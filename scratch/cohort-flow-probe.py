@@ -20,6 +20,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from experiments.runners.pipeline_benchmark import Replay, Tape, load_services
+from experiments.runners.serving_cost import ServiceMeter, load_serving
 from manabot.training.models import TrainingRegime
 
 
@@ -249,6 +250,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--card", default="l4")
+    parser.add_argument(
+        "--serving-costs",
+        type=Path,
+        help="Validated full-service model; replaces idealized links",
+    )
     parser.add_argument("--global-streams", type=int, choices=(512, 4096), default=512)
     parser.add_argument(
         "--hardware",
@@ -326,6 +332,19 @@ def main() -> None:
         for s in load_services(hardware_path)
         if s.card == args.card and s.capacity == "w64-d1"
     }
+    serving = (
+        load_serving(
+            args.serving_costs,
+            hardware_path,
+            args.card,
+            tape.recipe,
+            (sample.demand.input_bytes + sample.demand.output_bytes)
+            / sample.demand.decisions,
+        )
+        if args.serving_costs is not None
+        else None
+    )
+    serving_usage = []
     queue = queue_module()
     queue.check()
     outcomes: list[Outcome] = []
@@ -355,6 +374,7 @@ def main() -> None:
                 publication_seconds=delay,
             )
             # Dynamic scratch-module API is narrowed immediately to Collection.
+            meter = ServiceMeter(serving.model) if serving is not None else None
             result = queue.simulate(
                 [f.rows for f in tape.frames],
                 0,
@@ -371,7 +391,12 @@ def main() -> None:
                 ),
                 request_host_seconds=sample.request_host_seconds,
                 tail_host_seconds=sample.tail_host_seconds,
+                batch_service=meter,
             )
+            if meter is not None:
+                serving_usage.append(
+                    {"settings": asdict(settings), **asdict(meter.usage)}
+                )
             collection = Collection.model_validate(asdict(result))
             assert collection.decisions == leased * sample.demand.decisions
             outcomes.append(
@@ -411,6 +436,11 @@ def main() -> None:
         "global_streams": global_streams,
         "sources": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
         "host_repeat": 1,
+        "serving_boundary": "complete_measured_worker"
+        if serving
+        else "model_plus_assumed_links",
+        "serving_cost_sources": serving.sources if serving else {},
+        "serving_cost_usage": serving_usage,
         "outcomes": [
             asdict(o) | {"collection": o.collection.model_dump()} for o in outcomes
         ],
@@ -423,6 +453,7 @@ def main() -> None:
             "Array-memory scenario retains leased actor arrays while copying a global batch; idle capacity has no instantiated collectors. Native games, models, Python, staging excluded.",
             "Horizon counts completed updates, published versions and pending phase; CPU work excludes the partial epoch.",
             "Extra inference-serving CPU thread perGPU; target CPU contention and all-reduce unmodeled.",
+            "Full serving and learner measurements may come from different rentals; this is an explicit composition, not simultaneous measured throughput. Each server assumes independent calibrated CPU/memory/link capacity.",
         ],
     }
     args.out.write_text(json.dumps(report, indent=2) + "\n")

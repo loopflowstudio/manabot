@@ -1,63 +1,54 @@
 # Learner admission and coupled cohort model
 
-The model-only service boundary failed physical validation. A complete serving
-model subsequently passed nine fresh H100 cases, but is not yet integrated here.
-Rates below remain conditional optimistic scenarios; see `gpu-validation.md`.
+`scratch/cohort-flow-probe.py` couples the existing finite-actor inference queue to
+measured ordinary learning, under a synchronous zero-lag barrier. A global8×64,
+8×512 or8×4096 batch leases1/8/64 actors; extra configured actors stay idle.
+Inference drains before one central optimizer update; publication precedes reuse.
+No concurrent inference/learning or multi-GPU Adam is assumed.
 
-## Coupled zero-lag control
+`--serving-costs scratch/gpu-probes/serving-007/service-model.json` selects the
+prospectively checked full serving boundary, with matching `--hardware` from the
+same folder and `--card h100`. The loader rejects incompatible model/world/input
+contracts or forward evidence and reports request/row extrapolation. Without this
+option the original model-plus-link control remains unchanged.
 
-`scratch/cohort-flow-probe.py` now reuses the existing finite-request inference
-simulator, followed by measured ordinary learning service. One global cohort leases
-one64stream actor for8×64, eight for8×512, or64 for8×4096 when calibrated. Inference drains before one central
-update; publication precedes the next lease. Extra actor capacity stays idle.
-This models exclusive phase sharing on the GPUs, not concurrent inference/training
-or independent Adam owners. Larger unmeasured learner shapes are rejected.
+Current comparisons use run007 inference and run005 ordinary learner service:
 
-Seed10349 has8×64learner rows,1,099decisions,59requests and zero finished/truncated
-games. Input auditing and three exact replays passed. Repeat1:28.606ms host work,
-4.395ms final tail. Model/world contracts and hashes are checked; CPU/GPU trajectory
-equality is not claimed.
+|Global streams|Servers|Model+links best rows/s|Complete serving best rows/s|
+|---|---:|---:|---:|
+|512|1|5284|4223|
+|512|8|6036|5610|
+|4096|1|11923|8874|
+|4096|64|16732|16272|
 
-Fourth-L4 completed reference learning service is0.2252/0.2361s per8×64 batch and
-0.3690s per8×512; `gpu-probes/l4-004/learner-service.json` retains cold/repeated
-samples. H100 now has completed8×4096 service at1.6677s, retained under`h100-005`. All shapes keep filtering populations
-explicit; stationary raw rows/s and retained optimizer exposures/s are separate.
+One-server optima use batch1024; multi-server optima use64. For4096streams,
+64×servers give only1.83× raw learner throughput under the central barrier.
+Doubling collector CPU speed changes8874→8880rows/s(0.061%). This ranks modeled
+constraints, not actual distributed performance or strength. Distinguish raw rows,
+optimizer exposures, surfaced decisions and published policy versions.
 
-27cases and closed-form timing, lease, memory, horizon, publication, unsupported-shape,
-request/CPU conservation checks passed. Results: `accelerator-probes/cohort-flow-detail.json`.
-Earlier24case output and exact source snapshot remain. Conditional examples:
+The8×64 seed10349 tape has512learner rows,1099decisions,59requests and no finished
+or truncated games. Input audits and three exact replays passed; repeat1 host work
+is28.606ms, including4.395ms final tail. H100 has a completed8×4096 learner receipt;
+L4's matching loops timed out, so that learner shape remains unavailable on L4.
 
-On L4, batch256 won with one server (3,654raw rows/s); batch64 won with eight
-(6,265rows/s). Extra actor capacity leaves those rates unchanged under the same
-cohort shape. Full sensitivities remain in the saved27case report. Hardware-specific
-batch optima are conditional, not measured distributed throughput or strength.
+Retained array accounting assumes leased rollouts survive a global-batch copy:
+348121088bytes for8actors;2784968704 for64. Idle capacity has no instantiated
+collectors. Native games, Python, models, staging and allocator slack are excluded.
+Finite horizons separately count updates, publications and unfinished phases;
+CPU totals exclude partial final epochs. Source/recipe checks reject unsupported
+learner shapes and changes in model/world/observation contracts.
 
-Array accounting retains actor rollouts while copying one global batch:348,121,088
-bytes at eight actors, including native array buffers. Idle capacity has no instantiated
-collectors in this scenario. Native games, Python, models and staging are excluded.
-Ten-second horizons retain unfinished phases; completed learning and published
-versions are distinct. CPU-work totals explicitly exclude the partial final epoch.
+`accelerator-probes/serving-integration/` retains54complete and54same-forward control
+cohort cases, admission checks and27unchanged L4 outcomes. All nine prospective
+physical predictions were reproduced exactly after extracting the shared model.
+`serving-integration-results.txt` gives exact reproduction commands, the6case
+4096actor/64server inference-only sweep, budgets and proof limits. That sweep has
+262144streams; it must not be conflated with this4096-global-stream learner cohort.
 
-Reproduce with a fresh output:
-`uv run --no-sync python scratch/cohort-flow-probe.py --out scratch/accelerator-probes/cohort-new.json`.
-Protocol: `cohort-protocol.txt`; capture helper only invokes existing capture/replay.
-The original cohort pass used5.109seconds, closing legacy probes at238.718/240.
-H100 integration used4.428seconds of a separate20second analysis slice within the
-original300second accelerator allowance (`highend-integration-protocol.txt`).
-
-Limits: cloned stationary untrained tape, named GPU service/learner receipts, assumed links, one extra serving CPU thread/server. Zero aggregation/
-publication is an optimistic network bound. Actual policy evolution, target CPU
-contention, multi-GPU optimization and physical distributed execution remain unmeasured.
-The zero-lag barrier is a compatibility control, not a selected architecture.
-
-H100 integration preserves all27L4 outcomes exactly. The same27case H100 matrix
-at512streams prefers batch1024 on one server (5,465rows/s), versus L4's256.
-A second27case H100 matrix uses64leased actors for global4096streams: one server
-with batch1024 predicts12,097rows/s;64servers with batch64 predicts16,988. Thus64×
-inference servers yield only1.40× admitted rows/s under this single-learner barrier.
-Average server/learner reservation is6.3% in the latter case, not measured SM usage.
-Modeled retained arrays are2,784,968,704bytes. Actual distributed behavior remains
-unvalidated; the physical H100 run used one large collector, not64sharded actors.
-
-Reproduce the larger modeled cohort with a fresh output:
-`uv run --no-sync python scratch/cohort-flow-probe.py --card h100 --hardware scratch/gpu-probes/h100-005/capacity-report.json --learner-service scratch/gpu-probes/h100-005/learner-service.json --global-streams 4096 --out scratch/accelerator-probes/h100-new.json`.
+Models still clone one untrained trace and assume independent per-server CPU,
+memory bandwidth and links. Zero aggregation/publication is an optimistic network
+bound;10ms sensitivities are assumptions. Learner and serving measurements come
+from different rentals. Target CPU contention, policy evolution, distributed
+execution, all-reduce and strength per compute remain unmeasured. Complete prior
+notes and L4/H100 historical comparisons are preserved by hash in the artifact index.

@@ -1,0 +1,34 @@
+Complete serving CLI integration — 2026-10-15, before execution
+
+Previous turn made progress: fixed overhead coefficients passed prospective run007
+at new4/16/128 actor counts; median errors<=9.1%, individual samples<=13%, rankings
+preserved. All seven paid machines are deleted; this pass spends$0.
+
+Make --serving-costs select the complete measured serving boundary in both existing
+queue and synchronous-learner CLIs. Keep the original model-plus-link path as the
+control. Reuse one typed coefficient owner; do not duplicate queue scheduling or
+refit. Reject mismatched forward hardware evidence, recipe/model/world/observation
+contracts and payload bytes. Verify declared source hashes. Retain explicit source
+provenance, request/row support extrapolation and per-server CPU assumptions.
+Diagnostic optimizer reservation, when selected, is an additional explicit cost;
+it is not ordinary RL learning and is not validated by the serving experiment.
+
+Two bounded commands inside existing20second calibration slice:11.867659918seconds
+already used,8.132340082remaining. Each invocation<=5seconds, one thread,6GiB RSS;
+supervisor enforces both phase and original300second conservative total (276.252used).
+No local model/environment/optimizer execution. Keep all errors/timeouts, no cap
+increase or overwriting receipts. Artifact inspection/hashing is separate.
+
+First: admission/mismatch checks, same nine prospective full-model predictions,
+unchanged27 L4 cohort outcomes, and full-service27case H100 cohorts at512 and4096
+streams. H100 inference uses run007; ordinary learner service still run005: report
+this mixed-rental composition explicitly, not measured simultaneous performance.
+Second: existing scale CLI, selected eight-step64stream seed10349 tape/replay,
+512actors/128collectorCPUs/8servers and4096actors/512CPUs/64servers, each maximum
+batch64/256/1024. This is a stationary synthetic scaling scenario; only each
+one-worker serving boundary was physically tested. Independent CPU cores/memory
+bandwidth/links per server and zero network/all-reduce remain assumptions.
+
+Record full-cost versus same-forward model-only control outcomes for cohort
+comparisons. Interpret changed rankings/rates; do not call a simulated improvement
+an actual system or playing-strength gain. No production learning/rules changes.

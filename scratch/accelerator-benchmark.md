@@ -24,7 +24,7 @@ No PR, merge, Task operation or other experiment is selected by this work.
    selected directions. Original model-only serving predictions failed; adding
    measured preparation/transfers passed a fresh H100 check: all nine median
    errors<=9.1%, correct best batches. See gpu-validation.md. The full-service
-   callback exists; integration into high-scale CLI sweeps is still pending.
+   model is selectable in both high-scale and learner CLIs with `--serving-costs`.
 
 The queue requires one additional inference-serving CPU thread per GPU: measured
 synchronized model calls include host dispatch/validation.512collector CPUs plus
@@ -79,7 +79,7 @@ finite completion, padding and host tails. All measured attempts used bounded
 supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
-calibration-analysis slice used11.868seconds; conservative combined usage276.252/300. New measured
+calibration-analysis slice used17.944seconds; conservative combined usage282.328/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
 records$2.191590 billed/estimated rentals,$2.82 conservative charges+$5reserve,
 $42.18 free; all seven machines are confirmed deleted.
@@ -89,14 +89,15 @@ $42.18 free; all seven machines are confirmed deleted.
 CPU replay normalizes/samples on CPU, unlike production CUDA. Coalesced transfers,
 independent GPU links and reserved server cores are assumptions; network,
 all-reduce, target CPU contention and shared-memory interference are unmodeled.
-Retained arrays alone are151,443,136bytes/actor(577.7GiB at4096), excluding native
+The earlier64-step trace retains151,443,136array bytes/actor(577.7GiB at4096), excluding native
 state, Python objects, staging, models and allocator slack. Finite startup/drain
 and synthetic phase rotations must remain visible. Exact replay of one policy
 does not predict how a changed trained policy changes its game distribution.
 
-Next: integrate the prospectively checked complete service model into high-scale
-and coupled-learner CLI sweeps, then mixed mature-policy traces, real backpressure
-and policy-age accounting. Multi-GPU rates remain conditional on independent links.
+Full serving integration completed in2.570s; the4096actor/64server sweep took3.506s,
+~302MB laptop RSS. Exact commands and results are in`serving-integration-results.txt`.
+Next: paired GPU staging/materialization optimization, then mixed mature-policy
+traces and real backpressure. Multi-GPU rates remain conditional on independent links.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and

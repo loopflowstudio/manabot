@@ -49,8 +49,10 @@ plus current forward points; `capacity-report.json` retains model-only service.
 All source hashes, predictions, raw JSON/logs, budget and cleanup are portable there.
 Full archive/input tensors remain in`.runs/gpu-validation/result-007` and Etude output.
 The queue's optional `batch_service` replaces both model and link costs, avoiding
-double charging; the default path remains exact. CLI integration into high-scale
-and learner sweeps is still pending, so their old rates remain unvalidated.
+double charging; the default path remains exact. Both queue and learner CLIs now
+select it with `--serving-costs`, checking hardware/recipe/input compatibility and
+reporting support extrapolation. See `serving-integration-results.txt`; multi-server
+rates remain modeled, with independent per-server memory bandwidth assumed.
 
 Pod`xxf0u7g7fqgnq0` was confirmed absent at2026-10-15T13:09:42.447945Z.
 Whole rental estimate$1.158104 exceeds the job-status estimate$0.390643: the attempt
@@ -91,8 +93,9 @@ learning gain. Complete earlier controls, failures and curves remain in`h100-005
 and`l4-002/003/004`, with expanded prior notes preserved by hash.
 
 Original local probes remain238.718/240seconds. The20second calibration slice now
-uses11.868seconds; conservative combined measurement use276.252/300. This turn's
-fit/regression and frozen-loader/fake-backend checks used2.316/1.851seconds with
-342/304MB sampled RSS; no local ML was run. Ruff and diff checks passed.
+uses17.944seconds; conservative combined measurement use282.328/300. CLI integration
+and high-scale checks used2.570/3.506seconds with305/302MB sampled RSS. Admission
+guards,9exact prospective predictions,27unchanged L4 outcomes,108paired cohort and
+6high-scale cases passed; no local ML was run. Ruff and diff checks passed.
 Actual distributed execution, evolving policy traffic, target CPU contention,
 multi-GPU optimization/all-reduce and strength per compute remain unmeasured.

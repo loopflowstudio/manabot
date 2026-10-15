@@ -963,8 +963,8 @@
     },
     {
       "path": "scratch/cohort-flow-probe.py",
-      "bytes": 16038,
-      "sha256": "6f2dc44130b7d64b9d2205deb6e576a972280e8b7fc6de78b0a64ed50c37cbd0"
+      "bytes": 17346,
+      "sha256": "b4773bdb8d6cc4b838a0853f1f86b19744d38a5fc321e7e9bd7888463ac9d82c"
     },
     {
       "path": "scratch/cohort-protocol.txt",
@@ -1078,8 +1078,8 @@
     },
     {
       "path": "scratch/accelerator-queue-probe.py",
-      "bytes": 21999,
-      "sha256": "98c3fae2c4cd54404bdedc05075546eeab7932fec47a3b09fd498fd80fe50cc1"
+      "bytes": 23542,
+      "sha256": "fe3ac465f6981b5447142df99ba7ec50a6799f5955c2b61e0ff9e16bb41b2be1"
     },
     {
       "path": "scratch/cpu-probe-command.py",
@@ -1158,8 +1158,8 @@
     },
     {
       "path": "scratch/physical-serving-probe.py",
-      "bytes": 20822,
-      "sha256": "b96f9c0ad1b25f17652c8fd5be1b6b1f54243168fa1bfa3e58ba7b31804c391f"
+      "bytes": 20444,
+      "sha256": "a13c4f53ddeec170a1eed3461f7f65e991ebe0d60e2f3fdd95d3c9fe54db0f3f"
     },
     {
       "path": "scratch/serving-validation-protocol.txt",
@@ -1483,8 +1483,8 @@
     },
     {
       "path": "scratch/serving-cost-calibration.py",
-      "bytes": 13202,
-      "sha256": "5cb47d88a6468d81549a9f2d1d005108909ce4629784355b48144ca114e86c19"
+      "bytes": 12155,
+      "sha256": "86f28f1b25d074a3acc1270bcdadb632b9c84d150166fc3a9c277126bb9e2712"
     },
     {
       "path": "scratch/gpu-validation.py",
@@ -1850,6 +1850,151 @@
       "path": "scratch/gpu-probes/serving-007/evidence/inputs/worker.log",
       "bytes": 0,
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "experiments/runners/serving_cost.py",
+      "bytes": 7401,
+      "sha256": "325cd9f4a906ad72e6f4645004e46faf5d9c09703ddd077af824485d936149b4"
+    },
+    {
+      "path": "scratch/serving-integration-check.py",
+      "bytes": 5354,
+      "sha256": "cfafb0706345608d5b28e3fa109020135821b36d8511260f12d2d4b1599bbe58"
+    },
+    {
+      "path": "scratch/serving-integration-protocol.txt",
+      "bytes": 2325,
+      "sha256": "84f986ad8008186233d4452534780ffe0a26db86cf49c1e453714fbca63ead50"
+    },
+    {
+      "path": "scratch/serving-integration-results.txt",
+      "bytes": 5157,
+      "sha256": "7fd5a9e9c7e77127063d05a0d241efa0b1d15fd5775441610354b9385597663c"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/l4-control.json",
+      "bytes": 46729,
+      "sha256": "40b106ffd80a52a529d2450906203d9af24507adf998b01a79675a3cad5cfb54"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/h100-s4096-complete.json",
+      "bytes": 58215,
+      "sha256": "e1f8224ee7e9b95c5a7182f6adc62f4236046f19321aa2d4e7b047471ea62473"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/h100-s512-control.json",
+      "bytes": 46544,
+      "sha256": "3745ffe6c7d14232552e5eb4ac182e485dc1b346884f573fd2ae83fae75999c2"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/h100-s4096-control.json",
+      "bytes": 46778,
+      "sha256": "38c5fb37a773dd85facb45b42bf0776043e1831acb33b8e27b48443d786ba831"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/checks.json",
+      "bytes": 196,
+      "sha256": "eb9d36f7e98b13fa6165845bbddea5cd8f2dd9ef68742db2eb4394a969e78b9a"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/execution-sources.json",
+      "bytes": 762,
+      "sha256": "58f06254c712adb54f3e69d135f3ba1021a31c0a82bfeeb45bd428732bd0ea73"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/h100-s512-complete.json",
+      "bytes": 58015,
+      "sha256": "3aa4749bc8992a1ca23203115f7aae5cb7a9cafac62bc11bf39ba97c74a8bf43"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-integration/high-scale.json",
+      "bytes": 12619,
+      "sha256": "693a9641ce0cb62fa4559c56ab1894247867cac7e0d12b1ca29391034248cf19"
+    },
+    {
+      "path": "scratch/accelerator-probes/e5a0ed3d40974902f225368c6af04d9d0274a3f3a87e3191eeba74d9ce6dd4c3.notes.txt",
+      "bytes": 7478,
+      "sha256": "e5a0ed3d40974902f225368c6af04d9d0274a3f3a87e3191eeba74d9ce6dd4c3"
+    },
+    {
+      "path": "scratch/accelerator-probes/6924979d1dffa9f54e2a47954d72ead45e64f30c94f85116d96dcadcf226a456.notes.txt",
+      "bytes": 6185,
+      "sha256": "6924979d1dffa9f54e2a47954d72ead45e64f30c94f85116d96dcadcf226a456"
+    },
+    {
+      "path": "scratch/accelerator-probes/1de034fdbaa017ed768963fd0206c6a3e222360d8337092938dab85028350107.notes.txt",
+      "bytes": 4317,
+      "sha256": "1de034fdbaa017ed768963fd0206c6a3e222360d8337092938dab85028350107"
+    },
+    {
+      "path": "scratch/accelerator-probes/cfafb0706345608d5b28e3fa109020135821b36d8511260f12d2d4b1599bbe58.source.txt",
+      "bytes": 5354,
+      "sha256": "cfafb0706345608d5b28e3fa109020135821b36d8511260f12d2d4b1599bbe58"
+    },
+    {
+      "path": "scratch/accelerator-probes/b4773bdb8d6cc4b838a0853f1f86b19744d38a5fc321e7e9bd7888463ac9d82c.source.txt",
+      "bytes": 17346,
+      "sha256": "b4773bdb8d6cc4b838a0853f1f86b19744d38a5fc321e7e9bd7888463ac9d82c"
+    },
+    {
+      "path": "scratch/accelerator-probes/9cf8cbcb32f670db35458910bf62f157ea868d74930b2085b7c045cd3047ad6a.source.txt",
+      "bytes": 23519,
+      "sha256": "9cf8cbcb32f670db35458910bf62f157ea868d74930b2085b7c045cd3047ad6a"
+    },
+    {
+      "path": "scratch/accelerator-probes/86f28f1b25d074a3acc1270bcdadb632b9c84d150166fc3a9c277126bb9e2712.source.txt",
+      "bytes": 12155,
+      "sha256": "86f28f1b25d074a3acc1270bcdadb632b9c84d150166fc3a9c277126bb9e2712"
+    },
+    {
+      "path": "scratch/accelerator-probes/a13c4f53ddeec170a1eed3461f7f65e991ebe0d60e2f3fdd95d3c9fe54db0f3f.source.txt",
+      "bytes": 20444,
+      "sha256": "a13c4f53ddeec170a1eed3461f7f65e991ebe0d60e2f3fdd95d3c9fe54db0f3f"
+    },
+    {
+      "path": "scratch/accelerator-probes/b5acbace3a13b5dcf69887a68d4f634d393288aa59184bfdc53974175620e67d.source.txt",
+      "bytes": 7311,
+      "sha256": "b5acbace3a13b5dcf69887a68d4f634d393288aa59184bfdc53974175620e67d"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-integration.receipt.json",
+      "bytes": 1385,
+      "sha256": "42829f8eeac5e4c177035d1e613bbc983bed57f30dc72e8069dd8474c15750d4"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-integration.stdout.log",
+      "bytes": 1067,
+      "sha256": "c3b5af5dd2415d51fec49dfe1e073b38b50d679e74eb7e8ab4837c6c54c1081a"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-integration.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-scale.receipt.json",
+      "bytes": 2137,
+      "sha256": "6b8fffeb7ec3a3c16a9d4d66469fc3515684aefbfb5efb4de370015201f8500a"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-scale.stdout.log",
+      "bytes": 2195,
+      "sha256": "9bbfaec2013cc601368744e136c3aee6b50e19bbf61377ae4b4559786b5ded3c"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cli-scale.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/accelerator-probes/325cd9f4a906ad72e6f4645004e46faf5d9c09703ddd077af824485d936149b4.source.txt",
+      "bytes": 7401,
+      "sha256": "325cd9f4a906ad72e6f4645004e46faf5d9c09703ddd077af824485d936149b4"
+    },
+    {
+      "path": "scratch/accelerator-probes/fe3ac465f6981b5447142df99ba7ec50a6799f5955c2b61e0ff9e16bb41b2be1.source.txt",
+      "bytes": 23542,
+      "sha256": "fe3ac465f6981b5447142df99ba7ec50a6799f5955c2b61e0ff9e16bb41b2be1"
     }
   ]
 }

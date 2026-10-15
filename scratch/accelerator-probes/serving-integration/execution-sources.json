@@ -1,0 +1,9 @@
+{
+  "experiments/runners/serving_cost.py": "b5acbace3a13b5dcf69887a68d4f634d393288aa59184bfdc53974175620e67d",
+  "scratch/serving-cost-calibration.py": "86f28f1b25d074a3acc1270bcdadb632b9c84d150166fc3a9c277126bb9e2712",
+  "scratch/physical-serving-probe.py": "a13c4f53ddeec170a1eed3461f7f65e991ebe0d60e2f3fdd95d3c9fe54db0f3f",
+  "scratch/accelerator-queue-probe.py": "9cf8cbcb32f670db35458910bf62f157ea868d74930b2085b7c045cd3047ad6a",
+  "scratch/cohort-flow-probe.py": "b4773bdb8d6cc4b838a0853f1f86b19744d38a5fc321e7e9bd7888463ac9d82c",
+  "scratch/serving-integration-check.py": "cfafb0706345608d5b28e3fa109020135821b36d8511260f12d2d4b1599bbe58",
+  "scratch/serving-integration-protocol.txt": "84f986ad8008186233d4452534780ffe0a26db86cf49c1e453714fbca63ead50"
+}

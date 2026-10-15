@@ -21,6 +21,7 @@ import time
 from typing import Literal, Protocol
 
 from experiments.runners.pipeline_benchmark import Replay, Tape, load_services
+from experiments.runners.serving_cost import ServiceMeter, load_serving
 
 
 @dataclass(frozen=True)
@@ -400,6 +401,11 @@ def main() -> None:
     )
     parser.add_argument("--request-timings", action="store_true")
     parser.add_argument(
+        "--serving-costs",
+        type=Path,
+        help="Validated full-service model; replaces idealized links",
+    )
+    parser.add_argument(
         "--card", default="l4", help="Exact card label in the supplied hardware report"
     )
     parser.add_argument(
@@ -446,6 +452,19 @@ def main() -> None:
         for s in load_services(hardware_path)
         if s.card == args.card and s.capacity == "w64-d1"
     ]
+    serving = (
+        load_serving(
+            args.serving_costs,
+            hardware_path,
+            args.card,
+            tape.recipe,
+            (sample.demand.input_bytes + sample.demand.output_bytes)
+            / sample.demand.decisions,
+        )
+        if args.serving_costs is not None
+        else None
+    )
+    serving_usage = []
     frames = [f.rows for f in tape.frames]
     if args.mode == "host":
         settings = [
@@ -514,6 +533,18 @@ def main() -> None:
     results: list[Outcome] = []
     started = time.perf_counter()
     for setting in settings:
+        meter = (
+            ServiceMeter(
+                serving.model,
+                {
+                    s.batch: setting.optimizer_observations_per_decision
+                    * s.optimizer_seconds
+                    for s in services
+                },
+            )
+            if serving is not None
+            else None
+        )
         service = {
             s.batch: s.inference_seconds
             + setting.optimizer_observations_per_decision * s.optimizer_seconds
@@ -532,8 +563,11 @@ def main() -> None:
             tail_host_seconds=(sample.tail_host_seconds or 0.0)
             if args.request_timings
             else 0.0,
+            batch_service=meter,
         )
         results.append(outcome)
+        if meter is not None:
+            serving_usage.append({"settings": asdict(setting), **asdict(meter.usage)})
         print(
             json.dumps(
                 {
@@ -551,6 +585,11 @@ def main() -> None:
             for p in (tape_path, replay_path, hardware_path, Path(__file__))
         },
         "host_repeat": 1,
+        "serving_boundary": "complete_measured_worker"
+        if serving
+        else "model_plus_assumed_links",
+        "serving_cost_sources": serving.sources if serving else {},
+        "serving_cost_usage": serving_usage,
         "host_timing": "measured request intervals and final tail"
         if args.request_timings
         else "proportional average",
@@ -568,7 +607,8 @@ def main() -> None:
             "Finite trace includes startup and drain; not a steady-state capacity measurement",
             "Device and transfers serialize; independent GPU links; no network or all-reduce",
             "No learner queue or policy lag; optional diagnostic optimizer service is only reserved time",
-            "Named device service is measured separately; CPU postprocessing and transfer assumptions need end-to-end calibration",
+            "The model-plus-link control omits preparation and assumes transfers; full-service calibration applies only to its measured serving boundary",
+            "Full service, when selected, replaces the model/link boundary; its host memory bandwidth and serving CPU are assumed independently available per server. Network and multi-server contention remain unvalidated.",
         ],
     }
     temporary = args.out.with_suffix(".tmp")

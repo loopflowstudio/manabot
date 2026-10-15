@@ -16,17 +16,16 @@ from pathlib import Path
 from statistics import median
 import sys
 from types import ModuleType
-from typing import Annotated, Literal, Protocol
+from typing import Annotated
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from experiments.runners.pipeline_benchmark import Replay, Tape
+from experiments.runners.serving_cost import PHASES, Coefficients, Demand, ServingModel
 
 Seconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-Phase = Literal["prepare", "h2d", "d2h", "validate"]
-PHASES: tuple[Phase, ...] = ("prepare", "h2d", "d2h", "validate")
 SIZES = (1, 4, 16, 64, 256, 1024)
 
 
@@ -67,43 +66,6 @@ class CalibrationPoint(BaseModel):
     device: str
     input_sha256: str
     inference: Inference
-
-
-class Coefficients(BaseModel):
-    """Nonnegative seconds per batch, padded row and logical request."""
-
-    batch_seconds: Seconds
-    padded_row_seconds: Seconds
-    request_seconds: Seconds
-
-    def duration(self, rows: int, requests: int) -> float:
-        return (
-            self.batch_seconds
-            + rows * self.padded_row_seconds
-            + requests * self.request_seconds
-        )
-
-
-class Demand(Protocol):
-    @property
-    def padded_rows(self) -> int: ...
-
-    @property
-    def requests(self) -> int: ...
-
-
-class ServingModel(BaseModel):
-    phases: dict[Phase, Coefficients]
-    forward_seconds: dict[int, Seconds]
-    calibration_rows_range: tuple[int, int]
-    calibration_requests_range: tuple[int, int]
-    calibration_batches: int
-
-    def duration(self, demand: Demand) -> float:
-        return self.forward_seconds[demand.padded_rows] + sum(
-            phase.duration(demand.padded_rows, demand.requests)
-            for phase in self.phases.values()
-        )
 
 
 def queue_module() -> ModuleType:

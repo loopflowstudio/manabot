@@ -27,6 +27,7 @@ import torch
 
 from experiments.runners.cuda_performance import load_observations
 from experiments.runners.pipeline_benchmark import Replay, Tape
+from experiments.runners.serving_cost import ModelRecord
 from manabot.env import ObservationSpace
 from manabot.model.agent import Agent
 from manabot.training.execution import atomic_json
@@ -100,21 +101,12 @@ type CostModel = Callable[[BatchDemand], float]
 
 def frozen_cost_model(path: Path, forward: dict[int, float]) -> CostModel:
     """Load fixed overhead coefficients; only forward points follow this rental."""
-    spec = importlib.util.spec_from_file_location(
-        "serving_cost", "scratch/serving-cost-calibration.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    record = json.loads(path.read_text())
-    if record["schema"] != "manabot.research.serving-cost.v1":
-        raise ValueError("unsupported serving cost model")
-    model = module.ServingModel.model_validate(record["model"])
+    record = ModelRecord.model_validate_json(path.read_text())
+    model = record.model
     if set(forward) != set(model.forward_seconds):
         raise ValueError("forward calibration support differs")
     model = model.model_copy(update={"forward_seconds": forward})
-    # Dynamic scratch-module boundary narrowed to the shared demand contract.
+    # The physical and modeled schedulers share this structural demand contract.
     return cast(CostModel, model.duration)
 
 
@@ -566,7 +558,7 @@ def main() -> None:
         )
         for path in (
             args.cost_model,
-            Path("scratch/serving-cost-calibration.py"),
+            Path("experiments/runners/serving_cost.py"),
         ):
             report["sources"][str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     args.out.mkdir(exist_ok=True)
