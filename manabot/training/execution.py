@@ -844,9 +844,13 @@ def _execute_regime(
                                     stats.interrupted_microchoices += sum(
                                         '"command":' in line for line in partial
                                     )
-                            record.diagnostics = [asdict(stats)]
                             raise
-                        record.collection_seconds += time.perf_counter() - tick
+                        finally:
+                            # Failed collection/replay still consumes the run's
+                            # collection budget; retain that cost before settlement.
+                            record.collection_seconds += time.perf_counter() - tick
+                            stats.collection_seconds = record.collection_seconds
+                            record.diagnostics = [asdict(stats)]
                         record.artifacts[f"game-{game_index}"] = artifact(target)
                         stats.record_game(game)
                         record.games = stats.games
@@ -1142,6 +1146,7 @@ def _execute_regime(
                                 "run_id": run.id,
                                 "stage_id": stage.id,
                                 "weights": "initial_raw",
+                                "value_semantic": "signed_outcome",
                                 "regime_digest": run.regime_digest,
                             },
                         )

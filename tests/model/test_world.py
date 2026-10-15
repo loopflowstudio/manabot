@@ -1,6 +1,7 @@
 """Ordinary checkpoint admission binds corrected rules and complete setup."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 import torch
@@ -29,6 +30,7 @@ def checkpoint():
     )
     return {
         "model_state_dict": agent.state_dict(),
+        "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
             "agent_hypers": agent.hypers.model_dump(),
             "observation_hypers": space.encoder.hypers.model_dump(),
@@ -50,9 +52,21 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "change", ["missing", "world", "rules", "schema", "pack", "sideboard"]
+    "change",
+    [
+        "missing",
+        "world",
+        "rules",
+        "schema",
+        "input_version",
+        "action_width",
+        "pack",
+        "sideboard",
+    ],
 )
-def test_ordinary_loader_rejects_incompatible_binding_before_weights(tmp_path, change):
+def test_ordinary_loader_rejects_incompatible_binding_before_weights(
+    tmp_path: Path, change: str
+) -> None:
     payload = checkpoint()
     if change == "missing":
         del payload["world_binding"]
@@ -64,6 +78,10 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(tmp_path, c
             binding["rules"] = "discard-only"
         elif change == "schema":
             binding["input_schema"]["actions"]["shape"][0] = 32
+        elif change == "input_version":
+            binding["policy_input_version"] = 2
+        elif change == "action_width":
+            binding["input_schema"]["actions"]["shape"][1] = 17
         elif change == "pack":
             binding["content_manifest"]["content_digest"] = "old"
         else:

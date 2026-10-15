@@ -112,6 +112,74 @@ Targets on the same retained roots:
 A same-root genuine PUCT-visit comparison remains separate scientific work.
 The existing `visit_distribution` trainer remains available for its own teacher.
 
+## PUCT policy/value compatibility
+
+`make_player` also exposes `kind="agent_puct"` over the same saved policy:
+
+```python
+from manabot.sim.flat_mc import make_player
+
+player, space = make_player(
+    {
+        "kind": "agent_puct",
+        "checkpoint": "/absolute/path/to/policy.pt",
+        "device": "cpu",
+        "sims": 16,
+        "worlds": 4,
+        "c_puct": 1.5,
+        "max_steps": 32,
+        "value_mode": "learned",
+    },
+    seed=71,
+)
+```
+
+These are example budgets, not tuned recommendations. Simulations are total
+tree traversals across worlds; each world receives at least one. Play chooses
+maximal visits, breaking ties by root-perspective Q and then offer order.
+Native determinization samples physically compatible hidden worlds, without a
+learned belief model. Each world has its own adaptive tree; this is not
+information-set-consistent MCTS or the local-update teacher's fixed rollout
+allocation.
+
+PUCT retains its terminal win-score units: loss 0, draw .5, win 1. Signed scalar,
+categorical WDL and compound prefix critics convert by `(value + 1) / 2`, then
+invert with `1 - value` when the acting seat differs from the root seat. Scalar
+predictions remain unconstrained. Only checkpoints explicitly declaring
+`bc.value_semantic="win_logit"` use sigmoid. Untagged ordinary scalar heads are
+rejected for learned-value search; `value_mode="neutral"` explicitly substitutes
+.5 while still evaluating policy priors. Categorical and compound architectures
+declare signed units; contradictory metadata fails loading. Belief-input models,
+nonfinite predictions and incomplete legal action tensors fail admission.
+
+Compound priors marginalize the retained decoder prefix onto next canonical
+Commands through the existing local-search projection. Every tree branch retains
+its own immutable prefix, and the live player advances only its selected branch.
+Call `start_game(env, seat)` at game boundaries (arena does this). The original
+viewer root survives attacker, blocker, target and supported payment microsteps;
+the unused flat head is never consulted. A still-legal action with exact zero
+conditional support receives no visits. Unsupported native compound boundaries
+retain the projection owner's explicit failures.
+
+Arena accepts `agent_puct` as a checkpoint registration with all search parameters
+explicit, plus `batch_size=1`, `branch_driver_id`, `branch_audit`, and
+`implementation_source_sha256=puct_source_sha256()` from `manabot.sim.mcts`.
+The registered spec omits the checkpoint path; the arena binds verified bytes.
+Use search-call seed identity `mcts-mix-player-seed-decision-v1`, root prior
+`checkpoint-canonical-policy/v1`, and leaf evaluator
+`checkpoint-declared-value-win-score/v1` (or `neutral-win-score/v1`).
+Search semantics must echo `branch_audit`. Historical `policy_prior_puct`
+registrations keep their random-leaf recipe.
+
+`last_result` retains root/per-world visits, Q, depth and branch receipts;
+unvisited Q=.5 is a placeholder, not measured evidence. Player statistics and
+arena decisions retain elapsed cost. `forward_calls` counts flat forwards only;
+compound projection can require many decoder calls. An optional absolute
+`player.deadline` uses `time.perf_counter()` and rejects overrun results without
+policy fallback; the arena's process limit supplies the outer game bound.
+Fixture games and exact Command replay establish software compatibility, not
+search strength, value calibration or equal compute between policy families.
+
 ## Consumers and unsupported paths
 
 `make_player(kind=local_update)` supports the existing matchup lifecycle. Arena

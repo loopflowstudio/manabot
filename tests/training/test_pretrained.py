@@ -56,6 +56,7 @@ def test_changed_recipe_starts_from_published_weights(
     record = forked.stages[0]
     expected, _ = load_checkpoint_agent(producer.stages[0].artifacts["ema"]["path"])
     initial, _ = load_checkpoint_agent(record.artifacts["initial_raw"]["path"])
+    assert initial.value_semantic == "signed_outcome"
     for key, value in initial.state_dict().items():
         torch.testing.assert_close(value, expected.state_dict()[key], rtol=0, atol=0)
     # Schedules, counters and Adam belong to this run, not to the producer.

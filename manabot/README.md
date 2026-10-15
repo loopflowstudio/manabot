@@ -139,6 +139,11 @@ Frozen-policy local search and same-root distillation run through
 compatible-prior recipe completes games; exact-history search rejects unsupported
 Rules likelihood events. Target receipts and arena replay retain this distinction.
 
+The existing `agent_puct` player accepts current flat and compound checkpoints;
+see [PUCT policy/value compatibility](../docs/local-policy-search.md#puct-policyvalue-compatibility)
+for critic units, retained prefixes and arena registration. This is a search
+compatibility path, not a calibrated strength preset.
+
 Declare training comparisons with [typed Python experiments](../docs/training-experiments.md).
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.

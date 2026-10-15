@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from manabot.sim.search_branch import branch_backend
 
 
 def canonical_json(value: Any) -> bytes:
@@ -179,6 +182,58 @@ class PlayerRegistration(StrictModel):
                     != "local-policy-seed-times-1000003-plus-call-mod-2pow63/v1"
                 ):
                     raise ValueError("local-update search and seed semantics differ")
+            elif kind == "agent_puct":
+                spec = self.player_spec
+                required_keys = {
+                    "kind",
+                    "sims",
+                    "worlds",
+                    "c_puct",
+                    "max_steps",
+                    "branch_driver_id",
+                    "branch_audit",
+                    "device",
+                    "batch_size",
+                    "value_mode",
+                    "implementation_source_sha256",
+                }
+                if set(spec) != required_keys:
+                    raise ValueError("agent PUCT spec must be fully explicit")
+                digest = spec["implementation_source_sha256"]
+                if (
+                    any(
+                        type(spec[k]) is not int
+                        for k in ("sims", "worlds", "max_steps")
+                    )
+                    or not 1 <= spec["worlds"] <= spec["sims"]
+                    or spec["max_steps"] < 1
+                    or type(spec["c_puct"]) not in (int, float)
+                    or not math.isfinite(spec["c_puct"])
+                    or spec["c_puct"] <= 0
+                    or spec["device"] != "cpu"
+                    or spec["batch_size"] != 1
+                    or type(spec["branch_audit"]) is not bool
+                    or spec["value_mode"] not in ("learned", "neutral")
+                    or not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(c not in "0123456789abcdef" for c in digest)
+                ):
+                    raise ValueError("invalid agent PUCT parameters or source identity")
+                branch_backend(spec["branch_driver_id"])
+                if (
+                    self.search_semantics is None
+                    or self.search_semantics.model_dump()
+                    != {
+                        "branch_audit": spec["branch_audit"],
+                        "root_prior": "checkpoint-canonical-policy/v1",
+                        "leaf_evaluator": "checkpoint-declared-value-win-score/v1"
+                        if spec["value_mode"] == "learned"
+                        else "neutral-win-score/v1",
+                    }
+                    or self.search_call_seed_derivation_id
+                    != "mcts-mix-player-seed-decision-v1"
+                ):
+                    raise ValueError("agent PUCT search and seed semantics differ")
             elif kind == "policy_prior_puct":
                 required_keys = {
                     "kind",
