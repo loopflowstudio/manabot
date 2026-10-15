@@ -1,29 +1,38 @@
 # GPU validation — evidence and budget
 
-Jack Heart authorized $50 total. All nine rentals are provider-confirmed deleted.
-Bills/whole-rental estimates total **$2.921478**; conservative charges $3.91 plus
-$5 ancillary reserve leave **$41.09 unallocated**, with no pending reservation.
-`gpu-probes/collector-009/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
+Jack Heart authorized $50 total. All ten rentals are provider-confirmed deleted.
+Bills/whole-rental estimates total **$3.443180**; conservative charges $4.58 plus
+$5 ancillary reserve leave **$40.42 unallocated**, with no pending reservation.
+`gpu-probes/phase-010/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
 is the live ledger. Final invoices are not all settled.
 
-## Ordinary collector staging: performance gates did not pass
+## Large-collection stalls: assembly boundary identified
 
-Run009`d17e9ea3ee14`, source`677710a879e6e9b7c670d268e676a28658c8af8b`,
-H100/driver580.126.09. Real64/512/4096stream ×8step collection, two seeds, ABBA/BAAB.
-All four64/512stream cells completed with exact trajectories. Median gains at64:
-1.078×/.951×; at512:1.438×/1.034×. One64case regressed5.13%; one512case missed10%.
-The large512gain depends on a slow first reference sample; all samples are retained.
-Both4096cells timed out at90seconds. One retained staged64.393s/reference6.625s pair
-had exact32768-row trajectories, but no complete median; the25second cooperative
-collection allowance was exceeded. The deadline checks microsteps, not final rollout
-assembly or the full timed window. The phase causing the delay remains unknown.
+Run010`4370fade4b40`, source`88e91fc149d6af2c46dc3834113313f0ad5ca257`,
+H100/driver580.126.09, retained4096streams x8steps and both seeds. Externally enforced
+25s collections:10349/reference was killed inside `_build_batch`, active at least
+14.532s; three cells completed. Completed assembly times ranged .863–7.194s;
+slow10349 staged assembly used6.551/2.681s system CPU versus .649/.635s user CPU.
+Container memory-pressure counters rose, but their scope does not isolate a cause.
+This localizes a new stall; it does not explain run009's untraced64.393s sample.
 
-All six fixed field/dtype/storage gates passed;18retained samples matched complete
-rollouts, final buffers, journals, reset seeds and sampling RNG. Nine staged storage
-checks passed. All28manifest files/30outputs verified. `collector-staging-results.txt`
-records every sample, failures, competing explanations and the next phase diagnostic.
-`gpu-probes/collector-009` holds evidence. Next: externally bounded4096stream phase
-attribution before training integration. No cap increase/retry or production edit.
+Six retained samples match within seed; all four10350 samples match across variants
+and prior009. No completed10349 reference identity exists. All41manifest files and
+43outputs verified. Whole rental$.521702; pod deletion confirmed. Full outcomes,
+raw traces, limits and next discriminating checks: `collector-phase-results.txt`
+and `gpu-probes/phase-010`. Synchronized, process-isolated attribution supplies no
+speedup ratio. Native stepping is41–45% of completed10350 collection, so the earlier
+CPU-only1.25% share cannot rule out GPU-host parallelism. Assembly variability and
+real multiworker/shared-memory scaling remain unresolved; calibration stays run007.
+
+Run009`d17e9ea3ee14`, source`677710a879e6e9b7c670d268e676a28658c8af8b`, tested
+ordinary64/512/4096stream x8step collection, two seeds, ABBA/BAAB. Four64/512 cells
+had exact trajectories but mixed gains:64stream1.078×/.951×,512stream1.438×/1.034×.
+One64case regressed5.13%; one512case missed10%; the large512gain has a slow first
+reference. Both4096cells timed out90s; one staged64.393s/reference6.625s pair was
+exact but incomplete and exceeded25s. All six fixed gates and18sample identities
+passed;28manifest/30outputs verified. `collector-staging-results.txt` retains every
+sample and proof limit. Ordinary collection performance gates remain unmet.
 
 ## Reusable serving buffers: narrower validation passed
 
@@ -79,8 +88,6 @@ completed, including4096streams:98,304rows,63games,16.040s collection,5.003s lea
 max5.68e-14. Larger inference gains did not imply larger learning gains. Full prior
 comparisons remain in`h100-005`, `l4-002/003/004` and hash-preserved previous notes.
 
-Original local probes remain238.718/240seconds. Calibration slice now19.589804/20s;
-conservative combined measurement283.973775/300s. Staging preflight1.645465s,305MB,
-no local ML. Prior integration passed9exact prospective predictions,27unchanged L4
-outcomes,108paired cohort and6high-scale cases. Physical distributed execution,
-evolving policies, target CPU contention/all-reduce and strength remain unmeasured.
+Local limits and integration checks remain in accelerator-benchmark.md. Physical
+distributed execution, evolving policies, shared-host interference/all-reduce and
+strength remain unmeasured.

@@ -81,8 +81,8 @@ its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
 calibration-analysis slice used19.589804seconds; conservative combined usage283.973775/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$2.921478 billed/estimated rentals,$3.91 conservative charges+$5reserve,
-$41.09 free; all nine machines are confirmed deleted.
+records$3.443180 billed/estimated rentals,$4.58 conservative charges+$5reserve,
+$40.42 free; all ten machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -99,8 +99,12 @@ Full serving integration completed in2.570s; the4096actor/64server sweep took3.5
 Paired H100 staging passed:1.234×/1.421× gains at128actors, exact serving witnesses;
 see`staging-validation-results.txt`. Ordinary collection did not pass: seed-dependent
 gains, one5.13% regression and two4096stream timeouts. See`collector-staging-results.txt`.
-Next: externally bounded4096stream phase attribution, then learning/mature-policy
-traces and real backpressure. Multi-GPU rates remain conditional on independent links.
+Run010 localized a25s reference timeout inside rollout assembly; completed assembly
+costs varied .863–7.194s, largely in system CPU. Native stepping was41–45% in completed
+10350 GPU collections. See`collector-phase-results.txt`; no speedup ratio follows.
+Next: separate assembly allocation/copy/release and host pressure, then validate
+actual CPU concurrency, learning/mature-policy traces and backpressure. Multi-GPU
+rates remain conditional on independent links.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and
