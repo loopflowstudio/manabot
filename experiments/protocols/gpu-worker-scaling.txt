@@ -50,3 +50,13 @@ with their original55s stage/60s recipe/70s process caps. These measure current
 single-collector whole training and memory to inform hardware economics, not a
 parallel learner. Failures are retained; no substitute throughput for missing
 cells. No trained-strength, policy-lag, multi-GPU or all-reduce claim follows.
+
+Post-submission source admission: lf submit synchronized upstream worldw6 and new
+observation/action identity fields. The w4 tape and service calibration remain
+historical evidence; they must not be relabeled as current measurements. Rebuild
+local native code, then capture a separate tape-w6 with identical64x8 shape and
+seed10349, explicitly migrating the recipe.world to the runtime world. One5second
+local capture cap from the remaining6.178525second measurement allowance; preserve
+failure without retry. The paid experiment uses tape-w6 and fresh same-device
+CUDA captures. Update the submitted PR before renting. The old queue/calibration
+examples remain historical conditional projections, not calibration of w6.

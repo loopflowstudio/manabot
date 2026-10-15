@@ -21,6 +21,7 @@ import torch
 from experiments.runners.cuda_performance import Cell
 from experiments.runners.pipeline_benchmark import Tape
 from experiments.runners.worker_scaling import write_json
+from manabot.training.source_bundle import SourceBundle, source_commit
 
 
 def read_optional(path: str) -> str | None:
@@ -39,6 +40,19 @@ def main() -> None:
     parser.add_argument("--expected-gpu", required=True)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
+    if config_path := os.environ.get("ETUDE_CONFIG"):
+        config = json.loads(Path(config_path).read_text())
+        bundle = SourceBundle.model_validate(config["source"])
+        for name, expected in bundle.files.items():
+            path = Path(name)
+            if path.is_absolute() or ".." in path.parts or digest(path) != expected:
+                raise ValueError(f"prepared source mismatch: {name}")
+        for path in Path("managym").glob("*.so"):
+            bundle.files[str(path)] = digest(path)
+        write_json(Path(".manabot-source.json"), bundle.model_dump(mode="json"))
+        if source_commit() != bundle.commit:
+            raise ValueError("source owner rejected exact archive identity")
+        write_json(args.out / "source-bundle.json", bundle.model_dump(mode="json"))
     name = torch.cuda.get_device_name()
     if name != args.expected_gpu:
         raise ValueError(f"expected {args.expected_gpu}, received {name}")
@@ -57,11 +71,7 @@ def main() -> None:
             "memory_max": read_optional("/sys/fs/cgroup/memory.max"),
             "cpuinfo": read_optional("/proc/cpuinfo"),
             "memory_bytes": psutil.virtual_memory().total,
-            "source_commit": subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], text=True
-            ).strip()
-            if Path(".git").exists()
-            else os.environ.get("ETUDE_SOURCE_COMMIT"),
+            "source_commit": source_commit(),
         },
     )
     statuses = []
@@ -72,7 +82,7 @@ def main() -> None:
                 "-m",
                 "experiments.runners.worker_scaling",
                 "--tape",
-                "experiments/data/worker-scaling/tape",
+                "experiments/data/worker-scaling/tape-w6",
                 "--out",
                 str(args.out / device),
                 "--device",
@@ -98,7 +108,7 @@ def main() -> None:
             )
             write_json(args.out / "status.json", {"cases": statuses})
         tape = Tape.model_validate_json(
-            Path("experiments/data/worker-scaling/tape/tape.json").read_text()
+            Path("experiments/data/worker-scaling/tape-w6/tape.json").read_text()
         )
         for streams in (512, 4096):
             root = args.out / f"ordinary-s{streams}"

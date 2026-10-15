@@ -9,7 +9,7 @@ It changes no production rules, policy or learning algorithm.
 ## Actual workers
 
 ```bash
-uv run --no-sync python -m experiments.runners.worker_scaling --tape experiments/data/worker-scaling/tape --out .runs/workers-new --actors 64 --repeats 1 --seconds 14.5
+uv run --no-sync python -m experiments.runners.worker_scaling --tape experiments/data/worker-scaling/tape-w6 --out .runs/workers-new --actors 64 --repeats 1 --seconds 14.5
 ```
 
 The fixed workload is64actors x64streams x8learner steps. All actors exist before
@@ -19,7 +19,7 @@ two and four workers perform identical work. `prepare`, `collect`, `verify` and
 tree and kills its owned group on failure/deadline. Do not sum workers' wall times
 as elapsed time. Summed RSS conservatively counts shared pages more than once.
 
-On an M4 Max, the first retained screening sample measured:
+On an M4 Max with the pre-sync w4 source, the first retained screening sample measured:
 
 |Workers|Collection seconds|Decisions/s|Learner rows/s|Speedup|
 |---|---:|---:|---:|---:|
@@ -89,3 +89,8 @@ Prior catalog reuse and serving-buffer gains were workload-dependent. Ordinary
 collection staging failed its performance gates; a huge-page toggle made assembly
 slower. These negative findings remain in the research history. Do not apply a
 universal optimization multiplier to the model or erase stalled measurements.
+
+PR submission synchronized upstream world w6. The current worker command uses
+`data/worker-scaling/tape-w6`; the initial laptop curve and queue calibration
+remain w4 historical evidence. The paid comparison captures w6 policies on each
+GPU. No w4 timing coefficient is claimed to calibrate w6.
