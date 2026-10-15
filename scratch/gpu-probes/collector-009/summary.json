@@ -1,0 +1,652 @@
+{
+  "run": "d17e9ea3ee14",
+  "source": "677710a879e6e9b7c670d268e676a28658c8af8b",
+  "verified_files": 28,
+  "archive_bytes": 300159,
+  "archive_sha256": "f3a0b936e0117b6a7ec0c8071814b9d317f2a6083afeee2ddfd7f2c162ebbd38",
+  "authoritative_outputs_verified": 30,
+  "analysis_sha256": "d32e76cec9ab49c54c7dfc6422c8b2b2f3b9d7984044a0304856be1db12fbcc3",
+  "cells": [
+    {
+      "name": "collector-s64-seed10349",
+      "status": "completed",
+      "child_seconds": 5.879590680124238,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          64,
+          1,
+          3,
+          64
+        ],
+        "stable_pointers": true
+      },
+      "streams": 64,
+      "seed": 10349,
+      "order": "ABBA",
+      "samples": [
+        {
+          "allocation_seconds": 3.0484981834888458e-05,
+          "construction_seconds": 0.003456586040556431,
+          "decisions": 1115,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 0,
+          "identity": {
+            "batch": "d05c753e0505e7edb5447a95488353cb56a8cc1427d334755b0bc0bab8c14e4b",
+            "buffers": "c5fb0752dac2c54e423fdfea26a9c8904a66015449ca4b0670a97f0a877ffbfe",
+            "game_seeds": "ba53c41b5ab41a5f3cd4f8ed606aa11936fe302c35a9862b835a991a4e01be5e",
+            "journal": "b2ff7ac951c3105d659784b5bd666b2ba3456270fe344ca89256e6add135d50c",
+            "sampling_rng": "6e64e998bbe7b06bafb76cb3e670a5e7a2c86561a6c15f58d602dbe9601ad725"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97758720,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 0.33563873497769237,
+          "staged": false,
+          "startup_inclusive_seconds": 0.3391258060000837,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.00016779405996203423,
+          "construction_seconds": 0.0036532350350171328,
+          "decisions": 1115,
+          "device_bytes": 2261504,
+          "exact": true,
+          "games": 0,
+          "identity": {
+            "batch": "d05c753e0505e7edb5447a95488353cb56a8cc1427d334755b0bc0bab8c14e4b",
+            "buffers": "c5fb0752dac2c54e423fdfea26a9c8904a66015449ca4b0670a97f0a877ffbfe",
+            "game_seeds": "ba53c41b5ab41a5f3cd4f8ed606aa11936fe302c35a9862b835a991a4e01be5e",
+            "journal": "b2ff7ac951c3105d659784b5bd666b2ba3456270fe344ca89256e6add135d50c",
+            "sampling_rng": "6e64e998bbe7b06bafb76cb3e670a5e7a2c86561a6c15f58d602dbe9601ad725"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97750528,
+          "pinned_bytes": 2294272,
+          "rollout_storage_independent": true,
+          "seconds": 0.3276105960831046,
+          "staged": true,
+          "startup_inclusive_seconds": 0.3314316251780838,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.00019439100287854671,
+          "construction_seconds": 0.0036468070466071367,
+          "decisions": 1115,
+          "device_bytes": 2261504,
+          "exact": true,
+          "games": 0,
+          "identity": {
+            "batch": "d05c753e0505e7edb5447a95488353cb56a8cc1427d334755b0bc0bab8c14e4b",
+            "buffers": "c5fb0752dac2c54e423fdfea26a9c8904a66015449ca4b0670a97f0a877ffbfe",
+            "game_seeds": "ba53c41b5ab41a5f3cd4f8ed606aa11936fe302c35a9862b835a991a4e01be5e",
+            "journal": "b2ff7ac951c3105d659784b5bd666b2ba3456270fe344ca89256e6add135d50c",
+            "sampling_rng": "6e64e998bbe7b06bafb76cb3e670a5e7a2c86561a6c15f58d602dbe9601ad725"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97750528,
+          "pinned_bytes": 2294272,
+          "rollout_storage_independent": true,
+          "seconds": 0.32090794388204813,
+          "staged": true,
+          "startup_inclusive_seconds": 0.3247491419315338,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 3.208988346159458e-05,
+          "construction_seconds": 0.0037068480160087347,
+          "decisions": 1115,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 0,
+          "identity": {
+            "batch": "d05c753e0505e7edb5447a95488353cb56a8cc1427d334755b0bc0bab8c14e4b",
+            "buffers": "c5fb0752dac2c54e423fdfea26a9c8904a66015449ca4b0670a97f0a877ffbfe",
+            "game_seeds": "ba53c41b5ab41a5f3cd4f8ed606aa11936fe302c35a9862b835a991a4e01be5e",
+            "journal": "b2ff7ac951c3105d659784b5bd666b2ba3456270fe344ca89256e6add135d50c",
+            "sampling_rng": "6e64e998bbe7b06bafb76cb3e670a5e7a2c86561a6c15f58d602dbe9601ad725"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97758720,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 0.3634311920031905,
+          "staged": false,
+          "startup_inclusive_seconds": 0.36717012990266085,
+          "truncations": 0
+        }
+      ],
+      "identity_differences": [
+        {
+          "sample": 0,
+          "fields": []
+        },
+        {
+          "sample": 1,
+          "fields": []
+        },
+        {
+          "sample": 2,
+          "fields": []
+        },
+        {
+          "sample": 3,
+          "fields": []
+        }
+      ],
+      "median_speedup": 1.0779490236600582,
+      "target_passed": true,
+      "startup_inclusive_speedup": 1.0763740287815462
+    },
+    {
+      "name": "collector-s64-seed10350",
+      "status": "completed",
+      "child_seconds": 6.431307958904654,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          64,
+          1,
+          3,
+          64
+        ],
+        "stable_pointers": true
+      },
+      "streams": 64,
+      "seed": 10350,
+      "order": "BAAB",
+      "samples": [
+        {
+          "allocation_seconds": 0.00018671294674277306,
+          "construction_seconds": 0.0034669660963118076,
+          "decisions": 1157,
+          "device_bytes": 2261504,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "eaf82b7ed841ce9aed6fb31a99855c2f00401c27ed7fb7debb1c80c110407cb0",
+            "buffers": "85289340033a1c13fdab10ade1692ae00fc175fb661269bccba1f2ebad66ec6c",
+            "game_seeds": "222aaeba521ead3117e89e5242d4035c98210b3f8022a41ccf9016692727d006",
+            "journal": "675a49ee670f619cb3f3653973f5dd4d096012db8187911de043d4c1f07db4e1",
+            "sampling_rng": "478a271dfe03f05a39e89f707b2d104222c7c4815339444377e0320228a47aab"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97491968,
+          "pinned_bytes": 2294272,
+          "rollout_storage_independent": true,
+          "seconds": 0.5108493720181286,
+          "staged": true,
+          "startup_inclusive_seconds": 0.5145030510611832,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 3.171013668179512e-05,
+          "construction_seconds": 0.0036635231226682663,
+          "decisions": 1157,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "eaf82b7ed841ce9aed6fb31a99855c2f00401c27ed7fb7debb1c80c110407cb0",
+            "buffers": "85289340033a1c13fdab10ade1692ae00fc175fb661269bccba1f2ebad66ec6c",
+            "game_seeds": "222aaeba521ead3117e89e5242d4035c98210b3f8022a41ccf9016692727d006",
+            "journal": "675a49ee670f619cb3f3653973f5dd4d096012db8187911de043d4c1f07db4e1",
+            "sampling_rng": "478a271dfe03f05a39e89f707b2d104222c7c4815339444377e0320228a47aab"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97501184,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 0.48459461401216686,
+          "staged": false,
+          "startup_inclusive_seconds": 0.4882898472715169,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 3.3913878723978996e-05,
+          "construction_seconds": 0.0037197221536189318,
+          "decisions": 1157,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "eaf82b7ed841ce9aed6fb31a99855c2f00401c27ed7fb7debb1c80c110407cb0",
+            "buffers": "85289340033a1c13fdab10ade1692ae00fc175fb661269bccba1f2ebad66ec6c",
+            "game_seeds": "222aaeba521ead3117e89e5242d4035c98210b3f8022a41ccf9016692727d006",
+            "journal": "675a49ee670f619cb3f3653973f5dd4d096012db8187911de043d4c1f07db4e1",
+            "sampling_rng": "478a271dfe03f05a39e89f707b2d104222c7c4815339444377e0320228a47aab"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97501184,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 0.5009431610815227,
+          "staged": false,
+          "startup_inclusive_seconds": 0.5046967971138656,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.0001713600941002369,
+          "construction_seconds": 0.003716232953593135,
+          "decisions": 1157,
+          "device_bytes": 2261504,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "eaf82b7ed841ce9aed6fb31a99855c2f00401c27ed7fb7debb1c80c110407cb0",
+            "buffers": "85289340033a1c13fdab10ade1692ae00fc175fb661269bccba1f2ebad66ec6c",
+            "game_seeds": "222aaeba521ead3117e89e5242d4035c98210b3f8022a41ccf9016692727d006",
+            "journal": "675a49ee670f619cb3f3653973f5dd4d096012db8187911de043d4c1f07db4e1",
+            "sampling_rng": "478a271dfe03f05a39e89f707b2d104222c7c4815339444377e0320228a47aab"
+          },
+          "learner_transitions": 512,
+          "peak_allocated_bytes": 97491968,
+          "pinned_bytes": 2294272,
+          "rollout_storage_independent": true,
+          "seconds": 0.525285542011261,
+          "staged": true,
+          "startup_inclusive_seconds": 0.5291731350589544,
+          "truncations": 0
+        }
+      ],
+      "identity_differences": [
+        {
+          "sample": 0,
+          "fields": []
+        },
+        {
+          "sample": 1,
+          "fields": []
+        },
+        {
+          "sample": 2,
+          "fields": []
+        },
+        {
+          "sample": 3,
+          "fields": []
+        }
+      ],
+      "median_speedup": 0.9511674220696468,
+      "target_passed": false,
+      "startup_inclusive_speedup": 0.9514317348533234
+    },
+    {
+      "name": "collector-s512-seed10349",
+      "status": "completed",
+      "child_seconds": 13.022793219890445,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          512,
+          1,
+          3,
+          512
+        ],
+        "stable_pointers": true
+      },
+      "streams": 512,
+      "seed": 10349,
+      "order": "ABBA",
+      "samples": [
+        {
+          "allocation_seconds": 4.288414493203163e-05,
+          "construction_seconds": 0.02271944796666503,
+          "decisions": 9100,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "bd67cd956c11cc9520105cc3c4e41f832f6884b38868643991c353e1ab25868b",
+            "buffers": "b51d8703c7114ba2fd6421dbd7fa8fecf7c1996a528b0e0b09ef7f15bf054710",
+            "game_seeds": "0ddca075fc6d15b0f60077dc81ccd84b1deb050e2808e4e8eab4c9dc1eca3e6d",
+            "journal": "de2fa00fe736d7ba4f4f1ad54f6f421fc7b39e8075dfb60edebd839d2c28aa25",
+            "sampling_rng": "8042894ec786a0a69a360082a3e42e8a08accd1cae2fe618ed30a2c3d504e001"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 483789312,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 2.404230060055852,
+          "staged": false,
+          "startup_inclusive_seconds": 2.426992392167449,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.0002347391564399004,
+          "construction_seconds": 0.023780620889738202,
+          "decisions": 9100,
+          "device_bytes": 18092032,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "bd67cd956c11cc9520105cc3c4e41f832f6884b38868643991c353e1ab25868b",
+            "buffers": "b51d8703c7114ba2fd6421dbd7fa8fecf7c1996a528b0e0b09ef7f15bf054710",
+            "game_seeds": "0ddca075fc6d15b0f60077dc81ccd84b1deb050e2808e4e8eab4c9dc1eca3e6d",
+            "journal": "de2fa00fe736d7ba4f4f1ad54f6f421fc7b39e8075dfb60edebd839d2c28aa25",
+            "sampling_rng": "8042894ec786a0a69a360082a3e42e8a08accd1cae2fe618ed30a2c3d504e001"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 482873856,
+          "pinned_bytes": 18354176,
+          "rollout_storage_independent": true,
+          "seconds": 1.3431697899941355,
+          "staged": true,
+          "startup_inclusive_seconds": 1.3671851500403136,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.00026629120111465454,
+          "construction_seconds": 0.03139824094250798,
+          "decisions": 9100,
+          "device_bytes": 18092032,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "bd67cd956c11cc9520105cc3c4e41f832f6884b38868643991c353e1ab25868b",
+            "buffers": "b51d8703c7114ba2fd6421dbd7fa8fecf7c1996a528b0e0b09ef7f15bf054710",
+            "game_seeds": "0ddca075fc6d15b0f60077dc81ccd84b1deb050e2808e4e8eab4c9dc1eca3e6d",
+            "journal": "de2fa00fe736d7ba4f4f1ad54f6f421fc7b39e8075dfb60edebd839d2c28aa25",
+            "sampling_rng": "8042894ec786a0a69a360082a3e42e8a08accd1cae2fe618ed30a2c3d504e001"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 482873856,
+          "pinned_bytes": 18354176,
+          "rollout_storage_independent": true,
+          "seconds": 1.3113799581769854,
+          "staged": true,
+          "startup_inclusive_seconds": 1.343044490320608,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 5.267001688480377e-05,
+          "construction_seconds": 0.025161704048514366,
+          "decisions": 9100,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "bd67cd956c11cc9520105cc3c4e41f832f6884b38868643991c353e1ab25868b",
+            "buffers": "b51d8703c7114ba2fd6421dbd7fa8fecf7c1996a528b0e0b09ef7f15bf054710",
+            "game_seeds": "0ddca075fc6d15b0f60077dc81ccd84b1deb050e2808e4e8eab4c9dc1eca3e6d",
+            "journal": "de2fa00fe736d7ba4f4f1ad54f6f421fc7b39e8075dfb60edebd839d2c28aa25",
+            "sampling_rng": "8042894ec786a0a69a360082a3e42e8a08accd1cae2fe618ed30a2c3d504e001"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 483789312,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 1.4127321920823306,
+          "staged": false,
+          "startup_inclusive_seconds": 1.4379465661477298,
+          "truncations": 0
+        }
+      ],
+      "identity_differences": [
+        {
+          "sample": 0,
+          "fields": []
+        },
+        {
+          "sample": 1,
+          "fields": []
+        },
+        {
+          "sample": 2,
+          "fields": []
+        },
+        {
+          "sample": 3,
+          "fields": []
+        }
+      ],
+      "median_speedup": 1.4378944130800027,
+      "target_passed": true,
+      "startup_inclusive_speedup": 1.426055896060706
+    },
+    {
+      "name": "collector-s512-seed10350",
+      "status": "completed",
+      "child_seconds": 11.356180192902684,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          512,
+          1,
+          3,
+          512
+        ],
+        "stable_pointers": true
+      },
+      "streams": 512,
+      "seed": 10350,
+      "order": "BAAB",
+      "samples": [
+        {
+          "allocation_seconds": 0.0002069410402327776,
+          "construction_seconds": 0.022610913030803204,
+          "decisions": 9007,
+          "device_bytes": 18092032,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "245d85b4ba0e529eb0f8ef10a33444f14f02cd7297637e08633a84e485c65a10",
+            "buffers": "f4c244c93d0197b3120d84f918e500ff7ea954f160c077d2e5bb99298ec2fdac",
+            "game_seeds": "443699b08e5116b8f32ea6fcfd1e1a347c5bf9a1e40401ef52744496d17a9571",
+            "journal": "6f3b56a35a33fefc056ec5b6f85b2e32d5c78f31ae6cdd1bf96903d4c4c01f6e",
+            "sampling_rng": "880fa69c2a3985565f0c8982928b39ecdc28e69fc9536322eb82215308c7ca32"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 493838336,
+          "pinned_bytes": 18354176,
+          "rollout_storage_independent": true,
+          "seconds": 1.365772255929187,
+          "staged": true,
+          "startup_inclusive_seconds": 1.388590110000223,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 5.293102003633976e-05,
+          "construction_seconds": 0.027056772960349917,
+          "decisions": 9007,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "245d85b4ba0e529eb0f8ef10a33444f14f02cd7297637e08633a84e485c65a10",
+            "buffers": "f4c244c93d0197b3120d84f918e500ff7ea954f160c077d2e5bb99298ec2fdac",
+            "game_seeds": "443699b08e5116b8f32ea6fcfd1e1a347c5bf9a1e40401ef52744496d17a9571",
+            "journal": "6f3b56a35a33fefc056ec5b6f85b2e32d5c78f31ae6cdd1bf96903d4c4c01f6e",
+            "sampling_rng": "880fa69c2a3985565f0c8982928b39ecdc28e69fc9536322eb82215308c7ca32"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 494424576,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 1.4204707499593496,
+          "staged": false,
+          "startup_inclusive_seconds": 1.447580453939736,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 5.0141941756010056e-05,
+          "construction_seconds": 0.023469598963856697,
+          "decisions": 9007,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "245d85b4ba0e529eb0f8ef10a33444f14f02cd7297637e08633a84e485c65a10",
+            "buffers": "f4c244c93d0197b3120d84f918e500ff7ea954f160c077d2e5bb99298ec2fdac",
+            "game_seeds": "443699b08e5116b8f32ea6fcfd1e1a347c5bf9a1e40401ef52744496d17a9571",
+            "journal": "6f3b56a35a33fefc056ec5b6f85b2e32d5c78f31ae6cdd1bf96903d4c4c01f6e",
+            "sampling_rng": "880fa69c2a3985565f0c8982928b39ecdc28e69fc9536322eb82215308c7ca32"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 494424576,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 1.3456786889582872,
+          "staged": false,
+          "startup_inclusive_seconds": 1.3691984298639,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 0.00025110505521297455,
+          "construction_seconds": 0.029896343825384974,
+          "decisions": 9007,
+          "device_bytes": 18092032,
+          "exact": true,
+          "games": 1,
+          "identity": {
+            "batch": "245d85b4ba0e529eb0f8ef10a33444f14f02cd7297637e08633a84e485c65a10",
+            "buffers": "f4c244c93d0197b3120d84f918e500ff7ea954f160c077d2e5bb99298ec2fdac",
+            "game_seeds": "443699b08e5116b8f32ea6fcfd1e1a347c5bf9a1e40401ef52744496d17a9571",
+            "journal": "6f3b56a35a33fefc056ec5b6f85b2e32d5c78f31ae6cdd1bf96903d4c4c01f6e",
+            "sampling_rng": "880fa69c2a3985565f0c8982928b39ecdc28e69fc9536322eb82215308c7ca32"
+          },
+          "learner_transitions": 4096,
+          "peak_allocated_bytes": 493838336,
+          "pinned_bytes": 18354176,
+          "rollout_storage_independent": true,
+          "seconds": 1.3088597408495843,
+          "staged": true,
+          "startup_inclusive_seconds": 1.3390071897301823,
+          "truncations": 0
+        }
+      ],
+      "identity_differences": [
+        {
+          "sample": 0,
+          "fields": []
+        },
+        {
+          "sample": 1,
+          "fields": []
+        },
+        {
+          "sample": 2,
+          "fields": []
+        },
+        {
+          "sample": 3,
+          "fields": []
+        }
+      ],
+      "median_speedup": 1.0342168351567937,
+      "target_passed": false,
+      "startup_inclusive_speedup": 1.0326960230097182
+    },
+    {
+      "name": "collector-s4096-seed10349",
+      "status": "timeout",
+      "child_seconds": 90.2147578431759,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          4096,
+          1,
+          3,
+          4096
+        ],
+        "stable_pointers": true
+      }
+    },
+    {
+      "name": "collector-s4096-seed10350",
+      "status": "timeout",
+      "child_seconds": 90.27030818699859,
+      "fixed_witnesses": {
+        "action_focus_dtype": "float32",
+        "all_fields_exact": true,
+        "invalid_rows_rejected": true,
+        "sizes": [
+          4096,
+          1,
+          3,
+          4096
+        ],
+        "stable_pointers": true
+      },
+      "streams": 4096,
+      "seed": 10350,
+      "order": "BAAB",
+      "samples": [
+        {
+          "allocation_seconds": 0.0004719570279121399,
+          "construction_seconds": 0.1979317730292678,
+          "decisions": 71871,
+          "device_bytes": 144736256,
+          "exact": true,
+          "games": 4,
+          "identity": {
+            "batch": "aaa0541b3d3ddf79a179fb4b49d5073795fd9a53fa5042ef43f26e0cd07e710c",
+            "buffers": "45dfa51da87f28051e6c58cc3efa307cec57bb383edc50036edf70a99fb034dc",
+            "game_seeds": "62bd535c0cb44819faa2d60471b2a38ec210a852353fe3b5230e3ed300235db0",
+            "journal": "f1e6bd1b50a639d0f1b3a03a8eff5309be349862f7ef6c8d497b47c9982f0255",
+            "sampling_rng": "02cf23d9bf78fbcb199b3906221dfca271c96b2be0dd27d3e35f97700af12a3d"
+          },
+          "learner_transitions": 32768,
+          "peak_allocated_bytes": 3484499456,
+          "pinned_bytes": 146833408,
+          "rollout_storage_independent": true,
+          "seconds": 64.39302309416234,
+          "staged": true,
+          "startup_inclusive_seconds": 64.59142682421952,
+          "truncations": 0
+        },
+        {
+          "allocation_seconds": 6.0069840401411057e-05,
+          "construction_seconds": 0.2155820969492197,
+          "decisions": 71871,
+          "device_bytes": 0,
+          "exact": true,
+          "games": 4,
+          "identity": {
+            "batch": "aaa0541b3d3ddf79a179fb4b49d5073795fd9a53fa5042ef43f26e0cd07e710c",
+            "buffers": "45dfa51da87f28051e6c58cc3efa307cec57bb383edc50036edf70a99fb034dc",
+            "game_seeds": "62bd535c0cb44819faa2d60471b2a38ec210a852353fe3b5230e3ed300235db0",
+            "journal": "f1e6bd1b50a639d0f1b3a03a8eff5309be349862f7ef6c8d497b47c9982f0255",
+            "sampling_rng": "02cf23d9bf78fbcb199b3906221dfca271c96b2be0dd27d3e35f97700af12a3d"
+          },
+          "learner_transitions": 32768,
+          "peak_allocated_bytes": 3477979136,
+          "pinned_bytes": 0,
+          "rollout_storage_independent": true,
+          "seconds": 6.625282417051494,
+          "staged": false,
+          "startup_inclusive_seconds": 6.840924583841115,
+          "truncations": 0
+        }
+      ],
+      "identity_differences": [
+        {
+          "sample": 0,
+          "fields": []
+        },
+        {
+          "sample": 1,
+          "fields": []
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Two observations per variant/seed/shape; no population confidence interval.",
+    "Actual ordinary collection with fixed untrained policies, without optimizer updates or distributed execution.",
+    "Initialization is outside warm collection time; startup-inclusive ratios are reported separately.",
+    "Laptop service models remain run007 reference costs; no universal staged speed multiplier."
+  ]
+}

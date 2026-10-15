@@ -1,5 +1,5 @@
 {
-  "purpose": "Laptop replay, conditional finite-actor/cohort models, serving falsification, prospective full-cost validation and paired reusable-buffer H100 evidence.",
+  "purpose": "Laptop replay, conditional scaling models, prospective GPU serving validation, paired staging gains and mixed ordinary collector transfer evidence.",
   "artifacts": [
     {
       "path": "scratch/accelerator-probes/03ff7a0c9fda228431b70d9e55d5ccfa76d3b689c574fc289941b6754abf66c8.source.txt",
@@ -2273,13 +2273,13 @@
     },
     {
       "path": "scratch/gpu-validation.md",
-      "bytes": 5709,
-      "sha256": "1f4357f1a6679326352e414ca54a9c770f9fff769b44443beb98565f4408299b"
+      "bytes": 5796,
+      "sha256": "182e2ab23ac84efb2adb894a77a4c439f04f736923ab88f06c5c6655d613425b"
     },
     {
       "path": "scratch/accelerator-benchmark.md",
-      "bytes": 7710,
-      "sha256": "3c12de877e71622e1949bcc1a0b849534fe6ca3804bbc226c3115a9006f20519"
+      "bytes": 7859,
+      "sha256": "57ff57d4da17019a39408f0b2cee08ae4b3862c7e1f003c1155faae052969a90"
     },
     {
       "path": "scratch/accelerator-probes/357cee9992cb852c3ef250ecfbefb6698ec2b95f2debed42f468c8be8394c2e4.notes.txt",
@@ -2315,6 +2315,271 @@
       "path": "scratch/accelerator-probes/5a2ee4b34191e5c7314a79ac8a05cfb449dc50c9e0b456fe96536c5c8e408a44.source.txt",
       "bytes": 12095,
       "sha256": "5a2ee4b34191e5c7314a79ac8a05cfb449dc50c9e0b456fe96536c5c8e408a44"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/monitor-cleanup-009.json",
+      "bytes": 174,
+      "sha256": "89567e9726b6c3edc501aa55a0cc207f9c6abd9a6b52dbf121869b6ead317f36"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/summary.json",
+      "bytes": 24486,
+      "sha256": "3138a9961c967bfabf641b0c487f492d2607a2add66b79c5bec00c60f6539cf2"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/launch-009.json",
+      "bytes": 201,
+      "sha256": "b7357edb72beb4be1a6a594134a46ce42bc27e295e99087ab90ae094a4b4b667"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/lifecycle-009.json",
+      "bytes": 6274,
+      "sha256": "df6f7bb894b9fd36d14e012f0e0643dde4509c158792129889aea7df893c8900"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/artifact-audit.json",
+      "bytes": 1154,
+      "sha256": "d2d9e625a7ad6b2aa3dc3bbcab2f03d491b315f1db2c43b57d39fde6c02f7927"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/protocol.txt",
+      "bytes": 3542,
+      "sha256": "b30414dfc628a06e220cf8e73a5c4caa2051dc99cf7f38037228b30c9fcebf15"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/prepared-source.json",
+      "bytes": 454,
+      "sha256": "424b073dc32cbb73101b97febaefa492a0145feaf3f2de03cfd650dce793ad64"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/rental-costs-009.json",
+      "bytes": 2779,
+      "sha256": "593078116b324589afcdbbe96518e02b1ec116731e56e9b4dda6b1ecddf2816b"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/ninth-pod.json",
+      "bytes": 176,
+      "sha256": "aeaf2dd45b2e5be5503e107103d39e66e73cbb7bd76b4550e02c66ce8d0ddf60"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/lifecycle-summary.json",
+      "bytes": 578,
+      "sha256": "8a6422ab53ea4e5aa3b0f63f08f065e63dbfe7a4761bc6c587383f6b1106a6a5"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/monitor.source.txt",
+      "bytes": 2095,
+      "sha256": "c5fbcb0e4864095fcd4bcd808cc93ce299b17025a5a810210bfe0ae8ee11fc74"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/job-009.json",
+      "bytes": 360379,
+      "sha256": "23904f02eaf8f1b94d9d821b8524649f0bb4503f3beb6d47c1bfbcd32c5b5cc1"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/observed-009.log",
+      "bytes": 10509,
+      "sha256": "e33c7ab99ecb0d381b6a5cdddebd3ec386b953058e8371f3d92d750e4655f02e"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/budget.json",
+      "bytes": 6477,
+      "sha256": "c264f45b8cb2190609db11f63c8297838aae6fed3a2437bc2791ac670653d381"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/analysis.source.txt",
+      "bytes": 4476,
+      "sha256": "d32e76cec9ab49c54c7dfc6422c8b2b2f3b9d7984044a0304856be1db12fbcc3"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/verification.json",
+      "bytes": 182,
+      "sha256": "92b7dc29abf7c967fc435e00cb3150a19dbde8fefb8ef2ec2d4f59e829b27ec6"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/download.source.txt",
+      "bytes": 3439,
+      "sha256": "cb6cb31a8bc3af3bb0968fda3f6a8b981b947527a7ab6b5cc6edd3e57fcff57e"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/download-recovery-009.json",
+      "bytes": 518,
+      "sha256": "6bf9ca4db74a185bc22a356c96cffc93f26a69d2153ec28aa277a10eb13d6908"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/source-copy.json",
+      "bytes": 222,
+      "sha256": "cad39cfb69d5e464ebb7540f0c2bec42f72d459ce34b6620688b09cf8a065942"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/ninth-cleanup.json",
+      "bytes": 122,
+      "sha256": "9cdaf5934eb10fe329607f866dd617f3390edabe0bc329ca52681d96ac5a3edb"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/preflight-009.json",
+      "bytes": 371,
+      "sha256": "dd7117d47b2447e6020c36b9e34b8e0d1c9d0fc8308ca182f90cc190e99a9edb"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/audit.source.txt",
+      "bytes": 3338,
+      "sha256": "d167703a6f6eb26e756be357c5d94ce5bdfa74cc9ba53f2e7ff84a3e09dba9aa"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/frozen-input-receipt.json",
+      "bytes": 330,
+      "sha256": "3a5f0c786a8a38211a02803bac8b59cfa8082c5d99f51461a900fcd46550173f"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/source-bundle.json",
+      "bytes": 356440,
+      "sha256": "b07fe22bc02c2f079d5f6f346defa55cfcc96ad73ef1218507431440cc2869a9"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/attempts.json",
+      "bytes": 3908,
+      "sha256": "ab6219b0c8b5986bcc9938418b24a01824f9936e344a7390f2cc6d0ac16f58a1"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/identity.json",
+      "bytes": 8964,
+      "sha256": "f88ed9d9d5c20e2bff758782c394fd5eabaf3bde2c789d89853ea1c18f2dc0a0"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/baseline.json",
+      "bytes": 4194,
+      "sha256": "2e490db96cbcfd196f5ad96877ed3d1d8b365004aa3f00db401b4d1ad2016ed2"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/manifest.json",
+      "bytes": 4400,
+      "sha256": "c2b03a3ce7d7bb3e5e2e5e7726bf49a3fe011192c198575cff528603fb4dd850"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10349/summary.json",
+      "bytes": 222,
+      "sha256": "f7408b1deb7c775ae9a3c4167e6a4070e52a9b5a540372c4c4830bd27bc6f63a"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10349/result.json",
+      "bytes": 3922,
+      "sha256": "71b0128242b231405687befac3ea0e98185cfd5fd110c83b1efd48e0f95c4d6e"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10349/worker.log",
+      "bytes": 37,
+      "sha256": "5b484d40b70e667ab0742b95081985f5ac8a2b6cf75a970a1ddf4b4ee1571faf"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10349/fixed-witnesses.json",
+      "bytes": 175,
+      "sha256": "20b3069321cb416f0aa16f255184b2357fa7027ea41061b2f2d7805c2ba6f32d"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10350/summary.json",
+      "bytes": 223,
+      "sha256": "e094ef567ed3e82cddf2ec3b02b557d580445c03f191b4496d5893356c57354a"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10350/result.json",
+      "bytes": 3918,
+      "sha256": "53498af98221b0efb8a0ffe6687a802f09a92c25d8a5bcaeb47d56019e7a0f51"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10350/worker.log",
+      "bytes": 36,
+      "sha256": "7d01fbd4583986f684cf80f5d00e198aec7991e2485359ebb320791f9247e76a"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10350/fixed-witnesses.json",
+      "bytes": 173,
+      "sha256": "040b2200e8619c817dd578aa5c5d637051c536b097b05527fdb7bdb7f234a462"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s4096-seed10350/result.json",
+      "bytes": 2003,
+      "sha256": "3a9ad927eb82708adec86c962ec099255b2e773b0aaf4a8822978012d1706a03"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s4096-seed10350/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s4096-seed10350/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s4096-seed10349/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s4096-seed10349/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10349/summary.json",
+      "bytes": 222,
+      "sha256": "cb54a88997981f6ec93bd57fa1df89b4bc3b240b51bf689423c94e0f63c82385"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10349/result.json",
+      "bytes": 3922,
+      "sha256": "633b00a17a6b019cd854bee7823de43f86ec83cae1d4dd7bbb65c17699d48cb8"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10349/worker.log",
+      "bytes": 36,
+      "sha256": "d8762e9f07a2dd90342589f1c5afbad4d5112af17f5935ed98d94c6c92d62832"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s64-seed10349/fixed-witnesses.json",
+      "bytes": 173,
+      "sha256": "040b2200e8619c817dd578aa5c5d637051c536b097b05527fdb7bdb7f234a462"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10350/summary.json",
+      "bytes": 223,
+      "sha256": "e33e7c791ffe7194a4c8b3aaf3f6e8321e04cb928565b98f37be0e6d7e843f24"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10350/result.json",
+      "bytes": 3922,
+      "sha256": "eef463e46e0f422c88a3787388b4eec1b660acf830b43ca963207310ffc27cc8"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10350/worker.log",
+      "bytes": 37,
+      "sha256": "cf8fe11c9c1a432be4fbb8e30565212722afc77d0c64594a2f40e48b83cb0455"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/collector-s512-seed10350/fixed-witnesses.json",
+      "bytes": 175,
+      "sha256": "20b3069321cb416f0aa16f255184b2357fa7027ea41061b2f2d7805c2ba6f32d"
+    },
+    {
+      "path": "scratch/gpu-probes/collector-009/evidence/inputs/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/collector-staging-results.txt",
+      "bytes": 6478,
+      "sha256": "4976175db3849afa4d1c7afcc7b30964756dbeac3724be10120e8f4f6d7fa32a"
+    },
+    {
+      "path": "scratch/accelerator-probes/1f4357f1a6679326352e414ca54a9c770f9fff769b44443beb98565f4408299b.notes.txt",
+      "bytes": 5709,
+      "sha256": "1f4357f1a6679326352e414ca54a9c770f9fff769b44443beb98565f4408299b"
+    },
+    {
+      "path": "scratch/accelerator-probes/3c12de877e71622e1949bcc1a0b849534fe6ca3804bbc226c3115a9006f20519.notes.txt",
+      "bytes": 7710,
+      "sha256": "3c12de877e71622e1949bcc1a0b849534fe6ca3804bbc226c3115a9006f20519"
     }
   ]
 }

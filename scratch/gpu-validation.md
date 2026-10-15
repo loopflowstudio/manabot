@@ -1,47 +1,42 @@
 # GPU validation — evidence and budget
 
-Jack Heart authorized $50 total. All eight rentals are provider-confirmed deleted.
-Bills/whole-rental estimates total **$2.505036**; conservative charges $3.32 plus
-$5 ancillary reserve leave **$41.68 unallocated**, with no pending reservation.
-`gpu-probes/staging-008/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
+Jack Heart authorized $50 total. All nine rentals are provider-confirmed deleted.
+Bills/whole-rental estimates total **$2.921478**; conservative charges $3.91 plus
+$5 ancillary reserve leave **$41.09 unallocated**, with no pending reservation.
+`gpu-probes/collector-009/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
 is the live ledger. Final invoices are not all settled.
 
-## Reusable serving buffers: paired validation passed
+## Ordinary collector staging: performance gates did not pass
 
-Run`3375fdd99515`, frozen source`317cbdbd352394f60c46274616510bcc179de40c`,
-H10080GB HBM3, driver580.126.09. All four cases completed. Median serving gains:
+Run009`d17e9ea3ee14`, source`677710a879e6e9b7c670d268e676a28658c8af8b`,
+H100/driver580.126.09. Real64/512/4096stream ×8step collection, two seeds, ABBA/BAAB.
+All four64/512stream cells completed with exact trajectories. Median gains at64:
+1.078×/.951×; at512:1.438×/1.034×. One64case regressed5.13%; one512case missed10%.
+The large512gain depends on a slow first reference sample; all samples are retained.
+Both4096cells timed out at90seconds. One retained staged64.393s/reference6.625s pair
+had exact32768-row trajectories, but no complete median; the25second cooperative
+collection allowance was exceeded. The deadline checks microsteps, not final rollout
+assembly or the full timed window. The phase causing the delay remains unknown.
 
-|Actors|Maximum batch|Reference seconds|Staged seconds|Speedup|
-|---|---:|---:|---:|---:|
-|16|256|0.873|0.727|1.200×|
-|16|1024|1.024|0.798|1.284×|
-|128|256|4.797|3.886|1.234×|
-|128|1024|3.095|2.177|1.421×|
+All six fixed field/dtype/storage gates passed;18retained samples matched complete
+rollouts, final buffers, journals, reset seeds and sampling RNG. Nine staged storage
+checks passed. All28manifest files/30outputs verified. `collector-staging-results.txt`
+records every sample, failures, competing explanations and the next phase diagnostic.
+`gpu-probes/collector-009` holds evidence. Next: externally bounded4096stream phase
+attribution before training integration. No cap increase/retry or production edit.
 
-Both128actor cases passed the preregistered1.15× target; neither16actor case
-regressed. ABBA/BAAB order, two samples per variant/case, all retained. At128/1024,
-preparation fell1.110→0.562s, H2D0.493→0.127s, forward1.231→1.228s. This jointly
-changes CPU selection, pinned host/device buffer reuse and copying; individual
-component effects are not isolated. Histograms were identical within every case.
+## Reusable serving buffers: narrower validation passed
 
-All44fixed groups/176service calls passed exact input/output parity and storage
-ownership gates. Separate artifact audit checked67,968live deliveries: all expected
-requests, exact inputs/outputs, zero hash differences, matching measured source.
-All23manifest files and25authoritative outputs verified. Failed standard download
-was recovered with authenticated range reads, without rerental. Raw evidence and
-receipts are in`gpu-probes/staging-008`; all samples, memory and detailed boundaries
-are in`staging-validation-results.txt`. Persistent pinned/device storage is9.046MB
-each atbatch256 and36.184MB each at1024; GPU peaks include both backends coexisting.
-
-This is one-worker serving with virtual host delays, not real games/learning or
-multiple physical GPUs. Ordinary collection must preserve action_focus float32,
-independent pending observations and sampling/journal contracts before any training
-claim. The laptop model still uses run007 reference costs; do not apply one pooled
-speed multiplier. A staged cost model needs independent calibration/confirmation.
-
-Deletion was confirmed14:44:17.821584Z; post-job billing interval74.034435s. Whole
-rental estimate$0.346252 exceeds job estimate$0.264197. Process-scoped caffeinate
-was used; neither the earlier delay's cause nor a causal remedy is established.
+Run008`3375fdd99515`, source`317cbdbd352394f60c46274616510bcc179de40c`, same GPU/driver.
+At16actors, batch256/1024 gains1.200×/1.284×; at128actors1.234×/1.421×. All targets
+passed. At128/1024, preparation1.110→.562s, H2D.493→.127s, forward1.231→1.228s.
+Combined selection/buffer/copy intervention; component effects were not isolated.
+All44fixed groups/176calls and67,968live deliveries matched exactly, with identical
+within-case histograms. All23manifest files/25outputs verified. Allocation and memory
+are explicit in `staging-validation-results.txt`; evidence is in`gpu-probes/staging-008`.
+This one-worker/virtual-host result does not establish general collection or training
+gains. Run009 supplies contrary transfer evidence. Laptop costs remain run007 reference;
+no universal staging multiplier. Staged calibration and learning remain unverified.
 
 ## Complete serving model: prospective validation passed
 

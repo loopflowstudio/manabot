@@ -1,0 +1,12 @@
+{
+  "run": "d17e9ea3ee14",
+  "bucket": "etude-job-journals-324288363980-us-west-2",
+  "key": "etude/fantasia-gpu-validation-20261014/5c983292d346/out/attempts/be8c4e3a2b57/outputs/evidence.tar.gz",
+  "previous_fetch": null,
+  "method": "ordered 4MiB authenticated range GET, four readers, If-Match ETag",
+  "seconds": 0.4249172090785578,
+  "verified_files": 28,
+  "archive_bytes": 300159,
+  "archive_sha256": "f3a0b936e0117b6a7ec0c8071814b9d317f2a6083afeee2ddfd7f2c162ebbd38",
+  "authoritative_outputs_verified": 30
+}
