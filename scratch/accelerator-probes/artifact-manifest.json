@@ -895,6 +895,16 @@
       "path": "scratch/cpu-probes/learner-flow-clock.receipt.json",
       "bytes": 650,
       "sha256": "c434d0db709869d3740ba82d0b758b8d4bb10b33ff1888ab6fbd65c757602735"
+    },
+    {
+      "path": "scratch/gpu-probes/l4-004/artifact-manifest.json",
+      "bytes": 12855,
+      "sha256": "66141657441f5bd2d39435defe744b1631f926aa28ba4d0924324cab3a869db5"
+    },
+    {
+      "path": "scratch/compare-training-states.py",
+      "bytes": 5713,
+      "sha256": "eab2f9f550b0962a863294024a186b06359b06842665ab2d97c13c59ab1b0c7d"
     }
   ]
 }

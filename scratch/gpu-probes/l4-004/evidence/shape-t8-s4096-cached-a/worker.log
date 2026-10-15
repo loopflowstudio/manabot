@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/scratch/gpu-validation.py", line 608, in <module>
+    main()
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/scratch/gpu-validation.py", line 392, in main
+    child(args)
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/scratch/gpu-validation.py", line 324, in child
+    capacity_child(args.root, cell)
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/experiments/runners/cuda_performance.py", line 266, in child
+    run = execute_regime(recipe, 10349, out / "run", store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/manabot/training/execution.py", line 259, in execute_regime
+    return _execute_regime(
+           ^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/manabot/training/execution.py", line 1279, in _execute_regime
+    batch = trainer.collector.collect(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/scratch/gpu-validation.py", line 285, in call
+    return function(*values, **keywords)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/scratch/gpu-validation.py", line 305, in collect
+    return original(
+           ^^^^^^^^^
+  File "/run/etude/sessions/20e2d6c4c331/attempts/c6952b091ea5/src/manabot/sim/net_opponent.py", line 422, in collect
+    raise TimeoutError("collector exceeded training deadline")
+TimeoutError: collector exceeded training deadline

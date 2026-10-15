@@ -1,124 +1,109 @@
 # GPU validation — current evidence and allocation
 
-Jack Heart authorized **$50 total** GPU spend for this goal. It supersedes the
+Jack Heart authorized **$50 total** GPU spend for this goal, superseding the
 original no-paid boundary. No other experiments, Tasks or publication are selected.
-Complete preregistration and earlier operational history are retained byte-for-byte
-in `gpu-probes/eac79ab23e09900cabe7f6bf3e060e602c6e3fdfb56b572f70dcc9d73f07c4b0.protocol.txt`
-and the committed versions of this note. Do not lose failed attempts or predictions.
+Full previous protocol/history and findings remain in committed versions and
+hash-named `.protocol.txt`, `.history.txt` and `.notes.txt` under `gpu-probes/`.
 
-## Evidence from the first completed measurement
+## Earlier measurements and catalog direction
 
-Run `a7df3b8d1a77`, source `724da6e1ab87381c65d1e85ed54cb4176df25ed5`,
-L4 23,661,248,512bytes, Torch2.10.0+cu128, Python3.12.3, float32/TF32off.
-All53 manifest entries verified after fetch. Small raw records, failure logs,
-summary and current capacity report are in `gpu-probes/l4-002`. Complete tensors,
-trace and archive are retained under `.runs/gpu-validation/result-002`;
-archive SHA `fa2b9efa8615831ec7b1a4baabb947421eaa6b4df97536883dc802a732c02e8d`.
+First allocation failed bootstrap before measurements. Second run `a7df3b8d1a77`
+completed eight model cells, nine collection cells and a profile; two learning
+cells failed source admission because archives lack `.git`. Later probes use the
+existing verified source-bundle contract. All failures and costs remain retained.
 
-| Small-model batch | Inference observations/s, median of3 windows |
-|---|---:|
-|1|314|
-|4|1,314|
-|16|5,151|
-|64|15,071|
-|256|26,316|
-|1024|28,064|
+Second-rental inference/collection curves are in `gpu-probes/l4-002` and the
+main benchmark note. Batching helped the small model but not width384/depth8;
+all nine exact collection comparisons passed. Whole collection stayed below50%
+of best model-only throughput. All53manifest files verified; large tensors/trace
+remain in `.runs/gpu-validation/result-002`. These are short untrained workloads.
 
-Batch256 is1.75x batch64, meeting the preregistered>=20% prediction. In contrast,
-width384/depth8 achieved942/934 observations/s at64/256. Batching is not always
-beneficial. Actual attention length is202, versus203 in historical curves.
+Third run `a7f16bef6f6c`, frozen source `a5b73db1007ae247fc18d59e08722b1e4bfbc75f`,
+tested catalog reuse only within one frozen-weight no-grad collection, restored
+before learning. Three seeds10831–10833,64/256streams,4,096learner transitions,
+four timed samples in ABBA/BAAB order after warmup. First cache computation stays
+inside timing. The prototype rejects gradients and weight-version changes.
 
-Repeated whole collection across three untrained seeds delivered972–1,210
-**decisions**/s at16streams,2,269–2,707 at64,3,785–4,970 at256. All nine exact
-same-seed rollout comparisons passed; no truncations. Every case was below50%
-of best model-only throughput, meeting the second prediction. These are different
-boundaries, not measured distributed efficiency. 256stream traces end after16
-learner steps and only1–2 games: not mature-policy or steady traffic.
+Median collection speedups were **1.490× at64**, **1.252× at256**, meeting both
+predictions. All24trajectories matched exactly, including journals/reset seeds;
+extra peak GPU allocation8,192bytes. The64stream seed10832 reference outlier
+4.541s versus2.285s is retained; its2.181× pair does not determine the median.
+Four ordinary three-update training runs completed at16/64streams:1,536learner
+rows,384exposures each,96/24optimizer steps,11/zero finished games. All had48changed
+state tensors and zero nonfinite/skipped steps. Initial/final raw and EMA matched;
+16stream Adam was exact,64stream Adam differed in3moment tensors(max3.64e-12).
+No tolerance was preregistered. Whole-run times8.825→5.847s and3.143→2.916s are
+single ordered pairs with setup/host variation, not robust training-speed claims.
+All59manifest files verified. Small records: `gpu-probes/l4-003`; large tensor
+archive: `.runs/gpu-validation/result-003`. The fourth controls below address the
+optimizer discrepancy. Production invalidation/API and mature-policy safety remain
+unselected; no playing-strength claim follows.
 
-The single host profiler interval is1.389588s, with0.207562s kernel/copy union
-(14.94%),68,114kernels and4,955copies. Three same-named GPU annotations are nested
-duplicates, not repetitions. CPU GRU inclusive time0.2447s over119forwards;
-launch runtime0.5246s overlaps those operations. Busy intervals are not SM occupancy.
-CPU catalog dominance cannot be transferred quantitatively to GPU.
-
-Both actual-learning cells failed before learning: Git archives lack`.git`.
-The existing source owner supports a verified`.manabot-source.json` bundle;
-use that contract, retain failed logs, and make no learning-throughput claim.
-
-## Catalog experiment (completed)
-
-Frozen source `a5b73db1007ae247fc18d59e08722b1e4bfbc75f`, cohort
-`l4-validation-003`, source archive SHA
-`6e34d4be03a2861986901a0ad7049137f602f5d10aef9694c5208583a11433a4`.
-Multipart upload and complete readback finished before renting (185.034s).
-The job manifest binds1938 source files and the worker-built native module.
-
-Reference versus research-only catalog reuse inside one frozen-policy collection:
-three seeds10831–10833,64/256streams,4096learner transitions, four paired samples
-in ABBA/BAAB order after two-step warmup. First cache computation is timed. Require
-exact rollout/journal/reset-seed parity; reject gradients or parameter-version
-changes inside the cache. Destroy it before learning. Prediction frozen before
-execution: >=15% median collection gain at64streams, smaller relative gain at256.
-This tests a mechanism, not a production cache/invalidation API.
-
-Ordinary three-update TrainingRun comparisons at16/64streams use separate
-reference/cached processes and the same seed. Retain real exposure/skip counters
-and compare final logical tensor states where possible. Do not replace RL with
-the model-only diagnostic Adam measurement. Source bundle verification happens
-before the existing source owner admits training. CPU preflight exact paired
-parity passed in2.846commandseconds,324.2MiB sampled peak; not GPU speed evidence.
-
-## Execution controls and retained history
-
-All allocations used one L4 at$0.59/hour, pool ceiling$0.80, job30minutes/$1.50,
+All rentals used one L4 at$0.59/hour, pool ceiling$0.80, job30minutes/$1.50,
 cohort$3,maxoneattempt. Driver caps: setup900s, measurements600s, child90s.
-Etude owns source transport and self-deletion; credentials stay in-process.
-The first run failed bootstrap before measurements; the second retained two
-source-admission failures. Their costs and evidence are included, not discarded.
-Exact allocation IDs, cleanup receipts, CLI recovery and complete operational
-history are retained in`gpu-probes/f81f288a4bde6776f15cb9d0ce4c7aab6034d08ed3eb07cecd701cb91eace2bc.history.txt`.
-The current ledger is`.runs/gpu-validation/budget.json`; its latest snapshot is
-`gpu-probes/l4-003/budget.json`. No allocation or observation process remains live.
+Etude owns source transport/self-deletion; credentials stay in-process. GPU drivers
+differ across rentals, so use within-rental comparisons. Exact IDs, failed logs,
+source/output checksums, billing and cleanup receipts remain with each result.
 
-## Catalog results and remaining uncertainty
+## Learner shapes and repeatability (fourth allocation)
 
-All59 returned manifest files verified; archiveSHA
-`3a4c377151f535fe5b90863585c3719aebb680f58aed01bb92be7b0b9082bb9b`.
-Full small records and tensor comparison: `gpu-probes/l4-003/summary.json` and
-`tensor-comparison.json`; raw tensor archive in`.runs/gpu-validation/result-003`.
-Third provider pod absent at02:55:38.926UTC. All three allocations are deleted.
-Total rental estimate$0.20; conservative charges$0.35 plus ancillary reserve$5
-leave$44.65 unallocated. No new allocation is pending. Full ledger is retained
-with the third results; billing amounts remain estimates.
+Preregistered in `gpu-scale-protocol.txt`, frozen source
+`d056d09218d3be3c234b40c9eafa70ad736f5c81`; run `1f97b066ed87`,
+session `20e2d6c4c331`. Source archive SHA
+`cfa68303d46ef31aac7668353b5840ef2aa5b6d0dd839bbfe9a96be75719bde4`.
+A source readback timeout happened before rental; complete ordered range readback
+with If-Match verified the unchanged archive in9.137s. No rental retry occurred.
+L4 driver580.126.20 differs from earlier rentals; use within-rental comparisons.
 
-Across seeds,64stream collection speedups were1.490/2.181/1.466x (median1.490x);
-256stream1.297/1.252/1.228x (median1.252x). All24 timed trajectories matched
-exactly within their seed/stream pairs, including rollout, journal and reset
-seeds. Extra peak GPU allocation was8192bytes. Both catalog predictions passed.
-The2.181x case includes a4.541s reference outlier versus2.285s on its repeat;
-retain it. The median result and all other paired comparisons still show gains.
+Six three-update cells completed; both4096stream cells were interrupted by the
+55second training deadline during their third collection. Each had already
+completed two actual updates:65,536learner rows,16,384exposures,16optimizer steps,
+21finished games. This is not an OOM result or a completed three-update run.
+The partial timings remain diagnostic evidence; complete-loop capacity and
+post-run GPU peak allocation are unavailable for this shape.
 
-All four three-update training runs completed, each1536learner transitions and
-384optimizer exposures;16streams had96optimizer steps/11games,64streams24steps/
-zero finished games. No nonfinite or skipped steps were reported. Initial, final
-raw and EMA tensor states matched exactly between reference/cache, as did all
-scientific diagnostics after excluding timing/resource coordinates.48state tensors
-changed during each run, so this was actual optimization, not an empty-filter smoke.
-16stream Adam state also matched exactly.64stream Adam state had3differing moment
-tensors, maximum absolute delta3.64e-12; no tolerance was preregistered, so exact
-optimizer parity is **not** established. Possible explanations include ordinary
-CUDA reduction variation and cache-dependent execution/allocation ordering.
-A reference/reference plus cached/cached repeatability control is the next small
-check before selecting a production implementation. No new tolerance is invented.
+| Reference shape | Complete learning rows/s | Learning seconds / iteration | GPU peak allocated |
+|---|---:|---:|---:|
+|8×64, A|2,273|0.2252|166,784,000bytes|
+|8×64, B|2,169|0.2361|166,784,000bytes|
+|8×512|11,099|0.3690|1,135,156,736bytes|
 
-Whole-run times were8.825→5.847s (16streams),3.143→2.916s (64streams).
-These are single reference-then-candidate comparisons, not a robust training-speed
-claim; initialization/host variability contributes. Driver580.159.04 differs
-from the prior rental's595.91.07, so use within-rental pairs. Zero completed games
-in64stream learning also limits representativeness. This validates catalog reuse
-as an optimization direction; production API/invalidation, mature-policy traffic,
-and a learner/backpressure/policy-age model remain unimplemented/unmeasured.
+The512stream point is4.883× reference-A rows/s, exceeding the predicted2×.
+These include cold first updates and EMA. Synchronized method times separately
+preserve all three samples; update_iteration excludes EMA. All completed cells
+had24optimizer steps,25% retained exposures,48changed raw state tensors and zero
+reported nonfinite/skipped steps. Shape changes filtering populations; equal
+throughput units do not establish equal learning quality. There were zero games
+at64streams and four at512, limiting representative-traffic claims.
 
-Next bounded allocation: `gpu-scale-protocol.txt` freezes a repeatability control
-and actual [8,64], [8,512], [8,4096] learner shapes on one L4. It retains the same
-per-job limits and original $50 total; no source or lease is yet active for it.
+Reference-A/reference-B Adam differs in3moment tensors/17elements, max3.64e-12.
+Thus caching is **not necessary** for this non-exactness; its kernel-level cause
+remains unidentified. Cached-A/B Adam is exact. Reference/cache differs in3moment
+tensors at64(max3.64e-12) and2 at512(max1.14e-13). Initial/final raw and EMA states
+are exact in every completed comparison. No tolerance was added and no universal
+optimizer-equivalence claim follows. Interrupted final states remain unavailable.
+
+At64streams, collection reference/cache ratios were1.300× and1.332×.
+At512, cached collection was5.915s versus4.694s reference:26.0% slower in this
+single ordered pair, with identical final raw/EMA. This prevents extrapolating
+the earlier collection gain to larger shapes. Repeat with alternating order to
+separate a real shape effect from host/time variation; neither is established.
+
+All91manifest entries verified; output archive SHA
+`a17b8f2dcb250ba4e58b1ff559fc89dabcdca65c91ef849cdfe1646c3be4ff86`.
+Small raw records, source snapshots, summary, exact tensor comparison and explicit
+successful-shape calibration are in`gpu-probes/l4-004`; full tensors/SQLite/archive
+remain in`.runs/gpu-validation/result-004` and Etude output. The comparator's five
+mechanical checks passed in0.703s; legacy probe use is233.608/240seconds.
+
+Pod`g4893kl7qnbnhf` was confirmed absent at03:51:37UTC on2026-10-15; all four
+rentals ended. First three provider bills total$0.188858; fourth estimate$0.067083,
+combined$0.255941. Conservative charges$0.45 plus$5ancillary reserve leave
+**$44.55 unallocated** of the original$50. No reservation remains. The authoritative
+ledger and dated provider cost/cleanup receipts accompany the fourth results.
+
+The laptop model now has measured distinct learner shapes rather than an assumed
+linear per-row cost. Next is explicit global-cohort admission with measured service
+and retained memory, coupled to inference sharing. Mature-policy traffic, high-end
+GPU service and multi-GPU synchronization remain missing; no system-speed or
+strength conclusion follows from these short L4 probes.

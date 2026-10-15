@@ -1,0 +1,51 @@
+L4 learner batch-shape and repeatability validation — preregistration
+
+Purpose: replace unmeasured learner scaling assumptions with actual fixed-shape
+service and distinguish ordinary repeatability noise from the catalog cache's
+small Adam-state difference. This is a bounded performance/correctness probe,
+not a strength campaign or production optimization.
+
+Reuse the existing ordinary cuda_performance TrainingRun owner. Width64/depth1,
+float32/TF32off, Ataraxos move recipe, current-self, fixed initialization10349,
+three learning iterations per child. Fresh process for every case. All sizes are
+complete centrally filtered batches; do not simulate summing independent Adam
+owners. Shape is [learner timesteps, streams].
+
+Cases, in order:
+- Four [8,64] cases: reference-A, cached-A, reference-B, cached-B. Compare raw,
+  EMA and Adam states within reference/reference and cached/cached, then across
+  variants. Preserve every non-exact tensor and absolute differences; no new
+  tolerance or removal of discrepant tensors. Prior strict exact comparison is
+  the control; do not claim all future schedules deterministic from one machine.
+- [8,512] reference/cached, 4096 learner rows per iteration.
+- [8,4096] reference/cached, 32768 learner rows per iteration.
+
+The research cache is restricted to one no-gradient frozen-policy collection and
+restored before updates. No production rule or optimizer changes. Record
+synchronized collect/update-iteration phase times individually, preserving their
+order; update timing excludes EMA, while TrainingRun's complete learning time
+includes it. Instrumentation is identical in all cases. Keep ordinary stage and
+run times, actual exposures/optimizer steps, skips/nonfinite reports, world/source
+identities and exported raw/EMA/Adam artifacts. Larger batches change the filter
+population; compare shapes as configurations, not identical learning workloads.
+
+Predictions: reference-B versus reference-A can reproduce tiny Adam differences
+without caching (alternative: discrepancy only appears across cache variants).
+For successful [8,512] versus [8,64], learning rows/s increases by at least2x;
+[8,4096] may OOM or exceed the fixed deadline, which is evidence and not permission
+to resize/retry. Per-row linear scaling from512 rows is not assumed. Cache gains
+may diminish at larger batches. No playing-strength claim.
+
+One L4 via the existing isolated Etude pool. Original$50 total inclusive ceiling;
+prior estimated rentals$0.20, conservative charges$0.35, ancillary reserve$5.
+Fourth cohort l4-validation-004 reserves$3; job$1.50,30minutes,maxoneattempt,
+pool ceiling$0.80/hour and only one GPU. Existing guardian adds at most15minutes
+setup. Same setup900s/measurement600s/cell90s; ordinary TrainingRun stage55s and
+regime60s remain unchanged. No cap is relaxed on failure. Freeze source/protocol
+and fully verify source upload before renting. Missing/wrong CUDA, source or
+nonfinite failures are retained. Confirm exact pod deletion before further spend.
+Source-bundle verification uses the existing contract, not a synthetic Git repo.
+
+Local preflight is static lint/CLI schema only; no new measured CPU workload.
+Existing CPU allowances are not extended. Remote limits and total GPU budget own
+this experiment. Hypotheses, failures, manifests and ledger survive every retry.

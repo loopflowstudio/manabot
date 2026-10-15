@@ -21,7 +21,7 @@ Seventeen cases and serial timing, partial service, fractional-clock, zero-lag,
 block/drop, conservation and replay checks passed. Final evidence is
 `accelerator-probes/learner-flow-clock.json`. Earlier reports remain; a timestamp
 roundoff fix admits exact-horizon completions within 1e-12 seconds, never stale
-policy versions. Three invocations cost 0.703 seconds; legacy probe usage is 232.905/240 seconds.
+policy versions. Three invocations cost 0.703 seconds; legacy probe usage at that point was232.905/240seconds.
 No GPU allocation occurred.
 
 Key counterexamples:
@@ -42,3 +42,10 @@ controls include global batch leases, other zero-lag quotas, or a separately
 validated learning rule; none is selected. Next: measured global-cohort service
 and integration with inference sharing, rather than summing independent
 optimizers as one consistent learner.
+
+Fourth-rental service points are now in `gpu-probes/l4-004/learner-service.json`.
+Three-update reference learning averages are0.2252/0.2361s for8×64 and0.3690s for
+8×512; the latter is a different centrally filtered batch, not eight independent
+updates. Keep cold and repeated method samples visible.8×4096 has two completed
+updates before a collector deadline, so no complete-loop calibration is admitted.
+The existing admission model still uses the earlier fixed8×64 calibration.

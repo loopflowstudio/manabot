@@ -87,12 +87,12 @@ uv run --no-sync python scratch/accelerator-queue-probe.py host --tape scratch/a
 
 Six focused tests passed; ten closed-form/conservation checks cover queue timing,
 finite completion, padding and host tails. All measured attempts used bounded
-supervision. The legacy wrapper has consumed232.905of240aggregate probe seconds;
+supervision. The legacy wrapper has consumed233.608of240aggregate probe seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits also remain unexhausted. New measured
-work needs an explicit protocol and adequate remaining allowance. GPU ledger
-remains$0.20 estimated rentals,$0.35 conservative charges+$5reserve,$44.65 free;
-all machines confirmed deleted, no new allocation in this turn.
+work needs an explicit protocol and adequate remaining allowance. The GPU ledger
+records$0.255941 billed/estimated rentals,$0.45 conservative charges+$5reserve,
+$44.55 free; all four machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -105,8 +105,9 @@ and synthetic phase rotations must remain visible. Exact replay of one policy
 does not predict how a changed trained policy changes its game distribution.
 
 Next: mixed independent/mature-policy traces, actual learner/backpressure and
-policy-age accounting, and GPU reference/reference controls for the tiny Adam
-state discrepancy. Optimize host code by paired semantic replay; change GPU
+policy-age accounting, and coupling to measured learner service. Reference/reference
+controls reproduce tiny Adam differences without caching (gpu-validation.md).
+Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and
 learning before a system-speed claim. The active goal is not complete.
 
@@ -118,3 +119,9 @@ Learner admission/backpressure now has a separate pure scheduling model and
 physical512row 8x64 learning-service calibration: see learner-flow.md. It counts
 zero-lag admission, stale/full discards and blocked-producer packet retention.
 It is not yet coupled to inference/network or a global-cohort learning protocol.
+
+Fourth L4 calibration (`gpu-probes/l4-004/learner-service.json`) records complete
+8×64 and8×512 runs with individual cold/repeated phase samples; reference learning
+rows/s improved4.883× at512streams.8×4096 completed two updates but timed out in
+collection; no successful whole-loop point is inferred. A single512stream cache
+pair regressed collection26%, so do not extrapolate the64/256stream cache gain.
