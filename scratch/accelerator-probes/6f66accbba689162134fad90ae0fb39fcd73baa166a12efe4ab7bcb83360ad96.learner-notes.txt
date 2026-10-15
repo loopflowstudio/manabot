@@ -1,0 +1,72 @@
+# Learner admission and backpressure — bounded research
+
+The prior turn added exact request timing and a second independent tape. This
+slice addresses the remaining learner/age gap without selecting a distributed
+learning algorithm. No remote allocation, training or production change.
+
+Observed source boundaries: `execution.py:1270–1355` collects a frozen behavior
+batch, then updates, advances its iteration and EMA. `ataraxos.py:211–310` builds
+central targets/filtering and takes one optimizer step per retained timestep.
+`docs/distributed-rl.md:19–24,99–108,627–638` explicitly leaves nonzero-lag admission
+unselected. A full512row batch with16streams has32 timestep groups; with64streams
+it has8. The real L4 runs observed96 versus24 optimizer steps across three updates,
+so rows/s alone cannot extrapolate learning to arbitrary global batch shapes.
+
+Calibration: the reference64stream x8step L4 TrainingRun from l4-003. Use its
+summed collection/learning seconds divided by its three iterations; preserve the
+source hash and full shape/counters. Constant service is a short-run sensitivity
+input, not a service distribution, steady state or a new CUDA measurement.
+
+A pure scheduling model will count complete512row batches, policy versions,
+production-start timestamps, queue waits and one learner owner. Strict zero-lag
+admission discards batches made with an older version before learning starts.
+Serial production is the current-compatible control. Block/drop-full producer
+modes are hypothetical transport experiments; neither authorizes stale learning.
+Blocking a producer retains its completed packet outside the bounded queue;
+report that occupancy separately. Count completed learning, stale/full discards,
+waiting/held/active/in-production units and enforce conservation. Do not call
+admitted rows useful strategic learning or scale independent optimizers linearly.
+
+Before execution: reuse the remaining legacy240second cap (232.202used), one
+<=5second pure-Python supervisor invocation. Check closed-form serial throughput,
+zero stale admission, full/drop/block accounting and deterministic replay. Sweep
+8/64/4096synthetic producers, two queue capacities and block/drop modes at declared
+offered-rate multiples. This is an independent admission stress model; it is not
+yet coupled to request-level inference, network, GPU sharing or real policy changes.
+Prediction: bounding the queue alone does not bound all completed packets when
+producers block; speculative zero-lag production can waste work even below nominal
+learner capacity. Preserve counterexamples rather than relax the admission rule.
+
+## Findings
+
+`scratch/learner-flow-probe.py` completed17cases and closed-form serial/partial
+service, fractional-clock, zero-lag, block/drop, conservation and deterministic
+replay checks. Three bounded invocations consumed0.703commandseconds, no GPU cost.
+Final report:`accelerator-probes/learner-flow-clock.json`; earlier reports and
+source snapshots remain. A1e-12second horizon roundoff rule fixes a fractional
+completion landing a few ulps beyond the cutoff; policy versions remain exact.
+
+Calibration is0.395460s collection and0.250497s learning per512row 8x64 batch,
+from three real L4 iterations. This gives a nominal learning-only capacity of
+2,044rows/s, not whole-run throughput or a portable capacity for another shape.
+The serial control completed20iterations with no stale/full discards; its
+learner duty fraction was38.78%, accounting for collection time separately.
+
+At4096complete-batch producers, queue capacity1 and block-on-full, the model
+retained up to511completed packets:509held by producers, one queued, one active.
+Drop-on-full kept that peak at2but discarded510packets for overflow. Both modes
+learned only2of8193produced batches; the other packets were stale or full-discarded.
+This horizon includes startup/drain behavior, not a steady-state throughput claim.
+At8producers offering only half nominal learner capacity,17batches were produced,
+2learned and15discarded as stale. Every admitted batch had version lag0. Wall-clock
+age and version lag are distinct: admitted samples can be old in seconds while
+still current-version. Explicit retained counts include work pending at cutoff.
+
+Interpretation: queue length and generated rows/s are insufficient optimization
+gates. Count producer-held results, admission/discarded work, unique rows,
+optimizer exposures, batch shape and policy version. A bounded queue cannot make
+stale learning valid. Candidate next controls include a global batch lease, different zero-lag quotas,
+or an explicitly tested alternative learning rule; none is selected here. The next model needs a measured global-cohort service point and
+integration with inference sharing. Independent optimizer owners cannot be summed
+as though they were one consistent learner. These are scheduling findings, not
+new learned-policy results or a production distributed implementation.

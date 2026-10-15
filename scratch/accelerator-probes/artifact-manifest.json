@@ -805,6 +805,96 @@
       "path": "scratch/gpu-probes/f81f288a4bde6776f15cb9d0ce4c7aab6034d08ed3eb07cecd701cb91eace2bc.history.txt",
       "bytes": 8369,
       "sha256": "f81f288a4bde6776f15cb9d0ce4c7aab6034d08ed3eb07cecd701cb91eace2bc"
+    },
+    {
+      "path": "scratch/accelerator-probes/learner-flow.json",
+      "bytes": 17317,
+      "sha256": "5208180750e1c28de8cb551b9e30bc900c574f5b31474558bebbe56f9a263309"
+    },
+    {
+      "path": "scratch/accelerator-probes/learner-flow-rates.json",
+      "bytes": 20326,
+      "sha256": "1b5dad7c039a295ad38193ad92f66fc4aeb35082bad1983e80cb7ca3b6713e06"
+    },
+    {
+      "path": "scratch/accelerator-probes/learner-flow-clock.json",
+      "bytes": 20430,
+      "sha256": "fee5842b5a4ebc8541919c63ad72715fdb6915aa0894d89d7086759514fc2575"
+    },
+    {
+      "path": "scratch/accelerator-probes/173d1c8a79f410c1d06961c8a0f5b50921e55b4a02ab6bcc0cf88f3a58602dcd.source.txt",
+      "bytes": 12918,
+      "sha256": "173d1c8a79f410c1d06961c8a0f5b50921e55b4a02ab6bcc0cf88f3a58602dcd"
+    },
+    {
+      "path": "scratch/accelerator-probes/8a0fac7a670628c8037f3fe92f8ffc48d30134997b3b9f628b1dadbdddc7d596.source.txt",
+      "bytes": 11934,
+      "sha256": "8a0fac7a670628c8037f3fe92f8ffc48d30134997b3b9f628b1dadbdddc7d596"
+    },
+    {
+      "path": "scratch/accelerator-probes/75b0cf7b90a3ef2784011dc925d4ca7dbabb0608e9142c7034c9209ca1b90852.source.txt",
+      "bytes": 12403,
+      "sha256": "75b0cf7b90a3ef2784011dc925d4ca7dbabb0608e9142c7034c9209ca1b90852"
+    },
+    {
+      "path": "scratch/accelerator-probes/7bc9df3dd20e16bb4e10a05448e7eeed07298aa2ecc99ccef2537bf22de394f6.notes.txt",
+      "bytes": 7771,
+      "sha256": "7bc9df3dd20e16bb4e10a05448e7eeed07298aa2ecc99ccef2537bf22de394f6"
+    },
+    {
+      "path": "scratch/cpu-probes/b913dd906459f34a339d1afe4de1b208e9127a142951b65756dd14e9472035c4.limits.txt",
+      "bytes": 3062,
+      "sha256": "b913dd906459f34a339d1afe4de1b208e9127a142951b65756dd14e9472035c4"
+    },
+    {
+      "path": "scratch/accelerator-probes/6f66accbba689162134fad90ae0fb39fcd73baa166a12efe4ab7bcb83360ad96.learner-notes.txt",
+      "bytes": 4954,
+      "sha256": "6f66accbba689162134fad90ae0fb39fcd73baa166a12efe4ab7bcb83360ad96"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-rates.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-clock.stdout.log",
+      "bytes": 164,
+      "sha256": "ac5fcee68db6d854aabc05cf92523cb54454bbe9ea9a87db60cc2694c78f1b29"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-rates.receipt.json",
+      "bytes": 654,
+      "sha256": "c096d7e74e03cccf30f801117c80f2da78eb62cf009739357a41d80ba39e3e22"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow.stdout.log",
+      "bytes": 158,
+      "sha256": "6080681c57308fdd0e5166b0616fe60838ab51e24885328157eb903b71145539"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow.receipt.json",
+      "bytes": 650,
+      "sha256": "e1aa768907163c90ee552b54b1386943be27ec7824a6ace44d5a69745ba8d554"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-clock.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-rates.stdout.log",
+      "bytes": 164,
+      "sha256": "7d75e117ae4201b0b7dcef6b536a2569343582d5ebc621d0ab2ae9b1bd7e349c"
+    },
+    {
+      "path": "scratch/cpu-probes/learner-flow-clock.receipt.json",
+      "bytes": 650,
+      "sha256": "c434d0db709869d3740ba82d0b758b8d4bb10b33ff1888ab6fbd65c757602735"
     }
   ]
 }

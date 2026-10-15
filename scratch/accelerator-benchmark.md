@@ -38,14 +38,12 @@ transitions,31games and491policy requests. The second independent seed10832 has
 with no truncations. They are untrained policies; phases rotated within one tape
 are synthetic sensitivity, not independent game trajectories.
 
-Three current seed10831 replays took0.2577/0.2559/0.2523s without request timing,
-0.2509/0.2506/0.2546s with it. These small consecutive runs show no obvious
-instrumentation penalty, not a precise zero-overhead estimate. Every measured
-interval plus final tail sums exactly to collection wall time. On declared
-repeat1, request median0.277ms,p95 1.103ms,max1.231ms; final host tail36.793ms
-(14.68%). That tail includes last-response processing/finalization/assembly,
-not an isolated assembly measurement. Independent seed10832 replay took0.23346s,
-with38.185ms tail and0.12206s native work on its declared repeat.
+Request timing preserves exact replay and reconstructs collection wall time.
+Seed10831's declared repeat1 took0.25064s, with36.793ms final host tail(14.68%);
+seed10832 took0.23346s with38.185ms tail. Tails include last-response processing,
+finalization and assembly, not isolated assembly cost. Three sequential repetitions
+with/without instrumentation show no obvious penalty, not precise zero overhead.
+Full intervals and controls are in`request-timing-summary.json` and raw replays.
 
 Current L4 service comes from`gpu-probes/l4-002/capacity-report.json`, float32,
 TF32off,202attention slots. Historical203slot reports remain separate. The small
@@ -72,11 +70,9 @@ model-only diagnostic Adam observation per decision lowered the original speed
 to3,777/s and raised mean request latency66.5→395.2ms. This reserve still lacks
 an actual learner queue, sample reuse and policy-age feedback.
 
-Physical catalog-reuse experiments improved collection median1.49x/1.25x at
-64/256streams, with exact trajectory parity. Final raw/EMA policies also matched
-in short actual learning runs; three Adam moment tensors differed slightly in
-one comparison. This is a validated optimization direction, not a production
-cache API or a complete optimizer-equivalence result. See gpu-validation.md.
+Physical catalog reuse improved collection median1.49x/1.25x at64/256streams.
+See gpu-validation.md for exact trajectory/raw/EMA parity, the small Adam-state
+discrepancy, costs and proof limits. This remains a research prototype.
 
 ## Reproduction
 
@@ -91,7 +87,7 @@ uv run --no-sync python scratch/accelerator-queue-probe.py host --tape scratch/a
 
 Six focused tests passed; ten closed-form/conservation checks cover queue timing,
 finite completion, padding and host tails. All measured attempts used bounded
-supervision. The legacy wrapper has consumed232.202of240aggregate probe seconds;
+supervision. The legacy wrapper has consumed232.905of240aggregate probe seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits also remain unexhausted. New measured
 work needs an explicit protocol and adequate remaining allowance. GPU ledger
@@ -115,8 +111,10 @@ service only with matching hardware measurements; require actual collection and
 learning before a system-speed claim. The active goal is not complete.
 
 Raw evidence and source snapshots are indexed by`accelerator-probes/artifact-manifest.json`.
-Previous complete notes are preserved as`2f03d257d2aa5c5b2cdc66f27bb1143ab21ec6f8877a4d673b96f4c0830c0b90.notes.txt` and
-`8a3e037326bd9f590e518be50c4a637f7bf9b5e7dbb99572510f9e607cb181f7.notes.txt`.
-The original replay source was recovered byte-for-byte against its recorded
-SHA`739335a2d199f2c870a9c44e04808176257e2ff74afb72dc49b34cdb65a49269`;
-new measurements retain their own exact source snapshots. No old result was overwritten.
+Complete previous notes and exact historical/current source snapshots are retained
+by hash in that manifest; no old result was overwritten.
+
+Learner admission/backpressure now has a separate pure scheduling model and
+physical512row 8x64 learning-service calibration: see learner-flow.md. It counts
+zero-lag admission, stale/full discards and blocked-producer packet retention.
+It is not yet coupled to inference/network or a global-cohort learning protocol.
