@@ -6,6 +6,7 @@ exceeds its allowance. Receipts retain RSS samples and the last trace event.
 """
 
 import argparse
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 import json
 import os
@@ -74,10 +75,12 @@ def supervise(
     call_seconds: float = 25,
     rss_limit: int = 12 * 1024**3,
     poll_seconds: float = 0.05,
+    sample: Callable[[int], dict[str, object]] | None = None,
 ) -> dict[str, object]:
     out.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     memory: list[MemorySample] = []
+    telemetry: list[dict[str, object]] = []
     reason: str | None = None
     expired: str | None = None
     observed_overshoot: float | None = None
@@ -90,6 +93,8 @@ def supervise(
                 now = time.monotonic()
                 value = rss(child.pid)
                 memory.append(MemorySample(now, value))
+                if sample is not None:
+                    telemetry.append({"monotonic": now, **sample(child.pid)})
                 calls = boundaries(out / "bounds.json")
                 violation = next(
                     (
@@ -144,6 +149,7 @@ def supervise(
         "last_event": last_event,
         "incomplete_trace_tail_lines": incomplete_tail_lines,
         "memory": [asdict(s) for s in memory],
+        "telemetry": telemetry,
         "boundaries": [asdict(b) for b in boundaries(out / "bounds.json")],
     }
     atomic(out / "supervision.json", report)
@@ -178,8 +184,10 @@ def check() -> None:
                 seconds=0.25,
                 call_seconds=0.1,
                 poll_seconds=0.01,
+                sample=lambda pid: {"pid": pid},
             )
             assert result["status"] == expected, result
+            assert result["telemetry"], result
             if expected != "completed":
                 assert result["exit_code"] == -signal.SIGKILL
         print(

@@ -72,9 +72,19 @@
       "sha256": "251a66ba81c0ce1e90ea062d9080d527d38d5a72f241ac22e1146aaca165d2bb"
     },
     {
+      "path": "scratch/accelerator-probes/25fd4577423874cccf866af18edf5e809bab1c01fdfa2b1bc5850f2326fd161d.source.txt",
+      "bytes": 31095,
+      "sha256": "25fd4577423874cccf866af18edf5e809bab1c01fdfa2b1bc5850f2326fd161d"
+    },
+    {
       "path": "scratch/accelerator-probes/277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b.source.txt",
       "bytes": 27002,
       "sha256": "277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b"
+    },
+    {
+      "path": "scratch/accelerator-probes/27ad53a597e78d069f8fc31b4833457e5e5a2ff2d4446d95555aa5421190dcda.source.txt",
+      "bytes": 13226,
+      "sha256": "27ad53a597e78d069f8fc31b4833457e5e5a2ff2d4446d95555aa5421190dcda"
     },
     {
       "path": "scratch/accelerator-probes/2c80b3e36d9be2821e5430870b0193f53f77c11164e639f7fd62aef10b0c25e1.source.txt",
@@ -120,6 +130,11 @@
       "path": "scratch/accelerator-probes/3e4b71aefb523ce82e1c707dfa1ff42e7717894d562bd19b7d48dfe5d02f3292.source.txt",
       "bytes": 1494,
       "sha256": "3e4b71aefb523ce82e1c707dfa1ff42e7717894d562bd19b7d48dfe5d02f3292"
+    },
+    {
+      "path": "scratch/accelerator-probes/40e1c1d6ef1c6b76c59b563692f38c2474e60c248b7e0873a899c21f4a58c0e3.source.txt",
+      "bytes": 1496,
+      "sha256": "40e1c1d6ef1c6b76c59b563692f38c2474e60c248b7e0873a899c21f4a58c0e3"
     },
     {
       "path": "scratch/accelerator-probes/44a1c12352bd33bb6f4b30ffb2a3c2c8a8b06006adc152be122f995dd066ca6e.notes.txt",
@@ -225,6 +240,11 @@
       "path": "scratch/accelerator-probes/8a3e037326bd9f590e518be50c4a637f7bf9b5e7dbb99572510f9e607cb181f7.notes.txt",
       "bytes": 7298,
       "sha256": "8a3e037326bd9f590e518be50c4a637f7bf9b5e7dbb99572510f9e607cb181f7"
+    },
+    {
+      "path": "scratch/accelerator-probes/8f299497a06179e9e448425603fdd441326ea1c55d07488ba0992e9f960772a0.source.txt",
+      "bytes": 8022,
+      "sha256": "8f299497a06179e9e448425603fdd441326ea1c55d07488ba0992e9f960772a0"
     },
     {
       "path": "scratch/accelerator-probes/9676d55c7801cb34954ba009a500855dea26b06bc118c98df114e05c09757605.source.txt",
@@ -425,6 +445,56 @@
       "path": "scratch/accelerator-probes/cohort-t8-s64/tape.json",
       "bytes": 41425,
       "sha256": "caff7743072bb4b153b17e6093d0727b05e6f240005df1c89a379e240b582670"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/fixtures/assembly-01.json",
+      "bytes": 771,
+      "sha256": "f5d7d2f25e94d718dc999f74db1a62ca75673d5866c4ed9601c89dac58269747"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/fixtures/assembly-02.json",
+      "bytes": 754,
+      "sha256": "456aa3122009a877d4c59bebaf9a99bd726a87426493b63afeada2fd4b868f70"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/fixtures/assembly-method.json",
+      "bytes": 5847,
+      "sha256": "87fc03bc8f06afcee4b864f0a85f267f6311c60b3c444df81b481ac5444ba7a2"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/fixtures/events.jsonl",
+      "bytes": 1859,
+      "sha256": "4b5905b697df3469a89a37e9edc0b8398e9444b92e8c45c15cab087271be4c9a"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/receipt.json",
+      "bytes": 419,
+      "sha256": "ac24d5d1288b681cedcf0464b7a3ddf85a79dd645e8bb2878b84b2a1ab1274d3"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/stdout.log",
+      "bytes": 72,
+      "sha256": "4f823aec45cc929a657f2293c19c1b5647d44f2918e5412c53652eb7919b7752"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/supervisor.receipt.json",
+      "bytes": 201,
+      "sha256": "0b6ba721dd6cf33ffaac716a305b2a44d58ae1bea06f30ba58eb03cf61793cc4"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/supervisor.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/accelerator-probes/collector-assembly-preflight/supervisor.stdout.log",
+      "bytes": 75,
+      "sha256": "97866f85ab6044abddf931290ddc2d6257c05cc4393ee1afd745f12199c0e501"
     },
     {
       "path": "scratch/accelerator-probes/collector-phase-preflight/receipt.json",
@@ -722,6 +792,16 @@
       "sha256": "b909aeec58aec6bfb6f300c579aaf0d4fbda0ac784cbcea37252feee7f6abe8c"
     },
     {
+      "path": "scratch/collector-assembly-probe.py",
+      "bytes": 13226,
+      "sha256": "27ad53a597e78d069f8fc31b4833457e5e5a2ff2d4446d95555aa5421190dcda"
+    },
+    {
+      "path": "scratch/collector-assembly-protocol.txt",
+      "bytes": 3565,
+      "sha256": "e2bf426412e9a8c0e81991c8f91549307203aaf640949463d34ce255dee165fd"
+    },
+    {
       "path": "scratch/collector-phase-protocol.txt",
       "bytes": 3624,
       "sha256": "3f30a0589ad8b90e0132147277404c30bfdb1a16c2c766659474a2e08447be98"
@@ -733,8 +813,8 @@
     },
     {
       "path": "scratch/collector-phase-supervisor.py",
-      "bytes": 7634,
-      "sha256": "5fdfd25ad3efc519258e003b108df0795539e024c7e411834c8c0f386b2e4db5"
+      "bytes": 8022,
+      "sha256": "8f299497a06179e9e448425603fdd441326ea1c55d07488ba0992e9f960772a0"
     },
     {
       "path": "scratch/collector-phase-worker.py",
@@ -2878,8 +2958,8 @@
     },
     {
       "path": "scratch/gpu-validation-job.py",
-      "bytes": 1490,
-      "sha256": "1af37a4cf3b92a156041d9f737b79f9ec333005d1c9e88ca76bfbafca0a3cb86"
+      "bytes": 1496,
+      "sha256": "40e1c1d6ef1c6b76c59b563692f38c2474e60c248b7e0873a899c21f4a58c0e3"
     },
     {
       "path": "scratch/gpu-validation.md",
@@ -2888,8 +2968,8 @@
     },
     {
       "path": "scratch/gpu-validation.py",
-      "bytes": 30003,
-      "sha256": "f9d206d1767bcf5f83dc56b306cc0233142a696fcd6c09593c82eb360d5f3d9d"
+      "bytes": 31095,
+      "sha256": "25fd4577423874cccf866af18edf5e809bab1c01fdfa2b1bc5850f2326fd161d"
     },
     {
       "path": "scratch/highend-integration-protocol.txt",

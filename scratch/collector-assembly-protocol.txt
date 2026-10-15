@@ -1,0 +1,51 @@
+Assembly allocation and process THP experiment — prospective run011
+
+Run010 caught reference4096x8 collection at its25s deadline in _build_batch;
+completed assemblies varied .863–7.194s, principally system CPU, with container
+memory-pressure growth. This implicates a boundary, not a kernel mechanism.
+Hypotheses: ordinary copy/release cost; first-touch/initialization; memory reclaim
+or compaction; shared-host interference. No single explanation is selected.
+
+Kernel documentation, read2026-10-15:
+https://docs.kernel.org/admin-guide/mm/transhuge.html
+describes synchronous reclaim/compaction under some THP defrag policies and
+PR_SET_THP_DISABLE for process-scoped control. https://docs.kernel.org/accounting/psi.html
+defines resource pressure accounting. These sources motivate a diagnostic,
+not a claim that this rental has that configuration or that THP caused run010.
+
+Four cells:10349 default,10349 disabled,10350 disabled,10350 default. Same4096streams,
+8steps, exact untrained model/seeds, ordinary reference input path; retain run010
+reference/staged2-step warmups and at most two fresh measured collections each.
+Process THP policy is the only intervention; set and read back prctl before
+importing Torch/NumPy. Default controls retain their inherited policy and record it.
+No global kernel settings, rules, precision, model or learning changes. Record
+sysfs THP controls, process status and cgroup limits. A failed/unsupported prctl
+is a failed cell, not a fallback. All prior runs remain contrary/historical evidence.
+
+Instrument the exact current _build_batch AST without copying its algorithm:
+assert its expected allocation/loop/delete/return structure, wrap allocation and
+row-loop phases, and aggregate per-row copying/release/bootstrap wall and CPU/fault
+counters. Save progress every128rows and at completion. Killed row-loop spans
+remain censored: the last completed-row aggregate cannot identify which operation
+inside the unfinished row stalled. Parent samples child /proc/stat CPU/faults,
+container pressure and system-wide VM counters every50ms alongside existing RSS.
+Counter scope and instrumentation overhead remain explicit. Retain generated
+instrumented source and original method hash. Exact method transformations are
+tested on tiny synthetic collectors including scalar/categorical outcome fields.
+
+Keep25s external collect cap,85s child/90s outer,12GiB RSS,600s GPUmeasurement,
+900s setup, one attempt, job30min/$3, cohort$4, rate<=4.10/hour, ten prior pods absent.
+No retries or relaxed limits. Exact full batches/buffers/journal/reset/RNG across
+completed equal-seed cells and prior010/009 identities required. Independent arrays,
+32768rows, no truncations. Missing paired outputs remain a missing comparison.
+These synchronized instrumented results do not establish throughput speedups or
+change the run007 serving calibration. A consistent >=10% reduction in both seeds'
+median collection and assembly costs, no extra failures, is a reason for a fresh
+uninstrumented confirmation, not immediate production adoption. Do not choose only
+the fastest seed or hide construction/warmup. Report all cells and counters.
+
+Local focused correctness check:10s process cap, no model inference/native games;
+uses the existing180s test allowance, not the nearly exhausted calibration slice.
+No new local measured collection. GPU budget before reservation: conservative
+charges$4.58 plus$5reserve, $40.42 available. Freeze source and verify upload before
+admission; owned continuous monitor and provider deletion confirmation afterward.

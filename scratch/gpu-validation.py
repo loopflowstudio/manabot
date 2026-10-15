@@ -415,6 +415,7 @@ def main() -> None:
             "staging",
             "collector-staging",
             "collector-phase",
+            "collector-assembly",
         ),
         default="baseline",
     )
@@ -439,6 +440,7 @@ def main() -> None:
         "staging",
         "collector-staging",
         "collector-phase",
+        "collector-assembly",
     ):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
@@ -510,9 +512,33 @@ def main() -> None:
             "staging",
             "collector-staging",
             "collector-phase",
+            "collector-assembly",
         ):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
+            if args.experiment == "collector-assembly":
+                for seed in (10349, 10350):
+                    policies = (
+                        ("default", "disabled") if seed % 2 else ("disabled", "default")
+                    )
+                    for policy in policies:
+                        name = f"assembly-s4096-seed{seed}-{policy}"
+                        run(
+                            name,
+                            [
+                                sys.executable,
+                                "scratch/collector-assembly-probe.py",
+                                "--root",
+                                str(root),
+                                "--out",
+                                str(root / name),
+                                "--seed",
+                                str(seed),
+                                "--policy",
+                                policy,
+                            ],
+                        )
+                return
             if args.experiment == "collector-phase":
                 for seed in (10349, 10350):
                     for variant in (

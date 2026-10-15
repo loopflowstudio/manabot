@@ -1,0 +1,14 @@
+{
+  "command": [
+    "/Users/jack/src/managym-cpu-research/.venv/bin/python3",
+    "scratch/collector-assembly-probe.py",
+    "--check",
+    "--out",
+    "scratch/accelerator-probes/collector-assembly-preflight/fixtures"
+  ],
+  "seconds": 2.0524366659810767,
+  "limit_seconds": 10,
+  "status": "passed",
+  "exit_code": 0,
+  "scope": "focused correctness, no ML inference or native games; existing180s test allowance"
+}
