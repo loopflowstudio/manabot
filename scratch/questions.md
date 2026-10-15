@@ -312,3 +312,36 @@ not a live service or a learned result. No training/evaluation ran locally.
 The frozen scientific source was not edited; shared protocol construction in
 the checkout now also admits the offline reader. Final interpretation and
 all-attempt cost/artifact settlement remain open.
+
+## Corrected-world restart authorization (2026-10-15)
+
+Jack Heart authorized restarting the study once both PR288 and PR289 land.
+Fresh GitHub reads show PR288 merged at `78bf9429a628d1f4a2a0487199ccce1aa5ac7684`;
+PR289 remains open. Restart is gated on both merges, integration and a new
+source/world/architecture freeze, fresh initialization and bounded calibration.
+PR288 fixes attack/decline aliasing; PR289 proposes w6/layout2 and further
+object/action identity repairs. The running w4 cohort is bug-affected evidence,
+not corrected-world results; preserve every attempt and charge its time. No
+budget extension was requested or granted: the existing 48-hour Mini ceiling
+(or alternative $25 GPU ceiling, not additive) remains binding. Reassess remaining
+capacity before launch; ask if a complete rerun cannot fit. No restart or live
+source modification occurred with this authorization. The current job has not
+been cancelled; explicit cancellation was not yet confirmed.
+
+## Baseline-first redirection and cancellation (2026-10-15)
+
+Jack Heart deferred the card-pool comparison in favor of reproducing the best
+supported training recipe on corrected Allies/Lessons first. Jack Heart explicitly
+approved stopping the bug-affected Mini study and redirecting its remaining budget.
+Both PR288 and PR289 are merged (PR289 `3b3e35fde9f7cc7819f391f657f47c7d0aec6576`).
+Etude run `063198864bfb` now reports terminal `done/cancelled`; receipt is
+`.runs/mtg122/cancel-w4.json`. The frozen campaign JSON retains its last `running`
+status and is not rewritten: it records three completed seed12251 pool fits and
+42574.162285 seconds at that progress point, not final inclusive settlement.
+Remote originals remain retained; local copying targets `.runs/mtg122/science`.
+No corrected-world job has launched. Baseline preparation must settle prior costs,
+review the strongest supported recipe (ETU-118 is an evidence-backed candidate,
+not yet declared the winner), integrate w6/layout2, and calibrate on Mini before
+freezing counts. Fresh initialization, independent seeds, fixed greedy/random
+anchors and deck-role cells remain intended; no historical score is a w6 baseline.
+The 48-hour Mini ceiling is not reset. Complexity and curriculum remain deferred.
