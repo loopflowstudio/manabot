@@ -415,3 +415,65 @@ entries were verified. All failed cells and timing repetitions remain in
 [data/worker-scaling/gpu-019](data/worker-scaling/gpu-019). The provider confirmed
 deletion; estimated whole rental cost was$0.380. The original$50authorization
 remains unchanged, and no additional experiment was launched for this analysis.
+
+## Direct rollout storage result (run020)
+
+The [prospective storage protocol](protocols/rollout-storage.txt) compared the
+verbatim frozen collector from a07b3cd3 against direct writes into final rollout
+arrays. Both use prepared inference and the same native implementation. All32cells
+completed: eight deterministic proofs and24ordinary timing cells. Each ordinary
+condition below has all three declared repetitions, with fixed work of12,288 or
+98,304learner rows. No failed or slow sample was discarded.
+
+The host was an RTX5090 / AMD EPYC9554, with a31.13-core quota, approximately62GB
+memory limit, driver610.57.04 and PyTorch2.10/cu128. This is a different host from019;
+the comparisons below are all within020, not cross-host speedup claims.
+
+| Streams | Storage | Producers | Training seconds | Learner rows/s |
+|---|---|---:|---:|---:|
+|512|frozen|1|5.308|2,315|
+|512|direct|1|4.805|2,557|
+|512|direct|4|4.830|2,544|
+|512|frozen|4|5.189|2,368|
+|4,096|frozen|1|23.084|4,258|
+|4,096|direct|1|24.913|3,946|
+|4,096|direct|4|23.690|4,150|
+|4,096|frozen|4|24.935|3,942|
+
+Direct4/frozen1 throughput is0.9744x, below the1.25x target; direct4/frozen4 is
+1.0526x, below1.15x. The small-run duration ratio is0.9098, passing its1.05 ceiling.
+Thus the candidate passes the small workload criterion but fails the large
+whole-training performance gates. Direct1 also regresses against frozen1 at4,096.
+Collection medians for large frozen1/direct1/direct4/frozen4 are
+17.604/19.115/18.140/19.573s; summed process CPU time is
+23.256/25.077/37.819/39.019s. Removing intermediate copies did not reliably improve
+the measured large workload, and adding producers did not help the frozen baseline
+on this host. Neither result identifies the underlying allocation/cache/scheduling
+cause. Three repetitions of one seed and recipe do not establish general capacity.
+
+All eight deterministic proofs match exactly within shape, including complete
+rollouts, action/active journals, buffers, seeds, sampling RNG, raw/EMA/Adam state
+and scientific diagnostics. All24ordinary timing runs have exact initial/raw/EMA
+and scientific-diagnostic agreement within shape, but Adam has four distinct groups
+at each shape. Differences also occur between frozen single-worker repetitions.
+The [post-hoc audit](data/worker-scaling/gpu-020/parity-audit.json) retains every
+distinct optimizer group against the first frozen1 baseline:512groups differ in
+4/5/71moment elements, with maximum absolute difference7.28e-12;4096groups each
+differ in one moment element, at most9.09e-13. No tolerance or acceptance gate
+changed. Deterministic proof does not waive ordinary-state variation.
+
+**Adoption is not accepted, and the single-GPU training goal remains incomplete.**
+The direct-storage candidate has no demonstrated benefit for the large target
+workload. A subsequent implementation should remove it as the production default
+before measuring another intervention; its source and this negative result remain
+frozen evidence. The unresolved numerical mechanism is a separate question from
+the failed performance gate.
+
+Run `a22592d08d8b` used source `e41edb26be24b0de9d68b46f9edaadfb28c6fcb6`.
+The84,061,387-byte archive (SHA256
+`be13accb98333705c4d2d943f4b3ddf87ab2ba570ebc1c466f707d125c9de905`) and all443manifest
+entries were verified. Structured receipts and all cells are retained in
+[gpu-020](data/worker-scaling/gpu-020); full model binaries remain in the immutable
+Etude output. Provider deletion is confirmed. Estimated whole rental cost is$0.251;
+the original$50 budget has about$6.31 estimated rental usage, with$31.68unallocated
+after conservative charges and reserves. No new rental is active.

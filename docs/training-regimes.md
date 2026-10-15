@@ -77,7 +77,11 @@ awaits only its reward and terminal flag. Collection stops before sampling an
 extra action, and the returned arrays remain owned by that batch through learning.
 Failed collection cannot be snapshotted or silently reused; recovery restores the
 last durable update into a fresh collector. This storage change preserves the
-existing rollout and recovery formats; its GPU performance is still unverified.
+existing rollout and recovery formats. The matched GPU comparison completed all
+32cells and passed deterministic proofs, but failed the large-workload performance
+and ordinary learned-state gates; see
+[run020](../experiments/worker-scaling.md#direct-rollout-storage-result-run020).
+The direct-storage candidate is not accepted as a training optimization.
 
 Training comparisons use [declarative typed-Python experiments](training-experiments.md):
 named components, frozen baselines/versioned presets, explicit overrides and ordered
