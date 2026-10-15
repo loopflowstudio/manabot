@@ -15,7 +15,9 @@ from experiments.runners.worker_inference import Exchange
 
 
 @pytest.mark.parametrize("fresh_capture", [False, True])
-def test_persistent_workers_preserve_fixed_work(tmp_path: Path, fresh_capture: bool) -> None:
+def test_persistent_workers_preserve_fixed_work(
+    tmp_path: Path, fresh_capture: bool
+) -> None:
     torch.set_num_threads(1)
     tape_dir = tmp_path / "tape"
     tape_dir.mkdir()

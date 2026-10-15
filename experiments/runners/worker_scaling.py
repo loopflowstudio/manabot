@@ -168,10 +168,15 @@ def barrier(
 
 
 def controller(args: argparse.Namespace) -> None:
-    from experiments.runners.pipeline_benchmark import (
-        PreparedReplay, Tape, _source, capture, file_sha256,
-    )
     import torch
+
+    from experiments.runners.pipeline_benchmark import (
+        PreparedReplay,
+        Tape,
+        _source,
+        capture,
+        file_sha256,
+    )
     import managym
 
     torch.set_num_threads(1)
@@ -181,7 +186,9 @@ def controller(args: argparse.Namespace) -> None:
     if args.capture_replay:
         # Portability is a separate check, never a relaxation of worker parity.
         # Every worker below must match a fresh capture on this exact host.
-        portability: Payload = {"original_tape_sha256": file_sha256(args.tape / "tape.json")}
+        portability: Payload = {
+            "original_tape_sha256": file_sha256(args.tape / "tape.json")
+        }
         try:
             audited = PreparedReplay(args.tape, verify_inputs=True)
             audited.collect()
@@ -192,8 +199,12 @@ def controller(args: argparse.Namespace) -> None:
         write_json(args.out / "portability.json", portability)
         args.tape = args.out / "host-tape"
         args.tape.mkdir()
-        tape = capture(tape.recipe, args.tape, tape.streams, tape.transitions, tape.seed)
-        hardware["capture"] = "fresh CPU policy on this host; original portability audited separately"
+        tape = capture(
+            tape.recipe, args.tape, tape.streams, tape.transitions, tape.seed
+        )
+        hardware["capture"] = (
+            "fresh CPU policy on this host; original portability audited separately"
+        )
     if args.device == "cuda":
         from experiments.runners.worker_inference import CudaService
 
@@ -367,8 +378,11 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=14.5)
     parser.add_argument("--rss-gib", type=float, default=6)
     parser.add_argument("--device", choices=["replay", "cuda"], default="replay")
-    parser.add_argument("--capture-replay", action="store_true",
-                        help="audit the supplied tape, then capture a fresh host CPU tape")
+    parser.add_argument(
+        "--capture-replay",
+        action="store_true",
+        help="audit the supplied tape, then capture a fresh host CPU tape",
+    )
     parser.add_argument("--exchange", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--controller", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--worker", type=int, help=argparse.SUPPRESS)
