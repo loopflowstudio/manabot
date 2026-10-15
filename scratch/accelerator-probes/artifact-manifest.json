@@ -1488,13 +1488,13 @@
     },
     {
       "path": "scratch/gpu-validation.py",
-      "bytes": 27946,
-      "sha256": "9676d55c7801cb34954ba009a500855dea26b06bc118c98df114e05c09757605"
+      "bytes": 28960,
+      "sha256": "ee91baca9fdaa4e813dba692fb5d8e1408416747a89e3cd9cd21e9b3a12cda82"
     },
     {
       "path": "scratch/gpu-validation-job.py",
-      "bytes": 1474,
-      "sha256": "026094ce10234d52c1e4d6600d4662d071765e85cc7c09149a6565b2d27e04cd"
+      "bytes": 1494,
+      "sha256": "3e4b71aefb523ce82e1c707dfa1ff42e7717894d562bd19b7d48dfe5d02f3292"
     },
     {
       "path": "scratch/serving-calibration-protocol.txt",
@@ -2290,6 +2290,31 @@
       "path": "scratch/accelerator-probes/a2d459317544ec8fb8a99cf2e33d6a30aec48738642f672849938b82a9fd54c6.notes.txt",
       "bytes": 6444,
       "sha256": "a2d459317544ec8fb8a99cf2e33d6a30aec48738642f672849938b82a9fd54c6"
+    },
+    {
+      "path": "scratch/collector-staging-probe.py",
+      "bytes": 12095,
+      "sha256": "5a2ee4b34191e5c7314a79ac8a05cfb449dc50c9e0b456fe96536c5c8e408a44"
+    },
+    {
+      "path": "scratch/collector-staging-protocol.txt",
+      "bytes": 3542,
+      "sha256": "b30414dfc628a06e220cf8e73a5c4caa2051dc99cf7f38037228b30c9fcebf15"
+    },
+    {
+      "path": "scratch/accelerator-probes/ee91baca9fdaa4e813dba692fb5d8e1408416747a89e3cd9cd21e9b3a12cda82.source.txt",
+      "bytes": 28960,
+      "sha256": "ee91baca9fdaa4e813dba692fb5d8e1408416747a89e3cd9cd21e9b3a12cda82"
+    },
+    {
+      "path": "scratch/accelerator-probes/3e4b71aefb523ce82e1c707dfa1ff42e7717894d562bd19b7d48dfe5d02f3292.source.txt",
+      "bytes": 1494,
+      "sha256": "3e4b71aefb523ce82e1c707dfa1ff42e7717894d562bd19b7d48dfe5d02f3292"
+    },
+    {
+      "path": "scratch/accelerator-probes/5a2ee4b34191e5c7314a79ac8a05cfb449dc50c9e0b456fe96536c5c8e408a44.source.txt",
+      "bytes": 12095,
+      "sha256": "5a2ee4b34191e5c7314a79ac8a05cfb449dc50c9e0b456fe96536c5c8e408a44"
     }
   ]
 }

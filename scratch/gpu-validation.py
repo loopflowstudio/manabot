@@ -413,6 +413,7 @@ def main() -> None:
             "serving",
             "serving-confirm",
             "staging",
+            "collector-staging",
         ),
         default="baseline",
     )
@@ -435,6 +436,7 @@ def main() -> None:
         "serving",
         "serving-confirm",
         "staging",
+        "collector-staging",
     ):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
@@ -499,9 +501,35 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
-        if args.experiment in ("highend", "serving", "serving-confirm", "staging"):
+        if args.experiment in (
+            "highend",
+            "serving",
+            "serving-confirm",
+            "staging",
+            "collector-staging",
+        ):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
+            if args.experiment == "collector-staging":
+                for streams in (64, 512, 4096):
+                    for seed in (10349, 10350):
+                        name = f"collector-s{streams}-seed{seed}"
+                        run(
+                            name,
+                            [
+                                sys.executable,
+                                "scratch/collector-staging-probe.py",
+                                "--root",
+                                str(root),
+                                "--out",
+                                str(root / name),
+                                "--streams",
+                                str(streams),
+                                "--seed",
+                                str(seed),
+                            ],
+                        )
+                return
             if args.experiment == "staging":
                 for actors in (16, 128):
                     for maximum in (256, 1024):
