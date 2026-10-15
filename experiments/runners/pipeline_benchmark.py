@@ -375,14 +375,23 @@ class PreparedReplay:
         buffers_hash = _buffer_digest(collector)
         journal_hash = _journal_digest(collector)
         seeds = timer.current_game_seeds()
-        if (
-            cursor != len(tape.frames)
-            or batch_hash != tape.batch_sha256
-            or buffers_hash != tape.buffers_sha256
-            or journal_hash != tape.journal_sha256
-            or seeds != tape.game_seeds
-        ):
-            raise ValueError("collector replay diverged from captured policy")
+        checks = {
+            "forward_calls": (cursor, len(tape.frames)),
+            "batch_sha256": (batch_hash, tape.batch_sha256),
+            "buffers_sha256": (buffers_hash, tape.buffers_sha256),
+            "journal_sha256": (journal_hash, tape.journal_sha256),
+            "game_seeds": (seeds, tape.game_seeds),
+        }
+        mismatches = {
+            name: {"actual": actual, "expected": expected}
+            for name, (actual, expected) in checks.items()
+            if actual != expected
+        }
+        if mismatches:
+            raise ValueError(
+                "collector replay diverged from captured policy: "
+                + json.dumps(mismatches, sort_keys=True)
+            )
         buffer_bytes = sum(v.nbytes for v in collector._buffers.values())
         return Replay(
             seconds=elapsed,

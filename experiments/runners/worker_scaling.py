@@ -168,12 +168,32 @@ def barrier(
 
 
 def controller(args: argparse.Namespace) -> None:
-    from experiments.runners.pipeline_benchmark import Tape, _source, file_sha256
+    from experiments.runners.pipeline_benchmark import (
+        PreparedReplay, Tape, _source, capture, file_sha256,
+    )
+    import torch
     import managym
 
+    torch.set_num_threads(1)
     tape = Tape.model_validate_json((args.tape / "tape.json").read_text())
     serve: RequestHandler | None = None
     hardware: Payload = {"mode": "recorded-outputs"}
+    if args.capture_replay:
+        # Portability is a separate check, never a relaxation of worker parity.
+        # Every worker below must match a fresh capture on this exact host.
+        portability: Payload = {"original_tape_sha256": file_sha256(args.tape / "tape.json")}
+        try:
+            audited = PreparedReplay(args.tape, verify_inputs=True)
+            audited.collect()
+            portability["result"] = audited.verify().model_dump(mode="json")
+            portability["status"] = "matched"
+        except ValueError as error:
+            portability.update(status="failed", error=str(error))
+        write_json(args.out / "portability.json", portability)
+        args.tape = args.out / "host-tape"
+        args.tape.mkdir()
+        tape = capture(tape.recipe, args.tape, tape.streams, tape.transitions, tape.seed)
+        hardware["capture"] = "fresh CPU policy on this host; original portability audited separately"
     if args.device == "cuda":
         from experiments.runners.worker_inference import CudaService
 
@@ -347,10 +367,14 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=14.5)
     parser.add_argument("--rss-gib", type=float, default=6)
     parser.add_argument("--device", choices=["replay", "cuda"], default="replay")
+    parser.add_argument("--capture-replay", action="store_true",
+                        help="audit the supplied tape, then capture a fresh host CPU tape")
     parser.add_argument("--exchange", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--controller", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--worker", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.capture_replay and args.device != "replay":
+        parser.error("--capture-replay requires --device replay")
     if (
         args.actors < 4
         or args.actors > 64

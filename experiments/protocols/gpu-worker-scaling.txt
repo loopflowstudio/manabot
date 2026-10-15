@@ -60,3 +60,18 @@ local capture cap from the remaining6.178525second measurement allowance; preser
 failure without retry. The paid experiment uses tape-w6 and fresh same-device
 CUDA captures. Update the submitted PR before renting. The old queue/calibration
 examples remain historical conditional projections, not calibration of w6.
+
+Amendment after run012, before run013: RTX5090 shared-CUDA and ordinary training
+completed, but replay of the Mac-captured tape failed its final aggregate check.
+All acting input hashes passed; the old error did not identify which final hash
+failed. This is not a valid Linux CPU scaling curve. Preserve run012 unchanged.
+Add named expected/actual checks and a separate portability receipt. For the new
+CPU experiment, capture a CPU tape on the host before timing and require exact
+parity for every actor. This isolates within-host worker scaling without assuming
+cross-platform bitwise arithmetic. Capture and portability audit count against
+the existing600s/24GiB mode cap; no tolerance or parity relaxation is introduced.
+H100 run013 uses this revision; CUDA and ordinary training logic stay unchanged.
+Reserve an additional$2 from the existing$50 for RTX5090 run014, CPU-only with
+this corrected fixture procedure, one attempt, job<=30minutes/$1.5. This is an
+explicit protocol correction, not an automatic retry. Do not repeat completed
+RTX5090 CUDA/training cells. Hardware-host variation remains a reported limit.

@@ -38,6 +38,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--expected-gpu", required=True)
+    parser.add_argument("--replay-only", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -76,7 +77,7 @@ def main() -> None:
     )
     statuses = []
     try:
-        for device in ("replay", "cuda"):
+        for device in (("replay",) if args.replay_only else ("replay", "cuda")):
             command = [
                 sys.executable,
                 "-m",
@@ -95,6 +96,7 @@ def main() -> None:
                 "600",
                 "--rss-gib",
                 "24",
+                *(["--capture-replay"] if device == "replay" else []),
             ]
             started = time.monotonic()
             result = subprocess.run(command, check=False)
@@ -110,7 +112,7 @@ def main() -> None:
         tape = Tape.model_validate_json(
             Path("experiments/data/worker-scaling/tape-w6/tape.json").read_text()
         )
-        for streams in (512, 4096):
+        for streams in (() if args.replay_only else (512, 4096)):
             root = args.out / f"ordinary-s{streams}"
             root.mkdir()
             write_json(root / "baseline.json", tape.recipe.model_dump(mode="json"))

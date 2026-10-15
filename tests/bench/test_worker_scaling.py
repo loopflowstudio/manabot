@@ -14,11 +14,15 @@ from experiments.runners.run_training_regimes import smoke_recipe
 from experiments.runners.worker_inference import Exchange
 
 
-def test_persistent_workers_preserve_fixed_work(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fresh_capture", [False, True])
+def test_persistent_workers_preserve_fixed_work(tmp_path: Path, fresh_capture: bool) -> None:
     torch.set_num_threads(1)
     tape_dir = tmp_path / "tape"
     tape_dir.mkdir()
     tape = capture(smoke_recipe("direct-self-play"), tape_dir, 2, 8, 10831)
+    if fresh_capture:
+        changed = tape.model_copy(update={"batch_sha256": "incompatible"})
+        (tape_dir / "tape.json").write_text(changed.model_dump_json())
     out = tmp_path / "workers"
     result = subprocess.run(
         [
@@ -33,6 +37,7 @@ def test_persistent_workers_preserve_fixed_work(tmp_path: Path) -> None:
             "4",
             "--seconds",
             "10",
+            *(["--capture-replay"] if fresh_capture else []),
         ],
         capture_output=True,
         text=True,
@@ -42,6 +47,11 @@ def test_persistent_workers_preserve_fixed_work(tmp_path: Path) -> None:
         result.stdout + result.stderr + (out / "stderr.log").read_text()
     )
     assert json.loads((out / "attempt.json").read_text())["status"] == "completed"
+    if fresh_capture:
+        portability = json.loads((out / "portability.json").read_text())
+        assert portability["status"] == "failed"
+        assert '"batch_sha256"' in portability["error"]
+        assert '"buffers_sha256"' not in portability["error"]
     for active in (1, 2, 4):
         collected = json.loads((out / f"r0-w{active}.collect.json").read_text())
         verified = json.loads((out / f"r0-w{active}.verify.json").read_text())

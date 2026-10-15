@@ -1,0 +1,46 @@
+2026-10-15 active continuation: user explicitly requests PR first, then actual
+1/2/4worker CPU/GPU experiment on economical training-class hardware, existing$50.
+PR292 https://github.com/loopflowstudio/manabot/pull/292 submitted, updated frozen
+head1f86d136a4e071ac34a9449705bfc225297eb185, ready/manual merge, not merged.
+Local w4 screening1.978x/3.803x scaling all192actor hashes exact. Source sync brought
+worldw6; rebuilt native8.25s, captured separate64x8seed10349 tape2.147539s. Nine
+focused tests pass after sync. Localmeasurement295.9690145/300seconds. GPUphysical
+code/protocol/data in experiments/runners/worker_*, experiments/protocols/ and
+experiments/data/worker-scaling. Historical queue/modeldata remainw4.
+
+lf pr publish unexpectedly stages untracked scratch; correction lf scratch clear
+excluded all research scratch before final publish. Historical full local notes
+and artifacts are recoverable from gitarchivec5cef8b7bfb5b326d0a536bb8a079d23da62ef63
+scratch. Restore missing files locally only AFTER final publication, else lf will
+stage them again. No original research was discarded; clear commits retain history.
+Do not replay publication or resynchronize source while rental is active.
+
+Source archive185047040bytes SHA8f8bc848e619f14c8e966da736bcbcf4c15bde3def8c76dded0ae8195edfdb7b
+uploaded+fullreadback150.209529s. All11priorpods recheckedabsent. Created isolated
+worker-5090 andworker-h100 pools8vCPUminimum48GBRAM40GBdisk maxone each. Quotes
+1.19/h and3.99/h. Reserved8dollars(4each),31.89unallocated beyondpriorcharges and
+5ancillaryreserve. Ledger.runs/gpu-validation/budget.json. No$50budgetreset.
+
+Launch012: .runs/gpu-validation/launch-worker.py012, monitor toolhandle72501.
+Never relaunchonobservationtimeout; resume wait same run if monitor terminalexception.
+The helper writeslaunch-012.json once launched. Inspectwithinspect-worker.py012;
+terminalcleanupupdatesbudget. Only then launch013. Both max30min/$3job/$4cohort,
+1attempt, sourceabove. No retry/expandedlimits. Replay3rounds1/2/4 andsharedCUDA3rounds,
+thenordinary512/4096stream trainingcontrols, original70scaps. Retain failures.
+Recover allauthoritativeoutputs withrecover-worker.py012/013; authenticated4MiBranges
+andfilehashes, manifestchecks. Logs/lifecycle/billing in.runs/gpu-validation.
+
+012launchedrun2a167a89c381. Originalmonitor72501 terminal1 onS3StorageUnavailable
+GETlist, NOT jobtermination. Resumed observation same run viaresume-worker.py012,
+handle60218. Do not resubmit. The local/Users/jack/src/etude/client path disappeared
+during unrelatedrepositoryreorganization. Use exactalreadyinstalledlaunchruntime:
+VIRTUAL_ENV=/Users/jack/.cache/uv/archive-v0/vs7MnbtcaP-dGy8d-5EAc uv run --active
+--no-project python .runs/gpu-validation/<helper>.py, underdoppleretude/prd asbefore.
+This changes noauth orEtude source. Currentinspectworker012handle19823.
+
+Run012 deleted,160immutable outputs verified. GPU median1/2/4:28.2593,23.1009,
+23.5961sec,1.2233x/1.1976x. Training4096:98304rows/43.1665s,2277.32rows/s.
+CPU actinginputs all passed but finalaggregatehash failed; exact component unknown.
+Implementing named mismatch diagnostics and explicit freshhost CPUcapture, keeping
+portabilityaudit separate and strict. Protocol amendedbefore013;014reservedCPUonly
+5090$2correctedfixture experiment, no repeatGPU/training. All within existing$50.
