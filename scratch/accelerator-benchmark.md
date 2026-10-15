@@ -21,10 +21,10 @@ No PR, merge, Task operation or other experiment is selected by this work.
    actual request intervals and final host tails; default proportional timing
    remains a control. Explicit `--tape`, `--replay`, `--hardware` select evidence.
 4. Physical CUDA collection, ordinary TrainingRun and serving probes validate
-   selected directions. Serving now rejects absolute queue timing: measured
-   duration is1.35–1.90× modeled across nine cells, despite preserved best-batch
-   rankings. CPU batch preparation is missing and transfers are underestimated.
-   See gpu-validation.md; neither replay nor queue output is a strength claim.
+   selected directions. Original model-only serving predictions failed; adding
+   measured preparation/transfers passed a fresh H100 check: all nine median
+   errors<=9.1%, correct best batches. See gpu-validation.md. The full-service
+   callback exists; integration into high-scale CLI sweeps is still pending.
 
 The queue requires one additional inference-serving CPU thread per GPU: measured
 synchronized model calls include host dispatch/validation.512collector CPUs plus
@@ -79,10 +79,10 @@ finite completion, padding and host tails. All measured attempts used bounded
 supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
-calibration-analysis slice used7.700seconds; conservative combined usage272.084/300. New measured
+calibration-analysis slice used11.868seconds; conservative combined usage276.252/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$1.033486 billed/estimated rentals,$1.51 conservative charges+$5reserve,
-$43.49 free; all six machines are confirmed deleted.
+records$2.191590 billed/estimated rentals,$2.82 conservative charges+$5reserve,
+$42.18 free; all seven machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -94,9 +94,9 @@ state, Python objects, staging, models and allocator slack. Finite startup/drain
 and synthetic phase rotations must remain visible. Exact replay of one policy
 does not predict how a changed trained policy changes its game distribution.
 
-Next: calibrate the complete serving boundary and validate withheld cases before
-trusting absolute throughput; then mixed mature-policy traces, real backpressure
-and policy-age accounting. Measured learner coupling already exists below.
+Next: integrate the prospectively checked complete service model into high-scale
+and coupled-learner CLI sweeps, then mixed mature-policy traces, real backpressure
+and policy-age accounting. Multi-GPU rates remain conditional on independent links.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and

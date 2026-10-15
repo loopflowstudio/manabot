@@ -1,10 +1,8 @@
 # Learner admission and coupled cohort model
 
-Physical serving validation now rejects the model-only absolute service boundary:
-nine measured cells took1.35–1.90× their predictions. The batch ranking survived,
-but the rates below are conditional optimistic scenarios, not validated absolute
-throughput. Missing batch preparation and underestimated transfers require new
-calibration and withheld-case validation; see `gpu-validation.md`.
+The model-only service boundary failed physical validation. A complete serving
+model subsequently passed nine fresh H100 cases, but is not yet integrated here.
+Rates below remain conditional optimistic scenarios; see `gpu-validation.md`.
 
 ## Coupled zero-lag control
 

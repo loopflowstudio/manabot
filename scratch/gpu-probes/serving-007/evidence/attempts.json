@@ -1,0 +1,289 @@
+[
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/scratch/gpu-validation.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--expected-gpu",
+      "NVIDIA H100 80GB HBM3",
+      "--child",
+      "inputs",
+      "--frozen-inputs"
+    ],
+    "exit_code": 0,
+    "name": "inputs",
+    "seconds": 4.0096257771365345,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":1,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b1-s0",
+    "seconds": 14.198797996155918,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":4,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b4-s0",
+    "seconds": 11.865853945259005,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":16,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b16-s0",
+    "seconds": 11.742673769127578,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":64,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b64-s0",
+    "seconds": 11.795405607670546,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":256,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b256-s0",
+    "seconds": 11.993344331160188,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":1024,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b1024-s0",
+    "seconds": 12.496751106344163,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a4-b64",
+      "--actors",
+      "4",
+      "--max-batch",
+      "64",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a4-b64",
+    "seconds": 7.039073973894119,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a4-b256",
+      "--actors",
+      "4",
+      "--max-batch",
+      "256",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a4-b256",
+    "seconds": 6.330801055766642,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a4-b1024",
+      "--actors",
+      "4",
+      "--max-batch",
+      "1024",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a4-b1024",
+    "seconds": 6.532554926816374,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a16-b64",
+      "--actors",
+      "16",
+      "--max-batch",
+      "64",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a16-b64",
+    "seconds": 11.463432378135622,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a16-b256",
+      "--actors",
+      "16",
+      "--max-batch",
+      "256",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a16-b256",
+    "seconds": 7.839342277962714,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a16-b1024",
+      "--actors",
+      "16",
+      "--max-batch",
+      "1024",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a16-b1024",
+    "seconds": 8.245208222884685,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a128-b64",
+      "--actors",
+      "128",
+      "--max-batch",
+      "64",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a128-b64",
+    "seconds": 54.598769245203584,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a128-b256",
+      "--actors",
+      "128",
+      "--max-batch",
+      "256",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a128-b256",
+    "seconds": 20.10917918989435,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/fb7915a7326b/attempts/5a40d47cf43c/outputs/evidence/serve-a128-b1024",
+      "--actors",
+      "128",
+      "--max-batch",
+      "1024",
+      "--cost-model",
+      "scratch/accelerator-probes/serving-cost-calibration.json"
+    ],
+    "exit_code": 0,
+    "name": "serve-a128-b1024",
+    "seconds": 16.161191591992974,
+    "status": "completed"
+  }
+]

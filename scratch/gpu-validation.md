@@ -1,98 +1,98 @@
 # GPU validation — evidence and budget
 
-Jack Heart authorized $50 total. All six rentals are deleted. Provider bills plus
-the sixth rental estimate total **$1.033486**; conservative charges $1.51 plus
-$5 ancillary reserve leave **$43.49 unallocated**, with no pending reservation.
-`gpu-probes/serving-006/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
-is the live ledger. Earlier protocols, notes and failures remain indexed or in Git.
+Jack Heart authorized $50 total. All seven rentals are provider-confirmed deleted.
+Bills/whole-rental estimates total **$2.191590**; conservative charges $2.82 plus
+$5 ancillary reserve leave **$42.18 unallocated**, with no pending reservation.
+`gpu-probes/serving-007/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
+is the live ledger.
 
-## Physical serving: timing prediction rejected
+## Complete serving boundary: prospective validation passed
 
-Run `8c51916229c9`, source `b32f4c03aecc757d3fadb5877f8ff30b0ad4c6aa`,
-protocol `serving-validation-protocol.txt`. One H10080GB HBM3, driver595.91.07,
-$3.99/hour. All six same-rental model calibration cells and nine serving cells
-completed within unchanged limits; all37 returned manifest entries verified.
-Archive SHA `f4ff5e6692209f8435eb195c71a0d91170f7839bb5ec4841e61a38ae78940fb1`.
+Run`77223d8a4050`, source`4d220b3af1b405d06a5e33087af575b2cb2e205f`, protocol
+`serving-confirmation-protocol.txt`. One H10080GB HBM3, driver570.195.03, at$3.99/hour.
+All six model calibrations and nine serving cases completed; all37 manifest entries
+verified. Archive SHA`c5316eef29dbfcf1c113e1fd307dcbd953f99f156fec5e4c141f2d5b2f47a8fe`.
 
-Each cell has three finite repeats, one CUDA worker, logical actors waiting for
-real CPU responses, and virtual host delays from the laptop's8×64 tape. Actual
-fixed observation rows are selected by deterministic indices; these are not the
-original game's per-request observations. Host simulation, IPC, network and
-learning are absent. Pageable per-field copies and response validation are included.
+The frozen model includes preparation, H2D, D2H and response-validation costs as
+nonnegative affine functions of padded rows and request count. Coefficients were
+fit once to381 actor8/repeat0 batches from run006; forward points alone were replaced
+with this new rental's six measured sizes. No overhead refitting occurred.
 
-The preregistered within20% timing prediction failed in **all nine cells**:
-actual/model median duration was1.349–1.900×. Batch1024 remained the best at8/64
-actors; the one-actor prediction tied all maximum batch settings.
+New actor counts4/16/128, maximum batches64/256/1024, three repeats each:
+**all nine medians passed the preregistered20% timing criterion**. Actual/predicted
+median duration ranged0.979–1.090×; all27 individual samples were0.950–1.129×.
+All best-batch predictions passed.
+The original model-only-plus-links control underestimated duration1.296–2.047×.
 
-|64 logical actors|maxbatch64|maxbatch256|maxbatch1024|
-|---|---:|---:|---:|
-|Predicted seconds|5.507|1.592|1.041|
-|Measured median seconds|7.587|2.483|1.977|
-|Actual/predicted|1.378×|1.560×|1.900×|
+|Actors|Measured median seconds at maxbatch64 /256 /1024|Predicted best|Measured best|
+|---|---|---|---|
+|4|0.710 /0.474 /0.473|256 or1024|1024|
+|16|2.138 /0.944 /1.087|256|256|
+|128|16.277 /4.883 /3.589|1024|1024|
 
-Declared repeat1 separates the explanations. Forward time for its actual batch
-mix was0.983–1.071× the same-rental calibration across all cells. Actual transfers
-were1.146–3.031× the assumed12GB/s+20us/direction model. At64actors/batch1024,
-preparation took0.997s, forward0.757s, H2D0.298s, D2H0.014s and validation0.068s.
-Those phases describe repeat1, not the median repeat. Preparation is a missing
-service component; enlarging batches makes its omission matter more. Batch
-histograms match exactly at1/8actors and differ slightly at64actors. Mean host-timer
-lateness is0.078–0.164ms; maximum response delivery delay reaches2ms.
+Every request/input identity and all cross-repeat output hashes passed. Peak GPU
+allocation was1,677,555,200bytes. Declared repeat1 at128actors/batch1024 spent1.636s
+preparing tensors versus1.284s in forward execution: preparation remains a concrete
+optimization target. Its forward service was1.038× calibrated; preparation1.192×
+the fixed fit. Full per-phase residuals, batch histograms and timer/delivery costs
+are retained. No fastest-repeat selection or numerical tolerance was added.
 
-Every request and input identity passed. One request's output hash differed in
-the second64actor/batch256 repetition; every other cell/repetition matched.
-No tolerance or exact cross-batching numerical-equivalence claim was introduced.
-Batch-dependent arithmetic and nondeterminism remain distinct possible causes.
+This is real one-worker serving with virtual host delays, not actual simulation,
+IPC/network, learning or multiple physical GPUs. Fixed real observation-pool rows
+are chosen by deterministic indices, not the original game's exact input sequence.
+Request counts above8 and occasional one-row batches extrapolate beyond fit support;
+counts are reported per case. This successful cross-host/driver check supports this
+specific boundary, not arbitrary hardware, trained policies or distributed rates.
 
-**Revised boundary:** the queue is useful for conditional batch ranking here,
-but model-only service plus idealized links does not predict absolute serving
-throughput. Next calibration must include CPU gather/materialization, per-field
-copies and response handling, with request count as well as padded rows. Validate
-on withheld actor counts/repeats; fitting these measurements is not validation.
+`gpu-probes/serving-007/service-model.json` retains unchanged overhead coefficients
+plus current forward points; `capacity-report.json` retains model-only service.
+All source hashes, predictions, raw JSON/logs, budget and cleanup are portable there.
+Full archive/input tensors remain in`.runs/gpu-validation/result-007` and Etude output.
+The queue's optional `batch_service` replaces both model and link costs, avoiding
+double charging; the default path remains exact. CLI integration into high-scale
+and learner sweeps is still pending, so their old rates remain unvalidated.
 
-The initial launch stalled in an origin Git fetch before any run/rental existed.
-After the computer returned, the exact owned SSH child was terminated; the launch
-exited1. A fresh submission with SSH keepalive limits succeeded without changing
-source or experiment limits. Pod`ec796h62yytif1`
-was provider-confirmed absent at2026-10-15T12:29:48.288561Z; whole-rental estimate
-$0.333071 includes setup. Portable evidence is in`gpu-probes/serving-006`; full
-archive/input tensors remain in`.runs/gpu-validation/result-006` and Etude output.
+Pod`xxf0u7g7fqgnq0` was confirmed absent at2026-10-15T13:09:42.447945Z.
+Whole rental estimate$1.158104 exceeds the job-status estimate$0.390643: the attempt
+finished12:58:08.504170Z, deletion was13:09:40.950585Z, a692.446s billable post-job
+interval. Its cause is unestablished; `lifecycle-summary.json` preserves the evidence.
+Use whole-rental costs for budget reservations, including idle/setup time.
 
-## Earlier GPU findings retained
+## Why the model changed
 
-Run001 failed bootstrap. Run002 measured model service/whole collection; two
-learning cells failed source admission. Run003's frozen-weight catalog reuse
-improved collection medians1.490×/1.252× at64/256streams. All24 trajectories and
-initial/final raw/EMA states matched; tiny Adam differences remained. Run004
-reference/reference controls reproduced Adam differences without caching
-(max3.64e-12), ruling out caching as a necessary cause. Its512stream cache pair
-regressed26%; both4096stream cells hit unchanged55s collector deadlines after
-two updates. Incomplete loops remain excluded from learner calibration.
+Run006 `8c51916229c9` used the original model plus assumed12GB/s and20us/direction.
+All nine timing predictions failed: measured/model medians1.349–1.900×, although
+best-batch rankings held. Forward costs were0.983–1.071× calibrated for actual
+batches, while transfers were1.146–3.031× assumed. CPU preparation was missing.
+One output hash differed in one64actor/batch256 repetition; no tolerance was added.
+All37 manifest entries and provider deletion passed; full evidence is in`serving-006`.
 
-Run005 `6c134ed75f40` calibrated exact frozen L4 input on H100, driver580.126.09,
-float32/TF32off, one thread. All19 cells and143 manifest checks passed.
-Small-model H100/L4 inference ratios at batches1/4/16/64/256/1024 were
-0.878/0.859/0.884/1.185/2.317/4.999; large384wide8layer batches64/256 were
-4.014/5.489. All three preregistered inequalities held. Different hosts/drivers
-prevent chip-only attribution; small-batch diagnostic Adam was slower on H100.
+The fit protocol is`serving-calibration-protocol.txt`; implementation/report are
+`serving-cost-calibration.py` and`accelerator-probes/serving-cost-calibration.json`.
+Its excluded actor1/64 medians passed20%, but one barely passed and an individual
+excluded repetition failed. Aggregate durations had already been inspected: this
+retrospective partition was not blind validation. Run007 supplied the prospective
+new-count check. A nine-case regression proves the default queue output unchanged;
+closed-form complete-service/no-double-charge and invalid-cost checks passed.
 
-All ten ordinary three-update H100 cells completed. The4096stream reference
-collected98,304rows/24,576optimizer exposures/24steps/63games in16.040s collection,
-5.003s learning,22.481s whole run, with9,786,454,016peak GPU bytes. At512streams,
-learning1.164s versus L4's1.107s shows that5× model inference is not5× learning.
-Every cell changed48 raw tensors with zero nonfinite/skipped steps. Initial/final
-raw/EMA states were exact;4096 reference/cache differed in2Adam moment tensors,
-3elements,max5.68e-14. The64/512 reference/reference and cache comparisons were
-exact. Cache improved512 collection1.254×/1.150×, but4096 only1.007×.
-Complete receipts, controls, service curves and cleanup remain in`h100-005`.
+## Earlier findings and remaining scope
 
-## Local integration and limits
+Runs001/002 retain bootstrap and source-admission failures. Run003 catalog reuse
+improved64/256stream collection medians1.490×/1.252× with exact trajectories/raw/EMA;
+small Adam differences remained. Run004 reproduced Adam differences without caching,
+retained a26%512stream regression and two4096stream collector deadlines.
 
-The original CPU phase remains238.718/240seconds. The separate20second calibration
-slice has used7.700seconds; conservative combined measurement use272.084/300.
-No local ML was measured in physical-serving preflight. Shared FIFO extraction
-preserved all27L4 outcomes exactly; fake-backend request/host-work checks passed.
-Earlier27case H100 matrices at512 and4096streams remain conditional scheduling
-results. Their absolute rates inherit the now-demonstrated service-boundary gap.
-Actual distributed execution, evolving trained-policy traffic, target CPU contention,
+Run005 measured exact-input H100/L4 small-model inference ratios0.878/0.859/0.884/
+1.185/2.317/4.999 at batches1/4/16/64/256/1024. All ten ordinary three-update H100
+cells completed, including4096streams:98,304rows,63games,16.040s collection,5.003s
+learning,22.481s whole run,9.786GB peak allocation. Raw/EMA matched;4096 Adam had
+three nonexact elements(max5.68e-14). Larger inference gain did not imply larger
+learning gain. Complete earlier controls, failures and curves remain in`h100-005`
+and`l4-002/003/004`, with expanded prior notes preserved by hash.
+
+Original local probes remain238.718/240seconds. The20second calibration slice now
+uses11.868seconds; conservative combined measurement use276.252/300. This turn's
+fit/regression and frozen-loader/fake-backend checks used2.316/1.851seconds with
+342/304MB sampled RSS; no local ML was run. Ruff and diff checks passed.
+Actual distributed execution, evolving policy traffic, target CPU contention,
 multi-GPU optimization/all-reduce and strength per compute remain unmeasured.
