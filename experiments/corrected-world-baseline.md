@@ -92,3 +92,31 @@ promotes a product baseline nor establishes chapter/human-play acceptance.
 Scientific outputs stay private; editable notebook/read-only HTML and inclusive
 cost settlement follow retained results. Complexity, catalog-size and curriculum
 comparisons are deferred, not automatically queued after this baseline.
+
+## Prospective cadence amendment (2026-10-15)
+
+Jack Heart requested exports every 500 updates and diagnostic evaluation every
+1,000 for future seeds, while evaluating only the existing 5,000 export for the
+current seed. Seed 12261 continues unchanged to 10,000 on source `09dc662d`.
+A bounded Mini sidecar evaluates its 5,000 export (13 paired deals × eight
+deck/play-order legs per greedy/random anchor; 208 games, 30-minute ceiling).
+These diagnostic deals are disjoint from the fixed scientific cohorts.
+
+The sidecar uses the existing stop-file contract only after the first complete
+TrainingRun, holding the old three-seed job before another learner starts. The
+replacement job retains that producer and completes its fixed evaluations, then
+runs seeds 12262/12263 with 500-update exports and diagnostics at 1,000 through
+9,000; the 10,000 endpoint keeps the larger original evaluation. Original partial
+evaluation attempts remain retained, not rewritten as successes. No first-seed
+optimizer restart, checkpoint port or changed learning recipe is involved.
+
+Each future seed receives at most 2.75 evaluator hours (900 seconds per anchor
+attempt) through the existing evaluator lease/queue. Budget exhaustion retains
+missing diagnostics, never changes endpoint selection. Concurrent evaluation may
+slow learning; export/cadence and source changes must remain explicit in seed
+comparisons. The original scientific plan, seeds, targets and endpoint deals are
+unchanged. The new job has a 44-hour cap covering two training allowances, all
+three fixed evaluation cohorts, diagnostics and setup; prior 18 hours, first-fit
+allowance and settlement remain inside the 80-hour operational ceiling.
+
+Seven focused software checks passed; no local training or evaluation ran.

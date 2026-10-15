@@ -1,5 +1,7 @@
 """Baseline admission changes the world explicitly, not frozen evidence."""
 
+from pathlib import Path
+
 import pytest
 
 from experiments.runners.corrected_baseline import MATCHUP, recipe, resolve_counts
@@ -48,3 +50,16 @@ def test_midpoint_is_export_only() -> None:
     assert plan.evaluation_updates == (0, 10000)
     with pytest.raises(ValueError):
         plan.protocol("l3", "random", 5000)
+
+
+def test_future_diagnostic_cadence_is_separate_from_scored_endpoint(tmp_path: Path) -> None:
+    from experiments.runners.baseline_monitoring import DiagnosticMonitor
+
+    monitor = DiagnosticMonitor(tmp_path / "run.json", tmp_path / "diagnostics")
+    assert monitor.config.updates == tuple(range(1000, 10000, 1000))
+    assert monitor.config.seconds == 9900
+    protocols = (monitor.config.protocol, *monitor.config.additional_protocols)
+    assert {p.opponent for p in protocols} == {"random", "scripted_greedy"}
+    assert all(p.purpose == "supplemental-matchup-diagnostic" for p in protocols)
+    assert all(len(p.deal_seeds) == 13 and p.include_mirrors for p in protocols)
+    assert not monitor.thread.is_alive()

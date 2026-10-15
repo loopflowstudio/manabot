@@ -15,10 +15,11 @@ import time
 from typing import Literal, Protocol
 
 from etude.track.records import Step
-from etude.track.run import init
+from etude.track.run import Run as TrackerRun, init
 from pydantic import Field, model_validator
 import torch
 
+from experiments.runners.baseline_monitoring import DiagnosticMonitor
 from experiments.runners.environment_complexity import Pool, regime, roster
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
@@ -214,8 +215,99 @@ class CampaignPlan(Protocol):
     ) -> MonitorProtocol: ...
 
 
-def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
+def evaluate_fit(
+    plan: CampaignPlan,
+    run: TrainingRun,
+    directory: Path,
+    pool: Pool,
+    expected_digest: str,
+    evaluation_tracker: TrackerRun,
+    deadline: float,
+) -> None:
+    """Score a completed fit, including retained seed1 after a cadence handoff."""
+    env = os.environ
+    if run.status != "completed" or run.updates_through() != plan.updates:
+        raise ValueError("evaluation requires the complete fixed target")
+    initial = Checkpoint(
+        artifact=run.stages[0].artifacts["initial_raw"],
+        coordinates=TrainingCoordinates(
+            stage_id="initialization", updates=0, training_seconds=0
+        ),
+    )
+    saved_initial, _ = load_checkpoint_agent(initial.artifact["path"])
+    if parameter_digest(saved_initial) != expected_digest:
+        raise ValueError("actual producer initialization differs from paired preflight")
+    middle = next(
+        c for c in run.monitoring_checkpoints if c.updates == plan.updates // 2
+    )
+    if middle.artifact is None:
+        raise RuntimeError("midpoint export unavailable")
+    endpoint = stage_checkpoint(run, run.stages[0].id)
+    if endpoint is None:
+        raise RuntimeError("endpoint export unavailable")
+    points = (
+        initial,
+        Checkpoint(
+            artifact=middle.artifact,
+            coordinates=TrainingCoordinates.model_validate(
+                middle.model_dump(), extra="ignore"
+            ),
+        ),
+        endpoint,
+    )
+    for point in points:
+        milestone = point.coordinates.updates
+        if milestone not in plan.evaluation_updates:
+            continue
+        for anchor in ("scripted_greedy", "random"):
+            protocol = plan.protocol(pool, anchor, milestone)
+            variants = (
+                (("candidate", point),)
+                if milestone == 0
+                else (("candidate", point), ("control", initial))
+            )
+            for variant, checkpoint in variants:
+                if (
+                    time.time() >= deadline - 60
+                    or Path(env["ETUDE_STOP_FILE"]).exists()
+                ):
+                    raise RuntimeError(
+                        "allocation exhausted with incomplete evaluation cohort"
+                    )
+                result = evaluate_checkpoint(
+                    run,
+                    checkpoint.artifact,
+                    checkpoint.coordinates,
+                    directory / f"{milestone}-{anchor}-{variant}",
+                    protocol=protocol,
+                )
+                publish_saved_evaluation(
+                    evaluation_tracker,
+                    directory / f"{milestone}-{anchor}-{variant}" / "monitor.json",
+                )
+                if result.status != "completed":
+                    raise RuntimeError(
+                        f"{run.seed}/{milestone}/{anchor}/{variant} incomplete"
+                    )
+
+
+def execute(
+    plan: CampaignPlan,
+    *,
+    pools: tuple[Pool, ...] = POOLS,
+    seeds: tuple[int, ...] | None = None,
+    frequent_diagnostics: bool = False,
+) -> None:
     """Execute all declared runs/cohorts; launcher's guardian owns hard stopping."""
+    selected = plan.seed_order if seeds is None else seeds
+    if (
+        not selected
+        or len(set(selected)) != len(selected)
+        or not set(selected).issubset(plan.seed_order)
+    ):
+        raise ValueError("selected seeds must be an explicit nonempty cohort subset")
+    if frequent_diagnostics and pools != ("l3",):
+        raise ValueError("baseline diagnostics require the product matchup")
     env = os.environ
     if not env.get("ETUDE_RUN") or not socket.gethostname().startswith("mini-heart"):
         raise ValueError(
@@ -223,8 +315,9 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
         )
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
     if deadline - time.time() < (
-        len(pools) * len(plan.seed_order) * plan.training_seconds_per_run
-        + plan.evaluation_reserve_seconds
+        len(pools) * len(selected) * plan.training_seconds_per_run
+        + plan.evaluation_reserve_seconds * len(selected) / len(plan.seed_order)
+        + (9900 * len(selected) if frequent_diagnostics else 0)
         + 300
     ):
         raise ValueError("remaining SDK allocation cannot admit the frozen campaign")
@@ -260,12 +353,14 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
         "plan_sha256": plan.digest,
         "started_unix": start,
         "completed": completed,
+        "selected_seeds": selected,
+        "frequent_diagnostics": frequent_diagnostics,
     }
     atomic_json(manifest, state)
     try:
         recipes = plan.recipes()
         expected: dict[int, str] = {}
-        for seed in plan.seed_order:
+        for seed in selected:
             for pool in pools:
                 torch.manual_seed(seed)
                 initial_model = Agent(
@@ -276,7 +371,7 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
                     raise ValueError("pool initialization changes learnable tensors")
                 expected[seed] = digest
         atomic_json(output / "initialization-parameters.json", expected)
-        for seed_index, seed in enumerate(plan.seed_order):
+        for seed_index, seed in enumerate(selected):
             offset = seed_index % len(pools)
             order = pools[offset:] + pools[:offset]
             for pool in order:
@@ -288,84 +383,45 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
                 env["ETUDE_OUTPUT_DIR"] = str(directory)
                 env["ETUDE_RUN"] = f"{root_run}-{key}"
                 env["ETUDE_TRACK_DIR"] = str(Path(root_tracking) / key)
-                with VerifyStore(directory / "training.sqlite") as store:
-                    run = execute_regime(
-                        recipes[pool],
-                        seed,
-                        directory / "training",
-                        store,
-                        checkpoint_updates=(plan.updates // 2,),
-                        stop_path=Path(env["ETUDE_STOP_FILE"]),
+                monitor = None
+                if frequent_diagnostics:
+                    monitor = DiagnosticMonitor(
+                        directory / "training/run.json", directory / "diagnostics"
                     )
+                    monitor.start()
+                try:
+                    with VerifyStore(directory / "training.sqlite") as store:
+                        run = execute_regime(
+                            recipes[pool],
+                            seed,
+                            directory / "training",
+                            store,
+                            checkpoint_updates=500
+                            if frequent_diagnostics
+                            else (plan.updates // 2,),
+                            stop_path=Path(env["ETUDE_STOP_FILE"]),
+                        )
+                finally:
+                    if monitor is not None:
+                        monitor.finish()
+                if frequent_diagnostics:
+                    for evidence in sorted(
+                        (directory / "diagnostics").glob(
+                            "attempt-*/evaluation/monitor.json"
+                        )
+                    ):
+                        publish_saved_evaluation(evaluation_tracker, evidence)
                 if run.status != "completed":
                     raise RuntimeError(f"{key} failed: {run.error}")
-                initial = Checkpoint(
-                    artifact=run.stages[0].artifacts["initial_raw"],
-                    coordinates=TrainingCoordinates(
-                        stage_id="initialization", updates=0, training_seconds=0
-                    ),
+                evaluate_fit(
+                    plan,
+                    run,
+                    directory,
+                    pool,
+                    expected[seed],
+                    evaluation_tracker,
+                    deadline,
                 )
-                saved_initial, _ = load_checkpoint_agent(initial.artifact["path"])
-                if parameter_digest(saved_initial) != expected[seed]:
-                    raise ValueError(
-                        "actual producer initialization differs from paired preflight"
-                    )
-                middle = next(
-                    c
-                    for c in run.monitoring_checkpoints
-                    if c.updates == plan.updates // 2
-                )
-                if middle.artifact is None:
-                    raise RuntimeError("midpoint export unavailable")
-                endpoint = stage_checkpoint(run, run.stages[0].id)
-                if endpoint is None:
-                    raise RuntimeError("endpoint export unavailable")
-                points = (
-                    initial,
-                    Checkpoint(
-                        artifact=middle.artifact,
-                        coordinates=TrainingCoordinates.model_validate(
-                            middle.model_dump(), extra="ignore"
-                        ),
-                    ),
-                    endpoint,
-                )
-                for point in points:
-                    milestone = point.coordinates.updates
-                    if milestone not in plan.evaluation_updates:
-                        continue
-                    for anchor in ("scripted_greedy", "random"):
-                        protocol = plan.protocol(pool, anchor, milestone)
-                        variants = (
-                            (("candidate", point),)
-                            if milestone == 0
-                            else (("candidate", point), ("control", initial))
-                        )
-                        for variant, checkpoint in variants:
-                            if (
-                                time.time() >= deadline - 60
-                                or Path(env["ETUDE_STOP_FILE"]).exists()
-                            ):
-                                raise RuntimeError(
-                                    "allocation exhausted with incomplete evaluation cohort"
-                                )
-                            result = evaluate_checkpoint(
-                                run,
-                                checkpoint.artifact,
-                                checkpoint.coordinates,
-                                directory / f"{milestone}-{anchor}-{variant}",
-                                protocol=protocol,
-                            )
-                            publish_saved_evaluation(
-                                evaluation_tracker,
-                                directory
-                                / f"{milestone}-{anchor}-{variant}"
-                                / "monitor.json",
-                            )
-                            if result.status != "completed":
-                                raise RuntimeError(
-                                    f"{key}/{milestone}/{anchor}/{variant} incomplete"
-                                )
                 completed.append(key)
                 evaluation_tracker.log(completed_runs=len(completed))
                 state["elapsed_seconds"] = time.time() - start
@@ -373,7 +429,7 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
         state["status"] = "completed"
         atomic_json(
             output / "etude-result.json",
-            {"clocks": {"completed_runs": len(pools) * len(plan.seed_order)}},
+            {"clocks": {"completed_runs": len(pools) * len(selected)}},
         )
     except BaseException as error:
         state["status"] = "failed"

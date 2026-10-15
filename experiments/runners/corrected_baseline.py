@@ -13,15 +13,17 @@ import socket
 import time
 from typing import Literal
 
+from etude.track.records import Step
+from etude.track.run import init
 from pydantic import Field, model_validator
 
-from experiments.runners.complexity_campaign import execute
+from experiments.runners.complexity_campaign import evaluate_fit, execute
 from experiments.runners.environment_complexity import Pool
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.experiments import Baseline, Experiment
-from manabot.training.models import Strict, TrainingRegime, TrainSelfPlay
+from manabot.training.models import Strict, TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitor_evaluation import (
     MonitorProtocol,
     evaluate_checkpoint,
@@ -142,6 +144,53 @@ def resolve_counts(
     )
 
 
+def complete_retained_first(plan: BaselinePlan, source: Path, output: Path) -> None:
+    """Finish seed1's fixed evaluations without training or porting its weights."""
+    run = TrainingRun.model_validate_json(source.read_text())
+    if (
+        run.seed != SEEDS[0]
+        or run.status != "completed"
+        or run.regime != recipe(10000, plan.training_seconds_per_run)
+    ):
+        raise ValueError("retained first fit differs from the frozen completed recipe")
+    if run.updates_through() != 10000:
+        raise ValueError("retained first fit has not completed10000 updates")
+    original = json.loads(
+        (source.parents[2] / "initialization-parameters.json").read_text()
+    )
+    target = output / "l3-12261"
+    target.mkdir(parents=True, exist_ok=False)
+    atomic_json(target / "training/run.json", run.model_dump(mode="json"))
+    tracker = init(
+        experiment="mtg122-evaluation",
+        run=os.environ["ETUDE_RUN"] + "-retained-first",
+        directory=Path(os.environ["ETUDE_TRACK_DIR"]) / "retained-first",
+        clocks=[
+            Step(
+                "completed_evaluations", "Retained first seed fixed endpoint comparison"
+            )
+        ],
+        config={"producer": run.id, "plan_sha256": plan.digest},
+        strict=True,
+    )
+    try:
+        evaluate_fit(
+            plan,
+            run,
+            target,
+            "l3",
+            original[str(run.seed)],
+            tracker,
+            datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp(),
+        )
+        tracker.log(completed_evaluations=1)
+    except BaseException:
+        tracker.finish("failed")
+        raise
+    else:
+        tracker.finish("finished")
+
+
 def run() -> None:
     """Execute only inside the authorized Mini allocation, with no retry path."""
     env = os.environ
@@ -157,7 +206,24 @@ def run() -> None:
         output = Path(env["ETUDE_OUTPUT_DIR"])
         output.mkdir(parents=True, exist_ok=True)
         atomic_json(output / "calibrated-plan.json", plan.model_dump(mode="json"))
-        execute(plan, pools=("l3",))
+        if "retained_first" in config:
+            remaining = (
+                datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp() - time.time()
+            )
+            if (
+                remaining
+                < 2 * plan.training_seconds_per_run
+                + plan.evaluation_reserve_seconds
+                + 19800
+                + 600
+            ):
+                raise ValueError(
+                    "remaining allocation cannot cover retained evaluation and two monitored fits"
+                )
+            complete_retained_first(plan, Path(config["retained_first"]), output)
+            execute(plan, pools=("l3",), seeds=SEEDS[1:], frequent_diagnostics=True)
+        else:
+            execute(plan, pools=("l3",))
         return
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
     output = Path(env["ETUDE_OUTPUT_DIR"])
