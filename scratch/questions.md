@@ -346,19 +346,11 @@ freezing counts. Fresh initialization, independent seeds, fixed greedy/random
 anchors and deck-role cells remain intended; no historical score is a w6 baseline.
 The 48-hour Mini ceiling is not reset. Complexity and curriculum remain deferred.
 
-## Corrected baseline launch preparation (2026-10-15)
+## Corrected baseline history
 
-Jack Heart explicitly requested launch. PR288/289 are integrated; the bounded
-baseline protocol now lives in `experiments/corrected-world-baseline.md`.
-Mini job cap31.5h plus16h prior-attempt reservation and0.5h settlement preserves
-48h total. Calibration freezes counts before three new fits; insufficient capacity
-stops, with no quiet cohort reduction. The original product semantic catalog and
-small sustained masked-mean recipe are used; pool/curriculum contrasts stay deferred.
-Check: nine focused baseline/declaration/attack-choice checks passed on rebuilt w6.
-
-The short w6 launch and source-delivery recovery remain at `cd72366b` and
-`.runs/mtg122/w6-baseline-launch.json`; that attempt was later cancelled.
-Prior originals remain on Mini; full local archival is incomplete.
+Earlier launch/calibration and source-delivery recovery remain at `cd72366b` and
+`.runs/mtg122/w6-baseline-launch.json`. That short attempt was cancelled; Mini
+originals remain authoritative and full local archival is incomplete.
 
 ## Sustained horizon correction (2026-10-15)
 
