@@ -250,3 +250,16 @@ after this repair, retaining the original failure. Inclusive first-attempt charg
 is 114.739966 seconds; retry is capped at the remaining 3485.260034 seconds of
 the same one-hour calibration reserve. Exact retry admission remains in
 `.runs/mtg122/calibration-retry-source.json`; the scientific cohort is not started.
+
+## Scientific execution path prepared (2026-10-14)
+
+The repaired Mini calibration `60cfb89655fa` was observed at 90 vanilla-pool
+updates (310.48 active seconds), still running; this is neither its final timing
+nor a scored result. The frozen campaign module now resolves the three cases
+through Experiment/TrainingRegime, admits 1000–10000 common updates from complete
+calibration at 1.5× cost margins, and preserves all 36,000 planned games. Nine
+fits rotate pool order by seed; initial/mid/end deals are disjoint, midpoint/end
+controls use the exact initial bytes, and parameter hashes check paired starts.
+SDK publication retains every arena cohort. Missing fits/cells stop with failed
+evidence rather than reducing counts. Declaration tests pass; scientific runner
+has not executed and still needs measured admission and final reporting.
