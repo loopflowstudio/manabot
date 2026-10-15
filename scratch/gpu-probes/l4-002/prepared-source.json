@@ -1,9 +1,0 @@
-{
-  "bucket": "etude-job-journals-324288363980-us-west-2",
-  "key": "etude/fantasia-gpu-validation-20261014/prepared/724da6e1ab87381c65d1e85ed54cb4176df25ed5.tar",
-  "commit": "724da6e1ab87381c65d1e85ed54cb4176df25ed5",
-  "bytes": 182743040,
-  "sha256": "b6714a4476a4b98de52b74d0fce0ee901c6059dc89ded3e44340b5eb8e50204b",
-  "seconds": 102.35210514068604,
-  "status": "verified"
-}

@@ -1,7 +1,0 @@
-{
-  "all_exact": true,
-  "limits": "Untrained fixed policy, actual ordinary collection; no optimizer or distributed training measurement.",
-  "median_speedup": 1.0342168351567937,
-  "samples": 4,
-  "target_passed": false
-}
