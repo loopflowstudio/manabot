@@ -54,10 +54,15 @@ training-runtime = [
 ]
 play-runtime = [
     "fastapi>=0.116.0",
+    # A trained opponent loads through manabot's model and env packages,
+    # which import these at module load.
+    "gymnasium>=1.0.0",
     "maturin>=1.5,<2.0",
     "numpy>=1.24.0",
+    "psutil>=5.9.0",
     "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
+    "wandb>=0.18.7",
 ]
 
 [tool.uv]

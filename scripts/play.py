@@ -56,7 +56,17 @@ UV_RUNTIME = [
     "--only-group",
     "play-runtime",
 ]
-RUNTIME_IMPORTS = ("academy.server", "academy.live_advice", "numpy", "torch")
+# The checkpoint opponent's modules load lazily, only when a game selects it.
+RUNTIME_IMPORTS = (
+    "academy.server",
+    "academy.live_advice",
+    "manabot.model.world",
+    "manabot.sim.compound",
+    "manabot.sim.flat_mc",
+    "manabot.verify.util",
+    "numpy",
+    "torch",
+)
 
 
 @dataclass(frozen=True)

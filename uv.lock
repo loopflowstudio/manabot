@@ -1995,12 +1995,15 @@ reports = [
 [package.dev-dependencies]
 play-runtime = [
     { name = "fastapi" },
+    { name = "gymnasium" },
     { name = "maturin" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.11' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "psutil" },
     { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "uvicorn", extra = ["standard"], marker = "extra == 'group-7-manabot-play-runtime'" },
+    { name = "wandb" },
 ]
 training-runtime = [
     { name = "torch", version = "2.10.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'group-7-manabot-training-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
@@ -2037,10 +2040,13 @@ provides-extras = ["reports", "artifacts", "play", "dev", "notebook"]
 [package.metadata.requires-dev]
 play-runtime = [
     { name = "fastapi", specifier = ">=0.116.0" },
+    { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.5,<2.0" },
     { name = "numpy", specifier = ">=1.24.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
     { name = "torch", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "manabot", group = "play-runtime" } },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
+    { name = "wandb", specifier = ">=0.18.7" },
 ]
 training-runtime = [
     { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.10.0", index = "https://pypi.org/simple", conflict = { package = "manabot", group = "training-runtime" } },
