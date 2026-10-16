@@ -31,6 +31,7 @@ from manabot.belief.sampling_fit import (
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
+from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_identity
 from manabot.model.policy_distribution import NumericalError
@@ -62,6 +63,7 @@ from .models import (
     ImportPolicy,
     MonitoringCheckpoint,
     NumericalFailure,
+    PhaseTiming,
     StageRecord,
     TrainBelief,
     TrainCompound,
@@ -582,6 +584,9 @@ def _execute_regime(
                 )
                 if not restoring_completed:
                     record.admission_wait_seconds = 0.0
+                    record.collection_timings = (
+                        {} if stage.execution.profile_collection else None
+                    )
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -1235,6 +1240,9 @@ def _execute_regime(
                         imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(trainer.agent.parameters()).device)
+                trainer.collector.profiler = Profiler(
+                    enabled=stage.execution.profile_collection
+                )
                 before = deepcopy(trainer.collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
@@ -1316,6 +1324,17 @@ def _execute_regime(
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
+                        if stage.execution.profile_collection:
+                            # Subphases inherit the existing collection boundary.
+                            # Copy after it closes; reporting overhead is outside it.
+                            record.collection_timings = {
+                                path.removeprefix("Collection/"): PhaseTiming(
+                                    seconds=stats["total_time"],
+                                    calls=int(stats["count"]),
+                                )
+                                for path, stats in trainer.collector.profiler.get_stats().items()
+                                if path.startswith("Collection/")
+                            }
                     check()
                     tick = time.perf_counter()
                     try:

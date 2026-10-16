@@ -183,6 +183,7 @@ class Execution(Strict):
     threads: int = Field(default=1, ge=1, le=4)
     wall_seconds: float = Field(default=300, gt=0)
     memory_bytes: int = Field(default=32 * 1024**3, gt=0)
+    profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class Stage(Strict):
@@ -191,6 +192,11 @@ class Stage(Strict):
 
     @model_validator(mode="after")
     def supported_workers(self) -> "Stage":
+        if (
+            self.execution.profile_collection
+            and getattr(self, "operation", None) != "train_self_play"
+        ):
+            raise ValueError("collection profiling requires train_self_play")
         if (
             self.execution.workers != 1
             and getattr(self, "operation", None) != "train_self_play"
@@ -771,6 +777,13 @@ class NumericalFailure(Strict):
     health: dict[str, int | float] = {}
 
 
+class PhaseTiming(Strict):
+    """Accumulated host wall seconds and calls; never device utilization."""
+
+    seconds: float = Field(ge=0, allow_inf_nan=False)
+    calls: int = Field(ge=0)
+
+
 class StageRecord(Strict):
     learning_state_origin: LearningStateOrigin | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -797,6 +810,9 @@ class StageRecord(Strict):
     # None means historical/unsupported measurement, rather than zero wait.
     admission_wait_seconds: float | None = Field(
         default=None, ge=0, exclude_if=lambda value: value is None
+    )
+    collection_timings: dict[str, PhaseTiming] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     games: int = 0
     environment_decisions: int = 0

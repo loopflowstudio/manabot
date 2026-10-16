@@ -91,11 +91,13 @@ def lineage_roots(parents: dict[str, str | None]) -> dict[str, str]:
 
 
 def phase_totals(profiles: Sequence[TrainingProfile]) -> dict[str, float]:
-    """Sum leaves only; stage and root totals already contain their children."""
+    """Sum domain phases once, retaining their nested measurements for drilldown."""
     totals: dict[str, float] = defaultdict(float)
 
     def visit(node: TimeSlice) -> None:
-        if node.children:
+        if node.name in PHASES:
+            totals[node.name] += node.seconds
+        elif node.children:
             for child in node.children:
                 visit(child)
         else:

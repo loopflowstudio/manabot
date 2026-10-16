@@ -118,7 +118,26 @@ def training_profiles(runs: Sequence[TrainingRun]) -> tuple[TrainingProfile, ...
                     ),
                 ):
                     if field in stage.model_fields_set:
-                        costs.append(TimeSlice(label, value))
+                        if (
+                            field == "collection_seconds"
+                            and stage.collection_timings is not None
+                        ):
+                            try:
+                                costs.append(
+                                    _partition(
+                                        label,
+                                        value,
+                                        [
+                                            TimeSlice(name, timing.seconds)
+                                            for name, timing in stage.collection_timings.items()
+                                        ],
+                                    )
+                                )
+                            except ValueError as error:
+                                warnings.append(str(error))
+                                costs.append(TimeSlice(label, value))
+                        else:
+                            costs.append(TimeSlice(label, value))
                     else:
                         warnings.append(f"{stage.id}: {label} duration unavailable")
                 try:
@@ -245,8 +264,12 @@ def _profile_svg(root: TimeSlice) -> str:
         "Stage exports": "#9b703d",
         "Unattributed": "#77716a",
     }
+
+    def levels(node: TimeSlice) -> int:
+        return 1 + max((levels(child) for child in node.children), default=0)
+
     parts = [
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 120" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 {levels(root) * 39}" '
         'role="img" aria-label="Aggregate training phase durations">'
     ]
 

@@ -6,7 +6,8 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from manabot.training.experiment_report import load_evidence, write_time_profile
-from manabot.training.models import StageRecord, TrainingRun
+from manabot.training.models import PhaseTiming, StageRecord, TrainingRun
+from manabot.training.time_cohort import phase_totals
 from manabot.training.time_profile import (
     training_intervals,
     training_profiles,
@@ -104,6 +105,28 @@ def test_initial_admission_wait_partitions_stage_time_without_active_work() -> N
         == 0.5
     )
     assert next(p.seconds for p in stage.children if p.name == "Unattributed") == 0.25
+
+
+def test_collection_subphases_preserve_parent_total_and_deeper_svg() -> None:
+    run = _run()
+    run.stages[0].collection_timings = {
+        "Environment step and encoding": PhaseTiming(seconds=3, calls=12),
+        "Policy inference and action selection": PhaseTiming(seconds=1, calls=10),
+    }
+    profile = training_profiles([run])[0]
+    assert not profile.warnings
+    assert profile.root is not None
+    stage = next(p for p in profile.root.children if p.name == "train")
+    collection = next(p for p in stage.children if p.name == "Collection")
+    assert sum(p.seconds for p in collection.children) == collection.seconds == 5
+    assert phase_totals([profile])["Collection"] == 5
+    assert sum(phase_totals([profile]).values()) == 10
+    html = training_time_report([run], [])
+    assert 'viewBox="0 0 1000 156"' in html
+    run.stages[0].collection_timings["Environment step and encoding"].seconds = 10
+    contradictory = training_profiles([run])[0]
+    assert "Collection: phase totals exceed recorded duration" in contradictory.warnings
+    assert phase_totals([contradictory])["Collection"] == 5
 
 
 def test_conflicting_costs_are_visible_instead_of_normalized() -> None:

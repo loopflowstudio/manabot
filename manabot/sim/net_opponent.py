@@ -39,6 +39,7 @@ import torch
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
+from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.inference import PolicyInference
 from manabot.model.policy_distribution import (
@@ -214,6 +215,9 @@ class SeatRoutedCollector:
         self.opponent_mode = opponent_mode
         self.device = torch.device(device)
         self.stats = CollectorStats()
+        # The calling training stage owns enablement and resets this timer.
+        # Only the collector thread records host intervals; workers never share it.
+        self.profiler = Profiler(enabled=False)
         if (
             recovery_max_microsteps is not None
             or recovery_max_game_microsteps is not None
@@ -438,7 +442,7 @@ class SeatRoutedCollector:
 
         # No cache or prepared observation survives learning, snapshot or restore.
         # Both seats in self-play use this same unchanged behavior-policy scope.
-        with PolicyInference(agent) as inference:
+        with self.profiler.track("Collection"), PolicyInference(agent) as inference:
             return self._collect(
                 agent,
                 num_steps,
@@ -487,54 +491,60 @@ class SeatRoutedCollector:
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))
 
             if len(learner_rows):
-                obs_t = self._slice_obs_tensors(learner_rows, inference)
-                with torch.no_grad():
-                    outcomes: np.ndarray | None = None
-                    if agent.hypers.value_kind == "categorical_wdl":
-                        logits, outcome_logits = agent.forward_distribution(obs_t)
-                        outcome_t = outcome_logits.softmax(dim=-1)
-                        value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                        outcomes = outcome_t.cpu().numpy()
-                    else:
-                        logits, value_t = agent(obs_t)
-                    logs = self._policy_logs(logits, obs_t)
-                    require(
-                        torch.isfinite(value_t),
-                        "nonfinite_collection_values",
-                        values=value_t,
-                        valid=obs_t["actions_valid"] > 0,
+                with self.profiler.track("Observation preparation"):
+                    obs_t = self._slice_obs_tensors(learner_rows, inference)
+                with self.profiler.track("Policy inference and action selection"):
+                    with torch.no_grad():
+                        outcomes: np.ndarray | None = None
+                        if agent.hypers.value_kind == "categorical_wdl":
+                            logits, outcome_logits = agent.forward_distribution(obs_t)
+                            outcome_t = outcome_logits.softmax(dim=-1)
+                            value_t = outcome_t[:, 2] - outcome_t[:, 0]
+                            outcomes = outcome_t.cpu().numpy()
+                        else:
+                            logits, value_t = agent(obs_t)
+                        logs = self._policy_logs(logits, obs_t)
+                        require(
+                            torch.isfinite(value_t),
+                            "nonfinite_collection_values",
+                            values=value_t,
+                            valid=obs_t["actions_valid"] > 0,
+                        )
+                        weights = logs.exp()
+                        action_t = torch.multinomial(
+                            weights, 1, generator=self._self_rng
+                        ).squeeze(-1)
+                        logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
+                        probabilities = weights.cpu().numpy()
+                        log_probabilities = logs.cpu().numpy()
+                    acts = action_t.cpu().numpy().astype(np.int64)
+                    logprobs = logprob_t.cpu().numpy()
+                    values = value_t.view(-1).cpu().numpy()
+                with self.profiler.track("Rollout recording"):
+                    # One copied slice per key; per-row dicts view into it.
+                    obs_rows = {
+                        key: buffers[key][learner_rows].copy() for key in OBS_KEYS
+                    }
+                    for j, row in enumerate(learner_rows):
+                        self._pending[row] = _Pending(
+                            obs={key: obs_rows[key][j] for key in OBS_KEYS},
+                            action=int(acts[j]),
+                            logprob=float(logprobs[j]),
+                            value=float(values[j]),
+                            probabilities=probabilities[j].copy(),
+                            log_probabilities=log_probabilities[j].copy(),
+                            outcome_probabilities=(
+                                None if outcomes is None else outcomes[j].copy()
+                            ),
+                        )
+                    actions[learner_rows] = acts
+                    self._count_action_types(
+                        self.stats.learner_action_types, learner_rows, acts
                     )
-                    weights = logs.exp()
-                    action_t = torch.multinomial(
-                        weights, 1, generator=self._self_rng
-                    ).squeeze(-1)
-                    logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                    probabilities = weights.cpu().numpy()
-                    log_probabilities = logs.cpu().numpy()
-                acts = action_t.cpu().numpy().astype(np.int64)
-                logprobs = logprob_t.cpu().numpy()
-                values = value_t.view(-1).cpu().numpy()
-                # One copied slice per key; per-row dicts view into it.
-                obs_rows = {key: buffers[key][learner_rows].copy() for key in OBS_KEYS}
-                for j, row in enumerate(learner_rows):
-                    self._pending[row] = _Pending(
-                        obs={key: obs_rows[key][j] for key in OBS_KEYS},
-                        action=int(acts[j]),
-                        logprob=float(logprobs[j]),
-                        value=float(values[j]),
-                        probabilities=probabilities[j].copy(),
-                        log_probabilities=log_probabilities[j].copy(),
-                        outcome_probabilities=(
-                            None if outcomes is None else outcomes[j].copy()
-                        ),
-                    )
-                actions[learner_rows] = acts
-                self._count_action_types(
-                    self.stats.learner_action_types, learner_rows, acts
-                )
 
             if len(opp_rows):
-                opp_acts = self._opponent_actions(agent, opp_rows, inference)
+                with self.profiler.track("Opponent policy"):
+                    opp_acts = self._opponent_actions(agent, opp_rows, inference)
                 actions[opp_rows] = opp_acts
                 self.stats.opponent_decisions += len(opp_rows)
                 self._count_action_types(
@@ -545,7 +555,8 @@ class SeatRoutedCollector:
                 if self.stats.micro_steps + int(active.sum()) > self._recovery_limit:
                     raise RuntimeError("collector recovery journal limit exceeded")
                 self._journal.append((actions.tolist(), active.tolist()))
-            env.step_into_buffers(actions.tolist(), active.tolist())
+            with self.profiler.track("Environment step and encoding"):
+                env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
 
             done = (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
@@ -585,7 +596,8 @@ class SeatRoutedCollector:
                     if self._pending[row] is not None:
                         self._finalize(int(row), reward=reward, done=True)
 
-        batch = self._build_batch(num_steps)
+        with self.profiler.track("Batch assembly"):
+            batch = self._build_batch(num_steps)
         self.stats.seconds += time.perf_counter() - start
         return batch
 

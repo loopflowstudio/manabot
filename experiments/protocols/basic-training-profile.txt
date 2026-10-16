@@ -1,0 +1,54 @@
+Basic GPU training attribution — prospective protocol, 2026-10-15
+
+Question: where does collection time go in the larger model used by real training,
+and how much does an opt-in basic host profiler perturb ordinary training?
+Historical reference: etu103-recovery-v2-pilot-1, width384/depth8, scalar value,
+Ataraxos MOVE,64streams,8transitions. Its saved recipe is retained as the baseline
+with current world/schema defaults. Source2555c0e2 and that run's L4 timings are
+historical evidence, not a matched control for today's source or5090hardware.
+
+One RTX5090 at <=$1.25/hour, >=8vCPU/48GBRAM. New total budget$25, separate from
+the earlier$50campaign. Reserve$3for this cohort and$2for ancillary costs; one
+attempt, job30minutes/$2, rental2700seconds. Exact committed source must be fully
+read back before admission. Refresh provider absence and quote before launch.
+Do not extend deadlines, silently retry or drop failed cells from analysis.
+
+experiments.runners.training_profile runs28fresh-process cells on one host:
+four deterministic proof cells: width384/depth8 at64/512streams, each timeroff/on,
+3updates. Capture full collection/buffer/action-active/RNG/seed witnesses and
+raw/EMA/Adam hashes. Require exact matched off/on trajectory and learned state.
+Proof mode uses deterministic algorithms and CUBLAS_WORKSPACE_CONFIG=:4096:8.
+It is excluded from timing comparisons.
+
+24ordinary timing cells: width64/depth1 andwidth384/depth8, each64/512streams,
+16updates x8transitions. Timer ordering off/on/on/off/off/on gives three repetitions
+per condition and shape. All use1TorchCPUthread,1nativeworker,FP32,TF32off,
+seed10349, actual filtered Ataraxos learning. No PyTorch trace or new CUDA
+synchronization. No evaluation gate, monitoring cohort or recovery cadence.
+Full ordinary exports remain part of the measured run and retained evidence.
+
+Each shape has matching work across timer controls. Different stream counts
+change rollout size and learning exposure: throughput describes the capacity
+envelope, not an algorithmically equivalent training improvement. Record retained
+rows, optimizer exposures, microsteps and full diagnostics. Split first update
+from the interval between first and last update using saved clock coordinates;
+never infer startup time by subtracting an unrelated process clock.
+
+Collection subphases are exclusive host wall intervals: observation preparation,
+policy inference/action selection and returned results, rollout recording,
+opponent policy, environment step/encoding, batch assembly. They include any
+existing device waits in their scope, not independent GPU kernel durations.
+Unmeasured orchestration and synchronization remain the collection residual.
+Report sums and calls alongside parent collection seconds. Preserve all failures,
+inconsistent timers and incomplete records as coverage gaps.
+
+Stage cap110s, recipe115s, child125s; whole study900s. Parent stops starting cells
+with less than125s remaining. Etude enforces the independent job/rental limits.
+Retain source/native hashes, CPU quotas, memory limit, GPU/runtime details,
+per-cell logs, raw TrainingRun, model exports, status and SHA256 file manifest.
+Verify outputs against session receipts and confirm provider deletion.
+
+Observer gate: matched on/off median complete-run ratio within5%, alongside all
+three observations and steady-update ratios. If exceeded, the profiler is a
+diagnostic instrument only; do not extrapolate its fractions as ordinary speed.
+No performance or playing-strength win is claimed from this attribution study.

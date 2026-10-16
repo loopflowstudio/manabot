@@ -148,10 +148,20 @@ independent seeds and held-out scientific cohorts attached to any conclusion.
 The training-only time profile shows a flamegraph-style hierarchy for each saved
 attempt: setup, stages, collection, learning, stage exports and remaining time.
 Widths are aggregate elapsed seconds, not chronological spans. Unattributed time
-is visible; detailed inference/simulation and learning subphases are unavailable
+is visible; historical inference/simulation and learning subphases are unavailable
 unless separately profiled. Diagnostics can include failure accounting, so they
 are not universally pure diagnostic computation. Monitoring exports and recovery
 costs are already inside stage time and are not added again.
+
+Self-play stages can set `execution.profile_collection: true` to retain basic
+host timers in `StageRecord.collection_timings`: observation preparation, policy
+inference and action selection, rollout recording, opponent policy, environment
+step/encoding, and batch assembly. The report nests these beneath collection and
+keeps the residual visible. Seconds and call counts are attempt-local; reused
+collectors start fresh counters at each stage. These intervals include existing
+device waits but are not GPU kernel timings. The option defaults off, adds no
+CUDA synchronization, and does not enable PyTorch tracing. Compare matched
+ordinary runs with it off/on before treating instrumented fractions as typical.
 
 The main dashboard includes this view. To generate a standalone training-only
 report from saved records in a notebook or script run through `uv run`:
