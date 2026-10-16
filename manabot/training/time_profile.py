@@ -141,9 +141,25 @@ def training_profiles(runs: Sequence[TrainingRun]) -> tuple[TrainingProfile, ...
                     else:
                         warnings.append(f"{stage.id}: {label} duration unavailable")
                 try:
+                    duration = stage.seconds
+                    label = stage.id
+                    # Live exports update phase counters before finalizing the
+                    # stage clock. Their sum measures observed work, not elapsed
+                    # stage time; the attempt retains the unknown remainder.
+                    if (
+                        run.status == "running"
+                        and stage.status == "running"
+                        and stage.seconds == 0
+                        and costs
+                    ):
+                        duration = sum(cost.seconds for cost in costs)
+                        label = f"{stage.id} (observed phases)"
+                        warnings.append(
+                            f"{stage.id}: live stage duration unavailable; showing accumulated observed phases."
+                        )
                     phase = _partition(
-                        stage.id,
-                        stage.seconds,
+                        label,
+                        duration,
                         costs,
                     )
                 except ValueError as error:

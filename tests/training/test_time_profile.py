@@ -7,7 +7,7 @@ import pytest
 
 from manabot.training.experiment_report import load_evidence, write_time_profile
 from manabot.training.models import PhaseTiming, StageRecord, TrainingRun
-from manabot.training.time_cohort import phase_totals
+from manabot.training.time_cohort import native_cohort, phase_totals
 from manabot.training.time_profile import (
     training_intervals,
     training_profiles,
@@ -127,6 +127,37 @@ def test_collection_subphases_preserve_parent_total_and_deeper_svg() -> None:
     contradictory = training_profiles([run])[0]
     assert "Collection: phase totals exceed recorded duration" in contradictory.warnings
     assert phase_totals([contradictory])["Collection"] == 5
+
+
+def test_live_snapshot_keeps_observed_work_without_inventing_stage_duration() -> None:
+    run = _run()
+    run.status = "running"
+    run.stages[0].status = "running"
+    run.stages[0].seconds = 0
+    profile = training_profiles([run])[0]
+    assert profile.root is not None and profile.root.seconds == 10
+    observed = next(p for p in profile.root.children if "observed phases" in p.name)
+    assert observed.seconds == 7.25
+    assert phase_totals([profile]) == {
+        "Setup": 1,
+        "Collection": 5,
+        "Learning": 2,
+        "Stage exports": 0.25,
+        "Unattributed": 1.75,
+    }
+    assert "live stage duration unavailable" in profile.warnings[0]
+    assert native_cohort([run]).runs[0].active_seconds == 7
+    # An impossible enclosing clock still invalidates attribution.
+    run.seconds = 3
+    contradictory = training_profiles([run])[0]
+    assert phase_totals([contradictory]) == {"Unattributed": 3}
+    assert native_cohort([run]).runs[0].active_seconds is None
+    # A completed stage cannot use the live-export explanation.
+    run.seconds = 10
+    run.stages[0].status = "completed"
+    completed = training_profiles([run])[0]
+    assert "Collection" not in phase_totals([completed])
+    assert any("exceed" in warning for warning in completed.warnings)
 
 
 def test_conflicting_costs_are_visible_instead_of_normalized() -> None:

@@ -47,6 +47,23 @@ waits; it is excluded from active training and partitioned once in the report.
 Older records retain an unknown value. This adds a basic host timer, not PyTorch
 tracing or evaluation instrumentation.
 
+The larger historical running snapshot, `etu103-recovery-v3-science-2`, supports
+the same startup/steady distinction. Its first-to-last-update interval is
+3,423.831 seconds, with 3,279.878 active seconds (**95.8%**). Collection is
+81.1% of accumulated active time. It contains 1,855 updates and 949,760 learner
+rows on an L4 with the same width-384/eight-layer shape. These are observed
+snapshot counters, not a completed-run result. [Source-bound measurements](data/training-time/historical-live-snapshot.json)
+retain the artifact hash and exact source `45940fe3`.
+
+In that source, phase counters update during training, while `stage.seconds`
+is finalized only when a stage ends. The report now shows a running stage's
+measured counters as **observed phases** when that stage clock remains zero.
+It keeps the enclosing attempt's remaining time unattributed and still rejects
+phase sums exceeding the attempt clock. This makes the larger snapshot useful
+without inventing its missing stage duration. The historical demo initially
+selects both records; it remains a partial inventory rather than a complete
+ranking of historical runs.
+
 Ordinary self-play now supports optional collection subphase counters through
 `execution.profile_collection`. They record observation preparation, policy/action
 handling, rollout recording, opponent policy, environment step/encoding and batch
