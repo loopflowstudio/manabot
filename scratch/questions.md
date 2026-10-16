@@ -346,12 +346,6 @@ freezing counts. Fresh initialization, independent seeds, fixed greedy/random
 anchors and deck-role cells remain intended; no historical score is a w6 baseline.
 The 48-hour Mini ceiling is not reset. Complexity and curriculum remain deferred.
 
-## Corrected baseline history
-
-Earlier launch/calibration and source-delivery recovery remain at `cd72366b` and
-`.runs/mtg122/w6-baseline-launch.json`. That short attempt was cancelled; Mini
-originals remain authoritative and full local archival is incomplete.
-
 ## Sustained horizon correction (2026-10-15)
 
 Earlier horizon/budget deliberation remains at `cd72366b`; subsequent decisions below supersede it.
