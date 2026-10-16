@@ -379,11 +379,10 @@ session `f89409f36a91`, attempt `a9878311d7d9`; receipt
 admission passed; first scientific seed12261 has a10000-update target. No new
 calibration or checkpoint continuation. Other attempts remain terminal and charged.
 
-Jack Heart requested quick latest-checkpoint evaluation and an Etude report.
-Etude reports are generated snapshots under `.runs/mtg122/etude-report`, not live
-strength evidence. At 4712 updates, seed12261 remained running, without its5000
-export. The bounded Mini watcher waits for that export and evaluates208 games,
-then holds only after the completed10000-update first fit.
+The5k seed12261 diagnostic completed208 replayed games:79/104 greedy,92/104
+random; Lessons against greedy Allies12/26. Etude reports remain snapshots.
+Historical GPU comparison is recorded in the baseline protocol, not a causal
+speedup claim.
 
 Jack Heart approved 500-update saves / 1000-update diagnostics for future seeds.
 Queued `c1ec4899c7dd`, source `135c34a0`, retains seed1 for fixed evaluation and
@@ -395,3 +394,11 @@ Receipt/log: `.runs/mtg122/w6-cadence-launch.json`, `cadence-controller.json`,
 `335bd645dafe`; this is not successor launch or midpoint strength evidence.
 Task periodic automation is disabled and CI watcher stopped; neither owns this
 scientific queue. Seven focused software checks passed; no local science ran.
+
+Jack Heart approved a complementary GPU study: three seeds ×25k updates,
+$25 inclusive cap, post-training evaluations on Mini without displacing its10k
+study. The subsequent cadence correction is diagnostics every2,500 updates for
+the GPU study; retain500-update saves and the Mini future-seed1,000 diagnostic
+cadence. GPU allocation has not launched; the task-local Etude database currently
+has no GPU provider configured. Reuse existing secure provider/storage contracts,
+calibrate the unchanged256-transition recipe, and freeze admission before science.
