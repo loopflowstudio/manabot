@@ -217,3 +217,55 @@ with evidence locating the first divergent learner operation. Training logic,
 backend numerical behavior and hardware remain competing explanations. The
 finite outlier must be investigated rather than attributed to the profiler or
 silently removed. PyTorch tracing remains deferred.
+
+## Basic-profile-004: repeated learner witnesses agree
+
+Run `7d6c152708bc`, source `5a99c7e4`, completed all six predeclared diagnostic
+cases. All 31 Etude output objects and 126 archive members were verified, followed
+by independent CPU decoding and canonical hashing of all 24 checkpoint payloads.
+The RTX 5090 rental was deleted at 04:18:14 UTC on 2026-10-16; estimated cost $0.2380.
+The four-study campaign totals $1.4055 estimated / $2.21 conservative, with the existing
+$2 ancillary reserve and no live rental. Final billing remains unavailable.
+
+[Comparison results](data/training-time/basic-profile-004/analysis.json),
+[checkpoint verification](data/training-time/basic-profile-004/checkpoint-hash-verification.json),
+[cross-study comparison](data/training-time/basic-profile-004/cross-study.json),
+and [source/output receipt](data/training-time/basic-profile-004/receipt.json)
+retain the evidence. Ordered learner JSONL and collection witnesses are alongside
+them. The initial source-history fetch failed before admission; no run or rental
+was created. An identical bounded read-only fetch passed, after which the single
+admission proceeded with the same source and reservation. That failure is retained.
+
+| Comparison | Work per case | Result |
+|---|---|---|
+| Deterministic timer off/off | 3 updates, 9 Adam steps | All 60 learner events, collections and checkpoint states exact |
+| Deterministic timer off/on | 3 updates, 9 Adam steps | Exact |
+| Deterministic timer on/on | 3 updates, 9 Adam steps | Exact |
+| Ordinary timer off/off | 16 updates, 85 Adam steps | All 505 learner events, collections and checkpoint states exact |
+
+The first four cases have full deterministic algorithms enabled; the last two
+do not. Recorded runtime flags confirm this distinction. All cases have cuDNN
+determinism enabled, benchmarking and TF32 disabled. The largest observed
+coordinate movement is 0.00009993 in the short proofs and 0.00017330 in the ordinary
+controls. No movement crossed the diagnostic 0.01 capture trigger.
+
+The new short proofs match study 003's timer-off proof exactly, but not its
+timer-on proof. The two new ordinary controls match **all five non-anomalous
+ordinary cases from 003**, including both timer settings; only 003's first ordinary
+timer-off case differs. Thus the retained evidence supports two exceptional cases
+in 003, not a claim that every repetition had distinct learned state.
+
+These diagnostics deliberately hash tensors around forwards, target construction,
+backward/clipping and Adam. That adds synchronization, CPU transfers and substantial
+overhead; their durations are not performance measurements. The host also changed
+from EPYC 9554 / 31.13 CPU quota to EPYC 7543 / 12.75 quota, while GPU family and
+Torch 2.10/cu128 stayed the same. Synchronization effects and an intermittent
+backend/hardware failure remain materially different explanations. No divergent
+operation was reproduced, so no root cause is established and 003's failed gate
+remains failed.
+
+This supports returning to matched workload attribution with fresh ordinary
+controls, while keeping the anomalous run visible. A same-host witness-off/on
+comparison would separate observer synchronization from host changes if the
+numerical failure recurs. The missing model-size/batch-size comparison remains
+necessary before generalizing the 53.8% policy share to other training regimes.
