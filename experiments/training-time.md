@@ -181,6 +181,28 @@ and cause are unknown. [Checkpoint audit](data/training-time/basic-profile-003/s
 retains all parameter/state differences; [witnesses](data/training-time/basic-profile-003/witnesses.json)
 retain every case, including contrary controls.
 
+The [outlier follow-up](data/training-time/basic-profile-003/outlier-audit.json)
+rechecks the eight saved checkpoint hashes and maps the affected parameter to
+Adam state129. Its own initial value was−0.0429469; after86optimizer steps it
+is293.4111, with EMA0.5436766. The other off control ends at−0.0421838 after85steps.
+Both use learning rate0.0001, betas(0.9,0.999), epsilon1e-5 and zero weight decay.
+For zero-initialized moments, weighted Cauchy–Schwarz bounds the intended Adam
+recurrence's cumulative coordinate movement at0.0130134over86steps, regardless
+of gradient magnitudes. Observed movement is293.4540. Exactly one element across
+133parameter tensors exceeds this bound; the other off control has none.
+The formula and an independent equality-case check are retained in the audit.
+
+This is an exact-arithmetic model of the optimizer, not proof that its floating
+point implementation executed correctly. Final moments are finite/nonnegative;
+both controls also retain tiny moment-inequality exceptions in token embeddings
+(first moments below9.1e-26, zero second moments), whose final epsilon-limited
+step contributions are below9.1e-25. They do not explain the observed movement.
+The separately saved EMA anomaly argues against corruption confined to the final
+raw export. Neither final checkpoint locates the first bad operation. Per-update
+loss fields describe the last nonempty timestep minibatch, so first-update loss
+differences must not be called first-forward differences. No extra GPU was rented
+for this analysis, and no numerical gate changed.
+
 The timing hierarchy is therefore **diagnostic evidence**, not validated profiler
 adoption or an optimization win. Its dominant policy boundary differs from the
 earlier width64/depth1,4096-stream workload, but both model size and batching
