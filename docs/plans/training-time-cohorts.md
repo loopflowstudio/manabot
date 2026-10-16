@@ -15,6 +15,11 @@ or retained manabot artifact directories. Browse the discovered runs, select a
 cohort, and see its combined time accounting, per-run variation and timeline.
 The report reads existing evidence; opening or refreshing it never launches work.
 
+The aggregate flamegraph appears above the run picker. It merges matching
+recorded hierarchy paths across the selected runs without adding parent and child
+time together. An empty selection explains how to select available timing records;
+benchmark inclusion remains explicit. Detailed PyTorch tracing is deferred.
+
 The run picker provides:
 
 - Experiment and run identity, regime/model, seed, hardware, status and dates.

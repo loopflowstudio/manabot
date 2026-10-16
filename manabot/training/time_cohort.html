@@ -7,14 +7,19 @@ main{max-width:1350px;margin:auto;padding:28px}h1{font-size:30px}h2{margin-top:3
 .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:16px 0}
 input,select,button{font:inherit;padding:6px}button{cursor:pointer}label{display:inline-flex;gap:6px;align-items:center}
 .scroll{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:8px;border-bottom:1px solid #80808055;vertical-align:top;overflow-wrap:anywhere}th{white-space:nowrap}
-.phase-bar{display:flex;min-height:36px;margin:18px 0;color:white}.phase-bar div{overflow:hidden;min-width:0;white-space:nowrap;padding:4px 0}
+#flamegraph{padding:18px 0;min-height:120px}#flamegraph svg{min-width:700px}
 .lane{height:14px;background:#80808022}.segment{height:14px;background:#53758a}
 details{border-top:1px solid #80808055;padding:12px 0}summary{cursor:pointer}svg{width:100%;height:auto}
 .warning{color:light-dark(#804a20,#ecc18a)}[hidden]{display:none!important}a{color:light-dark(#256085,#9bcce9)}
 </style><main>
 <h1>Where training time goes</h1>
 <p>Training only. Select real runs to compare accumulated time and calendar overlap. No training or network access occurs in this page.</p>
-<p id="stamp"></p><div id="source-warnings" class="warning"></div>
+<p id="stamp"></p>
+<h2>Training time flamegraph</h2>
+<p id="flamegraph-coverage" role="status"></p>
+<p>Width is accumulated recorded time across the selected runs. Each lower row breaks down its parent; hover for seconds and share. This shows measured stages and phases, not execution order or GPU utilization.</p>
+<div id="flamegraph" class="scroll"></div>
+<details><summary>Source coverage and limitations</summary><div id="source-warnings" class="warning"></div></details>
 <h2>Select runs</h2><div class="controls">
 <label>Search <input id="search" type="search"></label>
 <label>Sort by <select id="sort"><option value="active_seconds">Active training time</option><option value="elapsed_seconds">Recorded training time</option><option value="learner_transitions">Learner transitions</option><option value="updates">Learning iterations</option><option value="cost_usd">Measured cost</option></select></label>

@@ -20,6 +20,35 @@ const TrainingCohort = (() => {
     }
     return seconds;
   }
+  function flamegraph(runs) {
+    // Merge only identical hierarchy paths. Parents already include children.
+    const root = {name: "Recorded training time", seconds: 0, children: []};
+    let covered = 0;
+    function merge(target, source) {
+      target.seconds += source.seconds;
+      for (const child of source.children) {
+        let match = target.children.find(n => n.name === child.name);
+        if (!match) { match = {name: child.name, seconds: 0, children: []}; target.children.push(match); }
+        merge(match, child);
+      }
+    }
+    for (const run of runs) {
+      if (!known(run.elapsed_seconds) || !run.profiles.length || run.profiles.some(p => !p.root)) continue;
+      covered++;
+      for (const profile of run.profiles) merge(root, profile.root);
+    }
+    const nodes = [];
+    function layout(node, left, depth) {
+      if (node.seconds <= 0) return;
+      nodes.push({name: node.name, seconds: node.seconds, left, depth, width: node.seconds / root.seconds});
+      for (const child of node.children) {
+        layout(child, left, depth + 1);
+        left += child.seconds / root.seconds;
+      }
+    }
+    layout(root, 0, 0);
+    return {seconds: root.seconds, covered, nodes};
+  }
   function aggregate(runs) {
     const phases = {}, groups = new Map(), calendars = new Map();
     const covered = runs.filter(r => known(r.elapsed_seconds));
@@ -71,7 +100,7 @@ const TrainingCohort = (() => {
       throw new Error("Selection belongs to different evidence. Open its original report snapshot.");
     return new Set(saved.selected);
   }
-  return {known, eligible, largest, union, aggregate, selection, restore};
+  return {known, eligible, largest, union, flamegraph, aggregate, selection, restore};
 })();
 if (typeof module !== "undefined") module.exports = TrainingCohort;
 if (typeof document !== "undefined") {
@@ -120,6 +149,39 @@ if (typeof document !== "undefined") {
   function draw() {
     drawPicker();
     const runs = D.runs.filter(r => selected.has(r.id)), summary = TrainingCohort.aggregate(runs);
+    const graph = TrainingCohort.flamegraph(runs), chart = $("flamegraph");
+    chart.replaceChildren();
+    $("flamegraph-coverage").textContent = `${runs.length} selected runs · ${graph.covered} with recorded phase trees · ${fmt(graph.seconds)} accumulated seconds.`;
+    if (graph.nodes.length) {
+      const svgEl = (tag, attrs) => {
+        const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (const [key, value] of Object.entries(attrs)) n.setAttribute(key, value);
+        return n;
+      };
+      const svg = svgEl("svg", {viewBox: `0 0 1200 ${(1 + Math.max(...graph.nodes.map(n => n.depth))) * 46}`, role: "img", "aria-label": "Selected training time flamegraph"});
+      const colors = {Collection: "#53758a", Learning: "#497e71", "Stage exports": "#9b703d", Unattributed: "#77716a"};
+      for (const n of graph.nodes) {
+        const group = svgEl("g", {}), label = `${n.name}: ${fmt(n.seconds)} s · ${(n.width * 100).toFixed(2)}% of recorded time`;
+        const title = svgEl("title", {}); title.textContent = label;
+        group.append(title, svgEl("rect", {x: n.left * 1200, y: n.depth * 46, width: n.width * 1200, height: 44, fill: colors[n.name] ?? "#334b5b", stroke: "#faf9f6", "stroke-width": 1}));
+        if (n.width * 1200 > 60) {
+          const text = svgEl("text", {x: n.left * 1200 + 7, y: n.depth * 46 + 27, fill: "white", "font-size": 15});
+          const limit = Math.floor((n.width * 1200 - 14) / 8);
+          text.textContent = label.length > limit ? label.slice(0, Math.max(0, limit - 1)) + "…" : label;
+          group.append(text);
+        }
+        svg.append(group);
+      }
+      chart.append(svg);
+    } else {
+      chart.append(el("p", runs.length ? "These runs have no recorded phase hierarchy. Select runs with timing records below; missing measurements cannot form a flamegraph." : "No runs selected. Select runs below to display their flamegraph."));
+      const ids = TrainingCohort.largest(D.runs.filter(r => r.profiles.some(p => p.root)), "active_seconds", D.top, true);
+      if (ids.length) {
+        const button = el("button", "Show available timing runs (may include benchmarks)");
+        button.onclick = () => { selected = new Set(ids); $("include-benchmarks").checked = true; draw(); };
+        chart.append(button);
+      }
+    }
     $("summary").replaceChildren(el("p", `${runs.length} selected logical runs · ${summary.attempts} recorded attempts/writers. Partial coverage is reported below.`));
     if (!runs.length) $("summary").append(el("p", "No runs selected. Runs without active-time evidence remain available for manual selection or another sort. Labeled benchmarks are excluded by default."));
     $("summary").append(el("p", [...new Set(runs.map(r => r.status))].map(status => `${status}: ${runs.filter(r => r.status === status).length}`).join(" · ")));
@@ -127,11 +189,6 @@ if (typeof document !== "undefined") {
       Object.entries(summary.metrics).map(([key, value]) => [labels[key], fmt(value.total), `${value.count}/${runs.length}`, fmt(value.median), fmt(value.min), fmt(value.max)])));
     $("summary").append(el("p", `Active training hours: ${fmt(summary.metrics.active_seconds.total == null ? null : summary.metrics.active_seconds.total / 3600)}. Rates below use only runs with both work and active time.`));
     $("phases").replaceChildren(table(["Exclusive phase", "Seconds", "Share of covered recorded time", "Phase coverage"], summary.phases.map(p => [p.name, fmt(p.seconds), p.share == null ? "unavailable" : `${(100 * p.share).toFixed(2)}%`, `${p.covered}/${runs.length} runs`])));
-    const bar = el("div"); bar.className = "phase-bar";
-    summary.phases.filter(p => p.share > 0).forEach((p, i) => {
-      const part = el("div", p.name); part.style.flex = p.seconds; part.style.backgroundColor = ["#496a80", "#387868", "#906c3c", "#665a80", "#77716a"][i % 5];
-      part.title = `${p.name}: ${fmt(p.seconds)} s`; bar.append(part);
-    }); $("phases").prepend(bar);
     $("rates").replaceChildren(table(["Recipe / job", "Hardware", "Covered runs", "Retained learner transitions / active second"], summary.rates.map(g => [g.recipe || "unknown", g.hardware, `${g.covered}/${g.count}`, fmt(g.rate)])));
     $("timeline").replaceChildren(el("p", `First-to-last observed calendar span: ${fmt(summary.span)} s. This includes gaps.`));
     $("timeline").append(table(["Interval basis", "Lanes", "Calendar union (s)", "Additive lane duration (s)"], summary.calendars.map(c => [c.basis, c.count, fmt(c.union), fmt(c.additive)])));

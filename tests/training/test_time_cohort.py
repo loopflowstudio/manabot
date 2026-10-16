@@ -1,6 +1,6 @@
 """Selection, recovery accounting and real Etude logs feed one offline report."""
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import subprocess
@@ -129,6 +129,79 @@ def test_missing_elapsed_total_does_not_turn_observed_active_time_into_zero() ->
     row = native_cohort([TrainingRun.model_validate(payload)]).runs[0]
     assert row.elapsed_seconds is None
     assert row.active_seconds == 7
+
+
+def test_flamegraph_merges_hierarchies_without_counting_parent_time_twice() -> None:
+    first = _run()
+    second = _run("second")
+    second.seconds = 20
+    cohort = native_cohort([first, second])
+    graph = _js("T.flamegraph(d.runs)", asdict(cohort))
+    assert graph["covered"] == 2
+    assert graph["seconds"] == 30
+    nodes = graph["nodes"]
+    collection = next(n for n in nodes if n["name"] == "Collection")
+    assert collection["seconds"] == 10
+    assert collection["width"] == pytest.approx(1 / 3)
+    assert collection["depth"] == 2
+    assert sum(n["seconds"] for n in nodes if n["depth"] == 1) == 30
+    assert all(n["left"] + n["width"] <= 1.000001 for n in nodes)
+    # Empty selection and missing phase evidence produce explicit empty graphs.
+    assert _js("T.flamegraph([]).nodes", {}) == []
+    missing = replace(cohort.runs[0], elapsed_seconds=None)
+    assert _js("T.flamegraph(d.runs).covered", {"runs": [asdict(missing)]}) == 0
+
+
+def test_page_displays_flamegraph_and_can_recover_from_empty_selection(
+    tmp_path: Path,
+) -> None:
+    cohort = native_cohort([_run()])
+    output = write_cohort_report(
+        cohort, tmp_path / "report.html", selected=[cohort.runs[0].id]
+    )
+    assert output.read_text().index('id="flamegraph"') < output.read_text().index(
+        'id="run-rows"'
+    )
+    # Exercise browser event wiring headlessly; this does not claim visual QA.
+    program = r"""
+const fs = require('fs'), vm = require('vm');
+class Element {
+  constructor(tag) { this.tag = tag; this.children = []; this.style = {}; this.value = ''; }
+  append(...children) { this.children.push(...children); }
+  replaceChildren(...children) { this.children = children; }
+  setAttribute(name, value) { this[name] = value; }
+}
+const elements = new Map(), get = id => {
+  if (!elements.has(id)) elements.set(id, new Element('div'));
+  return elements.get(id);
+};
+get('cohort-data').textContent = fs.readFileSync(0, 'utf8');
+get('sort').value = 'active_seconds';
+const document = {getElementById:get, createElement:tag=>new Element(tag),
+  createElementNS:(_,tag)=>new Element(tag), querySelectorAll:()=>[]};
+vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {
+  document, URLSearchParams, location:{hash:'',pathname:'/report.html',search:''},
+  history:{replaceState:()=>{}}
+});
+const chart = () => get('flamegraph').children.some(n => n.tag === 'svg');
+const initial = chart();
+get('clear').onclick();
+const cleared = !chart();
+get('flamegraph').children.find(n => n.tag === 'button').onclick();
+console.log(JSON.stringify({initial,cleared,restored:chart()}));
+"""
+    result = subprocess.run(
+        ["node", "-e", program, str(JS)],
+        input=(tmp_path / "report-training-time.json").read_text(),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) == {
+        "initial": True,
+        "cleared": True,
+        "restored": True,
+    }
 
 
 def test_etude_written_logs_are_selectable_without_invented_phases(
