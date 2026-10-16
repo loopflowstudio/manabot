@@ -177,3 +177,12 @@ needed controller listing. No IAM policy, provider allocation or frozen Mini
 source was changed. No rental was created; the GPU study is blocked pending
 secure SDK storage/controller configuration. Do not pass the issuer key to a
 worker, broaden bucket access, or bypass admission to start paid training.
+
+Admission correction: Jack Heart challenged the permission diagnosis. The normal
+controller's existing boto3 SSO credentials successfully list the same study
+prefix. The earlier check used the restricted worker role and did not establish
+missing account/controller permissions. No IAM expansion is justified by that
+check. Public Etude SDK reads AWS environment credentials rather than boto3's SSO
+chain; integration must preserve credential expiry for remote signed links and
+keep controller and worker authority separate. Mini currently uses SSH transport;
+GPU transport uses S3. No GPU rental or IAM change occurred.
