@@ -186,3 +186,22 @@ check. Public Etude SDK reads AWS environment credentials rather than boto3's SS
 chain; integration must preserve credential expiry for remote signed links and
 keep controller and worker authority separate. Mini currently uses SSH transport;
 GPU transport uses S3. No GPU rental or IAM change occurred.
+
+Jack Heart subsequently authorized reusable permission configuration and launch.
+The dedicated issuer receives a separate controller policy limited to
+`manabot/etude-launch/*`, prefix-constrained listing and STS federation. Existing
+worker-role and shared-key permissions remain unchanged. Controller credentials
+stay in its environment; SDK workers receive run-scoped temporary upload access
+and signed read links. The policy applies to future Etude jobs, not just one run.
+
+GPU calibration uses seed12260,100 updates and16 complete arena games on one L4,
+maximum1h/$1 inclusive rental. Scientific jobs are fresh paired seeds12261–12263,
+25k updates each with unchanged256-transition recipe, CUDA instead of CPU and
+one learner thread. At most one GPU at once. Reserve three9h/$7.50 jobs plus$1.50
+storage/settlement inside$25, with no automatic replacement attempts. Calibration
+requires1.5× block timing plus1.5× all13 diagnostic game cohorts and600s overhead
+to fit8.5h; otherwise do not launch science. Final Mini scoring remains separate
+and queued behind existing work. Save0,10k,25k for paired initialization controls
+on the same fixed baseline deal families;25k uses fresh1226102000–1226102024.
+Do not select endpoints from diagnostics or equate CPU/CUDA seeds with identical
+trajectories. No source edits or restarts of the current Mini study are authorized.

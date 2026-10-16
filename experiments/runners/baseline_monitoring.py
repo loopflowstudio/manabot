@@ -18,7 +18,14 @@ from manabot.training.monitor_evaluation import MonitorProtocol
 class DiagnosticMonitor:
     """An explicitly bounded sidecar; failures remain diagnostic, not strength."""
 
-    def __init__(self, source: Path, output: Path) -> None:
+    def __init__(
+        self,
+        source: Path,
+        output: Path,
+        *,
+        updates: tuple[int, ...] = tuple(range(1000, 10000, 1000)),
+        seconds: float = 9900,
+    ) -> None:
         matchup = AuthoredMatchup(
             pack_key="ur-lessons-vs-gw-allies", role_a="ur_lessons", role_b="gw_allies"
         )
@@ -36,9 +43,9 @@ class DiagnosticMonitor:
         )
         self.source, self.output = source, output
         self.config = MonitoringBudget(
-            seconds=9900,
+            seconds=seconds,
             attempt_seconds=900,
-            updates=tuple(range(1000, 10000, 1000)),
+            updates=updates,
             protocol=protocols[0],
             additional_protocols=(protocols[1],),
         )
