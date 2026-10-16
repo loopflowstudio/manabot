@@ -157,3 +157,23 @@ hours (5.76 active) on Mini. It collects256 learner transitions/update versus512
 for the old GPU run:1.28M transitions now,43.59M at the old85,145 point. Worlds,
 value aggregation, collection balance, hardware, seeds and evaluation deals differ.
 This is descriptive context, not a causal speedup or matched-compute comparison.
+
+## Approved GPU extension and admission blocker (2026-10-15)
+
+Jack Heart approved three fresh25,000-update GPU seeds with a$25 inclusive
+ceiling, alongside the unchanged Mini10k study. Preserve the small masked-mean
+recipe and256 learner transitions/update; device is the intended execution change,
+not capacity or batch expansion. Export every500 updates. Diagnostics are at
+1k,2k,3k,4k,5k,7.5k,10k,12.5k,15k,17.5k,20k,22.5k,25k. Post-training
+evaluations belong on Mini, behind its existing work. Freeze the complete seed,
+cohort and cost plan after bounded GPU calibration; these are not yet running.
+
+Read-only RunPod admission returned an available NVIDIA L4 at$0.59/hour. The
+documented Doppler etude/prd issuer remains usable and AssumeRole succeeds.
+Etude SDK storage admission fails with AccessDenied on ListObjectsV2 for
+`etudefantasia/manabot/jobs/mtg122-gpu/runtime/`, even through a session policy
+restricted to that prefix. Existing worker-role permissions do not supply the
+needed controller listing. No IAM policy, provider allocation or frozen Mini
+source was changed. No rental was created; the GPU study is blocked pending
+secure SDK storage/controller configuration. Do not pass the issuer key to a
+worker, broaden bucket access, or bypass admission to start paid training.

@@ -391,6 +391,7 @@ Seven focused software checks passed; no local science ran.
 Jack Heart approved a complementary GPU study: three seeds ×25k updates,
 $25 inclusive cap, post-training evaluations on Mini without displacing its10k
 study. GPU diagnostics:1k,2k,3k,4k,5k, then7.5k,10k,12.5k,15k,17.5k,20k,22.5k,25k.
-Retain500-update saves and Mini future-seed1k diagnostics. GPU allocation has not launched; the task-local Etude database currently
-has no GPU provider configured. Reuse existing secure provider/storage contracts,
-calibrate the unchanged256-transition recipe, and freeze admission before science.
+Retain500-update saves and Mini future-seed1k diagnostics. GPU not launched: L4 quote$0.59/h available; existing issuer/role work, but
+SDK prefix listing returns AccessDenied. Baseline protocol records the scoped
+storage blocker. No IAM mutation/rental. Resolve controller storage permissions
+before calibration; keep the256-transition recipe.
