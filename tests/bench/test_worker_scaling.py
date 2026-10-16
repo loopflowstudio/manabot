@@ -26,6 +26,9 @@ def test_persistent_workers_preserve_fixed_work(
         changed = tape.model_copy(update={"batch_sha256": "incompatible"})
         (tape_dir / "tape.json").write_text(changed.model_dump_json())
     out = tmp_path / "workers"
+    # This bounds hangs, not throughput: fresh Torch worker imports also count
+    # toward the controller deadline on shared CI runners.
+    seconds_limit = 60
     result = subprocess.run(
         [
             sys.executable,
@@ -38,12 +41,12 @@ def test_persistent_workers_preserve_fixed_work(
             "--actors",
             "4",
             "--seconds",
-            "10",
+            str(seconds_limit),
             *(["--capture-replay"] if fresh_capture else []),
         ],
         capture_output=True,
         text=True,
-        timeout=12,
+        timeout=seconds_limit + 15,
     )
     assert result.returncode == 0, (
         result.stdout + result.stderr + (out / "stderr.log").read_text()
