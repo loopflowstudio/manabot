@@ -1,5 +1,7 @@
 # Corrected-world baseline operations handoff
 
+Owner: Intelligence Task `fc765e` (`task_fc765e5f72b242e9ad7dca598658ba0b`), primary operating Session `c1021f5bac5f44b1becbd201268ba63f`. The Session started and explicitly accepted sole operating responsibility on 2026-10-15. Linear synchronization was pending at creation. MTG-122 no longer operates these baseline runs.
+
 Jack Heart requested this dedicated Intelligence Task and transfer of monitoring to its operating Session on 2026-10-15. Own the existing Mini baseline and complementary GPU baseline through retained results, cost settlement and cleanup. This is an operational handoff, not permission to duplicate or restart runs. MTG-122 retains environment complexity/catalog research, deferred until the baseline is understood. Baseline promotion remains MTG-118's responsibility.
 
 ## Accepted work and acceptance
