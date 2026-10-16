@@ -63,3 +63,55 @@ def test_future_diagnostic_cadence_is_separate_from_scored_endpoint(tmp_path: Pa
     assert all(p.purpose == "supplemental-matchup-diagnostic" for p in protocols)
     assert all(len(p.deal_seeds) == 13 and p.include_mirrors for p in protocols)
     assert not monitor.thread.is_alive()
+
+
+def test_retained_first_writes_into_fresh_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    import experiments.runners.corrected_baseline as baseline
+
+    plan = resolve_counts(
+        slowest_update=3.7,
+        panel_costs=(2, 2),
+        remaining=53 * 3600,
+        hashes={k: "a" * 64 for k in ("training", "random", "scripted_greedy")},
+    )
+    producer = SimpleNamespace(
+        id="producer",
+        seed=12261,
+        status="completed",
+        regime=recipe(10000, plan.training_seconds_per_run),
+        updates_through=lambda: 10000,
+        model_dump=lambda mode: {"id": "producer"},
+    )
+    source = tmp_path / "producer/outputs/l3-12261/training/run.json"
+    source.parent.mkdir(parents=True)
+    source.write_text("{}")
+    (tmp_path / "producer/outputs/initialization-parameters.json").write_text(
+        '{"12261": "digest"}'
+    )
+    evaluated: list[Path] = []
+    monkeypatch.setattr(
+        baseline.TrainingRun, "model_validate_json", lambda text: producer
+    )
+    monkeypatch.setattr(
+        baseline,
+        "init",
+        lambda **_: SimpleNamespace(log=lambda **_: None, finish=lambda _: None),
+    )
+    monkeypatch.setattr(
+        baseline,
+        "evaluate_fit",
+        lambda plan, run, target, *_: evaluated.append(target),
+    )
+    monkeypatch.setenv("ETUDE_RUN", "check")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    monkeypatch.setenv("ETUDE_DEADLINE", "2099-01-01T00:00:00+00:00")
+
+    output = tmp_path / "outputs"
+    baseline.complete_retained_first(plan, source, output)
+
+    assert (output / "l3-12261/training/run.json").exists()
+    assert evaluated == [output / "l3-12261"]

@@ -160,6 +160,7 @@ def complete_retained_first(plan: BaselinePlan, source: Path, output: Path) -> N
     )
     target = output / "l3-12261"
     target.mkdir(parents=True, exist_ok=False)
+    (target / "training").mkdir()
     atomic_json(target / "training/run.json", run.model_dump(mode="json"))
     tracker = init(
         experiment="mtg122-evaluation",
