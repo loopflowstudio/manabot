@@ -114,3 +114,84 @@ unknown; absence of a claim does not identify a failed download or provider faul
 provider-confirmed cleanup. Estimated rental cost is $0.0453, reserved as $0.25
 conservatively. The protocol declares one separate operational replication003
 with unchanged measured source, work, predictions, gates and limits.
+
+## Basic-profile-003: policy handling dominates this larger-model window
+
+Run `d51e85f1a805` completed all eight cases on an RTX5090/EPYC9554 host:
+width384, eight layers,64streams,8transitions,16ordinary updates, seed10349.
+Torch2.10/cu128,FP32, oneTorchCPUthread and one native worker. Measured source
+is unchanged `7d00992a`. All40Etude output objects and106archive members were
+hash-verified. Provider deletion is confirmed; estimated rental cost$0.2282.
+The new campaign's three rentals total about$1.17estimated/$1.77conservative,
+plus a separate$2ancillary reserve. Final provider billing remains unavailable.
+
+[Interactive report](data/training-time/basic-profile-003/report.html),
+[flamegraph](data/training-time/basic-profile-003/flamegraph.svg),
+[all cases and gates](data/training-time/basic-profile-003/analysis.json), and
+[source/artifact receipt](data/training-time/basic-profile-003/receipt.json).
+
+The following shares sum the three ordinary instrumented runs' own measurements;
+no historical or separately traced subphase percentages are grafted onto them.
+
+| Boundary | Share of recorded training time | Share of collection |
+|---|---:|---:|
+| Collection, including its children | 62.0% | 100% |
+| Learner policy inference and action handling | 22.2% | 35.8% |
+| Opponent policy, including its input preparation | 31.6% | 51.0% |
+| Environment stepping and observation encoding | 2.8% | 4.5% |
+| Learner observation preparation | 2.9% | 4.7% |
+| Batch assembly | 1.0% | 1.6% |
+| Rollout recording | 0.7% | 1.1% |
+| Learning | 20.7% | — |
+| Model/optimizer exports | 8.7% | — |
+
+Collection is75.0%of active collection+learning time. Combined policy handling
+accounts for86.8%of collection and53.8%of the recorded run. Requests average
+only10.95acting rows per policy call, despite64resident environments. There are
+67native stepping calls per update. These are host intervals containing dispatch,
+model execution, policy logs/sampling and returned-result waits. They do not
+separate GPU compute from CPU launch overhead or establish GPU utilization.
+Opponent input preparation is nested in its policy interval; the separately
+named observation-preparation row covers the learner only.
+
+Uninstrumented complete-run median:18.777s,436learner rows/s. Instrumented:
+19.079s,429rows/s, a1.0161duration ratio. First-to-last-update medians are
+554.5and542.5rows/s respectively; whole-run time includes startup and exports.
+The ratio meets the declared5%descriptive gate, but **exact-state validation
+fails**, so it is not a causally isolated measurement of timer overhead.
+
+### Numerical failure: not dismissed as rounding noise
+
+Initial weights and the first complete proof rollout match exactly. Across all
+three proof collections, actions/active masks, environment buffers, game seeds
+and sampling RNG match. The first learner update already differs in value loss;
+subsequent rollout tensors and final raw/EMA/Adam state differ. The largest raw
+parameter difference after three deterministic-proof updates is6.37e-5.
+The exact gate remains failed; no tolerance is waived.
+
+Ordinary timer-off repetitions also disagree. One contains a finite weight of
+293.4111 at `extra_attention.6.mlp.2.weight[362,1461]`; this tensor's maximum
+absolute value is0.11701initially and0.11725in another timer-off control.
+This is materially different from the tiny Adam differences in earlier small-model
+experiments. The first control also has395optimizer exposures and18,240environment
+decisions versus390/18,261in the other ordinary cases. All have8,192learner rows.
+The first update's sampled numerical-health record agrees between those controls;
+later per-step parameter movement was not sampled. The first anomalous operation
+and cause are unknown. [Checkpoint audit](data/training-time/basic-profile-003/state-audit.json)
+retains all parameter/state differences; [witnesses](data/training-time/basic-profile-003/witnesses.json)
+retain every case, including contrary controls.
+
+The timing hierarchy is therefore **diagnostic evidence**, not validated profiler
+adoption or an optimization win. Its dominant policy boundary differs from the
+earlier width64/depth1,4096-stream workload, but both model size and batching
+changed; this study does not isolate which caused the difference. A serving
+benchmark must match the actual model and small-request pattern before predicting
+training gains. Making model math faster alone is not the same intervention as
+reducing the whole policy-handling interval.
+
+Before another performance intervention, the separating check is repeated
+identical deterministic timer-off controls, then matched timer-on controls,
+with evidence locating the first divergent learner operation. Training logic,
+backend numerical behavior and hardware remain competing explanations. The
+finite outlier must be investigated rather than attributed to the profiler or
+silently removed. PyTorch tracing remains deferred.
