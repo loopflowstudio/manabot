@@ -92,6 +92,20 @@ def test_recovery_does_not_charge_completed_parent_stages_again() -> None:
     assert orphan.root.children[0].name == "Unattributed"
 
 
+def test_initial_admission_wait_partitions_stage_time_without_active_work() -> None:
+    run = _run()
+    run.stages[0].admission_wait_seconds = 0.5
+    profile = training_profiles([run])[0]
+    assert profile.root is not None
+    stage = next(p for p in profile.root.children if p.name == "train")
+    assert sum(p.seconds for p in stage.children) == 8.0
+    assert (
+        next(p.seconds for p in stage.children if p.name == "Initial admission wait")
+        == 0.5
+    )
+    assert next(p.seconds for p in stage.children if p.name == "Unattributed") == 0.25
+
+
 def test_conflicting_costs_are_visible_instead_of_normalized() -> None:
     run = _run()
     run.stages[0].learning_seconds = 20

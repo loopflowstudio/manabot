@@ -793,6 +793,11 @@ class StageRecord(Strict):
     learning_seconds: float = 0
     export_seconds: float = 0
     diagnostic_seconds: float = 0
+    # Attempt-local learner wall time waiting for initial evaluation admission.
+    # None means historical/unsupported measurement, rather than zero wait.
+    admission_wait_seconds: float | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
     games: int = 0
     environment_decisions: int = 0
     learner_transitions: int = 0

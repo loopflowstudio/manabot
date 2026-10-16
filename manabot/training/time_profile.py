@@ -101,6 +101,12 @@ def training_profiles(runs: Sequence[TrainingRun]) -> tuple[TrainingProfile, ...
                     warnings.append(f"{stage.id}: stage duration unavailable")
                     continue
                 costs = []
+                if stage.admission_wait_seconds is not None:
+                    costs.append(
+                        TimeSlice(
+                            "Initial admission wait", stage.admission_wait_seconds
+                        )
+                    )
                 for field, label, value in (
                     ("collection_seconds", "Collection", stage.collection_seconds),
                     ("learning_seconds", "Learning", stage.learning_seconds),

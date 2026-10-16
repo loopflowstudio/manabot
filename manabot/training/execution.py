@@ -580,6 +580,8 @@ def _execute_regime(
                 record.optimizer_updates = (
                     record.observed_optimizer_updates() if snapshot is not None else 0
                 )
+                if not restoring_completed:
+                    record.admission_wait_seconds = 0.0
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -1164,9 +1166,15 @@ def _execute_regime(
                             # after its initialization cohort is complete and
                             # durably published. Waiting consumes the watchdog,
                             # never collection/learning time or RNG draws.
-                            while not initial_admission.exists():
-                                check()
-                                time.sleep(0.2)
+                            admission_started = time.perf_counter()
+                            try:
+                                while not initial_admission.exists():
+                                    check()
+                                    time.sleep(0.2)
+                            finally:
+                                record.admission_wait_seconds = (
+                                    time.perf_counter() - admission_started
+                                )
                             if (
                                 initial_admission.read_text().strip()
                                 != record.artifacts["initial_raw"]["sha256"]
@@ -1606,7 +1614,8 @@ def _execute_regime(
                 - record.collection_seconds
                 - record.learning_seconds
                 - record.export_seconds
-                - record.diagnostic_seconds,
+                - record.diagnostic_seconds
+                - (record.admission_wait_seconds or 0.0),
             )
             # Unmeasured setup, persistence and waits are never active training.
             # Self-play operation timers settle in finally, including failed work.

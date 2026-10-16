@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 import time
 from typing import ParamSpec, TypeVar
 
@@ -120,6 +121,13 @@ def test_initial_admission_precedes_collection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admitted: bool
 ) -> None:
     clock = Clock()
+    waiting = Event()
+
+    def admission_sleep(seconds: float) -> None:
+        waiting.set()
+        time.sleep(seconds)
+
+    monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
@@ -154,6 +162,7 @@ def test_initial_admission_precedes_collection(
             pytest.fail("initial checkpoint unavailable")
         assert run.updates_through() == 0
         assert run.stages[0].learner_transitions == 0
+        assert waiting.wait(timeout=5)
         # A slow admission cannot consume the active training allocation.
         clock.offset += 100
         digest = run.stages[0].artifacts["initial_raw"]["sha256"]
@@ -162,9 +171,15 @@ def test_initial_admission_precedes_collection(
             finished = future.result(timeout=30)
             assert finished.status == "completed"
             assert len(finished.stages[0].diagnostics) == 2
+            assert finished.stages[0].admission_wait_seconds is not None
+            assert finished.stages[0].admission_wait_seconds >= 100
         else:
             with pytest.raises(ValueError, match="admission differs"):
                 future.result(timeout=30)
             failed = TrainingRun.model_validate_json((out / "run.json").read_text())
             assert failed.updates_through() == 0
             assert failed.stages[0].learner_transitions == 0
+            assert failed.stages[0].admission_wait_seconds is not None
+            assert failed.stages[0].admission_wait_seconds >= 100
+            # Failure accounting does not charge the same wait a second time.
+            assert failed.stages[0].diagnostic_seconds < 10

@@ -114,6 +114,7 @@ PHASES = (
     "Learning",
     "Stage exports",
     "Diagnostics / failure accounting",
+    "Initial admission wait",
     "Unattributed",
 )
 
@@ -259,9 +260,14 @@ def native_cohort(
                         ("Learning", "learning_seconds"),
                         ("Stage exports", "export_seconds"),
                         ("Diagnostics / failure accounting", "diagnostic_seconds"),
+                        ("Initial admission wait", "admission_wait_seconds"),
                     )
                     if owned
-                    and all(field in stage.model_fields_set for stage in owned)
+                    and all(
+                        field in stage.model_fields_set
+                        and getattr(stage, field) is not None
+                        for stage in owned
+                    )
                     and not any(
                         "exceed" in w or "conflict" in w or "parent unavailable" in w
                         for w in warnings

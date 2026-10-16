@@ -194,13 +194,10 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
         queue: CheckpointQueue, sources: list[Path], *, launch: bool = True
     ) -> None:
         tick(queue, sources, launch=launch)
-        # Progress exports are throttled; request while running rather than
-        # racing a tiny learner to its final exported update count.
-        if any(
-            TrainingRun.model_validate_json(p.read_text()).status == "running"
-            for p in sources
-        ):
-            (root / "pause.request").touch()
+        # The first coordinator poll occurs with a live child. Waiting for its
+        # run.json races the five-second polling interval against this tiny run.
+        # The learner handles this request at its first safe update boundary.
+        (root / "pause.request").touch()
 
     with monkeypatch.context() as patch:
         patch.setattr(CheckpointQueue, "tick", request_pause)
