@@ -47,8 +47,41 @@ waits; it is excluded from active training and partitioned once in the report.
 Older records retain an unknown value. This adds a basic host timer, not PyTorch
 tracing or evaluation instrumentation.
 
-The next study will use lightweight collection and learning subphase counters,
-first verify attribution and observer effects, then compare representative
-ordinary GPU training recipes. Detailed PyTorch traces remain deferred. The new
-investigation has a separate $25 GPU allowance; no new rental was used for this
-historical finding or the admission-wait measurement.
+Ordinary self-play now supports optional collection subphase counters through
+`execution.profile_collection`. They record observation preparation, policy/action
+handling, rollout recording, opponent policy, environment step/encoding and batch
+assembly. The report nests these under collection and retains an unmeasured
+remainder. These are host intervals with existing device waits, not GPU kernel
+durations. Learning remains a coarse measured phase. Detailed PyTorch traces stay
+deferred. The new investigation has a separate $25 GPU allowance.
+
+## Basic-profile-001: evidence delivery failed
+
+The [first protocol](protocols/basic-training-profile.txt) admitted 28 cases on
+one RTX5090, covering the small benchmark model and the larger historical shape.
+Source `79ea7a0e`, run `70ec76cbf84d`. The job log reports an incomplete study, but
+no cell records or training archive reached storage. All 28 planned cells remain
+**unknown**, including the proof and observer-effect gates; there are no timing
+medians to report. [Retained failure evidence](data/training-time/basic-profile-001.json)
+includes every planned case, terminal state and provider-confirmed deletion.
+
+The rental ended at its original 45-minute limit on 2026-10-16 at 02:19 UTC.
+Etude recorded `lost / machine_lost`. Estimated rental cost is $0.894; accounting
+reserves $1.09 conservatively, separately from the $2 ancillary allowance. Final
+provider billing was not yet available. The provider confirmed the pod absent.
+
+Only the claim, job traceback and setup log survived. The launcher uploads every
+output before its completion receipt, using a single-object form capped at 5 GiB
+and an HTTP timeout of 60 seconds. This explains why a finished local job can
+still appear running while delivering artifacts. It does **not** identify the
+actual failure: the archive's size, transfer rate and upload exception were not
+recovered. Neither this delay nor its rental cost measures a training bottleneck.
+
+The [focused follow-up protocol](protocols/basic-training-profile-002.txt) keeps
+the historical width-384/eight-layer, 64-stream comparison: both deterministic
+proofs and all three ordinary timer-on/off repetitions at the original work
+counts. Timing metadata is independently readable and sorts before model data;
+the complete evidence is split into 64 MiB compressed objects with ordered hashes.
+Local tests reconstruct every original file and check independently readable
+metadata. Training behavior and measured model exports are unchanged. This
+repairs evidence delivery; it does not establish a GPU throughput improvement.
