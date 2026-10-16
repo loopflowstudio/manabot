@@ -132,6 +132,26 @@ class Learning(Strict):
     ema: float | None = Field(default=None, ge=0, lt=1)
 
 
+class IterationSchedule(Strict):
+    """Map a declared run horizon onto a reference iteration schedule.
+
+    Both endpoints are preserved. A one-step run uses the initial rate. The
+    mapping is deterministic in completed updates, never elapsed wall time;
+    continuation must retain the original horizon rather than start a new one.
+    """
+
+    steps: int = Field(ge=1, strict=True)
+    reference_steps: int = Field(default=10_000, ge=2, strict=True)
+
+    def at(self, iteration: int) -> float:
+        if iteration < 1:
+            raise ValueError("iteration must be positive")
+        if self.steps == 1:
+            return 1.0
+        progress = min(1.0, (iteration - 1) / (self.steps - 1))
+        return 1 + progress * (self.reference_steps - 1)
+
+
 class AtaraxosMoveLearning(Strict):
     """Supplement S3.4 move update; MTG reference and batch sizes are adaptations.
 
@@ -157,6 +177,9 @@ class AtaraxosMoveLearning(Strict):
     tau_power: float = Field(default=0.3, ge=0)
     max_grad_norm: float = Field(default=0.267, gt=0)
     ema: float | None = Field(default=0.999, ge=0, lt=1)
+    iteration_schedule: IterationSchedule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def valid_learning_rate_bounds(self) -> "AtaraxosMoveLearning":
@@ -168,10 +191,15 @@ class AtaraxosMoveLearning(Strict):
         """One-based completed collection/update iteration, including skips."""
         if iteration < 1:
             raise ValueError("Ataraxos iteration must be positive")
-        rate = self.learning_rate_scale / iteration**self.learning_rate_power
+        position = (
+            self.iteration_schedule.at(iteration)
+            if self.iteration_schedule is not None
+            else iteration
+        )
+        rate = self.learning_rate_scale / position**self.learning_rate_power
         return (
             min(self.learning_rate_max, max(self.learning_rate_min, rate)),
-            self.tau_scale / iteration**self.tau_power,
+            self.tau_scale / position**self.tau_power,
         )
 
 

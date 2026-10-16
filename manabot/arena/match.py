@@ -15,6 +15,7 @@ from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.sim.local_update import LocalUpdatePlayer
+from manabot.sim.mcts import DeterminizedPuctPlayer
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
@@ -122,7 +123,7 @@ def _execute_game(
         send(("initial", game["initial_state_digest"]))
         for seat, player_id in enumerate(game["seat_players"]):
             player = built[player_id][0]
-            if isinstance(player, LocalUpdatePlayer):
+            if isinstance(player, (LocalUpdatePlayer, DeterminizedPuctPlayer)):
                 player.start_game(env, seat)
         local_players = [
             player

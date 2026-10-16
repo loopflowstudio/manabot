@@ -1,0 +1,993 @@
+{
+  "source": "a0b8682bf94579b2f9954838ddda5c4b11db5382",
+  "status": "completed_budget",
+  "wall_seconds": 600.028208473,
+  "cpu_seconds": 599.8155381659999,
+  "rounds": 11,
+  "fits": {
+    "completed": 43,
+    "budget_exhausted": 1
+  },
+  "unique_scored_states": 352,
+  "scores": 1376,
+  "counts": {
+    "visited_family_1": 59465,
+    "audited_family_1": 6513,
+    "visited_family_3": 2181,
+    "visited_family_4": 1044,
+    "audited_family_4": 791,
+    "visited_family_2": 2276,
+    "audited_family_2": 2276,
+    "visited_family_9": 263,
+    "audited_family_9": 260,
+    "visited_family_6": 1083,
+    "audited_family_6": 590,
+    "audited_family_3": 627,
+    "visited_family_7": 208,
+    "audited_family_7": 140,
+    "terminal_games": 71,
+    "visited_family_5": 232,
+    "audited_family_5": 232,
+    "visited_family_10": 2715,
+    "audited_family_10": 2210,
+    "visited_family_11": 88,
+    "audited_family_11": 88,
+    "step_capped_games": 17
+  },
+  "by_arm": {
+    "generic": {
+      "scores": 704,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "semantic": {
+      "scores": 672,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "by_family": {
+    "1": {
+      "scores": 172,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "2": {
+      "scores": 172,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "3": {
+      "scores": 133,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "4": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "5": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "6": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "7": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "9": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "10": {
+      "scores": 129,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "11": {
+      "scores": 125,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "fit_errors": [],
+  "native_findings": [],
+  "worst_fit_scores": [
+    {
+      "round": 2,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1002,
+      "case": "50017-1084",
+      "family": 10,
+      "initial": 0.4999482333660126,
+      "conditional_probability": 0.9999803304672241,
+      "fit_passed": true,
+      "errors": {
+        "batch": 3.814697265625e-06,
+        "offer": 0.0,
+        "object": 1.1920928955078125e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 0,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1000,
+      "case": "50006-248",
+      "family": 4,
+      "initial": 0.4999840557575226,
+      "conditional_probability": 0.9999930262565613,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 1.7881393432617188e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1002,
+      "case": "50018-570",
+      "family": 6,
+      "initial": 0.5002580285072327,
+      "conditional_probability": 0.999993622303009,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 0.0,
+        "object": 4.796163466380676e-14,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50041-369",
+      "family": 1,
+      "initial": 0.499935120344162,
+      "conditional_probability": 0.9999957084655762,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 1.382431946694851e-10,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50047-4",
+      "family": 1,
+      "initial": 0.6666216254234314,
+      "conditional_probability": 0.999995768070221,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 4.0978193283081055e-08,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1007,
+      "case": "50057-475",
+      "family": 6,
+      "initial": 0.49937114119529724,
+      "conditional_probability": 0.999995768070221,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.430511474609375e-06,
+        "offer": 1.1920928955078125e-07,
+        "object": 1.8189894035458565e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50044-572",
+      "family": 4,
+      "initial": 0.5003816485404968,
+      "conditional_probability": 0.9999958276748657,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 7.73070496506989e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50024-1163",
+      "family": 4,
+      "initial": 0.6665821671485901,
+      "conditional_probability": 0.9999960064888,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 5.960464477539063e-08,
+        "object": 6.184563972055912e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 1,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1001,
+      "case": "50009-410",
+      "family": 6,
+      "initial": 0.4999455213546753,
+      "conditional_probability": 0.9999966025352478,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.7881393432617188e-07,
+        "offer": 0.0,
+        "object": 6.59383658785373e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50042-563",
+      "family": 10,
+      "initial": 0.49984210729599,
+      "conditional_probability": 0.9999966621398926,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.9802322387695312e-08,
+        "offer": 0.0,
+        "object": 3.5762786865234375e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50027-1039",
+      "family": 10,
+      "initial": 0.500153660774231,
+      "conditional_probability": 0.9999969005584717,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 0.0,
+        "object": 2.980232238769531e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 4,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1004,
+      "case": "50032-341",
+      "family": 6,
+      "initial": 0.49994421005249023,
+      "conditional_probability": 0.9999969005584717,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 2.7284841053187847e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 9,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1009,
+      "case": "50078-834",
+      "family": 10,
+      "initial": 0.4989683926105499,
+      "conditional_probability": 0.9999969005584717,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.6093254089355469e-06,
+        "offer": 0.0,
+        "object": 6.984919309616089e-10,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 0,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1000,
+      "case": "50007-1152",
+      "family": 11,
+      "initial": 0.5000739693641663,
+      "conditional_probability": 0.9999971985816956,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 1.1920928955078125e-07,
+        "object": 1.862645149230957e-09,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 1,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1001,
+      "case": "50013-419",
+      "family": 10,
+      "initial": 0.4998945891857147,
+      "conditional_probability": 0.9999974966049194,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 4.470348358154297e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50042-563",
+      "family": 10,
+      "initial": 0.50015789270401,
+      "conditional_probability": 0.999997615814209,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 6,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1006,
+      "case": "50048-87",
+      "family": 11,
+      "initial": 0.5001099705696106,
+      "conditional_probability": 0.9999977350234985,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.1457672119140625e-06,
+        "offer": 0.0,
+        "object": 4.76837158203125e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50045-954",
+      "family": 10,
+      "initial": 0.5001862645149231,
+      "conditional_probability": 0.9999978542327881,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 2.8870999813079834e-08,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 9,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1009,
+      "case": "50075-539",
+      "family": 9,
+      "initial": 0.49886995553970337,
+      "conditional_probability": 0.9999979734420776,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.9802322387695312e-08,
+        "offer": 0.0,
+        "object": 1.8189894035458565e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 0,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1000,
+      "case": "50003-859",
+      "family": 9,
+      "initial": 0.4999787211418152,
+      "conditional_probability": 0.9999980330467224,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 0.0,
+        "object": 4.0745362639427185e-10,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "worst_invariants": [
+    {
+      "round": 4,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1004,
+      "case": "50036-543",
+      "family": 2,
+      "initial": 0.499958336353302,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.1444091796875e-05,
+        "offer": 0.0,
+        "object": 1.9949319973733282e-17,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 0,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1000,
+      "case": "50006-578",
+      "family": 3,
+      "initial": 0.49989113211631775,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 7.993605777301127e-15,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1002,
+      "case": "50022-553",
+      "family": 9,
+      "initial": 0.5001563429832458,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 1.3877787807814457e-16,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1002,
+      "case": "50017-1084",
+      "family": 10,
+      "initial": 0.5000517964363098,
+      "conditional_probability": 0.9999995231628418,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 3.296918293926865e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1002,
+      "case": "50018-619",
+      "family": 11,
+      "initial": 0.5000865459442139,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 1.1920928955078125e-07,
+        "object": 2.384185791015625e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1002,
+      "case": "50017-358",
+      "family": 6,
+      "initial": 0.49996283650398254,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 3.907985046680551e-13,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1002,
+      "case": "50021-139",
+      "family": 11,
+      "initial": 0.2500316798686981,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 1.9073486328125e-06,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50027-1039",
+      "family": 10,
+      "initial": 0.501030445098877,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 2.984279490192421e-13,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 4,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1004,
+      "case": "50037-236",
+      "family": 4,
+      "initial": 0.5001822113990784,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 5.3085386753082275e-08,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 4,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1004,
+      "case": "50037-661",
+      "family": 3,
+      "initial": 0.5003677010536194,
+      "conditional_probability": 0.9999991655349731,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 1.8611563782443123e-23,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "pair_coverage": {
+    "retained_states": 352,
+    "same_verb": 227,
+    "same_verb_and_declaration": 162,
+    "definition_only_pairs": 93
+  },
+  "minimum_fitted_probability": 0.9999803304672241,
+  "initial_scores_passing_threshold": 0,
+  "actions_run": 38784811065,
+  "actions_artifact": {
+    "created_at": "2026-10-15T18:31:21Z",
+    "digest": "sha256:e4fa589257999844be27c7a9246ca95906f115422507002865f32d3985e63434",
+    "expired": false,
+    "id": 11997907700,
+    "name": "learnability-search-38784811065-1",
+    "size_in_bytes": 6747598
+  },
+  "result_sha256": "f87c5cba9933218bcd37b7a15230c57d38557b775bd28cd421308967a453e75c",
+  "input_collision_audit": {
+    "method": "Exact action and role/type-aware focused object rows, including categorical joins; all retained states, including unscored final batches.",
+    "replay": [
+      {
+        "case": "50004-4",
+        "family": 1,
+        "steps": 4,
+        "digest": "87890593c23d59ed80b146653db84c5663a164425360b9efe58f1c0b00532892",
+        "passed": true
+      },
+      {
+        "case": "50005-384",
+        "family": 2,
+        "steps": 384,
+        "digest": "658fdb0fe7a03510d17fca8744cc955456903d6d92ba03bf1357cb3fb9b3ca5f",
+        "passed": true
+      },
+      {
+        "case": "50001-235",
+        "family": 3,
+        "steps": 235,
+        "digest": "273c1e217757e10e8e07f1837b160c41b413773241a66d20f95b39d4d0e5c733",
+        "passed": true
+      },
+      {
+        "case": "50006-248",
+        "family": 4,
+        "steps": 248,
+        "digest": "2fb0d21b9409f470f6118b44d1283bf687dd7902875682cf56fc114ba82a416c",
+        "passed": true
+      },
+      {
+        "case": "50001-368",
+        "family": 5,
+        "steps": 368,
+        "digest": "934d6a54b3d1775c8023d8358e105298a04dd8a45f4271e7e64815f1bb21c0fb",
+        "passed": true
+      },
+      {
+        "case": "50007-938",
+        "family": 6,
+        "steps": 938,
+        "digest": "d10f5a837d7d28b6474bb4955b1e051f324859f5d3c724fd1d52d008e75f1868",
+        "passed": true
+      },
+      {
+        "case": "50000-532",
+        "family": 7,
+        "steps": 532,
+        "digest": "e175cb10fde45aa02f713bfd4d80455bece95f4236e875c30f810275cbe30364",
+        "passed": true
+      },
+      {
+        "case": "50007-250",
+        "family": 9,
+        "steps": 250,
+        "digest": "b00bbc148f41c812be350ab817bfc72f44c3c0a6b24655bdda719fb9ec914ee6",
+        "passed": true
+      },
+      {
+        "case": "50007-1116",
+        "family": 10,
+        "steps": 1116,
+        "digest": "fa7e34574b60dcd062cd2e9c7aec2963e45be520589853507d64b2b7439d8f2a",
+        "passed": true
+      },
+      {
+        "case": "50007-1152",
+        "family": 11,
+        "steps": 1152,
+        "digest": "e90aca2a8e7d30af0088460ed527c55ce46fbc7707ee49befd8d4b92aa44f117",
+        "passed": true
+      }
+    ],
+    "counts": {
+      "clean_states": 352,
+      "clean_colliding_states": 0,
+      "clean_collision_classes": 0,
+      "without_declaration_states": 352,
+      "without_declaration_colliding_states": 44,
+      "without_declaration_collision_classes": 44,
+      "without_definition_states": 352,
+      "without_definition_colliding_states": 80,
+      "without_definition_collision_classes": 95
+    },
+    "examples": {
+      "without_definition": [
+        {
+          "case": "50004-4",
+          "family": 1,
+          "offers": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            1,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "case": "50007-1152",
+          "family": 11,
+          "offers": [
+            2,
+            5
+          ]
+        },
+        {
+          "case": "50000-218",
+          "family": 9,
+          "offers": [
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50003-859",
+          "family": 9,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50014-340",
+          "family": 4,
+          "offers": [
+            6,
+            7
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            1,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "case": "50012-767",
+          "family": 10,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50009-692",
+          "family": 11,
+          "offers": [
+            4,
+            6
+          ]
+        },
+        {
+          "case": "50014-204",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        }
+      ],
+      "without_declaration": [
+        {
+          "case": "50005-384",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50001-360",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50006-569",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50000-579",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50008-678",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50010-376",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50012-180",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50009-677",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50022-1033",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-639",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50019-352",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-640",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "condition": "closest pairs, generic and semantic attention",
+  "matched_pair_selection": {
+    "states": 352,
+    "same_digests_and_traces": true,
+    "original_definition_only": 4,
+    "closest_definition_only": 93
+  }
+}

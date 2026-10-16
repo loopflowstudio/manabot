@@ -12,21 +12,31 @@ from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
 from manabot.training.references import reference_distribution
 from manabot.training.selection import selected_rows
 from manabot.verify.store import VerifyStore
+from managym import WORLD_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def recipe(name="direct-self-play"):
+def recipe(name: str = "direct-self-play") -> TrainingRegime:
     value = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes" / f"{name}.json").read_text()
     )
+    value.world = WORLD_VERSION
     value.agent.semantic_pack = "ur-lessons-vs-gw-allies"
     return value
 
 
 def test_all_recipes_validate_and_reject_future_references():
     for path in (ROOT / "experiments/regimes").glob("*.json"):
-        validate_regime(TrainingRegime.model_validate_json(path.read_text()))
+        payload = json.loads(path.read_text())
+        if "recipes" in payload:  # Frozen study plans are not TrainingRegimes.
+            continue
+        frozen = TrainingRegime.model_validate(payload)
+        if frozen.world == WORLD_VERSION:
+            validate_regime(frozen)
+        else:
+            with pytest.raises(ValueError, match="world"):
+                validate_regime(frozen)
     raw = recipe().model_dump()
     raw["stages"][0]["initial"] = "policy-1"
     with pytest.raises(ValueError, match="earlier"):
@@ -45,7 +55,14 @@ def test_reference_has_full_support_and_is_permutation_invariant():
     obs = {
         "actions_valid": torch.tensor([[1.0, 1.0, 1.0, 0.0]]),
         "actions": torch.tensor(
-            [[[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]]
+            [
+                [
+                    [1.0, *([0.0] * 15), 1.0, 1.0],
+                    [1.0, *([0.0] * 15), 0.0, 1.0],
+                    [0.0, 1.0, *([0.0] * 14), 0.0, 1.0],
+                    [0.0] * 18,
+                ]
+            ]
         ),
     }
     probs = reference_distribution(obs, "action_type_uniform")
@@ -136,7 +153,10 @@ def test_named_treatments_execute_real_optimizer_batches():
         _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
     )
     for path in (ROOT / "experiments/regimes").glob("*.json"):
-        stage = TrainingRegime.model_validate_json(path.read_text()).stages[0]
+        payload = json.loads(path.read_text())
+        if "recipes" in payload:
+            continue
+        stage = TrainingRegime.model_validate(payload).stages[0]
         if stage.operation != "train_self_play":
             continue
         result = update_iteration(
@@ -226,8 +246,12 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     value.stages[0].updates = 1
     value.stages[0].learning.epochs = 1
 
-    def reject_checkpoint(*args, **kwargs):
-        raise ValueError("checkpoint admission failed")
+    load = execution.load_checkpoint_agent
+
+    def reject_checkpoint(path: str) -> object:
+        if Path(path).name == "policy-0-raw.pt":
+            raise ValueError("checkpoint admission failed")
+        return load(path)
 
     monkeypatch.setattr(execution, "load_checkpoint_agent", reject_checkpoint)
     with VerifyStore(tmp_path / "store.sqlite") as store:

@@ -232,6 +232,13 @@ def load_checkpoint_agent(
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent = Agent(obs_space, AgentSpec(**hypers["agent_hypers"]))
+    value_semantic = checkpoint.get("bc", {}).get("value_semantic")
+    if value_semantic is not None:
+        if value_semantic not in ("signed_outcome", "win_logit"):
+            raise ValueError("unsupported checkpoint value semantic")
+        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
+            raise ValueError("checkpoint value semantic conflicts with its critic")
+        agent.value_semantic = value_semantic
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
     binding = None
@@ -334,10 +341,13 @@ def make_player(
                 c_puct=float(spec.get("c_puct", 1.5)),
                 max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
                 seed=seed,
-                evaluator=AgentLeafEvaluator(agent, obs_space),
+                evaluator=AgentLeafEvaluator(
+                    agent, obs_space, value_mode=str(spec.get("value_mode", "learned"))
+                ),
                 branch_driver_id=str(
                     spec.get("branch_driver_id", SELECTED_BRANCH_DRIVER_ID)
                 ),
+                branch_audit=bool(spec.get("branch_audit", False)),
             ),
             obs_space,
         )

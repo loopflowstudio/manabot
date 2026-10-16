@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from manabot.env import Env, ObservationSpace
 from manabot.sim.flat_mc import MatchupPlayer, make_player
+from manabot.sim.mcts import puct_source_sha256
 import managym
+
+from .models import file_sha256
 
 
 class DemoSearchPlayer:
@@ -71,6 +75,15 @@ def build_player(
         if checkpoint_path is None:
             raise FileNotFoundError("checkpoint candidate bytes are unavailable")
         spec["path"] = checkpoint_path
+        if spec["kind"] == "agent_puct":
+            if puct_source_sha256() != spec["implementation_source_sha256"]:
+                raise ValueError("agent PUCT implementation source drift")
+            if (
+                file_sha256(checkpoint_path) != registration.checkpoint_sha256
+                or Path(checkpoint_path).stat().st_size != registration.checkpoint_bytes
+            ):
+                raise ValueError("agent PUCT checkpoint byte identity drift")
+            spec["checkpoint"] = checkpoint_path
         if spec["kind"] == "local_update":
             from manabot.sim import local_update
 
@@ -85,12 +98,15 @@ def build_player(
         return ScriptedGreedyPlayer(), None
     player, obs_space = make_player(spec, seed=seed)
     attribute_names = {
-        "sims": "simulations" if spec["kind"] == "determinized_puct" else "sims",
+        "sims": "simulations"
+        if spec["kind"] in {"determinized_puct", "agent_puct"}
+        else "sims",
         "rollouts_per_world": "rollouts",
         "worlds": "worlds",
         "c_puct": "c_puct",
         "max_steps": "max_steps",
         "branch_driver_id": "branch_driver_id",
+        "branch_audit": "branch_audit",
     }
     for field, attribute in attribute_names.items():
         if field in spec and getattr(player, attribute, None) != spec[field]:
@@ -105,4 +121,12 @@ def build_player(
             raise RuntimeError(
                 "constructed player did not use the registered leaf evaluator"
             )
+    if spec["kind"] == "agent_puct":
+        if player.evaluator.value_mode != spec["value_mode"]:
+            raise RuntimeError("constructed player did not echo value_mode")
+        if (
+            sum(p.numel() for p in player.evaluator.agent.parameters())
+            != registration.parameter_count
+        ):
+            raise ValueError("agent PUCT checkpoint parameter count drift")
     return player, obs_space

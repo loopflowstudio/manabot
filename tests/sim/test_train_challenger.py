@@ -43,7 +43,7 @@ def test_world_identity_binds_lesson_pool_and_tensor_shape():
         },
         "gw_allies": {"Fancy Footwork": 1, "Yip Yip!": 1},
     }
-    assert world["observation_action_abi"]["shapes"]["actions"] == [128, 17]
+    assert world["observation_action_abi"]["shapes"]["actions"] == [128, 18]
     assert "LEARN_TAKE_LESSON" in world["observation_action_abi"]["action_types"]
     assert world["content_manifest"]["compiled_semantics"]["pack_key"] == (
         train_challenger.PACK_KEY

@@ -1953,6 +1953,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "gymnasium" },
+    { name = "nbformat" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
@@ -2019,6 +2020,7 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.9" },
     { name = "maturin", marker = "extra == 'play'", specifier = ">=1.5,<2.0" },
     { name = "nbclient", marker = "extra == 'notebook'", specifier = ">=0.10" },
+    { name = "nbformat", specifier = ">=5.10.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "psutil", specifier = ">=5.9.0" },

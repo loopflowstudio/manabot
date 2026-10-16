@@ -1,0 +1,99 @@
+name: Nightly baseline learning
+
+on:
+  schedule:
+    - cron: '23 8 * * *'
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: Baseline iterations (empty uses the shared recipe default)
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-nightly
+  cancel-in-progress: false
+
+jobs:
+  sanity:
+    uses: ./.github/workflows/learnability.yml
+  train:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [197, 281, 419]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: managym -> target
+      - name: Install CPU runtime
+        run: |
+          uv sync --frozen --extra dev --extra play --no-default-groups --group play-runtime
+          uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+      - name: Recipe and evidence contracts
+        run: uv run --no-sync pytest tests/training/test_baseline_recipe.py tests/verify/test_learning_regression.py -q
+      - name: Ordinary baseline training and frozen evaluation
+        env:
+          BASELINE_STEPS: ${{ inputs.steps || '' }}
+          BASELINE_SEED: ${{ matrix.seed }}
+        run: |
+          horizon=()
+          if [ -n "$BASELINE_STEPS" ]; then horizon=(--steps "$BASELINE_STEPS"); fi
+          timeout --signal=TERM 1800s uv run --no-sync manabot train --recipe baseline "${horizon[@]}" --seed "$BASELINE_SEED" --seconds 1680 --out .runs/baseline
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f .runs/baseline/report.md ]; then
+            cat .runs/baseline/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Baseline did not finish; retained partial evidence is not a learning pass.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-${{ matrix.seed }}
+          path: .runs/baseline
+          retention-days: 14
+          if-no-files-found: error
+  evidence:
+    if: always() && needs.train.result != 'skipped'
+    needs: [train, sanity]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: managym -> target
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: baseline-*
+          path: .runs/cohort
+      - name: Install analysis runtime
+        run: |
+          uv sync --frozen --extra dev --extra play --no-default-groups --group play-runtime
+          uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+      - name: Paired learning evidence
+        run: uv run --no-sync python -m manabot.verify.learning_regression .runs/cohort/baseline-*/learning.json --seeds 197 281 419 --out .runs/result
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f .runs/result/report.md ]; then cat .runs/result/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-result
+          path: .runs/result
+          retention-days: 30

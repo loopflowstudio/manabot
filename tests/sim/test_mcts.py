@@ -93,6 +93,7 @@ def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
     root, observation = _fresh_engine_and_observation(seed=35)
     observation_space = ObservationSpace()
     agent = Agent(observation_space, AgentSpec())
+    agent.value_semantic = "win_logit"
     with torch.no_grad():
         for parameter in agent.parameters():
             parameter.zero_()
@@ -141,6 +142,7 @@ def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
     root, observation = _fresh_engine_and_observation(seed=36)
     observation_space = ObservationSpace()
     agent = Agent(observation_space, AgentSpec())
+    agent.value_semantic = "win_logit"
     learned = AgentLeafEvaluator(agent, observation_space, value_mode="learned")
     neutral = AgentLeafEvaluator(agent, observation_space, value_mode="neutral")
     action_count = int(root.action_count())
@@ -174,6 +176,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
         observation_space,
         checkpoint,
         player_configs=interactive_player_configs,
+        extra={"value_semantic": "win_logit"},
     )
 
     player, loaded_space = make_player(
