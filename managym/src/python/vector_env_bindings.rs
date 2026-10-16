@@ -78,17 +78,22 @@ pub struct PyVectorEnv {
 #[pymethods]
 impl PyVectorEnv {
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none"))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none", seed_stride=None))]
     fn new(
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
         opponent_policy: &str,
+        seed_stride: Option<u64>,
     ) -> PyResult<Self> {
         let policy = parse_opponent_policy(opponent_policy)?;
+        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policy);
+        if let Some(stride) = seed_stride {
+            inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
+        }
 
         Ok(Self {
-            inner: VectorEnv::new(num_envs, seed, skip_trivial, policy),
+            inner,
             config: ObservationEncoderConfig::default(),
             num_envs,
             buffers: None,

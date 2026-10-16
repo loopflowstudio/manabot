@@ -1,10 +1,48 @@
 """Complete typed card programs joined to viewer-safe card and knowledge rows."""
 
+from dataclasses import dataclass
+
 import torch
 from torch import nn
 
 from manabot.semantic.learning import BoundSemanticPack
 import managym
+
+
+def admit_definition_ids(
+    ids: torch.Tensor, size: int, lookup: torch.Tensor | None = None
+) -> torch.Tensor:
+    """Check transport IDs before indexing; optionally resolve semantic rows."""
+    kind = "semantic" if lookup is not None else "card"
+    message = f"policy received an unadmitted {kind} definition"
+    if (
+        not torch.equal(ids, ids.floor())
+        or bool((ids < 0).any())
+        or bool((ids >= size).any())
+    ):
+        raise ValueError(message)
+    rows = ids.long()
+    if lookup is not None:
+        rows = lookup[rows]
+        if bool((rows < 0).any()):
+            raise ValueError(message)
+    return rows
+
+
+@dataclass(frozen=True)
+class CardReferences:
+    """Admitted catalog indexes for visible cards, permanents and public hands."""
+
+    cards: torch.Tensor
+    permanents: torch.Tensor
+    known: torch.Tensor | None
+
+    def to(self, device: torch.device) -> "CardReferences":
+        return CardReferences(
+            self.cards.to(device),
+            self.permanents.to(device),
+            None if self.known is None else self.known.to(device),
+        )
 
 
 class SemanticCardEncoder(nn.Module):
@@ -76,16 +114,9 @@ class SemanticCardEncoder(nn.Module):
         self.register_buffer("definition_rows", lookup)
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
-        if (
-            not torch.equal(ids, ids.floor())
-            or bool((ids < 0).any())
-            or bool((ids >= len(self.definition_rows)).any())
-        ):
-            raise ValueError("policy received an unadmitted semantic definition")
-        rows = self.definition_rows[ids.long()]
-        if bool((rows < 0).any()):
-            raise ValueError("policy received an unadmitted semantic definition")
-        return rows
+        return admit_definition_ids(
+            ids, len(self.definition_rows), self.definition_rows
+        )
 
     def definitions(self) -> torch.Tensor:
         """Encode the immutable catalog once for visible and historical references."""
@@ -104,12 +135,23 @@ class SemanticCardEncoder(nn.Module):
         return definitions[self._rows(ids)]
 
     def forward(
-        self, obs: dict[str, torch.Tensor], definitions: torch.Tensor | None = None
+        self,
+        obs: dict[str, torch.Tensor],
+        definitions: torch.Tensor | None = None,
+        references: CardReferences | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if definitions is None:
             definitions = self.definitions()
-        cards = self.embed_definitions(obs["semantic_cards"], definitions)
+        cards = definitions[
+            self._rows(obs["semantic_cards"])
+            if references is None
+            else references.cards
+        ]
         knowledge = obs["known_hand"]
-        known = definitions[self._rows(knowledge[..., 0])]
+        known_rows = (
+            self._rows(knowledge[..., 0]) if references is None else references.known
+        )
+        assert known_rows is not None
+        known = definitions[known_rows]
         known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)
         return cards, known

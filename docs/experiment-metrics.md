@@ -1,5 +1,56 @@
 # Reading the experiment report
 
+## Select a training cohort
+
+Generate a self-contained training-time report from local evidence and Etude logs:
+
+```sh
+uv run --extra reports manabot training-report \
+  --source /path/to/saved-training \
+  --source s3://your-bucket/your-etude-prefix \
+  --out training-time.html
+```
+
+The page provides search, sorting, run checkboxes, a largest-five selection,
+time-weighted phase totals, descriptive per-run statistics, throughput grouped by
+recipe/hardware, and a training-only timeline. Selecting a recovered run includes
+its available attempts. Work counters come from the retained trajectory, while
+duration includes failed/replayed attempts. Incomplete or branching ancestry
+leaves ambiguous work counts unavailable. Unknown hardware is not pooled.
+
+The initial selection uses observed active training seconds and excludes explicitly
+labeled benchmarks, smokes, fixtures, tests and evaluations. Unclassified records
+remain visible and eligible; inspect them before calling the result a production
+training cohort. Use `--top 10`, `--include-benchmarks`, or repeated `--run` with
+the exact logical IDs shown in the page to change the initial selection. Page
+filters do not silently remove already selected runs.
+
+Use **Save selection** and **Restore selection** for exact membership tied to the
+report's evidence snapshot. Restoring against different source bytes is rejected;
+retain the original HTML and its `*-training-time.json` alongside the selection.
+The URL also preserves selected identities for that snapshot.
+
+Native phase counters retain their existing meanings. For generic Etude logs,
+`training_seconds` must be a declared cumulative **time** clock measuring active
+training; `--training-clock NAME` selects another explicitly equivalent clock.
+`learner_transitions`, `updates` and `steps` are distinct declared step clocks.
+Resumed attempts need the active-time resume coordinate to establish their added
+duration. Arbitrary metric names are not interpreted as timing phases. Generic
+logs without regime timing remain selectable, but their elapsed-time breakdown
+and measured cost stay unavailable. No rental ceilings are converted into spend.
+
+The reader uses the optional Etude SDK and existing credentials. Local/S3 reads
+happen only during report generation; the resulting page needs no server or
+network. Source failures remain visible, archives are not automatically expanded,
+and no checkpoints are downloaded. Supply verified extracted archive directories
+to include archived training records. A snapshot covers its configured sources,
+not an assumed complete training history.
+
+The accepted cross-project scope is recorded in
+[Training time reports from selected Etude runs](plans/training-time-cohorts.md).
+
+## Experiment notebooks
+
 The notebook is the editable report generator. Run All reads local evidence and
 writes one HTML dashboard. HTML is the default read-only surface; it does not
 poll, train, evaluate, or access a tracker. Change the notebook's question,
@@ -93,6 +144,47 @@ rule; do not extrapolate absent checkpoints. Keep regime-specific configuration,
 independent seeds and held-out scientific cohorts attached to any conclusion.
 
 ## Costs
+
+The training-only time profile shows a flamegraph-style hierarchy for each saved
+attempt: setup, stages, collection, learning, stage exports and remaining time.
+Widths are aggregate elapsed seconds, not chronological spans. Unattributed time
+is visible; historical inference/simulation and learning subphases are unavailable
+unless separately profiled. Diagnostics can include failure accounting, so they
+are not universally pure diagnostic computation. Monitoring exports and recovery
+costs are already inside stage time and are not added again.
+
+Self-play stages can set `execution.profile_collection: true` to retain basic
+host timers in `StageRecord.collection_timings`: observation preparation, policy
+inference and action selection, rollout recording, opponent policy, environment
+step/encoding, and batch assembly. The report nests these beneath collection and
+keeps the residual visible. Seconds and call counts are attempt-local; reused
+collectors start fresh counters at each stage. These intervals include existing
+device waits but are not GPU kernel timings. The option defaults off, adds no
+CUDA synchronization, and does not enable PyTorch tracing. Compare matched
+ordinary runs with it off/on before treating instrumented fractions as typical.
+
+The main dashboard includes this view. To generate a standalone training-only
+report from saved records in a notebook or script run through `uv run`:
+
+```python
+from pathlib import Path
+from manabot.training.experiment_report import load_evidence, write_time_profile
+
+write_time_profile(load_evidence(Path("saved-experiment")), Path("training-time.html"))
+```
+
+Completed stages copied into a recovery child are excluded from that child's
+cost. Missing parent records or inconsistent timing totals produce a visible
+attribution warning rather than normalized percentages. The downloadable training
+time JSON contains the hierarchy, intervals and source-file hashes.
+
+The training-attempt timeline uses execution start/end timestamps where available;
+otherwise it uses the run's recorded calendar span. These bases are labeled:
+process lifetime includes work outside a regime, and calendar spans may include
+downtime. Running intervals stop at the saved heartbeat, not the rendering time.
+Missing timestamps remain unavailable. Overlapping lane durations cannot be added
+to obtain elapsed time; cross-machine clock uncertainty is unrecorded. Evaluation
+lanes and causal critical-path attribution are deferred.
 
 Elapsed wall seconds and additive worker-process seconds come from ExperimentRun.
 Process seconds include concurrent learner and evaluator duration; evaluator

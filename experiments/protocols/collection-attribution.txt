@@ -1,0 +1,47 @@
+Ordinary collection attribution — prospective protocol, 2026-10-15
+
+Run017 improved small-request serving1.844x but ordinary4096-stream training only
+1.0082x. Strict training parity also failed, with within-reference variation.
+Do not adopt the provisional collector change or claim the goal complete.
+This experiment identifies the remaining ordinary collection cost before another
+serving implementation. It changes no simulation, sampling, policy math or learning.
+
+Use the existing worker_experiment --collection-profile orchestrator and
+cuda_performance.child ordinary three-update TrainingRun. Same w64-d1 recipe,
+seed10349,8steps,512/4096streams,FP32/TF32off,oneCPUtorchthread. Reference uses the
+original tensor transfer; prepared uses PolicyInference as in017. Neither mode
+is silently substituted for the other. All outputs and exact source are retained.
+
+Ten fresh-process cells, in this order:
+  control reference512,reference4096,prepared512,prepared4096;
+  torch reference512,reference4096,prepared512,prepared4096;
+  python reference4096,prepared4096.
+Controls collect no trace. Torch records only collection index1 (the second,
+after one real update), with CPU/CUDA trace and named windows for input assembly/
+transfer, scoped preparation, forward, semantic catalog, policy logs, multinomial,
+native step+observation encoding, and final batch assembly. Independent cProfile
+passes expose Python/array function costs without simultaneous Torch profiling.
+No claimed additive decomposition of nested windows. Native work includes encoding.
+Device interval union is activity time, not SM utilization or kernel efficiency.
+Unmarked gaps retain no assigned cause. Profilers can change scheduling and cost;
+compare controls only as overhead context, not a replicated performance result.
+
+All cells retain55sstage/60srecipe/70sprocess caps, including diagnostic export.
+No automatic retry, deadline extension or exclusion. Missing/failed cells remain
+missing/failed. Preserve raw traces,pstats,logs,runrecords and raw/EMA/Adam hashes.
+Use exact within/cross-mode learned-state comparisons as diagnostics; the failed017
+acceptance gate remains failed. This attribution run has no optimization acceptance
+or training-strength claim. One observation per cell cannot estimate uncertainty.
+
+Use one RTX5090 at <=$1.25/hour,>=8vCPU/48GBRAM; inspect actual host and quota.
+Original$50total budget, reserve$4,job30min/$3,oneattempt,rental2700s. Prior admitted
+pods must be provider-deleted. Unknown015 retains its separate$4reserve and named
+provider-absence check; do not resubmit it. Publish exact source/protocol and verify
+full source archive readback before renting. Package complete raw output directory
+with internal manifest, then verify immutable output receipt and every manifest file.
+Delete the machine and record whole-rental cost before another allocation.
+
+Decision: a dominant forward/device window supports model/batch work; dominant
+input/output/host windows support transfer/materialization changes; dominant batch
+assembly supports collector data-layout work. Keep mixed explanations if timings
+cannot distinguish them. No simulation optimization selected by default.
