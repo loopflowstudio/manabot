@@ -120,3 +120,40 @@ three fixed evaluation cohorts, diagnostics and setup; prior 18 hours, first-fit
 allowance and settlement remain inside the 80-hour operational ceiling.
 
 Seven focused software checks passed; no local training or evaluation ran.
+
+## Historical GPU context (2026-10-15)
+
+Jack Heart recalled roughly 50% piloting Lessons against scripted greedy Allies.
+Read-only retrieval of the versioned ETU-103/126 monitoring artifacts confirms
+that result for the small GPU seed10351 and its continuations, not the ETU-118
+Mini baseline. Each historical deck split contains50 games; all are completed
+monitoring cohorts, not independent training seeds or held-out confirmation.
+
+| Absolute update | Lessons wins /50 | Recorded training hours | Active training hours |
+| --- | --- | --- | --- |
+| 26,000 (original endpoint) | 21 | 4.93 | 4.41 |
+| 31,165 | 22 | 5.93 | 5.22 |
+| 54,645 | 23 | 9.93 | 8.98 |
+| 60,467 | 24 | 10.93 | 9.92 |
+| 63,000 | 18 | 11.36 | 10.33 |
+| 68,014 | 24 | 12.36 | 11.13 |
+| 73,797 | 24 | 13.36 | 12.07 |
+| 79,478 | 20 | 14.36 | 13.00 |
+| 85,145 | 25 | 15.36 | 13.93 |
+| 90,732 | 23 | 16.36 | 14.86 |
+| 96,324 | 26 | 17.36 | 15.80 |
+| 100,000 | 25 | 18.02 | 16.41 |
+
+These are checkpoint clocks, not inclusive rental/queue time. The first observed
+50% point is85,145; fluctuations preclude a sustained-threshold claim. The100k
+monitor digest is `de1f2ea2885063fdf42e671b64e9a5d81bd58f12fff504b63602f74b37df6d6e`;
+the85,145 digest is `f3d9035bb905fc85a54ecd33adf57f6bcea7ec9ef3971f3f7d20314063a4ef01`.
+Versioned manifests and verified monitor bytes remain in
+`.runs/mtg122/historical-gpu/cache`; `summary.json` retains all retrieved points.
+No historical artifacts or jobs were changed.
+
+The current5k seed scores12/26 (46.2%) in that cell after5.87 recorded training
+hours (5.76 active) on Mini. It collects256 learner transitions/update versus512
+for the old GPU run:1.28M transitions now,43.59M at the old85,145 point. Worlds,
+value aggregation, collection balance, hardware, seeds and evaluation deals differ.
+This is descriptive context, not a causal speedup or matched-compute comparison.
