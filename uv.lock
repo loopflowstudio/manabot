@@ -241,6 +241,34 @@ css = [
 ]
 
 [[package]]
+name = "boto3"
+version = "1.42.61"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore" },
+    { name = "jmespath" },
+    { name = "s3transfer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/15/356d38280ce3fce37a8e2b44e2ead81240d933f64411e86415a2ed4c0bd5/boto3-1.42.61.tar.gz", hash = "sha256:117ebfc597c95bfb64c6d37ba77bd1c2a97a1885c1dcac2a8be1a14e2139a76d", size = 112750, upload-time = "2026-03-04T20:30:53.73Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/d7/a2fa875cb7c5d6b5c5cf6fc181343708c8dc6cafae3e6964ed486ae21bea/boto3-1.42.61-py3-none-any.whl", hash = "sha256:156efcc298a33206be6dfd220815c64aa8b09424017534cabe717636961fc306", size = 140555, upload-time = "2026-03-04T20:30:51.17Z" },
+]
+
+[[package]]
+name = "botocore"
+version = "1.42.61"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jmespath" },
+    { name = "python-dateutil" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d1/6a/27836dde004717c496f69f4fe28fa2f3f3762d04859a9292681944a45a36/botocore-1.42.61.tar.gz", hash = "sha256:702d6011ace2b5b652a0dbb45053d4d9f79da2c5b184463042434e1754bdd601", size = 14954743, upload-time = "2026-03-04T20:30:41.956Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/46/98a01139f318b7a2f0ad1d1e3be2a028d13aeb7e05aaa340a27cdc47fdf0/botocore-1.42.61-py3-none-any.whl", hash = "sha256:476059beb3f462042742950cf195d26bc313461a77189c16e37e205b0a924b26", size = 14627717, upload-time = "2026-03-04T20:30:37.503Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.2.25"
 source = { registry = "https://pypi.org/simple" }
@@ -865,6 +893,25 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
+name = "etude-sdk"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "pydantic", marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "typer", version = "0.27.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/e7/eaf44fdaf704aa523830afb6e9b95f510bcab9826c4035cbc80aa95da3eb/etude_sdk-0.1.1.tar.gz", hash = "sha256:49e5ec84dcd4eee5e4cc6f20e15ef43d8d7ddf60d4b5aee36292776f526618dd", size = 317387, upload-time = "2026-10-14T21:43:07.715Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/d6/3da8225633cefd053da424d04d973b80895922885aaaaa4f2d213496ef4f/etude_sdk-0.1.1-py3-none-any.whl", hash = "sha256:71cbfe3fcc59a2818d4aa029eef5b7b635049942e37e5b5787c5e6b0b99b9a2f", size = 254879, upload-time = "2026-10-14T21:43:04.836Z" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "boto3", marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
 ]
 
 [[package]]
@@ -1503,6 +1550,15 @@ wheels = [
 ]
 
 [[package]]
+name = "jmespath"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247fb5d1763a6cbe46eff7222eaeebafd9fa65d4bf5cb11/jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d", size = 27377, upload-time = "2026-01-22T16:35:26.279Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
+]
+
+[[package]]
 name = "json5"
 version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1903,7 +1959,8 @@ dependencies = [
     { name = "pandas", version = "3.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "psutil" },
     { name = "pydantic" },
-    { name = "typer" },
+    { name = "typer", version = "0.24.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "typer", version = "0.27.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "wandb" },
 ]
@@ -1928,6 +1985,11 @@ notebook = [
 play = [
     { name = "maturin" },
 ]
+reports = [
+    { name = "etude-sdk", extra = ["s3"], marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "matplotlib", version = "3.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+]
 
 [package.dev-dependencies]
 play-runtime = [
@@ -1947,12 +2009,14 @@ training-runtime = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
+    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", specifier = "==0.1.1" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.0" },
     { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.9" },
+    { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.9" },
     { name = "maturin", marker = "extra == 'play'", specifier = ">=1.5,<2.0" },
     { name = "nbclient", marker = "extra == 'notebook'", specifier = ">=0.10" },
     { name = "numpy", specifier = ">=1.24.0" },
@@ -1966,7 +2030,7 @@ requires-dist = [
     { name = "wandb", specifier = ">=0.18.7" },
     { name = "wandb-workspaces", marker = "extra == 'notebook'", specifier = ">=0.4.13" },
 ]
-provides-extras = ["artifacts", "play", "dev", "notebook"]
+provides-extras = ["reports", "artifacts", "play", "dev", "notebook"]
 
 [package.metadata.requires-dev]
 play-runtime = [
@@ -4126,6 +4190,18 @@ wheels = [
 ]
 
 [[package]]
+name = "s3transfer"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/05/04/74127fc843314818edfa81b5540e26dd537353b123a4edc563109d8f17dd/s3transfer-0.16.0.tar.gz", hash = "sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920", size = 153827, upload-time = "2025-12-01T02:30:59.114Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/51/727abb13f44c1fcf6d145979e1535a35794db0f6e450a0cb46aa24732fe2/s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe", size = 86830, upload-time = "2025-12-01T02:30:57.729Z" },
+]
+
+[[package]]
 name = "send2trash"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4578,15 +4654,80 @@ wheels = [
 name = "typer"
 version = "0.24.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version == '3.11.*' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform != 'linux' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version < '3.11' and sys_platform != 'linux' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+]
 dependencies = [
-    { name = "annotated-doc" },
-    { name = "click" },
-    { name = "rich" },
-    { name = "shellingham" },
+    { name = "annotated-doc", marker = "python_full_version < '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "click", marker = "python_full_version < '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "rich", marker = "python_full_version < '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "shellingham", marker = "python_full_version < '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f5/24/cb09efec5cc954f7f9b930bf8279447d24618bb6758d4f6adf2574c41780/typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45", size = 118613, upload-time = "2026-02-21T16:54:40.609Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4a/91/48db081e7a63bb37284f9fbcefda7c44c277b18b0e13fbc36ea2335b71e6/typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e", size = 56085, upload-time = "2026-02-21T16:54:41.616Z" },
+]
+
+[[package]]
+name = "typer"
+version = "0.27.3"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'linux' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32' and extra != 'group-7-manabot-play-runtime' and extra != 'group-7-manabot-training-runtime'",
+]
+dependencies = [
+    { name = "annotated-doc", marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "colorama", marker = "(python_full_version >= '3.12' and sys_platform == 'win32') or (python_full_version < '3.12' and extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime') or (sys_platform != 'win32' and extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "rich", marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+    { name = "shellingham", marker = "python_full_version >= '3.12' or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/03/51/d33db42cc72ffd8c30777547b42d01f0cbf9d95a770457698d0174b3ed71/typer-0.27.3.tar.gz", hash = "sha256:d0396f770a560ab1b0a8504e13b5f254b728cedb05c61cf0359e944e50ce8901", size = 205303, upload-time = "2026-10-06T17:24:16.61Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/ea/2e31b67051e91a133189e9c000c222502ddc6969856416de0d095de4c0b0/typer-0.27.3-py3-none-any.whl", hash = "sha256:e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff", size = 123312, upload-time = "2026-10-06T17:24:15.054Z" },
 ]
 
 [[package]]
@@ -5170,53 +5311,3 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1c/24/4f26ff9a7dd0998f6d1036bdddef7ce3e78972a74f7fffa7967e7bc3b7e4/xxhash-4.0.1-pp311-pypy311_pp73-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f484ed57bb3e4142f9d6439568658c38be5f94b702ba00a1ff32c69783b6c66d", size = 39532, upload-time = "2026-08-17T08:23:57.556Z" },
     { url = "https://files.pythonhosted.org/packages/7d/f3/1ac078fc8fceadcf066469acecacb35d2821cbfaf7d6fc5ac2107c7a314d/xxhash-4.0.1-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:fac4832b638000106207bc44e44b9616a6a416aaee56c62b01d61f3705e49f58", size = 37252, upload-time = "2026-08-17T08:24:06.652Z" },
 ]
-
-[[package]]
-name = "boto3"
-version = "1.42.61"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "botocore" },
-    { name = "jmespath" },
-    { name = "s3transfer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/58/15/356d38280ce3fce37a8e2b44e2ead81240d933f64411e86415a2ed4c0bd5/boto3-1.42.61.tar.gz", hash = "sha256:117ebfc597c95bfb64c6d37ba77bd1c2a97a1885c1dcac2a8be1a14e2139a76d", size = 112750, upload-time = "2026-03-04T20:30:53.73Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/d7/a2fa875cb7c5d6b5c5cf6fc181343708c8dc6cafae3e6964ed486ae21bea/boto3-1.42.61-py3-none-any.whl", hash = "sha256:156efcc298a33206be6dfd220815c64aa8b09424017534cabe717636961fc306", size = 140555, upload-time = "2026-03-04T20:30:51.17Z" },
-]
-
-[[package]]
-name = "botocore"
-version = "1.42.61"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jmespath" },
-    { name = "python-dateutil" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d1/6a/27836dde004717c496f69f4fe28fa2f3f3762d04859a9292681944a45a36/botocore-1.42.61.tar.gz", hash = "sha256:702d6011ace2b5b652a0dbb45053d4d9f79da2c5b184463042434e1754bdd601", size = 14954743, upload-time = "2026-03-04T20:30:41.956Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/46/98a01139f318b7a2f0ad1d1e3be2a028d13aeb7e05aaa340a27cdc47fdf0/botocore-1.42.61-py3-none-any.whl", hash = "sha256:476059beb3f462042742950cf195d26bc313461a77189c16e37e205b0a924b26", size = 14627717, upload-time = "2026-03-04T20:30:37.503Z" },
-]
-
-[[package]]
-name = "jmespath"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247fb5d1763a6cbe46eff7222eaeebafd9fa65d4bf5cb11/jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d", size = 27377, upload-time = "2026-01-22T16:35:26.279Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
-]
-
-[[package]]
-name = "s3transfer"
-version = "0.16.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "botocore" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/05/04/74127fc843314818edfa81b5540e26dd537353b123a4edc563109d8f17dd/s3transfer-0.16.0.tar.gz", hash = "sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920", size = 153827, upload-time = "2025-12-01T02:30:59.114Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/51/727abb13f44c1fcf6d145979e1535a35794db0f6e450a0cb46aa24732fe2/s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe", size = 86830, upload-time = "2025-12-01T02:30:57.729Z" },
-]
-

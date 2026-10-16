@@ -95,9 +95,14 @@ jobs:
       - name: Build managym extension
         run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
 
+      - name: Setup Node for offline report tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Integration tests
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
@@ -107,6 +112,7 @@ jobs:
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
+            tests/training/test_time_profile.py tests/training/test_time_cohort.py \
             tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
             tests/training/test_technique_screen.py tests/training/test_filter_scope_mini.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \

@@ -67,7 +67,9 @@ def training_profiles(runs: Sequence[TrainingRun]) -> tuple[TrainingProfile, ...
     """
     by_id: dict[str, TrainingRun] = {}
     for run in runs:
-        if run.id in by_id and by_id[run.id] != run:
+        if run.id in by_id and by_id[run.id].model_dump(
+            exclude_unset=True
+        ) != run.model_dump(exclude_unset=True):
             raise ValueError(f"conflicting retained training run {run.id}")
         by_id[run.id] = run
     profiles = []
@@ -269,6 +271,18 @@ def _profile_rows(root: TimeSlice, depth: int = 0) -> str:
     return row + "".join(_profile_rows(child, depth + 1) for child in root.children)
 
 
+def profile_body(profile: TrainingProfile) -> str:
+    """One measured hierarchy, shared by the dashboard and cohort drilldown."""
+    if profile.root is None:
+        return "<p>Recorded duration unavailable.</p>"
+    return (
+        _profile_svg(profile.root)
+        + "<table><thead><tr><th>Phase</th><th>Recorded seconds</th></tr></thead><tbody>"
+        + _profile_rows(profile.root)
+        + "</tbody></table>"
+    )
+
+
 def training_time_report(
     runs: Sequence[TrainingRun], executions: Sequence[ExperimentRun]
 ) -> str:
@@ -287,18 +301,7 @@ def training_time_report(
             f"<details><summary>{escape(profile.label)} · "
             f"{escape(profile.status)} · run {escape(profile.run_id)}</summary>"
         )
-        if profile.root is not None:
-            parts.extend(
-                [
-                    _profile_svg(profile.root),
-                    "<table><thead><tr><th>Phase</th>"
-                    "<th>Recorded seconds</th></tr></thead><tbody>",
-                    _profile_rows(profile.root),
-                    "</tbody></table>",
-                ]
-            )
-        else:
-            parts.append("<p>Recorded duration unavailable.</p>")
+        parts.append(profile_body(profile))
         parts.extend(
             f"<p>Attribution warning: {escape(w)}</p>" for w in profile.warnings
         )

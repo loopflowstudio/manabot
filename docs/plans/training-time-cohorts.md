@@ -1,6 +1,6 @@
 # Training time reports from selected Etude runs
 
-Status: accepted product scope; implementation in progress.
+Status: selectable report implemented; historical long-run cohort remains incomplete.
 Direction supplied by Jack Heart on 2026-10-15.
 
 The report should answer **where time went across a chosen set of real training

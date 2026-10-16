@@ -113,6 +113,55 @@ def sim_command(
     _run_sim(preset, set_values or [])
 
 
+@app.command("training-report")
+def training_report_command(
+    source: list[str] = typer.Option(
+        ..., help="Local evidence directory or s3://bucket/prefix; repeatable"
+    ),
+    out: str = typer.Option("training-time.html", help="Self-contained output HTML"),
+    run: list[str] | None = typer.Option(
+        None, help="Exact logical run ID; repeatable. Otherwise select largest runs"
+    ),
+    top: int = typer.Option(
+        5, min=1, help="Initially select this many runs by observed active time"
+    ),
+    include_benchmarks: bool = typer.Option(
+        False,
+        help="Include labeled benchmarks, smokes and fixtures in initial selection",
+    ),
+    training_clock: str = typer.Option(
+        "training_seconds",
+        help="Etude time clock measuring cumulative active training seconds",
+    ),
+) -> None:
+    """Select and aggregate saved training runs; never launch compute."""
+    from pathlib import Path
+
+    from manabot.training.time_cohort import write_cohort_report
+    from manabot.training.time_sources import load_time_sources
+
+    try:
+        cohort = load_time_sources(source, training_clock=training_clock)
+        target = write_cohort_report(
+            cohort,
+            Path(out),
+            selected=run,
+            top=top,
+            include_benchmarks=include_benchmarks,
+        )
+    except ImportError as error:
+        raise typer.BadParameter(
+            "Install report dependencies: uv sync --extra reports"
+        ) from error
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
+    typer.echo(
+        f"{target}: {len(cohort.runs)} logical runs; {len(cohort.warnings)} source/coverage warnings"
+    )
+    if not cohort.runs:
+        raise typer.Exit(1)
+
+
 @app.command("belief-demo")
 def belief_demo_command() -> None:
     """Prove generated and supplied beliefs use one decision core."""

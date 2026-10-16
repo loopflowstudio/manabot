@@ -524,19 +524,21 @@ def _training_time(evidence: ReportEvidence, output: Path) -> str:
 
 
 def write_time_profile(evidence: ReportEvidence, output: Path) -> Path:
-    """Write a standalone training-only report and its auditable timing data."""
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        '<!doctype html><html lang="en"><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Training time profile · manabot</title><style>"
-        + DASHBOARD_CSS
-        + "</style><main><h1>Training time profile</h1>"
-        + "<p>Saved evidence only. No training, evaluation or network access.</p>"
-        + _training_time(evidence, output)
-        + "</main></html>"
+    """Write a selectable training cohort from existing offline evidence."""
+    from manabot.training.time_cohort import (
+        TimingSource,
+        native_cohort,
+        write_cohort_report,
     )
-    return output
+
+    sources = tuple(
+        TimingSource(str(p.relative_to(evidence.root)), file_sha256(p))
+        for p in evidence.paths
+        if p.name in {"run.json", "experiment.json"}
+    )
+    return write_cohort_report(
+        native_cohort(evidence.runs, evidence.executions, sources), output
+    )
 
 
 def write_dashboard(

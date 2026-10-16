@@ -23,6 +23,10 @@ dependencies = [
 manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
+reports = [
+    "etude-sdk[s3]==0.1.1 ; python_version >= '3.12'",
+    "matplotlib>=3.9",
+]
 artifacts = [
     "boto3>=1.35.0",
 ]
