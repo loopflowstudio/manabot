@@ -27,6 +27,22 @@ def test_study_is_balanced_and_keeps_proofs_out_of_timing() -> None:
                 assert all(c.updates == 16 for c in selected)
 
 
+def test_large_model_group_retains_the_full_matched_comparison() -> None:
+    selected = cases("large-64")
+    assert len(selected) == 8
+    assert selected == [
+        c for c in cases() if (c.width, c.layers, c.streams) == (384, 8, 64)
+    ]
+    assert [c.profile for c in selected if not c.proof] == [
+        False,
+        True,
+        True,
+        False,
+        False,
+        True,
+    ]
+
+
 def test_study_child_retains_real_training_and_profile(tmp_path: Path) -> None:
     (tmp_path / "baseline.json").write_text(recipe().model_dump_json())
     case = Case(

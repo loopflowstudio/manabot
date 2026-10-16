@@ -1,0 +1,53 @@
+Basic GPU training attribution, focused cohort — prospective, 2026-10-15
+
+Question: in the width384/eight-layer,64-stream recipe used by historical longer
+training, which measured collection boundaries account for elapsed GPU training?
+Prediction: collection is >=60% of active collection+learning time; learner policy
+inference/action handling plus opponent policy account for >=50% of collection.
+These are host wall intervals including existing device waits, not kernel activity.
+The prediction is refuted if either fraction is lower in valid timed repetitions.
+
+This is a separate admission, basic-profile-002, contingent on provider-confirmed
+deletion and accounting of001.001reported incomplete study coverage; at protocol
+writing its large output archive and completion record were still unavailable.
+Do not replace001, infer its missing cells, extend its deadline or call002a retry
+within001. Retain every eventual001result and operational failure separately.
+
+Use experiments.runners.training_profile --group large-64 --artifacts OUTPUT.
+The group contains the same eight cases from001's frozen matrix, preserving the
+recipe and work: two deterministic proofs with3updates, then six ordinary16-update
+cells in off/on/on/off/off/on order. All64streams x8transitions, seed10349,
+width384/depth8/feedforward1536, scalar Ataraxos MOVE, oneTorchCPUthread/nativeworker,
+FP32/TF32off. No evaluations, PyTorch traces, extra CUDA synchronization, changed
+optimizer, model, collection or learning implementation. Current worldw6 differs
+from the historical source: that L4 run is context, never a paired timing control.
+
+One RTX5090 <=$1.25/h, >=8vCPU/48GBRAM, one attempt. Reserve$3within the new$25
+allowance, retain$2ancillary reserve, job30min/$2 and rental45min. Whole study900s;
+stage110s/recipe115s/child125s, no new case with <125sleft. Source committed,
+published and read back completely before admission. No second concurrent rental.
+
+Exact proof gates: all three collection/RNG/action/seed/buffer witnesses and final
+raw/EMA/Adam hashes and scientific diagnostics must match off/on. Proof settings
+are full deterministic algorithms and CUBLAS_WORKSPACE_CONFIG=:4096:8. Ordinary
+cells remove that setting; proofs never enter timing summaries. Ordinary runs
+retain full learned-state witnesses without claiming exact CUDA reproducibility.
+
+Observer gate: all six timing cells must complete16updates. Median complete-run
+on/off ratio must be within5%; retain every replicate and first-to-last-update
+interval as well as whole-run numbers. If failed/incomplete, diagnostic fractions
+remain labeled instrumented and no ordinary performance/adoption claim follows.
+Missing cases, failed deadlines and contradictory counters remain visible.
+
+Archive delivery: independent metadata archive sorts first; complete evidence is
+losslessly split into64MiBcompressed objects with ordered sizes/SHA256 index. Keep
+all model/database exports, source/native hashes, hardware/quota receipts and logs.
+Packaging occurs after measured training. Per-case status is printed immediately.
+Verify the metadata against its manifest and transport hash; verify every complete
+archive member before claiming complete artifact recovery. Missing binary parts
+are an explicit recovery gap, not grounds to invent or discard timings.
+
+Strongest confounds: an early16-update/single-seed window is not a long trained
+policy; sequential host intervals do not distinguish CPU dispatch from GPU work;
+one rental does not isolate host variation. This study chooses the next boundary
+to investigate. It makes no playing-strength, long-training or speedup claim.

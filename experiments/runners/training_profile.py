@@ -16,6 +16,7 @@ import platform
 import subprocess
 import sys
 import time
+from typing import Literal
 
 from pydantic import BaseModel, Field
 import torch
@@ -24,6 +25,7 @@ from experiments.runners.inference_preparation import (
     checkpoint_witnesses,
     collection_witnesses,
 )
+from experiments.runners.profile_artifacts import package
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.models import TrainingRegime, TrainSelfPlay
 from manabot.training.source_bundle import SourceBundle, source_commit
@@ -40,7 +42,7 @@ class Case(BaseModel):
     proof: bool = False
 
 
-def cases() -> list[Case]:
+def cases(group: Literal["all", "large-64"] = "all") -> list[Case]:
     result = [
         Case(
             name=f"proof-s{streams}-{'on' if enabled else 'off'}",
@@ -66,6 +68,8 @@ def cases() -> list[Case]:
                         profile=enabled,
                     )
                 )
+    if group == "large-64":
+        return [c for c in result if (c.width, c.layers, c.streams) == (384, 8, 64)]
     return result
 
 
@@ -121,7 +125,9 @@ def _digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def study(out: Path, expected_gpu: str) -> None:
+def study(
+    out: Path, expected_gpu: str, group: Literal["all", "large-64"] = "all"
+) -> None:
     out.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
     bundle = SourceBundle.model_validate(config["source"])
@@ -156,7 +162,7 @@ def study(out: Path, expected_gpu: str) -> None:
     (out / "baseline.json").write_bytes(
         Path("experiments/regimes/gpu-training-profile.json").read_bytes()
     )
-    trials = cases()
+    trials = cases(group)
     deadline = time.monotonic() + 900
     statuses: list[dict[str, str | int | float | None]] = []
     try:
@@ -200,6 +206,7 @@ def study(out: Path, expected_gpu: str) -> None:
                 status.update(status="timeout")
             finally:
                 status["process_seconds"] = time.monotonic() - started
+                print(json.dumps(status), flush=True)
                 atomic_json(
                     out / "status.json",
                     {
@@ -236,11 +243,17 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--expected-gpu")
     parser.add_argument("--case", type=Case.model_validate_json)
+    parser.add_argument("--group", choices=("all", "large-64"), default="all")
+    parser.add_argument("--artifacts", type=Path)
     args = parser.parse_args()
     if args.case:
         child(args.out, args.case)
     elif args.expected_gpu:
-        study(args.out, args.expected_gpu)
+        try:
+            study(args.out, args.expected_gpu, args.group)
+        finally:
+            if args.artifacts and (args.out / "manifest.json").is_file():
+                package(args.out, args.artifacts)
     else:
         parser.error("--expected-gpu is required for a study")
 
