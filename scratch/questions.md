@@ -392,8 +392,7 @@ controller PID50923 services the queue; it performs no training/evaluation.
 Receipt/log: `.runs/mtg122/w6-cadence-launch.json`, `cadence-controller.json`,
 `cadence-controller.log`. It was observed alive with successor queued behind
 `335bd645dafe`; this is not successor launch or midpoint strength evidence.
-Task periodic automation is disabled and CI watcher stopped; neither owns this
-scientific queue. Seven focused software checks passed; no local science ran.
+Seven focused software checks passed; no local science ran.
 
 Jack Heart approved a complementary GPU study: three seeds ×25k updates,
 $25 inclusive cap, post-training evaluations on Mini without displacing its10k
