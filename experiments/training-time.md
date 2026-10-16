@@ -85,3 +85,15 @@ the complete evidence is split into 64 MiB compressed objects with ordered hashe
 Local tests reconstruct every original file and check independently readable
 metadata. Training behavior and measured model exports are unchanged. This
 repairs evidence delivery; it does not establish a GPU throughput improvement.
+
+## Basic-profile-002: no training start
+
+Run `5f2c526b69b7`, measured source `7d00992a`, ended
+`lost / machine_lost_before_start` on 2026-10-16 at 02:23 UTC. Its session output
+prefix contains no worker receipt, job claim, log or artifact. The eight planned
+cells therefore supply no measurements. The bootstrap failure mechanism remains
+unknown; absence of a claim does not identify a failed download or provider fault.
+[Failure evidence](data/training-time/basic-profile-002.json) retains the plan and
+provider-confirmed cleanup. Estimated rental cost is $0.0453, reserved as $0.25
+conservatively. The protocol declares one separate operational replication003
+with unchanged measured source, work, predictions, gates and limits.
