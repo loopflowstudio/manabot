@@ -25,6 +25,7 @@ from experiments.runners.inference_preparation import (
     checkpoint_witnesses,
     collection_witnesses,
 )
+from experiments.runners.learner_witnesses import learner_witnesses
 from experiments.runners.profile_artifacts import package
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.models import TrainingRegime, TrainSelfPlay
@@ -40,9 +41,36 @@ class Case(BaseModel):
     profile: bool
     updates: int = Field(default=16, gt=0)
     proof: bool = False
+    diagnostic: bool = False
 
 
-def cases(group: Literal["all", "large-64"] = "all") -> list[Case]:
+Group = Literal["all", "large-64", "numerical-64"]
+
+
+def cases(group: Group = "all") -> list[Case]:
+    if group == "numerical-64":
+        return [
+            Case(
+                name=f"diagnostic-{repeat}-{'deterministic' if proof else 'ordinary'}-{'on' if enabled else 'off'}",
+                width=384,
+                layers=8,
+                streams=64,
+                profile=enabled,
+                updates=3 if proof else 16,
+                proof=proof,
+                diagnostic=True,
+            )
+            for repeat, (proof, enabled) in enumerate(
+                (
+                    (True, False),
+                    (True, False),
+                    (True, True),
+                    (True, True),
+                    (False, False),
+                    (False, False),
+                )
+            )
+        ]
     result = [
         Case(
             name=f"proof-s{streams}-{'on' if enabled else 'off'}",
@@ -90,7 +118,9 @@ def child(root: Path, case: Case, *, device: str = "cuda") -> None:
     stage.execution.device = device
     stage.execution.threads, stage.execution.workers = 1, 1
     stage.execution.profile_collection = case.profile
-    stage.execution.wall_seconds, recipe.wall_seconds = 110, 115
+    stage.execution.wall_seconds, recipe.wall_seconds = (
+        (280, 285) if case.diagnostic else (110, 115)
+    )
     recipe = TrainingRegime.model_validate(recipe.model_dump())
     out = root / case.name
     out.mkdir()
@@ -98,8 +128,11 @@ def child(root: Path, case: Case, *, device: str = "cuda") -> None:
     atomic_json(out / "regime.json", recipe.model_dump(mode="json"))
     if device == "cuda":
         torch.cuda.reset_peak_memory_stats()
-    context = collection_witnesses(out) if case.proof else nullcontext()
-    with context, VerifyStore(out / "training.sqlite") as store:
+    context = (
+        collection_witnesses(out) if case.proof or case.diagnostic else nullcontext()
+    )
+    learner = learner_witnesses(out) if case.diagnostic else nullcontext()
+    with context, learner, VerifyStore(out / "training.sqlite") as store:
         run = execute_regime(recipe, 10349, out / "run", store)
     atomic_json(out / "witnesses.json", checkpoint_witnesses(out / "run"))
     atomic_json(
@@ -113,7 +146,10 @@ def child(root: Path, case: Case, *, device: str = "cuda") -> None:
             "peak_reserved_bytes": torch.cuda.max_memory_reserved()
             if device == "cuda"
             else None,
-            "timing_basis": "host wall intervals; existing collection/learning synchronization only",
+            "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+            if case.diagnostic
+            else "host wall intervals; existing collection/learning synchronization only",
+            "diagnostic_only": case.diagnostic,
         },
     )
     if run.status != "completed":
@@ -125,9 +161,7 @@ def _digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def study(
-    out: Path, expected_gpu: str, group: Literal["all", "large-64"] = "all"
-) -> None:
+def study(out: Path, expected_gpu: str, group: Group = "all") -> None:
     out.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
     bundle = SourceBundle.model_validate(config["source"])
@@ -163,12 +197,13 @@ def study(
         Path("experiments/regimes/gpu-training-profile.json").read_bytes()
     )
     trials = cases(group)
-    deadline = time.monotonic() + 900
+    deadline = time.monotonic() + (1200 if group == "numerical-64" else 900)
     statuses: list[dict[str, str | int | float | None]] = []
     try:
         for case in trials:
+            child_seconds = 300 if case.diagnostic else 125
             remaining = deadline - time.monotonic()
-            if remaining < 125:
+            if remaining < child_seconds:
                 statuses.append({"name": case.name, "status": "not_started_deadline"})
                 continue
             started = time.monotonic()
@@ -195,7 +230,7 @@ def study(
                         ],
                         stdout=log,
                         stderr=subprocess.STDOUT,
-                        timeout=125,
+                        timeout=child_seconds,
                         env=environment,
                     )
                 status.update(
@@ -243,7 +278,9 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--expected-gpu")
     parser.add_argument("--case", type=Case.model_validate_json)
-    parser.add_argument("--group", choices=("all", "large-64"), default="all")
+    parser.add_argument(
+        "--group", choices=("all", "large-64", "numerical-64"), default="all"
+    )
     parser.add_argument("--artifacts", type=Path)
     args = parser.parse_args()
     if args.case:

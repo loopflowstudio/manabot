@@ -1,0 +1,51 @@
+GPU learner boundary diagnosis — prospective, 2026-10-16
+
+Question: does the deterministic baseline itself diverge, and at which recorded
+boundary does divergence first appear? Study003's timer-off ordinary run also
+contains a finite coordinate movement293.454, versus the intended Adam bound
+0.0130134. Neither that failure nor its smaller proof drift is attributed to
+timers, hardware, or a specific backend without separating evidence.
+
+Use the existing training_profile runner, group numerical-64. Six fresh-process
+cases, in declared order: deterministic off/off/on/on (three updates each), then
+ordinary off/off (16updates each). All cases use learner and collection witnesses;
+none supplies performance evidence. Same width384/depth8/feedforward1536,
+64streams/8transitions, seed10349, scalar Ataraxos MOVE, FP32/TF32off, one CPU
+thread/native worker and current w6 recipe as003. Deterministic cases set full
+Torch deterministic algorithms and CUBLAS_WORKSPACE_CONFIG=:4096:8. Ordinary
+cases remove that workspace setting and use the ordinary algorithm mode.
+No PyTorch tracing, optimizer/backend intervention, evaluation or learning change.
+
+Record initial/final raw, EMA and Adam witnesses, full collection witnesses,
+ordered learning input/output/target hashes, Torch CPU/CUDA RNG witnesses,
+runtime determinism flags, pre-step parameters, clipped gradients, Adam states,
+post-step parameter hashes and maximum coordinate movement. Each actual forward,
+backward and optimizer step executes once. Hashing transfers/synchronizes data;
+observed durations are diagnostic overhead, not ordinary throughput or timer cost.
+Flush JSONL after every event; metadata archive includes it. On the first observed
+optimizer-step movement >0.01, retain before/after weights and optimizer state.
+This trigger is not a new acceptance tolerance. It will not localize a change
+outside the wrapped step by itself; collection/update hashes supply those bounds.
+
+Compare off/off before off/on: exact initial state, collection trajectory and RNG,
+then ordered learner fields and final state. Report the first differing boundary
+and its prerequisite fields, every missing/failed case, all drift magnitudes
+available, and whether the large movement recurs. Same-input forward divergence,
+same-loss/parameter gradient divergence and same-gradient Adam divergence are
+different observations. A non-recurrence does not clear the003outlier. Observer
+effects and shared backend/hardware remain possible; this study identifies a
+boundary, not a root cause by resemblance. No prior gate is relaxed.
+
+One RTX5090 <=$1.25/hour, >=8vCPU/48GBRAM, no concurrent rental, max_attempts1.
+Reserve$3inside the new$25budget, retaining prior conservative$1.77and$2ancillary.
+Stage280s/recipe285s/child300s; whole study1200s, no case starts with <300sleft.
+Setup cap900s; job39minutes/$2; pool rental45minutes. Commit and publish code,
+verify complete source readback, and confirm prior pods deleted before admission.
+No extension or automatic retry. Keep all model/database outputs in indexed
+64MiB compressed parts and verify every member before claiming full recovery.
+Provider-confirmed deletion and conservative accounting close the admission.
+
+Local validation before admission: complete CPU baseline versus diagnostic learned
+state exact, repeated diagnostic JSONL exact; injected large movement retained once
+and patches restored on exception; six-cell plan and full archive roundtrip checked.
+Eight focused tests pass. No existing production profiling default changes.

@@ -87,7 +87,7 @@ def package(root: Path, destination: Path, *, part_bytes: int = 64 * 1024**2) ->
     metadata = destination / "00-training-metadata.tar.gz"
     with tarfile.open(metadata, "w:gz", compresslevel=1) as archive:
         for path in paths:
-            if path.suffix in {".json", ".log", ".txt"}:
+            if path.suffix in {".json", ".jsonl", ".log", ".txt"}:
                 archive.add(path, arcname=f"training-evidence/{path.relative_to(root)}")
     with _Parts(destination, part_bytes) as parts:
         with gzip.GzipFile(

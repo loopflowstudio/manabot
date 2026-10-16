@@ -18,6 +18,7 @@ def test_bounded_parts_reconstruct_every_original_file(tmp_path: Path) -> None:
     files = {
         "manifest.json": b"[]",
         "case/run/run.json": b'{"seconds": 42}',
+        "case/learner-witnesses.jsonl": b'{"kind": "targets"}\n',
         "case/model.pt": random.Random(37).randbytes(100_000),
         "case/training.sqlite": b"retained database",
     }
@@ -32,6 +33,7 @@ def test_bounded_parts_reconstruct_every_original_file(tmp_path: Path) -> None:
         assert set(archive.getnames()) == {
             "training-evidence/manifest.json",
             "training-evidence/case/run/run.json",
+            "training-evidence/case/learner-witnesses.jsonl",
         }
         assert (
             archive.extractfile("training-evidence/case/run/run.json").read()
