@@ -29,6 +29,11 @@ class Deadlines:
         return deadline
 
 
+def project_interpreter(root: Path) -> str:
+    # Resolving the executable symlink bypasses pyvenv.cfg and loses dependencies.
+    return str(root.absolute() / ".venv" / "bin" / "python")
+
+
 def write_json(path: Path, value: dict[str, object]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, indent=2) + "\n")
@@ -98,7 +103,7 @@ def main() -> None:
         "setup", ["bash", "scripts/benchmarks/setup-worker-gpu.sh"], 600
     )
     if code == 0:
-        interpreter = str(Path(".venv/bin/python").resolve())
+        interpreter = project_interpreter(Path.cwd())
         code = worker.command(
             "cuda-admission",
             [

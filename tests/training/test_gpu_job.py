@@ -2,19 +2,35 @@
 
 import json
 from pathlib import Path
+import subprocess
 import sys
 import time
+import venv
 
 import pytest
 import torch
 
 from experiments.runners.cuda_admission import diagnose
 from experiments.runners.etude_progress import ProgressStore
-from experiments.runners.gpu_job import Deadlines, Worker
+from experiments.runners.gpu_job import Deadlines, Worker, project_interpreter
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.verify.store import VerifyStore
 from tests.training.test_recovery import assert_learning_diagnostics_equal, recipe
+
+
+def test_worker_uses_project_environment_through_python_symlink(tmp_path: Path) -> None:
+    environment = tmp_path / ".venv"
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(environment)
+    interpreter = project_interpreter(tmp_path)
+    assert Path(interpreter).is_symlink()
+    result = subprocess.run(
+        [interpreter, "-c", "import sys; print(sys.prefix)"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert Path(result.stdout.strip()) == environment
 
 
 def test_cuda_failure_keeps_diagnostics_without_exposing_credentials(
