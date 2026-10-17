@@ -1,5 +1,11 @@
 """Freeze the same learner across three worlds; no scientific execution."""
 
+from datetime import datetime, timedelta, timezone
+import json
+import os
+from pathlib import Path
+from unittest.mock import Mock
+
 import pytest
 
 from experiments.runners.environment_complexity import calibrate, regime, roster
@@ -47,3 +53,57 @@ def test_gpu_pool_recipes_share_64_stream_learning_contract() -> None:
     historical = regime("l1", updates=100, seconds=600)
     assert historical.stages[0].streams == 4
     assert historical.stages[0].execution.device == "cpu"
+
+
+def test_gpu_calibration_requires_cuda_without_cpu_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETUDE_RUN", "fixture-only")
+    monkeypatch.setenv("ETUDE_DEADLINE", "2099-01-01T00:00:00+00:00")
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    with pytest.raises(ValueError, match="requires CUDA; no CPU fallback"):
+        calibrate(target="gpu")
+
+
+def test_mini_calibration_remains_remote_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETUDE_RUN", "fixture-only")
+    monkeypatch.setenv("ETUDE_DEADLINE", "2099-01-01T00:00:00+00:00")
+    monkeypatch.setattr("socket.gethostname", lambda: "local-fixture")
+    with pytest.raises(ValueError, match="Mini-only"):
+        calibrate()
+
+
+def test_gpu_calibration_selects_declared_recipe_and_retains_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """No learning runs: inspect the real boundary at the executor call."""
+    for key, value in {
+        "ETUDE_RUN": "fixture-only",
+        "ETUDE_DEADLINE": (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
+        "ETUDE_SEED": "12250",
+        "ETUDE_OUTPUT_DIR": str(tmp_path),
+        "ETUDE_TRACK_DIR": str(tmp_path / "tracking"),
+        "ETUDE_STOP_FILE": str(tmp_path / "stop"),
+    }.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr("torch.cuda.is_available", lambda: True)
+    executor = Mock(side_effect=RuntimeError("fixture stop before learning"))
+    monkeypatch.setattr(
+        "experiments.runners.environment_complexity.execute_regime", executor
+    )
+    with pytest.raises(RuntimeError, match="fixture stop"):
+        calibrate(target="gpu")
+    expected = regime("l1", updates=100, seconds=1200, streams=64, device="cuda")
+    assert executor.call_args.args[0] == expected
+    assert executor.call_args.args[1] == 12250
+    receipt = json.loads((tmp_path / "calibration.json").read_text())
+    assert receipt["status"] == "failed"
+    assert receipt["streams"] == 64
+    assert receipt["device"] == "cuda"
+    assert receipt["pools"] == []
+    assert not (tmp_path / "etude-result.json").exists()
+    assert os.environ["ETUDE_RUN"] == "fixture-only"
+    assert os.environ["ETUDE_TRACK_DIR"] == str(tmp_path / "tracking")

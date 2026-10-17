@@ -5,6 +5,7 @@ receipts retain the learning and complete-game evidence. Calibration uses the
 reserved fourth seed, not a scored seed; failure never becomes a smaller cohort.
 """
 
+import argparse
 from datetime import datetime, timezone
 import json
 import os
@@ -12,6 +13,8 @@ from pathlib import Path
 import socket
 import time
 from typing import Literal
+
+import torch
 
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.training.execution import execute_regime
@@ -59,15 +62,27 @@ def regime(
     return TrainingRegime.model_validate(recipe.model_dump())
 
 
-def calibrate() -> None:
-    """One remote hour at most, including the launcher's setup/build time."""
+def calibrate(*, target: Literal["mini", "gpu"] = "mini") -> None:
+    """Measure all pools inside one bounded SDK allocation, without fallback.
+
+    Historical Mini recipes remain unchanged. GPU calibration retains the
+    64-transition horizon while increasing streams to 64; its receipts cannot
+    admit the historical four-stream campaign. The SDK bounds inclusive cost.
+    """
     env = os.environ
     if not env.get("ETUDE_RUN") or not env.get("ETUDE_DEADLINE"):
         raise ValueError("calibration requires an Etude-owned remote allocation")
-    if not socket.gethostname().startswith("mini-heart"):
+    if target not in ("mini", "gpu"):
+        raise ValueError("unknown calibration target")
+    if target == "gpu" and not torch.cuda.is_available():
+        raise ValueError("GPU calibration requires CUDA; no CPU fallback")
+    if target == "mini" and not socket.gethostname().startswith("mini-heart"):
         raise ValueError(
             "this admitted calibration is Mini-only; local execution forbidden"
         )
+    streams: Literal[4, 64] = 64 if target == "gpu" else 4
+    device: Literal["cpu", "cuda"] = "cuda" if target == "gpu" else "cpu"
+    training_seconds = 1200 if target == "gpu" else 600
     if int(env["ETUDE_SEED"]) != 12250:
         raise ValueError("calibration requires reserved seed 12250")
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
@@ -81,6 +96,10 @@ def calibrate() -> None:
     receipt: dict[str, object] = {
         "status": "running",
         "host": socket.gethostname(),
+        "target": target,
+        "streams": streams,
+        "device": device,
+        "training_seconds_per_pool": training_seconds,
         "started": datetime.now(timezone.utc).isoformat(),
         "seed": 12250,
         "deadline": deadline,
@@ -89,14 +108,20 @@ def calibrate() -> None:
     completed: list[dict[str, object]] = []
     try:
         for index, pool in enumerate(("l1", "l2", "l3")):
-            if deadline - time.time() < 900:
+            if deadline - time.time() < training_seconds + 300:
                 raise RuntimeError(
                     "insufficient remaining allocation for next calibration pool"
                 )
             # Separate child tracker identities retain a single outer SDK allocation.
             env["ETUDE_RUN"] = f"{root_run}-{pool}"
             env["ETUDE_TRACK_DIR"] = str(Path(root_tracking) / pool)
-            spec = regime(pool, updates=100, seconds=600)
+            spec = regime(
+                pool,
+                updates=100,
+                seconds=training_seconds,
+                streams=streams,
+                device=device,
+            )
             directory = output / pool
             directory.mkdir()
             (directory / "regime.json").write_text(spec.model_dump_json(indent=2))
@@ -146,7 +171,8 @@ def calibrate() -> None:
                         game_seconds=120,
                     ),
                 )
-                if result.status != "completed":
+                result.validate_cohort()
+                if result.status != "completed" or len(result.rows) != 8:
                     raise RuntimeError(f"{pool}/{anchor} incomplete calibration matrix")
             completed.append(
                 {
@@ -171,4 +197,7 @@ def calibrate() -> None:
 
 
 if __name__ == "__main__":
-    calibrate()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", choices=("mini", "gpu"), default="mini")
+    arguments = parser.parse_args()
+    calibrate(target=arguments.target)
