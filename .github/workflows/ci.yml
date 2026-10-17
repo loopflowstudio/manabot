@@ -117,6 +117,7 @@ jobs:
             tests/training/test_producers.py tests/training/test_inference_preparation.py \
             tests/training/test_basic_profile_study.py tests/training/test_profile_artifacts.py \
             tests/training/test_gpu_job.py tests/training/test_batching_grid.py \
+            tests/training/test_process_tree_rss.py \
             tests/training/test_learner_witnesses.py \
             tests/bench/test_native_variants.py tests/bench/test_pipeline_benchmark.py tests/bench/test_worker_scaling.py \
             tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
