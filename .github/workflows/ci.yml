@@ -120,7 +120,10 @@ jobs:
             tests/training/test_process_tree_rss.py \
             tests/training/test_etude_bootstrap_diagnostics.py \
             tests/training/test_etude_worker_diagnostics.py \
+<<<<<<< HEAD
             tests/training/test_etude_launch_guard.py \
+=======
+>>>>>>> ca04fe2a527c2a1959bc1447404496a2036a0a4e
             tests/training/test_etude_prebuilt_client.py \
             tests/training/test_grouped_grid.py \
             tests/training/test_locked_gpu_setup.py \
