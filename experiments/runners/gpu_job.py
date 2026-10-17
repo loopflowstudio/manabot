@@ -84,6 +84,13 @@ def main() -> None:
     parser.add_argument("--size", choices=("small", "middle", "large"), required=True)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--canary", action="store_true")
+    parser.add_argument(
+        "--study", choices=("size-frontier", "batching-grid"), default="size-frontier"
+    )
+    parser.add_argument(
+        "--streams", type=int, choices=(4, 64, 128, 256, 512), default=4
+    )
+    parser.add_argument("--transitions", type=int, default=131_072)
     args = parser.parse_args()
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -130,6 +137,24 @@ def main() -> None:
             ]
             if args.canary:
                 command.append("--canary")
+            if args.study == "batching-grid":
+                if args.canary:
+                    raise ValueError("Use the separately declared lifecycle canary")
+                command = [
+                    interpreter,
+                    "-m",
+                    "experiments.runners.batching_grid",
+                    "--size",
+                    args.size,
+                    "--seed",
+                    str(args.seed),
+                    "--streams",
+                    str(args.streams),
+                    "--transitions",
+                    str(args.transitions),
+                    "--out",
+                    str(output / "study"),
+                ]
             code = worker.command("training", command, 3600)
     worker.phase("completed" if code == 0 else "failed", exit_code=code)
     raise SystemExit(code)

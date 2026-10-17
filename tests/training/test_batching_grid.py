@@ -1,0 +1,42 @@
+"""Keep grid contrasts on the baseline and bind budgets to actual experience."""
+
+from pathlib import Path
+
+import pytest
+
+from experiments.runners.batching_grid import CAPACITIES, STREAMS, recipe
+from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
+
+
+def test_grid_preserves_baseline_model_and_learning_at_four_streams() -> None:
+    original = TrainingRegime.model_validate_json(
+        Path("experiments/regimes/early-learning-rate-mini-source.json").read_text()
+    )
+    actual = recipe(CAPACITIES[0], 4, 131_072)
+    assert actual.agent == original.agent
+    assert actual.match == original.match
+    assert actual.observation == original.observation
+    assert actual.stages[0].learning == original.stages[0].learning
+    assert actual.stages[0].matchup_curriculum == "cross-balanced"
+    assert actual.world == "w6"
+
+
+def test_all_grid_cells_have_equal_experience_and_schedule_endpoints() -> None:
+    for capacity in CAPACITIES:
+        for streams in STREAMS:
+            spec = recipe(capacity, streams, 131_072)
+            stage = spec.stages[0]
+            assert isinstance(stage, TrainSelfPlay)
+            assert stage.updates * stage.streams * stage.transitions == 131_072
+            assert isinstance(stage.learning, AtaraxosMoveLearning)
+            reference = recipe(CAPACITIES[0], 4, 131_072).stages[0].learning
+            assert isinstance(reference, AtaraxosMoveLearning)
+            assert stage.learning.rates(1) == reference.rates(1)
+            assert stage.learning.rates(stage.updates) == reference.rates(512)
+            assert spec.agent.value_aggregation == "masked_mean"
+
+
+def test_grid_rejects_fractional_or_empty_iterations() -> None:
+    for budget in (0, 1, 131_071):
+        with pytest.raises(ValueError):
+            recipe(CAPACITIES[0], 512, budget)
