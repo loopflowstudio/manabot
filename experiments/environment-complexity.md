@@ -1,14 +1,25 @@
 # MTG-122: learning across environment complexity
 
-## Current disposition — 2026-10-16
+## Current disposition — 2026-10-17
 
-**Deferred behind corrected-world baseline results; not scientifically complete.**
-Jack Heart stopped the bug-affected original comparison after PR288/289 and
-selected reproducing the full-game baseline before further card-pool research.
-Baseline execution, recovery, evaluation and reporting now belong to Intelligence
-Task `fc765e`, not MTG-122. Its [handoff](../docs/plans/corrected-baseline-operations.md)
-records the ownership boundary; current execution state belongs to that Task.
-Baseline results cannot substitute for the three-pool comparison.
+**Reactivated for GPU preparation; not scientifically complete or launch-admitted.**
+Jack Heart selected 64 streams, following MTG-135's findings, and GPU rather than
+Mini for the three-pool experiment. This supersedes the baseline-first deferral.
+Existing baseline execution/recovery/evaluation remains MTG-137 (`fc765e`);
+its running jobs, sources and allocations are not changed or borrowed here.
+A separate inclusive GPU spending cap remains unresolved: historical MTG-122
+allocations were redirected into baseline work, not renewed by this choice.
+No new rental or scored execution follows until bounded admission is resolved.
+
+Use one identical 64-stream model/learner configuration across L1/L2/L3.
+Do not silently inherit the old 1,200-update target or CPU calibration: at
+64 transitions per stream, one update collects 4,096 learner transitions,
+16 times the historical four-stream batch. Training horizon, absolute-iteration
+schedules, timestep-filtered optimizer exposure and evaluation milestones must
+be explicitly frozen with the GPU plan. MTG-135's exact recipe and numerical
+findings must be checked before treating its 64-stream result as transferable.
+Calibration and CPU arena work on the GPU host count toward the inclusive GPU
+allocation; no Mini or local scientific execution is selected for this restart.
 
 The implementation includes vanilla simple-pool content, shared semantic catalog
 binding, ordinary checkpoint admission, an Etude runner and analysis/reporting
@@ -20,7 +31,7 @@ remain historical evidence, not corrected-world learning conclusions.
 Remaining outcomes:
 
 - Re-admit the three-pool contrast on a pinned corrected world, with an explicit
-  remaining resource allocation after the baseline decision. The old allocation
+  64-stream GPU configuration and separately bounded resource allocation. The old allocation
   below is historical, not a fresh reservation.
 - Execute the complete independent-seed/control/evaluation matrix and analyze
   within-pool improvement, uncertainty, costs and failures before concluding
