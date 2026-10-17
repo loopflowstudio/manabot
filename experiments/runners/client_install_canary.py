@@ -17,13 +17,22 @@ from experiments.runners.gpu_job import Deadlines, Worker, project_interpreter
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--locked-setup", type=Path)
+    setup_options = parser.add_mutually_exclusive_group()
+    setup_options.add_argument("--locked-setup", type=Path)
+    setup_options.add_argument("--prebuilt-runtime", help="Pinned runtime manifest SHA256")
     args = parser.parse_args()
     setup = (
         [sys.executable, str(args.locked_setup.resolve())]
         if args.locked_setup is not None
         else ["bash", "scripts/benchmarks/setup-worker-gpu.sh"]
     )
+    if args.prebuilt_runtime is not None:
+        setup = [
+            "/opt/manabot/runtime/bin/python",
+            "/opt/manabot/prebuilt_gpu_setup.py",
+            "--identity",
+            args.prebuilt_runtime,
+        ]
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
     if (output / "worker-status.json").exists():

@@ -139,6 +139,11 @@ CPU defaults and receipt fields retain their prior meaning.
 
 ## Local-disk setup measurement
 
+For the separately admitted lock-bound image comparison, see
+[GPU runtime images](gpu-runtime-image.md). It preserves the frozen training
+dependencies and native source build; measured GPU evidence is required before
+claiming faster startup.
+
 Source and its `.venv` live at `/opt/manabot/repo`, with uv's cache alongside at
 `/opt/manabot/uv-cache`. Only returned evidence and input recipes use `/workspace`.
 The 20 GB pod volume is deleted with the pod; no independent persistent volume is
