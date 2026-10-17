@@ -192,6 +192,21 @@ def complete_retained_first(plan: BaselinePlan, source: Path, output: Path) -> N
         tracker.finish("finished")
 
 
+def _require_first_evaluated(directory: Path) -> None:
+    """Seed1's six fixed endpoint cohorts must already be complete there."""
+    for name in (
+        "0-scripted_greedy-candidate",
+        "0-random-candidate",
+        "10000-scripted_greedy-candidate",
+        "10000-scripted_greedy-control",
+        "10000-random-candidate",
+        "10000-random-control",
+    ):
+        result = json.loads((directory / name / "monitor.json").read_text())
+        if result["status"] != "completed" or len(result["rows"]) != 200:
+            raise ValueError(f"retained seed1 cohort incomplete: {name}")
+
+
 def run() -> None:
     """Execute only inside the authorized Mini allocation, with no retry path."""
     env = os.environ
@@ -207,7 +222,7 @@ def run() -> None:
         output = Path(env["ETUDE_OUTPUT_DIR"])
         output.mkdir(parents=True, exist_ok=True)
         atomic_json(output / "calibrated-plan.json", plan.model_dump(mode="json"))
-        if "retained_first" in config:
+        if "retained_first" in config or "first_evaluated" in config:
             remaining = (
                 datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp() - time.time()
             )
@@ -221,7 +236,12 @@ def run() -> None:
                 raise ValueError(
                     "remaining allocation cannot cover retained evaluation and two monitored fits"
                 )
-            complete_retained_first(plan, Path(config["retained_first"]), output)
+            if "first_evaluated" in config:
+                # Seed1's fixed cohorts already completed in a retained attempt;
+                # only seeds 12262/12263 start here, each from initialization.
+                _require_first_evaluated(Path(config["first_evaluated"]))
+            else:
+                complete_retained_first(plan, Path(config["retained_first"]), output)
             execute(plan, pools=("l3",), seeds=SEEDS[1:], frequent_diagnostics=True)
         else:
             execute(plan, pools=("l3",))

@@ -52,7 +52,9 @@ def test_midpoint_is_export_only() -> None:
         plan.protocol("l3", "random", 5000)
 
 
-def test_future_diagnostic_cadence_is_separate_from_scored_endpoint(tmp_path: Path) -> None:
+def test_future_diagnostic_cadence_is_separate_from_scored_endpoint(
+    tmp_path: Path,
+) -> None:
     from experiments.runners.baseline_monitoring import DiagnosticMonitor
 
     monitor = DiagnosticMonitor(tmp_path / "run.json", tmp_path / "diagnostics")
@@ -115,3 +117,30 @@ def test_retained_first_writes_into_fresh_output(
 
     assert (output / "l3-12261/training/run.json").exists()
     assert evaluated == [output / "l3-12261"]
+
+
+def test_first_evaluated_requires_all_six_complete_cohorts(tmp_path: Path) -> None:
+    import json
+
+    from experiments.runners.corrected_baseline import _require_first_evaluated
+
+    names = (
+        "0-scripted_greedy-candidate",
+        "0-random-candidate",
+        "10000-scripted_greedy-candidate",
+        "10000-scripted_greedy-control",
+        "10000-random-candidate",
+        "10000-random-control",
+    )
+    for name in names:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "monitor.json").write_text(
+            json.dumps({"status": "completed", "rows": [{}] * 200})
+        )
+    _require_first_evaluated(tmp_path)
+
+    (tmp_path / names[-1] / "monitor.json").write_text(
+        json.dumps({"status": "incomplete", "rows": [{}] * 120})
+    )
+    with pytest.raises(ValueError):
+        _require_first_evaluated(tmp_path)
