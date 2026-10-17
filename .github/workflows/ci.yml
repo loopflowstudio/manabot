@@ -119,6 +119,7 @@ jobs:
             tests/training/test_gpu_job.py tests/training/test_batching_grid.py \
             tests/training/test_process_tree_rss.py \
             tests/training/test_etude_bootstrap_diagnostics.py \
+            tests/training/test_etude_prebuilt_client.py \
             tests/training/test_prepared_source.py \
             tests/training/test_source_projection.py tests/training/test_batching_evaluation.py \
             tests/training/test_batching_calibration.py \
