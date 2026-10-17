@@ -1,4 +1,4 @@
-"""Frozen MTG-122 scientific cohort, executed only inside one Mini Etude job.
+"""Frozen MTG-122 scientific cohort, executed only inside a bounded remote Etude job.
 
 A plan is admitted from complete remote calibration, before scoring. The same
 three-seed/four-cell cohort is never reduced to fit a deadline. Failure retains
@@ -87,10 +87,11 @@ class ComplexityPlan(Strict):
     def digest(self) -> str:
         return canonical_sha256(self.model_dump(mode="json"))
 
+    def training_recipe(self, pool: Pool) -> TrainingRegime:
+        return regime(pool, updates=self.updates, seconds=self.training_seconds_per_run)
+
     def experiment(self) -> Experiment:
-        baseline = regime(
-            "l1", updates=self.updates, seconds=self.training_seconds_per_run
-        )
+        baseline = self.training_recipe("l1")
         return Experiment(
             name="mtg122",
             baseline=Baseline.capture("complexity", baseline),
@@ -130,7 +131,49 @@ class ComplexityPlan(Strict):
         )
 
 
-def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPlan:
+class GPUComplexityPlan(ComplexityPlan):
+    """Versioned CUDA contract, separate from historical Mini recipe identities.
+
+    Provider price includes rental hardware/storage; artifact/settlement reserve
+    is additional. Actual calibration charges remain visible even on failure.
+    Launcher limits must be no larger than these admitted seconds and dollars.
+    """
+
+    schema_version: Literal[2] = 2
+    streams: Literal[64] = 64
+    device: Literal["cuda"] = "cuda"
+    max_usd_per_hour: float = Field(gt=0)
+    calibration_usd: float = Field(ge=0, le=2)
+    settlement_reserve_usd: Literal[3] = 3
+    inclusive_cap_usd: Literal[35] = 35
+
+    @model_validator(mode="after")
+    def spending_cap(self) -> "GPUComplexityPlan":
+        rental = self.total_seconds / 3600 * self.max_usd_per_hour
+        if (
+            rental > 30
+            or rental + self.calibration_usd + self.settlement_reserve_usd > 35
+        ):
+            raise ValueError("GPU cohort exceeds the inclusive $35 allocation")
+        return self
+
+    def training_recipe(self, pool: Pool) -> TrainingRegime:
+        return regime(
+            pool,
+            updates=self.updates,
+            seconds=self.training_seconds_per_run,
+            streams=self.streams,
+            device=self.device,
+        )
+
+
+def calibrated_plan(
+    calibration: Path,
+    *,
+    total_seconds: float,
+    gpu_max_usd_per_hour: float | None = None,
+    calibration_usd: float = 0,
+) -> ComplexityPlan:
     """Admit unchanged cohort using 1.5× observed worst block/cell costs.
 
     Sparse calibration extrapolates, not guarantees. The remote guardian and
@@ -148,7 +191,14 @@ def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPla
             or run.updates_through() != 100
         ):
             raise ValueError(f"incomplete calibration training: {pool}")
-        if run.regime != regime(pool, updates=100, seconds=600):
+        expected = regime(
+            pool,
+            updates=100,
+            seconds=1200 if gpu_max_usd_per_hour is not None else 600,
+            streams=64 if gpu_max_usd_per_hour is not None else 4,
+            device="cuda" if gpu_max_usd_per_hour is not None else "cpu",
+        )
+        if run.regime != expected:
             raise ValueError(f"calibration recipe differs: {pool}")
         hashes[str(path.relative_to(calibration))] = file_sha256(path)
         clocks = [0.0] + [
@@ -177,7 +227,14 @@ def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPla
     if slowest <= 0:
         raise ValueError("calibration has no positive measured update cost")
     updates = min(10000, int((7200 - 120) / (1.5 * slowest)) // 100 * 100)
-    return ComplexityPlan(
+    plan_type = ComplexityPlan if gpu_max_usd_per_hour is None else GPUComplexityPlan
+    fields: dict[str, object] = {}
+    if gpu_max_usd_per_hour is not None:
+        fields.update(
+            max_usd_per_hour=gpu_max_usd_per_hour, calibration_usd=calibration_usd
+        )
+    return plan_type(
+        **fields,
         updates=updates,
         training_seconds_per_run=7200,
         total_seconds=total_seconds,
@@ -309,10 +366,13 @@ def execute(
     if frequent_diagnostics and pools != ("l3",):
         raise ValueError("baseline diagnostics require the product matchup")
     env = os.environ
-    if not env.get("ETUDE_RUN") or not socket.gethostname().startswith("mini-heart"):
-        raise ValueError(
-            "scientific campaign requires Etude on Mini, not local execution"
-        )
+    if not env.get("ETUDE_RUN"):
+        raise ValueError("scientific campaign requires an Etude remote allocation")
+    if isinstance(plan, GPUComplexityPlan):
+        if not torch.cuda.is_available():
+            raise ValueError("GPU campaign requires CUDA; no CPU fallback")
+    elif not socket.gethostname().startswith("mini-heart"):
+        raise ValueError("historical campaign requires Mini, not local execution")
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
     if deadline - time.time() < (
         len(pools) * len(selected) * plan.training_seconds_per_run
@@ -446,8 +506,8 @@ def execute(
 
 
 if __name__ == "__main__":
-    execute(
-        ComplexityPlan.model_validate(
-            json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())["plan"]
-        )
+    payload = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())["plan"]
+    plan_type = (
+        GPUComplexityPlan if payload.get("schema_version") == 2 else ComplexityPlan
     )
+    execute(plan_type.model_validate(payload))

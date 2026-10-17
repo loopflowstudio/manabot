@@ -82,6 +82,15 @@ calibration. The fixed 64-transition horizon means 4,096 learner rows/update;
 MTG-135's 64-stream/8-transition measurements cannot supply its timing. Full
 GPU plan admission and source/transport/dependency preflight still precede rental.
 
-Check (2026-10-17): eight declaration/campaign tests and focused Ruff pass;
-the mocked executor proves CUDA recipe selection and failure retention, not GPU
-runtime or scientific evidence. No new rental or scientific execution occurred.
+Check (2026-10-17): fourteen declaration/campaign/memory-guard tests and focused
+Ruff pass. GPU plan v2 binds CUDA/64 streams and the inclusive cost ceiling while
+retaining all 36,000 evaluation games. The existing `c8946070` child-RSS race fix
+is reused without baseline-runner changes. Mocked executor checks establish
+recipe selection/failure retention, not GPU runtime or scientific evidence.
+
+Read-only RunPod quote at 20:52 UTC: L4 available, $0.59/hour, retained in
+`.runs/mtg122/gpu-complexity/quote.json`. The repository-documented `etude/prd`
+secret scope supplied it; `manabot/prd` lacked the provider variable and made no
+provider request. No credentials changed. Remote source-upload, publication and
+setup preflight remain before the uniquely owned calibration rental. No rental
+or scientific execution occurred in this pass.

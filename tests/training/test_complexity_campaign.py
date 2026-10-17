@@ -2,7 +2,11 @@
 
 import pytest
 
-from experiments.runners.complexity_campaign import ComplexityPlan
+from experiments.runners.complexity_campaign import (
+    ComplexityPlan,
+    GPUComplexityPlan,
+    execute,
+)
 
 
 def plan() -> ComplexityPlan:
@@ -38,3 +42,51 @@ def test_allocation_or_cohort_cannot_silently_shrink() -> None:
     ):
         with pytest.raises(ValueError):
             ComplexityPlan.model_validate({**plan().model_dump(), **change})
+
+
+def gpu_plan() -> GPUComplexityPlan:
+    return GPUComplexityPlan.model_validate(
+        {
+            **plan().model_dump(),
+            "schema_version": 2,
+            "total_seconds": 43 * 3600,
+            "evaluation_reserve_seconds": 85000,
+            "max_usd_per_hour": 0.69,
+            "calibration_usd": 2,
+        }
+    )
+
+
+def test_gpu_plan_preserves_cohort_but_changes_bound_recipe() -> None:
+    frozen = gpu_plan()
+    for recipe in frozen.recipes().values():
+        assert recipe.stages[0].streams == 64
+        assert recipe.stages[0].execution.device == "cuda"
+        assert recipe.stages[0].transitions == 64
+    assert frozen.deals(1000) == plan().deals(1000)
+    assert frozen.digest != plan().digest
+    for recipe in plan().recipes().values():
+        assert recipe.stages[0].streams == 4
+        assert recipe.stages[0].execution.device == "cpu"
+
+
+def test_gpu_plan_rejects_overspending_and_unapproved_settings() -> None:
+    for change in (
+        {"max_usd_per_hour": 0.80},
+        {"calibration_usd": 2.01},
+        {"inclusive_cap_usd": 36},
+        {"settlement_reserve_usd": 0},
+        {"streams": 512},
+        {"device": "cpu"},
+    ):
+        with pytest.raises(ValueError):
+            GPUComplexityPlan.model_validate({**gpu_plan().model_dump(), **change})
+
+
+def test_gpu_campaign_rejects_cpu_before_starting_any_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETUDE_RUN", "fixture-only")
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    with pytest.raises(ValueError, match="requires CUDA"):
+        execute(gpu_plan())
