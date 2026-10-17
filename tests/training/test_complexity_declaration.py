@@ -27,3 +27,23 @@ def test_calibration_rejects_unowned_local_execution(
     monkeypatch.delenv("ETUDE_RUN", raising=False)
     with pytest.raises(ValueError, match="Etude-owned"):
         calibrate()
+
+
+def test_gpu_pool_recipes_share_64_stream_learning_contract() -> None:
+    """GPU preparation does not silently change historical recipes or horizons."""
+    common: list[dict[str, object]] = []
+    for pool in ("l1", "l2", "l3"):
+        recipe = regime(pool, updates=100, seconds=600, streams=64, device="cuda")
+        stage = recipe.stages[0]
+        assert stage.streams == 64
+        assert stage.transitions == 64
+        assert stage.execution.device == "cuda"
+        assert stage.streams * stage.transitions == 4096
+        value = recipe.model_dump()
+        value.pop("id")
+        value.pop("match")
+        common.append(value)
+    assert common[0] == common[1] == common[2]
+    historical = regime("l1", updates=100, seconds=600)
+    assert historical.stages[0].streams == 4
+    assert historical.stages[0].execution.device == "cpu"

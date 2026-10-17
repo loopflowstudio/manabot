@@ -7,9 +7,14 @@ Jack Heart selected 64 streams, following MTG-135's findings, and GPU rather tha
 Mini for the three-pool experiment. This supersedes the baseline-first deferral.
 Existing baseline execution/recovery/evaluation remains MTG-137 (`fc765e`);
 its running jobs, sources and allocations are not changed or borrowed here.
-A separate inclusive GPU spending cap remains unresolved: historical MTG-122
-allocations were redirected into baseline work, not renewed by this choice.
-No new rental or scored execution follows until bounded admission is resolved.
+Jack Heart authorized a separate **$35 inclusive GPU restart cap** on
+2026-10-17. Charge calibration, setup, training, all evaluation, failed attempts,
+artifact transfer/storage and cleanup to it. Historical baseline allocations
+remain separately accounted; this is not another $35 for MTG-137.
+Reserve at most $2 for initial calibration and $3 for artifact/settlement costs,
+leaving at most $30 for admitted scientific execution. No automatic paid retries.
+The full three-seed/three-pool evaluation matrix must fit measured admission;
+otherwise report the capacity shortfall before renting for science.
 
 Use one identical 64-stream model/learner configuration across L1/L2/L3.
 Do not silently inherit the old 1,200-update target or CPU calibration: at

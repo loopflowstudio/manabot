@@ -33,7 +33,14 @@ def roster(pool: Pool) -> AuthoredMatchup:
     return AuthoredMatchup(pack_key=PACK, role_a=roles[0], role_b=roles[1])
 
 
-def regime(pool: Pool, *, updates: int, seconds: float) -> TrainingRegime:
+def regime(
+    pool: Pool,
+    *,
+    updates: int,
+    seconds: float,
+    streams: Literal[4, 64] = 4,
+    device: Literal["cpu", "cuda"] = "cpu",
+) -> TrainingRegime:
     """Identical learner and catalog; only exact deck composition changes."""
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
@@ -45,6 +52,8 @@ def regime(pool: Pool, *, updates: int, seconds: float) -> TrainingRegime:
     stage = recipe.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = updates
+    stage.streams = streams
+    stage.execution.device = device
     stage.matchup_curriculum = "cross-balanced"
     stage.execution.wall_seconds = seconds
     return TrainingRegime.model_validate(recipe.model_dump())
