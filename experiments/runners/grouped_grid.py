@@ -17,6 +17,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import sys
 import threading
 import time
 
@@ -139,7 +140,13 @@ def reporting(worker: Worker, cells: list[Cell], completed: int) -> Iterator[Non
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cell", type=Cell.parse, action="append", required=True)
+    parser.add_argument("--locked-setup", type=Path)
     args = parser.parse_args()
+    setup = (
+        [sys.executable, str(args.locked_setup.resolve())]
+        if args.locked_setup is not None
+        else ["bash", "scripts/benchmarks/setup-worker-gpu.sh"]
+    )
     cells: list[Cell] = args.cell
     if len(cells) > 5 or len(set(cells)) != len(cells):
         parser.error("Declare one to five unique cells")
@@ -159,9 +166,7 @@ def main() -> None:
     )
     code = worker.command("nvidia-smi", ["nvidia-smi", "-q"], 15)
     if code == 0:
-        code = worker.command(
-            "setup", ["bash", "scripts/benchmarks/setup-worker-gpu.sh"], 1200
-        )
+        code = worker.command("setup", setup, 1200)
     interpreter = project_interpreter(Path.cwd())
     if code == 0:
         code = worker.command(
