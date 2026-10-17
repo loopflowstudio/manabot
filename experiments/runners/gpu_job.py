@@ -9,6 +9,7 @@ import argparse
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -32,6 +33,13 @@ class Deadlines:
 def project_interpreter(root: Path) -> str:
     # Resolving the executable symlink bypasses pyvenv.cfg and loses dependencies.
     return str(root.absolute() / ".venv" / "bin" / "python")
+
+
+def _positive_seconds(value: str) -> float:
+    seconds = float(value)
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("training seconds must be finite and positive")
+    return seconds
 
 
 def write_json(path: Path, value: dict[str, object]) -> None:
@@ -96,11 +104,14 @@ def main() -> None:
     )
     parser.add_argument("--transitions", type=int, default=131_072)
     parser.add_argument("--checkpoint-transitions", type=int, nargs="+")
+    parser.add_argument("--training-seconds", type=_positive_seconds)
     args = parser.parse_args()
     if args.study == "size-frontier" and args.size not in ("small", "middle", "large"):
         parser.error("The added width/depth contrasts require --study batching-grid")
     if args.study != "batching-grid" and args.checkpoint_transitions is not None:
         parser.error("Transition checkpoints require --study batching-grid")
+    if args.study != "batching-grid" and args.training_seconds is not None:
+        parser.error("Explicit training seconds require --study batching-grid")
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
@@ -169,7 +180,17 @@ def main() -> None:
                         "--checkpoint-transitions",
                         *(str(n) for n in args.checkpoint_transitions),
                     ]
-            code = worker.command("training", command, 3600)
+                if args.training_seconds is not None:
+                    command += ["--seconds", str(args.training_seconds)]
+            # An explicit learner limit also sets the worker limit, with time for
+            # the learner to settle its record. The rental's retention reserve
+            # still caps this phase; this option never extends the outer budget.
+            training_limit = (
+                args.training_seconds + 60
+                if args.training_seconds is not None
+                else 3600
+            )
+            code = worker.command("training", command, training_limit)
     worker.phase("completed" if code == 0 else "failed", exit_code=code)
     raise SystemExit(code)
 

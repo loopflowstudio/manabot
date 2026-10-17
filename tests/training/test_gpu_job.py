@@ -12,7 +12,7 @@ import torch
 
 from experiments.runners.cuda_admission import diagnose
 from experiments.runners.etude_progress import ProgressStore
-from experiments.runners.gpu_job import Deadlines, Worker, project_interpreter
+from experiments.runners.gpu_job import Deadlines, Worker, main, project_interpreter
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.verify.store import VerifyStore
@@ -54,6 +54,74 @@ def test_expired_reserve_prevents_new_work(tmp_path: Path) -> None:
     with pytest.raises(TimeoutError, match="retention reserve"):
         worker.command("forbidden", ["false"], 1)
     assert not (tmp_path / "forbidden.log").exists()
+
+
+def test_explicit_learning_limit_reaches_both_learner_and_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: dict[str, tuple[list[str], float]] = {}
+
+    def command(self: Worker, name: str, args: list[str], seconds: float) -> int:
+        calls[name] = (args, seconds)
+        return 0
+
+    def ignore_signal(signum: int, handler: object) -> None:
+        pass
+
+    monkeypatch.setattr(Worker, "command", command)
+    monkeypatch.setattr("experiments.runners.gpu_job.signal.signal", ignore_signal)
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("ETUDE_DEADLINE", "2099-01-01T00:00:00+00:00")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gpu_job",
+            "--study",
+            "batching-grid",
+            "--size",
+            "middle",
+            "--seed",
+            "13591",
+            "--training-seconds",
+            "2400",
+            "--checkpoint-transitions",
+            "131072",
+        ],
+    )
+    with pytest.raises(SystemExit) as result:
+        main()
+    assert result.value.code == 0
+    argv, limit = calls["training"]
+    assert argv[argv.index("--seconds") + 1] == "2400.0"
+    assert argv[argv.index("--checkpoint-transitions") + 1] == "131072"
+    assert limit == 2460
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf"])
+def test_invalid_training_limit_is_rejected_before_worker_creation(
+    value: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "not-created"))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "gpu_job",
+            "--study",
+            "batching-grid",
+            "--size",
+            "small",
+            "--seed",
+            "13591",
+            "--training-seconds",
+            value,
+        ],
+    )
+    with pytest.raises(SystemExit) as result:
+        main()
+    assert result.value.code == 2
+    assert not (tmp_path / "not-created").exists()
 
 
 def test_timeout_retains_partial_files_and_stops_child(tmp_path: Path) -> None:

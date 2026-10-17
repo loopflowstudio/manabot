@@ -120,3 +120,8 @@ milestones are errors; there is no rounding or substitution. Freeze the panel's
 MonitorProtocol and study binding before scoring; initialization and later
 points use paired deals against both anchors. This runner does not itself
 choose the learning horizon, seed allocation or training configuration.
+Later allocations can pass an explicit `--training-seconds` to `gpu_job`; the
+worker gives the learner that limit plus a 60-second settlement allowance, still
+bounded by the rental deadline and its retention reserve. Existing feasibility
+jobs retain their original source and limits. Longer limits require a measured,
+budgeted allocation; the option itself grants no additional spending.
