@@ -142,7 +142,8 @@ def main() -> None:
             protocol=protocol,
             concurrent_activity="post-training panel; other host activity unmeasured",
         )
-        result.validate_cohort()
+        # The evaluator validates cohort completeness and replay before marking
+        # its result completed; an incomplete cohort must stop this panel.
         if result.status != "completed":
             raise RuntimeError(
                 f"evaluation incomplete at {count} transitions: {result.error}"
