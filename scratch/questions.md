@@ -109,3 +109,22 @@ SDK history is isolated from MTG-137 and local pool disabled. The first detached
 shell exited before intent/queue; foreground controller owns the one retained
 intent. Do not launch a replacement: reconcile this exact run and preserve any
 failure. Runtime completion, costs and scientific admission remain unverified.
+
+
+## Laptop interruption and corrected-world admission repair — 2026-10-17
+
+Jack Heart reported closing the laptop and authorized retry, deferring an Etude
+bug report. Original run `b689bba03c66` has a cancellation request; provider lookup
+found no matching pod, while SDK kept a conservative `renting` estimate. Bootstrap
+was absent; source upload was incomplete. A later source-fetch probe succeeded.
+No original training is established; its uncertain ledger stays separate.
+
+Retry `cdad6c0a67fd` used exact-source server-side S3 copy and reached provider
+RUNNING (`lmdo5yr6046fbg`) and native build. It failed before learning: the GPU
+recipe inherited w4 while the runtime was w6. SDK reports failed and rental ended,
+$0.01595487 estimated. This is a runner preparation defect, not a learning result.
+The new CUDA derivative now explicitly pins w6 (rejecting other native worlds);
+historical CPU recipes and evidence remain unchanged. Fifteen focused tests now
+include ordinary native-world admission for each CUDA pool, not merely recipe
+construction. New source freeze and verified cleanup precede further submission.
+Private controller/attempt evidence: `.runs/mtg122/gpu-complexity-retry/`.

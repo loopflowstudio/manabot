@@ -21,6 +21,7 @@ from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingCoordinates, TrainingRegime, TrainSelfPlay
 from manabot.training.monitor_evaluation import MonitorProtocol, evaluate_checkpoint
 from manabot.verify.store import VerifyStore
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 Pool = Literal["l1", "l2", "l3"]
@@ -48,6 +49,12 @@ def regime(
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
+    if device == "cuda":
+        # GPU restart is a fresh corrected-world cohort, not a relabeling of
+        # historical CPU evidence or checkpoints. Pin rather than infer a world.
+        if managym.WORLD_VERSION != "w6":
+            raise ValueError("GPU complexity study requires w6 native runtime")
+        recipe.world = "w6"
     recipe.id = f"mtg122-{pool}"
     recipe.agent.semantic_pack = PACK
     recipe.match = roster(pool).match()

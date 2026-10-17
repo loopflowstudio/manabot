@@ -9,6 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from experiments.runners.environment_complexity import calibrate, regime, roster
+from manabot.training.execution import validate_regime
 
 
 def test_pool_recipes_only_change_declared_environment() -> None:
@@ -41,6 +42,8 @@ def test_gpu_pool_recipes_share_64_stream_learning_contract() -> None:
     for pool in ("l1", "l2", "l3"):
         recipe = regime(pool, updates=100, seconds=600, streams=64, device="cuda")
         stage = recipe.stages[0]
+        assert recipe.world == "w6"
+        assert validate_regime(recipe) == recipe
         assert stage.streams == 64
         assert stage.transitions == 64
         assert stage.execution.device == "cuda"
@@ -107,3 +110,9 @@ def test_gpu_calibration_selects_declared_recipe_and_retains_failure(
     assert not (tmp_path / "etude-result.json").exists()
     assert os.environ["ETUDE_RUN"] == "fixture-only"
     assert os.environ["ETUDE_TRACK_DIR"] == str(tmp_path / "tracking")
+
+
+def test_gpu_recipe_rejects_another_native_world(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("managym.WORLD_VERSION", "w7")
+    with pytest.raises(ValueError, match="requires w6"):
+        regime("l1", updates=100, seconds=1200, streams=64, device="cuda")
