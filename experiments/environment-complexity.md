@@ -1,5 +1,39 @@
 # MTG-122: learning across environment complexity
 
+## Current disposition — 2026-10-16
+
+**Deferred behind corrected-world baseline results; not scientifically complete.**
+Jack Heart stopped the bug-affected original comparison after PR288/289 and
+selected reproducing the full-game baseline before further card-pool research.
+Baseline execution, recovery, evaluation and reporting now belong to Intelligence
+Task `fc765e`, not MTG-122. Its [handoff](../docs/plans/corrected-baseline-operations.md)
+records the ownership boundary; current execution state belongs to that Task.
+Baseline results cannot substitute for the three-pool comparison.
+
+The implementation includes vanilla simple-pool content, shared semantic catalog
+binding, ordinary checkpoint admission, an Etude runner and analysis/reporting
+support. Original calibration completed all three pools. The stopped campaign
+`063198864bfb` retained three pool fits for seed12251, but not the completed
+three-seed comparison. Its pre-fix world, interrupted cohort and original receipts
+remain historical evidence, not corrected-world learning conclusions.
+
+Remaining outcomes:
+
+- Re-admit the three-pool contrast on a pinned corrected world, with an explicit
+  remaining resource allocation after the baseline decision. The old allocation
+  below is historical, not a fresh reservation.
+- Execute the complete independent-seed/control/evaluation matrix and analyze
+  within-pool improvement, uncertainty, costs and failures before concluding
+  whether simpler games provide a useful learning diagnostic.
+- Design and separately admit the requested catalog-size contrast, distinguishing
+  definition count, semantic-token vocabulary and program lengths. The common
+  full catalog in the original contrast holds this factor fixed; it does not
+  measure catalog-size effects.
+- Keep curriculum transfer separately selectable; no transfer outcome is claimed.
+
+The frozen protocol below preserves the original declaration and predictions.
+A future corrected-world plan must retain this lineage rather than overwrite it.
+
 ## Frozen scientific protocol — 2026-10-14, before scored execution
 
 Jack Heart authorized Mini for up to 48 hours or $25 GPU spending, without local
