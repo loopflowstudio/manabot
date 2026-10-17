@@ -94,3 +94,18 @@ secret scope supplied it; `manabot/prd` lacked the provider variable and made no
 provider request. No credentials changed. Remote source-upload, publication and
 setup preflight remain before the uniquely owned calibration rental. No rental
 or scientific execution occurred in this pass.
+
+
+## GPU calibration submitted — 2026-10-17
+
+Exact source `5ed397ae`, 1,977 files, compressed archive 80,335,492 bytes passed
+multipart upload/full readback and scoped worker publication. Private receipts
+and the single-owner controller are in `.runs/mtg122/gpu-complexity/`.
+Run `b689bba03c66`, session `4f58be96e16f`, attempt `79d938953765` is admitted
+for seed12250, three pools ×100 updates, 64 streams ×64 transitions, and48
+complete replayed calibration games. Cap $2, job2.5h, pool max rental2.8h;
+Etude owns guardian/deletion. No scientific cohort is admitted by submission.
+SDK history is isolated from MTG-137 and local pool disabled. The first detached
+shell exited before intent/queue; foreground controller owns the one retained
+intent. Do not launch a replacement: reconcile this exact run and preserve any
+failure. Runtime completion, costs and scientific admission remain unverified.
