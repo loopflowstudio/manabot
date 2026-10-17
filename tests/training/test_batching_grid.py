@@ -40,3 +40,16 @@ def test_grid_rejects_fractional_or_empty_iterations() -> None:
     for budget in (0, 1, 131_071):
         with pytest.raises(ValueError):
             recipe(CAPACITIES[0], 512, budget)
+
+
+def test_width_depth_contrasts_preserve_all_other_training_settings() -> None:
+    capacities = {capacity.name: capacity for capacity in CAPACITIES}
+    for original_name, added_name, depth in (
+        ("small", "small-deep", 4),
+        ("large", "large-shallow", 2),
+    ):
+        original = recipe(capacities[original_name], 128, 131_072)
+        added = recipe(capacities[added_name], 128, 131_072)
+        original.id = added.id
+        original.agent.attention_layers = depth
+        assert added == original

@@ -69,3 +69,25 @@ matching throughput or finite gradients, discriminates that concern. Ordinary
 CUDA non-repeatability and the earlier extreme parameter anomaly remain open;
 finite final checkpoints do not clear either. All failed attempts count toward
 the same$50cap. No other Task's budget or machines are borrowed.
+
+## Added width/depth contrasts (2026-10-17)
+
+Jack Heart requested64×4 and384×2 while the original small/middle four-stream
+cells were running. Add both architectures across the same five stream counts,
+seed13571 and131,072-transition target:25 feasibility cells in total. The
+64×2/64×4 comparison changes depth at fixed width;64×2/384×2 changes width at
+fixed depth. The384×2/384×8 pair adds a second depth comparison. Middle192×4
+remains included. No playing-strength results motivated this expansion.
+
+Added names are `small-deep` (64×4) and `large-shallow` (384×2). All other
+recipe fields, schedule mapping, deadlines and failure rules stay as declared.
+Original cells retain their original source revision; added cells use a new
+revision that only adds these choices, their checks and this protocol amendment.
+Record source per cell rather than claiming one source revision for all25.
+
+Reserve another$10 for ten$1 cell caps. Conservative prior charge$8.22 plus
+$25 feasibility caps and$2 ancillary reserve bounds exposure at$35.22, leaving
+$14.78 uncommitted under the existing$50 total. Actual unused rental caps may
+be released after verified deletion. Keep at most two concurrent rentals and
+no automatic retries. Reconsider the later learning-validation allocation from
+measured costs; this amendment does not authorize spending beyond$50.

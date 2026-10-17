@@ -39,6 +39,8 @@ CAPACITIES = (
     Capacity("small", 64, 2),
     Capacity("middle", 192, 4),
     Capacity("large", 384, 8),
+    Capacity("small-deep", 64, 4),
+    Capacity("large-shallow", 384, 2),
 )
 STREAMS = (4, 64, 128, 256, 512)
 TRANSITIONS_PER_STREAM = 64
