@@ -4,6 +4,7 @@ import gzip
 import io
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tarfile
 from types import ModuleType
@@ -61,6 +62,7 @@ def test_boot_events_preserve_success_and_failure(
     phases = [
         json.loads(line.removeprefix("ETUDE_BOOT_PHASE "))["phase"]
         for line in output.splitlines()
+        if line.startswith("ETUDE_BOOT_PHASE ")
     ]
     assert phases == [
         "entrypoint",
@@ -68,7 +70,55 @@ def test_boot_events_preserve_success_and_failure(
         "uv_start",
         "uv_ready",
         "client_install_start",
-    ] + ([] if install_fails else ["client_install_ready"])
+    ] + (["client_install_failed"] if install_fails else ["client_install_ready"])
+
+
+def test_install_timeout_retains_sanitized_stderr_and_original_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    failure = subprocess.TimeoutExpired(
+        ["uv", "sync"],
+        120,
+        stderr=b"x" * 5000
+        + b" dependency download stalled https://example.test/private?token=secret "
+        b"provider-sensitive-token request timed out",
+    )
+    pod = ModuleType("etude.launch.providers.runpod.pod")
+
+    def install(code: bytes) -> Path:
+        raise failure
+
+    def ensure_uv() -> None:
+        pass
+
+    def main(argv: list[str]) -> int:
+        pod.install(b"package")
+        raise AssertionError("installation unexpectedly succeeded")
+
+    pod.ensure_uv, pod.install, pod.main, pod.Path = ensure_uv, install, main, Path
+    parent = ModuleType("etude.launch.providers.runpod")
+    parent.pod = pod
+    monkeypatch.setitem(sys.modules, parent.__name__, parent)
+    monkeypatch.setitem(sys.modules, pod.__name__, pod)
+    monkeypatch.setenv("RUNPOD_API_KEY", "provider-sensitive-token")
+    source = "from etude.launch.providers.runpod.pod import main\nraise SystemExit(main(['pod','boot']))"
+    with pytest.raises(subprocess.TimeoutExpired) as raised:
+        exec(instrument_bootstrap(source), {})
+    assert raised.value is failure
+    output = capsys.readouterr().out
+    assert "provider-sensitive-token" not in output and "example.test" not in output
+    event = next(
+        json.loads(line.removeprefix("ETUDE_BOOT_FAILURE "))
+        for line in output.splitlines()
+        if line.startswith("ETUDE_BOOT_FAILURE ")
+    )
+    assert event["error_type"] == "TimeoutExpired"
+    assert event["timeout_seconds"] == 120
+    assert len(event["stderr_tail"]) == 4096
+    assert "<redacted-url>" in event["stderr_tail"]
+    assert "<redacted>" in event["stderr_tail"]
+    assert event["stderr_tail"].endswith("request timed out")
 
 
 def test_changed_sdk_bootstrap_requires_review() -> None:

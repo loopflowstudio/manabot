@@ -8,7 +8,7 @@ enter the events. Provider logs must still be retained before pod deletion.
 
 _IMPORT = "from etude.launch.providers.runpod.pod import main\n"
 _CALL = "raise SystemExit(main(['pod','boot']))"
-_EVENTS = """import json as _json, time as _time
+_EVENTS = """import json as _json, os as _os, re as _re, subprocess as _subprocess, time as _time
 def _phase(name: str) -> None:
     print("ETUDE_BOOT_PHASE " + _json.dumps({
         "phase": name, "unix_seconds": _time.time(),
@@ -25,7 +25,24 @@ def _ensure_uv() -> None:
     _phase("uv_ready")
 def _install(code: bytes) -> _pod.Path:
     _phase("client_install_start")
-    result = _original_install(code)
+    try:
+        result = _original_install(code)
+    except Exception as error:
+        _phase("client_install_failed")
+        event = {"error_type": type(error).__name__}
+        if isinstance(error, _subprocess.TimeoutExpired):
+            event["timeout_seconds"] = error.timeout
+            stderr = error.stderr or b""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            # Sanitize before truncation, so a boundary cannot split a secret.
+            for value in _os.environ.values():
+                if len(value) > 8:
+                    stderr = stderr.replace(value, "<redacted>")
+            stderr = _re.sub(r"https?://\\S+", "<redacted-url>", stderr)
+            event["stderr_tail"] = stderr[-4096:]
+        print("ETUDE_BOOT_FAILURE " + _json.dumps(event), flush=True)
+        raise
     _phase("client_install_ready")
     return result
 _pod.ensure_uv = _ensure_uv
