@@ -96,6 +96,24 @@ PROGRESS_EXPORT_SECONDS = 30.0
 PROGRESS_EXPORT_SHARE = 0.02
 
 
+def process_tree_rss(process: psutil.Process) -> int:
+    """Resident bytes of a process and its live descendants.
+
+    A child can exit between enumeration and its RSS read. psutil's
+    `is_running()` is still True for a zombie, and on macOS reading a zombie's
+    memory raises `ZombieProcess`; an exited child holds no memory to count,
+    so `NoSuchProcess` (its base class) skips it. Other failures, such as
+    `AccessDenied`, still surface: the memory cap must not stop measuring.
+    """
+    total = process.memory_info().rss
+    for child in process.children(recursive=True):
+        try:
+            total += child.memory_info().rss
+        except psutil.NoSuchProcess:
+            continue
+    return total
+
+
 def atomic_json(path: str | Path, value: object) -> None:
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -669,12 +687,7 @@ def _execute_regime(
                 if now - last_memory_sample < 1.0:
                     return
                 last_memory_sample = now
-                process = psutil.Process()
-                memory = process.memory_info().rss + sum(
-                    p.memory_info().rss
-                    for p in process.children(recursive=True)
-                    if p.is_running()
-                )
+                memory = process_tree_rss(psutil.Process())
                 if not restoring_completed:
                     record.sampled_peak_rss_bytes = max(
                         record.sampled_peak_rss_bytes, memory
