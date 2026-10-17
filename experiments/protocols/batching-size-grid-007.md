@@ -39,8 +39,11 @@ other cells use the existing endpoint-preserving IterationSchedule, mapping
 their run onto the reference512-update horizon. This is explicit schedule
 normalization, not unchanged training. At equal transition budgets there are
 fewer optimizer steps and EMA updates at larger stream counts; EMA0.999 remains
-per iteration. Minibatch composition, filtering and policy staleness also change.
-Therefore throughput alone cannot approve a new learning recipe.
+per iteration. In this current-self recipe, collection and bootstrap targets use
+the raw network, not EMA. Different EMA age affects its separate exported policy,
+not the raw learning target; all proposed learning comparisons use raw exports.
+Minibatch composition, filtering and policy staleness also change. Therefore
+throughput alone cannot approve a new learning recipe.
 
 Maximum$15 for15cell caps of$1, each at most45command minutes,1800training
 seconds, and reserved retained-output time. No automatic failed-cell retries.
