@@ -81,10 +81,26 @@ class Worker:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--size", choices=("small", "middle", "large"), required=True)
+    parser.add_argument(
+        "--size",
+        choices=("small", "middle", "large", "small-deep", "large-shallow"),
+        required=True,
+    )
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--canary", action="store_true")
+    parser.add_argument(
+        "--study", choices=("size-frontier", "batching-grid"), default="size-frontier"
+    )
+    parser.add_argument(
+        "--streams", type=int, choices=(4, 64, 128, 256, 512), default=4
+    )
+    parser.add_argument("--transitions", type=int, default=131_072)
+    parser.add_argument("--checkpoint-transitions", type=int, nargs="+")
     args = parser.parse_args()
+    if args.study == "size-frontier" and args.size not in ("small", "middle", "large"):
+        parser.error("The added width/depth contrasts require --study batching-grid")
+    if args.study != "batching-grid" and args.checkpoint_transitions is not None:
+        parser.error("Transition checkpoints require --study batching-grid")
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
@@ -130,6 +146,29 @@ def main() -> None:
             ]
             if args.canary:
                 command.append("--canary")
+            if args.study == "batching-grid":
+                if args.canary:
+                    raise ValueError("Use the separately declared lifecycle canary")
+                command = [
+                    interpreter,
+                    "-m",
+                    "experiments.runners.batching_grid",
+                    "--size",
+                    args.size,
+                    "--seed",
+                    str(args.seed),
+                    "--streams",
+                    str(args.streams),
+                    "--transitions",
+                    str(args.transitions),
+                    "--out",
+                    str(output / "study"),
+                ]
+                if args.checkpoint_transitions is not None:
+                    command += [
+                        "--checkpoint-transitions",
+                        *(str(n) for n in args.checkpoint_transitions),
+                    ]
             code = worker.command("training", command, 3600)
     worker.phase("completed" if code == 0 else "failed", exit_code=code)
     raise SystemExit(code)
