@@ -12,11 +12,11 @@ import os
 from pathlib import Path
 import socket
 import time
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 
 from etude.track.records import Step
 from etude.track.run import Run as TrackerRun, init
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 import torch
 
 from experiments.runners.baseline_monitoring import DiagnosticMonitor
@@ -165,6 +165,16 @@ class GPUComplexityPlan(ComplexityPlan):
             streams=self.streams,
             device=self.device,
         )
+
+
+def read_complexity_plan(payload: str) -> ComplexityPlan:
+    """Read an exact versioned plan without adapting historical recipe meaning."""
+    adapter = TypeAdapter(
+        Annotated[
+            ComplexityPlan | GPUComplexityPlan, Field(discriminator="schema_version")
+        ]
+    )
+    return adapter.validate_json(payload)
 
 
 def calibrated_plan(
@@ -507,7 +517,4 @@ def execute(
 
 if __name__ == "__main__":
     payload = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())["plan"]
-    plan_type = (
-        GPUComplexityPlan if payload.get("schema_version") == 2 else ComplexityPlan
-    )
-    execute(plan_type.model_validate(payload))
+    execute(read_complexity_plan(json.dumps(payload)))

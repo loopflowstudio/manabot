@@ -17,7 +17,12 @@ from pathlib import Path
 from matplotlib.figure import Figure
 from pydantic import TypeAdapter
 
-from experiments.runners.complexity_campaign import POOLS, SEEDS, ComplexityPlan
+from experiments.runners.complexity_campaign import (
+    POOLS,
+    SEEDS,
+    ComplexityPlan,
+    read_complexity_plan,
+)
 from experiments.runners.environment_complexity_analysis import (
     CohortEffect,
     SeedEffect,
@@ -45,7 +50,7 @@ class Evidence:
 
 def load(root: Path) -> Evidence:
     root = root.resolve()
-    plan = ComplexityPlan.model_validate_json((root / "plan.json").read_text())
+    plan = read_complexity_plan((root / "plan.json").read_text())
     hashes = {"plan.json": file_sha256(root / "plan.json")}
     runs: dict[tuple[str, int], TrainingRun] = {}
     effects: dict[tuple[str, str, int, int], SeedEffect] = {}

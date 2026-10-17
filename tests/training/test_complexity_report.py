@@ -9,7 +9,7 @@ import pytest
 from experiments.runners import complexity_report as report
 from experiments.runners.environment_complexity_analysis import paired_improvement
 from tests.training.test_complexity_analysis import cohort
-from tests.training.test_complexity_campaign import plan
+from tests.training.test_complexity_campaign import gpu_plan, plan
 
 
 def test_empty_report_does_not_invent_learning(tmp_path: Path) -> None:
@@ -45,3 +45,26 @@ def test_nonempty_summary_serializes_coordinates(
         data["panels"][0]["endpoint"]["seed_effects"][0]["coordinates"]["updates"]
         == 1000
     )
+
+
+def test_gpu_report_retains_plan_and_marks_unrun_cohort_unavailable(
+    tmp_path: Path,
+) -> None:
+    frozen = gpu_plan()
+    (tmp_path / "plan.json").write_text(frozen.model_dump_json())
+    evidence = report.load(tmp_path)
+    assert evidence.plan.digest == frozen.digest
+    assert evidence.plan.recipes()["l1"].stages[0].execution.device == "cuda"
+    assert evidence.plan.recipes()["l1"].world == "w6"
+    assert len(evidence.unavailable) == 9
+    report.write_report(tmp_path, tmp_path / "gpu.html")
+    data = json.loads((tmp_path / "gpu.analysis.json").read_text())
+    assert all(not panel["endpoint"]["available"] for panel in data["panels"])
+
+
+def test_unknown_plan_version_fails_closed(tmp_path: Path) -> None:
+    payload = gpu_plan().model_dump(mode="json")
+    payload["schema_version"] = 99
+    (tmp_path / "plan.json").write_text(json.dumps(payload))
+    with pytest.raises(ValueError):
+        report.load(tmp_path)

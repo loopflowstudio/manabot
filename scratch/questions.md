@@ -148,3 +148,13 @@ This is a pre-worker failure; its cause is unresolved, not another world mismatc
 Further paid startup attempts await Jack Heart's decision on at most three
 retries/$0.50 total inside $35. Preserve both paid failures and the original
 cancelled/uncertain SDK record; do not infer provider invoices from SDK estimates.
+
+
+Offline reporting now uses the same discriminated v1/v2 plan reader as execution;
+unknown schemas fail instead of falling back to CPU. A GPU no-results fixture
+preserves exact plan/recipe identity and marks all nine fits unavailable, including
+HTML analysis. Twenty-six report/analysis/declaration tests pass with notebook
+extras. No local games, optimizer steps or additional paid retries ran.
+Long scientific execution must also bind artifact-access lifetime: the installed
+SDK's default grant is13h, not a43h campaign lease. Admit bounded per-seed jobs or
+explicit valid access before renting; calibration completion alone cannot waive it.
