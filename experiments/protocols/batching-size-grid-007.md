@@ -94,3 +94,29 @@ $14.78 uncommitted under the existing$50 total. Actual unused rental caps may
 be released after verified deletion. Keep at most two concurrent rentals and
 no automatic retries. Reconsider the later learning-validation allocation from
 measured costs; this amendment does not authorize spending beyond$50.
+
+## Startup transport and retained evaluation
+
+The large four-stream cell and its first replacement both stopped before job
+claim. The replacement used full-source gzip transport, which had passed a
+separate two-update CUDA canary. Thus compression alone has not established
+reliable startup, and the original CUDA initialization cause remains unresolved.
+Keep those attempts; startup failure stops further scientific admission.
+
+A separately capped canary tests an explicit source projection that omits only
+`experiments/data/`, the historical measurement subtree. All other files retain
+their original bytes, permissions and link targets. Preserve the full source
+archive, retained/omitted file hashes, projected archive identity, complete cloud
+readback and exact per-job source configuration. This is a declared packaging
+change, not lossless compression of the full archive. Runtime code, content,
+recipes and learning controls stay fixed. Require complete canary artifacts,
+CUDA admission, independent policy load and provider deletion before further
+grid admission. Startup cost comparisons must retain the transport difference.
+
+For later learning panels, `experiments.runners.batching_evaluation` selects
+raw exports by recorded learner transitions. It validates the entire requested
+panel, including relocated artifact hashes, before playing games. Missing
+milestones are errors; there is no rounding or substitution. Freeze the panel's
+MonitorProtocol and study binding before scoring; initialization and later
+points use paired deals against both anchors. This runner does not itself
+choose the learning horizon, seed allocation or training configuration.
