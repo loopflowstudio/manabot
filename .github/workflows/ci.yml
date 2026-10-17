@@ -121,6 +121,7 @@ jobs:
             tests/training/test_etude_bootstrap_diagnostics.py \
             tests/training/test_prepared_source.py \
             tests/training/test_source_projection.py tests/training/test_batching_evaluation.py \
+            tests/training/test_batching_calibration.py \
             tests/training/test_learner_witnesses.py \
             tests/bench/test_native_variants.py tests/bench/test_pipeline_benchmark.py tests/bench/test_worker_scaling.py \
             tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
