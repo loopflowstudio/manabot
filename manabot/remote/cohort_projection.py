@@ -304,7 +304,13 @@ def follow_projection(
                 raise ValueError(
                     "projection allocation already binds different content"
                 )
-        deadline = cohort.deadline
+        observation_deadline = cohort.deadline + 1800
+        retained = directory / "status.json"
+        if retained.exists():
+            state = CohortState.model_validate_json(retained.read_bytes())
+            if state.cohort_sha256 != cohort.identity:
+                raise ValueError("projection cohort identity differs")
+            observation_deadline = state.effective_deadline(cohort) + 1800
         while True:
             try:
                 raw = S3JobStore(cohort.prefix).read("state.json")
@@ -312,10 +318,11 @@ def follow_projection(
                     state = CohortState.model_validate_json(raw.data)
                     if state.cohort_sha256 != cohort.identity:
                         raise ValueError("projection cohort identity differs")
-                    deadline = state.effective_deadline(cohort)
+                    observation_deadline = state.effective_deadline(cohort) + 1800
+                    atomic_json(retained, state.model_dump(mode="json"))
             except Exception:
                 pass  # Retain the last bounded cutoff across storage outages.
-            if time.time() >= deadline + 1800:
+            if time.time() >= observation_deadline:
                 return
             remaining = config.total_seconds - ledger.charged_seconds
             if remaining < config.attempt_seconds:
@@ -335,7 +342,7 @@ def follow_projection(
                         str(
                             min(
                                 attempt.started_at + config.attempt_seconds,
-                                deadline + 1800,
+                                observation_deadline,
                             )
                             - 10
                         ),
@@ -348,7 +355,7 @@ def follow_projection(
                     code = child.wait(
                         timeout=min(
                             config.attempt_seconds,
-                            max(1, deadline + 1800 - time.time()),
+                            max(1, observation_deadline - time.time()),
                         )
                     )
                 except subprocess.TimeoutExpired:

@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+from unittest.mock import Mock
 import uuid
 
 import pytest
@@ -18,7 +19,15 @@ from typer.testing import CliRunner
 
 from manabot.cli import app
 from manabot.remote import cohort_cli, cohort_service
-from manabot.remote.cohort import Cohort, CohortEntry, CohortState
+from manabot.remote.cohort import (
+    Cohort,
+    CohortAttempt,
+    CohortEntry,
+    CohortInsertion,
+    CohortState,
+    CohortSupervisor,
+)
+from manabot.remote.jobs import Job, JobStatus
 from manabot.remote.plan import JobSpec, Source, compile_plan
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE
@@ -83,9 +92,118 @@ def test_storage_outage_cannot_extend_observation_deadline(
     assert error["error_location"][-1]["file"] == "test_cohort_service.py"
     assert set(error["error_location"][-1]) == {"file", "function", "line"}
     assert "private transport detail" not in (directory / "error.json").read_text()
-    # Restart at the same absolute deadline cannot reset the observation window.
+    # Restart checks for an unseen insertion once, without resetting the window.
+    cohort_service.supervise_cohort(file, directory)
+    assert attempts == 2
+
+
+def test_restart_discovers_and_retains_extension_before_provider_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cohort = plan()
+    file = tmp_path / "cohort.json"
+    file.write_text(cohort.model_dump_json())
+    directory = tmp_path / "service"
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "test-machine")
+    with cohort_service.owner_lock(directory) as owner:
+        stale = CohortState(cohort_sha256=cohort.identity, owner=owner)
+    (directory / "status.json").write_text(stale.model_dump_json())
+    extended = cohort.deadline + 3600
+    state = CohortState(
+        cohort_sha256=cohort.identity,
+        owner=owner,
+        insertion=CohortInsertion(
+            after_job=cohort.entries[0].job_id,
+            entries=(cohort.entries[0].model_copy(update={"job_id": "added"}),),
+            deadline=extended,
+            access_expires_at=extended,
+        ),
+        attempts=(CohortAttempt(spec=cohort.entries[0].job(0)),),
+    )
+    store = FileStore(tmp_path / "cohort.sqlite")
+    store.create("state.json", state.model_dump_json().encode())
+    now = cohort.deadline + 1801
+    observations: list[str] = []
+
+    def observe(job: Job) -> JobStatus:
+        observations.append(job.job_id)
+        raise ConnectionError("private provider response")
+
+    def supervisor(
+        value: Cohort, owner: str, cache: Path, **kwargs: object
+    ) -> CohortSupervisor:
+        return CohortSupervisor(
+            value, owner, cache, store=store, observe=observe, persist=lambda job: job
+        )
+
+    def crash(seconds: float) -> None:
+        raise InterruptedError("controller stopped")
+
+    monkeypatch.setattr(cohort_service, "CohortSupervisor", supervisor)
+    monkeypatch.setattr(cohort_service.time, "time", lambda: now)
+    monkeypatch.setattr(cohort_service.time, "sleep", crash)
+    with pytest.raises(InterruptedError):
+        cohort_service.supervise_cohort(file, directory)
+    assert observations == [cohort.entries[0].job_id]
+    retained = CohortState.model_validate_json((directory / "status.json").read_bytes())
+    assert retained == state
+    assert "private provider response" not in (directory / "error.json").read_text()
+
+    attempts = 0
+
+    def unavailable(*args: object, **kwargs: object) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise ConnectionError("storage offline")
+
+    def sleep(seconds: float) -> None:
+        nonlocal now
+        assert seconds == 1
+        now += seconds
+
+    now = extended + 1799
+    monkeypatch.setattr(cohort_service, "CohortSupervisor", unavailable)
+    monkeypatch.setattr(cohort_service.time, "sleep", sleep)
     cohort_service.supervise_cohort(file, directory)
     assert attempts == 1
+    assert now == extended + 1800
+    assert (
+        CohortState.model_validate_json((directory / "status.json").read_bytes())
+        == state
+    )
+
+
+def test_expired_remote_state_is_retained_without_scheduling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cohort = plan()
+    file = tmp_path / "cohort.json"
+    file.write_text(cohort.model_dump_json())
+    directory = tmp_path / "service"
+    store = FileStore(tmp_path / "cohort.sqlite")
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "test-machine")
+    with cohort_service.owner_lock(directory) as owner:
+        state = CohortState(cohort_sha256=cohort.identity, owner=owner)
+    store.create("state.json", state.model_dump_json().encode())
+
+    def supervisor(
+        value: Cohort, owner: str, cache: Path, **kwargs: object
+    ) -> CohortSupervisor:
+        return CohortSupervisor(value, owner, cache, store=store)
+
+    tick = Mock()
+    monkeypatch.setattr(CohortSupervisor, "tick", tick)
+    monkeypatch.setattr(cohort_service, "CohortSupervisor", supervisor)
+    monkeypatch.setattr(cohort_service.time, "time", lambda: cohort.deadline + 1800)
+    cohort_service.supervise_cohort(file, directory)
+    tick.assert_not_called()
+    assert (
+        CohortState.model_validate_json((directory / "status.json").read_bytes())
+        == state
+    )
+    remote = store.read("state.json")
+    assert remote is not None
+    assert remote.data == state.model_dump_json().encode()
 
 
 def test_launcher_exit_and_forced_supervisor_restart(tmp_path: Path) -> None:

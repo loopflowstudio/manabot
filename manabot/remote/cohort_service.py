@@ -117,7 +117,9 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
             source_root = Path(roots.get(spec.plan.source.commit, str(Path.cwd())))
             return submit_job(spec, source_root=source_root)
 
-        while time.time() < observation_deadline:
+        # A restart may have missed an admitted insertion after its last local
+        # observation. Read the authority once even beyond the cached cutoff.
+        while True:
             supervisor: CohortSupervisor | None = None
             try:
                 # Reload after every uncertain network write; CAS and the host lock
@@ -125,9 +127,13 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                 supervisor = CohortSupervisor(
                     cohort, owner, directory / "cache", submit=submit
                 )
-                state = supervisor.tick()
+                state = supervisor.state
                 observation_deadline = state.effective_deadline(cohort) + 1800
-                atomic_json(directory / "status.json", state.model_dump(mode="json"))
+                atomic_json(retained, state.model_dump(mode="json"))
+                if time.time() >= observation_deadline:
+                    return
+                state = supervisor.tick()
+                atomic_json(retained, state.model_dump(mode="json"))
                 (directory / "error.json").unlink(missing_ok=True)
                 if state.settled:
                     return
@@ -149,7 +155,12 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                         "pid": os.getpid(),
                     },
                 )
-            time.sleep(min(interval, max(0, observation_deadline - time.time())))
+            remaining = observation_deadline - time.time()
+            if remaining <= 0:
+                return
+            time.sleep(min(interval, remaining))
+            if time.time() >= observation_deadline:
+                return
 
 
 def _systemd_quote(value: str, *, command: bool = False) -> str:
