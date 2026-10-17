@@ -93,3 +93,36 @@ job dollar cap can stop earlier. Profile/replay command caps2700/1800seconds,
 plus bounded setup and artifact upload. Preserve all failures and verify provider
 deletion. Run source and hashes bind archived evidence. No paid evaluation beyond
 this reservation. No change in scientific allocation based on observed scores.
+
+## Recovery after launcher failures (2026-10-16 Pacific)
+
+The conversation authorized fixing deadlines, progress reporting, retention and
+CUDA admission, then running the missing cells. This supersedes the original
+launch wrapper and its inconsistent one-hour outer deadline. Failed attempts
+remain recorded; no completed learning trajectory exists to resume. All ten
+learning/reference cells keep their original seeds, sizes and2048-update target.
+The two completed diagnostic tracks are retained, not repeated.
+
+`experiments.runners.gpu_job` owns setup and child lifetimes using Etude's
+absolute deadline. Setup is capped at600seconds, CUDA admission at60seconds,
+and training at3600seconds; every command also stops before the final240second
+retention reserve. The outer learning command allowance is4500seconds, with a
+$1.60 rental cap. A budget-limited shorter allocation remains visibly incomplete;
+it must not be reported as a completed trajectory or used as a survivor comparison.
+
+Training files and logs are written inside the attempt's retained outputs from
+the start. Ordinary TrainingRun persistence publishes measured update clocks and
+its existing policy checkpoints via `etude-result.json`. These are evaluation
+checkpoints, not complete-state CUDA restart claims. The progress observer must
+pass a same-seed exact-learning comparison before admission. Setup/device/runtime
+diagnostics are retained even when CUDA admission fails; no CPU fallback.
+
+One separately labelled two-update GPU canary (seed13599) must pass setup,
+CUDA matrix/gradient execution, training and independent checkpoint fetch/load
+before missing scientific cells are admitted. It is not a learning-comparison
+seed. Its cap is$0.35. With the current conservative settled campaign charge$6.55,
+ten$1.60 cell caps and the existing$2 ancillary reserve, maximum commitment is
+$24.90 under the authorized$25. Reconcile fresh receipts before launch; no
+additional budget is implied. Stop new admissions on any failed cell and retain
+its progress and checkpoint for diagnosis. Full reference/seed coverage remains
+required before arena comparison.

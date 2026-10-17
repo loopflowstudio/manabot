@@ -23,6 +23,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
+from experiments.runners.etude_progress import ProgressStore
 from experiments.runners.inference_preparation import state_digest
 from experiments.runners.learner_witnesses import learner_witnesses
 from experiments.runners.profile_artifacts import package
@@ -48,7 +49,6 @@ from manabot.training.models import (
 )
 from manabot.training.selection import UpdateDiagnostics
 from manabot.training.source_bundle import SourceBundle, source_commit
-from manabot.verify.store import VerifyStore
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,10 @@ def train(
 ) -> TrainingRun:
     out.mkdir(parents=True, exist_ok=False)
     atomic_json(out / "regime.json", spec.model_dump(mode="json"))
-    with VerifyStore(out / "training.sqlite") as store:
+    output = os.environ.get("ETUDE_OUTPUT_DIR")
+    with ProgressStore(
+        out / "training.sqlite", Path(output) if output else None
+    ) as store:
         run = execute_regime(
             spec,
             seed,
@@ -468,6 +471,11 @@ def main() -> None:
     parser.add_argument("--size", choices=[s.name for s in SIZES], default="small")
     parser.add_argument("--seed", type=int, default=13561)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument(
+        "--canary",
+        action="store_true",
+        help="Two CUDA updates; never a scientific trajectory",
+    )
     args = parser.parse_args()
     device = "cpu" if args.smoke else "cuda"
     args.out.mkdir(parents=True, exist_ok=False)
@@ -480,7 +488,11 @@ def main() -> None:
         if args.mode == "learning":
             size = next(s for s in SIZES if s.name == args.size)
             spec = recipe(
-                size, 2 if args.smoke else 2048, 2 if args.smoke else 64, device, 3_600
+                size,
+                2 if args.smoke or args.canary else 2048,
+                2 if args.smoke else 64,
+                device,
+                3_600,
             )
             train(args.out / "training", spec, args.seed, milestones=True)
         elif args.mode == "profile":
