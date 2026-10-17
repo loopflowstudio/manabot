@@ -555,6 +555,14 @@ bound insertion with new entries appended: existing entries, the boundary and
 admitted deadline or access limits cannot change, and the appended entries pass
 the same budget, deadline and admitted-successor checks.
 
+On restart, the scheduler checks remote state once before applying its cached
+observation cutoff, so an insertion accepted while it was offline remains visible.
+The scheduler and report companion retain validated cohort observations locally.
+An admitted extension therefore survives a restart followed by a storage outage,
+including when provider observation failed after the scheduler read the extension.
+Observation still ends 30 minutes after the last known admitted deadline;
+outages and restarts grant no additional time or reporting allowance.
+
 Each added `CohortEntry.continuation` names an earlier job, its stage and expected
 absolute iteration. After that job completes, publishes its final manifest and
 confirms cleanup, the existing controller binds its exact raw/EMA/Adam and
