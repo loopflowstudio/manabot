@@ -95,9 +95,12 @@ def main() -> None:
         "--streams", type=int, choices=(4, 64, 128, 256, 512), default=4
     )
     parser.add_argument("--transitions", type=int, default=131_072)
+    parser.add_argument("--checkpoint-transitions", type=int, nargs="+")
     args = parser.parse_args()
     if args.study == "size-frontier" and args.size not in ("small", "middle", "large"):
         parser.error("The added width/depth contrasts require --study batching-grid")
+    if args.study != "batching-grid" and args.checkpoint_transitions is not None:
+        parser.error("Transition checkpoints require --study batching-grid")
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]).resolve()
     output.mkdir(parents=True, exist_ok=True)
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
@@ -161,6 +164,11 @@ def main() -> None:
                     "--out",
                     str(output / "study"),
                 ]
+                if args.checkpoint_transitions is not None:
+                    command += [
+                        "--checkpoint-transitions",
+                        *(str(n) for n in args.checkpoint_transitions),
+                    ]
             code = worker.command("training", command, 3600)
     worker.phase("completed" if code == 0 else "failed", exit_code=code)
     raise SystemExit(code)

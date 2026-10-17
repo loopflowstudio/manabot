@@ -47,6 +47,24 @@ TRANSITIONS_PER_STREAM = 64
 FEASIBILITY_TRANSITIONS = 131_072
 
 
+def transition_checkpoints(
+    streams: int, transitions: int, milestones: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Map shared experience milestones to complete collection/update boundaries.
+
+    The endpoint already has a final export. Reject rounding, which would compare
+    different experience across stream counts while giving it the same label.
+    """
+    stride = streams * TRANSITIONS_PER_STREAM
+    if streams not in STREAMS or transitions <= 0 or transitions % stride:
+        raise ValueError("Invalid complete-iteration transition horizon")
+    if tuple(sorted(set(milestones))) != milestones or any(
+        n <= 0 or n > transitions or n % stride for n in milestones
+    ):
+        raise ValueError("Checkpoint transitions must increase on exact update boundaries")
+    return tuple(n // stride for n in milestones if n < transitions)
+
+
 def recipe(
     capacity: Capacity,
     streams: int,
@@ -137,6 +155,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=13571)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seconds", type=float, default=1800)
+    parser.add_argument("--checkpoint-transitions", type=int, nargs="+")
     parser.add_argument("--smoke", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
@@ -162,7 +181,20 @@ def main() -> None:
             device=device,
             seconds=args.seconds,
         )
-        trained = train(args.out / "training", spec, args.seed, milestones=True)
+        checkpoints = (
+            transition_checkpoints(
+                args.streams, args.transitions, tuple(args.checkpoint_transitions)
+            )
+            if args.checkpoint_transitions is not None
+            else None
+        )
+        trained = train(
+            args.out / "training",
+            spec,
+            args.seed,
+            milestones=checkpoints is None,
+            checkpoint_updates=checkpoints,
+        )
         atomic_json(
             args.out / "summary.json", summarize(trained, args.out / "training/run")
         )

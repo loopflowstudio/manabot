@@ -4,7 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from experiments.runners.batching_grid import CAPACITIES, STREAMS, recipe
+from experiments.runners.batching_grid import (
+    CAPACITIES,
+    STREAMS,
+    recipe,
+    transition_checkpoints,
+)
 from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
 
 
@@ -53,3 +58,20 @@ def test_width_depth_contrasts_preserve_all_other_training_settings() -> None:
         original.id = added.id
         original.agent.attention_layers = depth
         assert added == original
+
+
+def test_checkpoints_compare_exact_experience_across_stream_counts() -> None:
+    milestones = (32_768, 65_536, 131_072)
+    for streams in STREAMS:
+        updates = transition_checkpoints(streams, 131_072, milestones)
+        assert tuple(n * streams * 64 for n in updates) == milestones[:-1]
+
+
+@pytest.mark.parametrize(
+    "milestones", [(0,), (32_769,), (65_536, 32_768), (32_768, 32_768), (262_144,)]
+)
+def test_checkpoint_milestones_cannot_silently_change_experience(
+    milestones: tuple[int, ...],
+) -> None:
+    with pytest.raises(ValueError):
+        transition_checkpoints(512, 131_072, milestones)

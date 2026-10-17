@@ -91,8 +91,17 @@ def recipe(
 
 
 def train(
-    out: Path, spec: TrainingRegime, seed: int, *, milestones: bool = False
+    out: Path,
+    spec: TrainingRegime,
+    seed: int,
+    *,
+    milestones: bool = False,
+    checkpoint_updates: tuple[int, ...] | None = None,
 ) -> TrainingRun:
+    if milestones and checkpoint_updates is not None:
+        raise ValueError("Choose legacy milestones or explicit checkpoint updates")
+    if milestones:
+        checkpoint_updates = tuple(n for n in MILESTONES if n < spec.stages[0].updates)
     out.mkdir(parents=True, exist_ok=False)
     atomic_json(out / "regime.json", spec.model_dump(mode="json"))
     output = os.environ.get("ETUDE_OUTPUT_DIR")
@@ -104,11 +113,7 @@ def train(
             seed,
             out / "run",
             store,
-            checkpoint_updates=tuple(
-                n for n in MILESTONES if n < spec.stages[0].updates
-            )
-            if milestones
-            else None,
+            checkpoint_updates=checkpoint_updates,
         )
     atomic_json(
         out / "result.json",
