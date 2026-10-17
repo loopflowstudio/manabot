@@ -12,11 +12,36 @@ import torch
 
 from experiments.runners.cuda_admission import diagnose
 from experiments.runners.etude_progress import ProgressStore
-from experiments.runners.gpu_job import Deadlines, Worker, main, project_interpreter
+from experiments.runners.gpu_job import (
+    Deadlines,
+    Worker,
+    main,
+    project_interpreter,
+    write_retained_manifest,
+)
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.verify.store import VerifyStore
 from tests.training.test_recovery import assert_learning_diagnostics_equal, recipe
+
+
+def test_manifest_separates_courier_metadata_from_downloadable_files(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "etude-result.json").write_text('{"clocks":{"updates":1}}')
+    (tmp_path / "manifest.json").write_text("stale manifest")
+    nested = tmp_path / "study"
+    nested.mkdir()
+    (nested / "checkpoint.pt").write_bytes(b"retained checkpoint")
+    (nested / "etude-result.json").write_text("ordinary nested file")
+    write_retained_manifest(tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert {f["path"] for f in manifest["files"]} == {
+        "study/checkpoint.pt",
+        "study/etude-result.json",
+    }
+    assert "attempt clocks/checkpoint" in manifest["courier_metadata"]
+    assert (tmp_path / "etude-result.json").exists()
 
 
 def test_worker_uses_project_environment_through_python_symlink(tmp_path: Path) -> None:

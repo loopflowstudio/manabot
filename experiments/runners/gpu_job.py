@@ -8,6 +8,7 @@ retained outputs; stopping never depends on a final archive or shell copy.
 import argparse
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import json
 import math
 import os
@@ -46,6 +47,36 @@ def write_json(path: Path, value: dict[str, object]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, indent=2) + "\n")
     temporary.replace(path)
+
+
+def write_retained_manifest(output: Path) -> None:
+    """Index downloadable files; Etude owns the reserved progress record.
+
+    The courier retains etude-result.json as attempt clocks/checkpoint metadata,
+    not as a fetchable output object. Its filename must not promise a missing
+    artifact in this manifest. Nested study manifests remain ordinary outputs.
+    """
+    entries: list[dict[str, object]] = []
+    excluded = {output / "manifest.json", output / "etude-result.json"}
+    for path in sorted(output.rglob("*")):
+        if not path.is_file() or path in excluded:
+            continue
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        entries.append(
+            {
+                "path": str(path.relative_to(output)),
+                "bytes": path.stat().st_size,
+                "sha256": digest,
+            }
+        )
+    write_json(
+        output / "manifest.json",
+        {
+            "files": entries,
+            "courier_metadata": "etude-result.json is retained as attempt clocks/checkpoint, not a downloadable file",
+        },
+    )
 
 
 class Worker:
