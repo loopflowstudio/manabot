@@ -139,3 +139,12 @@ No SDK installation or frozen source was patched. Reserve the original uncertain
 $2 cap, $0.02 for the settled world-tag failure, $2 for this calibration, $3
 settlement and at most $27.98 for science. All remain inside $35. These conservative
 reservations are not invoiced costs. Training has not yet been observed.
+
+
+Run `970a26b94c0f` subsequently ended `lost/machine_lost_before_start`, rental
+ended, estimated $0.02705618. The startup package/source existed in S3, but neither
+worker receipt nor ended journal appeared and no job logs/learning were produced.
+This is a pre-worker failure; its cause is unresolved, not another world mismatch.
+Further paid startup attempts await Jack Heart's decision on at most three
+retries/$0.50 total inside $35. Preserve both paid failures and the original
+cancelled/uncertain SDK record; do not infer provider invoices from SDK estimates.
