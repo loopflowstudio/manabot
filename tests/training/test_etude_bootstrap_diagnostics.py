@@ -1,8 +1,11 @@
 """Startup observation preserves boot behavior and keeps credentials out of logs."""
 
+import gzip
+import io
 import json
 from pathlib import Path
 import sys
+import tarfile
 from types import ModuleType
 
 import pytest
@@ -71,3 +74,40 @@ def test_boot_events_preserve_success_and_failure(
 def test_changed_sdk_bootstrap_requires_review() -> None:
     with pytest.raises(ValueError, match="Unsupported Etude bootstrap"):
         instrument_bootstrap("print('different SDK')")
+
+
+def test_worker_accepts_lossless_gzip_source(tmp_path: Path) -> None:
+    from etude.launch.schemas import Work
+    from etude.launch.worker.attempts import _prepare
+
+    source = io.BytesIO()
+    contents = b"the exact frozen source bytes\n"
+    with tarfile.open(fileobj=source, mode="w") as archive:
+        entry = tarfile.TarInfo("source.txt")
+        entry.size = len(contents)
+        archive.addfile(entry, io.BytesIO(contents))
+    compressed = gzip.compress(source.getvalue(), mtime=0)
+    assert gzip.decompress(compressed) == source.getvalue()
+    session = tmp_path / "sessions" / "probe"
+    home = session / "attempts" / "attempt"
+    home.mkdir(parents=True)
+    (session / "sources").mkdir()
+    # Etude names source objects .tar; its real worker detects compression.
+    (session / "sources" / "revision.tar").write_bytes(compressed)
+    work = Work(
+        attempt="attempt",
+        command="true",
+        limit_seconds=60,
+        limit_kind="out_of_time",
+        seed=None,
+        until=None,
+        start=None,
+        config=None,
+        repo="frozen-source",
+        commit="revision",
+        checkpoint=None,
+        run="probe",
+    )
+    environment = _prepare(session, home, work)
+    assert (home / "src/source.txt").read_bytes() == contents
+    assert Path(environment["ETUDE_OUTPUT_DIR"]) == home / "outputs"
