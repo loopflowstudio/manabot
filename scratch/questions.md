@@ -128,3 +128,14 @@ historical CPU recipes and evidence remain unchanged. Fifteen focused tests now
 include ordinary native-world admission for each CUDA pool, not merely recipe
 construction. New source freeze and verified cleanup precede further submission.
 Private controller/attempt evidence: `.runs/mtg122/gpu-complexity-retry/`.
+
+
+Corrected-source calibration `970a26b94c0f` pins `0cd95fa8` and is setting up on
+GPU session `d4416e8e387d`; private owner/receipts live in
+`.runs/mtg122/gpu-complexity-w6/`. Two pre-rental source uploads hit SDK transport
+timeouts; 5MiB parts/180-second preflight transport passed full readback. Launch
+uses exact-digest S3 server-side copy, avoiding laptop upload during rental setup.
+No SDK installation or frozen source was patched. Reserve the original uncertain
+$2 cap, $0.02 for the settled world-tag failure, $2 for this calibration, $3
+settlement and at most $27.98 for science. All remain inside $35. These conservative
+reservations are not invoiced costs. Training has not yet been observed.
