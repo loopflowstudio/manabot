@@ -153,6 +153,25 @@ Experiment-specific driver scripts live in
 only reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+Study records retain viewer-safe target source names and target controller sides.
+Audit retained Allies/Lessons records without starting games with
+`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
+seat, including absent cohorts, unfinished records, declined targets and unknown
+identities. Target offers list player 0's objects first, so a first-offer
+policy's target side depends on its seat.
+Older records remain readable and count as unmeasured target prompts; source-less
+trigger choices remain unknown. Labels identify recorded seats, not a verified
+policy implementation. Own-side targeting alone does not establish a misplay,
+and these dependent choice counts are not game-level strength estimates.
+
+`scripted_greedy_v2` (`manabot/arena/greedy_v2.py`, Study label `greedy_v2`) is a
+separately versioned candidate anchor: for the side-ambiguous targeted cards in
+this pool it sends harmful effects to the opponent's side and beneficial ones to
+its own, declining rather than harming itself when allowed. All other prompts
+match `scripted_greedy`, which stays frozen with its arena source identity.
+Its strength as an anchor is unmeasured.
+
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
 custom-deck root requires its exact checkpoint setup binding.
