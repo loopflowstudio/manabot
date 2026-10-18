@@ -1,6 +1,6 @@
 """Protect a laptop's bounded Etude launcher and refuse stale rental creation.
 
-Etude 0.1.1 starts its five-minute pre-start clock before publishing the session's
+Etude 0.1.2 starts its five-minute pre-start clock before publishing the session's
 files. A sleeping controller can finish that publication after the clock expires.
 This process-local adapter checks the recorded claim immediately before the
 provider create call; it never resets deadlines or retries creation. On macOS it
@@ -22,7 +22,7 @@ import time
 from typing import NotRequired, TypedDict, Unpack
 
 from etude.launch.executor import Refused
-from etude.launch.providers.runpod.api import PodFact, ProviderUnavailable, RunPodAPI
+from etude.launch.providers.runpod.api import PodFact, RunPodAPI
 from etude.launch.records import Session
 
 
@@ -136,27 +136,9 @@ def protect_launcher(
         )
         if reason is not None:
             raise Refused(reason)
-        try:
-            return original(api, **options)
-        except Exception as error:
-            # The SDK treats creation exceptions as unknown outcomes and discards
-            # them. Retain only its fixed HTTP summary, never bodies, URLs,
-            # credentials, or arbitrary exception text. Do not retry creation.
-            summary = str(error) if isinstance(error, ProviderUnavailable) else ""
-            safe_summary = (
-                summary
-                if re.fullmatch(
-                    r"POST pods: (?:no reply|status [0-9]{3}|unreadable reply)", summary
-                )
-                else None
-            )
-            record(
-                "create_unconfirmed",
-                name=name,
-                error_type=type(error).__name__,
-                provider_summary=safe_summary,
-            )
-            raise
+        # The SDK retains the create outcome, including unknown replies, in its
+        # sanitized launch diagnostics (`etude logs --machine`).
+        return original(api, **options)
 
     try:
         record(

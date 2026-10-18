@@ -139,27 +139,12 @@ def test_existing_provider_receipt_prevents_duplicate_creation(
             _request(RunPodAPI("unused"))
 
 
-@pytest.mark.parametrize(
-    ("failure", "summary"),
-    [
-        (ProviderUnavailable("POST pods: status 400"), "POST pods: status 400"),
-        (ProviderUnavailable("POST pods: no reply"), "POST pods: no reply"),
-        (
-            ProviderUnavailable("POST pods: unreadable reply"),
-            "POST pods: unreadable reply",
-        ),
-        (ProviderUnavailable("POST pods: status 400 do-not-log"), None),
-        (OSError("do-not-log"), None),
-    ],
-)
-def test_creation_failure_retains_safe_diagnosis_without_retry(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    failure: Exception,
-    summary: str | None,
+def test_creation_failure_propagates_once_without_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     at = datetime(2026, 10, 17, tzinfo=UTC)
     calls = 0
+    failure = ProviderUnavailable("POST pods: no reply")
 
     def create(api: RunPodAPI, **options: object) -> PodFact:
         nonlocal calls
@@ -172,13 +157,10 @@ def test_creation_failure_retains_safe_diagnosis_without_retry(
     with guard.protect_launcher(
         lambda _: _session(at), evidence, seconds=3600, clock=lambda: at
     ):
-        with pytest.raises(type(failure)) as caught:
+        with pytest.raises(ProviderUnavailable) as caught:
             _request(RunPodAPI("unused"))
         assert caught.value is failure
     assert calls == 1
-    events = [json.loads(line) for line in evidence.read_text().splitlines()]
-    error = next(event for event in events if event["phase"] == "create_unconfirmed")
-    assert error["error_type"] == type(failure).__name__
-    assert error["provider_summary"] == summary
-    assert "do-not-log" not in evidence.read_text()
+    phases = [json.loads(line)["phase"] for line in evidence.read_text().splitlines()]
+    assert phases == ["guard_started", "create_allowed", "guard_stopped"]
     assert RunPodAPI.create is create

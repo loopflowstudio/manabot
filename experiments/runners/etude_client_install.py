@@ -3,7 +3,9 @@
 The launcher supplies a hashed source archive and its verified pure-Python wheel.
 Runtime dependencies still come from the original frozen lock. Only the local
 client build is replaced by an offline wheel install; the guardian stays intact.
-This module is copied into the standard-library guardian archive before launch.
+This module is copied into the standard-library guardian archive before launch,
+beside the SDK's own `etude.launch.logging`, so its progress and failures land
+in the rental's retained bootstrap log exactly as the stock installer's do.
 """
 
 from dataclasses import dataclass
@@ -18,6 +20,10 @@ import subprocess
 import sys
 import time
 import zipfile
+
+from etude.launch.logging import explain, write_log
+
+SDK_VERSION = "0.1.2"
 
 
 @dataclass(frozen=True)
@@ -35,19 +41,12 @@ def read_bundle(code: bytes) -> ClientBundle:
         source, wheel = archive.read("source.zip"), archive.read("client.whl")
     if not isinstance(identity, dict) or identity != {
         "format": 1,
-        "sdk_version": "0.1.1",
+        "sdk_version": SDK_VERSION,
         "source_sha256": hashlib.sha256(source).hexdigest(),
         "wheel_sha256": hashlib.sha256(wheel).hexdigest(),
     }:
         raise ValueError("Prebuilt client identity differs")
     return ClientBundle(source, wheel)
-
-
-def _phase(name: str) -> None:
-    print(
-        "ETUDE_BOOT_PHASE " + json.dumps({"phase": name, "unix_seconds": time.time()}),
-        flush=True,
-    )
 
 
 def install(code: bytes) -> Path:
@@ -69,7 +68,7 @@ def install(code: bytes) -> Path:
                 if path.is_absolute() or ".." in path.parts:
                     raise ValueError("Unsafe client source member")
             archive.extractall(root)
-        wheel = root / "etude_sdk-0.1.1-py3-none-any.whl"
+        wheel = root / f"etude_sdk-{SDK_VERSION}-py3-none-any.whl"
         wheel.write_bytes(bundle.wheel)
         environment = {
             key: value
@@ -108,19 +107,23 @@ def install(code: bytes) -> Path:
             ),
         )
         for name, argv in commands:
-            _phase(name + "_start")
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise subprocess.TimeoutExpired(argv, 120)
-            subprocess.run(
-                argv,
-                cwd=root,
-                env=environment,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                timeout=remaining,
-                check=True,
-            )
-            _phase(name + "_ready")
+            write_log("client install", f"starting {name}")
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(argv, 120)
+                subprocess.run(
+                    argv,
+                    cwd=root,
+                    env=environment,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    timeout=remaining,
+                    check=True,
+                )
+            except subprocess.SubprocessError as error:
+                write_log("client install", explain(error))
+                raise
+        write_log("client install", "completed")
         (root / "ready").touch()
     return root

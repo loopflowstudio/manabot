@@ -1,7 +1,7 @@
 """Keep a transient receipt-read failure from abandoning a running campaign.
 
 The launcher installs protect_storage_reads around its existing scheduler. Only
-Etude 0.1.1 GET requests that received no reply are retried, at most three times.
+Etude 0.1.2 GET requests that received no reply are retried, at most three times.
 Writes, provider creation, denied access and unreadable responses still fail.
 Unknown storage state never becomes evidence that a run or artifact is absent.
 """
