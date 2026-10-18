@@ -15,8 +15,11 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+from threading import Lock
 import time
 from types import FrameType
+
+_EVENT_OUTPUT_LOCK = Lock()
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,10 @@ class Worker:
     def phase(self, phase: str, **details: object) -> None:
         value = {"phase": phase, "observed_unix_seconds": time.time(), **details}
         write_json(self.output / "worker-status.json", value)
-        print(json.dumps(value), flush=True)
+        # All supervisor threads share stdout. Keep each JSON record and its
+        # newline together so retained logs remain readable one event per line.
+        with _EVENT_OUTPUT_LOCK:
+            print(json.dumps(value), flush=True)
 
     def command(self, name: str, args: list[str], seconds: float) -> int:
         deadline = self.deadlines.work(seconds)
