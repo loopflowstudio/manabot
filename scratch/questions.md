@@ -171,3 +171,13 @@ state above. Startup counts do not authorize replacing an incomplete learned
 seed; a successful startup continues the bounded $2 calibration. Preserve the
 three earlier attempts and conservative reservations; science reserve is at most
 $27.45 after prior-failure and startup-retry allowances. Provider is $0.59/hour.
+
+
+Calibration `0df9b17970bf` succeeded: all3 pools ×100 updates,48 replayed games,
+60 hash-verified outputs, rental ended, SDK estimated$0.24563316. The durable
+protocol records timings and the measured budget rejection. Original36k-game
+cohort projects72.62h with1000-update fits; the historical2h fit cap admits only
+800 updates. Proposed13-deal/104-game-per-anchor amendment retains all seeds,
+pools, cells and controls and projects34.48h/$23.80 at ceiling. Jack Heart's
+cohort decision is pending; no scored science launched. Full retained evidence
+and projections live in `.runs/mtg122/gpu-complexity-startup1/`.

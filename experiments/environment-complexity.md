@@ -50,6 +50,39 @@ Remaining outcomes:
 The frozen protocol below preserves the original declaration and predictions.
 A future corrected-world plan must retain this lineage rather than overwrite it.
 
+## Corrected GPU calibration — 2026-10-17
+
+Run `0df9b17970bf`, source `0cd95fa8`, completed three reserved-seed12250
+fits of100 updates/409,600 learner transitions each and six eight-game replayed
+anchor cohorts (48 games). All60 published outputs were fetched with SDK digest
+verification under `.runs/mtg122/gpu-complexity-startup1/retained`.
+The L4 rental ended; estimated SDK cost $0.24563316, not an invoice.
+No calibration checkpoint is a scientific candidate.
+
+| Pool | Training seconds (100 updates) | Worst 20-update block, seconds/update |
+|---|---:|---:|
+| L1 vanilla |375.51|4.031|
+| L2 interaction |379.63|4.034|
+| L3 Allies/Lessons |462.00|5.410|
+
+The frozen historical count resolver rejects this calibration: its two-hour
+per-fit cap admits800, below its1000-update minimum. Moreover, the retained
+worst-cell/coordinator costs with1.5× margin project51.53 hours for36,000
+assessment games. A1000-update target needs2.287 hours/fit with margin; nine fits,
+full assessments and30 minutes setup/publication total72.62 hours, exceeding
+this study's allocation. These are projections, not sustained-throughput claims.
+
+**Proposed amendment, awaiting Jack Heart's decision:** retain1000 updates,
+three seeds, all three pools, all four deck-role cells, initialization/midpoint/
+endpoint and same-deal frozen controls. Use13 paired deals per cell per anchor
+(26 games/cell;104 games/anchor/checkpoint), totaling9360 assessment games.
+The same margin projects13.40 assessment hours and34.48 inclusive hours before
+separately retained historical costs/reserves; at the $0.69 ceiling, $23.80.
+This retains at least100 balanced greedy games per checkpoint, but loses
+per-cell precision. Do not silently overwrite the earlier50-deal protocol or
+claim the original cohort completed. No scientific launch follows until the
+amendment and exact plan are frozen.
+
 ## Frozen scientific protocol — 2026-10-14, before scored execution
 
 Jack Heart authorized Mini for up to 48 hours or $25 GPU spending, without local
