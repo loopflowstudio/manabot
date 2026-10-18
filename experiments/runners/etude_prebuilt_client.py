@@ -14,6 +14,7 @@ import tomllib
 import zipfile
 
 from experiments.runners import etude_client_install
+from experiments.runners.etude_client_install import SDK_VERSION
 
 _INSTALLED: str | None = None
 _IMPORT = "from etude.launch.providers.runpod.pod import main\n"
@@ -41,7 +42,7 @@ def prepare(source: bytes, wheel: bytes) -> bytes:
         zipfile.ZipFile(io.BytesIO(wheel)) as built,
     ):
         project = tomllib.loads(original.read("pyproject.toml").decode())["project"]
-        if project["name"] != "etude-sdk" or project["version"] != "0.1.1":
+        if project["name"] != "etude-sdk" or project["version"] != SDK_VERSION:
             raise ValueError("Unsupported Etude SDK version; review the adapter")
         before = {n: original.read(n) for n in original.namelist() if n.endswith(".py")}
         after = {n: built.read(n) for n in built.namelist() if n.endswith(".py")}
@@ -50,9 +51,9 @@ def prepare(source: bytes, wheel: bytes) -> bytes:
         for name in ("pyproject.toml", "uv.lock"):
             if original.read(name) != built.read("etude/_package/" + name):
                 raise ValueError("Wheel forwarding metadata differs")
-        prefix = "etude_sdk-0.1.1.dist-info/"
+        prefix = f"etude_sdk-{SDK_VERSION}.dist-info/"
         metadata = BytesParser().parsebytes(built.read(prefix + "METADATA"))
-        if metadata["Name"] != "etude-sdk" or metadata["Version"] != "0.1.1":
+        if metadata["Name"] != "etude-sdk" or metadata["Version"] != SDK_VERSION:
             raise ValueError("Wheel package identity differs")
         if (
             "Tag: py3-none-any"
@@ -66,7 +67,7 @@ def prepare(source: bytes, wheel: bytes) -> bytes:
             "identity.json": json.dumps(
                 {
                     "format": 1,
-                    "sdk_version": "0.1.1",
+                    "sdk_version": SDK_VERSION,
                     "source_sha256": hashlib.sha256(source).hexdigest(),
                     "wheel_sha256": hashlib.sha256(wheel).hexdigest(),
                 },
@@ -77,7 +78,7 @@ def prepare(source: bytes, wheel: bytes) -> bytes:
 
 
 def enable(path: Path) -> str:
-    """Opt in before bootstrap diagnostics; return the retained bundle digest."""
+    """Opt in for this launcher's future rentals; return the retained bundle digest."""
     global _INSTALLED
     from etude.launch.providers.runpod import machines
 
@@ -94,10 +95,8 @@ def enable(path: Path) -> str:
         or prepare(bundle.source, bundle.wheel) != code
     ):
         raise ValueError("Prebuilt client differs from this launcher's exact SDK")
-    if machines._BOOT.count(_IMPORT) != 1 or machines._BOOT.startswith(
-        "import json as _json"
-    ):
-        raise ValueError("Enable the prebuilt client before bootstrap diagnostics")
+    if machines._BOOT.count(_IMPORT) != 1:
+        raise ValueError("Unsupported Etude bootstrap; inspect it before replacing install")
     with zipfile.ZipFile(io.BytesIO(original_archive(guardian=True))) as archive:
         guardian = {name: archive.read(name) for name in archive.namelist()}
     module = "etude/launch/prebuilt_install.py"

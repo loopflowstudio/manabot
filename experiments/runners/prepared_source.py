@@ -62,7 +62,7 @@ def install_prepared_sources(receipts: list[Path], *, prefix: str) -> None:
 
     Install once before queueing work. Unmatched writes retain the SDK behavior;
     a matching source with different bytes fails before any cloud mutation.
-    This is a process-local adapter for Etude 0.1.1, not a storage migration.
+    This is a process-local adapter for Etude 0.1.2, not a storage migration.
     """
     import boto3
     from botocore.config import Config

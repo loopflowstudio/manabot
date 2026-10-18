@@ -12,7 +12,6 @@ from experiments.runners import (
     etude_client_install as installer,
     etude_prebuilt_client as adapter,
 )
-from experiments.runners.etude_bootstrap_diagnostics import instrument_bootstrap
 
 
 def client() -> installer.ClientBundle:
@@ -27,10 +26,11 @@ def client() -> installer.ClientBundle:
                 built.writestr(name, original.read(name))
         for name in ("pyproject.toml", "uv.lock"):
             built.writestr("etude/_package/" + name, original.read(name))
+        info = f"etude_sdk-{installer.SDK_VERSION}.dist-info/"
         built.writestr(
-            "etude_sdk-0.1.1.dist-info/METADATA", "Name: etude-sdk\nVersion: 0.1.1\n"
+            info + "METADATA", f"Name: etude-sdk\nVersion: {installer.SDK_VERSION}\n"
         )
-        built.writestr("etude_sdk-0.1.1.dist-info/WHEEL", "Tag: py3-none-any\n")
+        built.writestr(info + "WHEEL", "Tag: py3-none-any\n")
     return installer.ClientBundle(source, wheel.getvalue())
 
 
@@ -66,7 +66,7 @@ def test_bundle_round_trip_and_substitution_rejection() -> None:
         installer.read_bundle(changed.getvalue())
 
 
-def test_adapter_preserves_guardian_and_composes_diagnostics(
+def test_adapter_preserves_guardian_and_replaces_only_install(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from etude.launch.providers.runpod import machines
@@ -89,9 +89,12 @@ def test_adapter_preserves_guardian_and_composes_diagnostics(
         assert set(after.namelist()) - set(before.namelist()) == {
             "etude/launch/prebuilt_install.py"
         }
-    boot = instrument_bootstrap(machines._BOOT)
-    compile(boot, "bootstrap", "exec")
-    assert boot.index("_prebuilt_pod.install =") < boot.index("_original_install =")
+        # The installer logs through the SDK's own retained bootstrap log.
+        assert "etude/launch/logging.py" in after.namelist()
+    compile(machines._BOOT, "bootstrap", "exec")
+    assert machines._BOOT.index("_prebuilt_pod.install =") < machines._BOOT.index(
+        "from etude.launch.providers.runpod.pod import main"
+    )
 
 
 def test_expired_total_install_budget_keeps_failed_state(
@@ -100,6 +103,8 @@ def test_expired_total_install_budget_keeps_failed_state(
     original = client()
     code = adapter.prepare(original.source, original.wheel)
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path))
+    log = tmp_path / "bootstrap.log"
+    monkeypatch.setenv("ETUDE_LOG_PATH", str(log))
     monkeypatch.setattr(installer.shutil, "which", lambda _: "/usr/bin/uv")
     clock = [0.0]
     monkeypatch.setattr(installer.time, "monotonic", lambda: clock[0])
@@ -117,4 +122,7 @@ def test_expired_total_install_budget_keeps_failed_state(
         installer.install(code)
     assert len(calls) == 1
     assert not list(tmp_path.rglob("ready"))
-    assert list(tmp_path.rglob("etude_sdk-0.1.1-py3-none-any.whl"))
+    assert list(tmp_path.rglob(f"etude_sdk-{installer.SDK_VERSION}-py3-none-any.whl"))
+    retained = log.read_text()
+    assert "client install: starting client_runtime_dependencies" in retained
+    assert "client install: TimeoutExpired: timed out after 120 seconds" in retained
