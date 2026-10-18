@@ -158,3 +158,16 @@ extras. No local games, optimizer steps or additional paid retries ran.
 Long scientific execution must also bind artifact-access lifetime: the installed
 SDK's default grant is13h, not a43h campaign lease. Admit bounded per-seed jobs or
 explicit valid access before renting; calibration completion alone cannot waive it.
+
+
+## Startup retry approval and active calibration — 2026-10-17
+
+Jack Heart approved up to three startup retries, $0.50 total within the existing
+$35. First approved startup retry `0df9b17970bf` pins the unchanged corrected
+source `0cd95fa8`; session `cb3b3eab7371`, provider pod `19j6cpds07kfvv` is RUNNING
+and job logs show remote dependency setup. Private owner/receipts:
+`.runs/mtg122/gpu-complexity-startup1/`. This supersedes the waiting-for-approval
+state above. Startup counts do not authorize replacing an incomplete learned
+seed; a successful startup continues the bounded $2 calibration. Preserve the
+three earlier attempts and conservative reservations; science reserve is at most
+$27.45 after prior-failure and startup-retry allowances. Provider is $0.59/hour.
