@@ -121,6 +121,7 @@ jobs:
             tests/training/test_etude_bootstrap_diagnostics.py \
             tests/training/test_etude_worker_diagnostics.py \
             tests/training/test_etude_launch_guard.py \
+            tests/training/test_etude_storage_reads.py \
             tests/training/test_etude_prebuilt_client.py \
             tests/training/test_grouped_grid.py tests/training/test_grouped_learning.py \
             tests/training/test_locked_gpu_setup.py \
