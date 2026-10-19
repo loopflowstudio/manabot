@@ -1,0 +1,275 @@
+{
+  "sync": {
+    "connected": false,
+    "changes": []
+  },
+  "task": {
+    "id": "task_115585f7c6bddae557a59aa816f73e72",
+    "revision": 0,
+    "identifier": "MTG-48",
+    "title": "Run the selected BranchDriver in the real search teacher",
+    "description": "After RUL-1 selects or explicitly retains a BranchDriver, integrate that exact implementation into the current Intelligence visit-based teacher rather than adding another benchmark-only regression gate. Run a fixed real selected-matchup search workload through both the existing full-clone reference and selected production path; require identical legal roots, chosen or sampled Commands, outcomes, deterministic witnesses, viewer boundaries, and replayable failure seeds. Measure total search decisions and rollouts per second, p50/p95 decision latency, peak RSS, branch and rollback counters, and label cost at one interactive and one saturated budget. Set regression budgets on this consumer path and report whether the representation should remain, split by workload, or be removed. Preserve the existing benchmark artifacts as diagnostics, but do not regenerate them unless a surprising integration result requires a matched cause-separating cell. Run Rust tests in debug, every Python command through uv, rebuild the extension after managym/src changes, and use lf pr land -c when verified.",
+    "rank": 0,
+    "assignee": null,
+    "due_date": null,
+    "state": "completed",
+    "completed": true,
+    "completed_at": "2026-09-29T19:25:05Z",
+    "linear_id": "8446fa49-a1ac-466e-8a24-e4b6a89a8023",
+    "pm_snapshot_synced_at": 1784313582,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "project_id": "proj_2d1578d31903053033f94d60aa647e33",
+    "worktree": "/Users/jack/src/etude.run-the-selected-branchdriver-in",
+    "workspace_slug": "run-the-selected-branchdriver-in",
+    "branch": "jack-heart/run-the-selected-branchdriver-in",
+    "base_commit": "37ccf4c6b340860cda3f5af2d41f46cf1bc20df4",
+    "parent_pr_id": null,
+    "agent": null,
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      198,
+      18,
+      43,
+      7,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "project": {
+    "id": "proj_2d1578d31903053033f94d60aa647e33",
+    "summary": "Give human play and training one faithful, reproducible Allies versus Lessons world, supporting the intended card interactions and actual consumer workloads without divergent rules or hidden-state leakage.",
+    "slug": "rules-faithful-play-and-training",
+    "name": "Rules — Faithful Play and Training",
+    "description": "",
+    "krs": [
+      {
+        "text": "**Play the intended rules.** Establish the selected format and eligible Lesson-pool setup and implement the full Learn choice, including the outside-game Lesson path where available, optional discard/draw, and decline. Exercise it through the real human and agent paths with correct visibility and deterministic replay. Reproduce and fix further selected-matchup discrepancies; a deliberately reduced mechanic is not faithful to the agreed world.",
+        "holds": false
+      },
+      {
+        "text": "**Meet real consumer budgets.** Jointly with Intelligence, freeze representative training/play consumers, machine/build profiles, throughput/latency/RSS measures and budgets before accepting performance. Measure current behavior; remove only demonstrated blockers and verify the same workloads and semantics afterward. Adequate existing performance may satisfy a budget without new optimization. Preserve negative results; do not restart deferred calibration or general provider work by inertia.",
+        "holds": false
+      },
+      {
+        "text": "**Keep one exact authority.** Human Commands, bot actions, replay and search forks actually required by the chosen agent use consistent versioned rules and identities. On a prospectively declared complete-game cohort, executing the same recorded Commands from equivalent roots reproduces state witnesses and ordered consequences across consumers; independently acting humans and bots need not choose the same moves. Retain executable witnesses for stale/duplicate rejection, deterministic replay, viewer privacy and fork/root isolation where applicable. Include Lesson-pool state and visibility in the contract. Changed mechanics invalidate old compatible-looking evidence until rebound and checked; no consumer rebuilds its own rules.",
+        "holds": false
+      }
+    ],
+    "metric_targets": [],
+    "workflow": "",
+    "status": "completed",
+    "linear_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+    "pm_snapshot_synced_at": 1791592070,
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      30,
+      9,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      200,
+      14,
+      4,
+      20,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "observed_at": null,
+  "planning_error": null,
+  "planning_stale": true,
+  "planning_state": "unavailable",
+  "execution": {
+    "machine_id": "home_39860354aaca640c2ccb50bf6ca609d8",
+    "issue_id": "8446fa49-a1ac-466e-8a24-e4b6a89a8023",
+    "issue_identifier": "MTG-48",
+    "task_id": "task_115585f7c6bddae557a59aa816f73e72",
+    "external_project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+    "project": "rules-faithful-play-and-training",
+    "pm_snapshot_synced_at": 1784313582,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave": "rules",
+    "project_id": "proj_2d1578d31903053033f94d60aa647e33",
+    "status": "done",
+    "completion_pending": null,
+    "execution": {
+      "state": "idle",
+      "reason": "No Task Flow has run; independent Sessions may still be active",
+      "step": null,
+      "captured": null
+    },
+    "work": {
+      "sessions": [],
+      "flow_processes": [],
+      "processes": [],
+      "workflow": {
+        "name": "unplanned",
+        "nodes": [],
+        "edges": [
+          {
+            "from": "start",
+            "to": "end",
+            "flow": null
+          }
+        ],
+        "position": {
+          "kind": "node",
+          "node": "end"
+        },
+        "outgoing": [],
+        "history": [
+          {
+            "workflow": "unplanned",
+            "kind": "set",
+            "from": "start",
+            "to": "end",
+            "edge": null,
+            "lf_process_id": null,
+            "actor": "person",
+            "session_id": null,
+            "note": "completed before Workflows",
+            "at": 1790709905
+          }
+        ]
+      }
+    },
+    "worktree": "/Users/jack/src/etude.run-the-selected-branchdriver-in",
+    "workspace_slug": "run-the-selected-branchdriver-in",
+    "branch": "jack-heart/run-the-selected-branchdriver-in",
+    "base_commit": "37ccf4c6b340860cda3f5af2d41f46cf1bc20df4",
+    "agent": null,
+    "provider": "codex",
+    "pr": {
+      "id": "pr_a71a32323b634f3d86e2f7c807d8e1a1",
+      "task_id": "task_115585f7c6bddae557a59aa816f73e72",
+      "sequence": 1,
+      "slug": "run-the-selected-branchdriver-in",
+      "branch": "jack-heart/run-the-selected-branchdriver-in",
+      "base_commit": "37ccf4c6b340860cda3f5af2d41f46cf1bc20df4",
+      "parent_pr_id": null,
+      "publication": {
+        "requested_at": [
+          2026,
+          198,
+          20,
+          33,
+          28,
+          0,
+          0,
+          0,
+          0
+        ],
+        "presentation": null,
+        "github": {
+          "number": 137,
+          "url": "https://github.com/loopflowstudio/etude/pull/137",
+          "head_sha": "6c5526db691e92def1b9bce86876f072464c799c"
+        },
+        "merge": null
+      },
+      "merge_commit": "d7fe8acd757f89a0b3a5637305a5855424b50e05",
+      "abandoned_at": null,
+      "ci_observation": null,
+      "github_observation": {
+        "checked_at": [
+          2026,
+          198,
+          20,
+          42,
+          29,
+          766778000,
+          0,
+          0,
+          0
+        ],
+        "result": {
+          "state": "fresh"
+        }
+      },
+      "linear_attachment_id": null,
+      "linear_comment_id": null,
+      "linear_link_error": "linear request failed with status 400 Bad Request: Unknown argument \"subtitle\" on field \"Mutation.attachmentLinkURL\". Did you mean \"title\"?",
+      "created_at": [
+        2026,
+        198,
+        18,
+        43,
+        7,
+        0,
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        2026,
+        198,
+        20,
+        42,
+        29,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "latest_event": null,
+    "created_at": [
+      2026,
+      198,
+      18,
+      43,
+      7,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    "observation": {
+      "freshness": "not_required"
+    },
+    "actions": {
+      "recommended": "no_action",
+      "reason": "Task is terminal"
+    }
+  }
+}

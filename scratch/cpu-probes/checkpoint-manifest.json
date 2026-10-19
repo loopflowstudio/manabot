@@ -1,0 +1,72 @@
+[
+  {
+    "path": "scratch/cpu-probes/train/run/policy-0-ema.pt",
+    "bytes": 109673,
+    "sha256": "6ef06e0bc14a8d454fd6937494a2949606814dda948af90e76bdbce8fea4b757"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-0-initial-raw.pt",
+    "bytes": 110009,
+    "sha256": "4051fc1900aa193278a360022dc1f279efaa9951b7d7982875222ec87ec1a8ad"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-0-optimizer.pt",
+    "bytes": 1711,
+    "sha256": "b5e848a3bc4b0ed1b7911a5df72d50070baee7006bda978a3440d0a7eaf43dc1"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-0-raw.pt",
+    "bytes": 109545,
+    "sha256": "d03f2819784a071982a0292408d2460ce0520271bac8f813928b900792907d6b"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-1-ema.pt",
+    "bytes": 109673,
+    "sha256": "39c30c322f5b1f3e5785da6d91f45033dc84eaa566ecebd62d8000387f1aa71c"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-1-optimizer.pt",
+    "bytes": 1711,
+    "sha256": "1456e096c38b89bb7a206fb4f5b10d09525914519e59c292f79adbddb69a9fce"
+  },
+  {
+    "path": "scratch/cpu-probes/train/run/policy-1-raw.pt",
+    "bytes": 109545,
+    "sha256": "f769f08e3aaa6eb1a629fbfa2e44de3d36cd8e528e62c4a8512c1cc11f32a020"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-0-ema.pt",
+    "bytes": 618153,
+    "sha256": "bdc216fb62cbbabe71c6282f4640cf438cad04c074c23ee283d26e61779537ea"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-0-initial-raw.pt",
+    "bytes": 618489,
+    "sha256": "a664385c82eb3c32e82377b29adb3325ce766fac4ff533cca551961d362d9c73"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-0-optimizer.pt",
+    "bytes": 1148049,
+    "sha256": "5a506a23b0b43b0719c05809a20602d2457233db8d24f1bee6b8114aa4cfb942"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-0-raw.pt",
+    "bytes": 618025,
+    "sha256": "504fbff4037af26cac4a1ab923996013e8a34ac0339411c74627fa99eb886704"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-1-ema.pt",
+    "bytes": 618153,
+    "sha256": "cbe67cf7b1ed104a90292d203e28a037557110b4d15c63ded8413b12f06841eb"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-1-optimizer.pt",
+    "bytes": 1148049,
+    "sha256": "717547dab0907cdc1bf9ea032d15de9cea0f8179047eaf6dde4ef7752d3db846"
+  },
+  {
+    "path": "scratch/cpu-probes/update/run/policy-1-raw.pt",
+    "bytes": 618025,
+    "sha256": "fc6485fce509c92bb3d13f3af5864943c827bbe4604f449152a149146b05170e"
+  }
+]

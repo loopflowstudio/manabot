@@ -1,0 +1,60 @@
+{
+  "phase": "calibration",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/cohort-flow-probe.py",
+    "--card",
+    "h100",
+    "--hardware",
+    "scratch/gpu-probes/h100-005/capacity-report.json",
+    "--learner-service",
+    "scratch/gpu-probes/h100-005/learner-service.json",
+    "--out",
+    "scratch/accelerator-probes/cohort-h100-s512.json"
+  ],
+  "started_utc": "2026-10-15T04:20:09.508190+00:00",
+  "limit_seconds": 5.0,
+  "load_start": [
+    4.82421875,
+    3.982421875,
+    3.4580078125
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 1.4002525419928133,
+  "load_end": [
+    4.837890625,
+    3.9990234375,
+    3.466796875
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.02976029203273356,
+      "rss_bytes": 5947392
+    },
+    {
+      "seconds": 0.2633240830618888,
+      "rss_bytes": 184483840
+    },
+    {
+      "seconds": 0.4955302920425311,
+      "rss_bytes": 227934208
+    },
+    {
+      "seconds": 0.7286989580607042,
+      "rss_bytes": 256278528
+    },
+    {
+      "seconds": 0.9609367919620126,
+      "rss_bytes": 271745024
+    },
+    {
+      "seconds": 1.1951573330443352,
+      "rss_bytes": 299155456
+    }
+  ],
+  "sampled_tree_peak_bytes": 299155456
+}

@@ -1,0 +1,9 @@
+{
+  "units": 5760,
+  "unit": "observations (fixed real batch of 64; forward only)",
+  "seconds": 1.0095210829749703,
+  "units_per_second": 5705.675787399887,
+  "parameters": 11316,
+  "initialization_and_warmup_excluded": true,
+  "strength_or_useful_learning_progress_measured": false
+}

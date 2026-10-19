@@ -1,0 +1,108 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "-m",
+    "experiments.runners.pipeline_benchmark",
+    "replay",
+    "--tape",
+    "scratch/accelerator-probes/capture-s64",
+    "--out",
+    "scratch/accelerator-probes/replay-clock-reference",
+    "--seconds",
+    "15"
+  ],
+  "started_utc": "2026-10-15T03:02:25.734049+00:00",
+  "limit_seconds": 20.0,
+  "load_start": [
+    2.7763671875,
+    2.89208984375,
+    3.146484375
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 4.231983334058896,
+  "load_end": [
+    2.6337890625,
+    2.8603515625,
+    3.1337890625
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.028007084038108587,
+      "rss_bytes": 5750784
+    },
+    {
+      "seconds": 0.26550800004042685,
+      "rss_bytes": 188153856
+    },
+    {
+      "seconds": 0.49826266698073596,
+      "rss_bytes": 229376000
+    },
+    {
+      "seconds": 0.7358038750244305,
+      "rss_bytes": 256638976
+    },
+    {
+      "seconds": 0.9721570420078933,
+      "rss_bytes": 280903680
+    },
+    {
+      "seconds": 1.2095552090322599,
+      "rss_bytes": 367853568
+    },
+    {
+      "seconds": 1.4474672500509769,
+      "rss_bytes": 483377152
+    },
+    {
+      "seconds": 1.6825352919986472,
+      "rss_bytes": 525107200
+    },
+    {
+      "seconds": 1.9087007920024917,
+      "rss_bytes": 538607616
+    },
+    {
+      "seconds": 2.145046083955094,
+      "rss_bytes": 571670528
+    },
+    {
+      "seconds": 2.37931650003884,
+      "rss_bytes": 703004672
+    },
+    {
+      "seconds": 2.608662458951585,
+      "rss_bytes": 914259968
+    },
+    {
+      "seconds": 2.8458000000100583,
+      "rss_bytes": 988839936
+    },
+    {
+      "seconds": 3.083286292036064,
+      "rss_bytes": 1023983616
+    },
+    {
+      "seconds": 3.3132732920348644,
+      "rss_bytes": 1132396544
+    },
+    {
+      "seconds": 3.550567000056617,
+      "rss_bytes": 1133576192
+    },
+    {
+      "seconds": 3.7821096250554547,
+      "rss_bytes": 1133658112
+    },
+    {
+      "seconds": 4.021855541970581,
+      "rss_bytes": 297992192
+    }
+  ],
+  "sampled_tree_peak_bytes": 1133658112
+}

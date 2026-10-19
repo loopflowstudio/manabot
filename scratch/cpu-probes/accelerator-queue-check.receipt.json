@@ -1,0 +1,61 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/accelerator-queue-probe.py",
+    "check"
+  ],
+  "started_utc": "2026-10-15T02:05:26.762613+00:00",
+  "limit_seconds": 30.0,
+  "load_start": [
+    5.73876953125,
+    7.296875,
+    6.8486328125
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 1.897911874926649,
+  "load_end": [
+    5.73876953125,
+    7.296875,
+    6.8486328125
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.029471791931428015,
+      "rss_bytes": 6881280
+    },
+    {
+      "seconds": 0.26596266694832593,
+      "rss_bytes": 134316032
+    },
+    {
+      "seconds": 0.5037080829497427,
+      "rss_bytes": 198164480
+    },
+    {
+      "seconds": 0.739764624973759,
+      "rss_bytes": 229031936
+    },
+    {
+      "seconds": 0.9799132919870317,
+      "rss_bytes": 247922688
+    },
+    {
+      "seconds": 1.2179322500014678,
+      "rss_bytes": 257638400
+    },
+    {
+      "seconds": 1.4485524579649791,
+      "rss_bytes": 276201472
+    },
+    {
+      "seconds": 1.687820416991599,
+      "rss_bytes": 297418752
+    }
+  ],
+  "sampled_tree_peak_bytes": 297418752
+}

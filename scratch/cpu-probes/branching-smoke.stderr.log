@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/Users/jack/src/managym-cpu-research/scripts/bench_branching.py", line 2217, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/jack/src/managym-cpu-research/scripts/bench_branching.py", line 2176, in main
+    payload = run_benchmark(
+              ^^^^^^^^^^^^^^
+  File "/Users/jack/src/managym-cpu-research/scripts/bench_branching.py", line 1045, in run_benchmark
+    initial_source = source or source_identity()
+                               ^^^^^^^^^^^^^^^^^
+  File "/Users/jack/src/managym-cpu-research/scripts/bench_branching.py", line 427, in source_identity
+    production_compile_time_inputs(root=root)
+  File "/Users/jack/src/managym-cpu-research/scripts/bench_branching.py", line 351, in production_compile_time_inputs
+    raise RuntimeError(
+RuntimeError: production compile-time input inventory mismatch: declared=['content/semantic/v1/coverage.evidence.json', 'content/semantic/v1/generated/two_deck.ir.json', 'content/semantic/v1/two_deck.source.json'], discovered=['content/semantic/v1/coverage.evidence.json', 'content/semantic/v1/generated/jeong_increment.ir.json', 'content/semantic/v1/generated/two_deck.ir.json', 'content/semantic/v1/two_deck.source.json']

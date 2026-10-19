@@ -1,0 +1,57 @@
+{
+  "phase": "calibration",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/physical-serving-probe.py",
+    "--check"
+  ],
+  "started_utc": "2026-10-15T14:26:56.761274+00:00",
+  "limit_seconds": 2.0,
+  "load_start": [
+    6.552734375,
+    5.783203125,
+    6.39453125
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 1.645464750006795,
+  "load_end": [
+    6.552734375,
+    5.783203125,
+    6.39453125
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.02782508300151676,
+      "rss_bytes": 6029312
+    },
+    {
+      "seconds": 0.26557412499096245,
+      "rss_bytes": 186056704
+    },
+    {
+      "seconds": 0.4959341250360012,
+      "rss_bytes": 226181120
+    },
+    {
+      "seconds": 0.7306595420232043,
+      "rss_bytes": 253181952
+    },
+    {
+      "seconds": 0.9670342500321567,
+      "rss_bytes": 270221312
+    },
+    {
+      "seconds": 1.203847875003703,
+      "rss_bytes": 299941888
+    },
+    {
+      "seconds": 1.440586082986556,
+      "rss_bytes": 304660480
+    }
+  ],
+  "sampled_tree_peak_bytes": 304660480
+}

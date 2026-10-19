@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "started_utc": "2026-10-15T01:18:08.615694+00:00",
+  "host": {
+    "platform": "macOS-26.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu": "Apple M4 Max",
+    "memory_bytes": "137438953472",
+    "logical_cpus": 16,
+    "load_average": [
+      7.29443359375,
+      7.89794921875,
+      6.8154296875
+    ]
+  },
+  "mode": "simulator",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "-m",
+    "experiments.runners.distributed_workloads",
+    "--mode",
+    "simulator",
+    "--out",
+    "/Users/jack/src/managym-cpu-research/scratch/cpu-probes/simulator/workload",
+    "--seconds",
+    "1.0",
+    "--timeout",
+    "75.0",
+    "--seed",
+    "108"
+  ],
+  "timeout_seconds": 75.0,
+  "threads": 1,
+  "device": "cpu",
+  "recipe_input_sha256": null,
+  "recipe_input_path": null,
+  "head": "9576dc40ef486966246e20d9fdf58e5d741f1c40",
+  "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "files": {
+    "/Users/jack/src/managym-cpu-research/experiments/runners/distributed_benchmark.py": "1d34ed8199305ecb405e966356286c5c18fe2c1d705f98104018e68adb62ca0b",
+    "experiments/runners/distributed_workloads.py": "234b6665bbe977413f1f7e5fc42e9fe62f96874bc7474d8b50b2ac32e241feb5",
+    "uv.lock": "89b0378107b43ac823079a86c2907b167bce04d136729d002d1b266aa8471709"
+  },
+  "status": "prepared",
+  "limits": [
+    "No energy or thermal measurement",
+    "Child rusage peak RSS is not aggregate process-tree peak",
+    "No hardware comparison under contention",
+    "No distributed contributions measured",
+    "Recipe memory_bytes is a requested budget, not an enforced memory limit",
+    "Timed-out child store may require reconciliation; summary is not TrainingRun authority"
+  ]
+}

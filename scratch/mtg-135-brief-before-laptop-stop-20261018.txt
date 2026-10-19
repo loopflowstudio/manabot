@@ -1,0 +1,55 @@
+Jack Heart's current direction, recorded 2026-10-17
+
+Produce enough verified experimental evidence to recommend an exact training setup to MTG-122: model width/depth, collection stream count, transition horizon, learning-schedule mapping and checkpoint cadence, with clear cost and playing-strength limits. This continues the original CPU/VecEnv and GPU-bottleneck investigation in the same Task.
+
+Accepted scope
+
+- Complete the combined model-size × batching feasibility grid. Architectures are 64×2, 192×4, 384×8, 64×4 and 384×2, each at 4/64/128/256/512 streams. The two added shapes were explicitly requested by Jack. Keep the declared failures, deadline censors and missing cells; never relabel startup failures as model outcomes.
+- Evaluate retained policies against initialization and the paired greedy/random anchors. The early 131,072-transition screen is evidence of learning onset, not a size ranking or skill ceiling. A longer comparison must retain all five architectures, 64-stream and larger-batch candidates, the four-stream baseline, independent training seeds, and shared experience checkpoints. Freeze its exact allocation and analysis from measured costs before admission.
+- Preserve corrected w6, decks, observation/action semantics, cross-balanced current-self, 64 transitions per stream, ordinary Ataraxos MOVE/Adam, float32, TF32 off, one CPU producer/thread and the declared RTX5090 hardware. Batch expansion changes optimizer-step frequency, sample grouping and staleness even with schedule normalization; this is explicit, not a pure speed comparison. Do not silently change optimizer grouping or model representation.
+- Keep existing MTG-122/137 baseline work unchanged. Do not borrow their machines, checkpoints, controllers or budgets as matched controls. The eventual recommendation should state what is established and what remains uncertain, rather than presenting throughput alone as a training win.
+
+Budget and delivery
+
+Jack increased this campaign's inclusive authorization to $50, including prior studies and failed rentals accounted for in .runs/gpu-bottleneck/budget.json. The earlier $25 figure is superseded. Reserve each allocation before admission, retain every failed attempt, enforce job/rental deadlines and output-retention time, and confirm provider deletion before releasing the reservation. At most two MTG-135 rentals run concurrently. The independent MTG-121 startup test may run one additional rental under its separate $5 cap; the earlier account-wide two-pod interpretation was an unsupported operator assumption, corrected on 2026-10-18. A controller or observation timeout is not evidence that work stopped; inspect the live owner before any replacement.
+
+Jack explicitly authorized landing necessary MLops PRs as this work proceeds, including the previously requested PR295/296. Continue focused fixes through checks and delivery; do not ask again merely because publication or landing is needed. A merged infrastructure PR does not complete this research Task.
+
+Jack separately authorized MTG-121, the existing startup-optimization Task, with its own $5 GPU-testing cap. Do not charge that allowance to this grid or use it to exceed the $50 campaign cap. Supported admission has recovered and the dedicated checkout is /Users/jack/src/manabot.mtg-121-reduce-remote-gpu. Its sole continuing pursue Flow is b3a2aee5-34c3-415d-89a0-15c82d24e62b, with implementation Session session_6404e7cda99448b3a83b1738f96291fd; process liveness was verified. A second launch raced an earlier session and was stopped without implementation changes or GPU spending. Prepared direction and baseline evidence were delivered into the startup Task checkout. Leave its live worker alone; it has an isolated Etude state/ledger and must check capacity before any paid test.
+
+Current evidence and execution
+
+Twelve original grid cells have verified training artifacts and early-learning panels. At 131,072 transitions, small64×2/64 streams scored 53.1% against greedy and 84.4% against random versus 56.3%/84.4% at four streams, with one training seed and four paired deals. Small256 was faster but scored lower at that experience endpoint. These are provisional early-learning results, not noninferiority or ceiling claims. Large384×8/four streams was censored at 97,024 transitions by its declared learner deadline.
+
+Guarded startup canary016 (56ac402f2a9f) has now passed CUDA admission, two training updates, all retained manifest hashes, finite checkpoint reload and provider-confirmed cleanup. Canary015's immediate failure was traced to 772 seconds of local host sleep between claim and provider creation; the guard prevents stale creation and asserts bounded idle-sleep protection. This does not resolve earlier CUDA/NVML causes or the historical finite-weight anomaly.
+
+The existing sole grouped controller, .runs/grid-007/grouped_campaign.py, was started on 2026-10-17 at 23:04 UTC. It owns small-deep64×4 run a89eab426bb0 and large-shallow384×2 run f5ece8ba99f6, each with all five stream counts and frozen source 9a1faddb96ba518d9b6e63eed545f157d9771c6c. The original middle512/small512 group remains pending under that same controller. Read its live PID/status and provider evidence before acting; never tick its shared Etude scheduler from a second process. At the latest observation both added models completed their four batched cells and were training the four-stream references. These are worker clocks; full retained-artifact and numerical verification remains required before scientific conclusions. The controller blocks new admission after failure and retains live work.
+
+Working evidence and protocols
+
+- experiments/protocols/batching-size-grid-007.md: accepted combined grid and recommendation boundary.
+- experiments/protocols/grouped-feasibility-011.md and awake-startup-canary-016.md: grouped execution and the verified startup gate.
+- experiments/grid-early-learning-013.md and experiments/data/grid-early-learning-013-summary.json: complete early-learning panel and limits.
+- scratch/grid-007-validation-planning.md: chronological direction, superseded candidates, failures and current controller handoffs. Older entries are history; current status must be read fresh.
+- scratch/grid-007-startup-incident.md: the startup015 causal investigation.
+
+Historical bottleneck evidence
+
+PR292 retained CPU-worker/inference-serving work and whole-training phase accounting. Isolated serving gains did not reliably predict complete training gains. One ordinary timer-off control had a large finite weight anomaly; subsequent diagnostics did not establish its cause. Retain that uncertainty and all historical receipts. The original report is experiments/training-time.md and the diagnostic protocol is experiments/protocols/basic-training-numerics-004.txt. This Task remains open until the experiment-backed recommendation to MTG-122 is delivered and its stated evidence is verified.
+
+
+Current operator evidence — learning017 admitted 2026-10-18
+The feasibility grid now retains 23 verified complete 131072-transition cells and two separate four-stream deadline censors. The eleven latest complete cells passed source/recipe/seed, full manifest, finite raw-checkpoint loading and coarse Adam-state checks. Small-deep4 stopped at112384 transitions/439 updates after1800.06675 seconds; large4 remains the earlier97024-transition censor. Neither is relabeled as a complete endpoint. CPU protocol013 panels for the eleven new cells are running under bounded local sleep protection. No new playing-strength conclusion has yet passed the full-panel audit.
+
+Protocol017 is frozen in experiments/protocols/longer-learning-017.md (SHA256 f6f22c4ca0ee67848f4d42f1852b0321b7cf18a58c40c1de8d2134a5c2402281). It admits22 fresh training trajectories: all five capacities at64/256 streams plus small4, seeds13591/13592,524288 transitions each, raw checkpoints0/131072/262144/524288. The order reverses between seeds. The verified cost-selection rule chose this4x horizon;655360 transitions would violate the declared uncommitted-margin rule. Source3c3681d2b26a7fc8167928fa63fe24a6cd3d058a and all26 frozen input byte sequences are retained. No source/recipe/endpoint substitutions or automatic training retries are allowed.
+
+The sole learning017 controller is .runs/grid-007/learning_campaign.py, PID8930 at admission. Runs e7acaf5f0c94 (seed13591) and d2c61bf03f93 (seed13592) are admitted and downloading their locked runtime. Read current launch/status/process evidence before any action; never tick this scheduler from a second process. The prior grouped controller completed retention and confirmed all its provider rentals absent. Current conservative ledger: $23.50 settled, $17.50 reserved, $5 ancillary reserve, $4 uncommitted, within the original$50. Study-specific files remain under.runs/grid-007/learning-017; no Task completion is requested.
+
+PR308 merged; PR309 is published with auto-merge armed for the bounded transient receipt-read guard. Integration checks were still active at the last read. Preserve all unrelated working files during LF publication.
+
+MTG121 remains a separate$5 startup Task. Its original worker stopped on image access. Fresh read-only evidence established the existing private Etude ECR repository and existing administrator-publish/narrow-issuer-pull roles. The remaining implementation/validation worker was launched as Flow ac4bc75d-89e5-4a3a-939c-3953cada1913. It may refresh Task-local pull credentials without changing IAM, shared secrets, accounts or image visibility; it must observe fresh capacity and never alter the two learning017 rentals. Task automation is disabled and the CI watcher is not running. Deliver the eventual exact recommendation and evidence into MTG-122's checkout without launching it from this campaign. Its own later accepted direction controls execution; the earlier interim handoff was not a new hold or approval requirement. See scratch/mtg-135-handoff-scope-20261018.md in that checkout.
+
+
+Operator capacity correction — 2026-10-18 02:21 UTC
+
+Jack asked why MTG-121 was capacity-gated. The operator found an unsupported assumption in its own startup brief and launcher, not a verified provider quota or user instruction. Fresh records show the previous startup Flow stopped at loop-or-next on that gate. Its corrected brief, local plan and unexecuted protocol now allow one own startup rental alongside the two sweep rentals, with isolated state, all budget/deadline/cleanup safeguards and no changes to other Tasks. See scratch/grid-017-concurrency-amendment.md for the prospective operational amendment to frozen017; the original protocol bytes and scientific allocation stay unchanged. A fresh pursue continuation covers only the repaired cause and remaining comparison/delivery work.

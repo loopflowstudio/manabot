@@ -1,0 +1,70 @@
+{
+  "seconds": 1.0827660420909524,
+  "learner_transitions": 256,
+  "parameters": 138434,
+  "collector_stats": {
+    "micro_steps": 591,
+    "learner_transitions": 256,
+    "opponent_decisions": 335,
+    "games": 2,
+    "learner_wins": 1,
+    "learner_win_rate": 0.5,
+    "truncations": 0,
+    "seconds": 1.082717707962729,
+    "opponent_action_types": {
+      "priority_pass_priority": 78,
+      "priority_play_land": 34,
+      "priority_cast_spell": 51,
+      "select_card": 14,
+      "declare_attacker": 57,
+      "choose_target": 17,
+      "learn_take_lesson": 3,
+      "priority_activate_ability": 26,
+      "decline_choice": 1,
+      "declare_blocker": 8,
+      "learn_discard": 3,
+      "tap_for_cost": 32,
+      "pay_cost": 11
+    },
+    "learner_action_types": {
+      "priority_play_land": 44,
+      "priority_cast_spell": 45,
+      "priority_pass_priority": 60,
+      "declare_attacker": 38,
+      "select_card": 6,
+      "priority_activate_ability": 19,
+      "choose_target": 9,
+      "learn_discard": 2,
+      "tap_for_cost": 14,
+      "decline_choice": 4,
+      "declare_blocker": 10,
+      "learn_take_lesson": 4,
+      "pay_cost": 1
+    },
+    "games_by_stream": {
+      "2": 1,
+      "3": 1
+    }
+  },
+  "batch_array_bytes": {
+    "obs": 9046016,
+    "actions": 2048,
+    "logprobs": 1024,
+    "rewards": 1024,
+    "dones": 256,
+    "values": 1024,
+    "next_obs": 141344,
+    "next_done": 4,
+    "probabilities": 65536,
+    "log_probabilities": 65536
+  },
+  "batch_total_bytes": 9323812,
+  "native_buffer_bytes": 141384,
+  "seed": 10831,
+  "checkpoint": null,
+  "weights": "untrained; fixed throughout collect",
+  "limits": [
+    "One collection; cProfile overhead; first forward not warmed",
+    "Array bytes exclude Python objects, transient arrays and allocator overhead"
+  ]
+}
