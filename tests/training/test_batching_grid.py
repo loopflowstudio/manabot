@@ -75,3 +75,21 @@ def test_checkpoint_milestones_cannot_silently_change_experience(
 ) -> None:
     with pytest.raises(ValueError):
         transition_checkpoints(512, 131_072, milestones)
+
+
+def test_batched_baseline_is_the_tested_small_64_stream_recipe() -> None:
+    checked_in = TrainingRegime.model_validate_json(
+        Path("experiments/regimes/batched-baseline.json").read_text()
+    ).model_dump()
+    rebuilt = recipe(CAPACITIES[0], 64, 524_288, seconds=1740).model_dump()
+    assert checked_in == rebuilt
+    stage = checked_in["stages"][0]
+    assert (
+        checked_in["agent"]["hidden_dim"],
+        checked_in["agent"]["attention_layers"],
+    ) == (64, 2)
+    assert (stage["streams"], stage["transitions"], stage["updates"]) == (64, 64, 128)
+    assert stage["learning"]["iteration_schedule"] == {
+        "steps": 128,
+        "reference_steps": 2048,
+    }
