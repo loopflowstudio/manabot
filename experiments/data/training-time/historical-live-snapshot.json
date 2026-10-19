@@ -1,0 +1,52 @@
+{
+  "run_id": "d12b1d5fd2004155ac888d655f5c372b",
+  "source_commit": "45940fe3587fe37851267d0c903c6030a3a64a92",
+  "job": "etu103-recovery-v3-science-2",
+  "artifact": {
+    "schema_version": 1,
+    "uri": "s3://etudefantasia/manabot/jobs/etu103-recovery-v3-science-2/runtime/artifacts/sha256/9fd0672500d5e27297c7713734e668c50949d31b0f88838f3d68d2737e913e43",
+    "sha256": "9fd0672500d5e27297c7713734e668c50949d31b0f88838f3d68d2737e913e43",
+    "bytes": 30808049,
+    "version_id": "8nwttljrvT0SAxgINI8LEiXBSWvcy8TI"
+  },
+  "status": "running",
+  "run_seconds": 4766.704315051436,
+  "stage_seconds": 0.0,
+  "stage_status": "running",
+  "collection_seconds": 2660.757225982845,
+  "learning_seconds": 621.6218243688345,
+  "updates": 1855,
+  "first_update": {
+    "updates": 1,
+    "training_seconds": 1342.8730864599347,
+    "active_training_seconds": 2.5007591024041176,
+    "environment_decisions": 1134,
+    "learner_transitions": 512,
+    "optimizer_exposures": 128,
+    "games": 0,
+    "rss_bytes": 1890914304,
+    "host_load_1m": 3.767578125,
+    "process_cpu_seconds": 15.391370632000001
+  },
+  "last_update": {
+    "updates": 1855,
+    "training_seconds": 4766.704142127186,
+    "active_training_seconds": 3282.3790503516793,
+    "environment_decisions": 1929129,
+    "learner_transitions": 949760,
+    "optimizer_exposures": 46329,
+    "games": 10192,
+    "rss_bytes": 2024079360,
+    "host_load_1m": 5.548828125,
+    "process_cpu_seconds": 3346.669505117
+  },
+  "between_first_and_last_update": {
+    "recorded_seconds": 3423.8310556672513,
+    "active_seconds": 3279.878291249275,
+    "active_fraction": 0.9579556461526627
+  },
+  "collection_fraction_of_active": 0.8106185133303745,
+  "retained_exposure_fraction": 0.048779691711590294,
+  "early16_retained_exposure_fraction": 0.0489501953125,
+  "proof_limit": "Running snapshot, not completed training. Phase counters are observed accumulated work; zero stage.seconds was not finalized. Exact stage duration and initial admission wait are unavailable. All update clock columns checked monotonic; final active clock equals collection+learning."
+}

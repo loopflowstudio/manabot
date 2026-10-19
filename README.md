@@ -77,8 +77,8 @@ replay, Retry, compare, and Study.
 You need [uv](https://docs.astral.sh/uv/), Node, and a Rust toolchain. Then:
 
 ```bash
-git clone git@github.com:loopflowstudio/fantasia.git
-cd fantasia
+git clone git@github.com:loopflowstudio/manabot.git
+cd manabot
 ./scripts/play
 ```
 
@@ -118,9 +118,7 @@ This workflow establishes a playable candidate, not a measured strongest bot.
 The [dated evidence and remaining acceptance](docs/evidence/trained-challenger-2026-09-25.md)
 separate automated integration proof from human play and corrected-world proof.
 
-Live learner metrics and admitted raw policy exports use the public Etude SDK.
-Historical W&B records remain readable; experiment scheduling and scientific
-evidence migration are still in progress.
+Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
 Simulation pulls trained models and can run locally on CPU. See
 [manabot/README.md](manabot/README.md) for the training and simulation
 quickstart, presets, and the current world's live baselines.
@@ -202,19 +200,25 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 ## Naming
 
 - **Manabot** — the whole project and this repository.
-- **manabot.academy** / **Academy** — the web app for playing Magic against manabots: the `academy` package, the frontend,
-  and the website.
-- **manabot.manabot** — the training-system component, implemented in the
-  `manabot` Python package and CLI. Indefinite noun:
+- **Academy** — the web app players use: the `academy` package, the frontend,
+  and its play service. The project website uses Manabot.
+- **manabot** — the bot and the Python training library/CLI. Indefinite noun:
   you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
-- **Etude** — the separate experiment library at
-  `loopflowstudio/etude`, publicly distributed as `etude-sdk`. Always ASCII (never “Étude”).
+- **Etude** — the separate launching and experiment system. Its public client
+  is [`loopflowstudio/etude`](https://github.com/loopflowstudio/etude); the
+  private research service is `loopflowstudio/etude-studio`. Always ASCII
+  (never “Étude”).
 
 If it faces the player, it is Academy; if it trains or evaluates the agent, it
 is manabot; if it is the world, it is managym. manabot is not a former name to
 erase: existing `manabot.*` contract/schema identifiers, experiment receipts,
 and wandb history keep their names and remain reproducible. The same holds
-for names that predate Academy: the `etude.gg` domain, `x-etude-*` headers,
+for names that predate Academy: `x-etude-*` headers,
 `etude.*` storage keys and schema identifiers, and the Sepia Etude visual
 language.
+
+Jack Heart selected Manabot on 2026-10-14. The project lives at `manabot.gg`,
+with Academy at `play.manabot.gg` or `academy.manabot.gg`. The old `etude.gg`
+addresses redirect to the matching new hosts, preserving paths and queries.
+The GitHub repository and deployed service identifiers retain their existing names.

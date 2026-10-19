@@ -574,3 +574,67 @@ fn compound_lowering_preserves_root_and_all_attacker_subsets() {
         .unwrap()
     );
 }
+
+#[test]
+fn compound_decline_stops_before_a_later_attacker_declaration() {
+    use managym::state::game_object::PlayerId;
+
+    for opponent_has_attacker in [true, false] {
+        let deck = BTreeMap::from([("Gray Ogre".to_string(), 40)]);
+        let mut scenario = Scenario::new(deck.clone(), deck, 815);
+        scenario.advance_to_active_step(0, StepKind::Main);
+        scenario.game_mut().scenario_clear_hand(PlayerId(0));
+        scenario.game_mut().scenario_clear_hand(PlayerId(1));
+        let attacker = scenario.force_permanent_on_battlefield(0, "Gray Ogre");
+        scenario.game_mut().state.permanents[attacker]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
+        if opponent_has_attacker {
+            scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+        }
+        scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
+        scenario.game_mut().skip_trivial = true;
+        let game = scenario.game();
+        let root = game.state.deterministic_hash();
+        let turn = game.state.turn.turn_number;
+        let offers = game.compound_offers().unwrap();
+        let offer = attacker_offer(&offers);
+        let (role, candidates) = attacker_candidates(offer);
+        assert_eq!(candidates.len(), 1);
+        let (submission, _) = submission_for_mask(offer, role, candidates, 0);
+
+        // One native decline is the independent oracle. With no castable cards,
+        // tick skips directly to another declaration, sometimes by the same actor.
+        let mut expected = game.clone();
+        let decline = expected
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .unwrap();
+        expected.step(decline).unwrap();
+        let expected_actor = PlayerId(usize::from(opponent_has_attacker));
+        assert_eq!(
+            expected.action_space().unwrap().kind,
+            ActionSpaceKind::DeclareAttacker
+        );
+        assert_eq!(
+            expected.action_space().unwrap().player,
+            Some(expected_actor)
+        );
+        assert_eq!(
+            expected.state.turn.turn_number,
+            turn + if opponent_has_attacker { 1 } else { 2 }
+        );
+
+        let commands = game.compound_commands(&offers, &submission).unwrap();
+        assert_eq!(commands.len(), 1);
+        assert_eq!(game.state.deterministic_hash(), root);
+        let mut replay = game.clone();
+        replay.execute_semantic_command(&commands[0]).unwrap();
+        expected.take_observation_events();
+        assert_equivalent_surface(&replay, &expected);
+    }
+}

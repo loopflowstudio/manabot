@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Manage the Fly-hosted Fantasia apps (mirrors kata/deploy/kata-fly.sh):
+# Manage the Fly-hosted Manabot apps (mirrors kata/deploy/kata-fly.sh):
 # the landing site (fantasia-website) and hosted play (academy-play).
-# DNS lives in Cloudflare; the API token comes from Doppler (fantasia/prd).
+# DNS lives in Cloudflare; the API token comes from Doppler (manabot/prd).
 
 set -euo pipefail
 
@@ -13,7 +13,7 @@ Commands:
   create   Create the Fly app if it does not exist
   deploy   Deploy the app image to Fly
   certs    Add/list Fly certificates for the app's domains
-  dns      Sync Cloudflare DNS for every domain (requires Doppler fantasia/prd)
+  dns      Sync Cloudflare DNS for every domain (requires Doppler manabot/prd)
   status   Show Fly app status
   logs     Tail Fly logs
   health   Check every public domain
@@ -37,8 +37,8 @@ app="${ACADEMY_FLY_APP:-fantasia-website}"
 org="${ACADEMY_FLY_ORG:-loopflow-studio}"
 region="${ACADEMY_FLY_REGION:-sjc}"
 repo="$(git rev-parse --show-toplevel)"
-website_domains=(etude.gg www.etude.gg etudefantasia.com www.etudefantasia.com etudefantasia.gg www.etudefantasia.gg)
-play_domains=(play.etude.gg)
+website_domains=(manabot.gg www.manabot.gg etude.gg www.etude.gg etudefantasia.com www.etudefantasia.com etudefantasia.gg www.etudefantasia.gg)
+play_domains=(play.manabot.gg academy.manabot.gg play.etude.gg)
 
 case "$app" in
   academy-play)
@@ -84,7 +84,7 @@ case "$command" in
     ;;
   dns)
     require_tool doppler
-    doppler run --project fantasia --config prd -- \
+    doppler run --project manabot --config prd -- \
       uv run --no-project python "$repo/deploy/academy-dns.py"
     ;;
   status)

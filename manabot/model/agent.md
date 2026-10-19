@@ -148,6 +148,21 @@ This updated design document reflects both the current implementation and our st
 
 
 
+## Inference preparation
+
+Ordinary seat-routed collection uses `PolicyInference` from
+[`inference.py`](inference.py) for one unchanged behavior-policy interval. It
+admits definition IDs on CPU before transfer and lazily reuses semantic catalog
+embeddings. Prepared observations retain the tensor dictionary interface; they
+are owned by that scope and must not be mutated or used after it closes. Normal
+parameter updates, tensor replacement, model-mode/configuration changes and
+gradient-enabled use are rejected. Unsafe mutation through `.data` aliases is
+outside this contract. A fresh scope follows every collection/update boundary.
+
+Learning with ordinary tensor dictionaries continues to validate inputs and
+encode the catalog with gradients. Inference scopes add no checkpoint state and
+do not change sampling, request shapes, optimizer state or recovery serialization.
+
 ## Capacity identity and accounting
 
 `AgentSpec.hidden_dim`, positive `attention_layers`, optional

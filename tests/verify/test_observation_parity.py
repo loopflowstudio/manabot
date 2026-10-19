@@ -146,7 +146,9 @@ def test_object_index_mapping_and_padded_focus_resolution():
     np.testing.assert_array_equal(encoded["action_focus"], expected_focus)
 
 
-def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract():
+def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract() -> (
+    None
+):
     env = managym.Env(seed=5, skip_trivial=True)
     hypers = ObservationSpaceHypers()
     encoder = ObservationEncoder(hypers)
@@ -155,67 +157,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     expected = env.encode_observation(obs)
 
     out = {
-        "agent_player": np.full((1, encoder.player_dim), -7.0, dtype=np.float32),
-        "opponent_player": np.full((1, encoder.player_dim), -7.0, dtype=np.float32),
-        "agent_cards": np.full(
-            (hypers.max_cards_per_player, encoder.card_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "opponent_cards": np.full(
-            (hypers.max_cards_per_player, encoder.card_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "agent_permanents": np.full(
-            (hypers.max_permanents_per_player, encoder.permanent_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "opponent_permanents": np.full(
-            (hypers.max_permanents_per_player, encoder.permanent_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "actions": np.full(
-            (hypers.max_actions, encoder.action_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "events": np.full(
-            (hypers.max_events, encoder.event_dim),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "action_focus": np.full(
-            (hypers.max_actions, hypers.max_focus_objects),
-            -7,
-            dtype=np.int32,
-        ),
-        "agent_player_valid": np.full((1,), -7.0, dtype=np.float32),
-        "opponent_player_valid": np.full((1,), -7.0, dtype=np.float32),
-        "agent_cards_valid": np.full(
-            (hypers.max_cards_per_player,),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "opponent_cards_valid": np.full(
-            (hypers.max_cards_per_player,),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "agent_permanents_valid": np.full(
-            (hypers.max_permanents_per_player,),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "opponent_permanents_valid": np.full(
-            (hypers.max_permanents_per_player,),
-            -7.0,
-            dtype=np.float32,
-        ),
-        "actions_valid": np.full((hypers.max_actions,), -7.0, dtype=np.float32),
-        "events_valid": np.full((hypers.max_events,), -7.0, dtype=np.float32),
+        key: np.full_like(value[0], -7) for key, value in encoder.allocate(1).items()
     }
 
     env.encode_observation_into(obs, out)

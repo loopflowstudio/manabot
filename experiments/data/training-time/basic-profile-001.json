@@ -1,0 +1,358 @@
+{
+  "study": "basic-profile-001",
+  "source": "79ea7a0e3b775487f7660d1c7656189f920297b8",
+  "run": "70ec76cbf84d",
+  "protocol": "experiments/protocols/basic-training-profile.txt",
+  "outcome": "lost",
+  "cause": "machine_lost",
+  "interpretation": "No training timings recovered. Job log reports incomplete study; cell outcomes are unknown. Artifact-delivery cause is unproven.",
+  "attempt": {
+    "id": "0898bc2f06b2",
+    "session": "3afc003174dc",
+    "started_at": "2026-10-16T01:34:31.648539Z",
+    "finished_at": "2026-10-16T02:19:10.440775Z",
+    "outcome": "lost",
+    "cause": "machine_lost",
+    "outputs": [],
+    "exit_code": null
+  },
+  "provider_cleanup": {
+    "checked_at": "2026-10-16T02:19:29.153539+00:00",
+    "run_id": "70ec76cbf84d",
+    "done": true,
+    "outcome": "lost",
+    "machine": "worker-ownership-3afc003174dc",
+    "provider_id": "2tagy7w174073m",
+    "provider_present": false,
+    "deleted_at": "2026-10-16T02:19:10.440775+00:00"
+  },
+  "observed_objects": [
+    {
+      "name": "claim",
+      "bytes": 32,
+      "sha256": "0341a6cf0a2e2ff39eeaffa0546810ba50fe44858c36a09f0b7b8ad9062f5554"
+    },
+    {
+      "name": "log",
+      "bytes": 728,
+      "sha256": "4ca02b3071354caba720faffaf2934b87c6a9babf36071f0debc33e421f975ee"
+    },
+    {
+      "name": "outputs/setup.log",
+      "bytes": 10244,
+      "sha256": "1ad03afafae591a7e4f1936e6737fe58a43d9bf54f3672a6191d35d97602736e"
+    }
+  ],
+  "observed_objects_proof_limit": "Authenticated S3 read and locally calculated hashes; no completed session output receipt was delivered.",
+  "allocation": {
+    "name": "basic-profile-001",
+    "source": "79ea7a0e3b775487f7660d1c7656189f920297b8",
+    "cohort_cap_usd": 3,
+    "job_cap_usd": 2,
+    "status": "terminal-deletion-confirmed",
+    "max_attempts": 1,
+    "reserved_at": "2026-10-16T01:32:56.352615+00:00",
+    "run_id": "70ec76cbf84d",
+    "pod_id": "2tagy7w174073m",
+    "hourly_rate_usd": 1.19,
+    "created_at": "2026-10-16T01:34:07.862000+00:00",
+    "outcome": "lost",
+    "deleted_at": "2026-10-16T02:19:10.440775+00:00",
+    "estimated_cost_usd": 0.894049091425,
+    "billed_usd": 0.0,
+    "billed_through": null,
+    "conservative_charge_usd": 1.09
+  },
+  "cases": [
+    {
+      "name": "proof-s64-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": false,
+      "updates": 3,
+      "proof": true,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "proof-s64-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": true,
+      "updates": 3,
+      "proof": true,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "proof-s512-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": false,
+      "updates": 3,
+      "proof": true,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "proof-s512-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": true,
+      "updates": 3,
+      "proof": true,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-0-w64-d1-s64-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-0-w64-d1-s512-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-0-w384-d8-s64-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-0-w384-d8-s512-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-1-w64-d1-s64-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-1-w64-d1-s512-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-1-w384-d8-s64-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-1-w384-d8-s512-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-2-w64-d1-s64-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-2-w64-d1-s512-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-2-w384-d8-s64-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-2-w384-d8-s512-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-3-w64-d1-s64-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-3-w64-d1-s512-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-3-w384-d8-s64-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-3-w384-d8-s512-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-4-w64-d1-s64-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-4-w64-d1-s512-off",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-4-w384-d8-s64-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-4-w384-d8-s512-off",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": false,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-5-w64-d1-s64-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-5-w64-d1-s512-on",
+      "width": 64,
+      "layers": 1,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-5-w384-d8-s64-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 64,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    },
+    {
+      "name": "timing-5-w384-d8-s512-on",
+      "width": 384,
+      "layers": 8,
+      "streams": 512,
+      "profile": true,
+      "updates": 16,
+      "proof": false,
+      "observed_status": "unknown_archive_unavailable"
+    }
+  ],
+  "timing_comparison_available": false,
+  "observer_gate": "unproven",
+  "exact_proof_gate": "unproven",
+  "transport_observations": {
+    "single_large_archive": true,
+    "completion_follows_all_output_uploads": true,
+    "http_timeout_seconds": 60,
+    "form_maximum_bytes": 5368709120
+  },
+  "transport_proof_limit": "Source inspection identifies limits but does not reveal actual archive size, transfer speed or remote upload exception."
+}

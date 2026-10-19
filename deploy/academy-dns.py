@@ -1,11 +1,11 @@
-"""Point Cloudflare DNS for the Fantasia domains at the Fly-hosted apps.
+"""Point Cloudflare DNS for the Manabot domains at the Fly-hosted apps.
 
 Mirrors the loopflow.studio zone pattern: a proxied CNAME per hostname to the
 app's unique Fly alias, a DNS-only _acme-challenge CNAME so Fly can issue
 certificates behind the Cloudflare proxy, and a _fly-ownership TXT record
 (required when traffic routes through a proxy).
 
-Run through the wrapper so the token comes from Doppler (fantasia/prd):
+Run through the wrapper so the token comes from Doppler (manabot/prd):
 
     deploy/academy-fly.sh dns
 """
@@ -21,6 +21,7 @@ import urllib.request
 API = "https://api.cloudflare.com/client/v4"
 
 ZONES = {
+    "manabot.gg": os.environ["CLOUDFLARE_ZONE_ID_MANABOT_GG"],
     "etude.gg": os.environ["CLOUDFLARE_ZONE_ID_ETUDE_GG"],
     "etudefantasia.com": os.environ["CLOUDFLARE_ZONE_ID_ETUDEFANTASIA_COM"],
     "etudefantasia.gg": os.environ["CLOUDFLARE_ZONE_ID_ETUDEFANTASIA_GG"],
@@ -36,6 +37,8 @@ HOSTS = {
         for host in (zone, f"www.{zone}")
     },
     "play.etude.gg": ("academy-play", "nw3xznd"),
+    "play.manabot.gg": ("academy-play", "nw3xznd"),
+    "academy.manabot.gg": ("academy-play", "nw3xznd"),
 }
 
 

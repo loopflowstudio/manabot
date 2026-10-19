@@ -1,0 +1,3114 @@
+{
+  "protocol": "experiments/baseline-nightly.md",
+  "recipe_version": "baseline-v1",
+  "horizon_choice_commit": "9ae00d62",
+  "purchased_compute_dollars": 0,
+  "compute": "standard public GitHub-hosted CPU runners; no laptop/mini training",
+  "cost_note": "Per-seed coordinator and learner/evaluator charges overlap; do not sum them as sequential wall time. Build/setup and aggregation are additional.",
+  "attempts": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-15T19:09:28Z",
+      "headSha": "793d4dd1eed7db76402d055e1a2b8e383fa25af6",
+      "status": "completed",
+      "updatedAt": "2026-10-15T19:14:22Z",
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/38791569833",
+      "run_id": 38791569833,
+      "interpretation": "Missing nbformat: all three stopped before training; no learning evidence.",
+      "artifacts": [
+        {
+          "name": "baseline-197",
+          "id": 12000647174,
+          "size_in_bytes": 9150,
+          "digest": "sha256:5392bb5989668bbfef4de58e1d4432130db73bc645ff2b8ad03131c48eab198f"
+        },
+        {
+          "name": "learnability-38791569833-1",
+          "id": 12000532131,
+          "size_in_bytes": 324552,
+          "digest": "sha256:34e9de54bad52e1caa76974e24fdb51a5630af183f162c3048fd25dd1dff0a54"
+        },
+        {
+          "name": "baseline-419",
+          "id": 12000003904,
+          "size_in_bytes": 9141,
+          "digest": "sha256:0ecceb921067cd792b738ef0720204dd2ddab1cf0b4d8e8d171d2d2c214cf34a"
+        },
+        {
+          "name": "baseline-281",
+          "id": 11999598796,
+          "size_in_bytes": 9146,
+          "digest": "sha256:a7909fc16accc6f337b62f35b397797c60c5d5528f3cb9e93ebc39cfcb51d71b"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-15T19:14:18Z",
+      "headSha": "e1d2bfb1b400019acc2ce295c2668418fa41fb13",
+      "status": "completed",
+      "updatedAt": "2026-10-15T19:18:56Z",
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/38792239992",
+      "run_id": 38792239992,
+      "interpretation": "All three trained 16 updates; evaluation admission failed on player-label setup identity; no admitted outcome comparison.",
+      "artifacts": [
+        {
+          "name": "baseline-result",
+          "id": 12001280466,
+          "size_in_bytes": 656,
+          "digest": "sha256:0a7a796b27d5474b1ecf203a6803cd965b0997d77bb3de9fb3e20c4bcbc5f94c"
+        },
+        {
+          "name": "learnability-38792239992-1",
+          "id": 12000840545,
+          "size_in_bytes": 324341,
+          "digest": "sha256:aedd9d86872bbd20ecc32709284e1bcb74af08e5d1c932b75575d457a43ae277"
+        },
+        {
+          "name": "baseline-197",
+          "id": 12000488558,
+          "size_in_bytes": 4372670,
+          "digest": "sha256:275132bfcfbd97dc63a4072999dc8b8fc19713dac60ccac15c0b1fef187e8933"
+        },
+        {
+          "name": "baseline-419",
+          "id": 11999214845,
+          "size_in_bytes": 4366240,
+          "digest": "sha256:a1396031e1469b779dc04f8630620184c5eabd9266f94366efdcc5a3024941b1"
+        },
+        {
+          "name": "baseline-281",
+          "id": 11999124808,
+          "size_in_bytes": 4359517,
+          "digest": "sha256:14d3c493e6282de6787f85505cd9353c215efddb9aa7ad9ed52b046222500a2b"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-15T19:19:27Z",
+      "headSha": "58532d7ebebcd81be28920c8286b6cd2a45f0596",
+      "status": "completed",
+      "updatedAt": "2026-10-15T19:43:44Z",
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/38792948721",
+      "run_id": 38792948721,
+      "interpretation": "All three 16-update software checks passed; aggregate learning inconclusive.",
+      "artifacts": [
+        {
+          "name": "baseline-419",
+          "id": 12001942770,
+          "size_in_bytes": 12324506,
+          "digest": "sha256:051cdbbce0ee8cf5e046b7a26c65be0da31eed66d6c41c4e43b4fa4cf9b247bf"
+        },
+        {
+          "name": "baseline-result",
+          "id": 12001389571,
+          "size_in_bytes": 742,
+          "digest": "sha256:9f810cbf846a4e0b2ea411901fa811b9ffc5868f56fbf41cc63597d25bb22a7b"
+        },
+        {
+          "name": "baseline-197",
+          "id": 12001173066,
+          "size_in_bytes": 12315891,
+          "digest": "sha256:6be1a8333edfbba0ab568f073a602fc747575fab33ee3fbf81d68746af6a7d43"
+        },
+        {
+          "name": "baseline-281",
+          "id": 12000869840,
+          "size_in_bytes": 12338499,
+          "digest": "sha256:eaf63a77afdfcb819e52f3058b315ab92f959c7f93d839863818857c93490b9e"
+        },
+        {
+          "name": "learnability-38792948721-1",
+          "id": 12000766713,
+          "size_in_bytes": 324549,
+          "digest": "sha256:89057ae1521b52cba69c81b65ebc53172a2a688386802c74f3034c93a773bbd9"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-15T19:37:11Z",
+      "headSha": "49316156e9ac47a4dc2b8e2e6baa67526a3c69ef",
+      "status": "completed",
+      "updatedAt": "2026-10-15T20:09:59Z",
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/38795378947",
+      "run_id": 38795378947,
+      "interpretation": "First full 128-update qualification; all attempts and the unchanged threshold retained.",
+      "artifacts": [
+        {
+          "name": "baseline-197",
+          "id": 12003981407,
+          "size_in_bytes": 12994369,
+          "digest": "sha256:383954388b60e5d0e630f09ab4bce23ea4d80f2daf592d2dfa6880c3f6388bd3"
+        },
+        {
+          "name": "baseline-419",
+          "id": 12003931508,
+          "size_in_bytes": 12868109,
+          "digest": "sha256:573991edefeb7abc651a882bc9e587397fcaee124c3848eb39ad385f1486e538"
+        },
+        {
+          "name": "baseline-result",
+          "id": 12003582407,
+          "size_in_bytes": 746,
+          "digest": "sha256:179532d9d59bf11850d860c901505f31a3a825b73261a976b904662cd2a140c0"
+        },
+        {
+          "name": "baseline-281",
+          "id": 12003357351,
+          "size_in_bytes": 13098263,
+          "digest": "sha256:ce341212e24d80143b399ad66e524cc5e8db0143bbbc162c67f7bc7b80a197df"
+        },
+        {
+          "name": "learnability-38795378947-1",
+          "id": 12002382176,
+          "size_in_bytes": 324357,
+          "digest": "sha256:b667a0e5f91ae394ea1f3ce378b770918d4819266f418bd557891bf1ee62f849"
+        }
+      ]
+    }
+  ],
+  "calibration_16": {
+    "aggregate": {
+      "deals": 24,
+      "gain": 0.0,
+      "lower": -0.041666666666666664,
+      "per_seed": [
+        0.03125,
+        -0.010416666666666666,
+        -0.020833333333333332
+      ],
+      "reason": "insufficient evidence of a practically meaningful outcome change",
+      "seeds": 3,
+      "upper": 0.041666666666666664,
+      "verdict": "inconclusive"
+    },
+    "aggregate_sha256": "997d73b749bd13917c3ad064a0a3132e0eb6883ef92fc828b5448e4708660124",
+    "seeds": [
+      {
+        "seed": 197,
+        "steps": 16,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": 0.03125,
+          "lower": 0.0,
+          "per_seed": [
+            0.03125
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.0625,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 47.0,
+        "final_game_score": 50.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "1cb4bbb69cc9245c336ec58850c070da252ba86a273d07cba980e6bdc388afa7",
+        "regime_digest": "247818bbc66a81457e1d775f7688d1c8f4c466243f9c68e21e04a6a2c35958a8",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "29b321888d3fa21e09e7e10a4a5e5430d6130ed72cd919ab2379f947c725ac6c",
+            "maximum_invariance_error": 2.384185791015625e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 8,
+            "checkpoint_sha256": "c21945af7c3da690df2c171ae3df28b1be13f88b0d4fc6802140aa476e5080b9",
+            "maximum_invariance_error": 2.086162567138672e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 16,
+            "checkpoint_sha256": "776d625d5aef81e75cf4f182f1e506a27efdd92500eb78914a9a451fd102e827",
+            "maximum_invariance_error": 2.5331974029541016e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.005260202665037165,
+            "mean_absolute_value_change": 0.13507106403509775,
+            "std_log_odds_change": 0.0051163554559408644
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.00025158382777590305,
+            "mean_absolute_value_change": 0.17798465490341187,
+            "std_log_odds_change": 0.00013682183416397154
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.0035350203591709337,
+            "mean_absolute_value_change": 0.23463011201885012,
+            "std_log_odds_change": 0.0034863543947923304
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.0013457785179424617,
+            "mean_absolute_value_change": 0.18864262931876713,
+            "std_log_odds_change": 0.0025449646051022142
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.00014055848199253282,
+            "mean_absolute_value_change": 0.1684730119175381,
+            "std_log_odds_change": 0.00013905925436952284
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.0011074815346445474,
+            "mean_absolute_value_change": 0.16001107460922664,
+            "std_log_odds_change": 0.0008394533729067659
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.0003597869460160534,
+            "mean_absolute_value_change": 0.21490206486648983,
+            "std_log_odds_change": 0.00026361355565449973
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.0005367801188387804,
+            "mean_absolute_value_change": 0.15266897446579403,
+            "std_log_odds_change": 0.0009097683889064238
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.0040747750317677855,
+            "mean_absolute_value_change": 0.1798027985625797,
+            "std_log_odds_change": 0.0044377289311551636
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.0004872754604245226,
+            "mean_absolute_value_change": 0.13906838330957624,
+            "std_log_odds_change": 0.0004876906653362563
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 451,
+            "retained": 157
+          },
+          {
+            "action_type": 1,
+            "collected": 628,
+            "retained": 127
+          },
+          {
+            "action_type": 2,
+            "collected": 895,
+            "retained": 198
+          },
+          {
+            "action_type": 3,
+            "collected": 666,
+            "retained": 269
+          },
+          {
+            "action_type": 4,
+            "collected": 144,
+            "retained": 52
+          },
+          {
+            "action_type": 5,
+            "collected": 203,
+            "retained": 42
+          },
+          {
+            "action_type": 6,
+            "collected": 347,
+            "retained": 30
+          },
+          {
+            "action_type": 7,
+            "collected": 19,
+            "retained": 4
+          },
+          {
+            "action_type": 8,
+            "collected": 22,
+            "retained": 8
+          },
+          {
+            "action_type": 9,
+            "collected": 112,
+            "retained": 27
+          },
+          {
+            "action_type": 10,
+            "collected": 87,
+            "retained": 15
+          },
+          {
+            "action_type": 11,
+            "collected": 120,
+            "retained": 12
+          },
+          {
+            "action_type": 13,
+            "collected": 331,
+            "retained": 4
+          },
+          {
+            "action_type": 14,
+            "collected": 24,
+            "retained": 7
+          },
+          {
+            "action_type": 15,
+            "collected": 47,
+            "retained": 9
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 29.794577458000163,
+          "learning_seconds": 25.146014166999635,
+          "cpu_seconds": 57.174629970000005,
+          "learner_transitions": 4096,
+          "environment_decisions": 9077,
+          "games": 49,
+          "optimizer_updates": 688,
+          "optimizer_exposures": 961
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 751.1091661549999,
+          "evaluator_seconds": 745.984351985,
+          "process_seconds": 805.91432585,
+          "coordinator_cpu_seconds": 29.250713062
+        },
+        "learner_process_seconds": 59.929973864999965,
+        "raw_sha256": {
+          "learning.json": "1b2c059c336314dfb92c9607166dc4dfd245e7e103ec01775b5441de3b5d08d9",
+          "experiment.json": "b1be970209624570953f2d2bd6020517ed78e5a9673e59265f34038fa1484e48",
+          "training/attempt-0000/run.json": "1cf6d3163a92071298960f24a4aeb2e3e98115c702126e700ff017c41eecdfe1"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 1.0,
+            "initial": 1.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.0,
+            "initial": 0.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "seed": 281,
+        "steps": 16,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": -0.010416666666666666,
+          "lower": -0.03125,
+          "per_seed": [
+            -0.010416666666666666
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.0,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 50.0,
+        "final_game_score": 49.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "1cb4bbb69cc9245c336ec58850c070da252ba86a273d07cba980e6bdc388afa7",
+        "regime_digest": "247818bbc66a81457e1d775f7688d1c8f4c466243f9c68e21e04a6a2c35958a8",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "d707d951d268ace8b63f9bbb0b805329cbe8078705be47e19fdd68d8dbe6a163",
+            "maximum_invariance_error": 2.4586915969848633e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 8,
+            "checkpoint_sha256": "7debe47276b05485670ac465b4a0575c5e84278ebd33b2bdda0a441cca17d775",
+            "maximum_invariance_error": 2.384185791015625e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 16,
+            "checkpoint_sha256": "7e8d649e7dda77fc56bdd8dcd827e1b7f447b4905a70afadef29c15607045c18",
+            "maximum_invariance_error": 2.384185791015625e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.012786727650867155,
+            "mean_absolute_value_change": 0.14014441271622977,
+            "std_log_odds_change": 0.011800147399045825
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.0005733764846809208,
+            "mean_absolute_value_change": 0.1612034011632204,
+            "std_log_odds_change": 0.00022556748834198374
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.001683159213927057,
+            "mean_absolute_value_change": 0.17653906469543776,
+            "std_log_odds_change": 0.001970640327239103
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.0014631038842101891,
+            "mean_absolute_value_change": 0.16919929161667824,
+            "std_log_odds_change": 0.0025068970648737554
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.00035780549256338016,
+            "mean_absolute_value_change": 0.18649251158866617,
+            "std_log_odds_change": 0.00024254186857680508
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.002519572153687477,
+            "mean_absolute_value_change": 0.1548047790096866,
+            "std_log_odds_change": 0.0018075854205423939
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.0005624329981704553,
+            "mean_absolute_value_change": 0.13702591674195397,
+            "std_log_odds_change": 8.712595813428283e-05
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.0006574215108735694,
+            "mean_absolute_value_change": 0.11408046881357829,
+            "std_log_odds_change": 0.0008475270783680033
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.004592601727280352,
+            "mean_absolute_value_change": 0.16648550083239874,
+            "std_log_odds_change": 0.004887730953271062
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.0002183236906097995,
+            "mean_absolute_value_change": 0.15618676816423735,
+            "std_log_odds_change": 0.00033459172721101414
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 376,
+            "retained": 128
+          },
+          {
+            "action_type": 1,
+            "collected": 583,
+            "retained": 142
+          },
+          {
+            "action_type": 2,
+            "collected": 925,
+            "retained": 172
+          },
+          {
+            "action_type": 3,
+            "collected": 572,
+            "retained": 179
+          },
+          {
+            "action_type": 4,
+            "collected": 155,
+            "retained": 41
+          },
+          {
+            "action_type": 5,
+            "collected": 195,
+            "retained": 43
+          },
+          {
+            "action_type": 6,
+            "collected": 468,
+            "retained": 51
+          },
+          {
+            "action_type": 7,
+            "collected": 12,
+            "retained": 4
+          },
+          {
+            "action_type": 8,
+            "collected": 14,
+            "retained": 5
+          },
+          {
+            "action_type": 9,
+            "collected": 108,
+            "retained": 27
+          },
+          {
+            "action_type": 10,
+            "collected": 85,
+            "retained": 15
+          },
+          {
+            "action_type": 11,
+            "collected": 137,
+            "retained": 11
+          },
+          {
+            "action_type": 13,
+            "collected": 403,
+            "retained": 7
+          },
+          {
+            "action_type": 14,
+            "collected": 36,
+            "retained": 9
+          },
+          {
+            "action_type": 15,
+            "collected": 27,
+            "retained": 8
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 57.63712199400011,
+          "learning_seconds": 41.37313551899996,
+          "cpu_seconds": 102.621325121,
+          "learner_transitions": 4096,
+          "environment_decisions": 8953,
+          "games": 35,
+          "optimizer_updates": 626,
+          "optimizer_exposures": 842
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 1270.270659291,
+          "evaluator_seconds": 1265.094955999,
+          "process_seconds": 1371.844130444,
+          "coordinator_cpu_seconds": 67.604405928
+        },
+        "learner_process_seconds": 106.74917444500001,
+        "raw_sha256": {
+          "learning.json": "7df38251da7e5f8c529e1f990418fc288bc7047299d1a8481d304f2353e156c3",
+          "experiment.json": "c9223ddca36564b8f3c98694da7cfd687fd6b0f31daa48c84dac72cc692bfc77",
+          "training/attempt-0000/run.json": "14ebe418bdd078910d048b1ff05aed2d77570260eeae5ff8bd1f975763779ff1"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 1.0,
+            "initial": 1.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.5,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.0,
+            "initial": 0.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "seed": 419,
+        "steps": 16,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": -0.020833333333333332,
+          "lower": -0.08333333333333333,
+          "per_seed": [
+            -0.020833333333333332
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.041666666666666664,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 49.0,
+        "final_game_score": 47.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "1cb4bbb69cc9245c336ec58850c070da252ba86a273d07cba980e6bdc388afa7",
+        "regime_digest": "247818bbc66a81457e1d775f7688d1c8f4c466243f9c68e21e04a6a2c35958a8",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "063e78d8ad74d7a56d848e8afb409558349c3580da5ae6b8ae11bda7b333d2e3",
+            "maximum_invariance_error": 2.8312206268310547e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 8,
+            "checkpoint_sha256": "713388a746377206b6ecca45b9cfefaea4b46c206226138dd3a4a0eff6610b2c",
+            "maximum_invariance_error": 2.980232238769531e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 16,
+            "checkpoint_sha256": "ba5a63d238301ad5d957d3a1ff743a3bb2cf6dd24b33391297c734f59c5da6f9",
+            "maximum_invariance_error": 2.337619662284851e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.01078571168667016,
+            "mean_absolute_value_change": 0.21670511721943816,
+            "std_log_odds_change": 0.010502993292442196
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.0006614958789820472,
+            "mean_absolute_value_change": 0.28967311047017574,
+            "std_log_odds_change": 8.995236341441982e-05
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.0009103522817086843,
+            "mean_absolute_value_change": 0.29961072167174685,
+            "std_log_odds_change": 0.0009745354968494368
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.0007098242317119406,
+            "mean_absolute_value_change": 0.31548529780573314,
+            "std_log_odds_change": 0.0011579289936612183
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.0007036973094929837,
+            "mean_absolute_value_change": 0.3064668108191755,
+            "std_log_odds_change": 0.0002060076609579343
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.0006948112988741033,
+            "mean_absolute_value_change": 0.2715028683241043,
+            "std_log_odds_change": 0.000737200434228251
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.0001664576767426398,
+            "mean_absolute_value_change": 0.26534051323930424,
+            "std_log_odds_change": 7.301199741480951e-05
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.0001510783202118344,
+            "mean_absolute_value_change": 0.2088106481047968,
+            "std_log_odds_change": 0.00020852418212692405
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.0006821056724422508,
+            "mean_absolute_value_change": 0.3244874039147463,
+            "std_log_odds_change": 0.0008608319051597266
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.0006120330007332894,
+            "mean_absolute_value_change": 0.2749156539535357,
+            "std_log_odds_change": 0.0004944695614821336
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 385,
+            "retained": 141
+          },
+          {
+            "action_type": 1,
+            "collected": 556,
+            "retained": 142
+          },
+          {
+            "action_type": 2,
+            "collected": 979,
+            "retained": 235
+          },
+          {
+            "action_type": 3,
+            "collected": 555,
+            "retained": 149
+          },
+          {
+            "action_type": 4,
+            "collected": 126,
+            "retained": 53
+          },
+          {
+            "action_type": 5,
+            "collected": 161,
+            "retained": 36
+          },
+          {
+            "action_type": 6,
+            "collected": 457,
+            "retained": 40
+          },
+          {
+            "action_type": 7,
+            "collected": 30,
+            "retained": 5
+          },
+          {
+            "action_type": 8,
+            "collected": 35,
+            "retained": 9
+          },
+          {
+            "action_type": 9,
+            "collected": 86,
+            "retained": 45
+          },
+          {
+            "action_type": 10,
+            "collected": 98,
+            "retained": 29
+          },
+          {
+            "action_type": 11,
+            "collected": 115,
+            "retained": 10
+          },
+          {
+            "action_type": 13,
+            "collected": 452,
+            "retained": 7
+          },
+          {
+            "action_type": 14,
+            "collected": 27,
+            "retained": 10
+          },
+          {
+            "action_type": 15,
+            "collected": 34,
+            "retained": 11
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 48.37214903899991,
+          "learning_seconds": 39.966362650000065,
+          "cpu_seconds": 91.703555541,
+          "learner_transitions": 4096,
+          "environment_decisions": 8434,
+          "games": 40,
+          "optimizer_updates": 657,
+          "optimizer_exposures": 922
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 1208.4597737020001,
+          "evaluator_seconds": 1203.292719821,
+          "process_seconds": 1298.790366354,
+          "coordinator_cpu_seconds": 62.979195847
+        },
+        "learner_process_seconds": 95.49764653299997,
+        "raw_sha256": {
+          "learning.json": "e0748db4f2aa5f7ec5a34c08fc889b66a339919f09964b50cb37b94d363120bc",
+          "experiment.json": "ac3d67698f438acf731f843ebab13ab5cb4c096b8627110af8f8a6a1b7b7fd7a",
+          "training/attempt-0000/run.json": "61a235e0371c0dc38257f690f7fdd256e42786c279ea6a1526407cdd0f1e6e04"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.5,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 1.0,
+            "initial": 1.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.0,
+            "initial": 0.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "qualification_128": {
+    "aggregate": {
+      "deals": 24,
+      "gain": 0.0,
+      "lower": -0.09375,
+      "per_seed": [
+        -0.020833333333333332,
+        -0.010416666666666666,
+        0.03125
+      ],
+      "reason": "insufficient evidence of a practically meaningful outcome change",
+      "seeds": 3,
+      "upper": 0.08333333333333333,
+      "verdict": "inconclusive"
+    },
+    "aggregate_sha256": "1b3ea764248acb8afc02214f5ec5ab46c6e0d801e519bdc8db60299e9b9ab28a",
+    "seeds": [
+      {
+        "seed": 197,
+        "steps": 128,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": -0.020833333333333332,
+          "lower": -0.10416666666666667,
+          "per_seed": [
+            -0.020833333333333332
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.0625,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 47.0,
+        "final_game_score": 45.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "a36f4c2413f74e6fa9440e3c6479772f077542a28f35e83fb706e378d3e9500e",
+        "regime_digest": "b2bd909c128f466026e84c18305938f2fcbc81addb2893415d32eec1767a5d8e",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "e73c5a95f1f6992ae66d629707f660084e1d1c6481399041c3513b2707bca428",
+            "maximum_invariance_error": 2.384185791015625e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 64,
+            "checkpoint_sha256": "42c32bba78d8c64c753bee4213872e93e6642629c12b8dbdd0f627569ee9d468",
+            "maximum_invariance_error": 1.7881393432617188e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 128,
+            "checkpoint_sha256": "3dbdde1fea5e0df08d34597323eaed66d6a9779814e09a3156898cb6679e5a2e",
+            "maximum_invariance_error": 2.980232238769531e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.14893940607241044,
+            "mean_absolute_value_change": 0.7289809565991163,
+            "std_log_odds_change": 0.13371429832720808
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.00957678956425904,
+            "mean_absolute_value_change": 0.4685480371117592,
+            "std_log_odds_change": 0.003539180406975524
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.06657841872786069,
+            "mean_absolute_value_change": 0.895857549375958,
+            "std_log_odds_change": 0.056423697082507
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.014406077654307915,
+            "mean_absolute_value_change": 0.39752831475602257,
+            "std_log_odds_change": 0.026122535446743738
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.0015600760816596448,
+            "mean_absolute_value_change": 0.15237951940960354,
+            "std_log_odds_change": 0.0006704016562489791
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.014549739523014674,
+            "mean_absolute_value_change": 0.30534251199828255,
+            "std_log_odds_change": 0.007926671601159396
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.004501681606699195,
+            "mean_absolute_value_change": 1.037267850504981,
+            "std_log_odds_change": 0.001133661298785353
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.00503725065694501,
+            "mean_absolute_value_change": 1.092150780889723,
+            "std_log_odds_change": 0.007226744218423012
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.05403754589820488,
+            "mean_absolute_value_change": 0.1532608022292455,
+            "std_log_odds_change": 0.037511277848653914
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.020522051426168118,
+            "mean_absolute_value_change": 0.20331034726566738,
+            "std_log_odds_change": 0.020843166624260848
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 3231,
+            "retained": 1019
+          },
+          {
+            "action_type": 1,
+            "collected": 4688,
+            "retained": 1072
+          },
+          {
+            "action_type": 2,
+            "collected": 6884,
+            "retained": 1486
+          },
+          {
+            "action_type": 3,
+            "collected": 4589,
+            "retained": 1685
+          },
+          {
+            "action_type": 4,
+            "collected": 1242,
+            "retained": 454
+          },
+          {
+            "action_type": 5,
+            "collected": 1517,
+            "retained": 328
+          },
+          {
+            "action_type": 6,
+            "collected": 3634,
+            "retained": 403
+          },
+          {
+            "action_type": 7,
+            "collected": 210,
+            "retained": 38
+          },
+          {
+            "action_type": 8,
+            "collected": 225,
+            "retained": 44
+          },
+          {
+            "action_type": 9,
+            "collected": 763,
+            "retained": 226
+          },
+          {
+            "action_type": 10,
+            "collected": 680,
+            "retained": 153
+          },
+          {
+            "action_type": 11,
+            "collected": 1120,
+            "retained": 88
+          },
+          {
+            "action_type": 13,
+            "collected": 3427,
+            "retained": 87
+          },
+          {
+            "action_type": 14,
+            "collected": 259,
+            "retained": 58
+          },
+          {
+            "action_type": 15,
+            "collected": 299,
+            "retained": 84
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 407.57067629200003,
+          "learning_seconds": 329.9275713999999,
+          "cpu_seconds": 742.999413394,
+          "learner_transitions": 32768,
+          "environment_decisions": 72467,
+          "games": 343,
+          "optimizer_updates": 5241,
+          "optimizer_exposures": 7225
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 1329.6404733850002,
+          "evaluator_seconds": 1227.144989545,
+          "process_seconds": 1974.060855815,
+          "coordinator_cpu_seconds": 101.413866943
+        },
+        "learner_process_seconds": 746.9158662699999,
+        "raw_sha256": {
+          "learning.json": "145b9b32acae4f13547c6e49e373d63f68408ca5378ac22fc6b6f79af42e6833",
+          "experiment.json": "2b0782737982776ecb4772385f3e4731f343384200e7f29defcdd7416566631d",
+          "training/attempt-0000/run.json": "e7a3af4cc72637f9538c28183186526a234861ddfbcf33f4cb38050208046c4f"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.25,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.25,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 0.5,
+            "initial": 1.0,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.75,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              1.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.0,
+            "initial": 0.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "seed": 281,
+        "steps": 128,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": -0.010416666666666666,
+          "lower": -0.13541666666666666,
+          "per_seed": [
+            -0.010416666666666666
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.10416666666666667,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 50.0,
+        "final_game_score": 49.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "a36f4c2413f74e6fa9440e3c6479772f077542a28f35e83fb706e378d3e9500e",
+        "regime_digest": "b2bd909c128f466026e84c18305938f2fcbc81addb2893415d32eec1767a5d8e",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "40ca9401fc778a82ed2eea967e3994490b8827db162e5f23c0df26704117eee8",
+            "maximum_invariance_error": 2.4586915969848633e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 64,
+            "checkpoint_sha256": "25f8bff065e52e6cef27e67db7462db59f79f79a609e941f63603a315ae60c81",
+            "maximum_invariance_error": 1.7881393432617188e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 128,
+            "checkpoint_sha256": "7bbe429c748d292a81a83d3a1bd3750bf70901ef22c22b81f5fa9e7ba6358fd3",
+            "maximum_invariance_error": 2.384185791015625e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.2109105199148568,
+            "mean_absolute_value_change": 0.6419934965670109,
+            "std_log_odds_change": 0.17809144952793446
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.0017810051213018596,
+            "mean_absolute_value_change": 0.7354779659459988,
+            "std_log_odds_change": 0.0020836218534208556
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.038780805033942066,
+            "mean_absolute_value_change": 0.6859712472392453,
+            "std_log_odds_change": 0.02427557304701815
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.01832560237704052,
+            "mean_absolute_value_change": 0.6949955990744962,
+            "std_log_odds_change": 0.023771451870313792
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.0008094807983272605,
+            "mean_absolute_value_change": 0.7822066021876203,
+            "std_log_odds_change": 0.0009088024890189837
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.04519040799803204,
+            "mean_absolute_value_change": 0.727431652860509,
+            "std_log_odds_change": 0.038533479872040866
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.0013408043628765477,
+            "mean_absolute_value_change": 0.7418724902802043,
+            "std_log_odds_change": 0.000798487234762443
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.005702880340524846,
+            "mean_absolute_value_change": 0.8144856310553021,
+            "std_log_odds_change": 0.006162930138765987
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.028228934957749315,
+            "mean_absolute_value_change": 0.7415030408236716,
+            "std_log_odds_change": 0.03542854758245104
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.01541597070172429,
+            "mean_absolute_value_change": 0.7294137995276186,
+            "std_log_odds_change": 0.015104036564851368
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 3129,
+            "retained": 1119
+          },
+          {
+            "action_type": 1,
+            "collected": 4573,
+            "retained": 1258
+          },
+          {
+            "action_type": 2,
+            "collected": 7169,
+            "retained": 1294
+          },
+          {
+            "action_type": 3,
+            "collected": 4660,
+            "retained": 1555
+          },
+          {
+            "action_type": 4,
+            "collected": 1334,
+            "retained": 476
+          },
+          {
+            "action_type": 5,
+            "collected": 1485,
+            "retained": 403
+          },
+          {
+            "action_type": 6,
+            "collected": 3544,
+            "retained": 356
+          },
+          {
+            "action_type": 7,
+            "collected": 225,
+            "retained": 55
+          },
+          {
+            "action_type": 8,
+            "collected": 224,
+            "retained": 52
+          },
+          {
+            "action_type": 9,
+            "collected": 787,
+            "retained": 237
+          },
+          {
+            "action_type": 10,
+            "collected": 606,
+            "retained": 126
+          },
+          {
+            "action_type": 11,
+            "collected": 1043,
+            "retained": 75
+          },
+          {
+            "action_type": 13,
+            "collected": 3452,
+            "retained": 58
+          },
+          {
+            "action_type": 14,
+            "collected": 249,
+            "retained": 81
+          },
+          {
+            "action_type": 15,
+            "collected": 288,
+            "retained": 77
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 419.3292718350008,
+          "learning_seconds": 330.8417129070003,
+          "cpu_seconds": 756.059981288,
+          "learner_transitions": 32768,
+          "environment_decisions": 70148,
+          "games": 334,
+          "optimizer_updates": 5272,
+          "optimizer_exposures": 7222
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 1397.8957819759999,
+          "evaluator_seconds": 1312.396543943,
+          "process_seconds": 2072.8853999870003,
+          "coordinator_cpu_seconds": 118.076975017
+        },
+        "learner_process_seconds": 760.488856044,
+        "raw_sha256": {
+          "learning.json": "5487ccf0274aa848e83317d633db8a126111e5ebdbc9ad0519ae08cbd38433b5",
+          "experiment.json": "f85e3f1bc9ac0a95b40fcd0e32b273ee19ced80021845f174a4d653c580b25f0",
+          "training/attempt-0000/run.json": "bf6e7f7e6faacc931c4c1c49b9c46457b16c6025c2f9c8fb274f0fcf03e6be21"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.25,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.5,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.75,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 0.25,
+            "initial": 1.0,
+            "legs": [
+              -1.0,
+              -1.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.5,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              1.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              -1.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 1.0,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              1.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.25,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              -1.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.25,
+            "initial": 0.0,
+            "legs": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      },
+      {
+        "seed": 419,
+        "steps": 128,
+        "software": "passed",
+        "error": null,
+        "learning": {
+          "deals": 24,
+          "gain": 0.03125,
+          "lower": -0.03125,
+          "per_seed": [
+            0.03125
+          ],
+          "reason": "insufficient evidence of a practically meaningful outcome change",
+          "seeds": 1,
+          "upper": 0.09375,
+          "verdict": "inconclusive"
+        },
+        "initial_game_score": 49.0,
+        "final_game_score": 52.0,
+        "games_per_endpoint": 96,
+        "world": "w6",
+        "source_digest": "a36f4c2413f74e6fa9440e3c6479772f077542a28f35e83fb706e378d3e9500e",
+        "regime_digest": "b2bd909c128f466026e84c18305938f2fcbc81addb2893415d32eec1767a5d8e",
+        "corpus_sha256": "e1ae2712d1650591f89cbd22ae5bd3ed57e0c02cd9d7919901af9a0d755a9294",
+        "checkpoints": [
+          {
+            "updates": 0,
+            "checkpoint_sha256": "6416a18e7a32a784dad871d9c53f1f74574a9ba8ca210e883ce82bd1cc6e70a3",
+            "maximum_invariance_error": 2.8312206268310547e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 64,
+            "checkpoint_sha256": "1774efc87ae2503f584554eb91dc4adcb06dc66408788c4630b9aafb03b7abf6",
+            "maximum_invariance_error": 1.043081283569336e-07,
+            "choice_states": 96
+          },
+          {
+            "updates": 128,
+            "checkpoint_sha256": "3eaea80d7152b50f925db4e4286b2c323549f22f58af8ba54ebf6241ae1ccc9c",
+            "maximum_invariance_error": 1.7881393432617188e-07,
+            "choice_states": 96
+          }
+        ],
+        "families": [
+          {
+            "cases": 12,
+            "family": 1,
+            "mean_absolute_log_odds_change": 0.04106729682340907,
+            "mean_absolute_value_change": 0.5287822966153423,
+            "std_log_odds_change": 0.04081738029445776
+          },
+          {
+            "cases": 12,
+            "family": 2,
+            "mean_absolute_log_odds_change": 0.0013662182706563424,
+            "mean_absolute_value_change": 0.3680442717547218,
+            "std_log_odds_change": 0.00035467890673936494
+          },
+          {
+            "cases": 9,
+            "family": 3,
+            "mean_absolute_log_odds_change": 0.02643688940184398,
+            "mean_absolute_value_change": 0.6110459251536263,
+            "std_log_odds_change": 0.019745529434257753
+          },
+          {
+            "cases": 9,
+            "family": 4,
+            "mean_absolute_log_odds_change": 0.01388280177100872,
+            "mean_absolute_value_change": 0.4166752590487401,
+            "std_log_odds_change": 0.02801575828831897
+          },
+          {
+            "cases": 9,
+            "family": 5,
+            "mean_absolute_log_odds_change": 0.0018592000738458915,
+            "mean_absolute_value_change": 0.2863920834950275,
+            "std_log_odds_change": 0.0009736879404298051
+          },
+          {
+            "cases": 9,
+            "family": 6,
+            "mean_absolute_log_odds_change": 0.014375333835939981,
+            "mean_absolute_value_change": 0.40083324246936375,
+            "std_log_odds_change": 0.010176214844728793
+          },
+          {
+            "cases": 9,
+            "family": 7,
+            "mean_absolute_log_odds_change": 0.0015888935239571664,
+            "mean_absolute_value_change": 0.6197231442977985,
+            "std_log_odds_change": 0.00032953307141948883
+          },
+          {
+            "cases": 9,
+            "family": 9,
+            "mean_absolute_log_odds_change": 0.007222095245702399,
+            "mean_absolute_value_change": 0.651601352625423,
+            "std_log_odds_change": 0.0059397584602995665
+          },
+          {
+            "cases": 9,
+            "family": 10,
+            "mean_absolute_log_odds_change": 0.05935824605532818,
+            "mean_absolute_value_change": 0.3368462284302546,
+            "std_log_odds_change": 0.06347291059944052
+          },
+          {
+            "cases": 9,
+            "family": 11,
+            "mean_absolute_log_odds_change": 0.006624019381383227,
+            "mean_absolute_value_change": 0.38774520386424327,
+            "std_log_odds_change": 0.005593439099477459
+          }
+        ],
+        "exposure": [
+          {
+            "action_type": 0,
+            "collected": 2926,
+            "retained": 899
+          },
+          {
+            "action_type": 1,
+            "collected": 4233,
+            "retained": 987
+          },
+          {
+            "action_type": 2,
+            "collected": 8049,
+            "retained": 1380
+          },
+          {
+            "action_type": 3,
+            "collected": 4369,
+            "retained": 1228
+          },
+          {
+            "action_type": 4,
+            "collected": 1259,
+            "retained": 375
+          },
+          {
+            "action_type": 5,
+            "collected": 1388,
+            "retained": 278
+          },
+          {
+            "action_type": 6,
+            "collected": 3593,
+            "retained": 308
+          },
+          {
+            "action_type": 7,
+            "collected": 221,
+            "retained": 35
+          },
+          {
+            "action_type": 8,
+            "collected": 204,
+            "retained": 32
+          },
+          {
+            "action_type": 9,
+            "collected": 677,
+            "retained": 288
+          },
+          {
+            "action_type": 10,
+            "collected": 563,
+            "retained": 187
+          },
+          {
+            "action_type": 11,
+            "collected": 1075,
+            "retained": 90
+          },
+          {
+            "action_type": 13,
+            "collected": 3694,
+            "retained": 86
+          },
+          {
+            "action_type": 14,
+            "collected": 232,
+            "retained": 57
+          },
+          {
+            "action_type": 15,
+            "collected": 285,
+            "retained": 60
+          }
+        ],
+        "training": {
+          "status": "completed",
+          "collection_seconds": 407.76575160900006,
+          "learning_seconds": 290.0644715990002,
+          "cpu_seconds": 703.580122995,
+          "learner_transitions": 32768,
+          "environment_decisions": 68650,
+          "games": 309,
+          "optimizer_updates": 4669,
+          "optimizer_exposures": 6290
+        },
+        "coordinator": {
+          "status": "completed",
+          "elapsed_seconds": 1319.5841525219998,
+          "evaluator_seconds": 1291.952542423,
+          "process_seconds": 1999.854284249,
+          "coordinator_cpu_seconds": 109.226615493
+        },
+        "learner_process_seconds": 707.901741826,
+        "raw_sha256": {
+          "learning.json": "8d1b2d4fc49fae42def946c1e13bed035be09572ba028111bb5706ac66af3060",
+          "experiment.json": "71d3c153ab73f07dc66be3ca41502f6977c12e7b8f73de87f9e50bf27d5e365f",
+          "training/attempt-0000/run.json": "ea724b7cfec86f74b8aed03e686c22f04b9bed81b9bfa14c66fc46b1eb20ce87"
+        },
+        "paired": [
+          {
+            "deal": 1915100000,
+            "final": 0.5,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100001,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          },
+          {
+            "deal": 1915100002,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100003,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          {
+            "deal": 1915100004,
+            "final": 1.0,
+            "initial": 1.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100005,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100006,
+            "final": 0.75,
+            "initial": 0.75,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100007,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100008,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100009,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100010,
+            "final": 0.5,
+            "initial": 0.25,
+            "legs": [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100011,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100012,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100013,
+            "final": 0.75,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100014,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100015,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100016,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100017,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100018,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100019,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100020,
+            "final": 0.5,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100021,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              -1.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100022,
+            "final": 0.0,
+            "initial": 0.0,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "deal": 1915100023,
+            "final": 0.25,
+            "initial": 0.5,
+            "legs": [
+              0.0,
+              0.0,
+              0.0,
+              -1.0
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

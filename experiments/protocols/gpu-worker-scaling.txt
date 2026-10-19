@@ -1,0 +1,77 @@
+Persistent collectors on training-class hosts — protocol, 2026-10-15
+
+Jack Heart requests a submitted benchmark PR before paid execution, then tests on
+hardware appropriate for a$100–$1000 training campaign. Existing total authorization
+is$50, not an additional$50. Prior eleven rentals conservative charges$5.11 plus
+$5 ancillary reserve leave$39.89 unallocated before this experiment. Reserve at
+most$8 for two sequential cohorts, at most$4 each; each job max30minutes,$3,
+one attempt. Confirm each machine deleted before starting the next. No retry or
+expanded budget on failure. Provider lifecycle monitoring persists through cleanup.
+
+Secure-cloud API quotes2026-10-15T18:10:42Z: RTX5090$1.19/h, H100SXM80GB$3.99/h,
+A100SXM80GB$1.79/h, L4$0.59/h; all available at quote time. Recheck before launch.
+First compare RTX5090 (32GB, plausible economic training choice for the measured
+~9.8GB ordinary workload) and H100SXM (existing high-throughput baseline with80GB
+headroom). A100 remains unmeasured, so do not declare a global hardware optimum.
+Rank measured whole-training rows/dollar as well as collection. Host CPU quotas,
+model size and memory constrain this recommendation; price alone does not choose.
+
+Frozen source must be the submitted PR revision, with verified source archive
+before rental. Setup uses the repository's locked Python3.12/CUDA dependencies
+and release native build; unchanged Rust has prior debug coverage. Record GPU,
+compiled architectures, CPU affinity/quota, RAM/cgroup limits and source identities.
+Reject a different GPU and preserve unsupported-runtime failures.
+
+Each machine runs the same64 resident actors x64streams x8learnersteps, fixed
+32768learner rows per case. Persistent4process pool,1/2/4active workers. Three
+rounds with orders1/2/4,4/2/1,1/2/4; all samples reported. First recorded-output
+CPU replay, then shared real CUDA service. Each mode has600s hard lifetime and
+24GiB summed process-tree RSS cap, including setup/audits/verification. Same-game
+clones are stationary synthetic demand, not independent games or mature policies.
+All completed rollouts remain resident until the global verification barrier.
+
+CUDA service captures a fresh tape on that GPU and uses the same original request
+batch sizes for all worker counts. This avoids CPU/CUDA arithmetic or changed
+batch shapes masquerading as concurrency errors. One reusable mmap input/output
+slot per worker; one outstanding request each; controller executes one request
+at a time. Include IPC, actual H2D/forward/D2H and sampling in collection wall.
+No device sleeps, fake service times, cross-request batching or hidden CPU fallback.
+Input and exact output audit per active worker precedes timed cases; every timed
+actor verifies full rollout/buffers/journal/reset seeds against its device tape.
+
+Report decisions/s and learner rows/s, active worker CPU time, collection wall,
+service demand, sampled memory and per-stage costs. Reject semantic divergence;
+retain all partials, timeouts and memory failures. Single-device request serialization
+can cap scaling; this experiment tests overlap and actual CPU scaling, not maximum
+coalesced GPU service. CPU/GPU tapes can differ; compare worker counts within mode.
+
+Finally run existing ordinary TrainingRun cells,512/4096streams x8steps x3updates,
+with their original55s stage/60s recipe/70s process caps. These measure current
+single-collector whole training and memory to inform hardware economics, not a
+parallel learner. Failures are retained; no substitute throughput for missing
+cells. No trained-strength, policy-lag, multi-GPU or all-reduce claim follows.
+
+Post-submission source admission: lf submit synchronized upstream worldw6 and new
+observation/action identity fields. The w4 tape and service calibration remain
+historical evidence; they must not be relabeled as current measurements. Rebuild
+local native code, then capture a separate tape-w6 with identical64x8 shape and
+seed10349, explicitly migrating the recipe.world to the runtime world. One5second
+local capture cap from the remaining6.178525second measurement allowance; preserve
+failure without retry. The paid experiment uses tape-w6 and fresh same-device
+CUDA captures. Update the submitted PR before renting. The old queue/calibration
+examples remain historical conditional projections, not calibration of w6.
+
+Amendment after run012, before run013: RTX5090 shared-CUDA and ordinary training
+completed, but replay of the Mac-captured tape failed its final aggregate check.
+All acting input hashes passed; the old error did not identify which final hash
+failed. This is not a valid Linux CPU scaling curve. Preserve run012 unchanged.
+Add named expected/actual checks and a separate portability receipt. For the new
+CPU experiment, capture a CPU tape on the host before timing and require exact
+parity for every actor. This isolates within-host worker scaling without assuming
+cross-platform bitwise arithmetic. Capture and portability audit count against
+the existing600s/24GiB mode cap; no tolerance or parity relaxation is introduced.
+H100 run013 uses this revision; CUDA and ordinary training logic stay unchanged.
+Reserve an additional$2 from the existing$50 for RTX5090 run014, CPU-only with
+this corrected fixture procedure, one attempt, job<=30minutes/$1.5. This is an
+explicit protocol correction, not an automatic retry. Do not repeat completed
+RTX5090 CUDA/training cells. Hardware-host variation remains a reported limit.

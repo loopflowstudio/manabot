@@ -1,0 +1,112 @@
+[
+  {
+    "streams": 512,
+    "cells": [
+      "timing-11-prepared-w1-s512",
+      "timing-8-prepared-w2-s512"
+    ],
+    "differences": [
+      {
+        "path": "/state/0/exp_avg",
+        "count": 45,
+        "max_absolute": 2.842170943040401e-14,
+        "shape": [
+          164,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/0/exp_avg_sq",
+        "count": 15,
+        "max_absolute": 5.421010862427522e-20,
+        "shape": [
+          164,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/1/exp_avg",
+        "count": 1,
+        "max_absolute": 1.9895196601282805e-13,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/1/exp_avg_sq",
+        "count": 2,
+        "max_absolute": 1.7763568394002505e-15,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/2/exp_avg",
+        "count": 5,
+        "max_absolute": 3.637978807091713e-12,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/2/exp_avg_sq",
+        "count": 1,
+        "max_absolute": 2.7755575615628914e-17,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/22/exp_avg",
+        "count": 1,
+        "max_absolute": 5.684341886080802e-14,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      },
+      {
+        "path": "/state/22/exp_avg_sq",
+        "count": 1,
+        "max_absolute": 1.3552527156068805e-20,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      }
+    ],
+    "limits": "Posthoc exact differences; no changed acceptance threshold or excluded trial."
+  },
+  {
+    "streams": 4096,
+    "cells": [
+      "timing-11-prepared-w1-s4096",
+      "timing-7-reference-w1-s4096"
+    ],
+    "differences": [
+      {
+        "path": "/state/22/exp_avg",
+        "count": 1,
+        "max_absolute": 2.842170943040401e-14,
+        "shape": [
+          192,
+          64
+        ],
+        "dtype": "torch.float32"
+      }
+    ],
+    "limits": "Posthoc exact differences; no changed acceptance threshold or excluded trial."
+  }
+]

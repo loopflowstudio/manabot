@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-10-16T04:18:40.400261+00:00",
+  "run_id": "7d6c152708bc",
+  "phase": "done",
+  "done": true,
+  "outcome": "succeeded",
+  "machine": "worker-ownership-9495e3de0b36",
+  "provider_id": "sigau1x84t7ho0",
+  "provider_present": false,
+  "deleted_at": "2026-10-16T04:18:14.394734+00:00"
+}

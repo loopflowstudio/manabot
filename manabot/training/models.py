@@ -132,6 +132,26 @@ class Learning(Strict):
     ema: float | None = Field(default=None, ge=0, lt=1)
 
 
+class IterationSchedule(Strict):
+    """Map a declared run horizon onto a reference iteration schedule.
+
+    Both endpoints are preserved. A one-step run uses the initial rate. The
+    mapping is deterministic in completed updates, never elapsed wall time;
+    continuation must retain the original horizon rather than start a new one.
+    """
+
+    steps: int = Field(ge=1, strict=True)
+    reference_steps: int = Field(default=10_000, ge=2, strict=True)
+
+    def at(self, iteration: int) -> float:
+        if iteration < 1:
+            raise ValueError("iteration must be positive")
+        if self.steps == 1:
+            return 1.0
+        progress = min(1.0, (iteration - 1) / (self.steps - 1))
+        return 1 + progress * (self.reference_steps - 1)
+
+
 class AtaraxosMoveLearning(Strict):
     """Supplement S3.4 move update; MTG reference and batch sizes are adaptations.
 
@@ -157,6 +177,9 @@ class AtaraxosMoveLearning(Strict):
     tau_power: float = Field(default=0.3, ge=0)
     max_grad_norm: float = Field(default=0.267, gt=0)
     ema: float | None = Field(default=0.999, ge=0, lt=1)
+    iteration_schedule: IterationSchedule | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def valid_learning_rate_bounds(self) -> "AtaraxosMoveLearning":
@@ -168,25 +191,48 @@ class AtaraxosMoveLearning(Strict):
         """One-based completed collection/update iteration, including skips."""
         if iteration < 1:
             raise ValueError("Ataraxos iteration must be positive")
-        rate = self.learning_rate_scale / iteration**self.learning_rate_power
+        position = (
+            self.iteration_schedule.at(iteration)
+            if self.iteration_schedule is not None
+            else iteration
+        )
+        rate = self.learning_rate_scale / position**self.learning_rate_power
         return (
             min(self.learning_rate_max, max(self.learning_rate_min, rate)),
-            self.tau_scale / iteration**self.tau_power,
+            self.tau_scale / position**self.tau_power,
         )
 
 
 class Execution(Strict):
     device: Literal["cpu", "cuda"] = "cpu"
     precision: Literal["float32"] = "float32"
-    workers: Literal[1] = 1
+    # Coarse native observation producers; policy/learning remain on one device.
+    workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
     wall_seconds: float = Field(default=300, gt=0)
     memory_bytes: int = Field(default=32 * 1024**3, gt=0)
+    profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class Stage(Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     execution: Execution = Execution()
+
+    @model_validator(mode="after")
+    def supported_workers(self) -> "Stage":
+        if (
+            self.execution.profile_collection
+            and getattr(self, "operation", None) != "train_self_play"
+        ):
+            raise ValueError("collection profiling requires train_self_play")
+        if (
+            self.execution.workers != 1
+            and getattr(self, "operation", None) != "train_self_play"
+        ):
+            raise ValueError(
+                "multiple producers are supported only for train_self_play"
+            )
+        return self
 
 
 class ImportPolicy(Stage):
@@ -345,6 +391,10 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.execution.workers > self.streams:
+            raise ValueError("producer count cannot exceed streams")
+        if self.execution.workers != 1 and self.root is not None:
+            raise ValueError("diagnostic roots require one producer")
         if self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
             if self.streams % width or self.behavior != "current-self":
@@ -714,6 +764,7 @@ class TrainingRegime(Strict):
                     )
                 if (
                     parent.execution.device != stage.execution.device
+                    or parent.execution.workers != stage.execution.workers
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.matchup_curriculum != stage.matchup_curriculum
@@ -724,7 +775,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock and opponent"
+                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock, workers and opponent"
                     )
             if isinstance(stage, TrainCompound):
                 if initial and parent is not latest_compound:
@@ -754,6 +805,13 @@ class NumericalFailure(Strict):
     health: dict[str, int | float] = {}
 
 
+class PhaseTiming(Strict):
+    """Accumulated host wall seconds and calls; never device utilization."""
+
+    seconds: float = Field(ge=0, allow_inf_nan=False)
+    calls: int = Field(ge=0)
+
+
 class StageRecord(Strict):
     learning_state_origin: LearningStateOrigin | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -776,6 +834,14 @@ class StageRecord(Strict):
     learning_seconds: float = 0
     export_seconds: float = 0
     diagnostic_seconds: float = 0
+    # Attempt-local learner wall time waiting for initial evaluation admission.
+    # None means historical/unsupported measurement, rather than zero wait.
+    admission_wait_seconds: float | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
+    collection_timings: dict[str, PhaseTiming] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     games: int = 0
     environment_decisions: int = 0
     learner_transitions: int = 0

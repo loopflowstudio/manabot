@@ -1,0 +1,1059 @@
+{
+  "source": "52d612b5b70a98597574defa467ef1984b46a917",
+  "status": "completed_budget",
+  "wall_seconds": 300.029002092,
+  "cpu_seconds": 299.813971431,
+  "rounds": 23,
+  "fits": {
+    "completed": 44,
+    "budget_exhausted": 1
+  },
+  "unique_scored_states": 704,
+  "scores": 1408,
+  "counts": {
+    "visited_family_1": 116907,
+    "audited_family_1": 12327,
+    "visited_family_3": 4527,
+    "visited_family_4": 2106,
+    "audited_family_4": 1573,
+    "visited_family_2": 4753,
+    "audited_family_2": 4753,
+    "visited_family_9": 520,
+    "audited_family_9": 517,
+    "visited_family_6": 1717,
+    "audited_family_6": 1008,
+    "audited_family_3": 1360,
+    "visited_family_7": 403,
+    "audited_family_7": 270,
+    "terminal_games": 157,
+    "visited_family_5": 342,
+    "audited_family_5": 342,
+    "visited_family_10": 4243,
+    "audited_family_10": 3464,
+    "visited_family_11": 140,
+    "audited_family_11": 140,
+    "step_capped_games": 27
+  },
+  "by_arm": {
+    "generic_no_attention": {
+      "scores": 1408,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "by_family": {
+    "1": {
+      "scores": 176,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "2": {
+      "scores": 176,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "3": {
+      "scores": 138,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "4": {
+      "scores": 136,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "5": {
+      "scores": 134,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "6": {
+      "scores": 134,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "7": {
+      "scores": 132,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "9": {
+      "scores": 132,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "10": {
+      "scores": 130,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "11": {
+      "scores": 120,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "fit_errors": [],
+  "native_findings": [],
+  "worst_fit_scores": [
+    {
+      "round": 14,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1014,
+      "case": "50112-530",
+      "family": 4,
+      "initial": 0.49873635172843933,
+      "conditional_probability": 0.999987781047821,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 6,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1006,
+      "case": "50054-575",
+      "family": 4,
+      "initial": 0.5001285672187805,
+      "conditional_probability": 0.9999884366989136,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 14,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1014,
+      "case": "50112-530",
+      "family": 4,
+      "initial": 0.5012636780738831,
+      "conditional_probability": 0.9999899864196777,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 18,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1018,
+      "case": "50147-120",
+      "family": 4,
+      "initial": 0.4996483027935028,
+      "conditional_probability": 0.9999945163726807,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 10,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1010,
+      "case": "50082-941",
+      "family": 4,
+      "initial": 0.5006646513938904,
+      "conditional_probability": 0.9999949932098389,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 6,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1006,
+      "case": "50054-575",
+      "family": 4,
+      "initial": 0.4998714029788971,
+      "conditional_probability": 0.9999957084655762,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 1.1920928955078125e-07,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 20,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1020,
+      "case": "50166-237",
+      "family": 4,
+      "initial": 0.6008578538894653,
+      "conditional_probability": 0.9999969005584717,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.450580596923828e-09,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 16,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1016,
+      "case": "50128-187",
+      "family": 4,
+      "initial": 0.4984639883041382,
+      "conditional_probability": 0.9999974966049194,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 13,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1013,
+      "case": "50106-708",
+      "family": 10,
+      "initial": 0.49994421005249023,
+      "conditional_probability": 0.9999977350234985,
+      "fit_passed": true,
+      "errors": {
+        "batch": 3.725290298461914e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 14,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1014,
+      "case": "50112-784",
+      "family": 11,
+      "initial": 0.6667528748512268,
+      "conditional_probability": 0.9999977946281433,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 16,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1016,
+      "case": "50128-187",
+      "family": 4,
+      "initial": 0.5015360116958618,
+      "conditional_probability": 0.9999977946281433,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.2351741790771484e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 12,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1012,
+      "case": "50101-685",
+      "family": 10,
+      "initial": 0.4996373951435089,
+      "conditional_probability": 0.9999978542327881,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.210719347000122e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 14,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1014,
+      "case": "50112-598",
+      "family": 11,
+      "initial": 0.5004639625549316,
+      "conditional_probability": 0.9999980330467224,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50044-572",
+      "family": 4,
+      "initial": 0.49991562962532043,
+      "conditional_probability": 0.9999983310699463,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 1.1920928955078125e-07,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 21,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1021,
+      "case": "50171-368",
+      "family": 10,
+      "initial": 0.499071329832077,
+      "conditional_probability": 0.9999983310699463,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 1.1920928955078125e-07,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50041-390",
+      "family": 2,
+      "initial": 0.499914288520813,
+      "conditional_probability": 0.9999986886978149,
+      "fit_passed": true,
+      "errors": {
+        "batch": 0.0,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 10,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1010,
+      "case": "50082-941",
+      "family": 4,
+      "initial": 0.49933528900146484,
+      "conditional_probability": 0.9999987483024597,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.9802322387695312e-08,
+        "offer": 1.1920928955078125e-07,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 12,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1012,
+      "case": "50101-685",
+      "family": 10,
+      "initial": 0.5003625750541687,
+      "conditional_probability": 0.9999987483024597,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.842877388000488e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 9,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1009,
+      "case": "50076-678",
+      "family": 10,
+      "initial": 0.5002866387367249,
+      "conditional_probability": 0.9999988079071045,
+      "fit_passed": true,
+      "errors": {
+        "batch": 3.725290298461914e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 19,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1019,
+      "case": "50155-577",
+      "family": 10,
+      "initial": 0.49922284483909607,
+      "conditional_probability": 0.9999988079071045,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.9802322387695312e-08,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "worst_invariants": [
+    {
+      "round": 12,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1012,
+      "case": "50101-1082",
+      "family": 4,
+      "initial": 0.49939289689064026,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 3.814697265625e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1002,
+      "case": "50021-557",
+      "family": 4,
+      "initial": 0.49943646788597107,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 5.960464477539063e-08,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 12,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1012,
+      "case": "50101-1082",
+      "family": 4,
+      "initial": 0.5006070733070374,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 8,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1008,
+      "case": "50066-350",
+      "family": 4,
+      "initial": 0.49988657236099243,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 21,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1021,
+      "case": "50169-508",
+      "family": 4,
+      "initial": 0.6664937734603882,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 5.960464477539063e-08,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 2,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1002,
+      "case": "50021-557",
+      "family": 4,
+      "initial": 0.5005635023117065,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 21,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1021,
+      "case": "50169-508",
+      "family": 4,
+      "initial": 0.3335062563419342,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 16,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1016,
+      "case": "50135-813",
+      "family": 4,
+      "initial": 0.500782310962677,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.384185791015625e-07,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 16,
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "seed": 1016,
+      "case": "50135-813",
+      "family": 4,
+      "initial": 0.499217689037323,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.384185791015625e-07,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50024-788",
+      "family": 10,
+      "initial": 0.5004120469093323,
+      "conditional_probability": 0.9999998807907104,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-07,
+        "offer": 5.960464477539063e-08,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "pair_coverage": {
+    "retained_states": 736,
+    "same_verb": 305,
+    "same_verb_and_declaration": 140,
+    "definition_only_pairs": 11
+  },
+  "minimum_fitted_probability": 0.999987781047821,
+  "initial_scores_passing_threshold": 0,
+  "actions_run": 38783322327,
+  "actions_artifact": {
+    "created_at": "2026-10-15T18:15:49Z",
+    "digest": "sha256:be9e81abb85cfd9af8b77a7541594c3a9cae0831a28a9627c6f69af1d3eedc1d",
+    "expired": false,
+    "id": 11997245753,
+    "name": "learnability-search-38783322327-1",
+    "size_in_bytes": 6207922
+  },
+  "result_sha256": "1ef010fa54d256b4300688353f040ea9bf55d26a8b6e3dcf1b7bea93841e1b29",
+  "input_collision_audit": {
+    "method": "Exact action and role/type-aware focused object rows, including categorical joins; all retained states, including unscored final batches.",
+    "replay": [
+      {
+        "case": "50004-4",
+        "family": 1,
+        "steps": 4,
+        "digest": "87890593c23d59ed80b146653db84c5663a164425360b9efe58f1c0b00532892",
+        "passed": true
+      },
+      {
+        "case": "50005-384",
+        "family": 2,
+        "steps": 384,
+        "digest": "658fdb0fe7a03510d17fca8744cc955456903d6d92ba03bf1357cb3fb9b3ca5f",
+        "passed": true
+      },
+      {
+        "case": "50001-235",
+        "family": 3,
+        "steps": 235,
+        "digest": "273c1e217757e10e8e07f1837b160c41b413773241a66d20f95b39d4d0e5c733",
+        "passed": true
+      },
+      {
+        "case": "50006-248",
+        "family": 4,
+        "steps": 248,
+        "digest": "2fb0d21b9409f470f6118b44d1283bf687dd7902875682cf56fc114ba82a416c",
+        "passed": true
+      },
+      {
+        "case": "50001-368",
+        "family": 5,
+        "steps": 368,
+        "digest": "934d6a54b3d1775c8023d8358e105298a04dd8a45f4271e7e64815f1bb21c0fb",
+        "passed": true
+      },
+      {
+        "case": "50007-938",
+        "family": 6,
+        "steps": 938,
+        "digest": "d10f5a837d7d28b6474bb4955b1e051f324859f5d3c724fd1d52d008e75f1868",
+        "passed": true
+      },
+      {
+        "case": "50000-532",
+        "family": 7,
+        "steps": 532,
+        "digest": "e175cb10fde45aa02f713bfd4d80455bece95f4236e875c30f810275cbe30364",
+        "passed": true
+      },
+      {
+        "case": "50007-250",
+        "family": 9,
+        "steps": 250,
+        "digest": "b00bbc148f41c812be350ab817bfc72f44c3c0a6b24655bdda719fb9ec914ee6",
+        "passed": true
+      },
+      {
+        "case": "50007-1116",
+        "family": 10,
+        "steps": 1116,
+        "digest": "fa7e34574b60dcd062cd2e9c7aec2963e45be520589853507d64b2b7439d8f2a",
+        "passed": true
+      },
+      {
+        "case": "50007-1152",
+        "family": 11,
+        "steps": 1152,
+        "digest": "e90aca2a8e7d30af0088460ed527c55ce46fbc7707ee49befd8d4b92aa44f117",
+        "passed": true
+      }
+    ],
+    "counts": {
+      "clean_states": 736,
+      "clean_colliding_states": 0,
+      "clean_collision_classes": 0,
+      "without_declaration_states": 736,
+      "without_declaration_colliding_states": 92,
+      "without_declaration_collision_classes": 92,
+      "without_definition_states": 736,
+      "without_definition_colliding_states": 152,
+      "without_definition_collision_classes": 175
+    },
+    "examples": {
+      "without_definition": [
+        {
+          "case": "50004-4",
+          "family": 1,
+          "offers": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            1,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "case": "50007-1152",
+          "family": 11,
+          "offers": [
+            2,
+            5
+          ]
+        },
+        {
+          "case": "50000-218",
+          "family": 9,
+          "offers": [
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50003-859",
+          "family": 9,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50014-340",
+          "family": 4,
+          "offers": [
+            6,
+            7
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            1,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "case": "50012-767",
+          "family": 10,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50009-692",
+          "family": 11,
+          "offers": [
+            4,
+            6
+          ]
+        },
+        {
+          "case": "50014-204",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        }
+      ],
+      "without_declaration": [
+        {
+          "case": "50005-384",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50001-360",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50006-569",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50000-579",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50008-678",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50010-376",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50012-180",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50009-677",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50022-1033",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-639",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50019-352",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-640",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "condition": "corrected attention-disabled arm, extreme pairs",
+  "replay_verification": {
+    "platform": "macOS-26.0.1-arm64-arm-64bit",
+    "seconds": 0.3029030830366537,
+    "cases": [
+      {
+        "case": "50004-4",
+        "family": 1,
+        "steps": 4,
+        "digest": "87890593c23d59ed80b146653db84c5663a164425360b9efe58f1c0b00532892",
+        "passed": true
+      },
+      {
+        "case": "50005-384",
+        "family": 2,
+        "steps": 384,
+        "digest": "658fdb0fe7a03510d17fca8744cc955456903d6d92ba03bf1357cb3fb9b3ca5f",
+        "passed": true
+      },
+      {
+        "case": "50001-235",
+        "family": 3,
+        "steps": 235,
+        "digest": "273c1e217757e10e8e07f1837b160c41b413773241a66d20f95b39d4d0e5c733",
+        "passed": true
+      },
+      {
+        "case": "50006-248",
+        "family": 4,
+        "steps": 248,
+        "digest": "2fb0d21b9409f470f6118b44d1283bf687dd7902875682cf56fc114ba82a416c",
+        "passed": true
+      },
+      {
+        "case": "50001-368",
+        "family": 5,
+        "steps": 368,
+        "digest": "934d6a54b3d1775c8023d8358e105298a04dd8a45f4271e7e64815f1bb21c0fb",
+        "passed": true
+      },
+      {
+        "case": "50007-938",
+        "family": 6,
+        "steps": 938,
+        "digest": "d10f5a837d7d28b6474bb4955b1e051f324859f5d3c724fd1d52d008e75f1868",
+        "passed": true
+      },
+      {
+        "case": "50000-532",
+        "family": 7,
+        "steps": 532,
+        "digest": "e175cb10fde45aa02f713bfd4d80455bece95f4236e875c30f810275cbe30364",
+        "passed": true
+      },
+      {
+        "case": "50007-250",
+        "family": 9,
+        "steps": 250,
+        "digest": "b00bbc148f41c812be350ab817bfc72f44c3c0a6b24655bdda719fb9ec914ee6",
+        "passed": true
+      },
+      {
+        "case": "50007-1116",
+        "family": 10,
+        "steps": 1116,
+        "digest": "fa7e34574b60dcd062cd2e9c7aec2963e45be520589853507d64b2b7439d8f2a",
+        "passed": true
+      },
+      {
+        "case": "50007-1152",
+        "family": 11,
+        "steps": 1152,
+        "digest": "e90aca2a8e7d30af0088460ed527c55ce46fbc7707ee49befd8d4b92aa44f117",
+        "passed": true
+      }
+    ],
+    "note": "Lightweight cross-platform replay of Linux artifacts; no model construction or training."
+  }
+}

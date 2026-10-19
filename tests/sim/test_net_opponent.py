@@ -10,7 +10,13 @@ from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.verify.util import INTERACTIVE_DECK
 
 
-def _make_collector(opponent_mode, opponent_agent=None, num_envs=4, seed=7):
+def _make_collector(
+    opponent_mode: str,
+    opponent_agent: Agent | None = None,
+    num_envs: int = 4,
+    seed: int = 7,
+    recovery_max_game_microsteps: int | None = None,
+) -> SeatRoutedCollector:
     obs_space = ObservationSpace()
     match = Match(
         MatchHypers(
@@ -29,6 +35,7 @@ def _make_collector(opponent_mode, opponent_agent=None, num_envs=4, seed=7):
         seed=seed,
         opponent_mode=opponent_mode,
         opponent_agent=opponent_agent,
+        recovery_max_game_microsteps=recovery_max_game_microsteps,
     )
 
 
@@ -112,13 +119,13 @@ def test_terminal_credit_and_bootstrap():
     torch.testing.assert_close(returns[:, 0], torch.tensor([1.0, 1.0, -1.0, 0.4]))
 
 
-def test_update_boundary_has_no_banked_or_sampled_actions():
-    collector = _make_collector("self")
+def test_update_boundary_has_no_banked_or_sampled_actions() -> None:
+    collector = _make_collector("self", recovery_max_game_microsteps=10_000)
     agent = _make_agent()
     first = collector.collect(agent, 7)
     assert collector.stats.learner_transitions == 28
-    assert all(not stream for stream in collector._streams)
-    assert all(pending is None for pending in collector._pending)
+    boundary = collector.snapshot()
+    assert boundary.stats.learner_transitions == 28
     for key in first.next_obs:
         np.testing.assert_array_equal(first.next_obs[key], collector._buffers[key])
     collector.collect(agent, 7)

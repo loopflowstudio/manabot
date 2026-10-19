@@ -1,0 +1,10 @@
+{
+  "run": "7d6c152708bc",
+  "source": "5a99c7e43b582c9680ffc8991748717843fbcb6f",
+  "metadata_files_verified": 90,
+  "manifest_files_verified": 90,
+  "metadata_archive_sha256": "f878e135e013c6de21d3398e0b9926c8499e95a52d24dda70a9ebcf7fd8ca497",
+  "metadata_archive_bytes": 380142,
+  "complete_checkpoint_recovery": false,
+  "proof_limit": "Authenticated metadata archive and each retained file match worker hashes; complete session receipts and binary model archive are still pending."
+}

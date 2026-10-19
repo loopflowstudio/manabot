@@ -1,0 +1,69 @@
+Persistent CPU producers feeding one GPU — prospective protocol, 2026-10-15
+
+Objective: clear the inference-serving bottleneck in complete single-GPU training.
+Run018 attributes about half the large-stream collection host window to native
+stepping plus observation encoding; prepared model forwarding is about8%. These
+profiled fractions motivate the intervention, not a promised throughput gain.
+Run017's1.844x isolated serving gain and0.82% ordinary training gain remain evidence
+against accepting another isolated optimization. Its strict parity failure remains
+unresolved, including baseline-to-baseline numerical variation.
+
+Intervention: ordinary TrainingRun with1/2/4 persistent CPU producer threads,
+each owning disjoint native streams and contiguous observation-buffer row views.
+The existing collector remains the sole GPU/policy/sampling/rollout owner. Global
+barriers preserve inference batch shapes, row order and sampling order. Global
+seed strides preserve resets across shard counts. No changes to rules, learning,
+precision, stream count or policy update cadence. workers1 is the direct native
+path. All owners close on completion/failure; recovery uses the existing global
+collector snapshot. Local tests prove uneven-shard, auto-reset, rollout, learning
+and recovery parity; they do not establish GPU scaling.
+
+Hardware/cost: one RTX5090 host, >=8vCPU/48GBRAM, quote <=$1.25/h, job30min/$3,
+rental2700s, one attempt. Reserve$4 within the original total$50. Keep the separate
+unknown015 reserve and verify its provider absence, all prior admitted deletions,
+published exact source and full source-archive readback before launch. No retry or
+deadline expansion to rescue a cell. Retain all failures and partial artifacts.
+
+Use existing cuda_performance.child through worker_experiment --producer-scaling.
+Each cell is a fresh process:512 or4096 streams,8steps x3updates, seed10349,
+w64-d1 FP32/TF32off, existing55s stage/60s recipe/70s process limits and memory
+limits unchanged. Fixed total learner work per cell is12288 or98304 rows.
+Conditions: ordinary-input reference/workers1, prepared/workers1, prepared/workers2,
+prepared/workers4. The reference patches preparation only, as in017; it is not a
+timing of a historical checkout. No cross-host pairing or discarded samples.
+
+First,10 diagnostic cells: condition order reference1/prepared1/prepared2/
+prepared4/reference1, each512 then4096. Set deterministic algorithms, cuDNN
+deterministic with benchmark disabled, CUBLAS_WORKSPACE_CONFIG=:16:8 before CUDA
+initialization. Hash every collection's full rollout, final buffers, global
+action/active journal, game seeds and sampling RNG. Hash raw/EMA/Adam exports
+and retain scientific diagnostics. Exact equality required within each stream
+count; unsupported deterministic operations fail visibly. These settings and
+hashing overhead are diagnostic only, never used as ordinary speed estimates.
+
+Then24 ordinary timing cells, deterministic settings untouched and no collection
+hashing: reference1/prepared1/prepared2/prepared4/prepared4/prepared2/prepared1/
+reference1/prepared2/reference1/prepared4/prepared1, each512 then4096. Three samples
+per condition/count. Retain complete TrainingRun time, collection/learning times,
+learner rows, process wall/CPU time, memory, closed-thread witness and learned-state
+hashes. Throughput denominator is whole TrainingRun, not the collection profile.
+Run all declared cells even after an earlier diagnostic failure; report that
+failure and never turn incomplete cells into successful throughput samples.
+
+Performance gates: at4096 median complete-training speedup >=1.25x reference1 to
+prepared4 AND >=1.20x prepared1 to prepared4. At512 prepared4 must not regress
+more than5% against reference1. All timing cells must complete within the existing
+limits, report exact work counts, and leave no producer threads. Report the full
+1/2/4 curve, repeats and startup-inclusive process timing as supporting evidence.
+
+Correctness/adoption gates: exact diagnostic trajectories and learned states;
+ordinary timing learned-state/scientific-diagnostic equality remains required.
+Deterministic diagnostic success does not waive017 or any ordinary-state failure.
+If ordinary equality fails but diagnostic equality passes, preserve the separate
+findings and investigate numerical reproducibility before adoption. No retrospective
+tolerance change. Passing one host/recipe does not establish general training
+capacity, playing strength or a production default for all machines.
+
+Preserve complete raw outputs in one immutable archive, verify archive receipt and
+every internal manifest entry on recovery, and retain readable summaries/receipts
+in the existing PR. No merge or Task completion from an isolated benchmark win.

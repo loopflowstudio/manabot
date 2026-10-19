@@ -580,16 +580,21 @@ wheels = [
 
 [[package]]
 name = "etude-sdk"
-version = "0.1.0"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/49/0f170a171c3040b3f2b003aa7e234533d9e16cac59c16586634a6b822b51/etude_sdk-0.1.0.tar.gz", hash = "sha256:371f0295162e845c12392462f41161cfbe8f59f8946d260f5afc47a9e2889740", size = 315272, upload-time = "2026-10-14T19:38:10.873Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/e7/eaf44fdaf704aa523830afb6e9b95f510bcab9826c4035cbc80aa95da3eb/etude_sdk-0.1.1.tar.gz", hash = "sha256:49e5ec84dcd4eee5e4cc6f20e15ef43d8d7ddf60d4b5aee36292776f526618dd", size = 317387, upload-time = "2026-10-14T21:43:07.715Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/4f/32e38e8ad71e806c1b15b3e00520d71f31e376a36326d80763cf258de632/etude_sdk-0.1.0-py3-none-any.whl", hash = "sha256:fadf0772dac366542822f247d06b16c8e7ad5a18c53b6b2d820a38a81fcd0c5e", size = 254880, upload-time = "2026-10-14T19:38:09.065Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/d6/3da8225633cefd053da424d04d973b80895922885aaaaa4f2d213496ef4f/etude_sdk-0.1.1-py3-none-any.whl", hash = "sha256:71cbfe3fcc59a2818d4aa029eef5b7b635049942e37e5b5787c5e6b0b99b9a2f", size = 254879, upload-time = "2026-10-14T21:43:04.836Z" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "boto3" },
 ]
 
 [[package]]
@@ -1283,6 +1288,7 @@ dependencies = [
     { name = "etude-sdk" },
     { name = "fastapi" },
     { name = "gymnasium" },
+    { name = "nbformat" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "psutil" },
@@ -1311,15 +1317,22 @@ notebook = [
 play = [
     { name = "maturin" },
 ]
+reports = [
+    { name = "etude-sdk", extra = ["s3"] },
+    { name = "matplotlib" },
+]
 
 [package.dev-dependencies]
 play-runtime = [
     { name = "fastapi" },
+    { name = "gymnasium" },
     { name = "maturin" },
     { name = "numpy" },
+    { name = "psutil" },
     { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-7-manabot-play-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
     { name = "uvicorn", extra = ["standard"], marker = "extra == 'group-7-manabot-play-runtime'" },
+    { name = "wandb" },
 ]
 training-runtime = [
     { name = "torch", version = "2.10.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and extra == 'group-7-manabot-training-runtime') or (extra == 'group-7-manabot-play-runtime' and extra == 'group-7-manabot-training-runtime')" },
@@ -1329,15 +1342,18 @@ training-runtime = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
-    { name = "etude-sdk", specifier = "==0.1.0" },
+    { name = "etude-sdk", specifier = "==0.1.1" },
+    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", specifier = "==0.1.1" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.0" },
     { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.9" },
+    { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.9" },
     { name = "maturin", marker = "extra == 'play'", specifier = ">=1.5,<2.0" },
     { name = "nbclient", marker = "extra == 'notebook'", specifier = ">=0.10" },
+    { name = "nbformat", specifier = ">=5.10.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "psutil", specifier = ">=5.9.0" },
@@ -1349,15 +1365,18 @@ requires-dist = [
     { name = "wandb", specifier = ">=0.18.7" },
     { name = "wandb-workspaces", marker = "extra == 'notebook'", specifier = ">=0.4.13" },
 ]
-provides-extras = ["artifacts", "play", "dev", "notebook"]
+provides-extras = ["reports", "artifacts", "play", "dev", "notebook"]
 
 [package.metadata.requires-dev]
 play-runtime = [
     { name = "fastapi", specifier = ">=0.116.0" },
+    { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.5,<2.0" },
     { name = "numpy", specifier = ">=1.24.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
     { name = "torch", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "manabot", group = "play-runtime" } },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
+    { name = "wandb", specifier = ">=0.18.7" },
 ]
 training-runtime = [
     { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.10.0", index = "https://pypi.org/simple", conflict = { package = "manabot", group = "training-runtime" } },

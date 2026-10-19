@@ -1378,6 +1378,10 @@ impl Game {
             AtomicCommand::DeclareAttackers {
                 player, attackers, ..
             } => {
+                let (actor, declaration_order) = self.current_attacker_declaration()?;
+                if actor != *player {
+                    return Err(StructuredOfferError::WrongDecision);
+                }
                 let selected: BTreeSet<_> = attackers
                     .iter()
                     .map(|object_ref| {
@@ -1391,26 +1395,17 @@ impl Game {
                     .collect::<Result<_, _>>()?;
                 let mut actions = 0;
                 let mut done = false;
-                while self
-                    .action_space()
-                    .is_some_and(|space| space.kind == ActionSpaceKind::DeclareAttacker)
-                {
-                    let space = self.action_space().expect("checked attacker prompt");
-                    if space.player != Some(*player) {
-                        return Err(StructuredOfferError::WrongDecision);
-                    }
-                    let permanent = space
-                        .actions
-                        .iter()
-                        .find_map(|action| match action {
-                            Action::DeclareAttacker { permanent, .. } => Some(*permanent),
-                            _ => None,
+                // The final choice may skip trivial windows all the way to a
+                // later turn's declaration, even by this same actor. Lower only
+                // the batch bound at the root, never a fresh prompt of this kind.
+                for permanent in declaration_order {
+                    let space = self
+                        .action_space()
+                        .filter(|space| {
+                            space.kind == ActionSpaceKind::DeclareAttacker
+                                && space.player == Some(*player)
                         })
-                        .ok_or_else(|| {
-                            StructuredOfferError::Invariant(
-                                "legacy attacker prompt is empty".to_string(),
-                            )
-                        })?;
+                        .ok_or(StructuredOfferError::WrongDecision)?;
                     let attack = selected.contains(&permanent);
                     let action = space
                         .actions

@@ -1,0 +1,9 @@
+{
+  "authorized_total_usd": 50,
+  "ancillary_reserve_usd": 5,
+  "spent_confirmed_usd": 4.867730032361578,
+  "estimated_rental_total_usd": 5.250913923331023,
+  "conservative_rental_total_usd": 8.09,
+  "unallocated_after_conservative_charges_and_ancillary_reserve_usd": 32.91,
+  "pending_reservations_usd": 4
+}

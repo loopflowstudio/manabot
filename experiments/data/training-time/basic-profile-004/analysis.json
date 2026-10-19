@@ -1,0 +1,350 @@
+{
+  "source": "5a99c7e43b582c9680ffc8991748717843fbcb6f",
+  "diagnostic_only": true,
+  "timing_comparison": null,
+  "cases": [
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-0-deterministic-off",
+        "profile": false,
+        "proof": true,
+        "streams": 64,
+        "updates": 3,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2248718336,
+        "peak_reserved_bytes": 2453667840,
+        "run_id": "60b208b3bf984a4a88db0fedeb43067e",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+        "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+      },
+      "events": 60,
+      "collection_witnesses": 3,
+      "optimizer_steps": 9,
+      "max_movement": 9.992718696594238e-05,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 1,
+        "step": 1,
+        "parameters": "caae681299114c5dca4ee9b488ffc4d125e4d292da0574e8c64fed14acd2ce04",
+        "optimizer": "2b4d5dddcb65c656a30ac0d179731f2c9dae1ac3ab0832beff7a411b7ebc9256",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 9.992718696594238e-05,
+        "max_movement_parameter": "value_head.5.weight",
+        "max_parameter_abs": 4.688721656799316
+      },
+      "large_movement_captures": [],
+      "errors": []
+    },
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-1-deterministic-off",
+        "profile": false,
+        "proof": true,
+        "streams": 64,
+        "updates": 3,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2248718336,
+        "peak_reserved_bytes": 2453667840,
+        "run_id": "17282de1363f439f8d9ed1c5202c5cbd",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+        "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+      },
+      "events": 60,
+      "collection_witnesses": 3,
+      "optimizer_steps": 9,
+      "max_movement": 9.992718696594238e-05,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 1,
+        "step": 1,
+        "parameters": "caae681299114c5dca4ee9b488ffc4d125e4d292da0574e8c64fed14acd2ce04",
+        "optimizer": "2b4d5dddcb65c656a30ac0d179731f2c9dae1ac3ab0832beff7a411b7ebc9256",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 9.992718696594238e-05,
+        "max_movement_parameter": "value_head.5.weight",
+        "max_parameter_abs": 4.688721656799316
+      },
+      "large_movement_captures": [],
+      "errors": []
+    },
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-2-deterministic-on",
+        "profile": true,
+        "proof": true,
+        "streams": 64,
+        "updates": 3,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2248718336,
+        "peak_reserved_bytes": 2453667840,
+        "run_id": "d9886ba663d14ab4af05f3db9c83d9e3",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+        "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+      },
+      "events": 60,
+      "collection_witnesses": 3,
+      "optimizer_steps": 9,
+      "max_movement": 9.992718696594238e-05,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 1,
+        "step": 1,
+        "parameters": "caae681299114c5dca4ee9b488ffc4d125e4d292da0574e8c64fed14acd2ce04",
+        "optimizer": "2b4d5dddcb65c656a30ac0d179731f2c9dae1ac3ab0832beff7a411b7ebc9256",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 9.992718696594238e-05,
+        "max_movement_parameter": "value_head.5.weight",
+        "max_parameter_abs": 4.688721656799316
+      },
+      "large_movement_captures": [],
+      "errors": []
+    },
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-3-deterministic-on",
+        "profile": true,
+        "proof": true,
+        "streams": 64,
+        "updates": 3,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2248718336,
+        "peak_reserved_bytes": 2453667840,
+        "run_id": "e3d40dfb3e9a491cabc9d27faa3e01b5",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+        "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+      },
+      "events": 60,
+      "collection_witnesses": 3,
+      "optimizer_steps": 9,
+      "max_movement": 9.992718696594238e-05,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 1,
+        "step": 1,
+        "parameters": "caae681299114c5dca4ee9b488ffc4d125e4d292da0574e8c64fed14acd2ce04",
+        "optimizer": "2b4d5dddcb65c656a30ac0d179731f2c9dae1ac3ab0832beff7a411b7ebc9256",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 9.992718696594238e-05,
+        "max_movement_parameter": "value_head.5.weight",
+        "max_parameter_abs": 4.688721656799316
+      },
+      "large_movement_captures": [],
+      "errors": []
+    },
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-4-ordinary-off",
+        "profile": false,
+        "proof": false,
+        "streams": 64,
+        "updates": 16,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2116165632,
+        "peak_reserved_bytes": 2378170368,
+        "run_id": "299d88938acf4a1d8fff4e1ec46013b3",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "c917a0a6673819924b65b5b432d8b4336f52b7c3bd6ed5f8455de3ecff666660",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "0b4d997e45bb14cd5d8cbb9714d67400110fe0295432d656ddbe4383c937cdc9",
+        "policy-raw.pt": "3f7a522f0b895e39588209ad9005252d4e6800d692f2852f6d15f6f95f4cb2ee"
+      },
+      "events": 505,
+      "collection_witnesses": 16,
+      "optimizer_steps": 85,
+      "max_movement": 0.0001733042299747467,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 15,
+        "step": 78,
+        "parameters": "967e80a5a19a5fd3ed26839cb47f48079225aa2f9007ade568a3b6d455fc0f1a",
+        "optimizer": "2986db3b27583cd297cd070ee19c4c989f67225e1ce5ee698c15bd55e6e47439",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 0.0001733042299747467,
+        "max_movement_parameter": "value_head.0.weight",
+        "max_parameter_abs": 4.688684940338135
+      },
+      "large_movement_captures": [],
+      "errors": []
+    },
+    {
+      "case": {
+        "diagnostic": true,
+        "layers": 8,
+        "name": "diagnostic-5-ordinary-off",
+        "profile": false,
+        "proof": false,
+        "streams": 64,
+        "updates": 16,
+        "width": 384
+      },
+      "result": {
+        "diagnostic_only": true,
+        "peak_allocated_bytes": 2116165632,
+        "peak_reserved_bytes": 2378170368,
+        "run_id": "a7a62717e23b426faeecd28c13106e75",
+        "status": "completed",
+        "timing_basis": "diagnostic witnesses add synchronization; not performance evidence"
+      },
+      "witnesses": {
+        "policy-ema.pt": "c917a0a6673819924b65b5b432d8b4336f52b7c3bd6ed5f8455de3ecff666660",
+        "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+        "policy-optimizer.pt": "0b4d997e45bb14cd5d8cbb9714d67400110fe0295432d656ddbe4383c937cdc9",
+        "policy-raw.pt": "3f7a522f0b895e39588209ad9005252d4e6800d692f2852f6d15f6f95f4cb2ee"
+      },
+      "events": 505,
+      "collection_witnesses": 16,
+      "optimizer_steps": 85,
+      "max_movement": 0.0001733042299747467,
+      "largest_step": {
+        "kind": "adam_after",
+        "iteration": 15,
+        "step": 78,
+        "parameters": "967e80a5a19a5fd3ed26839cb47f48079225aa2f9007ade568a3b6d455fc0f1a",
+        "optimizer": "2986db3b27583cd297cd070ee19c4c989f67225e1ce5ee698c15bd55e6e47439",
+        "rng": {
+          "torch_cpu": "387dbe43b5fb94db2e6651cca6e8c4fcb0947ba6fdf1065ffa44ba7aac5dcc14",
+          "torch_cuda": "ebf451f062d019221685e6538d6ba323d254e176085833c3a7d3a3d6d2c7c4a2"
+        },
+        "max_movement": 0.0001733042299747467,
+        "max_movement_parameter": "value_head.0.weight",
+        "max_parameter_abs": 4.688684940338135
+      },
+      "large_movement_captures": [],
+      "errors": []
+    }
+  ],
+  "comparisons": [
+    {
+      "comparison": "deterministic_off_off",
+      "left": "diagnostic-0-deterministic-off",
+      "right": "diagnostic-1-deterministic-off",
+      "first_learner_difference": null,
+      "first_collection_difference": null,
+      "checkpoint_equality": {
+        "policy-ema.pt": true,
+        "policy-initial-raw.pt": true,
+        "policy-optimizer.pt": true,
+        "policy-raw.pt": true
+      },
+      "complete": true
+    },
+    {
+      "comparison": "deterministic_off_on",
+      "left": "diagnostic-0-deterministic-off",
+      "right": "diagnostic-2-deterministic-on",
+      "first_learner_difference": null,
+      "first_collection_difference": null,
+      "checkpoint_equality": {
+        "policy-ema.pt": true,
+        "policy-initial-raw.pt": true,
+        "policy-optimizer.pt": true,
+        "policy-raw.pt": true
+      },
+      "complete": true
+    },
+    {
+      "comparison": "deterministic_on_on",
+      "left": "diagnostic-2-deterministic-on",
+      "right": "diagnostic-3-deterministic-on",
+      "first_learner_difference": null,
+      "first_collection_difference": null,
+      "checkpoint_equality": {
+        "policy-ema.pt": true,
+        "policy-initial-raw.pt": true,
+        "policy-optimizer.pt": true,
+        "policy-raw.pt": true
+      },
+      "complete": true
+    },
+    {
+      "comparison": "ordinary_off_off",
+      "left": "diagnostic-4-ordinary-off",
+      "right": "diagnostic-5-ordinary-off",
+      "first_learner_difference": null,
+      "first_collection_difference": null,
+      "checkpoint_equality": {
+        "policy-ema.pt": true,
+        "policy-initial-raw.pt": true,
+        "policy-optimizer.pt": true,
+        "policy-raw.pt": true
+      },
+      "complete": true
+    }
+  ],
+  "proof_limits": [
+    "Witness hashing changes synchronization and timing; no throughput inference.",
+    "First differing boundary is an observation, not a root-cause claim.",
+    "Non-recurrence does not clear the prior large outlier.",
+    "All binary payloads verified; this does not establish why study003 had two exceptional cases."
+  ],
+  "verification_scope": "All31Etude objects,126manifest members and24canonical checkpoint payload hashes verified.",
+  "performance_claim": false,
+  "prior_failure_resolved": false
+}

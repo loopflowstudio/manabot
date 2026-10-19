@@ -1,0 +1,8 @@
+{
+  "run": "df2ecc8af264",
+  "seconds": 0.20911541697569191,
+  "authoritative_outputs_verified": 1,
+  "manifest_files_verified": 2,
+  "total_bytes": 547,
+  "method": "per-file authenticated4MiB ranges,4file readers,If-Match,exact receipt hashes"
+}

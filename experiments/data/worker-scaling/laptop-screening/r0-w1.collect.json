@@ -1,0 +1,43 @@
+{
+  "seconds": 1.964100709068589,
+  "workers": [
+    {
+      "worker": 2,
+      "stage": "collect",
+      "count": 0,
+      "seconds": 9.00006853044033e-06,
+      "user_seconds": 5.000000000032756e-06,
+      "system_seconds": 9.999999999732445e-07,
+      "rss_bytes": 275365888
+    },
+    {
+      "worker": 1,
+      "stage": "collect",
+      "count": 0,
+      "seconds": 9.167008101940155e-06,
+      "user_seconds": 5.000000000032756e-06,
+      "system_seconds": 2.000000000002e-06,
+      "rss_bytes": 276627456
+    },
+    {
+      "worker": 3,
+      "stage": "collect",
+      "count": 0,
+      "seconds": 9.249895811080933e-06,
+      "user_seconds": 5.000000000032756e-06,
+      "system_seconds": 2.000000000002e-06,
+      "rss_bytes": 276152320
+    },
+    {
+      "worker": 0,
+      "stage": "collect",
+      "count": 64,
+      "seconds": 1.9638087089406326,
+      "user_seconds": 1.883816,
+      "system_seconds": 0.07688,
+      "rss_bytes": 2022359040
+    }
+  ],
+  "requests": 0,
+  "service_seconds": 0.0
+}

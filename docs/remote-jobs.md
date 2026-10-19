@@ -555,6 +555,14 @@ bound insertion with new entries appended: existing entries, the boundary and
 admitted deadline or access limits cannot change, and the appended entries pass
 the same budget, deadline and admitted-successor checks.
 
+On restart, the scheduler checks remote state once before applying its cached
+observation cutoff, so an insertion accepted while it was offline remains visible.
+The scheduler and report companion retain validated cohort observations locally.
+An admitted extension therefore survives a restart followed by a storage outage,
+including when provider observation failed after the scheduler read the extension.
+Observation still ends 30 minutes after the last known admitted deadline;
+outages and restarts grant no additional time or reporting allowance.
+
 Each added `CohortEntry.continuation` names an earlier job, its stage and expected
 absolute iteration. After that job completes, publishes its final manifest and
 confirms cleanup, the existing controller binds its exact raw/EMA/Adam and
@@ -587,8 +595,9 @@ source checkouts and credentials until every dependent allocation settles.
 
 ### Queued price rejection and startup clocks
 
-Public worker source is `loopflowstudio/fantasia`, not the private service repository
-`loopflowstudio/etude`. Admission checks the pinned commit/tree; Git fallback also
+Public worker source is `loopflowstudio/manabot`. The separate Etude client is
+`loopflowstudio/etude`; its private research service is `loopflowstudio/etude-studio`.
+Admission checks the pinned commit/tree; Git fallback also
 checks lock bytes. An API 403 may use the controller's existing `gh` login, then
 public Git fetch. No controller GitHub credential is forwarded to the rental.
 

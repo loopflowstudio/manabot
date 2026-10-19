@@ -1,0 +1,1307 @@
+{
+  "source": "6c4458364930200d25250aad42c8d9bdf8728e34",
+  "status": "completed_budget",
+  "wall_seconds": 1800.110301235,
+  "cpu_seconds": 1799.677710159,
+  "rounds": 27,
+  "fits": {
+    "completed": 107,
+    "error": 54,
+    "budget_exhausted": 1
+  },
+  "unique_scored_states": 864,
+  "scores": 3424,
+  "counts": {
+    "visited_family_1": 138026,
+    "audited_family_1": 14640,
+    "visited_family_3": 5281,
+    "visited_family_4": 2434,
+    "audited_family_4": 1809,
+    "visited_family_2": 5536,
+    "audited_family_2": 5536,
+    "visited_family_9": 608,
+    "audited_family_9": 605,
+    "visited_family_6": 2170,
+    "audited_family_6": 1269,
+    "audited_family_3": 1583,
+    "visited_family_7": 462,
+    "audited_family_7": 308,
+    "terminal_games": 185,
+    "visited_family_5": 405,
+    "audited_family_5": 405,
+    "visited_family_10": 5338,
+    "audited_family_10": 4349,
+    "visited_family_11": 191,
+    "audited_family_11": 191,
+    "step_capped_games": 31
+  },
+  "by_arm": {
+    "generic": {
+      "scores": 1728,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "semantic": {
+      "scores": 1696,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "by_family": {
+    "1": {
+      "scores": 428,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "2": {
+      "scores": 428,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "3": {
+      "scores": 341,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "4": {
+      "scores": 333,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "5": {
+      "scores": 321,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "6": {
+      "scores": 325,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "7": {
+      "scores": 321,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "9": {
+      "scores": 321,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "10": {
+      "scores": 317,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    },
+    "11": {
+      "scores": 289,
+      "fit_misses": 0,
+      "invariant_failures": 0
+    }
+  },
+  "fit_errors": [
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 0,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    },
+    {
+      "arm": "generic_no_attention",
+      "preference": 1,
+      "status": "error",
+      "error": "ValidationError: 1 validation error for AgentSpec\n  Value error, value token and stacked layers require attention [type=value_error, input_value={'hidden_dim': 32, 'num_a..., 'semantic_pack': None}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.12/v/value_error"
+    }
+  ],
+  "native_findings": [],
+  "worst_fit_scores": [
+    {
+      "round": 10,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1010,
+      "case": "50081-213",
+      "family": 11,
+      "initial": 0.4995948374271393,
+      "conditional_probability": 0.9999889731407166,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 2.086162567138672e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50044-572",
+      "family": 4,
+      "initial": 0.5001925230026245,
+      "conditional_probability": 0.9999922513961792,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 1.1920928955078125e-07,
+        "object": 2.0489096641540527e-08,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50045-457",
+      "family": 6,
+      "initial": 0.666738748550415,
+      "conditional_probability": 0.999992847442627,
+      "fit_passed": true,
+      "errors": {
+        "batch": 3.814697265625e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 20,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1020,
+      "case": "50160-692",
+      "family": 11,
+      "initial": 0.6667537093162537,
+      "conditional_probability": 0.9999939203262329,
+      "fit_passed": true,
+      "errors": {
+        "batch": 2.2649765014648438e-06,
+        "offer": 0.0,
+        "object": 2.682209014892578e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 26,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1026,
+      "case": "50208-484",
+      "family": 10,
+      "initial": 0.5005489587783813,
+      "conditional_probability": 0.9999942779541016,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 10,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1010,
+      "case": "50081-213",
+      "family": 11,
+      "initial": 0.5004051923751831,
+      "conditional_probability": 0.9999948740005493,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 1.4901161193847656e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50025-1175",
+      "family": 11,
+      "initial": 0.49976077675819397,
+      "conditional_probability": 0.9999950528144836,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 1.4097167877480388e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 14,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1014,
+      "case": "50112-784",
+      "family": 11,
+      "initial": 0.666571319103241,
+      "conditional_probability": 0.9999955892562866,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 5.960464477539063e-08,
+        "object": 1.8189894035458565e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 9,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1009,
+      "case": "50079-491",
+      "family": 10,
+      "initial": 0.5003389120101929,
+      "conditional_probability": 0.9999957084655762,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 6.245004513516506e-17,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1005,
+      "case": "50045-457",
+      "family": 6,
+      "initial": 0.33326125144958496,
+      "conditional_probability": 0.9999960660934448,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 26,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1026,
+      "case": "50208-484",
+      "family": 10,
+      "initial": 0.49995097517967224,
+      "conditional_probability": 0.9999966621398926,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 0.0,
+        "object": 1.2732925824820995e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 5,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1005,
+      "case": "50043-163",
+      "family": 11,
+      "initial": 0.6665798425674438,
+      "conditional_probability": 0.9999969005584717,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.152557373046875e-07,
+        "offer": 5.960464477539063e-08,
+        "object": 5.122274160385132e-09,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50058-395",
+      "family": 10,
+      "initial": 0.49854138493537903,
+      "conditional_probability": 0.9999969601631165,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 2.514570951461792e-08,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 9,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1009,
+      "case": "50076-644",
+      "family": 11,
+      "initial": 0.33418744802474976,
+      "conditional_probability": 0.9999969601631165,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 3.8743019104003906e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 14,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1014,
+      "case": "50112-784",
+      "family": 11,
+      "initial": 0.33342868089675903,
+      "conditional_probability": 0.9999970197677612,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.430511474609375e-06,
+        "offer": 1.1920928955078125e-07,
+        "object": 6.548361852765083e-11,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 8,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1008,
+      "case": "50065-702",
+      "family": 11,
+      "initial": 0.5007827281951904,
+      "conditional_probability": 0.999997079372406,
+      "fit_passed": true,
+      "errors": {
+        "batch": 9.5367431640625e-07,
+        "offer": 1.1920928955078125e-07,
+        "object": 5.820766091346741e-10,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 8,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1008,
+      "case": "50065-703",
+      "family": 11,
+      "initial": 0.5007807612419128,
+      "conditional_probability": 0.999997079372406,
+      "fit_passed": true,
+      "errors": {
+        "batch": 8.940696716308594e-08,
+        "offer": 1.1920928955078125e-07,
+        "object": 4.656612873077393e-10,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 0,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1000,
+      "case": "50000-346",
+      "family": 6,
+      "initial": 0.500100314617157,
+      "conditional_probability": 0.9999971389770508,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.4901161193847656e-08,
+        "offer": 0.0,
+        "object": 2.7284841053187847e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 6,
+      "arm": "semantic",
+      "preference": 1,
+      "seed": 1006,
+      "case": "50048-87",
+      "family": 11,
+      "initial": 0.666953444480896,
+      "conditional_probability": 0.9999973177909851,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.9073486328125e-06,
+        "offer": 0.0,
+        "object": 6.51925802230835e-09,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 11,
+      "arm": "generic",
+      "preference": 0,
+      "seed": 1011,
+      "case": "50088-242",
+      "family": 10,
+      "initial": 0.4996713399887085,
+      "conditional_probability": 0.9999973177909851,
+      "fit_passed": true,
+      "errors": {
+        "batch": 4.76837158203125e-07,
+        "offer": 0.0,
+        "object": 5.229594535194337e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "worst_invariants": [
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50063-605",
+      "family": 7,
+      "initial": 0.49983707070350647,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 1.1444091796875e-05,
+        "offer": 0.0,
+        "object": 6.776263578034403e-21,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 1,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1001,
+      "case": "50008-463",
+      "family": 3,
+      "initial": 0.5003189444541931,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50027-1147",
+      "family": 3,
+      "initial": 0.5004351735115051,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 3,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1003,
+      "case": "50025-435",
+      "family": 3,
+      "initial": 0.5005229711532593,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 6,
+      "arm": "generic",
+      "preference": 1,
+      "seed": 1006,
+      "case": "50054-262",
+      "family": 9,
+      "initial": 0.499838650226593,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 5.960464477539063e-08,
+        "object": 2.086162567138672e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50057-770",
+      "family": 11,
+      "initial": 0.5000835061073303,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 3.865352482534945e-12,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50060-279",
+      "family": 2,
+      "initial": 0.4998942017555237,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50057-356",
+      "family": 9,
+      "initial": 0.49999427795410156,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 2.384185791015625e-07,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50061-219",
+      "family": 3,
+      "initial": 0.4994066059589386,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 0.0,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    },
+    {
+      "round": 7,
+      "arm": "semantic",
+      "preference": 0,
+      "seed": 1007,
+      "case": "50058-395",
+      "family": 10,
+      "initial": 0.4995751976966858,
+      "conditional_probability": 1.0,
+      "fit_passed": true,
+      "errors": {
+        "batch": 7.62939453125e-06,
+        "offer": 0.0,
+        "object": 2.2118911147117615e-09,
+        "padding_mass": 0.0,
+        "reload": 0.0
+      },
+      "invariants_passed": true
+    }
+  ],
+  "minimum_fitted_probability": 0.9999889731407166,
+  "initial_scores_passing_threshold": 0,
+  "actions_run": 38782530929,
+  "actions_artifact": {
+    "created_at": "2026-10-15T18:35:13Z",
+    "digest": "sha256:bfc235e5834e1efe6e071ca53a752fa29b3d81c4d4d01c6000c741d31acf16c4",
+    "expired": false,
+    "id": 11998422776,
+    "name": "learnability-search-38782530929-1",
+    "size_in_bytes": 16669082
+  },
+  "result_sha256": "e8ef3d372307487b0f918f449df7e493fad586d02a406202e2451ed359a57b2f",
+  "input_collision_audit": {
+    "method": "Exact action and role/type-aware focused object rows, including categorical joins; all retained states, including unscored final batches.",
+    "replay": [
+      {
+        "case": "50004-4",
+        "family": 1,
+        "steps": 4,
+        "digest": "87890593c23d59ed80b146653db84c5663a164425360b9efe58f1c0b00532892",
+        "passed": true
+      },
+      {
+        "case": "50005-384",
+        "family": 2,
+        "steps": 384,
+        "digest": "658fdb0fe7a03510d17fca8744cc955456903d6d92ba03bf1357cb3fb9b3ca5f",
+        "passed": true
+      },
+      {
+        "case": "50001-235",
+        "family": 3,
+        "steps": 235,
+        "digest": "273c1e217757e10e8e07f1837b160c41b413773241a66d20f95b39d4d0e5c733",
+        "passed": true
+      },
+      {
+        "case": "50006-248",
+        "family": 4,
+        "steps": 248,
+        "digest": "2fb0d21b9409f470f6118b44d1283bf687dd7902875682cf56fc114ba82a416c",
+        "passed": true
+      },
+      {
+        "case": "50001-368",
+        "family": 5,
+        "steps": 368,
+        "digest": "934d6a54b3d1775c8023d8358e105298a04dd8a45f4271e7e64815f1bb21c0fb",
+        "passed": true
+      },
+      {
+        "case": "50007-938",
+        "family": 6,
+        "steps": 938,
+        "digest": "d10f5a837d7d28b6474bb4955b1e051f324859f5d3c724fd1d52d008e75f1868",
+        "passed": true
+      },
+      {
+        "case": "50000-532",
+        "family": 7,
+        "steps": 532,
+        "digest": "e175cb10fde45aa02f713bfd4d80455bece95f4236e875c30f810275cbe30364",
+        "passed": true
+      },
+      {
+        "case": "50007-250",
+        "family": 9,
+        "steps": 250,
+        "digest": "b00bbc148f41c812be350ab817bfc72f44c3c0a6b24655bdda719fb9ec914ee6",
+        "passed": true
+      },
+      {
+        "case": "50007-1116",
+        "family": 10,
+        "steps": 1116,
+        "digest": "fa7e34574b60dcd062cd2e9c7aec2963e45be520589853507d64b2b7439d8f2a",
+        "passed": true
+      },
+      {
+        "case": "50007-1152",
+        "family": 11,
+        "steps": 1152,
+        "digest": "e90aca2a8e7d30af0088460ed527c55ce46fbc7707ee49befd8d4b92aa44f117",
+        "passed": true
+      }
+    ],
+    "counts": {
+      "clean_states": 864,
+      "clean_colliding_states": 0,
+      "clean_collision_classes": 0,
+      "without_declaration_states": 864,
+      "without_declaration_colliding_states": 108,
+      "without_declaration_collision_classes": 108,
+      "without_definition_states": 864,
+      "without_definition_colliding_states": 179,
+      "without_definition_collision_classes": 205
+    },
+    "examples": {
+      "without_definition": [
+        {
+          "case": "50004-4",
+          "family": 1,
+          "offers": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            1,
+            3
+          ]
+        },
+        {
+          "case": "50007-250",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        },
+        {
+          "case": "50007-1152",
+          "family": 11,
+          "offers": [
+            2,
+            5
+          ]
+        },
+        {
+          "case": "50000-218",
+          "family": 9,
+          "offers": [
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50003-859",
+          "family": 9,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50014-340",
+          "family": 4,
+          "offers": [
+            6,
+            7
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            1,
+            3,
+            4
+          ]
+        },
+        {
+          "case": "50015-185",
+          "family": 9,
+          "offers": [
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "case": "50012-767",
+          "family": 10,
+          "offers": [
+            1,
+            2
+          ]
+        },
+        {
+          "case": "50009-692",
+          "family": 11,
+          "offers": [
+            4,
+            6
+          ]
+        },
+        {
+          "case": "50014-204",
+          "family": 9,
+          "offers": [
+            4,
+            5,
+            6
+          ]
+        }
+      ],
+      "without_declaration": [
+        {
+          "case": "50005-384",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50001-360",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50006-569",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50000-579",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50008-678",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50010-376",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50012-180",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50009-677",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50022-1033",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-639",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50019-352",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        },
+        {
+          "case": "50021-640",
+          "family": 2,
+          "offers": [
+            0,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "condition": "primary thirty-minute search; invalid attention-disabled attempts retained separately from completed generic/semantic fits"
+}

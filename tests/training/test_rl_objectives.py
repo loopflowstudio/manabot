@@ -39,7 +39,13 @@ def fixture():
     obs = {
         "actions_valid": np.tile([1, 1, 1, 0], (4, 1)).astype(np.float32),
         "actions": np.tile(
-            [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 0]], (4, 1, 1)
+            [
+                [1, *([0] * 15), 1, 1],
+                [1, *([0] * 15), 0, 1],
+                [0, 1, *([0] * 14), 0, 1],
+                [0] * 18,
+            ],
+            (4, 1, 1),
         ).astype(np.float32),
     }
     with torch.no_grad():

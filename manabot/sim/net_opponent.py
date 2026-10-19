@@ -39,7 +39,9 @@ import torch
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
+from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
+from manabot.model.inference import PolicyInference
 from manabot.model.policy_distribution import (
     NumericalError,
     legal_mask,
@@ -47,6 +49,7 @@ from manabot.model.policy_distribution import (
     require,
 )
 from manabot.model.train import Trainer
+from manabot.sim.producers import ShardedVectorEnv
 from manabot.sim.rollout import (
     OBS_KEYS,
     BatchedSampler,
@@ -192,7 +195,12 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
+        workers: int = 1,
     ) -> None:
+        if workers not in (1, 2, 4) or workers > num_envs:
+            raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
+        if workers != 1 and root is not None:
+            raise ValueError("diagnostic roots require one producer")
         if opponent_mode not in OPPONENT_MODES:
             raise ValueError(
                 f"opponent_mode must be one of {OPPONENT_MODES}, got {opponent_mode!r}"
@@ -207,6 +215,9 @@ class SeatRoutedCollector:
         self.opponent_mode = opponent_mode
         self.device = torch.device(device)
         self.stats = CollectorStats()
+        # The calling training stage owns enablement and resets this timer.
+        # Only the collector thread records host intervals; workers never share it.
+        self.profiler = Profiler(enabled=False)
         if (
             recovery_max_microsteps is not None
             or recovery_max_game_microsteps is not None
@@ -218,11 +229,15 @@ class SeatRoutedCollector:
         self._journal: list[tuple[list[int], list[bool]]] = []
 
         if root is None:
-            self._env = managym.VectorEnv(
-                num_envs=num_envs,
-                seed=seed,
-                skip_trivial=True,
-                opponent_policy="none",
+            self._env = (
+                ShardedVectorEnv(num_envs, seed, workers)
+                if workers > 1
+                else managym.VectorEnv(
+                    num_envs=num_envs,
+                    seed=seed,
+                    skip_trivial=True,
+                    opponent_policy="none",
+                )
             )
         else:
             from manabot.env.target_practice import TargetPracticeVector
@@ -234,43 +249,52 @@ class SeatRoutedCollector:
             ):
                 raise ValueError("unsupported training root or root recovery")
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
-        self._buffers = _allocate_buffers(observation_space, num_envs)
-        self._env.set_buffers(self._buffers)
-        self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
-        if matchup_curriculum == "fixed":
-            self._env.reset_all_into_buffers(match.to_rust())
-        else:
-            self._env.reset_each_into_buffers(
-                [m.to_rust() for m in self.stream_matches]
-            )
+        try:
+            self._buffers = _allocate_buffers(observation_space, num_envs)
+            self._env.set_buffers(self._buffers)
+            self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
+            if matchup_curriculum == "fixed":
+                self._env.reset_all_into_buffers(match.to_rust())
+            else:
+                self._env.reset_each_into_buffers(
+                    [m.to_rust() for m in self.stream_matches]
+                )
 
-        self._self_play_decks = [
-            (
-                deck_identity(m.hero_deck, m.hero_sideboard),
-                deck_identity(m.villain_deck, m.villain_sideboard),
-            )
-            for m in self.stream_matches
-        ]
+            self._self_play_decks = [
+                (
+                    deck_identity(m.hero_deck, m.hero_sideboard),
+                    deck_identity(m.villain_deck, m.villain_sideboard),
+                )
+                for m in self.stream_matches
+            ]
 
-        #: Learner seat per stream: stream s seats the learner at s % 2, so
-        #: half the streams have the learner on the play — seat-balanced.
-        self.learner_seat = np.arange(num_envs, dtype=np.int64) % 2
+            #: Learner seat per stream: stream s seats the learner at s % 2, so
+            #: half the streams have the learner on the play — seat-balanced.
+            self.learner_seat = np.arange(num_envs, dtype=np.int64) % 2
 
-        self._streams: list[list[_Transition]] = [[] for _ in range(num_envs)]
-        self._pending: list[_Pending | None] = [None] * num_envs
+            self._streams: list[list[_Transition]] = [[] for _ in range(num_envs)]
+            self._pending: list[_Pending | None] = [None] * num_envs
 
-        if opponent_mode == "random":
-            self._opponent: Any = RandomBatchController(seed=seed + 1)
-        elif opponent_mode == "frozen":
-            self._opponent = BatchedSampler(
-                opponent_agent, deterministic=False, seed=seed + 1, device=device
-            )
-        else:  # self-play: live learner weights, bound at collect() time
-            self._opponent = None
-        self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
+            if opponent_mode == "random":
+                self._opponent: Any = RandomBatchController(seed=seed + 1)
+            elif opponent_mode == "frozen":
+                self._opponent = BatchedSampler(
+                    opponent_agent, deterministic=False, seed=seed + 1, device=device
+                )
+            else:  # self-play: live learner weights, bound at collect() time
+                self._opponent = None
+            self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
 
-        self._win_reward = float(reward.hypers.win_reward)
-        self._lose_reward = float(reward.hypers.lose_reward)
+            self._win_reward = float(reward.hypers.win_reward)
+            self._lose_reward = float(reward.hypers.lose_reward)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Join owned CPU producers; ordinary single-vector collectors own no pool."""
+        if isinstance(self._env, ShardedVectorEnv):
+            self._env.close()
 
     def snapshot(self) -> CollectorSnapshot:
         """Capture a completed update boundary, including native RNG replay."""
@@ -346,9 +370,11 @@ class SeatRoutedCollector:
 
     # -- opponent routing -----------------------------------------------------
 
-    def _opponent_actions(self, agent: Agent, rows: np.ndarray) -> np.ndarray:
+    def _opponent_actions(
+        self, agent: Agent, rows: np.ndarray, inference: PolicyInference
+    ) -> np.ndarray:
         if self.opponent_mode == "self":
-            obs = self._slice_obs_tensors(rows)
+            obs = self._slice_obs_tensors(rows, inference)
             with torch.inference_mode():
                 logits, _ = agent.forward(obs)
                 probs = self._policy_logs(logits, obs).exp()
@@ -370,15 +396,24 @@ class SeatRoutedCollector:
             )
             raise
 
-    def _slice_obs_tensors(self, rows: np.ndarray) -> Dict[str, torch.Tensor]:
+    def _slice_obs_tensors(
+        self, rows: np.ndarray, inference: PolicyInference | None = None
+    ) -> dict[str, torch.Tensor]:
         obs = {}
         for key in OBS_KEYS:
             tensor = torch.from_numpy(self._buffers[key][rows])
             if key == "action_focus":
                 # Training convention (VectorEnv): action_focus as float32.
                 tensor = tensor.float()
-            obs[key] = tensor.to(self.device)
-        return obs
+            obs[key] = tensor
+        if inference is not None:
+            if inference.device.type != self.device.type or (
+                self.device.index is not None
+                and inference.device.index != self.device.index
+            ):
+                raise ValueError("collector and inference policy devices differ")
+            return inference.prepare(obs)
+        return {key: tensor.to(self.device) for key, tensor in obs.items()}
 
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
@@ -404,6 +439,27 @@ class SeatRoutedCollector:
     ) -> RolloutBatch:
         """Advance all streams until every env has ``num_steps`` finalized
         learner transitions, stopping before the bootstrap action is sampled."""
+
+        # No cache or prepared observation survives learning, snapshot or restore.
+        # Both seats in self-play use this same unchanged behavior-policy scope.
+        with self.profiler.track("Collection"), PolicyInference(agent) as inference:
+            return self._collect(
+                agent,
+                num_steps,
+                inference,
+                deadline_monotonic=deadline_monotonic,
+                check=check,
+            )
+
+    def _collect(
+        self,
+        agent: Agent,
+        num_steps: int,
+        inference: PolicyInference,
+        *,
+        deadline_monotonic: float | None,
+        check: Callable[[], None] | None,
+    ) -> RolloutBatch:
 
         start = time.perf_counter()
         buffers = self._buffers
@@ -435,54 +491,60 @@ class SeatRoutedCollector:
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))
 
             if len(learner_rows):
-                obs_t = self._slice_obs_tensors(learner_rows)
-                with torch.no_grad():
-                    outcomes: np.ndarray | None = None
-                    if agent.hypers.value_kind == "categorical_wdl":
-                        logits, outcome_logits = agent.forward_distribution(obs_t)
-                        outcome_t = outcome_logits.softmax(dim=-1)
-                        value_t = outcome_t[:, 2] - outcome_t[:, 0]
-                        outcomes = outcome_t.cpu().numpy()
-                    else:
-                        logits, value_t = agent(obs_t)
-                    logs = self._policy_logs(logits, obs_t)
-                    require(
-                        torch.isfinite(value_t),
-                        "nonfinite_collection_values",
-                        values=value_t,
-                        valid=obs_t["actions_valid"] > 0,
+                with self.profiler.track("Observation preparation"):
+                    obs_t = self._slice_obs_tensors(learner_rows, inference)
+                with self.profiler.track("Policy inference and action selection"):
+                    with torch.no_grad():
+                        outcomes: np.ndarray | None = None
+                        if agent.hypers.value_kind == "categorical_wdl":
+                            logits, outcome_logits = agent.forward_distribution(obs_t)
+                            outcome_t = outcome_logits.softmax(dim=-1)
+                            value_t = outcome_t[:, 2] - outcome_t[:, 0]
+                            outcomes = outcome_t.cpu().numpy()
+                        else:
+                            logits, value_t = agent(obs_t)
+                        logs = self._policy_logs(logits, obs_t)
+                        require(
+                            torch.isfinite(value_t),
+                            "nonfinite_collection_values",
+                            values=value_t,
+                            valid=obs_t["actions_valid"] > 0,
+                        )
+                        weights = logs.exp()
+                        action_t = torch.multinomial(
+                            weights, 1, generator=self._self_rng
+                        ).squeeze(-1)
+                        logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
+                        probabilities = weights.cpu().numpy()
+                        log_probabilities = logs.cpu().numpy()
+                    acts = action_t.cpu().numpy().astype(np.int64)
+                    logprobs = logprob_t.cpu().numpy()
+                    values = value_t.view(-1).cpu().numpy()
+                with self.profiler.track("Rollout recording"):
+                    # One copied slice per key; per-row dicts view into it.
+                    obs_rows = {
+                        key: buffers[key][learner_rows].copy() for key in OBS_KEYS
+                    }
+                    for j, row in enumerate(learner_rows):
+                        self._pending[row] = _Pending(
+                            obs={key: obs_rows[key][j] for key in OBS_KEYS},
+                            action=int(acts[j]),
+                            logprob=float(logprobs[j]),
+                            value=float(values[j]),
+                            probabilities=probabilities[j].copy(),
+                            log_probabilities=log_probabilities[j].copy(),
+                            outcome_probabilities=(
+                                None if outcomes is None else outcomes[j].copy()
+                            ),
+                        )
+                    actions[learner_rows] = acts
+                    self._count_action_types(
+                        self.stats.learner_action_types, learner_rows, acts
                     )
-                    weights = logs.exp()
-                    action_t = torch.multinomial(
-                        weights, 1, generator=self._self_rng
-                    ).squeeze(-1)
-                    logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                    probabilities = weights.cpu().numpy()
-                    log_probabilities = logs.cpu().numpy()
-                acts = action_t.cpu().numpy().astype(np.int64)
-                logprobs = logprob_t.cpu().numpy()
-                values = value_t.view(-1).cpu().numpy()
-                # One copied slice per key; per-row dicts view into it.
-                obs_rows = {key: buffers[key][learner_rows].copy() for key in OBS_KEYS}
-                for j, row in enumerate(learner_rows):
-                    self._pending[row] = _Pending(
-                        obs={key: obs_rows[key][j] for key in OBS_KEYS},
-                        action=int(acts[j]),
-                        logprob=float(logprobs[j]),
-                        value=float(values[j]),
-                        probabilities=probabilities[j].copy(),
-                        log_probabilities=log_probabilities[j].copy(),
-                        outcome_probabilities=(
-                            None if outcomes is None else outcomes[j].copy()
-                        ),
-                    )
-                actions[learner_rows] = acts
-                self._count_action_types(
-                    self.stats.learner_action_types, learner_rows, acts
-                )
 
             if len(opp_rows):
-                opp_acts = self._opponent_actions(agent, opp_rows)
+                with self.profiler.track("Opponent policy"):
+                    opp_acts = self._opponent_actions(agent, opp_rows, inference)
                 actions[opp_rows] = opp_acts
                 self.stats.opponent_decisions += len(opp_rows)
                 self._count_action_types(
@@ -493,7 +555,8 @@ class SeatRoutedCollector:
                 if self.stats.micro_steps + int(active.sum()) > self._recovery_limit:
                     raise RuntimeError("collector recovery journal limit exceeded")
                 self._journal.append((actions.tolist(), active.tolist()))
-            env.step_into_buffers(actions.tolist(), active.tolist())
+            with self.profiler.track("Environment step and encoding"):
+                env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
 
             done = (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
@@ -533,7 +596,8 @@ class SeatRoutedCollector:
                     if self._pending[row] is not None:
                         self._finalize(int(row), reward=reward, done=True)
 
-        batch = self._build_batch(num_steps)
+        with self.profiler.track("Batch assembly"):
+            batch = self._build_batch(num_steps)
         self.stats.seconds += time.perf_counter() - start
         return batch
 

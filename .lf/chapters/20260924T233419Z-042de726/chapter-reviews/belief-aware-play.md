@@ -182,7 +182,7 @@ No known chapter-start baseline supports a precise chapter-wide before/after com
 
 Several completed Tasks retain `ready` runtime residue and missing historical worktrees. Those are lifecycle discrepancies, not new execution instructions.
 
-[PR #179](https://github.com/loopflowstudio/etude/pull/179), associated with ETU-34 in the other Intelligence Project, supplied relevant learned-belief work now present at HEAD. Its merge establishes delivery, not closure of these KRs.
+[PR #179](https://github.com/loopflowstudio/manabot/pull/179), associated with ETU-34 in the other Intelligence Project, supplied relevant learned-belief work now present at HEAD. Its merge establishes delivery, not closure of these KRs.
 
 ## Priority and ownership findings
 

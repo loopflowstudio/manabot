@@ -1,0 +1,3452 @@
+{
+  "comparisons": [
+    {
+      "streams": 512,
+      "file": "policy-0-ema.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-2-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_ih_l0",
+          "count": 1,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_hh_l0",
+          "count": 2,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.bias",
+          "count": 48,
+          "max_absolute": 3.979039320256561e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.bias",
+          "count": 42,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.weight",
+          "count": 1,
+          "max_absolute": 1.7053025658242404e-13,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.bias",
+          "count": 48,
+          "max_absolute": 3.410605131648481e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.bias",
+          "count": 38,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.bias",
+          "count": 46,
+          "max_absolute": 2.8421709430404007e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.bias",
+          "count": 46,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.0.bias",
+          "count": 39,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.2.bias",
+          "count": 38,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_bias",
+          "count": 158,
+          "max_absolute": 3.410605131648481e-13,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.bias",
+          "count": 37,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm1.bias",
+          "count": 48,
+          "max_absolute": 3.410605131648481e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.bias",
+          "count": 188,
+          "max_absolute": 2.4868995751603507e-13,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.weight",
+          "count": 3,
+          "max_absolute": 9.313225746154785e-10,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.bias",
+          "count": 47,
+          "max_absolute": 3.410605131648481e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm2.bias",
+          "count": 39,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.bias",
+          "count": 34,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.2.bias",
+          "count": 32,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.bias",
+          "count": 43,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.weight",
+          "count": 2,
+          "max_absolute": 7.275957614183426e-12,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.bias",
+          "count": 1,
+          "max_absolute": 1.3508577936804933e-12,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.bias",
+          "count": 51,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.bias",
+          "count": 29,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.5.bias",
+          "count": 1,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/bc/run_id",
+          "reference": "6cc6a0c0accc4f35b391dd74d2b1155c",
+          "candidate": "a4e47d0c80704b63b270f72ac4caf9dd"
+        },
+        {
+          "path": "/bc/regime_digest",
+          "reference": "acaadbc9afabfbab8c199777aa928f58d2797c4a809e194c5b08b3f2a3631cbf",
+          "candidate": "6aea0713a634aaf6bc95a002a7325cf047b1140c9a36c8ef6e4cae8e77387d8b"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-ema.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-8-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.bias",
+          "count": 13,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.bias",
+          "count": 13,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.bias",
+          "count": 16,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.bias",
+          "count": 21,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.bias",
+          "count": 26,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.bias",
+          "count": 27,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.0.bias",
+          "count": 9,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.2.bias",
+          "count": 4,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_bias",
+          "count": 108,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.bias",
+          "count": 22,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm1.bias",
+          "count": 26,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.bias",
+          "count": 80,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.bias",
+          "count": 22,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm2.bias",
+          "count": 26,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.bias",
+          "count": 6,
+          "max_absolute": 7.105427357601002e-15,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.bias",
+          "count": 6,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.weight",
+          "count": 1,
+          "max_absolute": 7.275957614183426e-12,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.bias",
+          "count": 1,
+          "max_absolute": 2.731989981463734e-13,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.bias",
+          "count": 28,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.bias",
+          "count": 14,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.5.bias",
+          "count": 1,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/bc/run_id",
+          "reference": "6cc6a0c0accc4f35b391dd74d2b1155c",
+          "candidate": "cdb68090dd77411da7eb82d90c9b9538"
+        },
+        {
+          "path": "/bc/regime_digest",
+          "reference": "acaadbc9afabfbab8c199777aa928f58d2797c4a809e194c5b08b3f2a3631cbf",
+          "candidate": "6aea0713a634aaf6bc95a002a7325cf047b1140c9a36c8ef6e4cae8e77387d8b"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-1-borrowed-w1-s512",
+        "timing-3-cloned-w4-s512",
+        "timing-4-cloned-w4-s512",
+        "timing-5-borrowed-w4-s512",
+        "timing-6-borrowed-w1-s512",
+        "timing-9-cloned-w1-s512",
+        "timing-10-cloned-w4-s512",
+        "timing-11-borrowed-w1-s512"
+      ],
+      "differences": [
+        {
+          "path": "/state/0/exp_avg",
+          "count": 45,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/0/exp_avg_sq",
+          "count": 15,
+          "max_absolute": 5.421010862427522e-20,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg",
+          "count": 1,
+          "max_absolute": 1.9895196601282805e-13,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg_sq",
+          "count": 2,
+          "max_absolute": 1.7763568394002505e-15,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg",
+          "count": 5,
+          "max_absolute": 3.637978807091713e-12,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 2.7755575615628914e-17,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg",
+          "count": 1,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 1.3552527156068805e-20,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-2-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/state/0/exp_avg",
+          "count": 9755,
+          "max_absolute": 1.7280399333685637e-10,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/0/exp_avg_sq",
+          "count": 8939,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg",
+          "count": 11682,
+          "max_absolute": 1.0477378964424133e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg_sq",
+          "count": 11078,
+          "max_absolute": 1.3642420526593924e-12,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg",
+          "count": 11604,
+          "max_absolute": 1.382431946694851e-10,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg_sq",
+          "count": 10967,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/3/exp_avg",
+          "count": 188,
+          "max_absolute": 5.675246939063072e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/3/exp_avg_sq",
+          "count": 170,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/4/exp_avg",
+          "count": 190,
+          "max_absolute": 2.9467628337442875e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/4/exp_avg_sq",
+          "count": 166,
+          "max_absolute": 6.394884621840902e-14,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/5/exp_avg",
+          "count": 1214,
+          "max_absolute": 1.000444171950221e-10,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/5/exp_avg_sq",
+          "count": 1080,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/6/exp_avg",
+          "count": 58,
+          "max_absolute": 1.0913936421275139e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/6/exp_avg_sq",
+          "count": 52,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/7/exp_avg",
+          "count": 3714,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/7/exp_avg_sq",
+          "count": 3213,
+          "max_absolute": 8.881784197001252e-16,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/8/exp_avg",
+          "count": 61,
+          "max_absolute": 1.1641532182693481e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/8/exp_avg_sq",
+          "count": 53,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/9/exp_avg",
+          "count": 1282,
+          "max_absolute": 4.5292836148291826e-10,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/9/exp_avg_sq",
+          "count": 1186,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/10/exp_avg",
+          "count": 59,
+          "max_absolute": 4.18367562815547e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/10/exp_avg_sq",
+          "count": 55,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/11/exp_avg",
+          "count": 3789,
+          "max_absolute": 4.0745362639427185e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/11/exp_avg_sq",
+          "count": 3613,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/12/exp_avg",
+          "count": 62,
+          "max_absolute": 6.693881005048752e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/12/exp_avg_sq",
+          "count": 59,
+          "max_absolute": 2.8421709430404007e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/13/exp_avg",
+          "count": 742,
+          "max_absolute": 1.7462298274040222e-10,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/13/exp_avg_sq",
+          "count": 775,
+          "max_absolute": 4.263256414560601e-14,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/14/exp_avg",
+          "count": 52,
+          "max_absolute": 1.8917489796876907e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/14/exp_avg_sq",
+          "count": 56,
+          "max_absolute": 4.263256414560601e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/15/exp_avg",
+          "count": 3382,
+          "max_absolute": 1.7462298274040222e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/15/exp_avg_sq",
+          "count": 3586,
+          "max_absolute": 1.0658141036401503e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/16/exp_avg",
+          "count": 57,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/16/exp_avg_sq",
+          "count": 58,
+          "max_absolute": 4.973799150320701e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/17/exp_avg",
+          "count": 524,
+          "max_absolute": 7.531752999057062e-13,
+          "shape": [
+            64,
+            19
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/17/exp_avg_sq",
+          "count": 477,
+          "max_absolute": 6.776263578034403e-20,
+          "shape": [
+            64,
+            19
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/18/exp_avg",
+          "count": 62,
+          "max_absolute": 6.821210263296962e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/18/exp_avg_sq",
+          "count": 57,
+          "max_absolute": 1.0842021724855044e-19,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/19/exp_avg",
+          "count": 3896,
+          "max_absolute": 3.268496584496461e-13,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/19/exp_avg_sq",
+          "count": 3569,
+          "max_absolute": 1.6940658945086007e-20,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/20/exp_avg",
+          "count": 63,
+          "max_absolute": 1.3073986337985843e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/20/exp_avg_sq",
+          "count": 56,
+          "max_absolute": 8.131516293641283e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/21/exp_avg",
+          "count": 53,
+          "max_absolute": 4.656612873077393e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/21/exp_avg_sq",
+          "count": 53,
+          "max_absolute": 1.4210854715202004e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg",
+          "count": 11330,
+          "max_absolute": 3.2014213502407074e-10,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg_sq",
+          "count": 10406,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/23/exp_avg",
+          "count": 181,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/23/exp_avg_sq",
+          "count": 178,
+          "max_absolute": 1.7053025658242404e-13,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/24/exp_avg",
+          "count": 3802,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/24/exp_avg_sq",
+          "count": 3540,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/25/exp_avg",
+          "count": 61,
+          "max_absolute": 7.275957614183426e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/25/exp_avg_sq",
+          "count": 53,
+          "max_absolute": 3.410605131648481e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/26/exp_avg",
+          "count": 58,
+          "max_absolute": 6.83940015733242e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/26/exp_avg_sq",
+          "count": 53,
+          "max_absolute": 1.7053025658242404e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/27/exp_avg",
+          "count": 62,
+          "max_absolute": 3.8562575355172157e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/27/exp_avg_sq",
+          "count": 59,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/28/exp_avg",
+          "count": 15178,
+          "max_absolute": 3.5288394428789616e-10,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/28/exp_avg_sq",
+          "count": 13786,
+          "max_absolute": 6.394884621840902e-14,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/29/exp_avg",
+          "count": 231,
+          "max_absolute": 1.2732925824820995e-10,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/29/exp_avg_sq",
+          "count": 215,
+          "max_absolute": 8.881784197001252e-15,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/30/exp_avg",
+          "count": 15191,
+          "max_absolute": 5.675246939063072e-10,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/30/exp_avg_sq",
+          "count": 13858,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/31/exp_avg",
+          "count": 62,
+          "max_absolute": 2.9103830456733704e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/31/exp_avg_sq",
+          "count": 58,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/32/exp_avg",
+          "count": 56,
+          "max_absolute": 6.657501216977835e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/32/exp_avg_sq",
+          "count": 58,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/33/exp_avg",
+          "count": 60,
+          "max_absolute": 3.637978807091713e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/33/exp_avg_sq",
+          "count": 56,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/34/exp_avg",
+          "count": 11061,
+          "max_absolute": 5.4569682106375694e-12,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/34/exp_avg_sq",
+          "count": 10253,
+          "max_absolute": 3.469446951953614e-18,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/35/exp_avg",
+          "count": 63,
+          "max_absolute": 1.4210854715202004e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/35/exp_avg_sq",
+          "count": 52,
+          "max_absolute": 3.2526065174565133e-19,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/36/exp_avg",
+          "count": 3952,
+          "max_absolute": 2.3021584638627246e-12,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/36/exp_avg_sq",
+          "count": 3458,
+          "max_absolute": 4.336808689942018e-19,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/37/exp_avg",
+          "count": 61,
+          "max_absolute": 1.3713474800169934e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/37/exp_avg_sq",
+          "count": 53,
+          "max_absolute": 1.0842021724855044e-19,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/38/exp_avg",
+          "count": 3898,
+          "max_absolute": 2.3021584638627246e-12,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/38/exp_avg_sq",
+          "count": 3125,
+          "max_absolute": 4.336808689942018e-19,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/39/exp_avg",
+          "count": 60,
+          "max_absolute": 1.5631940186722204e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/39/exp_avg_sq",
+          "count": 47,
+          "max_absolute": 3.2526065174565133e-19,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/40/exp_avg",
+          "count": 62,
+          "max_absolute": 6.257323548197746e-10,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/40/exp_avg_sq",
+          "count": 51,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/41/exp_avg",
+          "count": 1,
+          "max_absolute": 5.869681130032944e-11,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/41/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 8.819910216574691e-22,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/42/exp_avg",
+          "count": 3803,
+          "max_absolute": 1.2223608791828156e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/42/exp_avg_sq",
+          "count": 3566,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/43/exp_avg",
+          "count": 56,
+          "max_absolute": 2.9103830456733704e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/43/exp_avg_sq",
+          "count": 60,
+          "max_absolute": 8.526512829121202e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/44/exp_avg",
+          "count": 2228,
+          "max_absolute": 1.7462298274040222e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/44/exp_avg_sq",
+          "count": 1983,
+          "max_absolute": 1.8189894035458565e-12,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/45/exp_avg",
+          "count": 37,
+          "max_absolute": 7.566995918750763e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/45/exp_avg_sq",
+          "count": 34,
+          "max_absolute": 2.2737367544323206e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/46/exp_avg",
+          "count": 37,
+          "max_absolute": 3.958120942115784e-09,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/46/exp_avg_sq",
+          "count": 31,
+          "max_absolute": 7.275957614183426e-12,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/47/exp_avg",
+          "count": 1,
+          "max_absolute": 2.561137080192566e-09,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/47/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 3.637978807091713e-12,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-7-cloned-w1-s512"
+      ],
+      "differences": [
+        {
+          "path": "/state/0/exp_avg",
+          "count": 45,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/0/exp_avg_sq",
+          "count": 15,
+          "max_absolute": 5.421010862427522e-20,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg",
+          "count": 1,
+          "max_absolute": 1.9895196601282805e-13,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg_sq",
+          "count": 2,
+          "max_absolute": 1.7763568394002505e-15,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg",
+          "count": 5,
+          "max_absolute": 3.637978807091713e-12,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 2.7755575615628914e-17,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/9/exp_avg",
+          "count": 1,
+          "max_absolute": 1.8189894035458565e-12,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg",
+          "count": 3,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg_sq",
+          "count": 2,
+          "max_absolute": 1.3552527156068805e-20,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-8-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/state/0/exp_avg",
+          "count": 9434,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/0/exp_avg_sq",
+          "count": 6842,
+          "max_absolute": 7.105427357601002e-15,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg",
+          "count": 11581,
+          "max_absolute": 1.3969838619232178e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/1/exp_avg_sq",
+          "count": 7522,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg",
+          "count": 11481,
+          "max_absolute": 1.7462298274040222e-10,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/2/exp_avg_sq",
+          "count": 7596,
+          "max_absolute": 7.105427357601002e-15,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/3/exp_avg",
+          "count": 179,
+          "max_absolute": 6.402842700481415e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/3/exp_avg_sq",
+          "count": 114,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/4/exp_avg",
+          "count": 179,
+          "max_absolute": 3.2014213502407074e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/4/exp_avg_sq",
+          "count": 114,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/5/exp_avg",
+          "count": 953,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/5/exp_avg_sq",
+          "count": 622,
+          "max_absolute": 1.7763568394002505e-15,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/6/exp_avg",
+          "count": 54,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/6/exp_avg_sq",
+          "count": 23,
+          "max_absolute": 8.881784197001252e-16,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/7/exp_avg",
+          "count": 3380,
+          "max_absolute": 3.637978807091713e-11,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/7/exp_avg_sq",
+          "count": 1682,
+          "max_absolute": 4.440892098500626e-16,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/8/exp_avg",
+          "count": 59,
+          "max_absolute": 8.731149137020111e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/8/exp_avg_sq",
+          "count": 13,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/9/exp_avg",
+          "count": 1234,
+          "max_absolute": 5.093170329928398e-10,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/9/exp_avg_sq",
+          "count": 831,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/10/exp_avg",
+          "count": 57,
+          "max_absolute": 5.529727786779404e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/10/exp_avg_sq",
+          "count": 30,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/11/exp_avg",
+          "count": 3825,
+          "max_absolute": 2.473825588822365e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/11/exp_avg_sq",
+          "count": 2279,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/12/exp_avg",
+          "count": 60,
+          "max_absolute": 5.820766091346741e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/12/exp_avg_sq",
+          "count": 31,
+          "max_absolute": 5.684341886080802e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/13/exp_avg",
+          "count": 690,
+          "max_absolute": 2.9103830456733704e-10,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/13/exp_avg_sq",
+          "count": 622,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/14/exp_avg",
+          "count": 57,
+          "max_absolute": 2.9103830456733704e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/14/exp_avg_sq",
+          "count": 40,
+          "max_absolute": 2.1316282072803006e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/15/exp_avg",
+          "count": 3428,
+          "max_absolute": 1.6007106751203537e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/15/exp_avg_sq",
+          "count": 2979,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/16/exp_avg",
+          "count": 59,
+          "max_absolute": 2.9103830456733704e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/16/exp_avg_sq",
+          "count": 52,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/17/exp_avg",
+          "count": 253,
+          "max_absolute": 5.329070518200751e-13,
+          "shape": [
+            64,
+            19
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/17/exp_avg_sq",
+          "count": 151,
+          "max_absolute": 5.421010862427522e-20,
+          "shape": [
+            64,
+            19
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/18/exp_avg",
+          "count": 56,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/18/exp_avg_sq",
+          "count": 37,
+          "max_absolute": 6.776263578034403e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/19/exp_avg",
+          "count": 2884,
+          "max_absolute": 7.37188088351104e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/19/exp_avg_sq",
+          "count": 2175,
+          "max_absolute": 3.3881317890172014e-21,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/20/exp_avg",
+          "count": 54,
+          "max_absolute": 3.126388037344441e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/20/exp_avg_sq",
+          "count": 28,
+          "max_absolute": 1.1858461261560205e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/21/exp_avg",
+          "count": 59,
+          "max_absolute": 4.656612873077393e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/21/exp_avg_sq",
+          "count": 31,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg",
+          "count": 11498,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg_sq",
+          "count": 7791,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/23/exp_avg",
+          "count": 189,
+          "max_absolute": 5.238689482212067e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/23/exp_avg_sq",
+          "count": 146,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/24/exp_avg",
+          "count": 3769,
+          "max_absolute": 4.656612873077393e-10,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/24/exp_avg_sq",
+          "count": 2537,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/25/exp_avg",
+          "count": 60,
+          "max_absolute": 8.149072527885437e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/25/exp_avg_sq",
+          "count": 30,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/26/exp_avg",
+          "count": 58,
+          "max_absolute": 4.3655745685100555e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/26/exp_avg_sq",
+          "count": 38,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/27/exp_avg",
+          "count": 62,
+          "max_absolute": 3.2014213502407074e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/27/exp_avg_sq",
+          "count": 43,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/28/exp_avg",
+          "count": 14714,
+          "max_absolute": 3.7834979593753815e-10,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/28/exp_avg_sq",
+          "count": 8905,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/29/exp_avg",
+          "count": 235,
+          "max_absolute": 1.4551915228366852e-10,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/29/exp_avg_sq",
+          "count": 133,
+          "max_absolute": 3.552713678800501e-15,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/30/exp_avg",
+          "count": 14806,
+          "max_absolute": 3.637978807091713e-10,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/30/exp_avg_sq",
+          "count": 8935,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/31/exp_avg",
+          "count": 60,
+          "max_absolute": 3.128661774098873e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/31/exp_avg_sq",
+          "count": 36,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/32/exp_avg",
+          "count": 60,
+          "max_absolute": 6.039044819772243e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/32/exp_avg_sq",
+          "count": 33,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/33/exp_avg",
+          "count": 59,
+          "max_absolute": 3.6925484891980886e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/33/exp_avg_sq",
+          "count": 32,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/34/exp_avg",
+          "count": 7490,
+          "max_absolute": 9.094947017729282e-13,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/34/exp_avg_sq",
+          "count": 3804,
+          "max_absolute": 4.336808689942018e-19,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/35/exp_avg",
+          "count": 43,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/35/exp_avg_sq",
+          "count": 18,
+          "max_absolute": 3.3881317890172014e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/36/exp_avg",
+          "count": 3399,
+          "max_absolute": 9.094947017729282e-13,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/36/exp_avg_sq",
+          "count": 1897,
+          "max_absolute": 2.168404344971009e-19,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/37/exp_avg",
+          "count": 39,
+          "max_absolute": 3.197442310920451e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/37/exp_avg_sq",
+          "count": 14,
+          "max_absolute": 2.710505431213761e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/38/exp_avg",
+          "count": 3346,
+          "max_absolute": 1.5774048733874224e-12,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/38/exp_avg_sq",
+          "count": 1732,
+          "max_absolute": 1.4907779871675686e-19,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/39/exp_avg",
+          "count": 24,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/39/exp_avg_sq",
+          "count": 6,
+          "max_absolute": 5.421010862427522e-20,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/40/exp_avg",
+          "count": 57,
+          "max_absolute": 4.656612873077393e-10,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/40/exp_avg_sq",
+          "count": 36,
+          "max_absolute": 1.4210854715202004e-14,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/41/exp_avg",
+          "count": 1,
+          "max_absolute": 1.3387763120320528e-11,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/41/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 1.2444625354304862e-22,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/42/exp_avg",
+          "count": 3688,
+          "max_absolute": 1.1059455573558807e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/42/exp_avg_sq",
+          "count": 2433,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/43/exp_avg",
+          "count": 55,
+          "max_absolute": 5.093170329928398e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/43/exp_avg_sq",
+          "count": 35,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/44/exp_avg",
+          "count": 1893,
+          "max_absolute": 1.3969838619232178e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/44/exp_avg_sq",
+          "count": 1092,
+          "max_absolute": 4.547473508864641e-13,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/45/exp_avg",
+          "count": 30,
+          "max_absolute": 6.984919309616089e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/45/exp_avg_sq",
+          "count": 13,
+          "max_absolute": 1.1368683772161603e-13,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/46/exp_avg",
+          "count": 31,
+          "max_absolute": 3.958120942115784e-09,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/46/exp_avg_sq",
+          "count": 18,
+          "max_absolute": 3.637978807091713e-12,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/47/exp_avg",
+          "count": 1,
+          "max_absolute": 2.6775524020195007e-09,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/47/exp_avg_sq",
+          "count": 1,
+          "max_absolute": 1.8189894035458565e-12,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-raw.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-2-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/model_state_dict/semantic_cards.token_embedding.weight",
+          "count": 18,
+          "max_absolute": 2.384185791015625e-07,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_ih_l0",
+          "count": 601,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_hh_l0",
+          "count": 485,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.bias_ih_l0",
+          "count": 12,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.bias_hh_l0",
+          "count": 12,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.weight",
+          "count": 42,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.bias",
+          "count": 55,
+          "max_absolute": 2.6193447411060333e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.weight",
+          "count": 120,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.bias",
+          "count": 56,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.weight",
+          "count": 61,
+          "max_absolute": 2.9802322387695312e-08,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.bias",
+          "count": 55,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.weight",
+          "count": 151,
+          "max_absolute": 2.9802322387695312e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.bias",
+          "count": 52,
+          "max_absolute": 1.7462298274040222e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.weight",
+          "count": 24,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.bias",
+          "count": 51,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.weight",
+          "count": 132,
+          "max_absolute": 2.9802322387695312e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.bias",
+          "count": 53,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.0.weight",
+          "count": 3,
+          "max_absolute": 9.313225746154785e-10,
+          "shape": [
+            64,
+            19
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.0.bias",
+          "count": 52,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.2.weight",
+          "count": 6,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.2.bias",
+          "count": 48,
+          "max_absolute": 8.731149137020111e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_weight",
+          "count": 325,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_bias",
+          "count": 174,
+          "max_absolute": 2.616119404441619e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.weight",
+          "count": 227,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.bias",
+          "count": 55,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm1.bias",
+          "count": 53,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.weight",
+          "count": 1050,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.bias",
+          "count": 222,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.weight",
+          "count": 1042,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.bias",
+          "count": 56,
+          "max_absolute": 3.4924596548080444e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm2.bias",
+          "count": 52,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.weight",
+          "count": 114,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.bias",
+          "count": 44,
+          "max_absolute": 8.731149137020111e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.2.weight",
+          "count": 32,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.2.bias",
+          "count": 43,
+          "max_absolute": 8.731149137020111e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.weight",
+          "count": 35,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.bias",
+          "count": 49,
+          "max_absolute": 6.184563972055912e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.weight",
+          "count": 43,
+          "max_absolute": 9.313225746154785e-10,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.bias",
+          "count": 1,
+          "max_absolute": 1.5643983886093338e-09,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.weight",
+          "count": 200,
+          "max_absolute": 2.9802322387695312e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.bias",
+          "count": 56,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.weight",
+          "count": 78,
+          "max_absolute": 2.9802322387695312e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.bias",
+          "count": 33,
+          "max_absolute": 1.6007106751203537e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.5.weight",
+          "count": 1,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.5.bias",
+          "count": 1,
+          "max_absolute": 4.3655745685100555e-11,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/bc/run_id",
+          "reference": "6cc6a0c0accc4f35b391dd74d2b1155c",
+          "candidate": "a4e47d0c80704b63b270f72ac4caf9dd"
+        },
+        {
+          "path": "/bc/regime_digest",
+          "reference": "acaadbc9afabfbab8c199777aa928f58d2797c4a809e194c5b08b3f2a3631cbf",
+          "candidate": "6aea0713a634aaf6bc95a002a7325cf047b1140c9a36c8ef6e4cae8e77387d8b"
+        }
+      ]
+    },
+    {
+      "streams": 512,
+      "file": "policy-0-raw.pt",
+      "baseline": "timing-0-cloned-w1-s512",
+      "cells": [
+        "timing-8-borrowed-w4-s512"
+      ],
+      "differences": [
+        {
+          "path": "/model_state_dict/semantic_cards.token_embedding.weight",
+          "count": 2,
+          "max_absolute": 1.1920928955078125e-07,
+          "shape": [
+            164,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_ih_l0",
+          "count": 94,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.weight_hh_l0",
+          "count": 79,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/semantic_cards.encoder.bias_ih_l0",
+          "count": 1,
+          "max_absolute": 1.1641532182693481e-10,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.weight",
+          "count": 1,
+          "max_absolute": 3.725290298461914e-09,
+          "shape": [
+            64,
+            28
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.0.bias",
+          "count": 18,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.weight",
+          "count": 13,
+          "max_absolute": 1.862645149230957e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/player_embedding.projection.2.bias",
+          "count": 30,
+          "max_absolute": 1.1641532182693481e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.weight",
+          "count": 9,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.0.bias",
+          "count": 34,
+          "max_absolute": 1.1641532182693481e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.weight",
+          "count": 30,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/card_embedding.projection.2.bias",
+          "count": 32,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.weight",
+          "count": 2,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            64,
+            25
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.0.bias",
+          "count": 36,
+          "max_absolute": 8.731149137020111e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.weight",
+          "count": 21,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/perm_embedding.projection.2.bias",
+          "count": 44,
+          "max_absolute": 1.1641532182693481e-10,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.0.bias",
+          "count": 13,
+          "max_absolute": 1.4551915228366852e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_embedding.projection.2.bias",
+          "count": 8,
+          "max_absolute": 1.4551915228366852e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_weight",
+          "count": 50,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.in_proj_bias",
+          "count": 129,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.weight",
+          "count": 32,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mha.out_proj.bias",
+          "count": 33,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm1.bias",
+          "count": 37,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.weight",
+          "count": 180,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            256,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.0.bias",
+          "count": 127,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.weight",
+          "count": 168,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            256
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.mlp.2.bias",
+          "count": 34,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/attention.norm2.bias",
+          "count": 35,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.weight",
+          "count": 7,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            192
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.0.bias",
+          "count": 7,
+          "max_absolute": 7.275957614183426e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.2.weight",
+          "count": 6,
+          "max_absolute": 3.725290298461914e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/action_layer.projection.2.bias",
+          "count": 1,
+          "max_absolute": 1.4551915228366852e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.weight",
+          "count": 4,
+          "max_absolute": 1.862645149230957e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.0.bias",
+          "count": 7,
+          "max_absolute": 7.275957614183426e-12,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.weight",
+          "count": 16,
+          "max_absolute": 2.3283064365386963e-10,
+          "shape": [
+            1,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/policy_head.2.bias",
+          "count": 1,
+          "max_absolute": 2.7319924100766e-10,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.weight",
+          "count": 28,
+          "max_absolute": 7.450580596923828e-09,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.0.bias",
+          "count": 38,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.weight",
+          "count": 12,
+          "max_absolute": 1.4901161193847656e-08,
+          "shape": [
+            64,
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.3.bias",
+          "count": 20,
+          "max_absolute": 5.820766091346741e-11,
+          "shape": [
+            64
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/model_state_dict/value_head.5.bias",
+          "count": 1,
+          "max_absolute": 2.9103830456733704e-11,
+          "shape": [
+            1
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/bc/run_id",
+          "reference": "6cc6a0c0accc4f35b391dd74d2b1155c",
+          "candidate": "cdb68090dd77411da7eb82d90c9b9538"
+        },
+        {
+          "path": "/bc/regime_digest",
+          "reference": "acaadbc9afabfbab8c199777aa928f58d2797c4a809e194c5b08b3f2a3631cbf",
+          "candidate": "6aea0713a634aaf6bc95a002a7325cf047b1140c9a36c8ef6e4cae8e77387d8b"
+        }
+      ]
+    },
+    {
+      "streams": 4096,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s4096",
+      "cells": [
+        "timing-3-cloned-w4-s4096"
+      ],
+      "differences": [
+        {
+          "path": "/state/9/exp_avg",
+          "count": 1,
+          "max_absolute": 9.094947017729282e-13,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        },
+        {
+          "path": "/state/22/exp_avg",
+          "count": 1,
+          "max_absolute": 1.2789769243681803e-13,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 4096,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s4096",
+      "cells": [
+        "timing-4-cloned-w4-s4096"
+      ],
+      "differences": [
+        {
+          "path": "/state/9/exp_avg",
+          "count": 1,
+          "max_absolute": 9.094947017729282e-13,
+          "shape": [
+            64,
+            39
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 4096,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s4096",
+      "cells": [
+        "timing-7-cloned-w1-s4096"
+      ],
+      "differences": [
+        {
+          "path": "/state/22/exp_avg",
+          "count": 1,
+          "max_absolute": 7.105427357601002e-15,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    },
+    {
+      "streams": 4096,
+      "file": "policy-0-optimizer.pt",
+      "baseline": "timing-0-cloned-w1-s4096",
+      "cells": [
+        "timing-8-borrowed-w4-s4096"
+      ],
+      "differences": [
+        {
+          "path": "/state/22/exp_avg",
+          "count": 1,
+          "max_absolute": 2.842170943040401e-14,
+          "shape": [
+            192,
+            64
+          ],
+          "dtype": "torch.float32"
+        }
+      ]
+    }
+  ],
+  "limits": "Posthoc differences against first predeclared cloned1. No tolerance, exclusions or gate changes."
+}

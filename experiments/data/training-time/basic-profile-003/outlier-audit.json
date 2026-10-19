@@ -1,0 +1,164 @@
+{
+  "measured_source": "7d00992a574615eace26b114900bbe865472c9ed",
+  "parameter": "extra_attention.6.mlp.2.weight",
+  "index": [
+    362,
+    1461
+  ],
+  "cases": [
+    {
+      "case": "timing-0-w384-d8-s64-off",
+      "target": {
+        "parameter_id": 129,
+        "steps": 86,
+        "initial": -0.04294691979885101,
+        "final": 293.4111022949219,
+        "ema": 0.5436765551567078,
+        "exp_avg": -1.6774768241134552e-08,
+        "exp_avg_sq": 2.64774313585292e-10,
+        "movement_bound": 0.013013448308406676
+      },
+      "parameters_checked": 133,
+      "movement_violations": [
+        {
+          "parameter": "extra_attention.6.mlp.2.weight",
+          "count": 1,
+          "max_movement": 293.4540492147207,
+          "bound": 0.013013448308406676
+        }
+      ],
+      "final_moment_inequality_violations": [
+        {
+          "parameter": "semantic_cards.token_embedding.weight",
+          "count": 1536,
+          "max_abs_exp_avg": 9.043659189634724e-26,
+          "max_exp_avg_sq": 0.0,
+          "epsilon_only_final_step_bound": 9.0447093374341e-25
+        }
+      ],
+      "optimizer": {
+        "lr": 0.0001,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "eps": 1e-05,
+        "weight_decay": 0,
+        "amsgrad": false,
+        "maximize": false,
+        "foreach": null,
+        "capturable": false,
+        "differentiable": false,
+        "fused": null,
+        "decoupled_weight_decay": false
+      },
+      "optimizer_steps_by_iteration": [
+        8,
+        0,
+        1,
+        4,
+        3,
+        8,
+        8,
+        6,
+        7,
+        1,
+        6,
+        3,
+        8,
+        8,
+        7,
+        8
+      ]
+    },
+    {
+      "case": "timing-3-w384-d8-s64-off",
+      "target": {
+        "parameter_id": 129,
+        "steps": 85,
+        "initial": -0.04294691979885101,
+        "final": -0.0421837642788887,
+        "ema": -0.04293661192059517,
+        "exp_avg": -1.8638631971157338e-08,
+        "exp_avg_sq": 2.6503935157684566e-10,
+        "movement_bound": 0.012804670137783794
+      },
+      "parameters_checked": 133,
+      "movement_violations": [],
+      "final_moment_inequality_violations": [
+        {
+          "parameter": "semantic_cards.token_embedding.weight",
+          "count": 1536,
+          "max_abs_exp_avg": 8.952204942518738e-26,
+          "max_exp_avg_sq": 0.0,
+          "epsilon_only_final_step_bound": 8.953359988700789e-25
+        }
+      ],
+      "optimizer": {
+        "lr": 0.0001,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "eps": 1e-05,
+        "weight_decay": 0,
+        "amsgrad": false,
+        "maximize": false,
+        "foreach": null,
+        "capturable": false,
+        "differentiable": false,
+        "fused": null,
+        "decoupled_weight_decay": false
+      },
+      "optimizer_steps_by_iteration": [
+        8,
+        0,
+        1,
+        4,
+        3,
+        8,
+        8,
+        6,
+        7,
+        1,
+        6,
+        3,
+        8,
+        8,
+        7,
+        7
+      ]
+    }
+  ],
+  "checkpoint_sha256": {
+    "timing-0-w384-d8-s64-off/run/policy-initial-raw.pt": "49b01d693cd58e0e7e7e534381c17875cd7b850e79036d72df5838e6277a9312",
+    "timing-0-w384-d8-s64-off/run/policy-raw.pt": "6550930309ba22ad24c988eb0bdcfbe6e2837f5dd5358014faca2bc982682d21",
+    "timing-0-w384-d8-s64-off/run/policy-ema.pt": "0c58e4b3ccc47c2d61962b292e3d9671d3b39992cd2f71bb701569482efd3f45",
+    "timing-0-w384-d8-s64-off/run/policy-optimizer.pt": "1c32ec6e71885512b1e2d54a08a6080048073d98f7b2cb6228b2d6ed2c075ac3",
+    "timing-3-w384-d8-s64-off/run/policy-initial-raw.pt": "435aa8ee759e98a4929f3ca7cce5904eaa05b925f3ce5ea7c100c8b2c6f9d0b2",
+    "timing-3-w384-d8-s64-off/run/policy-raw.pt": "6266ae8b7fb7a3554eb99037c8558d865a3c92ab73ad3e4bb6076707717867e2",
+    "timing-3-w384-d8-s64-off/run/policy-ema.pt": "945a8da9cd679586b09ea4f3d78ef87e7451ba0d9b5bebafac0a08ad329b86bf",
+    "timing-3-w384-d8-s64-off/run/policy-optimizer.pt": "38601e686fde914f93f8880a4739bde16a26d8c38dea489b44b7735aaf62ccb7"
+  },
+  "method": "Zero-initialized Adam moments, fixed recorded rate, zero weight decay: sum per-step Cauchy-Schwarz bounds on |m_hat|/sqrt(v_hat). Positive epsilon only decreases movement. Named parameter order reconstructed from the unchanged model and actual recipe.",
+  "proof_limits": [
+    "The bound describes the intended exact-arithmetic Adam recurrence, not a floating-point backend correctness proof.",
+    "Finite nonnegative final moments do not establish that intermediate states or operations were valid. Tiny moment-inequality exceptions are retained separately rather than treated as exact arithmetic.",
+    "Independent raw and EMA anomalies argue against corruption isolated to final raw serialization, but do not locate or identify the cause.",
+    "No repeated deterministic timer-off control exists in study003; small proof drift is not attributed to timers.",
+    "Recorded per-update loss is the last nonempty timestep minibatch, not necessarily the first divergent operation."
+  ],
+  "bound_formula": "B(t) = (1-b1)/(1-b1^t) * sqrt((1-b2^t)/(1-b2) * sum((b1^2/b2)^j, j=0..t-1)); cumulative = lr * sum(B(t), t=1..N)",
+  "bound_validation": {
+    "method": "Independent weighted Cauchy-Schwarz equality construction g_j=a_j/b_j; direct moment recurrence versus geometric formula",
+    "steps": [
+      1,
+      2,
+      16,
+      85,
+      86,
+      128
+    ],
+    "max_absolute_error": 4.440892098500626e-16
+  }
+}

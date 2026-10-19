@@ -10,7 +10,7 @@ import pytest
 
 from manabot.remote import cohort_projection as projection, cohort_service, job_client
 from manabot.remote.bundle import Bundle, BundleFile
-from manabot.remote.cohort import CohortAttempt, CohortState
+from manabot.remote.cohort import CohortAttempt, CohortInsertion, CohortState
 from manabot.remote.jobs import JobRecord
 from manabot.remote.snapshots import JobManifest
 from manabot.training.monitoring import Dashboard
@@ -175,3 +175,83 @@ p.project_before(Cohort.model_validate_json(Path(sys.argv[1]).read_bytes()),Path
         capture_output=True,
     )
     assert result.returncode == -9, result.stderr
+
+
+def test_projection_retains_extension_and_charges_across_offline_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cohort = plan()
+    extended = cohort.deadline + 3600
+    state = CohortState(
+        cohort_sha256=cohort.identity,
+        owner="scheduler",
+        insertion=CohortInsertion(
+            after_job=cohort.entries[0].job_id,
+            entries=(cohort.entries[0].model_copy(update={"job_id": "added"}),),
+            deadline=extended,
+            access_expires_at=extended,
+        ),
+    )
+    store = FileStore(tmp_path / "cohort.sqlite")
+    store.create("state.json", state.model_dump_json().encode())
+    monkeypatch.setattr(projection, "S3JobStore", lambda prefix: store)
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "fixture-host")
+    now = cohort.deadline + 1801
+    monkeypatch.setattr(projection.time, "time", lambda: now)
+
+    def crash(seconds: float) -> None:
+        raise InterruptedError("companion stopped")
+
+    monkeypatch.setattr(projection.time, "sleep", crash)
+    config = projection.ProjectionConfig()
+    command = [sys.executable, "-c", "raise SystemExit(1)"]
+    with pytest.raises(InterruptedError):
+        projection.follow_projection(cohort, tmp_path, config, command)
+    before = projection.ProjectionLedger.model_validate_json(
+        (tmp_path / "ledger.json").read_bytes()
+    )
+    assert len(before.attempts) == 1
+    assert (
+        CohortState.model_validate_json((tmp_path / "status.json").read_bytes())
+        == state
+    )
+
+    def unavailable(prefix: str) -> FileStore:
+        raise ConnectionError("storage offline")
+
+    def sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+
+    now = extended + 1799
+    monkeypatch.setattr(projection, "S3JobStore", unavailable)
+    monkeypatch.setattr(projection.time, "sleep", sleep)
+    projection.follow_projection(cohort, tmp_path, config, command)
+    after = projection.ProjectionLedger.model_validate_json(
+        (tmp_path / "ledger.json").read_bytes()
+    )
+    assert len(after.attempts) == 2
+    assert after.attempts[0] == before.attempts[0]
+    assert after.charged_seconds >= before.charged_seconds
+    assert after.attempts[1].exit_code == 1
+    # Restart after the absolute bound neither launches nor resets the ledger.
+    projection.follow_projection(cohort, tmp_path, config, command)
+    assert (
+        projection.ProjectionLedger.model_validate_json(
+            (tmp_path / "ledger.json").read_bytes()
+        )
+        == after
+    )
+
+
+def test_projection_rejects_foreign_retained_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = CohortState(cohort_sha256="another-cohort", owner="scheduler")
+    (tmp_path / "status.json").write_text(state.model_dump_json())
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "fixture-host")
+    with pytest.raises(ValueError, match="cohort identity differs"):
+        projection.follow_projection(
+            plan(), tmp_path, projection.ProjectionConfig(), ["unused"]
+        )
+    assert not (tmp_path / "ledger.json").exists()

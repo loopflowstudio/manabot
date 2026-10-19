@@ -14,8 +14,8 @@ from main import app
 
 
 @pytest.fixture
-def client():
-    return TestClient(app, base_url="http://etude.gg")
+def client() -> TestClient:
+    return TestClient(app, base_url="http://manabot.gg")
 
 
 def test_homepage_redirects_to_blog(client):
@@ -30,7 +30,7 @@ def test_blog_post_serves(client):
     assert "Rotisserie Drafting" in r.text
 
 
-@pytest.mark.parametrize("host", ["etude.gg", "fantasia-website.fly.dev", "localhost:5002"])
+@pytest.mark.parametrize("host", ["manabot.gg", "fantasia-website.fly.dev", "localhost:5002"])
 def test_healthz_plain_response(client: TestClient, host: str) -> None:
     r = client.get("/healthz", headers={"host": host}, follow_redirects=False)
     assert r.status_code == 200
@@ -48,23 +48,25 @@ def test_fly_healthz_probe(client):
         assert r.content == b"ok"
 
 
-def test_robots_and_sitemap(client):
+def test_robots_and_sitemap(client: TestClient) -> None:
     robots = client.get("/robots.txt")
     assert robots.status_code == 200
-    assert "https://etude.gg/sitemap.xml" in robots.text
+    assert "https://manabot.gg/sitemap.xml" in robots.text
     sitemap = client.get("/sitemap.xml")
     assert sitemap.status_code == 200
     root = ElementTree.fromstring(sitemap.content)
     namespace = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
     assert root.tag == f"{namespace}urlset"
     assert [loc.text for loc in root.findall(f"{namespace}url/{namespace}loc")] == [
-        "https://etude.gg/blog/lol-cube-kickoff"
+        "https://manabot.gg/blog/lol-cube-kickoff"
     ]
 
 
 @pytest.mark.parametrize(
     "host",
     [
+        "www.manabot.gg",
+        "etude.gg",
         "www.etude.gg",
         "etudefantasia.com",
         "www.etudefantasia.com",
@@ -72,10 +74,10 @@ def test_robots_and_sitemap(client):
         "www.etudefantasia.gg",
     ],
 )
-def test_alternate_hosts_redirect(client, host):
+def test_alternate_hosts_redirect(client: TestClient, host: str) -> None:
     r = client.get("/", headers={"host": host}, follow_redirects=False)
     assert r.status_code == 301
-    assert r.headers["location"] == "https://etude.gg/"
+    assert r.headers["location"] == "https://manabot.gg/"
 
 
 def test_fly_host_serves_directly(client: TestClient) -> None:
@@ -95,3 +97,16 @@ def test_static_assets_exist():
         "mana/W.svg",
     ):
         assert (static / asset).exists(), asset
+
+
+@pytest.mark.parametrize("host", ["etude.gg", "www.manabot.gg", "etudefantasia.com"])
+@pytest.mark.parametrize("path", [
+    "/blog/lol-cube-kickoff?from=old&tag=a&tag=b",
+    "/a%2Fb/space%20here?q=a%2Bb&next=https%3A%2F%2Fexample.com",
+])
+def test_redirect_preserves_encoded_path_and_query(
+    client: TestClient, host: str, path: str
+) -> None:
+    response = client.get(path, headers={"host": host}, follow_redirects=False)
+    assert response.status_code == 301
+    assert response.headers["location"] == f"https://manabot.gg{path}"

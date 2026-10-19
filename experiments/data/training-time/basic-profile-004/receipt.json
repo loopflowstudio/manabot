@@ -1,0 +1,203 @@
+{
+  "run": {
+    "run_id": "7d6c152708bc",
+    "cohort": "basic-profile-004",
+    "pool": "worker-ownership",
+    "source": "5a99c7e43b582c9680ffc8991748717843fbcb6f",
+    "created_at": "2026-10-16T04:06:26.565165+00:00"
+  },
+  "attempt": {
+    "id": "628733334765",
+    "session": "9495e3de0b36",
+    "run": "7d6c152708bc",
+    "outcome": "succeeded"
+  },
+  "outputs": [
+    {
+      "name": "00-study/00-training-metadata.tar.gz",
+      "sha256": "f878e135e013c6de21d3398e0b9926c8499e95a52d24dda70a9ebcf7fd8ca497",
+      "size_bytes": 380142
+    },
+    {
+      "name": "00-study/01-artifact-index.json",
+      "sha256": "814833d4772586890418280e8209db1131e2aca212e5d079e43aa457ff5d82b7",
+      "size_bytes": 5263
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00000",
+      "sha256": "b19255642a72138925af9a096d2aec29cf96a83578650eee77ef5eab081646bc",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00001",
+      "sha256": "489e06f1aebf79a99f7ea3b86cc7a7f2f8f20dcfda60294256525af09b20f9c0",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00002",
+      "sha256": "bbf30b8a87767cef6b401b82021e30effd1620c59ae3c4c2dc9330ddc6d1e497",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00003",
+      "sha256": "06ed6a2a8e950c4d6bcc682d45534aa38749153171f471287f736aa990f6fde1",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00004",
+      "sha256": "71befed9b29babfe60b8411c7a63eb980cd7c645e237b150257a8037b7d37fe4",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00005",
+      "sha256": "d671b48a6d313d0c79dce63084fceef62da311a531cc82d49b7b2573ac55cfc8",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00006",
+      "sha256": "134ee3e04e0565d74f7fc340debd2baa8275be42f0f9e2b33afcc09b06cddd72",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00007",
+      "sha256": "01338b8f2050a941564b2b27fff96a7832d419912f59890ff503c1220a51ddab",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00008",
+      "sha256": "398e770227a0796f6d486a9ed0503fbef7c493997481aedd6520a6bb700b1e6f",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00009",
+      "sha256": "0dceec90a15059148fca63c23335f6832d8f14c2c5ef78ba72833ad70ead8daa",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00010",
+      "sha256": "e9bd11976f5fd412c8d00c5cdcdecda2015e007d56f928c8942bd3dd8837c4bd",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00011",
+      "sha256": "c538e31a695a44634c332a3c2f17b2f208f53e1f128651b2a7f9a80a8515769b",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00012",
+      "sha256": "bbc40f54e951ebef800a0ca0323c51b516929ad9f7d1f0ba4d11085ddece55eb",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00013",
+      "sha256": "9f0da18ce03f8eee0502ecb8707db58cc153903f22366c3bf074198669be08a6",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00014",
+      "sha256": "8d7a61d75051ff40fdab5a895d1bdced35b36021829cc20f5f367020238d587f",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00015",
+      "sha256": "5d03c34b7d46004a4dd42e20907859ad6efda17f11866a8393b34a3f2cbde7a9",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00016",
+      "sha256": "768d02cd052279b054999aedc375b260547c7cf182d8068035d5dfbb44cc940b",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00017",
+      "sha256": "83d7a73fa779593ee2a9b5869a96ab7985cd721a24187ef0e3a5edac9b6130a7",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00018",
+      "sha256": "d8ea1f6b71f018c5e54c5e5d8f81a4c0d1b9557d5c3cb6776622c6c51e1a6a1e",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00019",
+      "sha256": "ccb49a45abdb3663a35d6048957abeac012f0e7a8d7ce3796363cc71cfdbd99d",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00020",
+      "sha256": "f255ea4b653b18d3b68b42e99b838b84231e98b97cbb3f9eba0d49c1f7da607a",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00021",
+      "sha256": "be0306100109ac1994f6ff42b96378d1b26039e28da17abcc0c7ab0f45a108cb",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00022",
+      "sha256": "31b909a8489d3c9f79c8b26e9625055fba3826b877e1efb55c6daeccd7a350d8",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00023",
+      "sha256": "28abeefa89f2f2cbe07f8c8cca373216ce9ec4c7f0a40475da1dacfc87329a61",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00024",
+      "sha256": "a80b4c755df4f9b658fbf25e7631faf87fac405caeaf76646cfcc5f278ca79ea",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00025",
+      "sha256": "fd8ab6d7b9acfb893fdfe99544da7cf07afdabd802fe776674c5eded566c26e4",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00026",
+      "sha256": "c6bff167c2d981d30bfffb5ff484a4fc2cb84c4f90c68c87a7420ff46222bc6c",
+      "size_bytes": 67108864
+    },
+    {
+      "name": "00-study/10-training-evidence.tar.gz.part-00027",
+      "sha256": "52c61991183d602638851723f1f926e8b4ed05c5ae8dfa3f859904dc8902d8dd",
+      "size_bytes": 40160397
+    },
+    {
+      "name": "setup.log",
+      "sha256": "5239a0b4bf0534c393f434df1ee149133e9b0b64615acfb1ae4cf6ebd2b7faf5",
+      "size_bytes": 10244
+    }
+  ],
+  "allocation": {
+    "name": "basic-profile-004",
+    "source": "5a99c7e43b582c9680ffc8991748717843fbcb6f",
+    "cohort_cap_usd": 3,
+    "job_cap_usd": 2,
+    "status": "terminal-deletion-confirmed",
+    "max_attempts": 1,
+    "reserved_at": "2026-10-16T03:44:34.023033+00:00",
+    "source_publication_attempts": 2,
+    "run_id": "7d6c152708bc",
+    "pod_id": "sigau1x84t7ho0",
+    "hourly_rate_usd": 1.19,
+    "created_at": "2026-10-16T04:06:17.044000+00:00",
+    "outcome": "succeeded",
+    "deleted_at": "2026-10-16T04:18:14.394734+00:00",
+    "estimated_cost_usd": 0.23799499869444443,
+    "billed_usd": 0.0,
+    "billed_through": null,
+    "conservative_charge_usd": 0.44
+  },
+  "source_archive": {
+    "bucket": "etude-job-journals-324288363980-us-west-2",
+    "key": "etude/fantasia-gpu-validation-20261014/prepared/5a99c7e43b582c9680ffc8991748717843fbcb6f.tar",
+    "commit": "5a99c7e43b582c9680ffc8991748717843fbcb6f",
+    "bytes": 224829440,
+    "sha256": "790ed7954472ceab991e065786a9418e94ac07563385328c88071be4915e40d1",
+    "seconds": 1114.4871060848236,
+    "status": "verified",
+    "readback": "complete ordered 4MiB ranges, four readers, If-Match ETag"
+  },
+  "protocol": "experiments/protocols/basic-training-numerics-004.txt"
+}

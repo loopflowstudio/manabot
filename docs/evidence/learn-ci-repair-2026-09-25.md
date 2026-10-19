@@ -1,8 +1,8 @@
 # Learn CI repair — 2026-09-25
 
 Failed head: `83ca02e8a76b73900c16ac42ba347eafbce79b31`,
-[PR #188](https://github.com/loopflowstudio/etude/pull/188),
-[CI run 36177994772](https://github.com/loopflowstudio/etude/actions/runs/36177994772).
+[PR #188](https://github.com/loopflowstudio/manabot/pull/188),
+[CI run 36177994772](https://github.com/loopflowstudio/manabot/actions/runs/36177994772).
 `lf rebase` left that head unchanged before investigation.
 
 ## Causes and repairs

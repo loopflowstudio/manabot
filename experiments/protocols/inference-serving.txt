@@ -1,0 +1,69 @@
+Single-GPU serving ownership — prospective protocol, 2026-10-15
+
+Jack Heart selected inference serving, rather than managym simulation, as the
+optimization target. The goal is to clear the serving bottleneck for single-GPU
+training. Existing total paid authorization remains$50. This next experiment
+reserves at most$4; job max30minutes/$3, one attempt, no automatic retry or expanded
+limits. Use RTX5090 at <=$1.25/h, >=8vCPU/48GBRAM, after all prior pods are deleted.
+Its measured ordinary training economics beat the H100 for this current model;
+this does not establish a global hardware optimum or mature-policy performance.
+
+Observation: run012 shared serving occupied97–99% of multiworker collection wall.
+Run013 independently confirmed3.82x CPU-only scaling, but shared serving capped
+four-worker throughput at1593learnerrows/s. The service interval includes host
+preparation, copies and inference; it is not GPU utilization. Current production
+TrainingRun calls its GPU model directly, so benchmark-only acceleration does not
+establish training acceptance. Keep the ordinary controls and report this boundary.
+
+Intervention: compare one shared model process with one model per persistent
+worker on the SAME GPU. Four workers/models remain resident, with1/2/4active.
+Keep original policy request shapes, FP32/TF32off, frozen weights,64actors x64streams
+x8steps=32768learnerrows. Both modes capture a same-device tape and require exact
+acting-input/output audits plus full rollout/buffer/journal/reset-seed hashes for
+every actor. The controller reference model also remains resident in local mode;
+include its memory. Do not change native simulation, policy sampling or learning.
+
+Six complete pool lifetimes, order shared/local/local/shared/shared/local. Each
+runs1/2/4active workers once, giving three observations per mode/count. Every trial
+has a180second whole-process-tree cap and24GiB summed RSS cap, including setup,
+audits and verification. Retain startup and collect/verify/release times separately.
+Never compare summed worker wall times as elapsed time. Local-model inference time
+is a per-worker inclusive interval and can overlap other workers; shared mode
+records controller service time. Compare full collection wall and rows/s first.
+
+Then one separately supervised45second service profile: real initial observations
+at1/16/32/64rows, two warmups and four attributed calls each, explicit CUDA sync
+between H2D/forward/D2H, CPU/CUDA trace with catalog scope. Require exact output
+parity with ordinary forwarding. These timings include profiler/sync overhead and
+exclude IPC/observation preparation; they must not replace unprofiled throughput.
+Keep all trace events and samples, no selective warmup deletion.
+
+Finally unchanged ordinary512/4096stream TrainingRun controls,8steps x3updates,
+original55s stage/60s recipe/70s process limits. These anchor host training behavior;
+independent collectors are not yet integrated into training. No training speedup
+claim follows solely from an ownership result. A production change requires a
+paired whole-training comparison, gradient/optimizer witnesses and preserved
+recovery semantics. Do not adopt an isolated serving multiplier.
+
+Screening gate: local ownership must improve the median four-worker whole-collection
+throughput by >=15%, with no >5% one-worker regression, all semantic checks passing
+and memory below the declared cap. Report each repetition and host facts, not a
+population confidence interval. Failed gates retain the shared reference and
+inform the next intervention; no baseline deletion or automatic deployment.
+
+Alternative hypotheses remain: serial host launch/validation, per-request copies,
+repeated catalog encoding, and batch/GPU utilization. Prior w4 catalog reuse gave
+only0.85% whole-training improvement at4096streams (22.4806→22.2904s), despite
+larger small-batch gains. Prior staged serving improved isolated time but failed
+ordinary-collection gates. Neither is a demonstrated current training solution.
+Cross-mode acceptance also requires identical decision counts and batch/buffer/
+journal hashes across all six trials, not only agreement with each trial's tape.
+GPU allocator peaks are cumulative per process, including warmup; report each
+process separately rather than treating a sum of peaks as concurrent utilization.
+
+Prelaunch contrary evidence: CPU-only run014 on a different RTX5090 host completed
+with2.20x scaling and1worker16.17–22.81s versus4workers6.79–13.19s; hostload232–249.
+Do not infer the cause from load alone or substitute run012's GPU timing on this
+host. Keep the180s trial cap and all failed cells. The upcoming paired ownership
+comparison includes both designs on the same host, plus its full host facts and
+ordinary controls; cross-host selection remains a separate limitation.

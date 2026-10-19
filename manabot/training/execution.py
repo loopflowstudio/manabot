@@ -31,6 +31,7 @@ from manabot.belief.sampling_fit import (
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
+from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_identity
 from manabot.model.policy_distribution import NumericalError
@@ -62,6 +63,7 @@ from .models import (
     ImportPolicy,
     MonitoringCheckpoint,
     NumericalFailure,
+    PhaseTiming,
     StageRecord,
     TrainBelief,
     TrainCompound,
@@ -97,10 +99,11 @@ PROGRESS_EXPORT_SHARE = 0.02
 def process_tree_rss(process: psutil.Process) -> int:
     """Resident bytes of a process and its live descendants.
 
-    A child can exit between enumeration and its RSS read; it then holds no
-    memory to count, so `NoSuchProcess` (including `ZombieProcess`) skips it.
-    Other failures, such as `AccessDenied`, still surface: the memory cap must
-    not silently stop measuring.
+    A child can exit between enumeration and its RSS read. psutil's
+    `is_running()` is still True for a zombie, and on macOS reading a zombie's
+    memory raises `ZombieProcess`; an exited child holds no memory to count,
+    so `NoSuchProcess` (its base class) skips it. Other failures, such as
+    `AccessDenied`, still surface: the memory cap must not stop measuring.
     """
     total = process.memory_info().rss
     for child in process.children(recursive=True):
@@ -399,6 +402,7 @@ def _execute_regime(
     outputs = {}
     self_play_session = None
     resources = ExitStack()
+    producers = resources.enter_context(ExitStack())
     game_index = 0
     fixed_validation_dataset: dict[str, np.ndarray] | None = None
     last_monitor_seconds = 0.0
@@ -603,6 +607,11 @@ def _execute_regime(
                 record.optimizer_updates = (
                     record.observed_optimizer_updates() if snapshot is not None else 0
                 )
+                if not restoring_completed:
+                    record.admission_wait_seconds = 0.0
+                    record.collection_timings = (
+                        {} if stage.execution.profile_collection else None
+                    )
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -867,9 +876,13 @@ def _execute_regime(
                                     stats.interrupted_microchoices += sum(
                                         '"command":' in line for line in partial
                                     )
-                            record.diagnostics = [asdict(stats)]
                             raise
-                        record.collection_seconds += time.perf_counter() - tick
+                        finally:
+                            # Failed collection/replay still consumes the run's
+                            # collection budget; retain that cost before settlement.
+                            record.collection_seconds += time.perf_counter() - tick
+                            stats.collection_seconds = record.collection_seconds
+                            record.diagnostics = [asdict(stats)]
                         record.artifacts[f"game-{game_index}"] = artifact(target)
                         stats.record_game(game)
                         record.games = stats.games
@@ -1165,6 +1178,7 @@ def _execute_regime(
                                 "run_id": run.id,
                                 "stage_id": stage.id,
                                 "weights": "initial_raw",
+                                "value_semantic": "signed_outcome",
                                 "regime_digest": run.regime_digest,
                             },
                         )
@@ -1186,14 +1200,21 @@ def _execute_regime(
                             # after its initialization cohort is complete and
                             # durably published. Waiting consumes the watchdog,
                             # never collection/learning time or RNG draws.
-                            while not initial_admission.exists():
-                                check()
-                                time.sleep(0.2)
+                            admission_started = time.perf_counter()
+                            try:
+                                while not initial_admission.exists():
+                                    check()
+                                    time.sleep(0.2)
+                            finally:
+                                record.admission_wait_seconds = (
+                                    time.perf_counter() - admission_started
+                                )
                             if (
                                 initial_admission.read_text().strip()
                                 != record.artifacts["initial_raw"]["sha256"]
                             ):
                                 raise ValueError("initial evaluation admission differs")
+                    producers.close()
                     collector = SeatRoutedCollector(
                         space,
                         Match(regime.match),
@@ -1213,7 +1234,9 @@ def _execute_regime(
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
                         device=stage.execution.device,
+                        workers=stage.execution.workers,
                     )
+                    producers.callback(collector.close)
                     experiment = Experiment(
                         ExperimentHypers(
                             wandb=False,
@@ -1270,6 +1293,9 @@ def _execute_regime(
                         imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(trainer.agent.parameters()).device)
+                trainer.collector.profiler = Profiler(
+                    enabled=stage.execution.profile_collection
+                )
                 before = deepcopy(trainer.collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
@@ -1351,6 +1377,17 @@ def _execute_regime(
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
+                        if stage.execution.profile_collection:
+                            # Subphases inherit the existing collection boundary.
+                            # Copy after it closes; reporting overhead is outside it.
+                            record.collection_timings = {
+                                path.removeprefix("Collection/"): PhaseTiming(
+                                    seconds=stats["total_time"],
+                                    calls=int(stats["count"]),
+                                )
+                                for path, stats in trainer.collector.profiler.get_stats().items()
+                                if path.startswith("Collection/")
+                            }
                     check()
                     tick = time.perf_counter()
                     try:
@@ -1663,7 +1700,8 @@ def _execute_regime(
                 - record.collection_seconds
                 - record.learning_seconds
                 - record.export_seconds
-                - record.diagnostic_seconds,
+                - record.diagnostic_seconds
+                - (record.admission_wait_seconds or 0.0),
             )
             # Unmeasured setup, persistence and waits are never active training.
             # Self-play operation timers settle in finally, including failed work.

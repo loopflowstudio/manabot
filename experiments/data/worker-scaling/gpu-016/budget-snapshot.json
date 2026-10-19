@@ -1,0 +1,11 @@
+{
+  "authorized_total_usd": 50,
+  "ancillary_reserve_usd": 5,
+  "spent_confirmed_usd": 4.731218511413317,
+  "estimated_rental_total_usd": 5.5078875161216505,
+  "conservative_rental_total_usd": 7.63,
+  "unallocated_after_conservative_charges_and_ancillary_reserve_usd": 33.37,
+  "pending_reservations_usd": 4,
+  "as_of": "2026-10-15T20:04:00.572904+00:00",
+  "note": "Rental estimates and confirmed bills differ while billing settles. Full failed-admission015 reserve retained; all admitted experiment pods deleted."
+}

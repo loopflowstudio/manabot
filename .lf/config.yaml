@@ -1,4 +1,5 @@
 agent: codex
-pm:
+planning:
   provider: linear
-  linear_team: d5a8730d-2040-4db1-ba04-569cc054ca96
+linear:
+  team: d5a8730d-2040-4db1-ba04-569cc054ca96

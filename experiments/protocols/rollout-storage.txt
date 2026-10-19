@@ -1,0 +1,63 @@
+Direct rollout storage — prospective protocol, 2026-10-15
+
+Objective remains complete single-GPU training throughput, not an isolated copy
+microbenchmark. Run019's prepared1/2/4 curve improved only11.9% at4096streams,
+below20%; four cells hit unchanged deadlines. Every result remains evidence.
+Run018 measured substantial batch assembly and input materialization. Source
+inspection shows observations copied into per-row pending objects, then copied
+again into final arrays with nested Python loops.
+
+Intervention: allocate one final RolloutBatch per collection, write sampled
+observations/actions/values/distributions into their final [time,stream] slots,
+and finalize reward/done/count when the next learner decision or terminal arrives.
+Replace per-row pending objects and the final nested copy loop. Use an array mask
+to select pending learner rows in the same ascending order. No changes to native
+rules, inference shapes/order, sampling RNG, learning rules or checkpoint format.
+No returned batch is overwritten or reused by subsequent collection.
+
+Reference: exact manabot/sim/net_opponent.py from published
+a07b3cd3794df658368918742ef25b661b28bb38, preserved verbatim with SHA256 receipt
+under experiments/data/worker-scaling/collector-a07b3cd3.py. The experiment alone
+loads this frozen class into the existing TrainingRun factory. Both classes use
+the same current model/native/producers code, which this intervention does not
+change. Both use prepared inference. Production retains only the direct-storage
+collector; the immutable control is not maintained as a production alternative.
+
+Host/budget: one RTX5090 at <=$1.25/h, >=8vCPU/48GBRAM. Same original$50 total;
+reserve$4, job30min/$3, rental2700s, one attempt. Verify all prior admitted pods
+deleted, unknown015 provider absence and separate$4reserve, published source and
+complete source-archive readback before admission. No retry or deadline expansion.
+
+Use worker_experiment --rollout-storage through existing cuda_performance.child.
+All cells are fresh processes with512 or4096streams,8steps x3updates, seed10349,
+w64-d1, FP32/TF32off,1TorchCPUthread. Existing55s stage/60s recipe/70s process and
+memory limits remain unchanged. All declared cells remain in the analysis,
+including failures, missing cells if the whole-job bound is reached, and partial
+witnesses. No survivor-only baseline median or substituted workload.
+
+Eight diagnostic cells: frozen1/direct1/direct4/frozen4, each512 then4096. Enable
+the same deterministic settings and full per-collection witnesses as019. Require
+exact rollout/buffer/global action-and-active journal/seeds/sampling-RNG and final
+raw/EMA/Adam/scientific-diagnostic agreement within each shape. These diagnostic
+timings are never treated as ordinary performance. Matching incomplete prefixes
+do not certify full learning or recovery. Unsupported operations fail visibly.
+
+Twenty-four ordinary timing cells, with ordinary execution settings and no full
+collection hashing: frozen1/direct1/direct4/frozen4/frozen4/direct4/direct1/frozen1/
+direct4/frozen1/frozen4/direct1, each512 then4096. This yields three complete
+repetitions per condition/shape. Capture full TrainingRun and collection/learning
+time, rows, process wall/CPU time, GPU memory, closed-thread witness and learned
+state hashes. Fixed work is12288 or98304learner rows per cell, respectively.
+
+Performance gates at4096: direct4/frozen1 throughput >=1.25x and direct4/frozen4
+>=1.15x. At512 direct4 duration must be <=1.05x frozen1. All timing cells must
+complete at exact work counts with no leaked producers. Report direct1 as well
+to distinguish storage from producer effects. Three repeats of one recipe/seed
+and one host do not establish general capacity or playing strength.
+
+Correctness/adoption gates remain exact diagnostic trajectories/learned states
+and exact ordinary learned-state/scientific-diagnostic equality. Run017/019's
+ordinary Adam variation is unresolved; no tolerance is changed, no failed gate
+waived by deterministic proofs. A performance win alone cannot establish adoption
+or complete the goal. Preserve all raw outputs in the existing immutable archive
+and verify its receipt plus every internal manifest entry before analysis.

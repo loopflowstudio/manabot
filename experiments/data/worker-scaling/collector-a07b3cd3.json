@@ -1,0 +1,6 @@
+{
+  "source_commit": "a07b3cd3794df658368918742ef25b661b28bb38",
+  "source_path": "manabot/sim/net_opponent.py",
+  "sha256": "13278e4fec4f30d058cf58662384c4955afbc34a365f073cdc13e7080e595381",
+  "purpose": "Frozen experimental control for direct rollout storage; never imported by production."
+}

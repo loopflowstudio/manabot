@@ -1,0 +1,1008 @@
+{
+  "runs": [
+    {
+      "id": "native:157800a09fa24c208bac4701ee7e9458",
+      "label": "timing-1-w384-d8-s64-on",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "666a7de28062085776e4801db8a3f265b8d0fc6526a53c8b8c1655e78be36813 \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "157800a09fa24c208bac4701ee7e9458"
+      ],
+      "active_seconds": 15.70043449383229,
+      "elapsed_seconds": 18.957532256376,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.2541934042237699,
+        "Collection": 11.898500723298639,
+        "Learning": 3.801933770533651,
+        "Stage exports": 1.6444856603629887,
+        "Unattributed": 1.3584186979569495
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 157800a0",
+          "run_id": "157800a09fa24c208bac4701ee7e9458",
+          "start": 1792117851.281893,
+          "end": 1792117870.2394266,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "157800a09fa24c208bac4701ee7e9458",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 18.957532256376,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.2541934042237699,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 18.690836098976433,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.898500723298639,
+                    "children": [
+                      {
+                        "name": "Batch assembly",
+                        "seconds": 0.2545154979452491,
+                        "children": []
+                      },
+                      {
+                        "name": "Environment step and encoding",
+                        "seconds": 0.5448381383903325,
+                        "children": []
+                      },
+                      {
+                        "name": "Observation preparation",
+                        "seconds": 0.5568521469831467,
+                        "children": []
+                      },
+                      {
+                        "name": "Opponent policy",
+                        "seconds": 6.0245055593550205,
+                        "children": []
+                      },
+                      {
+                        "name": "Policy inference and action selection",
+                        "seconds": 4.227863286621869,
+                        "children": []
+                      },
+                      {
+                        "name": "Rollout recording",
+                        "seconds": 0.13639473356306553,
+                        "children": []
+                      },
+                      {
+                        "name": "Unattributed",
+                        "seconds": 0.1535313604399562,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 3.801933770533651,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6444856603629887,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.3459159447811544,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.012502753175795078,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-1-w384-d8-s64-on/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:5a16415d95b64da3936b881dc0d16b79",
+      "label": "timing-2-w384-d8-s64-on",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "666a7de28062085776e4801db8a3f265b8d0fc6526a53c8b8c1655e78be36813 \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "5a16415d95b64da3936b881dc0d16b79"
+      ],
+      "active_seconds": 15.708394344430417,
+      "elapsed_seconds": 19.098517131991684,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.2557609532959759,
+        "Collection": 11.73374420683831,
+        "Learning": 3.974650137592107,
+        "Stage exports": 1.6809446178376675,
+        "Unattributed": 1.4534172164276242
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 5a16415d",
+          "run_id": "5a16415d95b64da3936b881dc0d16b79",
+          "start": 1792117874.3614104,
+          "end": 1792117893.4599283,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "5a16415d95b64da3936b881dc0d16b79",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 19.098517131991684,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.2557609532959759,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 18.82996066333726,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.73374420683831,
+                    "children": [
+                      {
+                        "name": "Batch assembly",
+                        "seconds": 0.1833121757954359,
+                        "children": []
+                      },
+                      {
+                        "name": "Environment step and encoding",
+                        "seconds": 0.535535164643079,
+                        "children": []
+                      },
+                      {
+                        "name": "Observation preparation",
+                        "seconds": 0.5446913321502507,
+                        "children": []
+                      },
+                      {
+                        "name": "Opponent policy",
+                        "seconds": 5.962366630323231,
+                        "children": []
+                      },
+                      {
+                        "name": "Policy inference and action selection",
+                        "seconds": 4.234583715442568,
+                        "children": []
+                      },
+                      {
+                        "name": "Rollout recording",
+                        "seconds": 0.12287617893889546,
+                        "children": []
+                      },
+                      {
+                        "name": "Unattributed",
+                        "seconds": 0.1503790095448494,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 3.974650137592107,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6809446178376675,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.4406217010691762,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.012795515358448029,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-2-w384-d8-s64-on/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:6cb114f39cf942deb978e3681521833f",
+      "label": "proof-s64-on",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "bd739b0dfb765e5b8176ad50c45890ff11dfe0f1d6ca6e7f91232d0a1cc67473 \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "6cb114f39cf942deb978e3681521833f"
+      ],
+      "active_seconds": 3.01455357670784,
+      "elapsed_seconds": 5.612551598343998,
+      "learner_transitions": 1536,
+      "updates": 3,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.2539819283410907,
+        "Collection": 2.2612183410674334,
+        "Learning": 0.7533352356404066,
+        "Stage exports": 1.6305201672948897,
+        "Unattributed": 0.7134959260001779
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 6cb114f3",
+          "run_id": "6cb114f39cf942deb978e3681521833f",
+          "start": 1792117818.6147456,
+          "end": 1792117824.227298,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "6cb114f39cf942deb978e3681521833f",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 5.612551598343998,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.2539819283410907,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 5.353361803106964,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 2.2612183410674334,
+                    "children": [
+                      {
+                        "name": "Batch assembly",
+                        "seconds": 0.04645704058930278,
+                        "children": []
+                      },
+                      {
+                        "name": "Environment step and encoding",
+                        "seconds": 0.06684526335448027,
+                        "children": []
+                      },
+                      {
+                        "name": "Observation preparation",
+                        "seconds": 0.07712125685065985,
+                        "children": []
+                      },
+                      {
+                        "name": "Opponent policy",
+                        "seconds": 0.8276622290723026,
+                        "children": []
+                      },
+                      {
+                        "name": "Policy inference and action selection",
+                        "seconds": 1.1561068557202816,
+                        "children": []
+                      },
+                      {
+                        "name": "Rollout recording",
+                        "seconds": 0.020166603848338127,
+                        "children": []
+                      },
+                      {
+                        "name": "Unattributed",
+                        "seconds": 0.06685909163206816,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 0.7533352356404066,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6305201672948897,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 0.708288059104234,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.00520786689594388,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/proof-s64-on/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:71ca4e8703df4e51964228e2f7a94ccb",
+      "label": "timing-3-w384-d8-s64-off",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "218dd911a145b5f780777beffd01d0f70dd25379f7411b0d1ca9bc24fc213dcc \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "71ca4e8703df4e51964228e2f7a94ccb"
+      ],
+      "active_seconds": 14.754292618017644,
+      "elapsed_seconds": 17.995766109786928,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.25504421815276146,
+        "Collection": 11.666114639025182,
+        "Learning": 3.088177978992462,
+        "Stage exports": 1.6540956101380289,
+        "Unattributed": 1.3323336634784937
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 71ca4e87",
+          "run_id": "71ca4e8703df4e51964228e2f7a94ccb",
+          "start": 1792117897.6111126,
+          "end": 1792117915.6068802,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "71ca4e8703df4e51964228e2f7a94ccb",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 17.995766109786928,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.25504421815276146,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 17.72851990396157,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.666114639025182,
+                    "children": []
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 3.088177978992462,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6540956101380289,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.3201316758058965,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.01220198767259717,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-3-w384-d8-s64-off/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:7749d86f704d496db83e8b2b3f6dd5b3",
+      "label": "proof-s64-off",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "19ef6128c8c3d6c21c48fa840a0e59396c71038617488deafef8c9f1400ef295 \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "7749d86f704d496db83e8b2b3f6dd5b3"
+      ],
+      "active_seconds": 2.99708415241912,
+      "elapsed_seconds": 5.503018277697265,
+      "learner_transitions": 1536,
+      "updates": 3,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.25333057064563036,
+        "Collection": 2.233355013653636,
+        "Learning": 0.7637291387654841,
+        "Stage exports": 1.6255869860760868,
+        "Unattributed": 0.627016568556428
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 7749d86f",
+          "run_id": "7749d86f704d496db83e8b2b3f6dd5b3",
+          "start": 1792117808.2336178,
+          "end": 1792117813.736637,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "7749d86f704d496db83e8b2b3f6dd5b3",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 5.503018277697265,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.25333057064563036,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 5.244448520243168,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 2.233355013653636,
+                    "children": []
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 0.7637291387654841,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6255869860760868,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 0.621777381747961,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.005239186808466911,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/proof-s64-off/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:d49723e27ebf4188b1930d9c8270aa1d",
+      "label": "timing-0-w384-d8-s64-off",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "218dd911a145b5f780777beffd01d0f70dd25379f7411b0d1ca9bc24fc213dcc \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "d49723e27ebf4188b1930d9c8270aa1d"
+      ],
+      "active_seconds": 15.499654069077224,
+      "elapsed_seconds": 18.802820640150458,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.2649602107703686,
+        "Collection": 11.580175059381872,
+        "Learning": 3.919479009695351,
+        "Stage exports": 1.6626346106640995,
+        "Unattributed": 1.375571749638766
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 d49723e2",
+          "run_id": "d49723e27ebf4188b1930d9c8270aa1d",
+          "start": 1792117828.3810754,
+          "end": 1792117847.183897,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "d49723e27ebf4188b1930d9c8270aa1d",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 18.802820640150458,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.2649602107703686,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 18.52549120504409,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.580175059381872,
+                    "children": []
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 3.919479009695351,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6626346106640995,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.3632025253027678,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.012369224335998297,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-0-w384-d8-s64-off/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:f5b7cc986da6464aa877a1f44e56a703",
+      "label": "timing-5-w384-d8-s64-on",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "666a7de28062085776e4801db8a3f265b8d0fc6526a53c8b8c1655e78be36813 \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "f5b7cc986da6464aa877a1f44e56a703"
+      ],
+      "active_seconds": 15.830550840124488,
+      "elapsed_seconds": 19.07926481263712,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.2689456515945494,
+        "Collection": 11.78801302658394,
+        "Learning": 4.042537813540548,
+        "Stage exports": 1.6448262045159936,
+        "Unattributed": 1.3349421164020896
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 f5b7cc98",
+          "run_id": "f5b7cc986da6464aa877a1f44e56a703",
+          "start": 1792117943.1114998,
+          "end": 1792117962.190766,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "f5b7cc986da6464aa877a1f44e56a703",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 19.07926481263712,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.2689456515945494,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 18.79791866801679,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.78801302658394,
+                    "children": [
+                      {
+                        "name": "Batch assembly",
+                        "seconds": 0.14110164204612374,
+                        "children": []
+                      },
+                      {
+                        "name": "Environment step and encoding",
+                        "seconds": 0.5296555389650166,
+                        "children": []
+                      },
+                      {
+                        "name": "Observation preparation",
+                        "seconds": 0.5486144050955772,
+                        "children": []
+                      },
+                      {
+                        "name": "Opponent policy",
+                        "seconds": 6.06694113323465,
+                        "children": []
+                      },
+                      {
+                        "name": "Policy inference and action selection",
+                        "seconds": 4.230115135665983,
+                        "children": []
+                      },
+                      {
+                        "name": "Rollout recording",
+                        "seconds": 0.11987926112487912,
+                        "children": []
+                      },
+                      {
+                        "name": "Unattributed",
+                        "seconds": 0.15170591045171022,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 4.042537813540548,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6448262045159936,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.3225416233763099,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.012400493025779724,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-5-w384-d8-s64-on/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    },
+    {
+      "id": "native:f74b752c4cad4543bd454dbd0739f08b",
+      "label": "timing-4-w384-d8-s64-off",
+      "experiment": "gpu-training-profile",
+      "kind": "benchmark",
+      "hardware": "NVIDIA GeForce RTX 5090",
+      "recipe": "218dd911a145b5f780777beffd01d0f70dd25379f7411b0d1ca9bc24fc213dcc \u00b7 runtime 136753c014fd",
+      "seed": 10349,
+      "status": "completed",
+      "members": [
+        "f74b752c4cad4543bd454dbd0739f08b"
+      ],
+      "active_seconds": 15.452727276831865,
+      "elapsed_seconds": 18.777195058297366,
+      "learner_transitions": 8192,
+      "updates": 16,
+      "environment_steps": null,
+      "cost_usd": null,
+      "phases": {
+        "Setup": 0.25679434230551124,
+        "Collection": 11.67832190124318,
+        "Learning": 3.7744053755886853,
+        "Stage exports": 1.6716062533669174,
+        "Unattributed": 1.396067185793072
+      },
+      "intervals": [
+        {
+          "label": "gpu-training-profile \u00b7 seed 10349 \u00b7 f74b752c",
+          "run_id": "f74b752c4cad4543bd454dbd0739f08b",
+          "start": 1792117919.8783166,
+          "end": 1792117938.655512,
+          "status": "completed",
+          "basis": "Recorded calendar span (may include downtime)"
+        }
+      ],
+      "profiles": [
+        {
+          "run_id": "f74b752c4cad4543bd454dbd0739f08b",
+          "label": "gpu-training-profile \u00b7 seed 10349",
+          "status": "completed",
+          "root": {
+            "name": "Recorded training attempt",
+            "seconds": 18.777195058297366,
+            "children": [
+              {
+                "name": "Setup",
+                "seconds": 0.25679434230551124,
+                "children": []
+              },
+              {
+                "name": "policy",
+                "seconds": 18.50683404505253,
+                "children": [
+                  {
+                    "name": "Collection",
+                    "seconds": 11.67832190124318,
+                    "children": []
+                  },
+                  {
+                    "name": "Learning",
+                    "seconds": 3.7744053755886853,
+                    "children": []
+                  },
+                  {
+                    "name": "Stage exports",
+                    "seconds": 1.6716062533669174,
+                    "children": []
+                  },
+                  {
+                    "name": "Unattributed",
+                    "seconds": 1.3825005148537457,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "Unattributed",
+                "seconds": 0.013566670939326286,
+                "children": []
+              }
+            ]
+          },
+          "warnings": []
+        }
+      ],
+      "warnings": [],
+      "phase_coverage": [
+        "Collection",
+        "Learning",
+        "Stage exports",
+        "Diagnostics / failure accounting",
+        "Initial admission wait",
+        "Setup"
+      ],
+      "source_uris": [
+        "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-4-w384-d8-s64-off/run/run.json"
+      ],
+      "model": "width 384 \u00b7 8 attention layers"
+    }
+  ],
+  "sources": [
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/proof-s64-off/run/run.json",
+      "sha256": "52abee6efc9b15d2edae2c42f7599cdb2edd0386fd6c9be4c60363136215b433",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/proof-s64-on/run/run.json",
+      "sha256": "2cbb336eecbfcdc7dc2d4dcac942dd86aba6ea837ae7ba8679ac35a45edd88bf",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-0-w384-d8-s64-off/run/run.json",
+      "sha256": "eb08880baa575b2fc63857fff67240e073678ed8c0a991166307d8a691d128c3",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-1-w384-d8-s64-on/run/run.json",
+      "sha256": "c3985df4c43f53fdad4d0e173d87b24b5e49576ebe9bc1e7b5030842cb93babf",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-2-w384-d8-s64-on/run/run.json",
+      "sha256": "bfe982d04a5bffc66d243c62050fa01edcae2cf4fcd9d6a254221a88f75d6028",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-3-w384-d8-s64-off/run/run.json",
+      "sha256": "2bfcac05a4088bae06442460026894ab45fc1d9d26c431b70f77956093977eea",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-4-w384-d8-s64-off/run/run.json",
+      "sha256": "6aacfd1bdc6da1f73e78f2e1dbfa878e17d5f0ba650fd16477d326ebd870c587",
+      "start": null,
+      "length": null
+    },
+    {
+      "uri": "file:///Users/jack/src/managym-cpu-research/.runs/gpu-bottleneck/result-003/training-evidence/timing-5-w384-d8-s64-on/run/run.json",
+      "sha256": "a71a12031dd5261312a0dcd3dbae93707fbd34a8900d0abb4bf27ee98fc4670f",
+      "start": null,
+      "length": null
+    }
+  ],
+  "warnings": [
+    "Basic-profile-003: controlled short GPU training windows, not long-training or strength evidence.",
+    "Complete archive verified against Etude output receipts and every member hash.",
+    "Exact deterministic proof gate: False. Failed proof means diagnostic attribution only; timer overhead is not causally isolated.",
+    "Initial selection: all ordinary timer-on cases. Proofs and timer-off controls remain selectable.",
+    "Collection children are host elapsed intervals, including existing device waits; they are not separate GPU kernel durations.",
+    "A timer-off control has a finite weight outlier near 293 while the corresponding tensor stays below 0.12 in another control. Numerical cause is unresolved; no optimization or profiler exact-state acceptance is claimed.",
+    "Timer-on/off median complete-run ratios: [1.016087054184713]. Missing/failed cells: none."
+  ],
+  "snapshot": "f50e22be09c13db7bfaf1aea2280b7df57caf86956fb708a5f90a6ace2457960",
+  "generated_at": "2026-10-16T03:05:49.384820+00:00",
+  "selected": [
+    "native:157800a09fa24c208bac4701ee7e9458",
+    "native:5a16415d95b64da3936b881dc0d16b79",
+    "native:f5b7cc986da6464aa877a1f44e56a703"
+  ],
+  "top": 5,
+  "include_benchmarks": false
+}

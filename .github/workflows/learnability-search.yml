@@ -1,0 +1,70 @@
+name: Learnability exploration
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Search budget in seconds (up to 1800)
+        default: '1800'
+      arms:
+        description: Space-separated configurations
+        type: choice
+        options:
+          - 'generic semantic generic_no_attention'
+          - 'generic semantic'
+          - 'generic_no_attention'
+        default: 'generic semantic generic_no_attention'
+      pairing:
+        description: Which distinguishable action classes to compare
+        type: choice
+        options: [closest, extremes]
+        default: closest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: learnability-exploration
+  cancel-in-progress: false
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: managym -> target
+      - name: Install CPU runtime
+        run: |
+          uv sync --frozen --extra dev --extra play --no-default-groups --group play-runtime
+          uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+      - name: Validate experiment setup
+        run: uv run --no-sync pytest tests/verify/test_learnability_search.py -q
+      - name: Bounded exploration
+        env:
+          SEARCH_SECONDS: ${{ inputs.seconds }}
+          SEARCH_ARMS: ${{ inputs.arms }}
+          SEARCH_PAIRING: ${{ inputs.pairing }}
+        run: |
+          extra=()
+          if [ "$SEARCH_PAIRING" = closest ]; then extra+=(--closest); fi
+          timeout --signal=TERM 1830s uv run --no-sync experiments/runners/learnability_search.py --out .runs/learnability-search --seconds "$SEARCH_SECONDS" --arms $SEARCH_ARMS "${extra[@]}"
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f .runs/learnability-search/report.md ]; then
+            cat .runs/learnability-search/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: learnability-search-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .runs/learnability-search
+          retention-days: 14
+          if-no-files-found: error

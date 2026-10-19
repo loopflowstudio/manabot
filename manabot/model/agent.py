@@ -6,7 +6,7 @@ Agent.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Literal, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,9 @@ from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra import AgentSpec
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
+from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
+from manabot.model.semantic_cards import admit_definition_ids
 from manabot.sim.structured_policy import RaggedOfferBatch
 import managym
 
@@ -38,6 +40,13 @@ class Agent(nn.Module):
         super().__init__()
         self.observation_space = observation_space
         self.hypers = hypers
+        # Scalar heads need the checkpoint's training-target declaration. WDL
+        # means and compound prefix critics have architectural signed units.
+        self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
+            "signed_outcome"
+            if hypers.value_kind == "categorical_wdl" or hypers.compound_decisions
+            else None
+        )
         self.logger = getLogger(__name__)
 
         # Extract dimensions from the observation encoder.
@@ -80,7 +89,7 @@ class Agent(nn.Module):
         self.player_embedding = ProjectionLayer(player_dim, embed_dim)
         self.card_embedding = ProjectionLayer(card_dim, embed_dim)
         self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
-        # Use only the first (action_dim - 1) features for actions.
+        # Embed policy features; validity only masks legal rows.
         self.action_embedding = ProjectionLayer(action_dim - 1, embed_dim)
 
         self.logger.info(f"Player embedding: ({player_dim} -> {embed_dim})")
@@ -197,7 +206,10 @@ class Agent(nn.Module):
     def forward(
         self, obs: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return policy logits [B,A] and acting-viewer signed values [B]."""
+        """Return policy logits [B,A] and acting-viewer critic [B].
+
+        WDL expectations are signed; scalar units follow value_semantic.
+        """
         logits, raw_value = self.forward_distribution(obs)
         if self.hypers.value_kind == "categorical_wdl":
             probabilities = raw_value.softmax(dim=-1)
@@ -223,7 +235,13 @@ class Agent(nn.Module):
             )
         objects, is_agent, validity, history = self._gather_object_embeddings(obs)
 
-        encoded = self._attend_objects(objects, is_agent, validity)
+        encoded = self._attend_objects(
+            objects,
+            is_agent,
+            validity,
+            objects_checked=isinstance(obs, PreparedObservation)
+            and obs.objects_checked,
+        )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : validity.shape[1]]
 
@@ -243,10 +261,13 @@ class Agent(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         validity: torch.Tensor,
+        *,
+        objects_checked: bool = False,
     ) -> torch.Tensor:
         """Encode real objects and, when configured, a trailing neutral value token."""
         if (
-            self.hypers.value_aggregation != "historical_mean"
+            not objects_checked
+            and self.hypers.value_aggregation != "historical_mean"
             and (validity.sum(1) == 0).any()
         ):
             raise ValueError("value aggregation requires a valid object")
@@ -367,11 +388,18 @@ class Agent(nn.Module):
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
+        if isinstance(obs, PreparedObservation):
+            obs.scope.check(self)
+            if torch.is_grad_enabled():
+                raise RuntimeError(
+                    "prepared inference observations cannot enter autograd"
+                )
         enc_agent_player = self.player_embedding(obs["agent_player"])
         enc_opp_player = self.player_embedding(obs["opponent_player"])
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
         definitions = None
+        references = obs.references if isinstance(obs, PreparedObservation) else None
         permanent_ids = torch.stack(
             [
                 obs[key][..., PERMANENT_DEFINITION_INDEX]
@@ -380,20 +408,31 @@ class Agent(nn.Module):
             dim=1,
         )
         if self.semantic_cards is not None:
-            definitions = self.semantic_cards.definitions()
-            cards, known = self.semantic_cards(obs, definitions)
+            definitions = (
+                obs.scope.catalog()
+                if isinstance(obs, PreparedObservation)
+                else self.semantic_cards.definitions()
+            )
+            assert definitions is not None
+            cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = self.semantic_cards.embed_definitions(
-                permanent_ids, definitions
+            permanent_definitions = (
+                self.semantic_cards.embed_definitions(permanent_ids, definitions)
+                if references is None
+                else definitions[references.permanents]
             )
         else:
-            cards = self._generic_definitions(obs["semantic_cards"])
+            cards = self._generic_definitions(
+                obs["semantic_cards"], None if references is None else references.cards
+            )
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self._generic_definitions(permanent_ids)
+            permanent_definitions = self._generic_definitions(
+                permanent_ids, None if references is None else references.permanents
+            )
         permanent_features = [
             torch.cat(
                 (obs[key][..., :PERMANENT_DEFINITION_INDEX], obs[key][..., -1:]), dim=-1
@@ -465,16 +504,17 @@ class Agent(nn.Module):
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity, history
 
-    def _generic_definitions(self, ids: torch.Tensor) -> torch.Tensor:
+    def _generic_definitions(
+        self, ids: torch.Tensor, admitted: torch.Tensor | None = None
+    ) -> torch.Tensor:
         """Reject unbound/fractional IDs instead of silently aliasing definitions."""
         assert self.card_definitions is not None
-        if (
-            not torch.equal(ids, ids.floor())
-            or bool((ids < 0).any())
-            or bool((ids >= self.card_definitions.num_embeddings).any())
-        ):
-            raise ValueError("policy received an unadmitted card definition")
-        return self.card_definitions(ids.long())
+        rows = (
+            admit_definition_ids(ids, self.card_definitions.num_embeddings)
+            if admitted is None
+            else admitted
+        )
+        return self.card_definitions(rows)
 
     def _belief_rows(
         self, obs: Dict[str, torch.Tensor]

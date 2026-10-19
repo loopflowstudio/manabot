@@ -1,0 +1,44 @@
+{
+  "method": "CPU torch.load and independent canonical state_digest of each fully hash-verified checkpoint payload",
+  "checkpoints_verified": 24,
+  "cases_verified": 6,
+  "all_worker_witnesses_match": true,
+  "witnesses": {
+    "diagnostic-0-deterministic-off": {
+      "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+      "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+    },
+    "diagnostic-1-deterministic-off": {
+      "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+      "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+    },
+    "diagnostic-2-deterministic-on": {
+      "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+      "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+    },
+    "diagnostic-3-deterministic-on": {
+      "policy-ema.pt": "a70b5d41ba981c0913c17ec375ab680d9febf0462976d9479ed6127b89a76c75",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "e57b48d4f6b8b4cb536002cbe94ab2ef4dbd6c2b8f69ddaa447c318717e0b2ac",
+      "policy-raw.pt": "be16653e3a803bd0e4d5315fc0c5ff60b11a1c2c7eee5be6c3ce22d7a4725913"
+    },
+    "diagnostic-4-ordinary-off": {
+      "policy-ema.pt": "c917a0a6673819924b65b5b432d8b4336f52b7c3bd6ed5f8455de3ecff666660",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "0b4d997e45bb14cd5d8cbb9714d67400110fe0295432d656ddbe4383c937cdc9",
+      "policy-raw.pt": "3f7a522f0b895e39588209ad9005252d4e6800d692f2852f6d15f6f95f4cb2ee"
+    },
+    "diagnostic-5-ordinary-off": {
+      "policy-ema.pt": "c917a0a6673819924b65b5b432d8b4336f52b7c3bd6ed5f8455de3ecff666660",
+      "policy-initial-raw.pt": "14e13dc476f93b496dee49d117437a9c10cd60de6955ae43613ba58b190dfc6a",
+      "policy-optimizer.pt": "0b4d997e45bb14cd5d8cbb9714d67400110fe0295432d656ddbe4383c937cdc9",
+      "policy-raw.pt": "3f7a522f0b895e39588209ad9005252d4e6800d692f2852f6d15f6f95f4cb2ee"
+    }
+  }
+}
