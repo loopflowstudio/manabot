@@ -95,3 +95,9 @@ complete hash-verified recovery and bounded two-worker CPU evaluation afterward.
 Fresh Task read still incomplete; older merged PR292 is not completion of this
 new allocation. Task automation is disabled; CI watcher active. The experiment
 supervisor is an actual independent process, not a promise of another chat turn.
+
+## 2026-10-19 — Jack Heart: final report and baseline follow-up
+
+Jack asked for a published final report (PR #314 plus the "Batching and Model Size: Final Report" doc)
+and a follow-up PR landing training improvements. Decision: switch the canonical `baseline()` recipe
+from 4 to 64 streams with the tested reference-iteration schedule (64×2 unchanged), in its own PR.
