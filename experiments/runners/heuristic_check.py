@@ -116,7 +116,11 @@ def run(args: argparse.Namespace) -> None:
         out.parent / f"{out.name}.admission.json",
     )
     checkpoint = _checkpoint(producer, outputs, args.point)
+    # MTG-137 checkpoints were produced by an older engine source whose world,
+    # ABIs and content manifest match this branch; the diagnostic purpose keeps
+    # those checks and records the producer's engine source instead of matching it.
     protocol = MonitorProtocol(
+        purpose="supplemental-matchup-diagnostic",
         include_mirrors=True,
         deal_seeds=tuple(range(DEAL_START, DEAL_START + args.deals)),
         opponent=args.anchor,
