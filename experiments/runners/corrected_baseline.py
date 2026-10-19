@@ -17,7 +17,11 @@ from etude.track.records import Step
 from etude.track.run import init
 from pydantic import Field, model_validator
 
-from experiments.runners.complexity_campaign import evaluate_fit, execute
+from experiments.runners.complexity_campaign import (
+    allocation_stop,
+    evaluate_fit,
+    execute,
+)
 from experiments.runners.environment_complexity import Pool
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import canonical_sha256, file_sha256
@@ -181,7 +185,9 @@ def complete_retained_first(plan: BaselinePlan, source: Path, output: Path) -> N
             "l3",
             original[str(run.seed)],
             tracker,
-            datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp(),
+            allocation_stop(
+                datetime.fromisoformat(os.environ["ETUDE_DEADLINE"]).timestamp()
+            ),
         )
         tracker.log(completed_evaluations=1)
     except BaseException:

@@ -20,7 +20,7 @@ from pydantic import TypeAdapter
 from experiments.runners.complexity_campaign import (
     POOLS,
     SEEDS,
-    ComplexityPlan,
+    AnyComplexityPlan,
     read_complexity_plan,
 )
 from experiments.runners.environment_complexity_analysis import (
@@ -39,7 +39,7 @@ from manabot.training.monitor_evaluation import MonitorResult
 @dataclass(frozen=True)
 class Evidence:
     root: Path
-    plan: ComplexityPlan
+    plan: AnyComplexityPlan
     runs: dict[tuple[str, int], TrainingRun]
     effects: dict[tuple[str, str, int, int], SeedEffect]
     unavailable: tuple[str, ...]

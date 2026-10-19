@@ -1,5 +1,43 @@
 # MTG-122: learning across environment complexity
 
+## Split GPU-training/Mini-evaluation plan — 2026-10-19
+
+Jack Heart directed GPU training with evaluation run separately on the Mini, no
+inline diagnostic evaluation, and all 36,000 scored games. The 104-game
+amendment below is not selected. MTG-135 protocol017 finished; for the
+64-stream plan it recommends 64x2, which is the architecture already shared by
+L1/L2/L3 (final package from source `3c3681d2`, recipe `small-s64.json`).
+
+The plan is `SplitComplexityPlan` (`schema_version: 3`) in
+`experiments.runners.complexity_campaign`; its frozen values are in
+[environment-complexity-split-plan.json](environment-complexity-split-plan.json).
+
+- **Recipe:** the tested 64-stream horizon. 128 iterations x 64 streams x 64
+  transitions = 524,288 learner transitions per fit, with
+  `iteration_schedule: {steps: 128, reference_steps: 2048}`, so learning rate
+  stays 1e-4 and tau falls from 0.05 to 0.005076577477226473. Each fit has its
+  protocol017 watchdog, 1,740 seconds. CUDA, w6, shared research catalog,
+  fresh initialization. Nothing else in the learner changes.
+- **GPU job:** trains nine fits (three seeds x three pools, rotated order) and
+  retains initialization, iteration 32 (unscored), midpoint 64 and endpoint 128
+  exports. It runs no games. The job checks that each fit's exports exist and
+  that initialization tensors match across pools.
+- **Mini evaluation:** after the outputs are fetched into a campaign directory,
+  run `uv run python -m experiments.runners.complexity_campaign evaluate
+  <campaign>` on the Mini. It scores the unchanged cohort below (50 deals x 8
+  legs per anchor; initialization, midpoint and endpoint candidates plus
+  same-deal frozen-initialization controls) from the hash-checked exports. A
+  rerun skips completed cells and stops at a retained incomplete one.
+- **Cost:** the L4 rental is capped at $0.69/hour for 19,800 seconds ($3.80), which includes
+  the in-job native build.
+  The plan counts $4.55 already spent or reserved, plus the $3 settlement
+  reserve, against the $35 cap. The horizon is fixed by the tested recipe, so
+  no update count is calibrated. The corrected calibration's slowest block,
+  5.41 s/update, projects about 11.5 minutes per fit.
+
+Historical plans (schema 1 and 2) keep their meaning; the deal families are the
+same by milestone ordinal.
+
 ## Current disposition — 2026-10-17
 
 **Reactivated for GPU preparation; not scientifically complete or launch-admitted.**

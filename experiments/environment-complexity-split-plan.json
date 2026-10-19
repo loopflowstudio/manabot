@@ -1,0 +1,20 @@
+{
+  "updates": 128,
+  "training_seconds_per_run": 1740,
+  "schema_version": 3,
+  "seed_order": [
+    12251,
+    12252,
+    12253
+  ],
+  "total_seconds": 19800.0,
+  "evaluation_reserve_seconds": 0,
+  "evaluation_placement": "mini",
+  "streams": 64,
+  "device": "cuda",
+  "max_usd_per_hour": 0.69,
+  "prior_usd": 4.55,
+  "settlement_reserve_usd": 3,
+  "inclusive_cap_usd": 35,
+  "deals_per_checkpoint": 50
+}

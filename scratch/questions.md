@@ -181,3 +181,43 @@ cohort projects72.62h with1000-update fits; the historical2h fit cap admits only
 pools, cells and controls and projects34.48h/$23.80 at ceiling. Jack Heart's
 cohort decision is pending; no scored science launched. Full retained evidence
 and projections live in `.runs/mtg122/gpu-complexity-startup1/`.
+
+## Split training/evaluation placement — 2026-10-18
+
+Jack Heart authorized Mini evaluation and removing inline diagnostics. GPU jobs
+should collect/train and retain initialization, midpoint and endpoint artifacts;
+Mini should run the original full greedy/random matrix and frozen controls from
+those exact exports. Keep all 36,000 scientific games; the proposed 104-game
+reduction is not selected. No local scientific execution. The $35 GPU ceiling
+remains unchanged, and Mini work must not displace other allocated cohorts.
+Disabling inline diagnostics does not remove scientific milestone evaluation:
+those cohorts move to the detached evaluator. Require hash-verified handoff,
+ordinary checkpoint admission and separate training/evaluation cost receipts.
+
+A newly delivered MTG-135 handoff states an execution hold pending its longer-run
+recommendation. This is distinct from evaluation placement; confirm whether the
+hold still applies before renting a worker. Existing combined CUDA execution
+cannot yet offload evaluation: it requires CUDA and calls evaluate_fit inline.
+Implement/admit a split execution path before launch, preserving historical plans.
+
+## MTG-135 handoff clarification — 2026-10-19
+
+The [later scope clarification](mtg-135-handoff-scope-20261018.md) resolves the
+interim handoff's hold language above: it added no user instruction or approval
+requirement. MTG-122's own current accepted direction governs execution. The
+complete MTG-135 comparison and final recipe are still pending; the delivered
+[recipe preparation](mtg-135-longer-learning-017-preparation/README.md) documents
+the schedule, horizon and split-execution integration work. Preserve the full
+36,000-game cohort, frozen controls, separate $35 cap and prohibition on laptop
+science. This clarification launches no work and changes no existing user hold.
+
+## MTG-135 final recipe and split execution — 2026-10-19
+
+Jack Heart relayed MTG-135's final result: for the 64-stream plan use 64x2,
+which our shared recipe already is. The remaining integration was the tested
+iteration schedule (merged from main) and a 128-iteration horizon, now
+`SplitComplexityPlan` (schema 3). Jack Heart: "we should be able to turn off
+diagnostic evals and just manually run evals on the mini". The GPU job trains
+and retains exports only; `complexity_campaign evaluate <campaign>` scores the
+unchanged 36,000-game cohort on the Mini. Plan budget: $0.69/h x 5.5h = $3.80,
+counted with $4.55 prior/reserved and $3 settlement inside $35.

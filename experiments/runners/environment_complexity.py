@@ -18,7 +18,13 @@ import torch
 
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingCoordinates, TrainingRegime, TrainSelfPlay
+from manabot.training.models import (
+    AtaraxosMoveLearning,
+    IterationSchedule,
+    TrainingCoordinates,
+    TrainingRegime,
+    TrainSelfPlay,
+)
 from manabot.training.monitor_evaluation import MonitorProtocol, evaluate_checkpoint
 from manabot.verify.store import VerifyStore
 import managym
@@ -44,8 +50,13 @@ def regime(
     seconds: float,
     streams: Literal[4, 64] = 4,
     device: Literal["cpu", "cuda"] = "cpu",
+    schedule: IterationSchedule | None = None,
 ) -> TrainingRegime:
-    """Identical learner and catalog; only exact deck composition changes."""
+    """Identical learner and catalog; only exact deck composition changes.
+
+    `schedule` maps a short horizon onto the learning-rate/tau curve of a longer
+    reference run (MTG-135 protocol017); omitting it keeps historical recipes.
+    """
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
@@ -66,6 +77,9 @@ def regime(
     stage.execution.device = device
     stage.matchup_curriculum = "cross-balanced"
     stage.execution.wall_seconds = seconds
+    if schedule is not None:
+        assert isinstance(stage.learning, AtaraxosMoveLearning)
+        stage.learning.iteration_schedule = schedule
     return TrainingRegime.model_validate(recipe.model_dump())
 
 
