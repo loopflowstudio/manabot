@@ -171,7 +171,10 @@ removal held for a kill, counters held for an opponent's spell, effect polarity
 derived from the semantic card source, attacks unless a blocker kills and
 survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
 stays frozen with its arena source identity. Select it for checkpoint monitoring
-with `MonitorProtocol(opponent="heuristic")`. Its strength is unmeasured.
+with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
+GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
+0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
+cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained

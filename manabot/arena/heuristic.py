@@ -198,7 +198,7 @@ class _Body:
     power: int
     toughness: int
     damage: int
-    keywords: Any
+    keywords: managym.Keywords
 
     @classmethod
     def of(cls, permanent: managym.Permanent, pump: tuple[int, int] = (0, 0)) -> _Body:
@@ -213,7 +213,7 @@ class _Body:
 class _Board:
     """Viewer-relative facts about one observation."""
 
-    def __init__(self, raw: managym.Observation):
+    def __init__(self, raw: managym.Observation) -> None:
         self.raw = raw
         self.cards = {int(c.id): c for c in raw.agent_cards + raw.opponent_cards}
         self.by_key = {
@@ -507,7 +507,9 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             return best[1]
         return decline
 
-    def _offer_side(self, board: _Board, index: int) -> str | None:
+    def _offer_side(
+        self, board: _Board, index: int
+    ) -> Literal["own", "opponent"] | None:
         """Viewer-relative side; stack spells use card ownership as control."""
         choice = inspect_target(board.raw, index)
         if choice is None:
