@@ -27,7 +27,8 @@ from typing import Literal
 
 import numpy as np
 
-from manabot.arena.models import file_sha256
+from manabot.arena.match import selected_match
+from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.training.models import ArtifactReference, TrainingCoordinates, TrainingRun
 from manabot.training.monitor_evaluation import (
     Checkpoint,
@@ -74,10 +75,44 @@ def _checkpoint(
     return endpoint
 
 
+def _admit(run: TrainingRun, note: Path) -> TrainingRun:
+    """Admit an MTG-137 run whose match differs only by an explicit pack.
+
+    MTG-137 sources name `content_pack` on cross-deck setups; this branch's
+    selected match leaves it None with identical decks and sideboards. Only
+    that field is normalized, both anchors see the same run, and the original
+    identity is written beside the attempt.
+    """
+    recorded = run.identities["matchup_sha256"]
+    selected = selected_match()
+    match = run.regime.match.model_copy(update={"content_pack": None})
+    if recorded == canonical_sha256(selected.model_dump()):
+        return run
+    if match.model_dump() != selected.model_dump():
+        raise ValueError("producer match differs beyond its content pack")
+    admitted = run.model_copy(deep=True)
+    admitted.identities["matchup_sha256"] = canonical_sha256(selected.model_dump())
+    note.write_text(
+        json.dumps(
+            {
+                "recorded_matchup_sha256": recorded,
+                "admitted_matchup_sha256": admitted.identities["matchup_sha256"],
+                "normalized_field": "regime.match.content_pack",
+                "recorded_content_pack": run.regime.match.content_pack,
+            },
+            indent=2,
+        )
+    )
+    return admitted
+
+
 def run(args: argparse.Namespace) -> None:
     outputs = Path(args.outputs)
-    producer = TrainingRun.model_validate_json(
-        (outputs / "training/run.json").read_text()
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    producer = _admit(
+        TrainingRun.model_validate_json((outputs / "training/run.json").read_text()),
+        out.parent / f"{out.name}.admission.json",
     )
     checkpoint = _checkpoint(producer, outputs, args.point)
     protocol = MonitorProtocol(
@@ -91,7 +126,7 @@ def run(args: argparse.Namespace) -> None:
         producer,
         checkpoint.artifact,
         checkpoint.coordinates,
-        Path(args.out),
+        out,
         protocol=protocol,
         concurrent_activity=args.activity,
     )
