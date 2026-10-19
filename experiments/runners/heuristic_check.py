@@ -91,6 +91,7 @@ def _admit(run: TrainingRun, note: Path) -> TrainingRun:
     if match.model_dump() != selected.model_dump():
         raise ValueError("producer match differs beyond its content pack")
     admitted = run.model_copy(deep=True)
+    admitted.regime.match = match
     admitted.identities["matchup_sha256"] = canonical_sha256(selected.model_dump())
     note.write_text(
         json.dumps(
