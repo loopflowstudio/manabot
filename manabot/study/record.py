@@ -17,10 +17,15 @@ import json
 import multiprocessing as mp
 from pathlib import Path
 import time
-from typing import Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 # First-party imports
 from manabot.infra.hypers import MatchHypers
+
+from .targeting import TargetChoice, inspect_target
+
+if TYPE_CHECKING:
+    from managym import Observation
 
 ATTACK = "DECLARE_ATTACKER"
 BLOCK = "DECLARE_BLOCKER"
@@ -75,6 +80,7 @@ class Decision:
     mine: tuple[Permanent, ...]
     theirs: tuple[Permanent, ...]
     latency: float = 0.0
+    target: TargetChoice | None = None
 
     @property
     def own_turn(self) -> bool:
@@ -108,6 +114,7 @@ class GameRecord:
 
 def build_player(spec: dict[str, Any], seed: int):
     """Build a player and its observation space from an arena player spec."""
+    from manabot.arena.heuristic import HeuristicPlayer
     from manabot.arena.players import DemoSearchPlayer, ScriptedGreedyPlayer
     from manabot.sim.flat_mc import make_player
 
@@ -115,6 +122,8 @@ def build_player(spec: dict[str, Any], seed: int):
         return DemoSearchPlayer(spec, seed), None
     if spec["kind"] == "scripted_greedy":
         return ScriptedGreedyPlayer(), None
+    if spec["kind"] == "heuristic":
+        return HeuristicPlayer(), None
     return make_player(dict(spec), seed=seed)
 
 
@@ -164,7 +173,9 @@ def _permanents(pairs: Iterable[tuple[Any, Any]]) -> tuple[Permanent, ...]:
     return tuple(out)
 
 
-def _decision(raw: Any, frame: dict[str, Any], action: int, latency: float) -> Decision:
+def _decision(
+    raw: Observation, frame: dict[str, Any], action: int, latency: float
+) -> Decision:
     offers = frame["offers"]
     index = next(i for i, offer in enumerate(offers) if int(offer["id"]) == action)
     chosen = offers[index]
@@ -204,6 +215,7 @@ def _decision(raw: Any, frame: dict[str, Any], action: int, latency: float) -> D
         mine=mine,
         theirs=_permanents(_battlefield(raw.opponent_permanents, raw.opponent_cards)),
         latency=latency,
+        target=inspect_target(raw, index),
     )
 
 
@@ -329,6 +341,9 @@ def read_games(path: Path | str) -> list[GameRecord]:
                     "life": tuple(decision["life"]),
                     "mine": tuple(_permanent(p) for p in decision["mine"]),
                     "theirs": tuple(_permanent(p) for p in decision["theirs"]),
+                    "target": TargetChoice(**decision["target"])
+                    if decision.get("target") is not None
+                    else None,
                 }
             )
             for decision in data.pop("decisions")

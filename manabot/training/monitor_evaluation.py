@@ -26,6 +26,7 @@ from pydantic import (
 )
 
 from manabot.arena import players
+from manabot.arena.heuristic import heuristic_source_paths
 from manabot.arena.match import (
     SELECTED_SUITE,
     play_cell,
@@ -76,7 +77,7 @@ class MonitorProtocol(Strict):
     bootstrap_replicates: int = Field(default=2000, ge=1)
     game_seconds: float = Field(default=120, gt=0)
     max_commands: int = Field(default=10_000, ge=1)
-    opponent: Literal["scripted_greedy", "random"] = Field(
+    opponent: Literal["scripted_greedy", "heuristic", "random"] = Field(
         default="scripted_greedy", exclude_if=lambda value: value == "scripted_greedy"
     )
     # A frozen external comparison owns seeds, selection and analysis. This binds
@@ -329,6 +330,20 @@ def _summarize(result: MonitorResult) -> None:
         )
 
 
+OPPONENT_NAMES = {
+    "scripted_greedy": "Frozen scripted greedy",
+    "heuristic": "Rule-of-thumb heuristic",
+    "random": "Uniform legal random",
+}
+
+
+def _opponent_source_sha256(opponent: str) -> str:
+    """v1 and random keep their frozen `players.py` identity."""
+    if opponent != "heuristic":
+        return file_sha256(Path(players.__file__))
+    return source_bundle_sha256([Path(path) for path in heuristic_source_paths()])
+
+
 def _manifest(
     run: TrainingRun,
     artifact: ArtifactReference,
@@ -404,14 +419,12 @@ def _manifest(
     opponent = PlayerRegistration(
         **common,
         player_id="monitor-" + protocol.opponent.replace("_", "-"),
-        display_name="Frozen scripted greedy"
-        if protocol.opponent == "scripted_greedy"
-        else "Uniform legal random",
+        display_name=OPPONENT_NAMES[protocol.opponent],
         role="anchor",
         runner_kind="code",
         player_spec={"kind": protocol.opponent},
         compute_class_id=protocol.opponent.replace("_", "-") + "-cpu-v1",
-        source_sha256=file_sha256(Path(players.__file__)),
+        source_sha256=_opponent_source_sha256(protocol.opponent),
     )
     key = ArenaKey(
         world=run.regime.world,

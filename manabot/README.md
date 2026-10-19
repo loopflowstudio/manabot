@@ -162,6 +162,29 @@ Experiment-specific driver scripts live in
 only reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+Study records retain viewer-safe target source names and target controller sides.
+Audit retained Allies/Lessons records without starting games with
+`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
+seat, including absent cohorts, unfinished records, declined targets and unknown
+identities. Target offers list player 0's objects first, so a first-offer
+policy's target side depends on its seat.
+Older records remain readable and count as unmeasured target prompts; source-less
+trigger choices remain unknown. Labels identify recorded seats, not a verified
+policy implementation. Own-side targeting alone does not establish a misplay,
+and these dependent choice counts are not game-level strength estimates.
+
+`heuristic` (`manabot/arena/heuristic.py`, Study label `heuristic`) is a
+separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
+removal held for a kill, counters held for an opponent's spell, effect polarity
+derived from the semantic card source, attacks unless a blocker kills and
+survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
+stays frozen with its arena source identity. Select it for checkpoint monitoring
+with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
+GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
+0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
+cell; it is not yet a frozen anchor comparison.
+
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
 custom-deck root requires its exact checkpoint setup binding.

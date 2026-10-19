@@ -32,6 +32,7 @@ PLAYERS = {
     },
     "random": {"kind": "random"},
     "greedy": {"kind": "scripted_greedy"},
+    "heuristic": {"kind": "heuristic"},
 }
 
 LEARN = {
