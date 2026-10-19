@@ -17,6 +17,7 @@ from manabot.sim.mcts import (
     UniformRandomLeafEvaluator,
 )
 
+from .heuristic import HeuristicPlayer
 from .models import file_sha256
 from .players import build_player
 
@@ -102,6 +103,8 @@ def build_arena_player(
     """Resolve the additive prior-only candidate or delegate unchanged kinds."""
 
     spec = dict(registration.player_spec)
+    if spec.get("kind") == "heuristic":
+        return HeuristicPlayer(), None
     if spec.get("kind") != "policy_prior_puct":
         return build_player(registration, seed=seed, checkpoint_path=checkpoint_path)
     if checkpoint_path is None:

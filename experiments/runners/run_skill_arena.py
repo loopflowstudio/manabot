@@ -19,6 +19,7 @@ import numpy as np
 
 from manabot.arena.competency import run_competencies
 from manabot.arena.guidance import build_arena_player
+from manabot.arena.heuristic import heuristic_source_paths
 from manabot.arena.match import play_cell
 from manabot.arena.models import (
     ArenaContract,
@@ -104,6 +105,8 @@ def registration_source_paths(registration: PlayerRegistration) -> list[str]:
         return ["academy/villain.py", "manabot/arena/players.py"]
     if kind == "scripted_greedy":
         return ["manabot/arena/players.py"]
+    if kind == "heuristic":
+        return [str(path.relative_to(REPO_ROOT)) for path in heuristic_source_paths()]
     if kind == "determinized_puct":
         return [
             "manabot/sim/flat_mc.py",
