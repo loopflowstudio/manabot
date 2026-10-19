@@ -114,7 +114,7 @@ class GameRecord:
 
 def build_player(spec: dict[str, Any], seed: int):
     """Build a player and its observation space from an arena player spec."""
-    from manabot.arena.greedy_v2 import ScriptedGreedyV2Player
+    from manabot.arena.heuristic import HeuristicPlayer
     from manabot.arena.players import DemoSearchPlayer, ScriptedGreedyPlayer
     from manabot.sim.flat_mc import make_player
 
@@ -122,8 +122,8 @@ def build_player(spec: dict[str, Any], seed: int):
         return DemoSearchPlayer(spec, seed), None
     if spec["kind"] == "scripted_greedy":
         return ScriptedGreedyPlayer(), None
-    if spec["kind"] == "scripted_greedy_v2":
-        return ScriptedGreedyV2Player(), None
+    if spec["kind"] == "heuristic":
+        return HeuristicPlayer(), None
     return make_player(dict(spec), seed=seed)
 
 

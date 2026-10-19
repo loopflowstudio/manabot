@@ -165,12 +165,13 @@ trigger choices remain unknown. Labels identify recorded seats, not a verified
 policy implementation. Own-side targeting alone does not establish a misplay,
 and these dependent choice counts are not game-level strength estimates.
 
-`scripted_greedy_v2` (`manabot/arena/greedy_v2.py`, Study label `greedy_v2`) is a
-separately versioned candidate anchor: for the side-ambiguous targeted cards in
-this pool it sends harmful effects to the opponent's side and beneficial ones to
-its own, declining rather than harming itself when allowed. All other prompts
-match `scripted_greedy`, which stays frozen with its arena source identity.
-Its strength as an anchor is unmeasured.
+`heuristic` (`manabot/arena/heuristic.py`, Study label `heuristic`) is a
+separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
+removal held for a kill, counters held for an opponent's spell, effect polarity
+derived from the semantic card source, attacks unless a blocker kills and
+survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
+stays frozen with its arena source identity. Select it for checkpoint monitoring
+with `MonitorProtocol(opponent="heuristic")`. Its strength is unmeasured.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
