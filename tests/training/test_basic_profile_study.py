@@ -3,11 +3,20 @@
 import json
 from pathlib import Path
 
+import pytest
 import torch
 
-from experiments.runners.training_profile import Case, cases, child
+from experiments.runners.training_profile import Case, cases, child, study
 from manabot.training.models import TrainingRun
 from tests.training.test_recovery import recipe
+
+
+@pytest.mark.parametrize("seconds", [0.0, 1801.0, float("inf"), float("nan")])
+def test_invalid_budget_does_not_create_study(tmp_path: Path, seconds: float) -> None:
+    out = tmp_path / "study"
+    with pytest.raises(ValueError, match="Study budget"):
+        study(out, "unused", study_seconds=seconds)
+    assert not out.exists()
 
 
 def test_study_is_balanced_and_keeps_proofs_out_of_timing() -> None:

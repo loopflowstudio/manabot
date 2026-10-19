@@ -161,7 +161,20 @@ def _digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def study(out: Path, expected_gpu: str, group: Group = "all") -> None:
+def study(
+    out: Path,
+    expected_gpu: str,
+    group: Group = "all",
+    *,
+    study_seconds: float | None = None,
+) -> None:
+    budget = (
+        study_seconds
+        if study_seconds is not None
+        else (1200 if group == "numerical-64" else 900)
+    )
+    if not 125 <= budget <= 1800:
+        raise ValueError("Study budget must be between 125 and 1800 seconds")
     out.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
     bundle = SourceBundle.model_validate(config["source"])
@@ -197,7 +210,7 @@ def study(out: Path, expected_gpu: str, group: Group = "all") -> None:
         Path("experiments/regimes/gpu-training-profile.json").read_bytes()
     )
     trials = cases(group)
-    deadline = time.monotonic() + (1200 if group == "numerical-64" else 900)
+    deadline = time.monotonic() + budget
     statuses: list[dict[str, str | int | float | None]] = []
     try:
         for case in trials:
@@ -245,6 +258,7 @@ def study(out: Path, expected_gpu: str, group: Group = "all") -> None:
                 atomic_json(
                     out / "status.json",
                     {
+                        "study_seconds": budget,
                         "cases": [c.model_dump(mode="json") for c in trials],
                         "attempts": statuses,
                     },
@@ -253,6 +267,7 @@ def study(out: Path, expected_gpu: str, group: Group = "all") -> None:
         atomic_json(
             out / "status.json",
             {
+                "study_seconds": budget,
                 "cases": [c.model_dump(mode="json") for c in trials],
                 "attempts": statuses,
             },
@@ -282,12 +297,22 @@ def main() -> None:
         "--group", choices=("all", "large-64", "numerical-64"), default="all"
     )
     parser.add_argument("--artifacts", type=Path)
+    parser.add_argument(
+        "--study-seconds",
+        type=float,
+        help="Prospectively declared study cap (125–1800s); excludes setup and packaging",
+    )
     args = parser.parse_args()
     if args.case:
         child(args.out, args.case)
     elif args.expected_gpu:
         try:
-            study(args.out, args.expected_gpu, args.group)
+            study(
+                args.out,
+                args.expected_gpu,
+                args.group,
+                study_seconds=args.study_seconds,
+            )
         finally:
             if args.artifacts and (args.out / "manifest.json").is_file():
                 package(args.out, args.artifacts)
