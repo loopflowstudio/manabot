@@ -1,1 +1,0 @@
-Read-only context copied from MTG-122 checkout at observed HEAD2916cbf197162e7ed8e00ef896dfd877e173c54f on2026-10-17. Historical budgets and ownership are evidence, not authorization. Current user direction gives MTG-135 the joint size/batching grid under$50inclusive. MTG-122 runs remain untouched.
