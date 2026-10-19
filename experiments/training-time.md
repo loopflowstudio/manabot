@@ -269,3 +269,73 @@ controls, while keeping the anomalous run visible. A same-host witness-off/on
 comparison would separate observer synchronization from host changes if the
 numerical failure recurs. The missing model-size/batch-size comparison remains
 necessary before generalizing the 53.8% policy share to other training regimes.
+
+## Basic-profile-005: batching helps, but model size changes the limit
+
+Run `0878e6922f7d`, source `5a99c7e4`, used one RTX 5090 / EPYC 7543 host
+with a 12.75 CPU quota. Both model sizes kept feedforward width 1536; the small
+model here is not automatically equivalent to every earlier small-model benchmark.
+The fixed 900-second study budget allowed 23 of 28 cases to complete. The last
+large-model timer-off case and all four final timer-on cases were not started.
+No executed case failed, but the study correctly reports failure for incomplete
+coverage. Its original deadline and three-repetition acceptance gates remain.
+
+The 154 metadata files are verified against their archive and member hashes.
+Complete archive and independent checkpoint verification are pending. The rental
+was deleted at 05:35:07 UTC on 2026-10-16; estimated cost was $0.5335. The five-study
+campaign totals $1.9390 estimated / $2.94 conservative, plus the existing $2
+ancillary reserve. No rental remains live; final billing is still unavailable.
+
+The following are **partial descriptive results**, not a passed profiler-overhead
+comparison or a semantics-matched optimization. Each ordinary case ran 16 updates
+of eight learner transitions per stream. Increasing streams changes rollout size,
+learning exposure and trajectories. The off controls have three repetitions except
+large/512, which has two; every on group has only two of its planned three.
+
+| Model width / layers | Streams | Off learner rows/s | On mean policy request rows | On policy ms/acting row | On policy share of run | Peak Torch allocation |
+|---|---:|---:|---:|---:|---:|---:|
+| 64 / 1 | 64 | 574 | 11.6 | 0.357 | 44.3% | 0.21 GiB |
+| 64 / 1 | 512 | 2,059 | 50.3 | 0.086 | 41.9% | 1.50 GiB |
+| 384 / 8 | 64 | 321 | 11.0 | 0.800 | 56.9% | 1.97 GiB |
+| 384 / 8 | 512 | 973 | 55.7 | 0.312 | 63.4% | 15.10 GiB |
+
+Rates are medians over the observed complete cases. Policy fractions and per-row
+costs use summed measured intervals and matching work denominators. Policy handling
+includes forwards, sampling and returned results; these host intervals are not
+GPU utilization or isolated matrix-multiplication time. Peak Torch allocation is
+the allocator's measured whole-case peak, not total device usage or a phase-local
+memory attribution.
+
+For the small model, requests become 4.34 times larger while policy time per call
+changes by only 1.04 times. For the large model, requests become 5.08 times larger
+and time per call rises 1.98 times. This is consistent with amortizing per-request
+cost, with more size-dependent work in the larger model. It does not identify
+which host or device operation causes that cost. Observed uninstrumented learner
+throughput increases 3.58 times and 3.03 times respectively; those are workload
+capacity comparisons, not strength-per-dollar improvements.
+
+The memory measurements also constrain extrapolation: 512 streams already use
+15.10 GiB for the large model. Earlier 4,096-stream small-model performance does
+not establish that the larger model can use that configuration on the same GPU.
+A useful serving benchmark must match model size, actual request sizes and memory
+behavior, rather than only the number of resident environments.
+
+Both deterministic off/on proofs match exactly at 64 and 512 streams, including
+trajectories, scientific diagnostics and learned-state witnesses. All ordinary
+64-stream repetitions agree within model size. The large/64 cases also match
+study 003's five non-anomalous ordinary cases. This does not resolve 003's outlier.
+
+Ordinary 512-stream repetitions disagree, including same-mode controls. For the
+large model, each retains 65,536 learner rows but optimizer exposures range from
+4,267 to 6,627 and native decisions from 141,311 to 143,228. Thus even equal learner
+row counts do not imply equal learning work. First-update selection summaries and
+the sampled first optimizer-step health fields agree, while the last-minibatch
+loss fields already differ. These records do not locate the first divergent
+operation. The checkpoint audit remains pending; the discrepancy is not attributed
+to timers or dismissed as harmless rounding.
+
+The next complete comparison needs a prospectively adequate study budget. The
+runner now accepts an explicit bounded `--study-seconds` and retains that cap in
+its status record; existing defaults and every per-case deadline are unchanged.
+No future run is admitted by this report, and missing observations are not filled
+from another machine or study.

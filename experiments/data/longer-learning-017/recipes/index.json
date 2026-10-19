@@ -1,0 +1,346 @@
+{
+  "observed_at": "2026-10-18T00:54:28.728300+00:00",
+  "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+  "allocation_sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
+  "exporter_sha256": "e554e04fb8270fc02b9cd6379fa06ab16e22f8f32211d5b505c25cd179cd3de2",
+  "status": "exact candidate recipes exported; selection pending full experiment",
+  "checkpoint_transitions": [
+    0,
+    131072,
+    262144,
+    524288
+  ],
+  "schedule_formula": "For K iterations and R=2048 reference iterations, r(i)=1+(i-1)*(R-1)/(K-1); four streams use r(i)=i. LR=clamp(0.5/r(i)^1.1,5e-6,1e-4); tau=0.05/r(i)^0.3.",
+  "records": [
+    {
+      "cell": "small-s64",
+      "size": "small",
+      "hidden_dim": 64,
+      "attention_layers": 2,
+      "streams": 64,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 128,
+      "raw_checkpoint_iterations": [
+        0,
+        32,
+        64,
+        128
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 1740,
+      "regime_path": "small-s64.json",
+      "regime_sha256": "f327315a217a4da66869561003641e8fe75e040a86ce3ff1b1f4e76dbcc97ab4"
+    },
+    {
+      "cell": "small-s256",
+      "size": "small",
+      "hidden_dim": 64,
+      "attention_layers": 2,
+      "streams": 256,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 32,
+      "raw_checkpoint_iterations": [
+        0,
+        8,
+        16,
+        32
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 600,
+      "regime_path": "small-s256.json",
+      "regime_sha256": "40eb5144f5c4c9be4ce9dbe70d35a77a047927d8fdf111cefe5455039e65070c"
+    },
+    {
+      "cell": "small-deep-s256",
+      "size": "small-deep",
+      "hidden_dim": 64,
+      "attention_layers": 4,
+      "streams": 256,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 32,
+      "raw_checkpoint_iterations": [
+        0,
+        8,
+        16,
+        32
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 720,
+      "regime_path": "small-deep-s256.json",
+      "regime_sha256": "e49438249118de346b591b45c736c056549599956c6b18d12dc7712a5c21c9ca"
+    },
+    {
+      "cell": "small-deep-s64",
+      "size": "small-deep",
+      "hidden_dim": 64,
+      "attention_layers": 4,
+      "streams": 64,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 128,
+      "raw_checkpoint_iterations": [
+        0,
+        32,
+        64,
+        128
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 1620,
+      "regime_path": "small-deep-s64.json",
+      "regime_sha256": "ffebaa24058a421c774ac4e7f114729ca998826903b02fdf127cd9e8354fb0ba"
+    },
+    {
+      "cell": "middle-s64",
+      "size": "middle",
+      "hidden_dim": 192,
+      "attention_layers": 4,
+      "streams": 64,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 128,
+      "raw_checkpoint_iterations": [
+        0,
+        32,
+        64,
+        128
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 1320,
+      "regime_path": "middle-s64.json",
+      "regime_sha256": "caf1d712269868ce88dd7dab75011b13fc9c61d7c70b0eb1aeeac653b5d5a412"
+    },
+    {
+      "cell": "middle-s256",
+      "size": "middle",
+      "hidden_dim": 192,
+      "attention_layers": 4,
+      "streams": 256,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 32,
+      "raw_checkpoint_iterations": [
+        0,
+        8,
+        16,
+        32
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 720,
+      "regime_path": "middle-s256.json",
+      "regime_sha256": "7f5ec9f1dff715d8e273a4891c0ccda36c27dbfbc475b19723802b7e6613597e"
+    },
+    {
+      "cell": "large-shallow-s256",
+      "size": "large-shallow",
+      "hidden_dim": 384,
+      "attention_layers": 2,
+      "streams": 256,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 32,
+      "raw_checkpoint_iterations": [
+        0,
+        8,
+        16,
+        32
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 660,
+      "regime_path": "large-shallow-s256.json",
+      "regime_sha256": "cff34c149c50775f620cc0bedca8683e3de796060206a563c5a5ab02a1fe9867"
+    },
+    {
+      "cell": "large-shallow-s64",
+      "size": "large-shallow",
+      "hidden_dim": 384,
+      "attention_layers": 2,
+      "streams": 64,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 128,
+      "raw_checkpoint_iterations": [
+        0,
+        32,
+        64,
+        128
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 1200,
+      "regime_path": "large-shallow-s64.json",
+      "regime_sha256": "31b88b27b7375ee93866b5c98851c15a4cc34aae2407d7b85316be933fc09b15"
+    },
+    {
+      "cell": "large-s64",
+      "size": "large",
+      "hidden_dim": 384,
+      "attention_layers": 8,
+      "streams": 64,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 128,
+      "raw_checkpoint_iterations": [
+        0,
+        32,
+        64,
+        128
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 2220,
+      "regime_path": "large-s64.json",
+      "regime_sha256": "f9048134ed10331cace9c5d0e141effef2374570d84d137872276f4d9df1a261"
+    },
+    {
+      "cell": "large-s256",
+      "size": "large",
+      "hidden_dim": 384,
+      "attention_layers": 8,
+      "streams": 256,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 32,
+      "raw_checkpoint_iterations": [
+        0,
+        8,
+        16,
+        32
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 1020,
+      "regime_path": "large-s256.json",
+      "regime_sha256": "bc9e6ff85db683a8a65fa5678183d8cc99fffcfe20a5d198ae3d98400fa369c0"
+    },
+    {
+      "cell": "small-s4",
+      "size": "small",
+      "hidden_dim": 64,
+      "attention_layers": 2,
+      "streams": 4,
+      "transitions_per_stream": 64,
+      "total_transitions": 524288,
+      "total_iterations": 2048,
+      "raw_checkpoint_iterations": [
+        0,
+        512,
+        1024,
+        2048
+      ],
+      "schedule_reference_iterations": 2048,
+      "initial_learning_rate": 0.0001,
+      "final_learning_rate": 0.0001,
+      "constant_learning_rate_over_tested_horizon": true,
+      "initial_tau": 0.05,
+      "final_tau": 0.005076577477226473,
+      "ema_per_iteration": 0.999,
+      "training_seed_values": [
+        13591,
+        13592
+      ],
+      "learner_seconds_limit": 9720,
+      "regime_path": "small-s4.json",
+      "regime_sha256": "bfd3cbaf76abb5316934b88d678cfb8716382051d40146887ea3aff3bbb2d9db"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "status": "verified",
+  "manifest_files": 9466,
+  "completed_commands": 44,
+  "completed_panels": 176,
+  "completed_replayed_games": 18304,
+  "training_seeds": [
+    13591,
+    13592
+  ],
+  "protocol_sha256": "f6f22c4ca0ee67848f4d42f1852b0321b7cf18a58c40c1de8d2134a5c2402281",
+  "root_manifest_sha256": "bd750eac4f9d990a98a6cc25fb0ae42a40eb3d1f1f682ba1e8d3acc1e61e5ba1",
+  "analyzer_sha256": "6850776f613e0958658c160007c20e728831a2ddeea7deaa777dd2e562b72875",
+  "evaluation_wall_seconds": 27305.823177750222,
+  "selection_sha256": "7f054037e1ae3e06ef2bb873f5104de36f23731593749604ba3340b44001f879",
+  "tradeoff_analysis_sha256": "720a7b9251038d6f6ce3e2e1c5788e72a0e4dfcdfd5b0239e42790be31da8518",
+  "limits": "Two training seeds; paired deal-bootstrap intervals are descriptive, not population training-variance or multiple-comparison guarantees"
+}
