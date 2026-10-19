@@ -44,6 +44,22 @@ whose x86 MKL result depends on thread count. The preflight now uses the
 recipe's thread count. Its outputs are retained under
 `.runs/mtg122/gpu-split-training/retained`; that fit is not a scored candidate.
 
+**Training complete — 2026-10-19.** Attempt `9ed2ffaa2d2d` (source `56dff0b1`)
+trained all nine fits in 3,235 seconds on one L4, SDK estimate $0.1957. All 104
+outputs were fetched with digest verification to
+`.runs/mtg122/gpu-split-training-2/retained` and copied byte-identically to the
+Mini. Every fit completed 128 iterations, 524,288 learner transitions and
+8,192 optimizer updates, retaining exports at 32 and 64.
+
+| Pool | Seconds per fit (12251/12252/12253) | Training games |
+|---|---|---|
+| L1 | 342 / 331 / 333 | 14,411 / 13,384 / 14,218 |
+| L2 | 336 / 332 / 337 | 14,953 / 17,920 / 15,737 |
+| L3 | 400 / 392 / 431 | 9,509 / 10,891 / 10,254 |
+
+Mini evaluation of the 36,000-game cohort started on 2026-10-19 as nine
+concurrent per-fit processes from the same source.
+
 Historical plans (schema 1 and 2) keep their meaning; the deal families are the
 same by milestone ordinal.
 
