@@ -2,6 +2,9 @@
 
 ## Split GPU-training/Mini-evaluation plan — 2026-10-19
 
+**Complete.** All nine fits and all 36,000 games; every pool learns well past
+the ten-point threshold against greedy (see Results below).
+
 Jack Heart directed GPU training with evaluation run separately on the Mini, no
 inline diagnostic evaluation, and all 36,000 scored games. The 104-game
 amendment below is not selected. MTG-135 protocol017 finished; for the
@@ -57,8 +60,60 @@ Mini. Every fit completed 128 iterations, 524,288 learner transitions and
 | L2 | 336 / 332 / 337 | 14,953 / 17,920 / 15,737 |
 | L3 | 400 / 392 / 431 | 9,509 / 10,891 / 10,254 |
 
-Mini evaluation of the 36,000-game cohort started on 2026-10-19 as nine
-concurrent per-fit processes from the same source.
+**Results — 2026-10-19.** The Mini scored all 36,000 games (90 cells, nine
+concurrent per-fit processes from source `56dff0b1`; first cell 07:56 UTC,
+last 13:35 UTC, 180,343 summed evaluation seconds). No cell was incomplete,
+failed or rerun. The fetched campaign is byte-identical to the Mini's (18,193
+files) at `.runs/mtg122/gpu-split-training-2/mini-evaluation`. The report,
+analysis JSON and editable notebook are in
+[data/environment-complexity](data/environment-complexity/comparison.html).
+
+Paired gain over the same seed's frozen initialization on the same deals, in
+points. Three-seed mean with 95% t interval (df 2); per-seed values in
+parentheses are means with conditional whole-deal intervals in the report.
+
+| Pool | Anchor | Midpoint (64) | Endpoint (128) | Endpoint seeds | Endpoint candidate / control |
+|---|---|---|---|---|---|
+| L1 | greedy | +28.6 [+22.3, +34.9] | **+35.3 [+34.4, +36.3]** | +35.8 / +35.0 / +35.2 | 54.9% / 19.6% |
+| L1 | random | +31.2 [+23.6, +38.9] | +31.7 [+25.0, +38.5] | +34.0 / +28.7 / +32.5 | 83.2% / 51.5% |
+| L2 | greedy | +49.5 [+46.7, +52.3] | **+49.8 [+41.9, +57.7]** | +53.5 / +47.8 / +48.2 | 71.5% / 21.7% |
+| L2 | random | +37.2 [+34.8, +39.7] | +38.5 [+34.4, +42.6] | +40.0 / +38.8 / +36.8 | 91.4% / 52.9% |
+| L3 | greedy | +27.5 [+23.6, +31.4] | **+31.7 [+25.8, +37.7]** | +30.8 / +34.5 / +30.0 | 55.3% / 23.6% |
+| L3 | random | +29.1 [+25.1, +33.0] | +28.3 [+23.7, +33.0] | +28.2 / +30.2 / +26.5 | 81.1% / 52.9% |
+
+- **L1 ≥ 10 points against greedy, positive in all seeds:** confirmed.
+- **L2 ≥ 5 points:** confirmed.
+- **L3 gains less than L1:** not established. The paired seed difference
+  L1 − L3 against greedy is +3.6 [−3.0, +10.2]. As frozen above, raw
+  cross-pool scores are confounded, so this is not a difficulty ranking.
+- The useful-positive diagnostic holds in every pool: all three greedy seed
+  effects positive, mean ≥ 10, seed lower bound > 0, and no random-anchor
+  regression.
+- Most of the gain arrives by the midpoint. From 64 to 128 the greedy gain
+  rises 6.7 points in L1, 0.3 in L2 and 4.2 in L3; random-anchor gains are flat.
+
+**Progress.** The frozen clock, `active_training_seconds`, is unavailable for
+every fit because initialization checkpoints record that clock as null rather
+than zero; the analysis correctly refuses to impute it. On the `updates` and
+`learner_transitions` clocks (supplementary, computed with the same analysis
+owner), all nine fits cross ten points against greedy within (0, 64] updates,
+i.e. (0, 262,144] transitions, and stay above at the endpoint. Midpoint active
+learning took 162–227 seconds per fit.
+
+**Frozen controls.** Untrained networks act almost uniformly: the action-score
+head is initialized at gain 0.01 (`manabot/model/agent.py`) and the arena seeds
+each game's policy. Different seeds' controls therefore play nearly identical
+games (L1 greedy midpoint: 398 of 400 games with the same decisions across two
+seeds), so control scores are effectively one near-random baseline per pool.
+The seed spread reflects training variation only. This is a property of the
+design, not a defect, but it means "gain over initialization" here is "gain over
+a near-uniform policy."
+
+**Cost.** GPU for this plan: $0.0914 (failed `a53e679aef2a`) + $0.1957
+(`9ed2ffaa2d2d`), SDK estimates pending settlement. The plan's $4.65 prior already includes
+the failed attempt, so the inclusive total is about $4.85 against the $35 cap. Training
+executor time 3,233 seconds over nine fits. Evaluation ran on the Mini with no
+GPU spend.
 
 Historical plans (schema 1 and 2) keep their meaning; the deal families are the
 same by milestone ordinal.
