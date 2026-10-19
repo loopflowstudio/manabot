@@ -1,0 +1,115 @@
+{
+  "observed_at": "2026-10-18T03:38:11.796105+00:00",
+  "contents_sha256": "65d67601b0fff9149137f7937e633ff6fce317b4ff546482cacb35d866916899",
+  "files": [
+    {
+      "path": ".runs/gpu-validation/cli.py",
+      "stored_path": "files/gpu-validation/cli.py",
+      "bytes": 3629,
+      "sha256": "372ec7f1e23be0038415e60d7a30597a1b198bcdf5137c0648b3486c984707a3"
+    },
+    {
+      "path": ".runs/grid-007/analyze_learning.py",
+      "stored_path": "files/grid-007/analyze_learning.py",
+      "bytes": 11515,
+      "sha256": "6850776f613e0958658c160007c20e728831a2ddeea7deaa777dd2e562b72875"
+    },
+    {
+      "path": ".runs/grid-007/audit_completed_numerics.py",
+      "stored_path": "files/grid-007/audit_completed_numerics.py",
+      "bytes": 4970,
+      "sha256": "8e22a8284aa56fa055a488c18b5f5333e2763f1ad2047f037f86abeeb3f0b499"
+    },
+    {
+      "path": ".runs/grid-007/check_analysis_readiness.py",
+      "stored_path": "files/grid-007/check_analysis_readiness.py",
+      "bytes": 3017,
+      "sha256": "0039c6b5e4d371fb023c693fc36d8b81251b5bb0a2c0c6ea6df990acabd6d923"
+    },
+    {
+      "path": ".runs/grid-007/check_report_readiness.py",
+      "stored_path": "files/grid-007/check_report_readiness.py",
+      "bytes": 6127,
+      "sha256": "de7fe1d41b1937e5ef128b1c26cdc96c9e4542d67713abcb9b0d5481c249967c"
+    },
+    {
+      "path": ".runs/grid-007/check_resource_readiness.py",
+      "stored_path": "files/grid-007/check_resource_readiness.py",
+      "bytes": 3926,
+      "sha256": "21c7e59d58f66d95eb4bb41c626e55e8f63548ff324eca9d7e912a7494f63312"
+    },
+    {
+      "path": ".runs/grid-007/evaluate_learning.py",
+      "stored_path": "files/grid-007/evaluate_learning.py",
+      "bytes": 4561,
+      "sha256": "7ca9828532e505c6b5beda47c4ee9ffc79d491d1d23921f17381cc85d588d5f8"
+    },
+    {
+      "path": ".runs/grid-007/evaluation_runtime.py",
+      "stored_path": "files/grid-007/evaluation_runtime.py",
+      "bytes": 3677,
+      "sha256": "fc52a1752e0794a900afafd361cc55d369f2bb3ed6f0c583bd3462327efa4339"
+    },
+    {
+      "path": ".runs/grid-007/export_learning_recipes.py",
+      "stored_path": "files/grid-007/export_learning_recipes.py",
+      "bytes": 5250,
+      "sha256": "e554e04fb8270fc02b9cd6379fa06ab16e22f8f32211d5b505c25cd179cd3de2"
+    },
+    {
+      "path": ".runs/grid-007/learning_figures.py",
+      "stored_path": "files/grid-007/learning_figures.py",
+      "bytes": 10052,
+      "sha256": "720a7b9251038d6f6ce3e2e1c5788e72a0e4dfcdfd5b0239e42790be31da8518"
+    },
+    {
+      "path": ".runs/grid-007/learning_resources.py",
+      "stored_path": "files/grid-007/learning_resources.py",
+      "bytes": 13220,
+      "sha256": "f5fcdeb3beacf892a63cfa64e25b89e871c9778731a08b7cf3949caa72526d59"
+    },
+    {
+      "path": ".runs/grid-007/learning_selection.py",
+      "stored_path": "files/grid-007/learning_selection.py",
+      "bytes": 7005,
+      "sha256": "7f054037e1ae3e06ef2bb873f5104de36f23731593749604ba3340b44001f879"
+    },
+    {
+      "path": ".runs/grid-007/preview_learning_figures.py",
+      "stored_path": "files/grid-007/preview_learning_figures.py",
+      "bytes": 3167,
+      "sha256": "4ff935c695c751b96d3cdb5bf14081fb583d60942698e9782ef9d9d61de6891e"
+    },
+    {
+      "path": ".runs/grid-007/render_learning_report.py",
+      "stored_path": "files/grid-007/render_learning_report.py",
+      "bytes": 20644,
+      "sha256": "d6fba8c25958f40ad58fa1ba6c7b0982ff174ffa726f47a3704bc9828f8938c0"
+    },
+    {
+      "path": ".runs/grid-007/retain_analysis_source.py",
+      "stored_path": "files/grid-007/retain_analysis_source.py",
+      "bytes": 8781,
+      "sha256": "506433f1ff9ebc101516f12ac9f621a05307fa7a050e0ec383fab167d98bd281"
+    },
+    {
+      "path": ".runs/grid-007/test_learning_analysis.py",
+      "stored_path": "files/grid-007/test_learning_analysis.py",
+      "bytes": 9382,
+      "sha256": "d2ba0c9e4896d9a110da335d974d6e41d732b2d61f84f94c0850bde2d998d1ff"
+    },
+    {
+      "path": ".runs/grid-007/verify_grouped.py",
+      "stored_path": "files/grid-007/verify_grouped.py",
+      "bytes": 9122,
+      "sha256": "412253eddc997987f6ed1f78dd069777773bf8a85cbaadcabffe22fd23ecf309"
+    },
+    {
+      "path": ".runs/grid-007/verify_learning.py",
+      "stored_path": "files/grid-007/verify_learning.py",
+      "bytes": 9679,
+      "sha256": "36486bc3ccaac28559f9f5a83f9772cf966d998afcedfa3d595583025dd396d4"
+    }
+  ],
+  "readme_sha256": "962f18f0bc465b57de0c0eab8fe6d5c087178875c4432b1976cba68a22fa0355"
+}

@@ -126,3 +126,6 @@ for the original models and `9a1faddb96ba518d9b6e63eed545f157d9771c6c` for the a
 architectures. Their manabot/managym source and dependency locks are identical;
 runner changes expose the added capacities. New numerical audits are coarse
 retained-state checks, not a guarantee that every individual update was correct.
+
+The [longer comparison](longer-learning-017.md) followed these candidates to
+524,288 transitions with two training seeds.
