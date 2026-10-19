@@ -30,10 +30,19 @@ The plan is `SplitComplexityPlan` (`schema_version: 3`) in
   rerun skips completed cells and stops at a retained incomplete one.
 - **Cost:** the L4 rental is capped at $0.69/hour for 19,800 seconds ($3.80), which includes
   the in-job native build.
-  The plan counts $4.55 already spent or reserved, plus the $3 settlement
+  The plan counts $4.65 already spent or reserved (including
+  failed attempt `a53e679aef2a`, below), plus the $3 settlement
   reserve, against the $35 cap. The horizon is fixed by the tested recipe, so
   no update count is calibrated. The corrected calibration's slowest block,
   5.41 s/update, projects about 11.5 minutes per fit.
+
+First attempt `a53e679aef2a` (source `90275997`, $0.0914 SDK estimate) trained
+L1 seed 12251 and then failed its initialization check: the preflight digest,
+computed with the GPU host's default thread count, differed from the producer's
+1-thread initial tensors. Orthogonal initialization uses a QR decomposition
+whose x86 MKL result depends on thread count. The preflight now uses the
+recipe's thread count. Its outputs are retained under
+`.runs/mtg122/gpu-split-training/retained`; that fit is not a scored candidate.
 
 Historical plans (schema 1 and 2) keep their meaning; the deal families are the
 same by milestone ordinal.

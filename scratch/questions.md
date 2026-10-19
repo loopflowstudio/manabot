@@ -221,3 +221,9 @@ diagnostic evals and just manually run evals on the mini". The GPU job trains
 and retains exports only; `complexity_campaign evaluate <campaign>` scores the
 unchanged 36,000-game cohort on the Mini. Plan budget: $0.69/h x 5.5h = $3.80,
 counted with $4.55 prior/reserved and $3 settlement inside $35.
+
+First split attempt `a53e679aef2a` failed after L1/12251 trained ($0.0914): the
+GPU preflight digest was computed with default threads but producer init runs
+with 1 thread; x86 MKL QR (orthogonal init) is thread-count dependent. Fixed by
+matching the recipe thread count; plan prior_usd raised to $4.65. Relaunching
+once under the same $35 authorization; the failed fit is not reused.

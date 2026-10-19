@@ -43,6 +43,7 @@ from manabot.training.models import (
     TrainingCoordinates,
     TrainingRegime,
     TrainingRun,
+    TrainSelfPlay,
 )
 from manabot.training.monitor_evaluation import (
     Checkpoint,
@@ -600,6 +601,12 @@ def execute(
         expected: dict[int, str] = {}
         for seed in selected:
             for pool in pools:
+                # Orthogonal initialization runs a QR decomposition whose x86
+                # MKL result depends on the intra-op thread count, so match the
+                # producer's setting before predicting its initial tensors.
+                stage = recipes[pool].stages[0]
+                assert isinstance(stage, TrainSelfPlay)
+                torch.set_num_threads(stage.execution.threads)
                 torch.manual_seed(seed)
                 initial_model = Agent(
                     ObservationSpace(recipes[pool].observation), recipes[pool].agent

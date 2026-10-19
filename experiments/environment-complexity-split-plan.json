@@ -13,7 +13,7 @@
   "streams": 64,
   "device": "cuda",
   "max_usd_per_hour": 0.69,
-  "prior_usd": 4.55,
+  "prior_usd": 4.65,
   "settlement_reserve_usd": 3,
   "inclusive_cap_usd": 35,
   "deals_per_checkpoint": 50
