@@ -124,6 +124,15 @@ class MonitorProtocol(Strict):
         return self
 
 
+def default_monitor_protocol() -> MonitorProtocol:
+    """New monitoring scores against `heuristic` (MTG-153).
+
+    The field default stays `scripted_greedy` so protocols serialized before this
+    choice, which omit `opponent`, keep their recorded meaning.
+    """
+    return MonitorProtocol(opponent="heuristic")
+
+
 class Checkpoint(Strict):
     artifact: ArtifactReference
     coordinates: TrainingCoordinates
@@ -510,7 +519,7 @@ def evaluate_checkpoint(
     process = psutil.Process()
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
-        result = _manifest(run, artifact, coordinates, protocol or MonitorProtocol())
+        result = _manifest(run, artifact, coordinates, protocol or default_monitor_protocol())
     except Exception as exc:
         atomic_json(
             output_dir / "admission-failure.json",

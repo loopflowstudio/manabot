@@ -456,3 +456,15 @@ def test_frozen_opponent_requires_artifact_without_changing_defaults() -> None:
         monitor.MonitorProtocol.model_validate_json(protocol.model_dump_json())
         == protocol
     )
+
+
+def test_new_monitoring_defaults_to_heuristic() -> None:
+    from manabot.training.checkpoint_queue import MonitoringBudget
+
+    default = monitor.default_monitor_protocol()
+    assert default.opponent == "heuristic"
+    assert default.model_dump(mode="json")["opponent"] == "heuristic"
+    assert MonitoringBudget(seconds=1).protocol == default
+    # Protocols serialized before the switch omit `opponent` and stay greedy.
+    legacy = monitor.MonitorProtocol.model_validate({})
+    assert legacy.opponent == "scripted_greedy"

@@ -160,7 +160,7 @@ def checkpoint_panels(evidence: "ReportEvidence") -> tuple[CheckpointPanel, ...]
         for key, values in sorted(
             groups.items(),
             key=lambda item: (
-                item[1][0].protocol.opponent != "scripted_greedy",
+                item[1][0].protocol.opponent != "heuristic",
                 item[1][0].training_seed,
                 item[0],
             ),

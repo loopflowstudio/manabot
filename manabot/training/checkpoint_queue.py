@@ -35,6 +35,7 @@ from manabot.training.monitor_evaluation import (
     Checkpoint,
     MonitorProtocol,
     MonitorResult,
+    default_monitor_protocol,
     evaluate_checkpoint,
     stage_checkpoint,
 )
@@ -46,7 +47,7 @@ class MonitoringBudget(Strict):
 
     seconds: float = Field(gt=0)
     attempt_seconds: float = Field(default=600, gt=0)
-    protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
+    protocol: MonitorProtocol = Field(default_factory=default_monitor_protocol)
     active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
     include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
     include_monitoring: bool = Field(default=True, exclude_if=lambda value: value)

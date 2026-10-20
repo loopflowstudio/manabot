@@ -189,5 +189,14 @@ an unsaturated AvL or a learned-policy opponent matters; it costs a model forwar
 pass per decision. Keep scripted greedy frozen for continuity. Five trained
 seeds and two anchors do not establish general skill or a method-level ordering.
 
+Adopted (Jack Heart, 2026-10-20): new checkpoint monitoring defaults to
+`heuristic` through `default_monitor_protocol()` (the `monitor_checkpoint` CLI,
+`evaluate_checkpoint` and `MonitoringBudget`). `scripted_greedy` and `random`
+stay frozen for continuity; serialized protocols without an `opponent` still mean
+greedy. Frozen checkpoints remain opt-in through `opponent="checkpoint"`. The
+nightly 128-update baseline keeps its qualified `random` evaluation: a policy
+that early is near zero against heuristic (init 0.00–0.20 here), so switching it
+would need its own requalification.
+
 Targeting counts by cell, seat and source are in `report.json` under
 `targeting`. They describe choices and are not misplay rates.

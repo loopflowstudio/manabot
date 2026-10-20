@@ -179,11 +179,14 @@ separately versioned candidate anchor of rules of thumb: highest-mana-value cast
 removal held for a kill, counters held for an opponent's spell, effect polarity
 derived from the semantic card source, attacks unless a blocker kills and
 survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its arena source identity. Select it for checkpoint monitoring
-with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
-GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
-0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
-cell; it is not yet a frozen anchor comparison.
+stays frozen with its arena source identity. `heuristic` is the default monitoring
+opponent (`default_monitor_protocol()`, used by `monitor_checkpoint` and
+`MonitoringBudget`); `MonitorProtocol()` itself still means `scripted_greedy` so
+older serialized protocols keep their meaning. `scripted_greedy` and `random`
+remain available for continuity with historical results. The MTG-153 cohort
+([experiments/evaluation-anchors.md](../experiments/evaluation-anchors.md),
+3,000 games) found heuristic orders retained checkpoints with more headroom than
+greedy; report LvA first, since AvL saturates against heuristic by about 10k.
 
 Monitoring also accepts `MonitorProtocol(opponent="checkpoint",
 checkpoint_opponent=FrozenCheckpointOpponent(artifact=reference,

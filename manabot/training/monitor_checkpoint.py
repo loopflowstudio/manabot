@@ -10,6 +10,7 @@ from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRun
 from manabot.training.monitor_evaluation import (
     MonitorProtocol,
+    default_monitor_protocol,
     MonitorResult,
     TrainingCoordinates,
     evaluate_checkpoint,
@@ -122,7 +123,7 @@ def main() -> None:
     parser.add_argument(
         "--protocol",
         type=Path,
-        help="Frozen MonitorProtocol JSON; defaults to 25 deals / 100 games",
+        help="Frozen MonitorProtocol JSON; defaults to 25 deals / 100 games against heuristic",
     )
     parser.add_argument(
         "--concurrent-activity", default="unknown; no contention correction"
@@ -154,7 +155,7 @@ def main() -> None:
             args.out,
             MonitorProtocol.model_validate_json(args.protocol.read_text())
             if args.protocol
-            else MonitorProtocol(),
+            else default_monitor_protocol(),
             poll_seconds=args.watch_seconds,
             concurrent_activity=args.concurrent_activity,
             online=args.online,
@@ -201,7 +202,7 @@ def main() -> None:
         protocol = (
             MonitorProtocol.model_validate_json(args.protocol.read_text())
             if args.protocol
-            else MonitorProtocol()
+            else default_monitor_protocol()
         )
         result = evaluate_checkpoint(
             run,
