@@ -85,3 +85,10 @@ passed in 63.85s. Ruff on the seven affected Python files and
 the scientific acceptance outcome. Fresh admission, current-source smoke,
 committed protocol/predictions and the authorized single scientific run with
 its complete report remain necessary before publication.
+
+## Corroborating evidence (MTG-135 protocol017 heuristic panel, 2026-10-19)
+- 9,152 games, 22 recipes x 4 checkpoints, 13 deals x 8 legs, main 12fc7c6f, RunPod CPU.
+- 524k endpoint vs heuristic 0.28-0.32 (384x8@64 streams: 0.12) vs 0.49-0.56 vs greedy; init 0.04 vs 0.27.
+- Per cell at 524k (heuristic vs greedy): LvA 0.15/0.23, AvL 0.53/0.82, LvL 0.23/0.61, AvA 0.29/0.44.
+- Paired heuristic-greedy gap nearly constant (-0.18 to -0.29): heuristic preserves greedy's ordering; it adds headroom, not new separation.
+- Data: /Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017-heuristic-cpu/analysis/
