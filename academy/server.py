@@ -72,7 +72,12 @@ from .curated_pack import (
     curated_pack_for_matchup,
 )
 from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
-from .opponent import configured_opponent, opponent_availability
+from .opponent import (
+    Opponent,
+    catalog_opponent,
+    configured_opponent,
+    opponent_catalog,
+)
 from .presentation import PresentationProjector
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -618,6 +623,64 @@ def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str
     return deck, "custom"
 
 
+def _select_opponent(sha256: Any) -> Opponent:
+    """Resolve the requested trained opponent by exact digest, verified.
+
+    Without a digest the configured candidate plays (its historical default).
+    A digest names the configured candidate or a catalog checkpoint; catalog
+    refusals carry the mismatch that makes the checkpoint unplayable here.
+    """
+
+    try:
+        configured = configured_opponent()
+    except ValueError:
+        # A broken candidate bundle must not hide catalog checkpoints.
+        if sha256 is None:
+            raise
+        configured = None
+    if sha256 is None:
+        if configured is None:
+            raise ValueError("No trained opponent is configured on this server.")
+        sha256 = configured.sha256
+    if not isinstance(sha256, str):
+        raise ValueError("opponent_sha256 must be a checkpoint digest.")
+    if configured is not None and sha256 == configured.sha256:
+        configured.verify()
+        return configured
+    opponent = catalog_opponent(sha256)
+    if opponent is None:
+        raise ValueError("The selected opponent is no longer available.")
+    return opponent
+
+
+def _deck_label(setup: dict) -> str:
+    for name, deck in NAMED_DECKS.items():
+        if deck == setup.get("deck"):
+            return DECK_DISPLAY_NAMES.get(name, name)
+    return "a custom deck"
+
+
+def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
+    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
+
+    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
+    so the bot plays either of its decks from either seat. Candidate bundles
+    check their decks after reset against the engine manifest instead.
+    """
+
+    if not opponent.setups:
+        return
+
+    def key(setup: dict) -> str:
+        return json.dumps(setup, sort_keys=True)
+
+    if sorted(map(key, setups)) != sorted(map(key, opponent.setups)):
+        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
+        raise ValueError(
+            f"{opponent.name} was trained on {trained}; choose those decks to play it."
+        )
+
+
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
@@ -651,18 +714,6 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
-
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
-    if villain_type == "checkpoint":
-        opponent = configured_opponent()
-        if opponent is None:
-            raise ValueError("No trained opponent is configured on this server.")
-        if data.get("opponent_sha256", opponent.sha256) != opponent.sha256:
-            raise ValueError("The selected opponent is no longer available.")
-        opponent.verify()
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
     hero_deck, hero_deck_name = _normalize_deck(
         data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
@@ -698,6 +749,21 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(f"{seat}_sideboard must match the named deck setup")
         sideboards[seat] = sideboard
 
+    villain_checkpoint: str | None = None
+    villain_deterministic = False
+    opponent: Opponent | None = None
+    if villain_type == "checkpoint":
+        opponent = _select_opponent(data.get("opponent_sha256"))
+        _check_opponent_decks(
+            opponent,
+            [
+                {"deck": hero_deck, "sideboard": sideboards["hero"]},
+                {"deck": villain_deck, "sideboard": sideboards["villain"]},
+            ],
+        )
+        villain_checkpoint = str(opponent.checkpoint)
+        villain_deterministic = opponent.deterministic
+
     return GameConfig(
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -712,7 +778,8 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
-        opponent=opponent.identity() if villain_type == "checkpoint" else None,
+        opponent=opponent.identity() if opponent is not None else None,
+        opponent_checkpoint=opponent.record() if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
@@ -853,17 +920,20 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        if config.opponent is not None:
+        # Candidate bundles pin the engine manifest and decks outside the
+        # checkpoint; catalog checkpoints were checked by their world binding.
+        if (
+            config.opponent_checkpoint is not None
+            and config.opponent_checkpoint["source"] == "candidate"
+        ):
             opponent = configured_opponent()
             assert opponent is not None
             if manifest != opponent.content_manifest:
                 raise ValueError(
                     "Trained opponent is incompatible with the current world."
                 )
-            if (
-                config.hero_deck not in opponent.decks.values()
-                or config.villain_deck not in opponent.decks.values()
-            ):
+            decks = (opponent.decks or {}).values()
+            if config.hero_deck not in decks or config.villain_deck not in decks:
                 raise ValueError("Trained opponent does not support these decks.")
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
@@ -3087,9 +3157,13 @@ async def play_socket(websocket: WebSocket) -> None:
             await websocket.close()
 
 
-@app.get("/api/opponent")
-async def get_opponent() -> dict[str, Any]:
-    return opponent_availability()
+@app.get("/api/opponents")
+async def get_opponents() -> dict[str, Any]:
+    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
+    catalog = await asyncio.to_thread(opponent_catalog)
+    for entry in catalog["opponents"]:
+        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
+    return catalog
 
 
 def _record_owners(tokens: str | None) -> set[str]:
