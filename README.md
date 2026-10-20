@@ -89,28 +89,6 @@ training method use independent training seeds, not just more games.
 Experiments are preregistered: the prediction and kill criteria are committed
 before the run ([experiments/](experiments/README.md)).
 
-## Earlier results
-
-Before self-play became the main loop, the project leaned on search. These
-results come from that period and from earlier encodings, so their numbers are
-not comparable with today's checkpoints:
-
-- **Search was strong and cheap.** Flat determinized Monte Carlo with 256
-  rollouts beat random 99% of the time. Every early trained policy was weaker
-  than 16-rollout search ([exp-02](experiments/exp-02-flat-mc.md)).
-- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
-  ([exp-03](experiments/exp-03-distillation.md)). Naive expert iteration did
-  not compound: round 1 lost 74–26 to round 0
-  ([exp-07](experiments/exp-07-expert-iteration.md)).
-- **Reward shaping hurt.** Terminal-only reward beat our shaped rewards by
-  about 15 points ([exp-04](experiments/exp-04-potential-shaping.md)).
-- **Win rate hid incompetence.** The search pilot could not play a control
-  deck: it found the right line at most 39% of the time in competency
-  scenarios, and random beat it in 3 of 5
-  ([exp-09](experiments/exp-09-control-competency.md)). Matchup tables mostly
-  measured the pilot and card quality
-  ([exp-08b](experiments/exp-08b-ancestral-dose.md)).
-
 ## Not built yet
 
 - **More cards.** Cards are authored as typed programs rather than parsed
