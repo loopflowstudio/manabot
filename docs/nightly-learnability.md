@@ -45,9 +45,10 @@ semantic target tests remain in `tests/model/test_action_identity.py`.
 
 The model has width 32, two attention heads and feed-forward width 64, with the
 FiLM-conditioned policy (`AgentSpec(policy_film=True)`, protocol
-`learnability-2`; see [starting-weight sensitivity](#starting-weight-sensitivity)). Each of
-240 Adam updates (learning rate .003) uses the same 24 fit cases, for 5,760
-supervised sample exposures per seed. No early stopping or model selection.
+`learnability-2`; see
+[starting-weight sensitivity](#starting-weight-sensitivity)). Each of 240 Adam
+updates (learning rate .003) uses the same 24 fit cases, for 5,760 supervised
+sample exposures per seed. No early stopping or model selection.
 All 24 held-out cases are evaluated only after training and weight reload.
 
 Both preferences occur in each family: public life 5/7 selects candidate zero,
@@ -115,6 +116,13 @@ shuffle puts a hand card (definition 3) that the Learn fit cases never show.
 In every checked miss, replacing it with a fit-seen definition restores the
 correct preference. This is case-design generalization, not a stuck start.
 It still fails roughly one seed in ten.
+
+The weakness is not confined to the probe's one-column contrasts. On 96 real
+authored decisions (choice-corpus rounds 0–2, ten families, each at life 5 and
+35) at the production baseline's model size, 1 of 12 additive seeds stayed
+at chance on 85 of the 96 decisions; all 12 FiLM seeds fit every decision.
+New training runs therefore train the FiLM policy too (`new_agent_spec()`,
+baseline recipe `baseline-v2`), so this gate tests the policy that is trained.
 
 ## Broader choice separability
 

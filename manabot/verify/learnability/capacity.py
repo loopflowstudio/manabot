@@ -125,7 +125,7 @@ def run(out: Path, result: Result) -> None:
         hidden_dim=result.config.hidden_dim,
         num_attention_heads=2,
         attention_feedforward_dim=64,
-        policy_film=result.config.policy_film,
+        policy_film=True,
     )
     for seed in result.config.seeds:
         torch.manual_seed(seed)

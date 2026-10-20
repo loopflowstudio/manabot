@@ -1,15 +1,18 @@
 """FiLM policy conditioning: historical identity at rest, interaction when trained.
 
-The opt-in path must not perturb the additive model's initialization, receipts or
-permutation contracts, and must give state-conditioned offer choices a gradient.
+New runs train FiLM; an omitted field stays additive. FiLM must not perturb the
+additive model's initialization, receipts or permutation contracts, and must
+give state-conditioned offer choices a gradient.
 """
 
 import pytest
 import torch
 
+from manabot.config.load import load_train_config
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.hypers import AgentSpec, Hypers
 from manabot.model import Agent
+from manabot.training.baseline import baseline
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
@@ -25,6 +28,15 @@ def test_disabled_film_preserves_serialized_spec() -> None:
     assert AgentSpec(**SPEC, policy_film=True).model_dump()["policy_film"] is True
     with pytest.raises(ValueError, match="compound"):
         AgentSpec(compound_decisions=True, policy_film=True)
+
+
+def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
+    assert Hypers().agent.policy_film
+    assert load_train_config("local").agent.policy_film
+    recipe = baseline(1)
+    assert recipe.version == "baseline-v2" and recipe.regime.agent.policy_film
+    assert not AgentSpec.model_validate({"hidden_dim": 64}).policy_film
+    assert not Hypers.model_validate({"agent": {}}).agent.policy_film
 
 
 def test_film_starts_as_the_additive_policy() -> None:

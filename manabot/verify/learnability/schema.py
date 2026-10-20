@@ -28,7 +28,6 @@ class Config(BaseModel):
     updates: int = 240
     learning_rate: float = 0.003
     hidden_dim: int = 32
-    policy_film: bool = True
     probability: float = 0.9
     invariance_tolerance: float = 0.0001
     timeout_seconds: int = 480

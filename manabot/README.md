@@ -92,8 +92,11 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 
 `AgentSpec(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
-learnable from any start. It is opt-in: omitted, it serializes as the historical
-additive policy. The learnability diagnostic uses it; ordinary recipes do not yet.
+learnable from any start. New runs train it: `new_agent_spec()` is the
+`manabot train` default, and the ordinary baseline recipe is `baseline-v2`.
+Omitted, the field serializes as the historical additive policy, so frozen
+recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
+keep their meaning. The learnability gate trains the same FiLM policy.
 
 An observation/action-shape or rules-meaning change is a world version.
 The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
