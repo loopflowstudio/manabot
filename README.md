@@ -106,7 +106,6 @@ Training scale per agent. We add a row when a run sets a new high.
 
 | Agent | Date | Hardware | Learner transitions | Updates | Throughput | Spend |
 |---|---|---|---:|---:|---:|---:|
-| Default recipe, 64×2, 256 streams ([017](experiments/longer-learning-017.md)) | 2026-10-18 | 1× RTX 5090 | 524k | 32 | ~1,700/s | ~$0.10 |
 | Longest run, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10-08 | 1× L4 | 51M | 100,000 | ~900/s (projected) | ~$15 (estimate) |
 
 Learner transitions are agent decisions. Throughput is transitions per
