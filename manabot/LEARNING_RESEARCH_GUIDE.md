@@ -2,7 +2,7 @@
 
 *A research guide informed by Ataraxos — October 2026*
 
-**Context:** [Fantasia / Manabot](https://github.com/loopflowstudio/fantasia)  
+**Context:** [Manabot](../README.md)  
 **Primary paper:** Sokota et al., [*Scalable decision-making for games of imperfect information*](https://doi.org/10.1038/s41586-026-11036-y), *Nature* (2026).
 
 ## Purpose
@@ -118,7 +118,7 @@ For frozen checkpoints \(P_i\), define the empirical payoff matrix
 M_{ij}=\mathbb E[\text{effective outcome of }P_i\text{ against }P_j].
 \]
 
-A policy may beat its predecessor and lose to a much older checkpoint. Evaluate a time-ordered cohort against one another and against frozen anchors, controlling deck suite, seats, paired deals, world/content versions, inference compute, and uncertainty. Fantasia already documents a world-pinned arena and frozen anchors; use that conceptual infrastructure rather than an isolated new Elo calculation.
+A policy may beat its predecessor and lose to a much older checkpoint. Evaluate a time-ordered cohort against one another and against frozen anchors, controlling deck suite, seats, paired deals, world/content versions, inference compute, and uncertainty. Manabot already documents a world-pinned arena and frozen anchors; use that conceptual infrastructure rather than an isolated new Elo calculation.
 
 A matrix reveals *who beats whom*, not *how strategies changed*. Complement it with a fixed suite of interpretable MTG decision states and compare full action distributions. Look for recurring behavioral signatures, regressions against old opponents, abrupt KL changes, and shifts in action-family frequencies. These are **signals**, not proof of cycling. An alert should require a practically meaningful and statistically supported historical regression, ideally despite improvement against recent opponents.
 
@@ -131,7 +131,7 @@ Do checkpoint policies improve across a diverse historical population? Are recur
 
 ## What the code suggests
 
-Our inspection of [Fantasia](https://github.com/loopflowstudio/fantasia) found several GPU-friendly *ideas* already in the Rust architecture: typed integer object IDs, indexed card/permanent storage, explicit effect resolution, an undo journal, vector environments, and rollout pools. Relevant entry points include [`game.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/flow/game.rs), [`game_object.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/state/game_object.rs), [`resolution.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/flow/resolution.rs), [`undo.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/flow/undo.rs), [`vector_env.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/agent/vector_env.rs), and [`rollout_pool.rs`](https://github.com/loopflowstudio/fantasia/blob/main/managym/src/agent/rollout_pool.rs).
+Our inspection of [managym](../managym/README.md) found several GPU-friendly *ideas* already in the Rust architecture: typed integer object IDs, indexed card/permanent storage, explicit effect resolution, an undo journal, vector environments, and rollout pools. Relevant entry points include [`game.rs`](../managym/src/flow/game.rs), [`game_object.rs`](../managym/src/state/game_object.rs), [`resolution.rs`](../managym/src/flow/resolution.rs), [`undo.rs`](../managym/src/flow/undo.rs), [`vector_env.rs`](../managym/src/agent/vector_env.rs), and [`rollout_pool.rs`](../managym/src/agent/rollout_pool.rs).
 
 The inspected `VectorEnv::step` loops through environments sequentially; a batched API is not necessarily parallel execution. `RolloutPool::from_game` clones worlds and per-action rollouts; this creates a concrete place to compare cloning with undo-based branching. The engine still uses dynamic `Vec`s, maps, queues, and host-side Rust logic. **Compact indexed structures are helpful but do not make existing Rust code directly executable as CUDA kernels.** Divergent effect resolution, memory layout, synchronization, and preserving rules semantics remain significant issues.
 
@@ -206,7 +206,7 @@ Sampling a complete hidden world for simulation is not the same as allowing the 
 
 However, this does **not** solve arbitrary imperfect-information subgames. Learned beliefs can be miscalibrated against unfamiliar opponents; rollout policies can be weak; value functions can be wrong; and a one-step root improvement does not jointly optimize all future information sets. Naive perfect-information determinization can suffer from strategy fusion. Information-limited rollouts mitigate direct leakage but do not guarantee full information-set consistency.
 
-Fantasia already has sampled-world flat Monte Carlo and determinized PUCT planning, plus typed possible-world and belief interfaces. This makes the root update a comparatively isolated experiment: **reuse the same worlds, rollouts, evaluator, and compute budget, changing only how search evidence is converted into a final action distribution**.
+Manabot already has sampled-world flat Monte Carlo and determinized PUCT planning, plus typed possible-world and belief interfaces. This makes the root update a comparatively isolated experiment: **reuse the same worlds, rollouts, evaluator, and compute budget, changing only how search evidence is converted into a final action distribution**.
 
 ### What to understand and test
 
@@ -252,7 +252,7 @@ Managym remains the authority for legality, state transitions, and possible-worl
 
 ### Treat negative results as evidence
 
-A cyclic schedule that fails, a fixed-reference KL that provides no benefit beyond old-policy KL, or a GPU prototype that loses to multicore CPU are valuable findings. Preserve experiment identity, world/content versions, model and observation/action schemas, seeds, opponents, compute class, confidence intervals, and observed failure modes. Fantasia's existing experiment ledger and world-pinned arena provide the natural foundation.
+A cyclic schedule that fails, a fixed-reference KL that provides no benefit beyond old-policy KL, or a GPU prototype that loses to multicore CPU are valuable findings. Preserve experiment identity, world/content versions, model and observation/action schemas, seeds, opponents, compute class, confidence intervals, and observed failure modes. Manabot's existing experiment ledger and world-pinned arena provide the natural foundation.
 
 ### Separate what is known from what is conjectured
 
@@ -284,4 +284,4 @@ The long-term aim is not to copy Ataraxos's optimizer or simulator. It is to bui
 - Sokota et al., [*Scalable decision-making for games of imperfect information*](https://doi.org/10.1038/s41586-026-11036-y), *Nature* (2026). Relevant sections: Figure 1; Methods on dynamically damped self-play, belief modeling, search, and simulator engineering; Extended Data Figure 5 and Table 1.
 - Sokota et al., *A Unified Approach to Reinforcement Learning, Quantal Response Equilibria, and Two-Player Zero-Sum Games* (ICLR 2023).
 - Sokota et al., [*The Update-Equivalence Framework for Decision-Time Planning*](https://arxiv.org/abs/2304.13138) (ICLR 2024).
-- [Fantasia architecture](https://github.com/loopflowstudio/fantasia/blob/main/docs/ARCHITECTURE.md), [Managym README](https://github.com/loopflowstudio/fantasia/blob/main/managym/README.md), [Manabot research thesis](https://github.com/loopflowstudio/fantasia/blob/main/manabot/RESEARCH.md), and [experiment ledger](https://github.com/loopflowstudio/fantasia/tree/main/experiments).
+- [Architecture](../docs/ARCHITECTURE.md), [managym README](../managym/README.md), [Manabot research thesis](RESEARCH.md), and [experiment ledger](../experiments/).
