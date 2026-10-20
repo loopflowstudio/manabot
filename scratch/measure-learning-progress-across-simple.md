@@ -107,8 +107,11 @@ cells exist yet for the complexity fits. Validate it on the retained L3
 complexity checkpoints (seeds 12251–12253: initialization, 64, 128 and frozen
 controls, on their existing deal families), with no new training:
 
-1. **Stronger:** heuristic beats greedy head-to-head over the L3 matrix,
-   400 games, whole-deal interval above 50%.
+1. **Stronger:** heuristic beats greedy head-to-head, whole-deal interval
+   above 50%. Evidence: MTG-153's greedy-vs-heuristic pairing, 25 deals × 8
+   legs = 200 games on the product Allies vs Lessons decks (same cards and
+   programs as the research L3 decks). Accepted instead of a separate
+   400-game run by Jack Heart, 2026-10-19, before any curriculum scoring.
 2. **Headroom:** every checkpoint scores lower against heuristic than against
    greedy on the same deals, and no endpoint exceeds 80%.
 3. **Resolves learning:** all three seed gains over initialization at 128 are
@@ -117,14 +120,17 @@ controls, on their existing deal families), with no new training:
 If all three pass, heuristic is the curriculum's decision anchor; otherwise
 greedy is, with heuristic as a labelled panel. The rule is frozen now and
 applied before any curriculum cell is scored, so the curriculum result cannot
-choose its own anchor. About 6,400 games. If MTG-152's broader cohort lands
-first with an equivalent check on these matchups, cite it rather than repeat
-it. Either way the result is reported in its own right: it says whether the
+choose its own anchor. Criteria 2 and 3 are answered by the supplementary
+heuristic cohort already scored for the complexity fits (`a9d8addd`): L3
+endpoints score 33.8% against heuristic versus 55.3% against greedy, seed
+gains are +25.2/+30.0/+19.0, and gains rise from midpoint to endpoint. They
+still go through `anchor_validation` once MTG-153's pairing exists. No new
+validation games are needed here. Either way the result is reported in its own right: it says whether the
 complexity contrast's greedy conclusions hold against the stronger opponent.
 
 Games: ten 400-game cells per anchor per seed (initialization; both arms and
 the control at 32, 64 and 128), so 4,000 per anchor per seed and 72,000 for
-six seeds and three anchors, plus 6,400 for validation. At the complexity
+six seeds and three anchors. At the complexity
 cohort's 5 process-seconds per game that is ~110 CPU process-hours, a few
 hours on one many-core rented pod. Per-game speed on rented hardware is unmeasured; see Budget.
 
@@ -161,10 +167,13 @@ this scale. It promotes no baseline and says nothing about the Academy opponent.
   transfer never crosses hosts. Expected ~80 minutes. The admitted lease is
   the watchdog bound, 12 × 1,740 s + 600 s = 21,480 s, ≤ $4.12 at $0.69/h;
   no automatic paid retry.
-- **Rented CPU evaluation:** the same evaluation command as the complexity
-  campaign, run on a rented CPU pod instead of the Mini. No rented-CPU
-  evaluation path exists in this checkout yet; it should come from the general
-  move of evaluation to rented CPU, not a curriculum-specific runner. Before
+- **Rented CPU evaluation:** the curriculum's `evaluate` command, run on
+  rented CPU through Etude's CPU launcher, which Etude is building (Jack
+  Heart, 2026-10-19); no curriculum-specific launcher. MTG-135's one-off
+  heuristic panel (cpu3c, 8 vCPU, $0.24/h) found pods about 2.2× slower per
+  game than the Mini with 8 workers on 4 physical cores, and a 120 s game
+  budget truncated a game. The reused complexity protocols keep 120 s, so run
+  about one worker per physical core rather than change the protocol. Before
   science, a short bounded calibration measures seconds per game and the
   pod's hourly price from the live catalog. The cap is then frozen from those
   measurements, with a stop rule that leaves unfinished cells incomplete.
@@ -251,7 +260,11 @@ editable notebook generating read-only HTML.
    hypothesis first (above) rather than assume it.
 4. Six seeds.
 
-Remaining dependency: a rented-CPU evaluation path and its calibration.
+5. Heuristic check: MTG-153's 200-game greedy-vs-heuristic pairing is fine.
+6. Rented CPU: use Etude's launcher when it lands.
+
+Remaining dependencies: Etude's CPU launcher (then a short calibration) and
+MTG-153's scientific attempt.
 
 Check (2026-10-19): read the completed complexity results, `admit_policy`,
 `PretrainedPolicy`/`LearningStateImport`, `validate_agent_setup`, Etude job

@@ -234,7 +234,8 @@ def time_to_progress(gains: dict[int, float]) -> int | None:
 class AnchorEvidence:
     """Complexity L3 evidence for seeds 12251-12253, both anchors, same deals.
 
-    `scores` maps (seed, iteration) to the checkpoint's mean score against
+    `heuristic_vs_greedy` is MTG-153's 200-game anchor pairing on the
+    product Allies vs Lessons decks, the heuristic's score. `scores` maps (seed, iteration) to the checkpoint's mean score against
     each anchor; `gains_128` is each seed's paired endpoint gain over its
     initialization against heuristic.
     """
