@@ -1,71 +1,76 @@
 # Manabot research
 
-Manabot is Fantasia's program for building increasingly strong Magic:
-The Gathering agents. The objective is not to accumulate isolated model
-results. It is to build agents that play real `managym` games, measure them
-honestly, understand why they improve or fail, and repeat until a bounded
-superhuman claim is earned.
+Manabot's research program builds increasingly strong Magic: The Gathering
+agents. The aim is agents that play real `managym` games, are measured
+honestly, and are understood well enough that we know why they improve or
+fail, repeated until a bounded superhuman claim is earned.
 
-This document is the durable map of that program. It records the research
-thesis, accepted evidence, current capability frontiers, and the decisions
-future experiments must make. Execution status and ownership live in Linear;
-frozen predictions, results, and provenance live in [`experiments/`](../experiments/README.md).
-The cross-package authority, Observation, belief/query, planning, artifact,
-arena, and Study contracts are defined in
-[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md); this research map operates
-inside those boundaries.
+This document is the map of that program: the approach, the evidence we
+accept, the open questions, and the claims we intend to earn. Preregistered
+predictions, results and provenance live in
+[`experiments/`](../experiments/README.md). The system design is in
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md); the
+[learning research guide](LEARNING_RESEARCH_GUIDE.md) works through the
+learning questions in depth.
 
 ## The builder's loop
 
 The unit of progress is a stronger runnable system:
 
-1. build the thinnest teacher, player, or training loop that acts in the real
-   engine;
+1. build the thinnest training loop or player that acts in the real engine;
 2. place it on a common skill-and-cost scoreboard;
 3. inspect behavior, competencies, calibration, and information safety;
 4. when a result is surprising or confounded, run the smallest ablation or
    kata that distinguishes the live explanations;
 5. change the running system and measure it again.
 
-Katas are diagnostic instruments. They do not grant permission to build an
-agent, and success on them is not a substitute for gameplay. Expensive
-comparisons remain preregistered so their thresholds cannot move after the
+Katas are diagnostic instruments, not a substitute for gameplay. Expensive
+comparisons are preregistered so their thresholds cannot move after the
 result is known.
 
-## The intelligence system
+## The approach
 
-Three coupled capabilities form the path from a working player to a
-superhuman one:
+Self-play reinforcement learning is the main loop. One network plays both
+decks against current copies of itself from terminal reward only, and the
+update is a clipped policy gradient regularized toward the collection policy
+and a fixed reference policy, with advantage filtering, annealed step sizes
+and an EMA of the weights. Many games step in lockstep so inference is
+batched. The recipe adapts
+[Ataraxos](https://doi.org/10.1038/s41586-026-11036-y); each of its pieces is
+a separate switch that we test on Magic rather than adopt on the paper's
+authority.
+
+Hidden information and search sit on top of that policy:
 
 ```text
-authoritative game + viewer-safe public history
-                       |
-                       v
-                beliefs / ranges
-                       |
-                       v
-          slow teacher: search or solve
-             | policy       | value
-             v              v
-             fast policy/value student
-                  |             |
-                  +----> next teacher
-                              |
-                            repeat
+self-play policy (frozen checkpoint)
+        |                     |
+        v                     v
+ belief sampler over    frozen-policy continuations
+ the opponent's hidden          |
+ cards                          |
+        +----------+------------+
+                   v
+       local search at the decision
+                   |
+                   v
+     distillation back into the policy
 ```
 
-- **Value learning** amortizes the future: estimate which positions or public
-  belief states are favorable without playing every continuation to terminal.
-- **Teacher-to-student distillation** amortizes deliberation: turn expensive
-  local search into a fast policy that generalizes to unseen positions.
-- **Belief modeling** makes both honest under hidden information: infer ranges
-  from public history and eventually value and solve public belief states
-  rather than independent sampled worlds.
+- **Beliefs.** A sampler learns a distribution over the opponent's hidden
+  cards from the frozen policy's own games
+  ([belief sampler](../docs/belief-sampler.md)). Exact hand enumeration is
+  kept only as a reference.
+- **Search.** Local search samples hands from that belief, plays out
+  continuations with the frozen policy, and updates the action distribution
+  at the decision ([local policy search](../docs/local-policy-search.md)).
+- **Distillation.** Search choices are distilled back into the policy so the
+  next round of self-play starts stronger.
 
-Search, solving, and opponent populations are the improvement operators. A
-value head or student can only compress the intelligence present in its
-targets. Exp-07 demonstrated the failure mode: a cheaper but weaker teacher
-produced a weaker next student.
+Search, beliefs and opponent populations are the improvement operators. A
+policy can only compress the intelligence present in its targets: in the
+search era, a cheaper but weaker teacher produced a weaker next student
+([exp-07](../experiments/exp-07-expert-iteration.md)).
 
 ## The scoreboard
 
@@ -85,11 +90,12 @@ strength claim.
 6. **Transfer** measures held-out cards, compositions, decks, and eventually
    broader formats.
 
-### Skill rating contract to establish
+### Skill rating contract
 
-Manabot needs a reproducible population rating rather than another win rate
-against random. The initial instrument should fit a batch Bradley-Terry model
-and express its log-odds parameters on the familiar Elo scale.
+Strength is a population rating, not a win rate against random. The arena
+(`manabot/arena/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
+parameters on the familiar Elo scale; [Tournament](../experiments/head-to-head.md)
+files play chosen checkpoints against each other on shared deals.
 
 A rating belongs to an exact tuple:
 
@@ -177,138 +183,86 @@ anchors protect the second.
 
 ## What we know
 
-All numbers below are world-relative and trace to frozen experiment reports.
+All numbers are world-relative and trace to frozen experiment reports. Most
+self-play results so far use few training seeds and weak fixed opponents, so
+they guide the next experiment rather than settle a method.
+
+### Self-play
 
 | Finding | Evidence | Consequence |
 | --- | --- | --- |
-| Search supplies useful intelligence without training. | Exp-02's flat search dominates early policies and scales with simulations. | Keep search as a baseline and source of targets, but do not confuse its aggregate strength with strategic completeness. |
-| Search distillation is much more effective than the early PPO recipe. | Exp-03's student reached 90.5% versus random and roughly search-8 strength at about 1 ms/decision. | Teacher-to-student learning is a primary path. |
-| Distillation does not improve a weak teacher. | Exp-07 round 1 lost 25.8% head-to-head to round 0 after affordable policy-rollout search reduced label quality. | Prove teacher improvement at matched cost before buying another corpus. |
-| The current distilled student resisted one matched-budget exploiter. | Exp-11's dedicated PPO attackers reached only 23.5-26.0%. | Preserve adversarial evaluation, while recognizing this is not a best-response certificate. |
-| A scalar value can support policy improvement but is not yet a rollout substitute. | Exp-10 search-over-V beat V-greedy 60.25%, yet lost to random-rollout search at matched wall time. | Judge values by search utility, not calibration alone; target quality and hidden information remain open. |
-| Joint value supervision is trainable and inexpensive. | Teacher-0's immutable 512-game prefix improved value Brier to 0.167 without reducing batched throughput or small-sample gameplay. | Carry policy-only controls, but keep building joint students. |
-| Visit-based policy/value learning and neural PUCT execute end to end. | INT-4's engineering smoke produced legal replayable labels, four matched student arms, a neural-search arena, and Study evidence. | Run the production-strength iteration; the smoke makes no strength claim. |
-| Information boundaries must be executable. | INT-4 exposed and fixed hidden-pool ordering that changed search evidence between viewer-equivalent authorities. | Viewer equivalence, replay, and leakage checks remain hard gates for every teacher. |
-| Static semantic structure matters, but the first structural encoder family was not viable. | W2-214 and INT-1 killed bag pooling and the first relational-pooling design. | Build a plausible semantic policy in real play; use the katas only to diagnose its failures. |
+| A 10,000-update self-play cohort improves on monitoring deals, mostly by learning to pilot Lessons. | Mean win rate against scripted greedy rose from 30.3% to 54.3%; Allies saturated near 87–88% by update 1,240 while Lessons rose from 5/150 to 32/150 ([current baseline](../experiments/current-baseline.md)). | The held-out final comparison is still pending. Lessons is where learning shows. |
+| Batching many games per update is a large, reliable speedup, and the smallest model learns as well as larger ones at this scale. | 64×2 took 109–111 minutes at 4 streams and 4.8–5.2 at 256 ([longer learning](../experiments/longer-learning-017.md)). | Batched collection is the default. Two seeds are not enough to rank model sizes. |
+| Opponent choice drives the measured gap between the decks. | Switching the greedy opponent's deck moved Lessons results by 40 to 60 points on five deals ([mirror curriculum](../experiments/mirror-curriculum.md)). | Curriculum and evaluation opponents are first-order questions. |
+| Several adapted techniques have not yet shown a benefit on Magic. | Actor-only advantage filtering: +3.33 points, interval [−4.33, +11.33], at 1.45× wall time ([technique screen](../experiments/ataraxos-technique-screen.md)); value-token and pooling variants unresolved ([value token](../experiments/value-token-screen.md), [pooling follow-up](../experiments/pooling-filter-followup.md)). | Keep them as switches; promote only on evidence. |
+| The observation encoding no longer hides decision-relevant differences. | The learnability search found 0 clean input collisions ([learnability](../experiments/learnability-search.md)). | A nightly check guards it; see [WORLDS.md](../WORLDS.md). |
+| Collection dominates GPU training time. | Collection was 82.5% of active time in the profiled run ([training time](../experiments/training-time.md)). | Engine and inference throughput are the cost levers. |
 
-## Capability frontiers
+Belief sampling and local search with distillation run end to end with zero
+replay mismatches, but neither has shown a strength gain over the policy
+alone yet.
 
-### Value learning
+### Earlier: the search era
 
-The current head predicts one scalar from the acting viewer's observation.
-The next useful build is a student whose value improves PUCT at matched cost,
-with terminal outcomes, teacher root values, and a preregistered blend compared
-on the same frozen trajectories.
+These come from earlier encodings and are not comparable with today's
+checkpoints.
 
-The longer path changes the type of the value function:
+| Finding | Evidence |
+| --- | --- |
+| Search supplies useful intelligence without training. | Flat search dominated early policies and scaled with simulations ([exp-02](../experiments/exp-02-flat-mc.md)). |
+| Distillation beat the early PPO recipe at equal cost. | 90.5% versus 52.7% against random ([exp-03](../experiments/exp-03-distillation.md)). |
+| Distillation does not improve a weak teacher. | Round 1 lost 74–26 to round 0 ([exp-07](../experiments/exp-07-expert-iteration.md)). |
+| Reward shaping hurt. | Terminal-only reward beat shaped rewards by about 15 points ([exp-04](../experiments/exp-04-potential-shaping.md)). |
+| Win rate hid incompetence. | The search pilot could not play a control deck ([exp-09](../experiments/exp-09-control-competency.md)). |
+| Information boundaries must be executable. | Hidden-pool ordering once changed search evidence between viewer-equivalent states. Viewer equivalence, replay and leakage checks are now hard gates. |
 
-```text
-scalar outcome value
-  -> useful leaf evaluator
-  -> search-trained and reanalyzed value
-  -> range-conditioned per-hand counterfactual values
-  -> equilibrium continuation values from deeper public-belief solves
-```
+## Open questions
 
-Teacher-root imitation and terminal-outcome calibration remain separate
-claims. A low Brier score matters only if the resulting decisions improve.
+### Curriculum
 
-### Teacher-to-student distillation
+The main open question is what the agent should learn from: which matchups,
+which opponents, and what mix of self-play, for example mirror matches versus
+balanced cross-deck play. The first mirror-inclusive comparison was negative
+on a small pilot and its 10,000-update run is incomplete
+([mirror curriculum](../experiments/mirror-curriculum.md)). Evaluation stays
+narrow, just enough to compare curricula.
 
-Chosen-action cloning is the working baseline. The next build learns normalized
-root visits and value targets, returns the student to PUCT, and measures whether
-the complete loop improves across training seeds.
+### Evaluation anchors
 
-```text
-chosen action
-  -> visit distribution
-  -> joint policy/value student
-  -> student-guided search
-  -> stronger teacher
-  -> repeated population-aware improvement
-```
+Scripted greedy is saturating as an anchor. A stronger rule-based `heuristic`
+bot and frozen trained checkpoints are candidates, and head-to-head
+Tournaments already separate checkpoints that look identical against a
+scripted opponent ([head-to-head](../experiments/head-to-head.md)).
 
-Hard targets can be effective for noisy flat search, but they cannot represent
-the calibrated mixing required for bluffing. Later belief-consistent teachers
-must emit and students must preserve genuine mixed strategies.
+### Scale
 
-### Belief modeling
+No model size has won yet, and one large configuration underperforms for
+reasons we have not explained ([longer learning](../experiments/longer-learning-017.md)).
+Separating the effects of more updates, filtering and staleness in batched
+training is still open.
 
-Current search samples viewer-safe worlds uniformly and builds a separate tree
-inside each. That is a necessary baseline, not information-set-consistent
-planning. The current selected deck's 10,832 possible seven-card hands make an
-exact first range tracker tractable.
+### Beliefs and search
 
-The first belief build should be a complete player, not a standalone posterior
-demo: maintain an exact range from public history, update it through canonical
-action likelihoods and chance events, sample weighted determinizations, and
-play the selected matchup. Calibration and a uniform-sampling ablation explain
-the gameplay result.
-
-```text
-viewer-safe uniform determinization
-  -> exact calibrated range tracker
-  -> likelihood-weighted search player
-  -> public-belief search with mixed policies
-  -> safe continual resolving at useful Magic boundaries
-```
-
-If the working player produces an ambiguous failure, the information x
-continuation matrix and exactly solvable counterspell/bait microgame determine
-whether the next treatment is better continuation, better beliefs, or
-information-set-consistent solving.
+The next steps are preregistered but unrun
+([Ataraxos transfer protocols](../experiments/ataraxos-transfer.md)): sampler
+quality, search with learned sampling, distillation, and exploiters trained
+against the incumbent. Later belief-consistent search must emit, and students
+must preserve, genuine mixed strategies, since hard targets cannot represent
+bluffing.
 
 ### Semantic generalization
 
-Semantic programs and structured commands are a cross-cutting substrate rather
-than a fourth independent improvement loop. A semantic policy must play real
-games and enter the same rating arena. Held-out identities and compositions
-then test whether its strength reflects transferable card reasoning rather
-than memorization.
-
-## Parallel build map
-
-Independent work should share frozen inputs rather than silently create
-different experiments:
-
-```text
-freeze world, arena, teacher, seeds, and evaluation cohort
-                         |
-       +-----------------+------------------+
-       |                 |                  |
-       v                 v                  v
- skill-rating       visit/value       belief-aware
- instrument         iteration         search player
-                         |
-                  freeze one corpus
-                         |
-             +-----------+------------+
-             |                        |
-             v                        v
-       value-target arms       teacher-guidance arms
-             |                        |
-             +-----------+------------+
-                         v
-                    combined arena
-```
-
-The rating instrument, visit-based baseline, belief-aware player, and semantic
-policy can be built concurrently. Once a corpus is frozen, policy and value
-training arms can run independently from that same read-only artifact.
-World/contract freezes, corpus generation, matched-host latency calibration,
-and the final combined arena remain serialized.
-
-On the current Apple host, run only one MPS training job at a time. CPU work can
-proceed alongside non-timing-sensitive training, but latency, throughput, and
-memory cells require a quiet host.
+Cards are typed programs, so a policy can embed what a card does as well as
+its name. Held-out cards and compositions will test whether strength reflects
+transferable card reasoning rather than memorization.
 
 ## Claim ladder
 
 1. **Runnable:** acts legally through authoritative `managym` games.
 2. **Measured:** has a world-pinned rating, competencies, behavioral profile,
    calibration, and cost.
-3. **Improving:** a teacher/student iteration raises rating at fixed compute
-   across training seeds without competency or integrity regression.
+3. **Improving:** a training change raises rating at fixed compute across
+   training seeds without competency or integrity regression.
 4. **Belief-aware:** public-history ranges are calibrated and improve play
    against informative opponents.
 5. **Strategically robust:** approximate best responses do not expose a
@@ -327,7 +281,7 @@ for the first bounded play-policy claim.
 
 | Source | Owns |
 | --- | --- |
-| This document | Research thesis, accepted evidence, capability frontiers, and decision graph |
+| This document | Approach, accepted evidence, open questions, and the claim ladder |
 | [`experiments/`](../experiments/README.md) | Preregistrations, immutable reports, raw evidence links, and reproduction |
 | [`paper/understanding.md`](../paper/understanding.md) | Causal conclusions mature enough to support publication |
 | [`wave/intelligence/GOAL.md`](../wave/intelligence/GOAL.md) | Intelligence's objective, measures, bounds, and operating loop |
@@ -335,5 +289,6 @@ for the first bounded play-policy claim.
 | [`WORLDS.md`](../WORLDS.md) | Observation/action worlds and artifact compatibility |
 
 Every completed experiment should update its frozen report and, when the
-conclusion changes the program, one evidence row or frontier in this document.
+conclusion changes the program, one evidence row or open question in this
+document.
 Do not copy PR status, task checklists, or live ownership here.
