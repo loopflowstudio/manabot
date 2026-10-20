@@ -42,78 +42,58 @@ There is also a local browser table (`./scripts/play`, needs Node) for playing
 one game against a checkpoint or stepping through a replay. It is for
 inspecting what a bot does, not a way to play Magic.
 
-## How we train now
+## How it works
 
-This section describes the approach as of October 2026.
+**The environment.** managym runs a full game of Magic: priority, the stack,
+combat, triggers, and state-based actions. At every decision it gives each
+player an observation of only what that player can see: players, cards, and
+permanents as typed objects, plus the list of legal actions with the objects
+each one targets. Cards are authored as typed programs, not parsed from Oracle
+text, so the model can embed what a card does as well as its name. The
+observation and action encoding is versioned as a *world*
+([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were trained
+in, and a nightly learnability check catches encodings that make two
+different choices look identical.
 
-**Self-play RL is the main loop.** Until mid-2026 the project leaned on
-search. Determinized Monte Carlo was strong and cheap, and we distilled it into
-networks. But search spends compute on every decision, it handles hidden
-information poorly, and naive expert iteration on top of it did not compound
-(results below). Self-play on a fast engine scales with training compute
-instead, so it is now the primary path. Search and belief models are being
-rebuilt as policy-improvement steps on top of it.
+**The agent.** One network encodes every visible object, mixes them with
+attention, and scores each legal action together with its focus objects. A
+value head predicts the game outcome. Every decision, from casting and
+targeting to attacking, blocking, and paying costs, goes through that single
+action head.
 
-**Ataraxos is a starting point, not a blueprint.** Sokota et al.'s
-[Stratego agent](https://doi.org/10.1038/s41586-026-11036-y) is the clearest
-recent example of conventional deep RL reaching champion level in a large
-imperfect-information game. The current baseline adapts its recipe:
+**Learning.** The main loop is self-play from terminal reward. The agent plays
+both decks against current copies of itself, and many games step in lockstep
+so that inference is batched. The update is a clipped policy gradient,
+regularized toward both the collection policy and a fixed reference policy,
+with advantage filtering, annealed step sizes, and an EMA of the weights for
+evaluation. Those choices follow
+[Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) (Sokota et al., 2026),
+and each one is a separate switch that we test on Magic rather than adopt on
+the paper's authority ([research guide](manabot/LEARNING_RESEARCH_GUIDE.md)).
+Training recipes are declared as JSON *regimes*
+([experiments/regimes/](experiments/regimes/)) and can run locally or on
+rented GPUs ([remote training](docs/remote-training.md)).
 
-- policy updates damped by KL to the collection policy and to a fixed
-  reference policy (uniform over action types, then over actions)
-- annealed learning-rate and regularization schedules
-- advantage filtering
-- an EMA of the weights for evaluation
+**Hidden information and search.** Belief samplers learn a distribution over
+the opponent's hidden cards from a frozen policy's own games
+([belief sampler](docs/belief-sampler.md)). Search samples hands from that
+belief, uses the frozen policy for continuations, and distills its choices
+back into the policy ([local policy search](docs/local-policy-search.md)).
+This runs end to end but has not yet shown a strength gain over the policy
+alone.
 
-Each piece is a separate switch in the regime file, so it can be tested on its
-own. So far, none has shown a measured benefit for Magic on its own.
-Restricting advantage filtering to the actor gained +3.3 points
-[−4.3, 11.3] for 45% more training cost
-([ETU-105](experiments/ataraxos-technique-screen.md)). Pooling and
-filter-floor variants showed no demonstrated benefit
-([ETU-106](experiments/pooling-filter-followup.md)). Magic also differs from
-Stratego in ways that matter: structured actions (targets, modes, payments),
-a large and changing card pool, and deckbuilding. The
-[learning research guide](manabot/LEARNING_RESEARCH_GUIDE.md) separates what
-the paper shows from what we are only conjecturing.
-
-**Throughput comes from batching.** The trainer steps many games in lockstep
-and batches inference on one GPU. Etude launches rented GPUs (RunPod) and
-records every run. At equal experience, a 64×2 attention model trains in
-about 110 minutes with 4 streams and about 5 minutes with 256. Larger models
-have not helped yet. At 524k transitions the small model scored 46–60%
-against scripted greedy and 74–89% against random
-([longer-learning-017](experiments/longer-learning-017.md)).
-
-**Evaluation uses fixed opponents.** Checkpoints play fixed anchors (random,
-scripted greedy, and a stronger `heuristic` bot) on held-out paired deals,
-from both decks and both seats, and every game is replay-verified. Independent
-training seeds, not games, are the unit for claims about a method. Greedy is
-nearing saturation: one checkpoint scored 79.5% against greedy but 57% against
-`heuristic` on the same deals. A world-pinned rated arena across many
-players exists from earlier work, but has not been rerun on the current
-encoding.
-
-**Encoding audits catch silent capacity bugs.** Two audits in October found
-choices the policy literally could not tell apart. Attack and decline had
-identical inputs. So did different targets, modes, and abilities on the same
-source. Both are fixed (worlds w5 and w6 in [WORLDS.md](WORLDS.md)), and a
-nightly learnability check now catches regressions.
-
-**Beliefs and search are being rebuilt for the RL policy.** Belief samplers
-over the opponent's hidden cards train from a frozen policy's own games
-([belief sampler](docs/belief-sampler.md)). Local search can use a frozen
-policy for continuations and sampled hands for the hidden state, then distill
-the result back into the policy
-([local policy search](docs/local-policy-search.md)). Both run end to end and
-neither has shown a strength gain yet.
+**Evaluation.** Checkpoints play fixed opponents (random, scripted greedy, and
+a stronger rule-based `heuristic` bot) on held-out paired deals, with both
+decks and both seats, and every game is replay-verified. Claims about a
+training method use independent training seeds, not just more games.
+Experiments are preregistered: the prediction and kill criteria are committed
+before the run ([experiments/](experiments/README.md)).
 
 ## Earlier results
 
-Every experiment has a report under [experiments/](experiments/README.md),
-with its prediction and kill criteria committed before it ran. Negative
-results stay on the record. These came from the search-first period and from
-earlier encodings, so their checkpoints are not comparable with today's:
+Before self-play became the main loop, the project leaned on search. These
+results come from that period and from earlier encodings, so their numbers are
+not comparable with today's checkpoints:
 
 - **Search was strong and cheap.** Flat determinized Monte Carlo with 256
   rollouts beat random 99% of the time. Every early trained policy was weaker

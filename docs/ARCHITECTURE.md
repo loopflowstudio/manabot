@@ -47,7 +47,7 @@ honestly. Three decisions anchor the design:
 
 ## The training loop
 
-Since October 2026 the primary path is self-play reinforcement learning.
+The primary path is self-play reinforcement learning.
 Search and belief models are policy-improvement steps on top of it, not the
 main engine. The loop is declared as data and executed by one runner:
 
@@ -68,13 +68,12 @@ main engine. The loop is declared as data and executed by one runner:
 ```
 
 - **Self-play learner.** Batched streams step games in lockstep, and policy
-  inference is batched on one device. The learning rule is selectable per
-  regime. The current baseline adapts the regularized self-play of Ataraxos
-  ([Sokota et al., 2026](https://doi.org/10.1038/s41586-026-11036-y)): KL to
-  the collection policy and to a fixed action-type-uniform reference,
-  annealed step size and regularization, advantage filtering, and an EMA for
-  evaluation. Each component is an independent switch, and PPO remains a
-  control. No component is retained on the paper's authority alone. See the
+  inference is batched on one device. The update is a clipped policy gradient
+  regularized toward the collection policy and a fixed action-type-uniform
+  reference, with advantage filtering, annealed step sizes, and an EMA for
+  evaluation. These choices follow Ataraxos
+  ([Sokota et al., 2026](https://doi.org/10.1038/s41586-026-11036-y)). Each
+  is a separate switch tested on Magic, with PPO kept as a control. See the
   [learning research guide](../manabot/LEARNING_RESEARCH_GUIDE.md) and the
   [technique screens](../experiments/ataraxos-technique-screen.md).
 - **Remote execution.** Etude launches regimes on rented GPUs and returns
