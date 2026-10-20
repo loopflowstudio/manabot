@@ -236,8 +236,9 @@ def test_arms_pair_on_identical_deals_and_never_across_milestones(
         np.mean([c.improvement.mean for c in between.cells])
     )
     gain = paired_difference(curriculum, control, bootstrap_replicates=100)
+    assert curriculum.score is not None and control.score is not None
     assert gain.difference.mean == pytest.approx(
-        curriculum.score - control.score  # type: ignore[operator]
+        curriculum.score.mean - control.score.mean
     )
     with pytest.raises(ValueError, match="differ: protocol"):
         paired_difference(curriculum, _cell(scored, "0-random-initial"))
