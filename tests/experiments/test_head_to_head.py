@@ -246,12 +246,6 @@ def test_mirror_mode_cannot_overwrite_cross_run(tmp_path: Path) -> None:
     assert (tmp_path / "status.json").read_bytes() == before
 
 
-def _grid_tournament() -> head_to_head.Tournament:
-    return head_to_head.Tournament.model_validate_json(
-        Path("experiments/tournaments/size-floor-grid.json").read_text()
-    )
-
-
 @pytest.mark.parametrize(
     "corruption",
     [
@@ -270,7 +264,7 @@ def _grid_tournament() -> head_to_head.Tournament:
     ],
 )
 def test_tournament_rejects_invalid_design(corruption: str) -> None:
-    data = _grid_tournament().model_dump(mode="json")
+    data = head_to_head.size_floor_grid().model_dump(mode="json")
     if corruption == "unknown":
         data["core"].append("unknown")
     elif corruption == "duplicate":
@@ -304,7 +298,7 @@ def test_custom_smoke_and_saved_report(
     tmp_path: Path,
     mode: head_to_head.MatchupMode,
 ) -> None:
-    spec = _grid_tournament()
+    spec = head_to_head.size_floor_grid()
     plan = head_to_head.smoke_plan(mode, spec)
     assert len(plan.pairings) == 6
     assert len(plan.units()) == 12
@@ -390,7 +384,7 @@ def test_extension_reuses_finished_units(
     monkeypatch.setattr(head_to_head, "admit", admit)
     monkeypatch.setattr(head_to_head, "ProcessPoolExecutor", pool)
     monkeypatch.setattr(head_to_head, "_play_unit", play)
-    full = _grid_tournament()
+    full = head_to_head.size_floor_grid()
     initial = head_to_head.Tournament(
         entrants=full.entrants[:3],
         core=full.core[:3],
@@ -508,7 +502,7 @@ def test_tournament_cli(
         wall_seconds: float,
         min_free_gib: float,
     ) -> None:
-        assert plan.tournament == _grid_tournament()
+        assert plan.tournament == head_to_head.size_floor_grid()
         raise RuntimeError("execution boundary")
 
     monkeypatch.setattr(head_to_head, "run", run)
@@ -522,7 +516,7 @@ def test_tournament_cli(
             "--models",
             str(tmp_path),
             "--tournament",
-            "experiments/tournaments/size-floor-grid.json",
+            "size-floor-grid",
         ],
     )
     with pytest.raises(RuntimeError, match="execution boundary"):

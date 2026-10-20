@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
+from experiments.recipes import regime
 from experiments.runners.model_capacity import regimes as capacity_regimes
 from experiments.runners.omitted_controls import resolve_contrast
 from manabot.infra.hypers import AgentSpec
@@ -22,9 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _baseline() -> TrainingRegime:
-    return TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
-    )
+    return regime("ataraxos-move-scalar")
 
 
 def test_python_baseline_preserves_existing_resolved_recipe() -> None:
