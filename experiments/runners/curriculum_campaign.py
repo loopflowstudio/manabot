@@ -364,7 +364,7 @@ def evaluate_seed(
     *,
     anchors: tuple[Anchor, ...] = ANCHORS,
     variants: tuple[Variant, ...] = VARIANTS,
-    training: Path | None = None,
+    fetched: dict[Arm, Path] | None = None,
 ) -> int:
     """Score one seed's arms and frozen controls; return cells newly run.
 
@@ -372,13 +372,14 @@ def evaluate_seed(
     score each arm and the unchanged initialization as a same-deal control. A
     completed cell is kept; any other retained attempt stops scoring.
     `variants` selects cells so separate processes can share one seed; each
-    cell has its own directory.
+    cell has its own directory. `fetched` maps each arm to its fetched fit
+    directory when artifacts were recorded on another host.
     """
     initial = initial_checkpoint(
-        fits["scratch"], None if training is None else training / "scratch"
+        fits["scratch"], None if fetched is None else fetched["scratch"]
     )
     exports = {
-        arm: fit_checkpoints(fit, None if training is None else training / arm)
+        arm: fit_checkpoints(fit, None if fetched is None else fetched[arm])
         for arm, fit in fits.items()
     }
     evaluated = 0
@@ -490,7 +491,7 @@ def evaluate_retained(
             should_stop,
             anchors=anchors,
             variants=variants,
-            training=campaign,
+            fetched={arm: campaign / f"{arm}-{seed}" for arm in ARMS},
         )
         print(f"{seed}: {count} cells evaluated", flush=True)
 

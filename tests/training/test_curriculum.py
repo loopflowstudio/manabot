@@ -230,6 +230,33 @@ def test_scoring_runs_each_arm_and_control_once_and_keeps_failures(
     assert alone == 1 and [p.name for p in (tmp_path / "control-only").iterdir()] == [
         f"{TINY.switch}-random-control"
     ]
+    # Fetched fits keep their `<arm>-<seed>` layout; artifacts relocate there.
+    fetched = {}
+    for arm, fit in fits.items():
+        origin = Path(fit.target.stages[0].artifacts["raw"]["path"]).parents[1]
+        fetched[arm] = tmp_path / "fetched" / f"{arm}-{SEED}"
+        shutil.copytree(origin, fetched[arm])
+        shutil.rmtree(origin)
+    try:
+        assert (
+            evaluate_seed(
+                fits,
+                (TINY.switch,),
+                _protocol,
+                tmp_path / "relocated",
+                lambda: False,
+                anchors=("random",),
+                variants=("control",),
+                fetched=fetched,
+            )
+            == 1
+        )
+    finally:
+        for arm, directory in fetched.items():
+            shutil.copytree(
+                directory,
+                Path(fits[arm].target.stages[0].artifacts["raw"]["path"]).parents[1],
+            )
     (copy / f"{TINY.switch}-random-control/monitor.json").unlink()
     with pytest.raises(RuntimeError, match="incomplete attempt"):
         _score(fits, copy)
