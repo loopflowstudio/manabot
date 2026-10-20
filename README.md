@@ -1,224 +1,191 @@
 # Manabot
 
-**Manabot** is an AI-assisted Pro Tour testing house for
-[Magic: The Gathering](https://magic.wizards.com/), built by Loopflow Studio.
+Manabot is a project to train superhuman
+[Magic: The Gathering](https://magic.wizards.com/) bots.
 
-The game and the study session are one activity. Pilot a match, watch a human
-or manabot, state a read about hidden information, compare how strategy changes,
-try a line, and carry the same decision into Study. The aim is the feeling of a
-great testing house: serious practice, visible disagreement, rapid experiments,
-and the fun of discovering something together.
+It has two halves:
 
-The first AI-assisted experience is one shared decision surface. It keeps the
-visible facts, a viewer-safe belief, the advisor's complete strategy, and the
-change from another belief separate. Changing “I think they are curving out”
-to “I think they are holding interaction” should change the advice without
-pretending either read is the hidden truth.
+- **managym** (Rust): a deterministic rules engine built for learning. It
+  handles fast batched stepping, exact clone/fork for search, replay, and
+  per-player observations that keep hidden information hidden. Python bindings
+  come through PyO3.
+- **manabot** (Python): the agents. It includes self-play training, search,
+  belief models over hidden cards, and an arena for evaluating checkpoints
+  against fixed opponents.
 
-<img src="docs/assets/ai-assisted-testing-house-v1.png"
-     alt="Academy's decision advice prototype comparing viewer-safe beliefs, action probabilities, values, uncertainty, and strategy deltas"
-     width="720">
+The bots are nowhere near superhuman yet. They play one fixed 40-card
+matchup from the *Avatar: The Last Airbender* set, UR Lessons versus GW
+Allies, with sideboards for Learn. The work so far has gone into a correct
+engine, cheap experiments, and honest measurement.
 
-*Prototype shown: a checked fixture generated from real, identity-pinned
-conditional-search evidence at one completed-match decision. The same component
-renders in the play and replay/Study hosts today. Binding it to the actual live
-or selected replay decision, player-authored belief entry, Retry and return,
-and shared watcher roles are still being connected.*
+## Quickstart
 
-## What runs today
-
-Academy currently plays a curated one-versus-one game on an authoritative
-semantic table. A human can face search, random play, or a checkpoint-backed
-manabot; ordinary legal Commands drive the match; semantic presentation,
-recovery, finished-game replay, and viewer-safe decision and evidence contracts
-share the same rules authority.
-
-The first belief-to-strategy prototype offers two pinned viewer-safe scenarios
-at one canonical decision. Selecting either scenario shows the complete legal
-action distribution, search values, sampled-world robustness, uncertainty,
-and explicit deltas from the other scenario. The evidence is reproducible and
-fails closed when its decision, replay, advisor, or compute identity does not
-match. It is fixture-backed advice, not yet a runtime advisor for the current
-board.
-
-## The destination: Avatar Cube Team Sealed
-
-Manabot is building toward Avatar Cube Team Sealed: two teams receive 135-card
-pools from a versioned 540-card cube, construct three 40-card-minimum decks with
-unlimited basics and deck-specific sideboards, and play the full three-by-three
-deck matchup matrix until one team reaches five wins. Every game remains an
-independent canonical match that the testing house can reopen in Study.
-
-Humans choose which seats they pilot. Manabots fill the remaining seats as
-teammates and opponents, and can also serve as sparring partners and advisors.
-Game owns the construction experience; Intelligence will eventually build the
-three legal decks from a shared sealed pool. A versioned, world-pinned Elo arena
-will measure manabots at declared compute classes with paired-deal uncertainty
-and explicit promotion gates.
-
-The Avatar destination guides the interfaces, but the next product is still
-the smallest polished loop: one selected match that is excellent to play,
-replay, Retry, compare, and Study.
-
-## Product laws
-
-- Viewer-safe match facts, player-authored beliefs, model-inferred beliefs, and
-  advice are distinct evidence. None silently becomes another.
-- The same decision, belief, advisor, compute class, and provenance identity
-  produces the same advice whether reached live or through Study.
-- Only the acting pilot can commit the live offered `Command`.
-- Watching, comparing beliefs, and exploring an isolated line never pause or
-  mutate the authoritative match.
-- Academy owns the canonical decisions and artifacts a testing group discusses.
-  Discord remains the human communication layer; Academy does not build chat.
-
-## Play
-
-You need [uv](https://docs.astral.sh/uv/), Node, and a Rust toolchain. Then:
+You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
 
 ```bash
 git clone git@github.com:loopflowstudio/manabot.git
 cd manabot
-./scripts/play
-```
-
-One command installs locked dependencies, builds the engine, starts the
-backend and frontend, and opens the curated matchup in your browser. Ctrl-C
-stops both services. The path from a fresh checkout to play is itself under
-test: `./scripts/verify-clean-machine` proves launch within 90 seconds, offline
-reload, and session recovery, and CI records the receipt (see
-[docs/clean-machine-play.md](docs/clean-machine-play.md)).
-
-## Continue into Study
-
-A finished game is study material, not an export to another product. The Study
-contract gives every historical player decision a stable viewer-safe address
-and preserves the exact frame, offer, played Command, semantic event cursor,
-and attributable evidence needed to inspect, Retry, compare, and return. The
-guided Retry and comparison experience is still being connected to the shared
-table. The versioned experience and Study schemas live in
-[protocol/](protocol/README.md); Study work is planned within
-[wave/game/](wave/game/GOAL.md).
-
-## Train a manabot
-
-```bash
-uv run manabot train
-```
-
-The default preset is a local training smoke with a different matchup. To train
-and play the current Allies versus Lessons challenger, follow the
-[bounded local workflow](docs/local-trained-challenger.md). It uses the existing
-search-distillation recipe, retains failures and provenance, and configures the
-exact output on the server. The browser selects that named opponent by default;
-players do not enter checkpoint paths. Games, replays and optional notes are
-retained in SQLite and browsable from **Games**.
-
-This workflow establishes a playable candidate, not a measured strongest bot.
-The [dated evidence and remaining acceptance](docs/evidence/trained-challenger-2026-09-25.md)
-separate automated integration proof from human play and corrected-world proof.
-
-Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
-Simulation pulls trained models and can run locally on CPU. See
-[manabot/README.md](manabot/README.md) for the training and simulation
-quickstart, presets, and the current world's live baselines.
-
-## How the system divides responsibility
-
-Manabot is built from three cooperating systems:
-
-- **Academy** (`academy`, Python + Svelte): the authored play, replay, Retry,
-  comparison, and Study experience
-- **manabot** (`manabot`, Python): trainable agents, beliefs, planning,
-  evidence, evaluation, and experiment tracking
-- **managym** (Rust): deterministic rules and match authority, viewer-safe
-  observations, typed possible worlds and queries, exact forks, and PyO3
-  Python bindings
-
-The governing contract is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In
-short: managym owns facts and legality, manabot owns inference and advice, and
-Academy owns what the player sees and does.
-
-## The research ledger
-
-Manabot's research program is preregistered and reproducible: every experiment
-states its prediction, budget, and kill criteria before running, and negative
-results are recorded alongside positive ones.
-
-- [experiments/](experiments/README.md) — the experiment ledger and frozen
-  contracts
-- [manabot/RESEARCH.md](manabot/RESEARCH.md) — the agent research thesis,
-  evidence map, skill-rating contract, and capability frontiers
-- [WORLDS.md](WORLDS.md) — observation/action world versioning and which
-  baselines are alive
-- [wave/](wave/README.md) — the active rules, game, folded Study, and
-  intelligence portfolios
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the top-down authority,
-  identity, replay, belief, search, learning, arena, and Study map
-- [docs/research/](docs/README.md) — platform comparisons and deep dives
-- [paper/](paper/README.md) — the paper
-
-## Development
-
-```bash
-# Install locked Python dependencies
 uv sync --python 3.12 --extra dev
-
-# Build and install the managym extension
-uv run --python 3.12 --extra play maturin develop --release \
+uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-# Rust checks (CI runs cargo test in debug; validate in debug before landing)
-cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test && cd ..
-
-# Python tests
-uv run --extra dev pytest tests/
+uv run manabot train          # small CPU training run, under a minute, no W&B
 ```
 
-Package structure and style live with [academy/](academy/README.md),
-[manabot/](manabot/README.md), and [managym/](managym/README.md). Agent and
-contributor conventions are in [AGENTS.md](AGENTS.md).
+`uv run manabot train` trains a small agent and saves checkpoints to
+`.runs/local/`. Training recipes are JSON files under
+[experiments/regimes/](experiments/regimes/). The current GPU baseline is
+`uv run manabot train --regime experiments/regimes/batched-baseline.json`.
+[manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
+simulation, and evaluation.
+
+There is also a local browser table (`./scripts/play`, needs Node) for playing
+one game against a checkpoint or stepping through a replay. It is for
+inspecting what a bot does, not a way to play Magic.
+
+## How we train now
+
+This section describes the approach as of October 2026.
+
+**Self-play RL is the main loop.** Until mid-2026 the project leaned on
+search. Determinized Monte Carlo was strong and cheap, and we distilled it into
+networks. But search spends compute on every decision, it handles hidden
+information poorly, and naive expert iteration on top of it did not compound
+(results below). Self-play on a fast engine scales with training compute
+instead, so it is now the primary path. Search and belief models are being
+rebuilt as policy-improvement steps on top of it.
+
+**Ataraxos is a starting point, not a blueprint.** Sokota et al.'s
+[Stratego agent](https://doi.org/10.1038/s41586-026-11036-y) is the clearest
+recent example of conventional deep RL reaching champion level in a large
+imperfect-information game. The current baseline adapts its recipe:
+
+- policy updates damped by KL to the collection policy and to a fixed
+  reference policy (uniform over action types, then over actions)
+- annealed learning-rate and regularization schedules
+- advantage filtering
+- an EMA of the weights for evaluation
+
+Each piece is a separate switch in the regime file, so it can be tested on its
+own. So far, none has shown a measured benefit for Magic on its own.
+Restricting advantage filtering to the actor gained +3.3 points
+[−4.3, 11.3] for 45% more training cost
+([ETU-105](experiments/ataraxos-technique-screen.md)). Pooling and
+filter-floor variants showed no demonstrated benefit
+([ETU-106](experiments/pooling-filter-followup.md)). Magic also differs from
+Stratego in ways that matter: structured actions (targets, modes, payments),
+a large and changing card pool, and deckbuilding. The
+[learning research guide](manabot/LEARNING_RESEARCH_GUIDE.md) separates what
+the paper shows from what we are only conjecturing.
+
+**Throughput comes from batching.** The trainer steps many games in lockstep
+and batches inference on one GPU. Etude launches rented GPUs (RunPod) and
+records every run. At equal experience, a 64×2 attention model trains in
+about 110 minutes with 4 streams and about 5 minutes with 256. Larger models
+have not helped yet. At 524k transitions the small model scored 46–60%
+against scripted greedy and 74–89% against random
+([longer-learning-017](experiments/longer-learning-017.md)).
+
+**Evaluation uses fixed opponents.** Checkpoints play fixed anchors (random,
+scripted greedy, and a stronger `heuristic` bot) on held-out paired deals,
+from both decks and both seats, and every game is replay-verified. Independent
+training seeds, not games, are the unit for claims about a method. Greedy is
+nearing saturation: one checkpoint scored 79.5% against greedy but 57% against
+`heuristic` on the same deals. A world-pinned rated arena across many
+players exists from earlier work, but has not been rerun on the current
+encoding.
+
+**Encoding audits catch silent capacity bugs.** Two audits in October found
+choices the policy literally could not tell apart. Attack and decline had
+identical inputs. So did different targets, modes, and abilities on the same
+source. Both are fixed (worlds w5 and w6 in [WORLDS.md](WORLDS.md)), and a
+nightly learnability check now catches regressions.
+
+**Beliefs and search are being rebuilt for the RL policy.** Belief samplers
+over the opponent's hidden cards train from a frozen policy's own games
+([belief sampler](docs/belief-sampler.md)). Local search can use a frozen
+policy for continuations and sampled hands for the hidden state, then distill
+the result back into the policy
+([local policy search](docs/local-policy-search.md)). Both run end to end and
+neither has shown a strength gain yet.
+
+## Earlier results
+
+Every experiment has a report under [experiments/](experiments/README.md),
+with its prediction and kill criteria committed before it ran. Negative
+results stay on the record. These came from the search-first period and from
+earlier encodings, so their checkpoints are not comparable with today's:
+
+- **Search was strong and cheap.** Flat determinized Monte Carlo with 256
+  rollouts beat random 99% of the time. Every early trained policy was weaker
+  than 16-rollout search ([exp-02](experiments/exp-02-flat-mc.md)).
+- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
+  ([exp-03](experiments/exp-03-distillation.md)). Naive expert iteration did
+  not compound: round 1 lost 74–26 to round 0
+  ([exp-07](experiments/exp-07-expert-iteration.md)).
+- **Reward shaping hurt.** Terminal-only reward beat our shaped rewards by
+  about 15 points ([exp-04](experiments/exp-04-potential-shaping.md)).
+- **Win rate hid incompetence.** The search pilot could not play a control
+  deck: it found the right line at most 39% of the time in competency
+  scenarios, and random beat it in 3 of 5
+  ([exp-09](experiments/exp-09-control-competency.md)). Matchup tables mostly
+  measured the pilot and card quality
+  ([exp-08b](experiments/exp-08b-ancestral-dose.md)).
+
+## Not built yet
+
+- **More cards.** Cards are authored as typed programs rather than parsed
+  Oracle text ([content/semantic/](content/semantic/README.md)), so that most
+  new cards can be added as content without engine changes. The pool is still
+  two decks.
+- **Limited.** The long-term target is sealed and draft play: building decks
+  from a pool, then piloting them. Nothing in the repository drafts or builds
+  decks yet.
 
 ## Map of the repository
 
 | Path | What it is |
 |---|---|
-| `academy/` | Experience server: transport, presentation, Study protocol, and adapters over managym authority |
-| `frontend/` | Academy's Svelte client |
-| `manabot/` | The trainable agent: env wrappers, models, search, training, verification |
-| `managym/` | Rust rules engine and vectorized environment (PyO3 bindings) |
-| `protocol/` | Versioned experience/Study schemas certified across Rust, Python, and TypeScript |
-| `content/` | Curated deck content compiled to typed semantic IR |
-| `conformance/` | Semantic kernel conformance fixtures |
-| `experiments/` | Preregistered experiment ledger, contracts, receipts |
-| `wave/` | Active research and product portfolios and their charters |
-| `docs/` | Architecture, research, rules, and benchmark documentation |
-| `paper/` | The paper |
-| `ops/` | Declared remote training hardware mixes |
-| `scripts/` | Entry points (`play`, `verify-clean-machine`) and benchmarks |
+| `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
+| `manabot/` | Agents: models, training, search, beliefs, arena, verification ([README](manabot/README.md)) |
+| `experiments/` | Preregistered experiment reports, protocols, and data |
+| `content/` | Card and deck definitions compiled to a typed IR |
+| `conformance/` | Rules conformance fixtures |
+| `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
+| `paper/` | A working paper draft |
+| `ops/`, `deploy/` | Remote training hardware and deployment |
+| `academy/`, `frontend/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
+| `wave/` | Working plans for the active areas of work |
 
-## Naming
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
+short, managym owns the rules and legality, manabot owns inference and
+decisions, and the play UI only displays what managym allows the viewer to
+see.
 
-- **Manabot** — the whole project and this repository.
-- **Academy** — the web app players use: the `academy` package, the frontend,
-  and its play service. The project website uses Manabot.
-- **manabot** — the bot and the Python training library/CLI. Indefinite noun:
-  you train *a* manabot.
-- **managym** — the rules environment the agent lives in.
-- **Etude** — the separate launching and experiment system. Its public client
-  is [`loopflowstudio/etude`](https://github.com/loopflowstudio/etude); the
-  private research service is `loopflowstudio/etude-studio`. Always ASCII
-  (never “Étude”).
+## Development
 
-If it faces the player, it is Academy; if it trains or evaluates the agent, it
-is manabot; if it is the world, it is managym. manabot is not a former name to
-erase: existing `manabot.*` contract/schema identifiers, experiment receipts,
-and wandb history keep their names and remain reproducible. The same holds
-for names that predate Academy: `x-etude-*` headers,
-`etude.*` storage keys and schema identifiers, and the Sepia Etude visual
-language.
+```bash
+# Rust (CI runs cargo test in debug, so validate in debug before landing)
+cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test && cd ..
 
-Jack Heart selected Manabot on 2026-10-14. The project lives at `manabot.gg`,
-with Academy at `play.manabot.gg` or `academy.manabot.gg`. The old `etude.gg`
-addresses redirect to the matching new hosts, preserving paths and queries.
-The GitHub repository and deployed service identifiers retain their existing names.
+# Python
+uv run --extra dev pytest tests/
+```
+
+Contributor and agent conventions are in [AGENTS.md](AGENTS.md). Package style
+guides are in each package README.
+
+## Names
+
+- **manabot**: the bot and the Python library. You train *a* manabot.
+- **managym**: the rules environment the bot lives in.
+- **Academy**: the local bot-testing UI (`academy/`, `frontend/`).
+- **Etude**: a separate system used to launch and record experiments
+  ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
+  documents also use *Etude* and *Fantasia* for this project.
+
+Manabot is an independent research project and unofficial Fan Content
+permitted under the Wizards of the Coast
+[Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy).
+Not approved or endorsed by Wizards. Magic: The Gathering and its card names
+are property of Wizards of the Coast LLC.

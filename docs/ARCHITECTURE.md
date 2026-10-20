@@ -1,26 +1,21 @@
 # Manabot architecture
 
-This is the top-down architecture for Academy, manabot, and managym.
-It names the central data structures, assigns one owner to each kind of truth,
-and states the contracts that play, replay, search, learning, evaluation, and
-Study must share.
+This is the top-down architecture for managym, manabot, and the Academy play
+UI. It names the central data structures, gives each kind of truth one owner,
+and states the contracts shared by training, search, evaluation, and replay.
 
-The architecture is anchored by three decisions from the search-and-learning
-review:
+The goal is superhuman play, so everything here serves one loop: generate
+experience in a faithful engine, learn from it, and measure the result
+honestly. Three decisions anchor the design:
 
 > “managym should be THE rules engine, but it also should be the rules engine
-> that ETUDE SPECIFICALLY needs.”
+> that manabot specifically needs.”
 
 > “Observation design is incredibly important for manabot and we should take
 > those as key laws of physics.”
 
 > “There is a language for talking about the world model and a grammar for
 > making queries on it to filter possible worlds.”
-
-The intended product proof is simple to describe: at a historical decision,
-Academy can show the complete play distribution under the baseline belief, “they
-have Lightning Bolt,” and “they have no lands,” while preserving the exact
-rules position and never revealing which condition is actually true.
 
 ## The system in one picture
 
@@ -37,24 +32,68 @@ rules position and never revealing which condition is actually true.
                        └── PossibleWorldSpace + WorldQuery + materialization
                                                    │
                                                    v
-                        belief and planning (manabot)
+                        learning, belief, and planning (manabot)
 
-                     ConditionalWorldPrior / BeliefState
-                                                   │
-                         ┌─────────────────────────┴────────────────────────┐
-                         v                                                  v
-               PolicyHead + ValueHead                        Planner + LeafEvaluator
-                         └─────────────────────────┬────────────────────────┘
-                                                   v
-                                    ConditionalStrategyResult
-                                      │        │         │
-                                      v        v         v
-                                    shards   arena   Study evidence
+        PolicyHead + ValueHead      BeliefSampler        Planner + LeafEvaluator
+                 │                        │                        │
+                 └────────────────────────┼────────────────────────┘
+                                          v
+             checkpoints ──> arena / anchor evaluation ──> receipts
 
-                            player experience (Academy)
+                         inspection UI (Academy, optional)
 
-             transport + interaction drafts + presentation + explanation
+                 local play against a checkpoint, replay, decision view
 ```
+
+## The training loop
+
+Since October 2026 the primary path is self-play reinforcement learning.
+Search and belief models are policy-improvement steps on top of it, not the
+main engine. The loop is declared as data and executed by one runner:
+
+```text
+ TrainingRegime (experiments/regimes/*.json)
+   world, match + decks, AgentSpec, ordered stages, per-stage hardware limits
+        │
+        v
+ TrainingRun ── train_self_play ──> raw + EMA checkpoints (world-bound)
+        │       collect_search / train_supervised   (search distillation)
+        │       collect_belief / train_belief       (hidden-hand samplers)
+        │
+        ├── VerifyStore: resolved recipe, seed streams, source identity,
+        │   costs, and every failed attempt
+        v
+ evaluation: fixed anchors (random, scripted greedy, heuristic) on held-out
+ paired deals, both decks and seats, replay-verified games
+```
+
+- **Self-play learner.** Batched streams step games in lockstep, and policy
+  inference is batched on one device. The learning rule is selectable per
+  regime. The current baseline adapts the regularized self-play of Ataraxos
+  ([Sokota et al., 2026](https://doi.org/10.1038/s41586-026-11036-y)): KL to
+  the collection policy and to a fixed action-type-uniform reference,
+  annealed step size and regularization, advantage filtering, and an EMA for
+  evaluation. Each component is an independent switch, and PPO remains a
+  control. No component is retained on the paper's authority alone. See the
+  [learning research guide](../manabot/LEARNING_RESEARCH_GUIDE.md) and the
+  [technique screens](../experiments/ataraxos-technique-screen.md).
+- **Remote execution.** Etude launches regimes on rented GPUs and returns
+  verified checkpoints and receipts. Training targets (`JobSpec`) are
+  separate from machine allocation. See
+  [remote training](remote-training.md) and
+  [training regimes](training-regimes.md).
+- **Beliefs.** Belief samplers over the opponent's hidden cards are fit from a
+  frozen policy's own complete games. They never feed hidden truth to the
+  acting policy ([belief sampler](belief-sampler.md)).
+- **Search as an improvement step.** Local search uses the frozen policy for
+  continuations and sampled hands for hidden state. Its result can be distilled
+  back into the policy ([local policy search](local-policy-search.md)).
+- **Encoding is identity.** An observation/action shape change is a new world
+  ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
+  nightly learnability check guards against inputs that make distinct choices
+  indistinguishable.
+
+## Ownership
 
 The ownership rule follows the repository's naming boundary:
 
@@ -66,9 +105,9 @@ The ownership rule follows the repository's naming boundary:
   worlds, search, policy/value models, teacher evidence, datasets,
   checkpoints, self-play, opponent selection, evaluation, and promotion
   evidence.
-- **Academy is the product.** It owns transport, interaction drafts, reconnect
-  behavior, presentation, Study navigation, query construction and
-  explanation, and research consent. It does not reconstruct rules meaning.
+- **Academy is the inspection UI.** It owns transport, interaction drafts,
+  reconnect behavior, presentation, and replay navigation. It does not
+  reconstruct rules meaning, and nothing in training depends on it.
 
 Telemetry, behavior trackers, profilers, caches, and user-interface state may
 observe or accelerate these authorities. They never become an alternate source
@@ -91,8 +130,8 @@ The labels in this document are precise:
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
 | Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
-| Learning | Teacher traces, NPZ shards, masked policy/value training, and checkpoints work end to end; stronger provenance lives mostly in experiment runners. | Visit-teacher and selected-branch work continue to harden this path. | Query-conditioned teacher rows, belief-conditioned policy/value, shared artifact manifests, and checkpoint-bound history/belief schemas. |
-| Evaluation | `play_games` provides deal-diverse, seat-balanced pairwise results and Wilson intervals. INT-18 ran INT-6's frozen world-pinned arena for real on 2026-07-18: 720 games over five anchors and dPUCT-32 retained the complete matrix, connected rating scale, and paired-deal uncertainty; dPUCT was rated but not promotion-eligible, and the exact-range comparison remains an evidence wait. | — | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
+| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, search collection, supervised distillation, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
+| Evaluation | Checkpoint monitoring and Tournament files score checkpoints against fixed anchors (random, scripted greedy, `heuristic`) on paired deals with both decks and seats, replay-verifying every game. INT-18's world-pinned rated arena (2026-07-18, 720 games, five anchors) predates the current world and has not been rerun. | Greedy is nearing saturation; `heuristic` is exploratory, not yet a frozen anchor. | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
 | Study | Academy identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Academy presents it without becoming another replay or belief engine. |
 
 The current implementation is not renamed into compliance. Migration is
@@ -691,7 +730,7 @@ meaning and are never rewritten to appear compliant.
 
 ## Non-goals
 
-- A general-purpose Magic rules library independent of Academy's selected
+- A general-purpose Magic rules library independent of the selected training
   worlds.
 - Runtime natural-language parsing or LLM authority over legality.
 - Hidden decklists, multiplayer/general-sum play, Commander breadth, or broad
