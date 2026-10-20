@@ -14,17 +14,37 @@ on:
         type: boolean
 
 jobs:
-  # Documentation-only pull requests skip the suites below. Skipped jobs report
-  # as skipped, and "Tests Result" (the required check) accepts that only when
-  # this job classified the change as documentation. Pushes to main and manual
-  # runs always run everything. Markdown that code or tests read (frontend,
-  # website, content, conformance, protocol, experiment protocols and data,
-  # docs/experiment-metrics.md, docs/benchmarks) counts as code.
+  # Pull requests run only the jobs their changed files can affect. Each file
+  # is sorted into areas, and each area turns on the jobs that read it:
+  #
+  #   rust      managym's cargo suites, which include_str! content/,
+  #             protocol/ and conformance/ evidence.
+  #   manabot   the agent suites (Integration, Semantic Coverage). Their tests
+  #             read scripts/, experiments/, ops/, docs/ data and the curated
+  #             frontend packs.
+  #   academy   the suites that exercise Academy, a client of manabot
+  #             (tests/test_package_boundaries.py): Academy Integration and
+  #             the play UI gates. A manabot change turns academy on too.
+  #   frontend  the play UI gates: protocol conformance, visual references
+  #             and clean-machine play.
+  #
+  # managym/, lockfiles, project manifests, .github/ and any unrecognized path
+  # turn on everything. Every change that is not documentation runs Python Unit
+  # Tests, which also hold the website routing tests, so a website/ change runs
+  # only that job. Markdown that code or tests read (frontend, website,
+  # content, conformance, protocol, experiment protocols and data,
+  # docs/experiment-metrics.md, docs/benchmarks) counts as code. Pushes to main
+  # and manual runs always run everything. "Tests Result" (the required check)
+  # accepts a skipped job only when its area was off.
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
+      rust: ${{ steps.classify.outputs.rust }}
+      manabot: ${{ steps.classify.outputs.manabot }}
+      academy: ${{ steps.classify.outputs.academy }}
+      frontend: ${{ steps.classify.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
@@ -34,33 +54,50 @@ jobs:
       - name: Classify changed files
         id: classify
         run: |
+          emit() {
+            for area in docs_only rust manabot academy frontend; do
+              echo "$area=${!area}"
+              echo "$area=${!area}" >> "$GITHUB_OUTPUT"
+            done
+          }
+          all() { docs_only=false rust=true manabot=true academy=true frontend=true; }
+          all
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            emit
             exit 0
           fi
           # HEAD is the PR merge commit; its first parent is the base tip.
           files=$(git diff --name-only HEAD^1 HEAD)
           echo "$files"
-          docs_only=true
-          [ -n "$files" ] || docs_only=false
+          if [ -z "$files" ]; then
+            emit
+            exit 0
+          fi
+          docs_only=true rust=false manabot=false academy=false frontend=false
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             case "$f" in
               content/DECKS.md) ;;
-              frontend/*|website/*|content/*|conformance/*|protocol/*|.github/*) docs_only=false ;;
-              docs/experiment-metrics.md|docs/benchmarks/*) docs_only=false ;;
-              experiments/*/*) docs_only=false ;;
+              content/*|protocol/*|conformance/*|.github/*) all ;;
+              frontend/src/lib/packs/*|frontend/src/lib/fixtures/*)
+                docs_only=false manabot=true academy=true frontend=true ;;
+              frontend/*) docs_only=false frontend=true ;;
+              website/*) docs_only=false ;;
+              docs/experiment-metrics.md|docs/benchmarks/*|experiments/*/*)
+                docs_only=false manabot=true academy=true ;;
               paper/*|wave/*|scratch/*|.lf/*|LICENSE) ;;
               *.md) ;;
-              *) docs_only=false ;;
+              academy/*|tests/academy/*|deploy/*) docs_only=false academy=true ;;
+              manabot/*|tests/*|scripts/*|experiments/*|ops/*|docs/*)
+                docs_only=false manabot=true academy=true ;;
+              *) all ;;
             esac
           done <<< "$files"
-          echo "docs_only=$docs_only"
-          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          emit
   rust:
     name: Rust Tests
     needs: [changes]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     env:
       # Optimize the engine while keeping debug assertions and overflow
@@ -111,7 +148,7 @@ jobs:
   integration:
     name: Integration (${{ matrix.os }})
     needs: [changes, rust]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.manabot == 'true' && (needs.rust.result == 'success' || needs.rust.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
     env:
       CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
@@ -158,6 +195,7 @@ jobs:
       - name: Integration tests
         run: |
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
+            --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
@@ -196,12 +234,6 @@ jobs:
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
 
-      - name: Frozen-policy search fixtures
-        run: |
-          uv run --python 3.12 --extra dev pytest -q \
-            tests/sim/test_local_update_sampling.py \
-            tests/sim/test_local_update_compound.py
-
       - name: Enum smoke test
         run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
@@ -217,10 +249,62 @@ jobs:
             --set experiment.profiler_enabled=false \
             --set agent.attention_on=false
 
+  # Tests that exercise Academy on top of manabot: checkpoint villains and
+  # local-update advice. They run on both platforms whenever manabot or
+  # academy changes, so academy-only changes can skip Integration.
+  academy-integration:
+    name: Academy Integration (${{ matrix.os }})
+    needs: [changes, rust]
+    if: ${{ !cancelled() && needs.changes.outputs.academy == 'true' && (needs.rust.result == 'success' || needs.rust.result == 'skipped') }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            managym -> target
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'managym/pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra dev --extra play
+
+      - name: Build managym extension
+        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+
+      - name: Checkpoint world bindings
+        run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
+
+      - name: Frozen-policy search fixtures
+        run: |
+          uv run --python 3.12 --extra dev pytest -q \
+            tests/sim/test_local_update_sampling.py \
+            tests/sim/test_local_update_compound.py
+
   protocol-v1:
     name: Protocol v1 Conformance
     needs: [changes]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -270,7 +354,7 @@ jobs:
   semantic-coverage:
     name: Semantic Coverage Gate
     needs: [changes, rust]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.manabot == 'true' && (needs.rust.result == 'success' || needs.rust.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -296,7 +380,7 @@ jobs:
   semantic-conformance:
     name: Semantic Kernel Conformance
     needs: [changes, rust]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
@@ -333,7 +417,7 @@ jobs:
   visual_reference:
     name: Visual Reference Gate
     needs: [changes]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -404,7 +488,7 @@ jobs:
   clean-machine-play:
     name: Clean-machine Play
     needs: [changes]
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -443,35 +527,57 @@ jobs:
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [changes, rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
+    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
     if: always()
     steps:
       - name: Check all jobs
         env:
           CHANGES: ${{ needs.changes.result }}
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          RUST: ${{ needs.changes.outputs.rust }}
+          MANABOT: ${{ needs.changes.outputs.manabot }}
+          ACADEMY: ${{ needs.changes.outputs.academy }}
+          FRONTEND: ${{ needs.changes.outputs.frontend }}
           RESULTS: >-
             rust=${{ needs.rust.result }}
             python-unit=${{ needs.python-unit.result }}
             integration=${{ needs.integration.result }}
+            academy-integration=${{ needs.academy-integration.result }}
             protocol-v1=${{ needs.protocol-v1.result }}
             semantic-coverage=${{ needs.semantic-coverage.result }}
             semantic-conformance=${{ needs.semantic-conformance.result }}
             visual_reference=${{ needs.visual_reference.result }}
             clean-machine-play=${{ needs.clean-machine-play.result }}
         run: |
-          echo "changes: $CHANGES (docs_only=$DOCS_ONLY)"
+          echo "changes: $CHANGES docs_only=$DOCS_ONLY rust=$RUST manabot=$MANABOT academy=$ACADEMY frontend=$FRONTEND"
           [ "$CHANGES" = "success" ] || exit 1
+          # A missing or misspelled area output must fail, never read as "off".
+          for area in "$DOCS_ONLY" "$RUST" "$MANABOT" "$ACADEMY" "$FRONTEND"; do
+            [ "$area" = "true" ] || [ "$area" = "false" ] || exit 1
+          done
+          # The areas that select each job; this mirrors the jobs' if: conditions.
+          # A job missing here counts as selected, so it must succeed.
+          selected() {
+            case "$1" in
+              rust|semantic-conformance) [ "$RUST" = "true" ] ;;
+              python-unit) [ "$DOCS_ONLY" = "false" ] ;;
+              integration|semantic-coverage) [ "$MANABOT" = "true" ] ;;
+              academy-integration) [ "$ACADEMY" = "true" ] ;;
+              protocol-v1|visual_reference|clean-machine-play)
+                [ "$ACADEMY" = "true" ] || [ "$FRONTEND" = "true" ] ;;
+              *) return 0 ;;
+            esac
+          }
           failed=0
           for entry in $RESULTS; do
-            echo "$entry"
+            job="${entry%%=*}"
             result="${entry#*=}"
-            if [ "$result" = "success" ]; then
-              continue
+            if selected "$job"; then
+              echo "$job: $result (selected)"
+              [ "$result" = "success" ] || failed=1
+            else
+              echo "$job: $result (area off)"
+              [ "$result" = "skipped" ] || [ "$result" = "success" ] || failed=1
             fi
-            if [ "$DOCS_ONLY" = "true" ] && [ "$result" = "skipped" ]; then
-              continue
-            fi
-            failed=1
           done
           exit "$failed"
