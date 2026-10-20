@@ -9,6 +9,8 @@ the combined CUDA campaign, and 3 (`SplitComplexityPlan`) the current split:
 the GPU job trains and retains checkpoints only, then an operator runs
 `python -m experiments.runners.complexity_campaign evaluate <campaign>` on the
 Mini against the fetched outputs. Both halves score the same 36,000 games.
+`--anchor heuristic` later scores the same cohort against the rule-of-thumb
+anchor, a supplementary comparison added after the frozen results.
 """
 
 import argparse
@@ -57,6 +59,9 @@ from manabot.verify.store import VerifyStore
 ROOT = Path(__file__).resolve().parents[2]
 SEEDS = (12251, 12252, 12253)
 POOLS: tuple[Pool, ...] = ("l1", "l2", "l3")
+Anchor = Literal["scripted_greedy", "heuristic", "random"]
+# The frozen cohort's anchors; `heuristic` is opt-in and supplementary.
+FROZEN_ANCHORS: tuple[Anchor, ...] = ("scripted_greedy", "random")
 # MTG-135 protocol017's selected 64-stream recipe: 128 iterations of 64 streams
 # x 64 transitions (524,288 learner transitions), with learning rate and tau
 # following the first 2,048 iterations of the reference curve.
@@ -111,9 +116,7 @@ class _Cohort:
             range(1_225_100_000 + ordinal * 1000, 1_225_100_050 + ordinal * 1000)
         )
 
-    def protocol(
-        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
-    ) -> MonitorProtocol:
+    def protocol(self, pool: Pool, anchor: Anchor, update: int) -> MonitorProtocol:
         return MonitorProtocol(
             authored_matchup=roster(pool),
             include_mirrors=True,
@@ -358,9 +361,7 @@ class CampaignPlan(Protocol):
     def model_dump(self, *, mode: str) -> dict[str, object]: ...
     def experiment(self) -> Experiment: ...
     def recipes(self) -> dict[str, TrainingRegime]: ...
-    def protocol(
-        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
-    ) -> MonitorProtocol: ...
+    def protocol(self, pool: Pool, anchor: Anchor, update: int) -> MonitorProtocol: ...
 
 
 def _relocated(artifact: ArtifactReference, training: Path | None) -> ArtifactReference:
@@ -425,6 +426,7 @@ def evaluate_fit(
     should_stop: Callable[[], bool],
     *,
     training: Path | None = None,
+    anchors: tuple[Anchor, ...] = FROZEN_ANCHORS,
 ) -> int:
     """Score a completed fit's five cohorts per anchor; return cells newly run.
 
@@ -438,7 +440,7 @@ def evaluate_fit(
         milestone = point.coordinates.updates
         if milestone not in plan.evaluation_updates:
             continue
-        for anchor in ("scripted_greedy", "random"):
+        for anchor in anchors:
             protocol = plan.protocol(pool, anchor, milestone)
             variants = (
                 (("candidate", point),)
@@ -487,6 +489,7 @@ def evaluate_retained(
     *,
     pools: tuple[Pool, ...] = POOLS,
     seeds: tuple[int, ...] = SEEDS,
+    anchors: tuple[Anchor, ...] = FROZEN_ANCHORS,
 ) -> None:
     """Score fetched split-plan training outputs on the Mini, in place.
 
@@ -518,6 +521,7 @@ def evaluate_retained(
                 None,
                 lambda: False,
                 training=directory / "training",
+                anchors=anchors,
             )
             print(f"{pool}-{seed}: {count} cells evaluated", flush=True)
 
@@ -705,12 +709,16 @@ if __name__ == "__main__":
     evaluate.add_argument("campaign", type=Path)
     evaluate.add_argument("--pool", choices=POOLS, action="append")
     evaluate.add_argument("--seed", type=int, choices=SEEDS, action="append")
+    evaluate.add_argument(
+        "--anchor", choices=("scripted_greedy", "heuristic", "random"), action="append"
+    )
     arguments = parser.parse_args()
     if arguments.command == "evaluate":
         evaluate_retained(
             arguments.campaign,
             pools=tuple(arguments.pool or POOLS),
             seeds=tuple(arguments.seed or SEEDS),
+            anchors=tuple(arguments.anchor or FROZEN_ANCHORS),
         )
     else:
         # Etude worker entry: the job config carries the frozen plan.

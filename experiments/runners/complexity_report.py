@@ -18,8 +18,10 @@ from matplotlib.figure import Figure
 from pydantic import TypeAdapter
 
 from experiments.runners.complexity_campaign import (
+    FROZEN_ANCHORS,
     POOLS,
     SEEDS,
+    Anchor,
     AnyComplexityPlan,
     read_complexity_plan,
 )
@@ -40,6 +42,8 @@ from manabot.training.monitor_evaluation import MonitorResult
 class Evidence:
     root: Path
     plan: AnyComplexityPlan
+    # Frozen anchors, then `heuristic` when any of its cells were scored.
+    anchors: tuple[Anchor, ...]
     runs: dict[tuple[str, int], TrainingRun]
     effects: dict[tuple[str, str, int, int], SeedEffect]
     unavailable: tuple[str, ...]
@@ -56,6 +60,10 @@ def load(root: Path) -> Evidence:
     effects: dict[tuple[str, str, int, int], SeedEffect] = {}
     missing: list[str] = []
     evaluation_seconds, games = 0.0, 0
+    supplementary: tuple[Anchor, ...] = (
+        ("heuristic",) if any(root.glob("*/*-heuristic-*/monitor.json")) else ()
+    )
+    anchors = FROZEN_ANCHORS + supplementary
     for pool in POOLS:
         for seed in SEEDS:
             directory = root / f"{pool}-{seed}"
@@ -71,7 +79,7 @@ def load(root: Path) -> Evidence:
             if not run.stages or "initial_raw" not in run.stages[0].artifacts:
                 missing.append(f"{pool}/{seed}: initialization unavailable")
                 continue
-            for anchor in ("scripted_greedy", "random"):
+            for anchor in anchors:
                 for update in (0, plan.updates // 2, plan.updates):
                     retained: list[MonitorResult] = []
                     variants = (
@@ -125,15 +133,24 @@ def load(root: Path) -> Evidence:
     if len({r.identities.get("source_commit") for r in runs.values()}) > 1:
         raise ValueError("report mixes scientific source freezes")
     return Evidence(
-        root, plan, runs, effects, tuple(missing), hashes, evaluation_seconds, games
+        root,
+        plan,
+        anchors,
+        runs,
+        effects,
+        tuple(missing),
+        hashes,
+        evaluation_seconds,
+        games,
     )
 
 
 def curves(evidence: Evidence, clock: str) -> Figure:
-    figure = Figure(figsize=(13, 9), layout="constrained")
-    axes = figure.subplots(3, 2, squeeze=False)
+    columns = len(evidence.anchors)
+    figure = Figure(figsize=(6.5 * columns, 9), layout="constrained")
+    axes = figure.subplots(3, columns, squeeze=False)
     for row, pool in enumerate(POOLS):
-        for col, anchor in enumerate(("scripted_greedy", "random")):
+        for col, anchor in enumerate(evidence.anchors):
             axis = axes[row, col]
             for seed in SEEDS:
                 points = [
@@ -195,14 +212,14 @@ def write_report(root: Path, output: Path, *, notes: str = "") -> Path:
         "<h1>Learning across environment complexity</h1>",
         f"<p>Saved evidence only · rendered {datetime.now(timezone.utc).isoformat(timespec='seconds')}</p>",
         f"<p>{sum(r.status == 'completed' for r in evidence.runs.values())}/9 fits complete; "
-        f"{evidence.evaluated_games}/36000 attempted evaluation games; "
+        f"{evidence.evaluated_games}/{18000 * len(evidence.anchors)} attempted evaluation games; "
         f"{len(evidence.unavailable)} unavailable components. Incomplete cohorts are not zero strength.</p>",
         f"<p>{escape(notes)}</p>",
         "<p>Each pool has its own controls. Raw scores across pools are not a difficulty ranking. "
         "Curves show conditional whole-deal intervals; method uncertainty uses three training seeds separately.</p>",
     ]
     for pool in POOLS:
-        for anchor in ("scripted_greedy", "random"):
+        for anchor in evidence.anchors:
             endpoint = tuple(
                 evidence.effects[pool, anchor, seed, evidence.plan.updates]
                 for seed in SEEDS
@@ -225,7 +242,14 @@ def write_report(root: Path, output: Path, *, notes: str = "") -> Path:
                 else "unavailable: not all three seed cohorts complete"
             )
             lines.append(
-                f"<h2>{pool.upper()} · {anchor}</h2><p>Endpoint gain: {text}. "
+                f"<h2>{pool.upper()} · {anchor}</h2>"
+                + (
+                    "<p>Supplementary anchor, scored after the frozen results on "
+                    "the same deals, legs and frozen controls.</p>"
+                    if anchor not in FROZEN_ANCHORS
+                    else ""
+                )
+                + f"<p>Endpoint gain: {text}. "
                 "95% t interval, df=2; assumption-sensitive.</p>"
             )
             lines.append(

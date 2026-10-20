@@ -18,6 +18,7 @@ from etude.track.run import init
 from pydantic import Field, model_validator
 
 from experiments.runners.complexity_campaign import (
+    Anchor,
     allocation_stop,
     evaluate_fit,
     execute,
@@ -108,9 +109,7 @@ class BaselinePlan(Strict):
     def recipes(self) -> dict[str, TrainingRegime]:
         return {"l3": self.experiment().resolve().cases[0].regime}
 
-    def protocol(
-        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
-    ) -> MonitorProtocol:
+    def protocol(self, pool: Pool, anchor: Anchor, update: int) -> MonitorProtocol:
         if pool != "l3":
             raise ValueError("baseline has no simple-pool arms")
         ordinal = self.evaluation_updates.index(update)

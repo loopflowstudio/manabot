@@ -56,8 +56,11 @@ from .players import ScriptedGreedyPlayer
 
 Polarity = Literal["harmful", "beneficial"]
 
+# The shared research catalog: the product two-deck definitions unchanged, plus
+# research cards such as Lightning Bolt. A targeted spell missing from here would
+# fall back to v1's seat-ordered target and could hit its own side.
 SEMANTIC_SOURCE = (
-    Path(__file__).resolve().parents[2] / "content/semantic/v1/two_deck.source.json"
+    Path(__file__).resolve().parents[2] / "content/semantic/v1/complexity.source.json"
 )
 
 # Ops that act on a target role, by what they do to that target's controller.

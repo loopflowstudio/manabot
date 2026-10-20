@@ -33,10 +33,12 @@ def test_nonempty_summary_serializes_coordinates(
     candidate.validate_cohort()
     effect = paired_improvement(candidate, control, initialization=control.artifact)
     effects = {
-        ("l1", "scripted_greedy", seed, 1000): replace(effect, seed=seed)
+        ("l1", anchor, seed, 1000): replace(effect, seed=seed)
+        for anchor in ("scripted_greedy", "heuristic")
         for seed in (12251, 12252, 12253)
     }
-    evidence = report.Evidence(tmp_path, plan(), {}, effects, (), {}, 0, 48)
+    anchors = ("scripted_greedy", "random", "heuristic")
+    evidence = report.Evidence(tmp_path, plan(), anchors, {}, effects, (), {}, 0, 48)
     monkeypatch.setattr(report, "load", lambda root: evidence)
     report.write_report(tmp_path, tmp_path / "complete.html")
     data = json.loads((tmp_path / "complete.analysis.json").read_text())
@@ -45,6 +47,12 @@ def test_nonempty_summary_serializes_coordinates(
         data["panels"][0]["endpoint"]["seed_effects"][0]["coordinates"]["updates"]
         == 1000
     )
+    # The supplementary anchor gets its own labelled panel, never a frozen one.
+    assert [p["anchor"] for p in data["panels"][:3]] == list(anchors)
+    assert data["panels"][2]["endpoint"]["available"]
+    html = (tmp_path / "complete.html").read_text()
+    assert html.count("Supplementary anchor") == 3
+    assert "48/54000 attempted" in html
 
 
 def test_gpu_report_retains_plan_and_marks_unrun_cohort_unavailable(

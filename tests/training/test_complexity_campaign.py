@@ -4,13 +4,13 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import shutil
-from typing import Literal
 
 import pytest
 import torch
 
 from experiments.runners.complexity_campaign import (
     ROOT,
+    Anchor,
     ComplexityPlan,
     GPUComplexityPlan,
     SplitComplexityPlan,
@@ -24,7 +24,7 @@ from experiments.runners.environment_complexity import Pool
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import AtaraxosMoveLearning
-from manabot.training.monitor_evaluation import MonitorProtocol
+from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
 from manabot.verify.store import VerifyStore
 from tests.training.test_recovery import recipe as tiny_recipe
 
@@ -170,9 +170,7 @@ class _TinyPlan:
     def evaluation_updates(self) -> tuple[int, ...]:
         return (0, 1, 3)
 
-    def protocol(
-        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
-    ) -> MonitorProtocol:
+    def protocol(self, pool: Pool, anchor: Anchor, update: int) -> MonitorProtocol:
         return MonitorProtocol(deal_seeds=(1_225_900_000 + update,), opponent=anchor)
 
 
@@ -207,6 +205,28 @@ def test_fetched_fit_is_scored_once_and_never_overwrites_failures(
 
     # Initial candidate, then candidate/control at midpoint and endpoint.
     assert score() == 2 * 5
+    assert score() == 0
+    frozen = {path: path.read_bytes() for path in cells.glob("*/monitor.json")}
+    # The opt-in anchor adds its own five cells and leaves frozen ones untouched.
+    assert (
+        evaluate_fit(
+            _TinyPlan(),  # type: ignore[arg-type]
+            run,
+            cells,
+            "l3",
+            digest,
+            None,
+            lambda: False,
+            training=fetched,
+            anchors=("heuristic",),
+        )
+        == 5
+    )
+    assert {path: path.read_bytes() for path in frozen} == frozen
+    added = MonitorResult.model_validate_json(
+        (cells / "3-heuristic-control/monitor.json").read_text()
+    )
+    assert added.status == "completed" and added.protocol.opponent == "heuristic"
     assert score() == 0
     (cells / "3-random-control/monitor.json").unlink()
     with pytest.raises(RuntimeError, match="incomplete attempt"):
