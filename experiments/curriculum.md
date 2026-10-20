@@ -47,13 +47,14 @@ code in `experiments/runners/curriculum_analysis.py`, frozen plan in
 
 Curriculum minus scratch, paired by seed and deal, mean of the four matrix
 cells, points; six-seed mean with 95% t interval (df 5), seeds positive.
-Analysis: [analysis.json](data/curriculum/analysis.json).
+Analysis: [analysis.json](data/curriculum/analysis.json); rendered report:
+[report.html](data/curriculum/report.html).
 
 | Anchor | 32 | **64 (primary)** | 128 |
 |---|---|---|---|
 | heuristic | −4.6 [−11.8, +2.5], 2/6 | **−2.3 [−5.6, +0.9], 2/6** | +0.4 [−4.1, +4.9], 4/6 |
 | greedy | −7.5 [−15.2, +0.1], 1/6 | **−0.8 [−4.0, +2.5], 2/6** | +1.5 [−2.0, +4.9], 5/6 |
-| random | −11.9 [−20.6, −3.2], 1/6 | −1.6 [−3.1, −0.1], 0/6 | +3.3 [+1.1, +5.4], 5/6 |
+| random | −11.9 [−20.6, −3.2], 1/6 | −1.6 [−3.1, −0.1], 0/6 | +3.2 [+1.1, +5.4], 5/6 |
 
 Frozen verdict at 64: **greedy — no useful effect** (interval inside ±5);
 **heuristic — inconclusive** (lower bound −5.6), leaning negative. Neither
@@ -77,7 +78,7 @@ Gain over the same seed's frozen initialization (points):
   64. At the boundary the L1-trained policy, playing L3 decks for the first
   time, has about half the scratch gain.
 - **Ceiling:** by 128 the arms are level against heuristic and greedy. The
-  random-anchor endpoint favours curriculum by 3.3 points [+1.1, +5.4]; scratch
+  random-anchor endpoint favours curriculum by 3.2 points [+1.1, +5.4]; scratch
   also dips from 64 to 128 there, so this is a small secondary signal, not a
   benefit claim.
 - **Cells at 64:** curriculum is slightly ahead in Lessons mirrors and behind
