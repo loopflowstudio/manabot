@@ -1324,6 +1324,7 @@ reports = [
 
 [package.dev-dependencies]
 play-runtime = [
+    { name = "etude-sdk" },
     { name = "fastapi" },
     { name = "gymnasium" },
     { name = "maturin" },
@@ -1369,6 +1370,7 @@ provides-extras = ["reports", "artifacts", "play", "dev", "notebook"]
 
 [package.metadata.requires-dev]
 play-runtime = [
+    { name = "etude-sdk", specifier = "==0.1.1" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.5,<2.0" },
