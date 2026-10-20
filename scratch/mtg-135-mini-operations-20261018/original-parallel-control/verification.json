@@ -1,0 +1,10 @@
+{
+  "all_manifest_files_verified": true,
+  "manifest_sha256": "f97e59605a3b263c7d8870b214e000e6a1a849974a44066bdce086ade62aa69b",
+  "files": 45,
+  "serial_games": 16,
+  "parallel_games": 32,
+  "all_decisions_identities_and_replays_equal": true,
+  "equal_work_speedup": 2.8321080440820783,
+  "gpu_cost_usd": 0
+}

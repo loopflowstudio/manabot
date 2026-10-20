@@ -1,0 +1,38 @@
+{
+  "checkpoints": [
+    {
+      "artifact": {
+        "bytes": 67363151,
+        "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/feasibility/results/evaluation-cost-calibration/large/training/run/self-play-initial-raw.pt",
+        "sha256": "8b469aaeed0f0a9811facd4ee1f11702524e6940deb3ff80c457742586b4e458"
+      },
+      "coordinates": {
+        "active_training_seconds": 0.0,
+        "environment_decisions": 0,
+        "games": 0,
+        "learner_transitions": 0,
+        "optimizer_exposures": 0,
+        "optimizer_updates": 0,
+        "stage_id": "self-play",
+        "training_seconds": 0.0,
+        "updates": 0
+      }
+    }
+  ],
+  "protocol": {
+    "bootstrap_replicates": 2000,
+    "bootstrap_seed": 101,
+    "deal_seeds": [
+      1359800000
+    ],
+    "game_seconds": 120.0,
+    "include_mirrors": true,
+    "max_commands": 10000,
+    "opponent": "random",
+    "purpose": "frozen-study-evaluation",
+    "study_protocol_sha256": "3cb14547e95d8f7f0550b588a0a91638ae124585447b663ef511956ec71277c1"
+  },
+  "run_id": "e388b2dfc622494bb0e11ba008885a78",
+  "run_sha256": "50d17efe889f02c61381c7dc66284da7bfedd24b55e4cbc476d9fa8294078ee3",
+  "seed": 13598
+}

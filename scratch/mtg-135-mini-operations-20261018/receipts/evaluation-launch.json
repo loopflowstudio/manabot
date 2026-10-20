@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-10-18T19:08:49.991926+00:00",
+  "label": "gg.manabot.mtg135.protocol017-evaluation",
+  "domain": "gui/502",
+  "host": "mini-heart.local",
+  "process_type": "Standard",
+  "automatic_restart": false,
+  "periodic_schedule": false,
+  "plan_sha256": "608ba726365206ed9cdf940e60a4b01ae971947153360c45ae087d61f77edd32",
+  "entrypoint_sha256": "9eb046ac07e71edfa362ca61a83cafebfeabc5fa420c2504f0e95c89bb42f258",
+  "games": 18304,
+  "gpu_cost_usd": 0
+}

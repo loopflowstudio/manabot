@@ -1,0 +1,146 @@
+{
+  "observed_at": "2026-10-18T19:00:09.887852+00:00",
+  "root": ".runs/grid-007/learning-017/mini-calibration",
+  "disposition": "failed control; retained after all processes exited",
+  "files": [
+    {
+      "path": "admission.json",
+      "bytes": 1277,
+      "sha256": "a4c81afad64bca229955cc85f376e0d4f15ac4036c8343a83cee97ce8bc3d60c"
+    },
+    {
+      "path": "commands/parallel-0-random/run.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/parallel-0-random/worker-status.json",
+      "bytes": 98,
+      "sha256": "49445dca6a8941aacbd21c278d018f54514d87ee309fa8da09246f734f4a687f"
+    },
+    {
+      "path": "commands/parallel-0-scripted_greedy/run.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/parallel-0-scripted_greedy/worker-status.json",
+      "bytes": 99,
+      "sha256": "1e1b44bc7fae2acbbefc33b481b3820ebbab3020672e4db02096a2b47e3e62e0"
+    },
+    {
+      "path": "commands/parallel-1-random/run.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/parallel-1-random/worker-status.json",
+      "bytes": 99,
+      "sha256": "022155abb5984a90cdaaec099726ddf3d6b08bd0e22bc186e0d5be4ffe1cd7c6"
+    },
+    {
+      "path": "commands/parallel-1-scripted_greedy/run.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "commands/parallel-1-scripted_greedy/worker-status.json",
+      "bytes": 100,
+      "sha256": "d5165be82894344007aca908597dc039db84700127bacb8df5648f707334d294"
+    },
+    {
+      "path": "controller.log",
+      "bytes": 2479,
+      "sha256": "e60b1e13262cde35a6e107b64fbc3fc745e72d04aa5e59d65414c470b8135950"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 4861,
+      "sha256": "ffc0a3a842c42dfa62d1b4e81d4ac1df8e24643a85a8d0b793799d8cb8df96c0"
+    },
+    {
+      "path": "operator-stop.json",
+      "bytes": 436,
+      "sha256": "9b7effb62171f1fc200cc19ab1013d5c7b44227c6d88a786c066a53069f308cc"
+    },
+    {
+      "path": "parallel-0-random/selection.json",
+      "bytes": 1179,
+      "sha256": "760a57d875a274e7eb8fed3ca18cb75a43353bed7e7c90a26279094f0ff3dbbf"
+    },
+    {
+      "path": "parallel-0-random/transitions-0/deal-000/traces/monitor-checkpoint__monitor-random.commands.jsonl.gz",
+      "bytes": 97864,
+      "sha256": "23549b0e97a7b086609f57335377fe98275534ab438d233ad1d7fef758228e71"
+    },
+    {
+      "path": "parallel-0-random/transitions-0/monitor.json",
+      "bytes": 7200,
+      "sha256": "6be8b087823fb4e573ddd046d477e594311c6b8c10a61ccd01fb8053ba1f7b56"
+    },
+    {
+      "path": "parallel-0-scripted_greedy/selection.json",
+      "bytes": 1153,
+      "sha256": "c8c3970f4236d91b94a10ddd0642064f49e93a35ef25f1186985a0afc23388e6"
+    },
+    {
+      "path": "parallel-0-scripted_greedy/transitions-0/deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "bytes": 71652,
+      "sha256": "c79f3d13c36cc810cdbe4eecbd332a09c77a19097c18253a18b6ace57dfc2179"
+    },
+    {
+      "path": "parallel-0-scripted_greedy/transitions-0/monitor.json",
+      "bytes": 7203,
+      "sha256": "deb849df6780ebad6ea467b6586667b4e9e49046531209d99302f136fb4e3f1f"
+    },
+    {
+      "path": "parallel-1-random/selection.json",
+      "bytes": 1179,
+      "sha256": "760a57d875a274e7eb8fed3ca18cb75a43353bed7e7c90a26279094f0ff3dbbf"
+    },
+    {
+      "path": "parallel-1-random/transitions-0/deal-000/traces/monitor-checkpoint__monitor-random.commands.jsonl.gz",
+      "bytes": 97830,
+      "sha256": "3a722bb1b572bd45c892a29e52a07bc000502517f01ba2b3fd24b93a1fe6389f"
+    },
+    {
+      "path": "parallel-1-random/transitions-0/monitor.json",
+      "bytes": 7199,
+      "sha256": "e27c331210041d1214dfdeb6994cd8f58b93b2c7b35091f22da76daada8526d0"
+    },
+    {
+      "path": "parallel-1-scripted_greedy/selection.json",
+      "bytes": 1153,
+      "sha256": "c8c3970f4236d91b94a10ddd0642064f49e93a35ef25f1186985a0afc23388e6"
+    },
+    {
+      "path": "parallel-1-scripted_greedy/transitions-0/deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "bytes": 71653,
+      "sha256": "50e8633dd32acb84fa29fb8d709f79da6cfe257e4d956873a528e43a7b01035b"
+    },
+    {
+      "path": "parallel-1-scripted_greedy/transitions-0/monitor.json",
+      "bytes": 7202,
+      "sha256": "d7a7835ff97005fbea29ab88cefb349a38a4a6ce4be4200711b1292a670abbd9"
+    },
+    {
+      "path": "protocol-random.json",
+      "bytes": 274,
+      "sha256": "243d396c14e3bb9acdc1326ae0dbfccd0830bdc44620ba726136d816b9e2aaee"
+    },
+    {
+      "path": "protocol-scripted_greedy.json",
+      "bytes": 284,
+      "sha256": "9946bb0ce10650de8a7ae89dd9a7b41fb1e6ca0f79774fed1d510f0364fa92c3"
+    },
+    {
+      "path": "worker-status.json",
+      "bytes": 174,
+      "sha256": "fcc9f82e551c2a4691371bea9d99466c8b2684eca93f7a2595c41fee0f7eab67"
+    }
+  ],
+  "original_manifest_differences": [
+    "controller.log"
+  ],
+  "reason": "Unhandled entry-point traceback was appended after the original finally block hashed controller.log. Original manifest remains unchanged; this final inventory covers the actual stopped attempt."
+}

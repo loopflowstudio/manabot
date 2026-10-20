@@ -1,0 +1,34 @@
+{
+  "observed_at": "2026-10-18T18:59:19.780732+00:00",
+  "source_host": "Jack laptop",
+  "source_directory": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/evaluation",
+  "disposition": "explicit user cancellation, not timeout or scientific failure",
+  "user_instruction": "please kill all evals on this laptop",
+  "completed_replayed_games": 352,
+  "planned_games": 18304,
+  "status": {
+    "phase": "failed",
+    "observed_unix_seconds": 1792341257.7546618,
+    "error": "RuntimeError: Panel exited 124; partial results retained without retry",
+    "seconds": 1633.0583673330038
+  },
+  "files": {
+    "admission.json": {
+      "sha256": "d3d9a79cf6453b690b2394002118194e60c43f80cab4e56d7985f6d228a88c8f",
+      "bytes": 148398
+    },
+    "worker-status.json": {
+      "sha256": "4f4af09d588d17ff1d7d7b23b48f0d7944696f557342d8ca91368b185750f90a",
+      "bytes": 189
+    },
+    "manifest.json": {
+      "sha256": "21bf5fa3ffb3a59c094c0f06d63a636ec0f11d26773ab5b8e60b81bce3796202",
+      "bytes": 43715
+    },
+    "controller.log": {
+      "sha256": "0781eb998952a73053c2917bbbc768c65cc58e0614ae97b139d4a4d609229c66",
+      "bytes": 2657
+    }
+  },
+  "use": "retained separately; excluded from replacement Mini scores"
+}

@@ -1,0 +1,50 @@
+{
+  "observed_at": "2026-10-18T19:31:49.623265+00:00",
+  "status": "candidate preparation only; selection and full-panel audit pending",
+  "scientific_execution": false,
+  "new_games": 0,
+  "new_rentals": 0,
+  "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+  "receiver_head": "8e7042517450e9a547fb353d95f77facc864290d",
+  "receiver_inputs": {
+    "experiments/runners/complexity_campaign.py": {
+      "bytes": 20322,
+      "sha256": "c0fe203b27f8f71f633330162c3e02cc1f04899595d6dd411ca2c9c90ee31d69"
+    },
+    "experiments/runners/environment_complexity.py": {
+      "bytes": 8628,
+      "sha256": "27b9ce368354ecaad9e18fa7cf2c9fd0c9c6ad5f5e90425c101785fb9bcc0e04"
+    },
+    "manabot/training/models.py": {
+      "bytes": 37388,
+      "sha256": "8dafbf0754acf4bc6e1c3a44f58b4deb06aff0a2d03fd51bdfdf293fa3fc239f"
+    },
+    "experiments/regimes/early-learning-rate-mini-source.json": {
+      "bytes": 3079,
+      "sha256": "a444bc2c667f4767834c4cfd7dc0ceebb3caf3a015a976a678a0df20512cfdc9"
+    },
+    "experiments/environment-complexity.md": {
+      "bytes": 11125,
+      "sha256": "78a0e81e2c0f25fc532405b71d3ea7f98c835bbcba04ae7842cd8161878d78fc"
+    },
+    "scratch/questions.md": {
+      "bytes": 12511,
+      "sha256": "a0606132a6315657eb69ece9ce1b2e34be23199182bb8c4e1cff4aa23c3612bd"
+    },
+    "scratch/mtg-135-handoff-scope-20261018.md": {
+      "bytes": 1916,
+      "sha256": "e8bfbf99226a74cf8c5d1a17c47b154067a8e3b018043505b40308f2630d2050"
+    }
+  },
+  "static_findings": {
+    "receiver_learning_accepts_iteration_schedule": false,
+    "receiver_plan_minimum_iterations": 1000,
+    "receiver_plan_iteration_granularity": 100,
+    "tested_64_stream_iterations": 128,
+    "tested_transitions": 524288,
+    "receiver_1000_iteration_transitions_at_64_streams": 4096000,
+    "unmapped_tau_at_iteration_128": 0.011662912394210094,
+    "tested_mapped_tau_at_iteration_128": 0.005076577477226473
+  },
+  "scope": "Static AST/JSON and exact-byte inspection only; no model construction, inference, training, credential access or cloud requests"
+}

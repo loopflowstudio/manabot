@@ -1,0 +1,996 @@
+{
+  "verification": {
+    "status": "verified",
+    "root_manifest_sha256": "f3425a5ce00053a357370aeda8e49ee95852d48c89aa2f7f79bf4fd7a1999973",
+    "manifest_files_verified": 895,
+    "completed_commands": 24,
+    "completed_monitors": 48,
+    "completed_replayed_games": 1536,
+    "protocol_sha256": "93001968b52f1624bb7128ab41bab80d15516689af6ae90d08aa462cfda3c08d",
+    "training_seed": 13571,
+    "transitions": 131072,
+    "training_cells": 12,
+    "declared_cells": 25,
+    "deadline_censored_cells": [
+      "large-s4"
+    ],
+    "not_completed_cells": [
+      "small-s512",
+      "middle-s512",
+      "small-deep-s4",
+      "small-deep-s64",
+      "small-deep-s128",
+      "small-deep-s256",
+      "small-deep-s512",
+      "large-shallow-s4",
+      "large-shallow-s64",
+      "large-shallow-s128",
+      "large-shallow-s256",
+      "large-shallow-s512"
+    ],
+    "limits": "Four paired deal blocks; one training seed; short horizon; not architecture ranking or skill-ceiling evidence.",
+    "wall_seconds": 1309.9503655000008
+  },
+  "results": [
+    {
+      "cell": "small-s4",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.5625,
+        "lower": 0.5,
+        "upper": 0.625
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.625,
+        0.5,
+        0.5,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.5,
+        0.25,
+        0.5,
+        0.375
+      ],
+      "improvement": 0.40625,
+      "paired_exact_block_bootstrap_95": [
+        0.3125,
+        0.5
+      ],
+      "initial_checkpoint_sha256": "d36c76b22d2b4620d1505bcb8d85b02c8363d5aa4cfcd5956cf1d7180645286b",
+      "endpoint_checkpoint_sha256": "ec8ceaa5aa36313d0d5e28d6e19eb4917d58253afef87b307c3fccf02990c6ed"
+    },
+    {
+      "cell": "small-s4",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.84375,
+        "lower": 0.75,
+        "upper": 0.9375
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        1.0,
+        0.75,
+        0.75,
+        0.875
+      ],
+      "paired_deal_block_improvements": [
+        0.625,
+        0.25,
+        0.375,
+        0.25
+      ],
+      "improvement": 0.375,
+      "paired_exact_block_bootstrap_95": [
+        0.25,
+        0.53125
+      ],
+      "initial_checkpoint_sha256": "d36c76b22d2b4620d1505bcb8d85b02c8363d5aa4cfcd5956cf1d7180645286b",
+      "endpoint_checkpoint_sha256": "ec8ceaa5aa36313d0d5e28d6e19eb4917d58253afef87b307c3fccf02990c6ed"
+    },
+    {
+      "cell": "middle-s4",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.34375,
+        "lower": 0.25,
+        "upper": 0.4375
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.375,
+        0.5,
+        0.25,
+        0.25
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.25,
+        0.25,
+        0.0
+      ],
+      "improvement": 0.1875,
+      "paired_exact_block_bootstrap_95": [
+        0.0625,
+        0.25
+      ],
+      "initial_checkpoint_sha256": "785229d9638d7ebc3b6671b548bc2b540a5c3f06acd8c0924eb941883948c784",
+      "endpoint_checkpoint_sha256": "3d3d2795b7313a1c0462c50955f67094a1bd6558744c1c60f4f1ea9b531383f2"
+    },
+    {
+      "cell": "middle-s4",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.65625,
+        "lower": 0.625,
+        "upper": 0.71875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.75,
+        0.625,
+        0.625,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.375,
+        0.125,
+        0.25,
+        0.0
+      ],
+      "improvement": 0.1875,
+      "paired_exact_block_bootstrap_95": [
+        0.0625,
+        0.3125
+      ],
+      "initial_checkpoint_sha256": "785229d9638d7ebc3b6671b548bc2b540a5c3f06acd8c0924eb941883948c784",
+      "endpoint_checkpoint_sha256": "3d3d2795b7313a1c0462c50955f67094a1bd6558744c1c60f4f1ea9b531383f2"
+    },
+    {
+      "cell": "middle-s64",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.5,
+        "lower": 0.40625,
+        "upper": 0.59375
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.5,
+        0.5,
+        0.625,
+        0.375
+      ],
+      "paired_deal_block_improvements": [
+        0.375,
+        0.25,
+        0.625,
+        0.125
+      ],
+      "improvement": 0.34375,
+      "paired_exact_block_bootstrap_95": [
+        0.1875,
+        0.53125
+      ],
+      "initial_checkpoint_sha256": "a86844dc45ffaa4d6896d036d4e5d752963de4653f5ee4832182b72cfb30d7b1",
+      "endpoint_checkpoint_sha256": "f6665609b55e1b336b5ebaa06d13adae264dea9b00f775a9937212ead8454184"
+    },
+    {
+      "cell": "middle-s64",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.75,
+        "lower": 0.65625,
+        "upper": 0.84375
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.75,
+        0.75,
+        0.875,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.375,
+        0.25,
+        0.5,
+        0.0
+      ],
+      "improvement": 0.28125,
+      "paired_exact_block_bootstrap_95": [
+        0.09375,
+        0.4375
+      ],
+      "initial_checkpoint_sha256": "a86844dc45ffaa4d6896d036d4e5d752963de4653f5ee4832182b72cfb30d7b1",
+      "endpoint_checkpoint_sha256": "f6665609b55e1b336b5ebaa06d13adae264dea9b00f775a9937212ead8454184"
+    },
+    {
+      "cell": "large-s64",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.28125,
+        "lower": 0.1875,
+        "upper": 0.375
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.125,
+        0.375,
+        0.375,
+        0.25
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.125,
+        0.375,
+        0.0
+      ],
+      "improvement": 0.125,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.28125
+      ],
+      "initial_checkpoint_sha256": "bf738c66e799a1f1f1b3729d5fea2701081922aaf468469649f07113951014e3",
+      "endpoint_checkpoint_sha256": "7a27a51e6248a2371fccf41b50dcb28f2feec3ea31b16957d515b0b67ca2f962"
+    },
+    {
+      "cell": "large-s64",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.53125,
+        "lower": 0.40625,
+        "upper": 0.6875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.5,
+        0.5,
+        0.375,
+        0.75
+      ],
+      "paired_deal_block_improvements": [
+        0.125,
+        0.0,
+        0.0,
+        0.125
+      ],
+      "improvement": 0.0625,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.125
+      ],
+      "initial_checkpoint_sha256": "bf738c66e799a1f1f1b3729d5fea2701081922aaf468469649f07113951014e3",
+      "endpoint_checkpoint_sha256": "7a27a51e6248a2371fccf41b50dcb28f2feec3ea31b16957d515b0b67ca2f962"
+    },
+    {
+      "cell": "small-s64",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.53125,
+        "lower": 0.4375,
+        "upper": 0.625
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.625,
+        0.375,
+        0.5,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.5,
+        0.125,
+        0.5,
+        0.375
+      ],
+      "improvement": 0.375,
+      "paired_exact_block_bootstrap_95": [
+        0.21875,
+        0.5
+      ],
+      "initial_checkpoint_sha256": "40cad68c60e707519ed649622584758b7b234ab98b565b56470d4d8a281bc3c7",
+      "endpoint_checkpoint_sha256": "aee2dad843179dee2d921358f78c518e858956d24cde9f54bff425b7684ac9ea"
+    },
+    {
+      "cell": "small-s64",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.84375,
+        "lower": 0.75,
+        "upper": 0.9375
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.75,
+        0.875,
+        1.0,
+        0.75
+      ],
+      "paired_deal_block_improvements": [
+        0.375,
+        0.375,
+        0.625,
+        0.125
+      ],
+      "improvement": 0.375,
+      "paired_exact_block_bootstrap_95": [
+        0.1875,
+        0.5625
+      ],
+      "initial_checkpoint_sha256": "40cad68c60e707519ed649622584758b7b234ab98b565b56470d4d8a281bc3c7",
+      "endpoint_checkpoint_sha256": "aee2dad843179dee2d921358f78c518e858956d24cde9f54bff425b7684ac9ea"
+    },
+    {
+      "cell": "large-s128",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.0,
+        0.25,
+        0.125,
+        0.25
+      ],
+      "paired_deal_block_improvements": [
+        -0.125,
+        0.0,
+        0.125,
+        0.0
+      ],
+      "improvement": 0.0,
+      "paired_exact_block_bootstrap_95": [
+        -0.09375,
+        0.09375
+      ],
+      "initial_checkpoint_sha256": "dbba0315412a03d44d7e16af8d049e1d8f9ae85f89ce5b2c06989a558621e759",
+      "endpoint_checkpoint_sha256": "e6d8f621925cc7a68defb1df469dc1296231cd9acbb861411789bcc14097b275"
+    },
+    {
+      "cell": "large-s128",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "improvement": 0.0,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.0
+      ],
+      "initial_checkpoint_sha256": "dbba0315412a03d44d7e16af8d049e1d8f9ae85f89ce5b2c06989a558621e759",
+      "endpoint_checkpoint_sha256": "e6d8f621925cc7a68defb1df469dc1296231cd9acbb861411789bcc14097b275"
+    },
+    {
+      "cell": "small-s128",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.375,
+        "lower": 0.28125,
+        "upper": 0.46875
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.375,
+        0.5,
+        0.25,
+        0.375
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.25,
+        0.25,
+        0.125
+      ],
+      "improvement": 0.21875,
+      "paired_exact_block_bootstrap_95": [
+        0.15625,
+        0.25
+      ],
+      "initial_checkpoint_sha256": "283d6340476b33d669025a40a6f46b66f9c09b8027af7c174927be4b85fdfceb",
+      "endpoint_checkpoint_sha256": "d005b9c5b4eb6fabe208c4f0ff4fe56c58995111ba0f5d6ca1352f5e0dcf4169"
+    },
+    {
+      "cell": "small-s128",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.5625,
+        "lower": 0.4375,
+        "upper": 0.625
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.625,
+        0.625,
+        0.375,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.125,
+        0.0,
+        0.0
+      ],
+      "improvement": 0.09375,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.1875
+      ],
+      "initial_checkpoint_sha256": "283d6340476b33d669025a40a6f46b66f9c09b8027af7c174927be4b85fdfceb",
+      "endpoint_checkpoint_sha256": "d005b9c5b4eb6fabe208c4f0ff4fe56c58995111ba0f5d6ca1352f5e0dcf4169"
+    },
+    {
+      "cell": "middle-s128",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.4375,
+        "lower": 0.375,
+        "upper": 0.5
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.5
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.25,
+        0.375,
+        0.25
+      ],
+      "improvement": 0.28125,
+      "paired_exact_block_bootstrap_95": [
+        0.25,
+        0.34375
+      ],
+      "initial_checkpoint_sha256": "13bc13cc93a6107c7fe992628370a8b1319ee1b64541ab8aac3c61ece652ca24",
+      "endpoint_checkpoint_sha256": "d4900608452c1452605ac94e80f8db0de0c5a4d68880ba6c0fc4d7c6412db710"
+    },
+    {
+      "cell": "middle-s128",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.71875,
+        "lower": 0.46875,
+        "upper": 0.9375
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.375,
+        0.75,
+        1.0,
+        0.75
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.25,
+        0.625,
+        0.125
+      ],
+      "improvement": 0.25,
+      "paired_exact_block_bootstrap_95": [
+        0.0625,
+        0.5
+      ],
+      "initial_checkpoint_sha256": "13bc13cc93a6107c7fe992628370a8b1319ee1b64541ab8aac3c61ece652ca24",
+      "endpoint_checkpoint_sha256": "d4900608452c1452605ac94e80f8db0de0c5a4d68880ba6c0fc4d7c6412db710"
+    },
+    {
+      "cell": "small-s256",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.21875,
+        "lower": 0.15625,
+        "upper": 0.25
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.25,
+        0.25,
+        0.125,
+        0.25
+      ],
+      "paired_deal_block_improvements": [
+        0.125,
+        0.0,
+        0.125,
+        0.0
+      ],
+      "improvement": 0.0625,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.125
+      ],
+      "initial_checkpoint_sha256": "754987d2b011c1388e5c0fc1bb16c98a7ff467d02d7a1d4e1a153d394cd87223",
+      "endpoint_checkpoint_sha256": "362465977a0f51ab831be21df4d3b2cc455711fac33cb527ad8539a2a7de45ac"
+    },
+    {
+      "cell": "small-s256",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.65625,
+        "lower": 0.625,
+        "upper": 0.71875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.75,
+        0.625,
+        0.625,
+        0.625
+      ],
+      "paired_deal_block_improvements": [
+        0.375,
+        0.125,
+        0.25,
+        0.0
+      ],
+      "improvement": 0.1875,
+      "paired_exact_block_bootstrap_95": [
+        0.0625,
+        0.3125
+      ],
+      "initial_checkpoint_sha256": "754987d2b011c1388e5c0fc1bb16c98a7ff467d02d7a1d4e1a153d394cd87223",
+      "endpoint_checkpoint_sha256": "362465977a0f51ab831be21df4d3b2cc455711fac33cb527ad8539a2a7de45ac"
+    },
+    {
+      "cell": "middle-s256",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.25,
+        "lower": 0.15625,
+        "upper": 0.34375
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.125,
+        0.25,
+        0.25,
+        0.375
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.0,
+        0.25,
+        0.125
+      ],
+      "improvement": 0.09375,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.1875
+      ],
+      "initial_checkpoint_sha256": "cf556a5409239ff2659faea476ad88a83a5ff2329998e004b99c597fc105cb01",
+      "endpoint_checkpoint_sha256": "85225127f35f4210f3d81440944f51650457ac5dfe34d420c00b2e55d4b84884"
+    },
+    {
+      "cell": "middle-s256",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.5,
+        "lower": 0.3125,
+        "upper": 0.6875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.625,
+        0.75,
+        0.25,
+        0.375
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.25,
+        -0.125,
+        -0.25
+      ],
+      "improvement": 0.03125,
+      "paired_exact_block_bootstrap_95": [
+        -0.1875,
+        0.25
+      ],
+      "initial_checkpoint_sha256": "cf556a5409239ff2659faea476ad88a83a5ff2329998e004b99c597fc105cb01",
+      "endpoint_checkpoint_sha256": "85225127f35f4210f3d81440944f51650457ac5dfe34d420c00b2e55d4b84884"
+    },
+    {
+      "cell": "large-s256",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.21875,
+        "lower": 0.125,
+        "upper": 0.3125
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.125,
+        0.25,
+        0.125,
+        0.375
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.0,
+        0.125,
+        0.125
+      ],
+      "improvement": 0.0625,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.125
+      ],
+      "initial_checkpoint_sha256": "11257d9a714ecc535ee6c2c4e1bf81498e5f7dd6af2387d3ab4ff7f24d8abf84",
+      "endpoint_checkpoint_sha256": "4f13fa0acd538238cc2b532b9e5eb720a9f5f5f2e5d9396e3b08aa1248f2f961"
+    },
+    {
+      "cell": "large-s256",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.53125,
+        "lower": 0.34375,
+        "upper": 0.6875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.625,
+        0.75,
+        0.25,
+        0.5
+      ],
+      "paired_deal_block_improvements": [
+        0.25,
+        0.25,
+        -0.125,
+        -0.125
+      ],
+      "improvement": 0.0625,
+      "paired_exact_block_bootstrap_95": [
+        -0.125,
+        0.25
+      ],
+      "initial_checkpoint_sha256": "11257d9a714ecc535ee6c2c4e1bf81498e5f7dd6af2387d3ab4ff7f24d8abf84",
+      "endpoint_checkpoint_sha256": "4f13fa0acd538238cc2b532b9e5eb720a9f5f5f2e5d9396e3b08aa1248f2f961"
+    },
+    {
+      "cell": "large-s512",
+      "anchor": "scripted_greedy",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.15625,
+        "lower": 0.0625,
+        "upper": 0.25
+      },
+      "endpoint": {
+        "mean": 0.21875,
+        "lower": 0.125,
+        "upper": 0.3125
+      },
+      "initial_deal_block_scores": [
+        0.125,
+        0.25,
+        0.0,
+        0.25
+      ],
+      "endpoint_deal_block_scores": [
+        0.125,
+        0.375,
+        0.125,
+        0.25
+      ],
+      "paired_deal_block_improvements": [
+        0.0,
+        0.125,
+        0.125,
+        0.0
+      ],
+      "improvement": 0.0625,
+      "paired_exact_block_bootstrap_95": [
+        0.0,
+        0.125
+      ],
+      "initial_checkpoint_sha256": "f148634d44d5c500ffd5424bf36609e2bc4bb195b2d8de6adb55c939576f8842",
+      "endpoint_checkpoint_sha256": "5ad7ea2fc4a2fb9692d89cc250280af4d5716931f16cb9521728782fe5cd0d35"
+    },
+    {
+      "cell": "large-s512",
+      "anchor": "random",
+      "games_per_checkpoint": 32,
+      "initial": {
+        "mean": 0.46875,
+        "lower": 0.375,
+        "upper": 0.5625
+      },
+      "endpoint": {
+        "mean": 0.5,
+        "lower": 0.3125,
+        "upper": 0.6875
+      },
+      "initial_deal_block_scores": [
+        0.375,
+        0.5,
+        0.375,
+        0.625
+      ],
+      "endpoint_deal_block_scores": [
+        0.5,
+        0.75,
+        0.25,
+        0.5
+      ],
+      "paired_deal_block_improvements": [
+        0.125,
+        0.25,
+        -0.125,
+        -0.125
+      ],
+      "improvement": 0.03125,
+      "paired_exact_block_bootstrap_95": [
+        -0.125,
+        0.1875
+      ],
+      "initial_checkpoint_sha256": "f148634d44d5c500ffd5424bf36609e2bc4bb195b2d8de6adb55c939576f8842",
+      "endpoint_checkpoint_sha256": "5ad7ea2fc4a2fb9692d89cc250280af4d5716931f16cb9521728782fe5cd0d35"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "actor_mismatches": 0,
+  "command_mismatches": 0,
+  "decisions": 1601,
+  "frame_mismatches": 0,
+  "games": 8,
+  "missing_decisions": 0,
+  "offer_mismatches": 0,
+  "outcome_mismatches": 0,
+  "passed": true,
+  "private_exposures": 0,
+  "seconds": 3.890677041374147,
+  "state_mismatches": 0,
+  "trace_mismatches": 0
+}

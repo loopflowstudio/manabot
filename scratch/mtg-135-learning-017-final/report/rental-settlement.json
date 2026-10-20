@@ -1,0 +1,9 @@
+{
+  "estimated_usd": 9.450465872883797,
+  "machines": [
+    "grid-007-learning017-seed-13591-1ffb638650f5",
+    "grid-007-learning017-seed-13592-65d4e4eeba17"
+  ],
+  "provider_absent": true,
+  "quoted_rate_cost_floor_usd": "9.602884628186111111111111111"
+}

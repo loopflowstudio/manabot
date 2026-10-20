@@ -1,0 +1,11 @@
+{
+  "purpose": "frozen-study-evaluation",
+  "study_protocol_sha256": "3cb14547e95d8f7f0550b588a0a91638ae124585447b663ef511956ec71277c1",
+  "deal_seeds": [
+    1359800000
+  ],
+  "include_mirrors": true,
+  "opponent": "random",
+  "game_seconds": 120,
+  "max_commands": 10000
+}

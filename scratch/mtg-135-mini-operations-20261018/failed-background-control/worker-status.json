@@ -1,0 +1,6 @@
+{
+  "phase": "failed",
+  "observed_unix_seconds": 1792343531.462421,
+  "error": "RuntimeError: Mini control exited 124; no automatic retry",
+  "seconds": 325.7353920415044
+}

@@ -1,0 +1,23 @@
+{"phase": "run", "observed_unix_seconds": 1792339624.686864, "deadline": 1792344124.686862}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792339624.694516, "active": ["seed-13591-small-s64-scripted_greedy"], "pending": 43}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792339624.695952, "active": ["seed-13591-small-s64-random", "seed-13591-small-s64-scripted_greedy"], "pending": 42}
+{"phase": "run", "observed_unix_seconds": 1792339624.6957068, "deadline": 1792344124.695704}
+{"phase": "run", "observed_unix_seconds": 1792339624.6967528, "deadline": 1792344124.696752}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792339624.6968162, "active": ["seed-13591-small-s256-scripted_greedy", "seed-13591-small-s64-random", "seed-13591-small-s64-scripted_greedy"], "pending": 41}
+{"phase": "run", "observed_unix_seconds": 1792339624.709895, "deadline": 1792344124.7098932}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792339624.710436, "active": ["seed-13591-small-s256-random", "seed-13591-small-s256-scripted_greedy", "seed-13591-small-s64-random", "seed-13591-small-s64-scripted_greedy"], "pending": 40}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792341257.610126, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792341257.611407, "command": "seed-13591-small-s64-random", "exit_code": 124}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792341257.6180649, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792341257.619547, "command": "seed-13591-small-s256-scripted_greedy", "exit_code": 124}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792341257.617887, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792341257.6228979, "command": "seed-13591-small-s256-random", "exit_code": 124}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792341257.7473311, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792341257.747974, "command": "seed-13591-small-s64-scripted_greedy", "exit_code": 124}
+{"phase": "failed", "observed_unix_seconds": 1792341257.7546618, "error": "RuntimeError: Panel exited 124; partial results retained without retry", "seconds": 1633.0583673330038}
+Traceback (most recent call last):
+  File "/Users/jack/src/managym-cpu-research/.runs/grid-007/evaluate_learning.py", line 91, in <module>
+    main()
+  File "/Users/jack/src/managym-cpu-research/.runs/grid-007/evaluate_learning.py", line 81, in main
+    raise RuntimeError(f'Panel exited {code}; partial results retained without retry')
+RuntimeError: Panel exited 124; partial results retained without retry

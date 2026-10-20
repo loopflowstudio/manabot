@@ -1,0 +1,23 @@
+{"phase": "run", "observed_unix_seconds": 1792343205.737251, "deadline": 1792344105.7372422}{"phase": "parallel_commands", "observed_unix_seconds": 1792343205.737463, "active": ["parallel-0-scripted_greedy"], "pending": 3}
+
+{"phase": "run", "observed_unix_seconds": 1792343205.739768, "deadline": 1792344105.7397609}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792343205.759624, "active": ["parallel-0-random", "parallel-0-scripted_greedy"], "pending": 2}
+{"phase": "run", "observed_unix_seconds": 1792343205.77517, "deadline": 1792344105.77515}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792343205.777295, "active": ["parallel-0-random", "parallel-0-scripted_greedy", "parallel-1-scripted_greedy"], "pending": 1}
+{"phase": "run", "observed_unix_seconds": 1792343205.804825, "deadline": 1792344105.804814}
+{"phase": "parallel_commands", "observed_unix_seconds": 1792343205.807294, "active": ["parallel-0-random", "parallel-0-scripted_greedy", "parallel-1-random", "parallel-1-scripted_greedy"], "pending": 0}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792343531.32571, "exit_code": -15}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792343531.349654, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792343531.3510568, "command": "parallel-0-scripted_greedy", "exit_code": 124}
+{"phase": "command_finished", "observed_unix_seconds": 1792343531.3538601, "command": "parallel-0-random", "exit_code": 124}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792343531.417343, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792343531.418907, "command": "parallel-1-random", "exit_code": 124}
+{"phase": "run_interrupted", "observed_unix_seconds": 1792343531.4594529, "exit_code": -15}
+{"phase": "command_finished", "observed_unix_seconds": 1792343531.460772, "command": "parallel-1-scripted_greedy", "exit_code": 124}
+{"phase": "failed", "observed_unix_seconds": 1792343531.462421, "error": "RuntimeError: Mini control exited 124; no automatic retry", "seconds": 325.7353920415044}
+Traceback (most recent call last):
+  File "/Users/jack/src/managym-cpu-research/.runs/grid-007/calibrate_mini_evaluation.py", line 113, in <module>
+    main()
+  File "/Users/jack/src/managym-cpu-research/.runs/grid-007/calibrate_mini_evaluation.py", line 89, in main
+    raise RuntimeError(f'Mini control exited {code}; no automatic retry')
+RuntimeError: Mini control exited 124; no automatic retry

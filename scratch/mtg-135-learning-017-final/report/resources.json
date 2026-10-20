@@ -1,0 +1,756 @@
+{
+  "status": "verified",
+  "groups": [
+    {
+      "seed": 13591,
+      "run": "e7acaf5f0c94",
+      "pool": "grid-007-learning017-seed-13591",
+      "log_sha256": "ed1be474d63114af6763560617c0019188346b3e202ba998bf4cad7c3d5642af",
+      "intervals": {
+        "start_to_first_cell_seconds": 450.6985583305359,
+        "setup_phase_seconds": 446.491055727005,
+        "cuda_admission_phase_seconds": 4.005297660827637,
+        "cells": [
+          {
+            "cell": "small-s64",
+            "wrapper_seconds": 765.3540875911713
+          },
+          {
+            "cell": "small-s256",
+            "wrapper_seconds": 294.01727414131165
+          },
+          {
+            "cell": "small-deep-s256",
+            "wrapper_seconds": 366.47264313697815
+          },
+          {
+            "cell": "small-deep-s64",
+            "wrapper_seconds": 922.8798804283142
+          },
+          {
+            "cell": "middle-s64",
+            "wrapper_seconds": 980.4858229160309
+          },
+          {
+            "cell": "middle-s256",
+            "wrapper_seconds": 352.35573530197144
+          },
+          {
+            "cell": "large-shallow-s256",
+            "wrapper_seconds": 333.47996854782104
+          },
+          {
+            "cell": "large-shallow-s64",
+            "wrapper_seconds": 730.9780030250549
+          },
+          {
+            "cell": "large-s64",
+            "wrapper_seconds": 1324.763370513916
+          },
+          {
+            "cell": "large-s256",
+            "wrapper_seconds": 642.8944752216339
+          },
+          {
+            "cell": "small-s4",
+            "wrapper_seconds": 6550.8912007808685
+          }
+        ]
+      },
+      "cells": [
+        {
+          "name": "seed-13591-small-s64",
+          "cell": "small-s64",
+          "seed": 13591,
+          "size": "small",
+          "streams": 64,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1071674,
+          "games": 9976,
+          "inclusive_training_seconds": 758.8387963629793,
+          "active_training_seconds": 750.3181289771746,
+          "training_setup_seconds": 0.04989398899488151,
+          "wrapper_seconds": 765.3540875911713,
+          "peak_cuda_bytes": 426012672,
+          "sampled_peak_rss_bytes": 2631733248,
+          "run_sha256": "885c385f9dc428b82df4a68c33907f77e5037372ab23c622beb646ce00fa48dd"
+        },
+        {
+          "name": "seed-13591-small-s256",
+          "cell": "small-s256",
+          "seed": 13591,
+          "size": "small",
+          "streams": 256,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1091339,
+          "games": 8185,
+          "inclusive_training_seconds": 288.64453198897536,
+          "active_training_seconds": 286.54421530503896,
+          "training_setup_seconds": 0.04956258297897875,
+          "wrapper_seconds": 294.01727414131165,
+          "peak_cuda_bytes": 1398950400,
+          "sampled_peak_rss_bytes": 3597099008,
+          "run_sha256": "c46f1cb67592d2e1cf7105a9083c7cf73d22dcc145f55fe0b3be86e698a704e1"
+        },
+        {
+          "name": "seed-13591-small-deep-s256",
+          "cell": "small-deep-s256",
+          "seed": 13591,
+          "size": "small-deep",
+          "streams": 256,
+          "parameters": 288578,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1089784,
+          "games": 7918,
+          "inclusive_training_seconds": 361.4689993089996,
+          "active_training_seconds": 359.28559043302084,
+          "training_setup_seconds": 0.04887309100013226,
+          "wrapper_seconds": 366.47264313697815,
+          "peak_cuda_bytes": 2105801728,
+          "sampled_peak_rss_bytes": 3586101248,
+          "run_sha256": "7066410b2f795137cd37adb2ed06c0af595534c706a27e0d47752511bf382f79"
+        },
+        {
+          "name": "seed-13591-small-deep-s64",
+          "cell": "small-deep-s64",
+          "seed": 13591,
+          "size": "small-deep",
+          "streams": 64,
+          "parameters": 288578,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1068384,
+          "games": 10842,
+          "inclusive_training_seconds": 917.5468792060274,
+          "active_training_seconds": 911.5186971327348,
+          "training_setup_seconds": 0.0463601540250238,
+          "wrapper_seconds": 922.8798804283142,
+          "peak_cuda_bytes": 581043712,
+          "sampled_peak_rss_bytes": 2610159616,
+          "run_sha256": "bdf957792db4a13bb05d5c507f3708e9327f6895374b839ee2dfa32c806c4dde"
+        },
+        {
+          "name": "seed-13591-middle-s64",
+          "cell": "middle-s64",
+          "seed": 13591,
+          "size": "middle",
+          "streams": 64,
+          "parameters": 2463170,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1076316,
+          "games": 10243,
+          "inclusive_training_seconds": 974.2241667569906,
+          "active_training_seconds": 967.358672151342,
+          "training_setup_seconds": 0.05777496699010953,
+          "wrapper_seconds": 980.4858229160309,
+          "peak_cuda_bytes": 979606016,
+          "sampled_peak_rss_bytes": 2597351424,
+          "run_sha256": "676a1b98d0d905e0d64c973364e5a13598e55187d8b630c0c3c6ff0b0dc879dc"
+        },
+        {
+          "name": "seed-13591-middle-s256",
+          "cell": "middle-s256",
+          "seed": 13591,
+          "size": "middle",
+          "streams": 256,
+          "parameters": 2463170,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1086651,
+          "games": 8229,
+          "inclusive_training_seconds": 347.02328277600463,
+          "active_training_seconds": 344.5951767110091,
+          "training_setup_seconds": 0.04874107800424099,
+          "wrapper_seconds": 352.35573530197144,
+          "peak_cuda_bytes": 3475762176,
+          "sampled_peak_rss_bytes": 3611934720,
+          "run_sha256": "1aea767d376584676b4b711b21d1615fedd963d296fa043817c66bb6d7546715"
+        },
+        {
+          "name": "seed-13591-large-shallow-s256",
+          "cell": "large-shallow-s256",
+          "seed": 13591,
+          "size": "large-shallow",
+          "streams": 256,
+          "parameters": 6169730,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 130583,
+          "environment_decisions": 1093224,
+          "games": 9640,
+          "inclusive_training_seconds": 327.4322332320153,
+          "active_training_seconds": 324.28654415285564,
+          "training_setup_seconds": 0.04915335099212825,
+          "wrapper_seconds": 333.47996854782104,
+          "peak_cuda_bytes": 5125456384,
+          "sampled_peak_rss_bytes": 3609128960,
+          "run_sha256": "5eb3b010e6f4a135cd1da0499cab427df374593074f637bd53cd310d59e6f3f6"
+        },
+        {
+          "name": "seed-13591-large-shallow-s64",
+          "cell": "large-shallow-s64",
+          "seed": 13591,
+          "size": "large-shallow",
+          "streams": 64,
+          "parameters": 6169730,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 130953,
+          "environment_decisions": 1050794,
+          "games": 8766,
+          "inclusive_training_seconds": 725.0782296590041,
+          "active_training_seconds": 718.6761930132052,
+          "training_setup_seconds": 0.04972508500213735,
+          "wrapper_seconds": 730.9780030250549,
+          "peak_cuda_bytes": 1502959616,
+          "sampled_peak_rss_bytes": 2593673216,
+          "run_sha256": "ca23faaefa06d224a6dde31c61dcd5416dca47fcc16cb8b0d5959f785d0541ed"
+        },
+        {
+          "name": "seed-13591-large-s64",
+          "cell": "large-s64",
+          "seed": 13591,
+          "size": "large",
+          "streams": 64,
+          "parameters": 16816514,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8115,
+          "skipped_empty_groups": 77,
+          "optimizer_exposures": 58467,
+          "environment_decisions": 1079676,
+          "games": 8384,
+          "inclusive_training_seconds": 1318.1564286709763,
+          "active_training_seconds": 1306.9876333630236,
+          "training_setup_seconds": 0.05028434700216167,
+          "wrapper_seconds": 1324.763370513916,
+          "peak_cuda_bytes": 3858588672,
+          "sampled_peak_rss_bytes": 2615615488,
+          "run_sha256": "d1551add94ba865dae0beaac0c4fdabc90a96091c81506ecd4be45949d0bb480"
+        },
+        {
+          "name": "seed-13591-large-s256",
+          "cell": "large-s256",
+          "seed": 13591,
+          "size": "large",
+          "streams": 256,
+          "parameters": 16816514,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 122428,
+          "environment_decisions": 1097875,
+          "games": 8017,
+          "inclusive_training_seconds": 636.4400785879989,
+          "active_training_seconds": 630.888671575929,
+          "training_setup_seconds": 0.04895919098635204,
+          "wrapper_seconds": 642.8944752216339,
+          "peak_cuda_bytes": 14390580224,
+          "sampled_peak_rss_bytes": 3642994688,
+          "run_sha256": "16dc06e69e36e53d06648e4184a02e409e5367264ca6c9302541ddf400b03c3f"
+        },
+        {
+          "name": "seed-13591-small-s4",
+          "cell": "small-s4",
+          "seed": 13591,
+          "size": "small",
+          "streams": 4,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 2048,
+          "adam_steps": 91702,
+          "skipped_empty_groups": 39370,
+          "optimizer_exposures": 128591,
+          "environment_decisions": 1055481,
+          "games": 10293,
+          "inclusive_training_seconds": 6542.480191485025,
+          "active_training_seconds": 6416.565206335683,
+          "training_setup_seconds": 0.05902877400512807,
+          "wrapper_seconds": 6550.8912007808685,
+          "peak_cuda_bytes": 105593856,
+          "sampled_peak_rss_bytes": 2384171008,
+          "run_sha256": "09a1fb010fc98ad3085e82f29ae41895cd4e8dc2fbaa2925efc2ae8eabe45749"
+        }
+      ],
+      "rentals": [
+        {
+          "machine": "grid-007-learning017-seed-13591-1ffb638650f5",
+          "pool": "grid-007-learning017-seed-13591",
+          "provider_id": "pvin4z9pqivcfk",
+          "requested_at": "2026-10-18T00:15:05.558341Z",
+          "deleted_at": "2026-10-18T04:16:12.420034Z",
+          "usd_per_hour": "1.19",
+          "estimated_charge_usd": "4.706246066838502950000000000",
+          "request_to_deletion_seconds": "14466.861693",
+          "quoted_rate_cost_floor_usd": "4.782101504075"
+        }
+      ]
+    },
+    {
+      "seed": 13592,
+      "run": "d2c61bf03f93",
+      "pool": "grid-007-learning017-seed-13592",
+      "log_sha256": "58f346893eef5c388059129f21a7135167ec17ffb46a987496fa4e500db6a36e",
+      "intervals": {
+        "start_to_first_cell_seconds": 440.30977964401245,
+        "setup_phase_seconds": 435.90144085884094,
+        "cuda_admission_phase_seconds": 4.206146955490112,
+        "cells": [
+          {
+            "cell": "small-s4",
+            "wrapper_seconds": 6659.899804830551
+          },
+          {
+            "cell": "large-s256",
+            "wrapper_seconds": 654.0728189945221
+          },
+          {
+            "cell": "large-s64",
+            "wrapper_seconds": 1342.765484571457
+          },
+          {
+            "cell": "large-shallow-s64",
+            "wrapper_seconds": 792.4479854106903
+          },
+          {
+            "cell": "large-shallow-s256",
+            "wrapper_seconds": 336.9645528793335
+          },
+          {
+            "cell": "middle-s256",
+            "wrapper_seconds": 355.3563868999481
+          },
+          {
+            "cell": "middle-s64",
+            "wrapper_seconds": 969.2525873184204
+          },
+          {
+            "cell": "small-deep-s64",
+            "wrapper_seconds": 950.3611047267914
+          },
+          {
+            "cell": "small-deep-s256",
+            "wrapper_seconds": 403.9285845756531
+          },
+          {
+            "cell": "small-s256",
+            "wrapper_seconds": 318.46722626686096
+          },
+          {
+            "cell": "small-s64",
+            "wrapper_seconds": 804.0131068229675
+          }
+        ]
+      },
+      "cells": [
+        {
+          "name": "seed-13592-small-s4",
+          "cell": "small-s4",
+          "seed": 13592,
+          "size": "small",
+          "streams": 4,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 2048,
+          "adam_steps": 88643,
+          "skipped_empty_groups": 42429,
+          "optimizer_exposures": 122613,
+          "environment_decisions": 1055342,
+          "games": 9773,
+          "inclusive_training_seconds": 6650.569466561079,
+          "active_training_seconds": 6522.660541746649,
+          "training_setup_seconds": 0.05650696798693389,
+          "wrapper_seconds": 6659.899804830551,
+          "peak_cuda_bytes": 105593856,
+          "sampled_peak_rss_bytes": 2444439552,
+          "run_sha256": "ae7f44ffb8795bbc145334cceeca8f657ba6f7ed1bb67863034308f71b4bf61b"
+        },
+        {
+          "name": "seed-13592-large-s256",
+          "cell": "large-s256",
+          "seed": 13592,
+          "size": "large",
+          "streams": 256,
+          "parameters": 16816514,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 128497,
+          "environment_decisions": 1104425,
+          "games": 8333,
+          "inclusive_training_seconds": 646.0151292909868,
+          "active_training_seconds": 640.0975443526404,
+          "training_setup_seconds": 0.05208600405603647,
+          "wrapper_seconds": 654.0728189945221,
+          "peak_cuda_bytes": 8455932928,
+          "sampled_peak_rss_bytes": 3654807552,
+          "run_sha256": "2fee904d35139d9fc4fb4508fdd05841c4be045e9bc568c6da5cae0f18f54a13"
+        },
+        {
+          "name": "seed-13592-large-s64",
+          "cell": "large-s64",
+          "seed": 13592,
+          "size": "large",
+          "streams": 64,
+          "parameters": 16816514,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8099,
+          "skipped_empty_groups": 93,
+          "optimizer_exposures": 56973,
+          "environment_decisions": 1069535,
+          "games": 8377,
+          "inclusive_training_seconds": 1335.910602260963,
+          "active_training_seconds": 1325.6345712705515,
+          "training_setup_seconds": 0.0532536949031055,
+          "wrapper_seconds": 1342.765484571457,
+          "peak_cuda_bytes": 2473670144,
+          "sampled_peak_rss_bytes": 2657132544,
+          "run_sha256": "b0ce64ddd61e74e9fdd49d3bccffd512fd0314daf20a3d97f6e442d05a0de8b2"
+        },
+        {
+          "name": "seed-13592-large-shallow-s64",
+          "cell": "large-shallow-s64",
+          "seed": 13592,
+          "size": "large-shallow",
+          "streams": 64,
+          "parameters": 6169730,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1068697,
+          "games": 10879,
+          "inclusive_training_seconds": 786.3033506090287,
+          "active_training_seconds": 779.4326757107629,
+          "training_setup_seconds": 0.05191585107240826,
+          "wrapper_seconds": 792.4479854106903,
+          "peak_cuda_bytes": 1880197120,
+          "sampled_peak_rss_bytes": 2625859584,
+          "run_sha256": "00470eab0db0e6eff2d6f32dead6cbedff5aa8fdf9fe46b4321a94acc2231a6d"
+        },
+        {
+          "name": "seed-13592-large-shallow-s256",
+          "cell": "large-shallow-s256",
+          "seed": 13592,
+          "size": "large-shallow",
+          "streams": 256,
+          "parameters": 6169730,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1093735,
+          "games": 8254,
+          "inclusive_training_seconds": 330.87983125296887,
+          "active_training_seconds": 327.6174069932895,
+          "training_setup_seconds": 0.051336935022845864,
+          "wrapper_seconds": 336.9645528793335,
+          "peak_cuda_bytes": 6263253504,
+          "sampled_peak_rss_bytes": 3648253952,
+          "run_sha256": "b5c0afef260aeed86091f422b00206c8e276e959ecf1e533274dda9467ae94be"
+        },
+        {
+          "name": "seed-13592-middle-s256",
+          "cell": "middle-s256",
+          "seed": 13592,
+          "size": "middle",
+          "streams": 256,
+          "parameters": 2463170,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 130358,
+          "environment_decisions": 1075747,
+          "games": 9353,
+          "inclusive_training_seconds": 349.85324475506786,
+          "active_training_seconds": 347.26590808317997,
+          "training_setup_seconds": 0.052186983986757696,
+          "wrapper_seconds": 355.3563868999481,
+          "peak_cuda_bytes": 5112995328,
+          "sampled_peak_rss_bytes": 3632074752,
+          "run_sha256": "7d3cd1b0cc29ef271b0d331e4518801521464ce64e0464e30ab82f94f90f12fd"
+        },
+        {
+          "name": "seed-13592-middle-s64",
+          "cell": "middle-s64",
+          "seed": 13592,
+          "size": "middle",
+          "streams": 64,
+          "parameters": 2463170,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 130474,
+          "environment_decisions": 1070862,
+          "games": 10833,
+          "inclusive_training_seconds": 963.2064347879495,
+          "active_training_seconds": 956.4947285128292,
+          "training_setup_seconds": 0.05340066598728299,
+          "wrapper_seconds": 969.2525873184204,
+          "peak_cuda_bytes": 1439653376,
+          "sampled_peak_rss_bytes": 2623893504,
+          "run_sha256": "662ec49c49c6172a899e1821364b5023025994613232e7ecfdfb889144bddfc6"
+        },
+        {
+          "name": "seed-13592-small-deep-s64",
+          "cell": "small-deep-s64",
+          "seed": 13592,
+          "size": "small-deep",
+          "streams": 64,
+          "parameters": 288578,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1059725,
+          "games": 9323,
+          "inclusive_training_seconds": 944.7975997499889,
+          "active_training_seconds": 938.8011262674117,
+          "training_setup_seconds": 0.055386655032634735,
+          "wrapper_seconds": 950.3611047267914,
+          "peak_cuda_bytes": 631392256,
+          "sampled_peak_rss_bytes": 2624430080,
+          "run_sha256": "d84e09a963ddae67de6ef538f6ebd6b3893bd8dbfa0803a6af446a83e1afcc5a"
+        },
+        {
+          "name": "seed-13592-small-deep-s256",
+          "cell": "small-deep-s256",
+          "seed": 13592,
+          "size": "small-deep",
+          "streams": 256,
+          "parameters": 288578,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1112628,
+          "games": 7244,
+          "inclusive_training_seconds": 398.6109016709961,
+          "active_training_seconds": 396.1534277097089,
+          "training_setup_seconds": 0.05144199600908905,
+          "wrapper_seconds": 403.9285845756531,
+          "peak_cuda_bytes": 2313803264,
+          "sampled_peak_rss_bytes": 3648028672,
+          "run_sha256": "d160b0fc85f36b63af9aabc92acea16e6e3e723698cd05288812c152772a67ab"
+        },
+        {
+          "name": "seed-13592-small-s256",
+          "cell": "small-s256",
+          "seed": 13592,
+          "size": "small",
+          "streams": 256,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 32,
+          "adam_steps": 2048,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1087052,
+          "games": 7854,
+          "inclusive_training_seconds": 313.1738523840904,
+          "active_training_seconds": 310.97404472786,
+          "training_setup_seconds": 0.05178028903901577,
+          "wrapper_seconds": 318.46722626686096,
+          "peak_cuda_bytes": 1475521024,
+          "sampled_peak_rss_bytes": 3627646976,
+          "run_sha256": "cedfb865f558621ec86ceed8bbab029e1fab90d0065cd02f9d838ae36e960a4c"
+        },
+        {
+          "name": "seed-13592-small-s64",
+          "cell": "small-s64",
+          "seed": 13592,
+          "size": "small",
+          "streams": 64,
+          "parameters": 188610,
+          "learner_transitions": 524288,
+          "iterations": 128,
+          "adam_steps": 8192,
+          "skipped_empty_groups": 0,
+          "optimizer_exposures": 131072,
+          "environment_decisions": 1072900,
+          "games": 10360,
+          "inclusive_training_seconds": 798.6380019170465,
+          "active_training_seconds": 793.2394081349485,
+          "training_setup_seconds": 0.05240110494196415,
+          "wrapper_seconds": 804.0131068229675,
+          "peak_cuda_bytes": 440327680,
+          "sampled_peak_rss_bytes": 2608226304,
+          "run_sha256": "3e86f3e3a04f76b8830038ab78dfac548597370407c35f911680202272af7077"
+        }
+      ],
+      "rentals": [
+        {
+          "machine": "grid-007-learning017-seed-13592-65d4e4eeba17",
+          "pool": "grid-007-learning017-seed-13592",
+          "provider_id": "ykksxq1x8wqnnk",
+          "requested_at": "2026-10-18T00:15:12.747670Z",
+          "deleted_at": "2026-10-18T04:18:16.629390Z",
+          "usd_per_hour": "1.19",
+          "estimated_charge_usd": "4.744219806045293900000000000",
+          "request_to_deletion_seconds": "14583.88172",
+          "quoted_rate_cost_floor_usd": "4.820783124111111111111111111"
+        }
+      ]
+    }
+  ],
+  "study_conservative_charge_usd": "10",
+  "campaign_budget": {
+    "authorized_total_usd": "50",
+    "conservative_rental_total_usd": "33.5",
+    "committed_caps_usd": "0",
+    "ancillary_reserve_usd": "5",
+    "allocations": [
+      {
+        "name": "basic-profile-001",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "1.09"
+      },
+      {
+        "name": "basic-profile-002",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.25"
+      },
+      {
+        "name": "basic-profile-003",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.43"
+      },
+      {
+        "name": "basic-profile-004",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.44"
+      },
+      {
+        "name": "basic-profile-005",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.73"
+      },
+      {
+        "name": "size-frontier-006-admission-refusal",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.41"
+      },
+      {
+        "name": "size-frontier-006",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "3.2"
+      },
+      {
+        "name": "size-frontier-006-repaired",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.5"
+      },
+      {
+        "name": "size-frontier-006-repaired-v2",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.91"
+      },
+      {
+        "name": "grid-007-boot-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.26"
+      },
+      {
+        "name": "grid-007-feasibility",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "9.56"
+      },
+      {
+        "name": "grid-007-startup-phase-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.3"
+      },
+      {
+        "name": "grid-007-no-source-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.21"
+      },
+      {
+        "name": "grid-007-compressed-source-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.37"
+      },
+      {
+        "name": "grid-007-projected-source-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.25"
+      },
+      {
+        "name": "grid-007-prebuilt-client-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.61"
+      },
+      {
+        "name": "grid-007-locked-dependency-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.3"
+      },
+      {
+        "name": "grid-007-worker-startup-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.56"
+      },
+      {
+        "name": "grid-007-awake-startup-probe",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "0.45"
+      },
+      {
+        "name": "grid-007-grouped-feasibility",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "2.67"
+      },
+      {
+        "name": "grid-007-longer-learning-017",
+        "status": "terminal-deletion-confirmed",
+        "conservative_charge_usd": "10"
+      }
+    ]
+  },
+  "input_sha256": {
+    ".runs/grid-007/learning-017/verified-results.json": "fa11d7b0e98f67e2929ec74227541c07ee4cca5da3b91f92c5415cb457e5c5b2",
+    ".runs/grid-007/learning-017/allocation.json": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
+    ".runs/grid-007/learning-017/launch.json": "1eedbc571939d06a1db56ced2de42969565c632d56648515b4b456851c3fde36",
+    ".runs/grid-007/learning-017/rental-settlement.json": "fbbb72b4857816ceae1b75209fb11f0db87278869e9a804d373d3930af608dd2",
+    ".runs/gpu-bottleneck/budget.json": "ddb903f18a105343d3a69469b67ac03817f83ebaddf2ef00589d81ec364bd2fb"
+  },
+  "collector_sha256": "f5fcdeb3beacf892a63cfa64e25b89e871c9778731a08b7cf3949caa72526d59",
+  "limits": "Worker phase intervals include dispatch overhead. Request-to-deletion occupancy is conservative; shared setup and retention are not assigned to individual recipes. SDK estimates are not final provider invoices."
+}

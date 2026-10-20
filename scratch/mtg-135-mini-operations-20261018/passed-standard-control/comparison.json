@@ -1,0 +1,35 @@
+{
+  "status": "completed",
+  "host": "mini-heart.local",
+  "parallel_seconds": 165.43540329206735,
+  "games": 32,
+  "workers": 4,
+  "all_decisions_identities_and_replays_equal": true,
+  "gpu_cost_usd": 0,
+  "panels": {
+    "parallel-0-scripted_greedy": {
+      "decision_digest": "556e2b6a1e68e8bc20b63b00b00ebf58a3079cce8bfc5d27596eb075299c0bed",
+      "result_sha256": "d8d7d63c4b65431e41cd7369b11fcf7a02e37444ffd0960ed6b708ba25b0814f",
+      "evaluator_seconds": 121.82568308431655,
+      "games": 8
+    },
+    "parallel-0-random": {
+      "decision_digest": "ba26c824794611cbfafdcdbf1a88a27058f5da97d750000222e43d45e195b282",
+      "result_sha256": "a82327d0b4548464313c72ccb80e0122dd48d757c2d7440c4a652dbbc9885a67",
+      "evaluator_seconds": 163.0899214586243,
+      "games": 8
+    },
+    "parallel-1-scripted_greedy": {
+      "decision_digest": "556e2b6a1e68e8bc20b63b00b00ebf58a3079cce8bfc5d27596eb075299c0bed",
+      "result_sha256": "0fcda18807bb08473b0fd970bbf91d743d79421006cd9df95806fcc6a3c0f430",
+      "evaluator_seconds": 122.331413208507,
+      "games": 8
+    },
+    "parallel-1-random": {
+      "decision_digest": "ba26c824794611cbfafdcdbf1a88a27058f5da97d750000222e43d45e195b282",
+      "result_sha256": "1a11ec14f7ddacb3d4ef99086dee0fb1c6212aa0a15e33a325affc28d2b8255d",
+      "evaluator_seconds": 163.2798183746636,
+      "games": 8
+    }
+  }
+}

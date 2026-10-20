@@ -1,0 +1,38 @@
+{
+  "status": "completed",
+  "purpose": "local timing and equivalence only",
+  "serial_seconds": 95.85639525000079,
+  "parallel_seconds": 67.69261183400158,
+  "equal_work_speedup": 2.8321080440820783,
+  "serial_games": 16,
+  "parallel_games": 32,
+  "parallel_workers": 4,
+  "all_decisions_and_identities_equal": true,
+  "gpu_cost_usd": 0,
+  "panels": {
+    "parallel-0-scripted_greedy": {
+      "decision_digest": "556e2b6a1e68e8bc20b63b00b00ebf58a3079cce8bfc5d27596eb075299c0bed",
+      "result_sha256": "f551ffe6dc759e97578398914211e73e5b8c51ddab17eabe108337a4b04436d2",
+      "evaluator_seconds": 46.166108749999694,
+      "games": 8
+    },
+    "parallel-0-random": {
+      "decision_digest": "ba26c824794611cbfafdcdbf1a88a27058f5da97d750000222e43d45e195b282",
+      "result_sha256": "5a6176754f628fe3c78239b8ba0b1731dbe35bf23f49b37332dd83cd127dfeeb",
+      "evaluator_seconds": 65.91933958300069,
+      "games": 8
+    },
+    "parallel-1-scripted_greedy": {
+      "decision_digest": "556e2b6a1e68e8bc20b63b00b00ebf58a3079cce8bfc5d27596eb075299c0bed",
+      "result_sha256": "719bc736b4303ee9576190194a4ef51efe0157b91b2e9fc7d648cf3d05fcdbea",
+      "evaluator_seconds": 46.12955120799961,
+      "games": 8
+    },
+    "parallel-1-random": {
+      "decision_digest": "ba26c824794611cbfafdcdbf1a88a27058f5da97d750000222e43d45e195b282",
+      "result_sha256": "1e5fc924165bd87ce6842d068723dcd70fbe17ea49aaaeb8f6a36ae8ebe48883",
+      "evaluator_seconds": 66.04346545899898,
+      "games": 8
+    }
+  }
+}

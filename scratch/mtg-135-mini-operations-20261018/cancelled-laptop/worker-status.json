@@ -1,0 +1,6 @@
+{
+  "phase": "failed",
+  "observed_unix_seconds": 1792341257.7546618,
+  "error": "RuntimeError: Panel exited 124; partial results retained without retry",
+  "seconds": 1633.0583673330038
+}

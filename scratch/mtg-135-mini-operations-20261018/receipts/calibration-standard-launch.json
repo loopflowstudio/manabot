@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-10-18T18:54:25.615210+00:00",
+  "label": "gg.manabot.mtg135.protocol017-mini-standard",
+  "domain": "gui/502",
+  "process_type": "Standard",
+  "automatic_restart": false,
+  "reason": "Correct Background scheduling after retained watchdog failures; apply merged PR311 event serialization",
+  "repair_note_sha256": "5b0bb1b38cb27b6978fd85a7e1d51d8ec3b6aed799b6e5be851643ffc1cf5634",
+  "controller_sha256": "317ee36223ca89d5cc99df02f5ba6a442ca71d537dcc3a56a38bf0336bf05977"
+}
