@@ -102,13 +102,29 @@ wide range of environments.
 
 ## Scale
 
-Training scale per agent. We add a row when a run sets a new high.
+Training scale per agent, measured in **learner decisions**: the decisions
+the learning policy made and trained on. Decisions with a single legal action
+are played automatically and not counted, and neither are the opponent seat's
+decisions in self-play. This unit does not depend on model size or batching,
+unlike iterations or Adam steps, and does not depend on hardware, unlike
+dollars or hours. We add a row when a run sets a new high.
 
-| Agent | Date | Hardware | Learner transitions | Updates |
-|---|---|---|---:|---:|
-| `small-100k`, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10 | 1× L4 | ~51M | 100,000 iterations (~800k Adam steps) |
+| Agent | Date | Model | Learner decisions | Decisions per iteration × iterations | Hardware |
+|---|---|---|---:|---:|---|
+| first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64 | 262k | 512 × 512 | CPU |
+| matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | 100k params | 5.8M | 2,048 × 2,850 | M4 Max |
+| `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64×2, 188k params | 13.3M | 512 × 26,000 | 1× L4 |
+| `small-63k`, continued | 2026-10 | 64×2 | 32.3M | 512 × 63,000 | 1× L4 |
+| `small-100k`, continued | 2026-10 | 64×2 | 51.2M | 512 × 100,000 | 1× L4 |
 
-Learner transitions are agent decisions.
+The first two rows predate the current world and encoding, so they record
+scale only. The [scale ladder](experiments/scale-ladder.md) is running a single
+64×2 run at 16,384 decisions per iteration. Its $10 and $50 checkpoints should
+be about 160M and 780M decisions.
+
+Learning-rate schedules currently count iterations, not decisions. The same
+recipe run at a different batch size therefore decays at a different number
+of decisions: about 18M for `small-100k` versus about 575M for the ladder run.
 
 ## Earlier results
 

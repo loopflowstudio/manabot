@@ -73,7 +73,13 @@ about 6.4M transitions; this tier sees roughly 150M). The medium tier scores at
 least 0.05 higher than the small tier in mean heuristic score over the four
 cells. A miss is retained as the result.
 
-| World | Tier | Updates | Transitions | Hours | vs heuristic (LvA) | vs heuristic (mean) |
+Scale is reported in learner decisions (see the README's Scale section);
+here one iteration is 16,384 decisions. The learning-rate schedule counts
+iterations, so v1's tiers compare directly only with runs at the same
+decisions per iteration. A later version may put the schedule on a decisions
+clock.
+
+| World | Tier | Iterations | Learner decisions | Hours | vs heuristic (LvA) | vs heuristic (mean) |
 |---|---|---:|---:|---:|---|---|
 | Allies vs Lessons v1 | $10 / 1 day | pending | | | | |
 | Allies vs Lessons v1 | $50 / 7 days | pending | | | | |
