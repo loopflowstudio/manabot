@@ -158,6 +158,7 @@ jobs:
       - name: Integration tests
         run: |
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
+            tests/test_package_boundaries.py \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
