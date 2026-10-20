@@ -13,7 +13,7 @@ The GPU job (`execute`) trains and retains exports only. An operator then runs
 rented CPU allocation. Initialization, 64 and 128 reuse the frozen complexity
 plan's L3 protocols exactly, so arm-C (continuous scratch) cells there are
 directly comparable; 32 has its own disjoint deal family. Design and decisions:
-`scratch/measure-learning-progress-across-simple.md`.
+`experiments/curriculum-design.md`.
 """
 
 import argparse

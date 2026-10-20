@@ -2,7 +2,7 @@
 
 Reads admitted arena results and never plays games. Written and frozen before
 any curriculum cell was scored; the rules here are the design's
-(`scratch/measure-learning-progress-across-simple.md`), not fitted to data.
+(`experiments/curriculum-design.md`), not fitted to data.
 
 - `paired_difference`: two checkpoints scored on the identical protocol,
   deals and opponent, subtracted per deal and leg before resampling whole
