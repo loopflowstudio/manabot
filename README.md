@@ -82,12 +82,17 @@ back into the policy ([local policy search](docs/local-policy-search.md)).
 This runs end to end but has not yet shown a strength gain over the policy
 alone.
 
-**Evaluation.** Checkpoints play fixed opponents (random, scripted greedy, and
-a stronger rule-based `heuristic` bot) on held-out paired deals, with both
-decks and both seats, and every game is replay-verified. Claims about a
-training method use independent training seeds, not just more games.
-Experiments are preregistered: the prediction and kill criteria are committed
-before the run ([experiments/](experiments/README.md)).
+**Evaluation.** Trained agents play each other. A *Tournament* file names a
+roster of checkpoints and fixed opponents, and the runner plays every pairing
+on the same held-out deals, with both decks and both seats
+([head-to-head](experiments/head-to-head.md)). Head-to-head play separates
+checkpoints that look the same against a scripted opponent, and the arena
+fits ratings across the whole population (`manabot/arena/`). Fixed anchors
+(random, scripted greedy, and a stronger rule-based `heuristic` bot) give a
+stable reference point across runs. Every game is replay-verified, claims
+about a training method use independent training seeds, and experiments are
+preregistered: the prediction and kill criteria are committed before the run
+([experiments/](experiments/README.md)).
 
 ## Not built yet
 
