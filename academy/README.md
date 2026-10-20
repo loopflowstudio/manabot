@@ -34,6 +34,9 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
+- **`opponent.py`**: trained opponents — the configured `candidate.json`
+  bundle and the checkpoint catalog (`GET /api/opponents`), both chosen by
+  exact SHA-256 and verified before play
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only
@@ -70,6 +73,20 @@ uv run uvicorn academy.server:app --port 8000
 The [local trained-challenger workflow](../docs/local-trained-challenger.md)
 covers training, the built same-origin server, feedback, and read-only SQL.
 Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
+
+Any other trained checkpoint is selectable from the Opponent menu. The table
+lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
+and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
+Tournament files, separated by `:` — with world, model shape, training step
+and producer. manabot's `manabot.model.catalog` reads them with Torch's
+weights-only loader and checks each world binding against the running engine;
+an incompatible checkpoint stays listed, disabled, with the mismatch (for
+example `trained in w5, engine is w6`), and the server refuses it with the same
+sentence. The browser sends only a digest; the server re-hashes the bytes,
+checks the selected decks against the checkpoint's binding (either seat), and
+records the exact checkpoint identity as the trace's `opponent_checkpoint`.
+Listing needs the training dependencies; a play-only install reports that the
+catalog is unavailable and still serves the configured candidate.
 
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
