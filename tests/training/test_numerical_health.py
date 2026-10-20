@@ -16,6 +16,7 @@ import pytest
 import torch
 from torch import Tensor
 
+from experiments.recipes import regime
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
@@ -32,7 +33,6 @@ from manabot.training.ataraxos import damped_policy_loss, update_move_iteration
 from manabot.training.health import NumericalHealth, OptimizerHealth
 from manabot.training.models import (
     AtaraxosMoveLearning,
-    TrainingRegime,
     TrainingRun,
     TrainSelfPlay,
 )
@@ -323,9 +323,7 @@ def test_extreme_real_collector_to_learner() -> None:
 def test_failed_update_retains_state_and_excludes_prior_overhead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
-    recipe = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
-    )
+    recipe = regime("ataraxos-move-scalar")
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.stages = recipe.stages[:1]

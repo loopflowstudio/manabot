@@ -108,9 +108,9 @@ uv run manabot train          # small CPU training run, under a minute, no W&B
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to
-`.runs/local/`. Training recipes are JSON *regimes* under
-[experiments/regimes/](experiments/regimes/). The current GPU baseline is
-`uv run manabot train --regime experiments/regimes/batched-baseline.json`.
+`.runs/local/`. Training recipes are typed *regimes* composed in Python in
+[experiments/recipes.py](experiments/recipes.py). The current GPU baseline is
+`uv run manabot train --regime-name batched-baseline --out .runs/batched/run`.
 [manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
 simulation, and evaluation.
 

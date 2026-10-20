@@ -267,7 +267,7 @@ Three kinds of progress are easy to confuse: \emph{optimization} progress (loss,
 
 The rules subset omits replacement and prevention effects, full layers and mulligans. The card pool is two decks. Opponents are scripted bots and our own checkpoints; there is no human evaluation. Several self-play findings rest on two or three training seeds. The literature mapping reflects our reading and is not a survey.
 
-\paragraph{Reproducibility.} Every number traces to a report under \texttt{experiments/}. The research summary in \texttt{manabot/RESEARCH.md} links current findings to their reports. Training recipes are JSON regimes under \texttt{experiments/regimes/}; the current baseline is \texttt{batched-baseline.json}.
+\paragraph{Reproducibility.} Every number traces to a report under \texttt{experiments/}. The research summary in \texttt{manabot/RESEARCH.md} links current findings to their reports. Training recipes are typed regimes composed in Python in \texttt{experiments/recipes.py}; the current baseline is \texttt{batched\_baseline}.
 
 \appendix
 % ---------------------------------------------------------------------------

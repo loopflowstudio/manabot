@@ -8,7 +8,7 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
-uv run manabot train --regime experiments/regimes/batched-baseline.json  # batched GPU baseline
+uv run manabot train --regime-name batched-baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -45,7 +45,7 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
-For GPU training, start from `experiments/regimes/batched-baseline.json`. It is the
+For GPU training, start from `batched_baseline()` in `experiments/recipes.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)

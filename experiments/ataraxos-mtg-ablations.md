@@ -13,7 +13,7 @@ uv run --extra notebook experiments/runners/run_training_regimes.py --report-onl
 The smoke runs all five core arms for two checkpoints and two updates per
 checkpoint, on one initialization seed. Each checkpoint completes a four-leg
 block against the control and fixed random anchor. It is deliberately too small
-to accept or reject a treatment. Regimes in `experiments/regimes/` are bounded
+to accept or reject a treatment. Regimes in `experiments/recipes.py` are bounded
 pilot recipes; their counts do not encode the draft hour-long screen below.
 Named add-ons have separate runnable recipes and bounded optimizer fixtures;
 they are not secretly added to the core five-arm run list.
