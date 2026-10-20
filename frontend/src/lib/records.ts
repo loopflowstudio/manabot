@@ -32,6 +32,6 @@ export function recordFetch(input: RequestInfo | URL, init: RequestInit = {}): P
   if (player) headers.set('x-etude-player-token', player);
   const tokens = credentials();
   headers.set('x-etude-participant-tokens', tokens.join(','));
-  if (tokens.length) headers.set('x-etude-participant-token', tokens[tokens.length - 1]);
+  if (tokens.length && !headers.has('x-etude-participant-token')) headers.set('x-etude-participant-token', tokens[tokens.length - 1]);
   return fetch(input, { ...init, headers });
 }

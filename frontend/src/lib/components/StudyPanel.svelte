@@ -12,6 +12,7 @@
     plans?: StudyDisplayPlan[];
     selectedPlan?: StudyPlanKind | null;
     busy?: boolean;
+    inspected?: boolean;
     errorMessage?: string | null;
     onRetry?: (offer: InteractionOffer) => void;
     onReveal?: () => void;
@@ -26,6 +27,7 @@
     plans = [],
     selectedPlan = null,
     busy = false,
+    inspected = false,
     errorMessage = null,
     onRetry = undefined,
     onReveal = undefined,
@@ -90,7 +92,7 @@
     <div>
       <p class="type-rubric text-mountain-ink">Study · Decision {restored.ordinal + 1}</p>
       <h2 id="study-heading" class="type-title mt-1 text-display">
-        {phase === 'restored' ? 'Retry before reveal' : phase === 'retried' ? 'Your line is committed' : 'Compare plans'}
+        {phase === 'restored' ? (inspected ? 'Try another line' : 'Retry before reveal') : phase === 'retried' ? 'Your line is committed' : 'Compare plans'}
       </h2>
     </div>
     <button
@@ -117,7 +119,7 @@
 
   {#if phase === 'restored'}
     <p class="type-annotation mt-3 text-ink-2">
-      Choose your line from the exact historical offer. Policy and Search stay sealed until one command is accepted.
+      {inspected ? 'Choose your line from the exact historical offer. The recorded match stays at its current decision.' : 'Choose your line from the exact historical offer. Policy and Search stay sealed until one command is accepted.'}
     </p>
     <div class="mt-3 grid gap-2" role="group" aria-label="Retry choices">
       {#each restored.frame.offers as offer}
@@ -135,8 +137,9 @@
     </div>
   {:else if phase === 'retried'}
     <p class="type-annotation mt-3 text-ink-2">
-      Your prediction is locked. Reveal asks the evidence provider now; returning leaves it sealed.
+      {inspected ? 'Your line ran on an isolated rules branch. Return to compare it with the recorded bot choice.' : 'Your prediction is locked. Reveal asks the evidence provider now; returning leaves it sealed.'}
     </p>
+    {#if !inspected}
     <button
       type="button"
       data-testid="study-reveal"
@@ -146,6 +149,7 @@
     >
       {busy ? 'Checking evidence…' : 'Reveal plans'}
     </button>
+    {/if}
   {:else if phase === 'revealed'}
     <p class="type-annotation mt-3 text-ink-2">
       Played, Policy, and Search are separate judgments. Focus a plan to highlight its authoritative table objects; select it to play its bounded continuation.
