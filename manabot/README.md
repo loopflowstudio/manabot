@@ -185,6 +185,15 @@ GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
 cell; it is not yet a frozen anchor comparison.
 
+Monitoring also accepts `MonitorProtocol(opponent="checkpoint",
+checkpoint_opponent=FrozenCheckpointOpponent(artifact=reference,
+training_seed=seed))`. It admits the exact artifact digest, setup and observation
+ABI before play; the frozen opponent uses the same stochastic CPU inference
+budget as the candidate. Default monitoring protocol serialization is unchanged.
+The [retained anchor comparison](../experiments/evaluation-anchors.md) supplies
+cohort admission, one-game pairing smoke checks, failure retention and whole-deal
+analysis; its full experiment remains separate from implementation checks.
+
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
 custom-deck root requires its exact checkpoint setup binding.

@@ -51,11 +51,9 @@ def _relocate(artifact: ArtifactReference, outputs: Path) -> ArtifactReference:
         and path.stat().st_size == artifact["bytes"]
         and file_sha256(path) == artifact["sha256"]
     ]
-    if len(matches) != 1:
-        raise ValueError(
-            f"retained checkpoint missing or ambiguous: {artifact['path']}"
-        )
-    return {**artifact, "path": str(matches[0].resolve())}
+    if not matches:
+        raise ValueError(f"retained checkpoint missing: {artifact['path']}")
+    return {**artifact, "path": str(sorted(matches)[0].resolve())}
 
 
 def _checkpoint(

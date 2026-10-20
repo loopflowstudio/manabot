@@ -264,10 +264,17 @@ def test_result_purpose_preserves_protocol_binding(
 
 @pytest.mark.parametrize(
     "max_commands,opponent",
-    [(1, "scripted_greedy"), (10000, "scripted_greedy"), (10000, "random")],
+    [
+        (1, "scripted_greedy"),
+        (10000, "scripted_greedy"),
+        (10000, "random"),
+        (10000, "checkpoint"),
+    ],
 )
 def test_real_arena_checkpoint_outcomes(
-    tmp_path: Path, max_commands: int, opponent: Literal["scripted_greedy", "random"]
+    tmp_path: Path,
+    max_commands: int,
+    opponent: Literal["scripted_greedy", "random", "checkpoint"],
 ) -> None:
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
@@ -329,6 +336,16 @@ def test_real_arena_checkpoint_outcomes(
                 # loading torch; macOS runners have taken 30s for one
                 # random-opponent game. It guards hangs, not evaluator speed.
                 opponent=opponent,
+                checkpoint_opponent=monitor.FrozenCheckpointOpponent(
+                    artifact={
+                        "path": str(checkpoint),
+                        "sha256": monitor.file_sha256(checkpoint),
+                        "bytes": checkpoint.stat().st_size,
+                    },
+                    training_seed=17,
+                )
+                if opponent == "checkpoint"
+                else None,
                 comparison_sha256="a" * 64 if opponent == "random" else None,
             ),
         )
@@ -355,6 +372,32 @@ def test_real_arena_checkpoint_outcomes(
         assert all(
             (tmp_path / "arena" / row.trace_path).is_file() for row in result.rows
         )
+        if opponent == "checkpoint":
+            assert (
+                result.opponent.checkpoint_sha256 == result.candidate.checkpoint_sha256
+            )
+            assert result.opponent.player_id != result.candidate.player_id
+            corrupt = tmp_path / "corrupt.pt"
+            data = bytearray(checkpoint.read_bytes())
+            data[-1] ^= 1
+            corrupt.write_bytes(data)
+            bad_protocol = result.protocol.model_copy(
+                update={
+                    "checkpoint_opponent": monitor.FrozenCheckpointOpponent(
+                        artifact={**result.artifact, "path": str(corrupt)},
+                        training_seed=17,
+                    )
+                }
+            )
+            with pytest.raises(ValueError, match="opponent checkpoint differs"):
+                monitor.evaluate_checkpoint(
+                    run,
+                    result.artifact,
+                    result.coordinates,
+                    tmp_path / "corrupt-attempt",
+                    protocol=bad_protocol,
+                )
+            assert (tmp_path / "corrupt-attempt/admission-failure.json").is_file()
     finally:
         torch.set_num_threads(previous_threads)
 
@@ -392,3 +435,24 @@ def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     changed.protocol.deal_seeds = (200,)
     with pytest.raises(ValueError, match="same run"):
         evaluation_dashboard([complete, changed])
+
+
+def test_frozen_opponent_requires_artifact_without_changing_defaults() -> None:
+    default = monitor.MonitorProtocol().model_dump(mode="json")
+    assert "opponent" not in default
+    assert "checkpoint_opponent" not in default
+    with pytest.raises(ValueError, match="exact artifact"):
+        monitor.MonitorProtocol(opponent="checkpoint")
+    frozen = monitor.FrozenCheckpointOpponent(
+        artifact={"path": "frozen.pt", "sha256": "a" * 64, "bytes": 10},
+        training_seed=12261,
+    )
+    with pytest.raises(ValueError, match="exact artifact"):
+        monitor.MonitorProtocol(checkpoint_opponent=frozen)
+    protocol = monitor.MonitorProtocol(
+        opponent="checkpoint", checkpoint_opponent=frozen
+    )
+    assert (
+        monitor.MonitorProtocol.model_validate_json(protocol.model_dump_json())
+        == protocol
+    )

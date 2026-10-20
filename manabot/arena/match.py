@@ -321,6 +321,7 @@ def play_cell(
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
     matchup_mode: MatchupMode = "cross",
+    selected_legs: tuple[int, ...] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
@@ -364,6 +365,21 @@ def play_cell(
                 raise ValueError(
                     "mirrors require explicit checkpoint deck repetition admission"
                 )
+    legs = (
+        range(8)
+        if matchup_mode == "all"
+        else range(4, 8)
+        if matchup_mode == "mirrors"
+        else range(4 if selected else 2)
+    )
+    if selected_legs is not None:
+        if (
+            not selected_legs
+            or len(set(selected_legs)) != len(selected_legs)
+            or not set(selected_legs) <= set(legs)
+        ):
+            raise ValueError("selected legs must be unique members of the matchup")
+        legs = selected_legs
     games, rows = [], []
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
@@ -381,13 +397,6 @@ def play_cell(
             )
             for p in (player_a, player_b)
         }
-        legs = (
-            range(8)
-            if matchup_mode == "all"
-            else range(4, 8)
-            if matchup_mode == "mirrors"
-            else range(4 if selected else 2)
-        )
         for leg in legs:
             seat_players = (
                 [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]

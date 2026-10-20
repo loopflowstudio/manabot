@@ -350,3 +350,25 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
 
     with pytest.raises(RuntimeError, match="SHA-256"):
         validate_registered_player(candidate, path)
+
+
+def test_selected_leg_retains_failed_attempt(tmp_path: Path) -> None:
+    key, (random, scripted) = selected_players()
+    rows, trace, _ = play_cell(
+        key=key,
+        player_a=random,
+        player_b=scripted,
+        deal_seeds=(83003,),
+        out_dir=tmp_path / "failure",
+        matchup_mode="all",
+        selected_legs=(7,),
+        max_commands=1,
+    )
+    assert len(rows) == 1
+    assert rows[0]["deal_seed"] == 83003
+    assert rows[0]["leg"] == 7
+    assert rows[0]["failure"] is not None
+    assert not rows[0]["terminated"]
+    games = read_trace(Path(trace["path"]))
+    assert len(games) == 1
+    assert len(games[0]["decisions"]) == 1

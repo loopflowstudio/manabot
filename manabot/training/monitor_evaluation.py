@@ -39,6 +39,8 @@ from manabot.arena.models import (
     canonical_sha256,
     file_sha256,
 )
+from manabot.env import Match
+from manabot.model.world import validate_agent_setup
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
 from manabot.training.execution import atomic_json
@@ -54,6 +56,13 @@ EvaluationPurpose = Literal[
     "frozen-study-evaluation",
     "supplemental-matchup-diagnostic",
 ]
+
+
+class FrozenCheckpointOpponent(Strict):
+    """Exact checkpoint bytes and producer seed; inference matches the candidate."""
+
+    artifact: ArtifactReference
+    training_seed: int
 
 
 class MonitorProtocol(Strict):
@@ -77,8 +86,11 @@ class MonitorProtocol(Strict):
     bootstrap_replicates: int = Field(default=2000, ge=1)
     game_seconds: float = Field(default=120, gt=0)
     max_commands: int = Field(default=10_000, ge=1)
-    opponent: Literal["scripted_greedy", "heuristic", "random"] = Field(
+    opponent: Literal["scripted_greedy", "heuristic", "random", "checkpoint"] = Field(
         default="scripted_greedy", exclude_if=lambda value: value == "scripted_greedy"
+    )
+    checkpoint_opponent: FrozenCheckpointOpponent | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     # A frozen external comparison owns seeds, selection and analysis. This binds
     # its exact bytes; the evaluator itself supplies no promotion decision.
@@ -105,6 +117,8 @@ class MonitorProtocol(Strict):
             raise ValueError(
                 "held-out evaluation requires a frozen study protocol binding"
             )
+        if (self.opponent == "checkpoint") != (self.checkpoint_opponent is not None):
+            raise ValueError("checkpoint opponent requires its exact artifact and seed")
         if not self.deal_seeds or len(set(self.deal_seeds)) != len(self.deal_seeds):
             raise ValueError("monitoring deals must be nonempty and unique")
         return self
@@ -416,16 +430,44 @@ def _manifest(
         training_seed=run.seed,
         artifact_id=f"monitor/{artifact['sha256']}",
     )
-    opponent = PlayerRegistration(
-        **common,
-        player_id="monitor-" + protocol.opponent.replace("_", "-"),
-        display_name=OPPONENT_NAMES[protocol.opponent],
-        role="anchor",
-        runner_kind="code",
-        player_spec={"kind": protocol.opponent},
-        compute_class_id=protocol.opponent.replace("_", "-") + "-cpu-v1",
-        source_sha256=_opponent_source_sha256(protocol.opponent),
-    )
+    if protocol.opponent != "checkpoint":
+        opponent = PlayerRegistration(
+            **common,
+            player_id="monitor-" + protocol.opponent.replace("_", "-"),
+            display_name=OPPONENT_NAMES[protocol.opponent],
+            role="anchor",
+            runner_kind="code",
+            player_spec={"kind": protocol.opponent},
+            compute_class_id=protocol.opponent.replace("_", "-") + "-cpu-v1",
+            source_sha256=_opponent_source_sha256(protocol.opponent),
+        )
+    else:
+        frozen = protocol.checkpoint_opponent
+        assert frozen is not None
+        frozen_path = Path(frozen.artifact["path"]).resolve()
+        if (
+            frozen_path.stat().st_size != frozen.artifact["bytes"]
+            or file_sha256(frozen_path) != frozen.artifact["sha256"]
+        ):
+            raise ValueError("opponent checkpoint differs from recorded artifact")
+        frozen_agent, frozen_space = load_checkpoint_agent(str(frozen_path))
+        validate_agent_setup(frozen_agent, Match(run.regime.match).to_rust())
+        if frozen_space.shapes != space.shapes:
+            raise ValueError("opponent observation ABI differs from candidate")
+        opponent = PlayerRegistration(
+            **common,
+            player_id="monitor-frozen-checkpoint",
+            display_name="Frozen checkpoint",
+            role="anchor",
+            runner_kind="checkpoint",
+            player_spec=candidate.player_spec,
+            compute_class_id=candidate.compute_class_id,
+            checkpoint_sha256=frozen.artifact["sha256"],
+            checkpoint_bytes=frozen.artifact["bytes"],
+            parameter_count=sum(p.numel() for p in frozen_agent.parameters()),
+            training_seed=frozen.training_seed,
+            artifact_id=f"monitor/{frozen.artifact['sha256']}",
+        )
     key = ArenaKey(
         world=run.regime.world,
         content_suite=SELECTED_SUITE,
@@ -486,6 +528,11 @@ def evaluate_checkpoint(
     result.coordinator_rss_before_bytes = process.memory_info().rss
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
+    checkpoint_paths = {result.candidate.player_id: result.artifact["path"]}
+    if result.protocol.checkpoint_opponent is not None:
+        checkpoint_paths[result.opponent.player_id] = (
+            result.protocol.checkpoint_opponent.artifact["path"]
+        )
     try:
         for block, seed in enumerate(result.protocol.deal_seeds):
             directory = output_dir / f"deal-{block:03d}"
@@ -497,7 +544,7 @@ def evaluate_checkpoint(
                 player_b=result.opponent,
                 deal_seeds=(seed,),
                 out_dir=directory,
-                checkpoint_paths={result.candidate.player_id: result.artifact["path"]},
+                checkpoint_paths=checkpoint_paths,
                 game_seconds=result.protocol.game_seconds,
                 max_commands=result.protocol.max_commands,
                 matchup_mode="all" if result.protocol.include_mirrors else "cross",
