@@ -4,7 +4,7 @@
 quarter of training on L1 simple creatures and lands does not make Allies versus
 Lessons (L3) learning faster or stronger than spending it on L3. It starts
 behind and only catches up. Design, decisions and the frozen rules are in
-[the design](../scratch/measure-learning-progress-across-simple.md); rules as
+[the design](curriculum-design.md); rules as
 code in `experiments/runners/curriculum_analysis.py`, frozen plan in
 [curriculum-plan.json](curriculum-plan.json).
 
