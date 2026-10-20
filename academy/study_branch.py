@@ -14,6 +14,8 @@ from typing import Any, Literal, Mapping
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 import managym
+from managym.decision import Command as SemanticCommand, DecisionFrame
+from managym.experience import Command
 
 from .replay_index import (
     CanonicalReplayV1,
@@ -37,7 +39,9 @@ class StudyExecutionReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     driver: Literal["full_clone/current_game_v1"] = STUDY_BRANCH_DRIVER
-    command_path: Literal["structured_offers/step_structured_v1"] = STUDY_COMMAND_PATH
+    command_path: Literal[
+        "structured_offers/step_structured_v1", "semantic_offers/step_semantic_v1"
+    ] = STUDY_COMMAND_PATH
     published_offer_sets: NonNegativeInt
     accepted_commands: NonNegativeInt
     rejected_commands: NonNegativeInt
@@ -80,6 +84,9 @@ class StudyBranch:
         self._accepted_commands = 0
         self._rejected_commands = 0
         self._committed_engine_actions = 0
+        self._command_path: Literal[
+            "structured_offers/step_structured_v1", "semantic_offers/step_semantic_v1"
+        ] = STUDY_COMMAND_PATH
 
     @property
     def viewer(self) -> int:
@@ -169,6 +176,40 @@ class StudyBranch:
             int(engine_actions),
         )
 
+    def submit_semantic(self, command: Command) -> managym.Observation:
+        """Execute an exact recorded watch offer on its isolated native root.
+
+        Watch records every native microchoice. These already bind one semantic
+        offer, so no structured-offer grouping or label matching is necessary.
+        """
+        env, restored = self._require_open()
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        prompt = restored.frame.prompt
+        if (
+            prompt is None
+            or frame.actor != restored.viewer
+            or command.match_id != restored.frame.match_id
+            or command.expected_revision != restored.revision
+            or command.prompt_id != prompt.id
+            or command.answers
+            or command.offer_id not in {offer.id for offer in restored.frame.offers}
+            or command.offer_id not in {int(offer["id"]) for offer in frame.offers}
+        ):
+            self._rejected_commands += 1
+            raise StudyBranchUnavailableError(
+                "Study command differs from the retained offer"
+            )
+        self._command_path = "semantic_offers/step_semantic_v1"
+        self._published_offer_sets += 1
+        env.step_semantic_command(
+            SemanticCommand(
+                command.command_id, frame.revision, command.offer_id
+            ).to_json()
+        )
+        self._accepted_commands += 1
+        self._committed_engine_actions += 1
+        return env.observation_for_player(restored.viewer)
+
     def return_to_recorded(self) -> StudyReturnReceipt:
         """Close the branch and return the source-bound canonical decision."""
         _, restored = self._require_open()
@@ -191,6 +232,7 @@ class StudyBranch:
 
     def _execution_receipt(self) -> StudyExecutionReceipt:
         return StudyExecutionReceipt(
+            command_path=self._command_path,
             published_offer_sets=self._published_offer_sets,
             accepted_commands=self._accepted_commands,
             rejected_commands=self._rejected_commands,
