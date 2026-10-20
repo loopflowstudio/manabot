@@ -292,3 +292,11 @@ def test_scoring_refuses_local_hosts(
     monkeypatch.delenv("ETUDE_RUN", raising=False)
     with pytest.raises(ValueError, match="rented allocation"):
         evaluate_retained(tmp_path)
+
+
+def test_frozen_plan_file_admits_its_cohort() -> None:
+    path = COMPLEXITY_PLAN.parent / "curriculum-plan.json"
+    plan = CurriculumPlan.model_validate_json(path.read_text())
+    plan.complexity()
+    # The GPU job's deadline check runs after the in-job native build.
+    assert plan.total_seconds - 1200 >= 12 * plan.training_seconds_per_fit + 300
