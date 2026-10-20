@@ -1,0 +1,1047 @@
+{
+ "missing": [],
+ "contrasts": {
+  "heuristic/32": {
+   "seeds": {
+    "12251": {
+     "difference": -0.1375,
+     "lower": -0.17,
+     "upper": -0.105,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.22,
+      "ur_lessons v gw_allies": -0.02,
+      "gw_allies v ur_lessons": -0.19,
+      "gw_allies v gw_allies": -0.12
+     },
+     "curriculum": 0.1175,
+     "scratch": 0.255
+    },
+    "12252": {
+     "difference": -0.0975,
+     "lower": -0.13,
+     "upper": -0.065,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.08,
+      "ur_lessons v gw_allies": -0.07,
+      "gw_allies v ur_lessons": -0.18,
+      "gw_allies v gw_allies": -0.06
+     },
+     "curriculum": 0.155,
+     "scratch": 0.2525
+    },
+    "12253": {
+     "difference": 0.0475,
+     "lower": 0.015,
+     "upper": 0.08,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.0,
+      "ur_lessons v gw_allies": 0.0,
+      "gw_allies v ur_lessons": 0.1,
+      "gw_allies v gw_allies": 0.09
+     },
+     "curriculum": 0.18,
+     "scratch": 0.1325
+    },
+    "12271": {
+     "difference": -0.07,
+     "lower": -0.1075,
+     "upper": -0.0325,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.07,
+      "ur_lessons v gw_allies": -0.02,
+      "gw_allies v ur_lessons": -0.14,
+      "gw_allies v gw_allies": -0.05
+     },
+     "curriculum": 0.1475,
+     "scratch": 0.2175
+    },
+    "12272": {
+     "difference": 0.0025,
+     "lower": -0.03,
+     "upper": 0.0375,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.01,
+      "ur_lessons v gw_allies": -0.04,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": 0.06
+     },
+     "curriculum": 0.2,
+     "scratch": 0.1975
+    },
+    "12273": {
+     "difference": -0.0225,
+     "lower": -0.055,
+     "upper": 0.0125,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.06,
+      "ur_lessons v gw_allies": -0.02,
+      "gw_allies v ur_lessons": 0.08,
+      "gw_allies v gw_allies": -0.09
+     },
+     "curriculum": 0.17,
+     "scratch": 0.1925
+    }
+   },
+   "summary": {
+    "mean": -0.046250000000000006,
+    "lower": -0.11780716024720156,
+    "upper": 0.02530716024720154,
+    "positive_seeds": 2
+   }
+  },
+  "heuristic/64": {
+   "seeds": {
+    "12251": {
+     "difference": -0.045,
+     "lower": -0.0875,
+     "upper": -0.005,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.1,
+      "ur_lessons v gw_allies": -0.05,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": 0.0
+     },
+     "curriculum": 0.275,
+     "scratch": 0.32
+    },
+    "12252": {
+     "difference": -0.05,
+     "lower": -0.0925,
+     "upper": -0.0075,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.0,
+      "ur_lessons v gw_allies": -0.01,
+      "gw_allies v ur_lessons": -0.17,
+      "gw_allies v gw_allies": -0.02
+     },
+     "curriculum": 0.28,
+     "scratch": 0.33
+    },
+    "12253": {
+     "difference": -0.02,
+     "lower": -0.0575,
+     "upper": 0.0175,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.02,
+      "ur_lessons v gw_allies": 0.02,
+      "gw_allies v ur_lessons": -0.04,
+      "gw_allies v gw_allies": -0.04
+     },
+     "curriculum": 0.2825,
+     "scratch": 0.3025
+    },
+    "12271": {
+     "difference": 0.01,
+     "lower": -0.0275,
+     "upper": 0.045,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.11,
+      "ur_lessons v gw_allies": -0.03,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": -0.01
+     },
+     "curriculum": 0.31,
+     "scratch": 0.3
+    },
+    "12272": {
+     "difference": -0.0525,
+     "lower": -0.0925,
+     "upper": -0.015,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.04,
+      "ur_lessons v gw_allies": 0.05,
+      "gw_allies v ur_lessons": -0.1,
+      "gw_allies v gw_allies": -0.2
+     },
+     "curriculum": 0.2825,
+     "scratch": 0.335
+    },
+    "12273": {
+     "difference": 0.0175,
+     "lower": -0.01,
+     "upper": 0.045,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.07,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": -0.02,
+      "gw_allies v gw_allies": -0.02
+     },
+     "curriculum": 0.2825,
+     "scratch": 0.265
+    }
+   },
+   "summary": {
+    "mean": -0.023333333333333334,
+    "lower": -0.05591939429455908,
+    "upper": 0.009252727627892417,
+    "positive_seeds": 2
+   }
+  },
+  "heuristic/128": {
+   "seeds": {
+    "12251": {
+     "difference": 0.0325,
+     "lower": -0.01,
+     "upper": 0.075,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.11,
+      "ur_lessons v gw_allies": -0.01,
+      "gw_allies v ur_lessons": 0.04,
+      "gw_allies v gw_allies": -0.01
+     },
+     "curriculum": 0.3725,
+     "scratch": 0.34
+    },
+    "12252": {
+     "difference": 0.03,
+     "lower": 0.0,
+     "upper": 0.0625,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.05,
+      "ur_lessons v gw_allies": 0.0,
+      "gw_allies v ur_lessons": 0.08,
+      "gw_allies v gw_allies": 0.09
+     },
+     "curriculum": 0.3525,
+     "scratch": 0.3225
+    },
+    "12253": {
+     "difference": 0.02,
+     "lower": -0.0125,
+     "upper": 0.0525,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.04,
+      "ur_lessons v gw_allies": -0.04,
+      "gw_allies v ur_lessons": 0.01,
+      "gw_allies v gw_allies": 0.07
+     },
+     "curriculum": 0.31,
+     "scratch": 0.29
+    },
+    "12271": {
+     "difference": 0.0375,
+     "lower": -0.0025,
+     "upper": 0.08,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.05,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": 0.02,
+      "gw_allies v gw_allies": 0.04
+     },
+     "curriculum": 0.3575,
+     "scratch": 0.32
+    },
+    "12272": {
+     "difference": -0.025,
+     "lower": -0.0725,
+     "upper": 0.0225,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.03,
+      "ur_lessons v gw_allies": 0.08,
+      "gw_allies v ur_lessons": -0.1,
+      "gw_allies v gw_allies": -0.11
+     },
+     "curriculum": 0.3125,
+     "scratch": 0.3375
+    },
+    "12273": {
+     "difference": -0.07,
+     "lower": -0.11,
+     "upper": -0.03,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.07,
+      "ur_lessons v gw_allies": 0.01,
+      "gw_allies v ur_lessons": -0.11,
+      "gw_allies v gw_allies": -0.11
+     },
+     "curriculum": 0.3075,
+     "scratch": 0.3775
+    }
+   },
+   "summary": {
+    "mean": 0.004166666666666666,
+    "lower": -0.04080831357859213,
+    "upper": 0.04914164691192546,
+    "positive_seeds": 4
+   }
+  },
+  "scripted_greedy/32": {
+   "seeds": {
+    "12251": {
+     "difference": -0.1425,
+     "lower": -0.1925,
+     "upper": -0.0925,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.19,
+      "ur_lessons v gw_allies": -0.1,
+      "gw_allies v ur_lessons": -0.2,
+      "gw_allies v gw_allies": -0.08
+     },
+     "curriculum": 0.3425,
+     "scratch": 0.485
+    },
+    "12252": {
+     "difference": -0.1575,
+     "lower": -0.2025,
+     "upper": -0.115,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.22,
+      "ur_lessons v gw_allies": -0.09,
+      "gw_allies v ur_lessons": -0.22,
+      "gw_allies v gw_allies": -0.1
+     },
+     "curriculum": 0.32,
+     "scratch": 0.4775
+    },
+    "12253": {
+     "difference": 0.01,
+     "lower": -0.04,
+     "upper": 0.0575,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.02,
+      "ur_lessons v gw_allies": -0.01,
+      "gw_allies v ur_lessons": 0.06,
+      "gw_allies v gw_allies": -0.03
+     },
+     "curriculum": 0.375,
+     "scratch": 0.365
+    },
+    "12271": {
+     "difference": -0.1175,
+     "lower": -0.1625,
+     "upper": -0.0725,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.09,
+      "ur_lessons v gw_allies": -0.09,
+      "gw_allies v ur_lessons": -0.19,
+      "gw_allies v gw_allies": -0.1
+     },
+     "curriculum": 0.3275,
+     "scratch": 0.445
+    },
+    "12272": {
+     "difference": -0.0425,
+     "lower": -0.0775,
+     "upper": -0.005,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.16,
+      "ur_lessons v gw_allies": -0.05,
+      "gw_allies v ur_lessons": 0.03,
+      "gw_allies v gw_allies": 0.01
+     },
+     "curriculum": 0.4325,
+     "scratch": 0.475
+    },
+    "12273": {
+     "difference": -0.0025,
+     "lower": -0.045,
+     "upper": 0.04,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.1,
+      "ur_lessons v gw_allies": -0.03,
+      "gw_allies v ur_lessons": 0.03,
+      "gw_allies v gw_allies": 0.09
+     },
+     "curriculum": 0.4,
+     "scratch": 0.4025
+    }
+   },
+   "summary": {
+    "mean": -0.07541666666666666,
+    "lower": -0.15211197401913795,
+    "upper": 0.0012786406858046467,
+    "positive_seeds": 1
+   }
+  },
+  "scripted_greedy/64": {
+   "seeds": {
+    "12251": {
+     "difference": 0.025,
+     "lower": -0.0125,
+     "upper": 0.0625,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.03,
+      "ur_lessons v gw_allies": 0.0,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": 0.07
+     },
+     "curriculum": 0.55,
+     "scratch": 0.525
+    },
+    "12252": {
+     "difference": -0.0175,
+     "lower": -0.055,
+     "upper": 0.02,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.06,
+      "ur_lessons v gw_allies": -0.04,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": -0.06
+     },
+     "curriculum": 0.5525,
+     "scratch": 0.57
+    },
+    "12253": {
+     "difference": -0.015,
+     "lower": -0.0525,
+     "upper": 0.0225,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.05,
+      "ur_lessons v gw_allies": -0.06,
+      "gw_allies v ur_lessons": -0.06,
+      "gw_allies v gw_allies": 0.01
+     },
+     "curriculum": 0.5175,
+     "scratch": 0.5325
+    },
+    "12271": {
+     "difference": 0.0,
+     "lower": -0.04,
+     "upper": 0.04,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.08,
+      "ur_lessons v gw_allies": -0.01,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": -0.04
+     },
+     "curriculum": 0.545,
+     "scratch": 0.545
+    },
+    "12272": {
+     "difference": -0.06,
+     "lower": -0.1025,
+     "upper": -0.0175,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.08,
+      "ur_lessons v gw_allies": -0.05,
+      "gw_allies v ur_lessons": -0.11,
+      "gw_allies v gw_allies": -0.16
+     },
+     "curriculum": 0.5325,
+     "scratch": 0.5925
+    },
+    "12273": {
+     "difference": 0.02,
+     "lower": -0.0175,
+     "upper": 0.0575,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.01,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": 0.03,
+      "gw_allies v gw_allies": 0.0
+     },
+     "curriculum": 0.5475,
+     "scratch": 0.5275
+    }
+   },
+   "summary": {
+    "mean": -0.007916666666666667,
+    "lower": -0.04036513632665471,
+    "upper": 0.024531802993321375,
+    "positive_seeds": 2
+   }
+  },
+  "scripted_greedy/128": {
+   "seeds": {
+    "12251": {
+     "difference": 0.0175,
+     "lower": -0.0225,
+     "upper": 0.0575,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.02,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": -0.01,
+      "gw_allies v gw_allies": 0.02
+     },
+     "curriculum": 0.5675,
+     "scratch": 0.55
+    },
+    "12252": {
+     "difference": -0.04,
+     "lower": -0.075,
+     "upper": -0.005,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.06,
+      "ur_lessons v gw_allies": -0.06,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": -0.04
+     },
+     "curriculum": 0.5475,
+     "scratch": 0.5875
+    },
+    "12253": {
+     "difference": 0.0375,
+     "lower": 0.0,
+     "upper": 0.0775,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.03,
+      "ur_lessons v gw_allies": 0.1,
+      "gw_allies v ur_lessons": -0.02,
+      "gw_allies v gw_allies": 0.1
+     },
+     "curriculum": 0.5525,
+     "scratch": 0.515
+    },
+    "12271": {
+     "difference": 0.0575,
+     "lower": 0.0225,
+     "upper": 0.0925,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.09,
+      "ur_lessons v gw_allies": 0.07,
+      "gw_allies v ur_lessons": 0.04,
+      "gw_allies v gw_allies": 0.03
+     },
+     "curriculum": 0.58,
+     "scratch": 0.5225
+    },
+    "12272": {
+     "difference": 0.0025,
+     "lower": -0.0375,
+     "upper": 0.0425,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.07,
+      "ur_lessons v gw_allies": -0.03,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": 0.0
+     },
+     "curriculum": 0.5575,
+     "scratch": 0.555
+    },
+    "12273": {
+     "difference": 0.0125,
+     "lower": -0.025,
+     "upper": 0.05,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.07,
+      "ur_lessons v gw_allies": 0.03,
+      "gw_allies v ur_lessons": -0.03,
+      "gw_allies v gw_allies": -0.02
+     },
+     "curriculum": 0.56,
+     "scratch": 0.5475
+    }
+   },
+   "summary": {
+    "mean": 0.014583333333333335,
+    "lower": -0.020238985397709387,
+    "upper": 0.04940565206437606,
+    "positive_seeds": 5
+   }
+  },
+  "random/32": {
+   "seeds": {
+    "12251": {
+     "difference": -0.19,
+     "lower": -0.2375,
+     "upper": -0.145,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.17,
+      "ur_lessons v gw_allies": -0.29,
+      "gw_allies v ur_lessons": -0.11,
+      "gw_allies v gw_allies": -0.19
+     },
+     "curriculum": 0.585,
+     "scratch": 0.775
+    },
+    "12252": {
+     "difference": -0.16,
+     "lower": -0.2175,
+     "upper": -0.1075,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.12,
+      "ur_lessons v gw_allies": -0.16,
+      "gw_allies v ur_lessons": -0.17,
+      "gw_allies v gw_allies": -0.19
+     },
+     "curriculum": 0.5925,
+     "scratch": 0.7525
+    },
+    "12253": {
+     "difference": 0.0225,
+     "lower": -0.03,
+     "upper": 0.0725,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.05,
+      "ur_lessons v gw_allies": 0.07,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": 0.07
+     },
+     "curriculum": 0.64,
+     "scratch": 0.6175
+    },
+    "12271": {
+     "difference": -0.1975,
+     "lower": -0.2525,
+     "upper": -0.14,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.16,
+      "ur_lessons v gw_allies": -0.16,
+      "gw_allies v ur_lessons": -0.22,
+      "gw_allies v gw_allies": -0.25
+     },
+     "curriculum": 0.5225,
+     "scratch": 0.72
+    },
+    "12272": {
+     "difference": -0.1075,
+     "lower": -0.1575,
+     "upper": -0.055,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.15,
+      "ur_lessons v gw_allies": -0.13,
+      "gw_allies v ur_lessons": -0.1,
+      "gw_allies v gw_allies": -0.05
+     },
+     "curriculum": 0.645,
+     "scratch": 0.7525
+    },
+    "12273": {
+     "difference": -0.0825,
+     "lower": -0.1325,
+     "upper": -0.0325,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.09,
+      "ur_lessons v gw_allies": -0.14,
+      "gw_allies v ur_lessons": -0.04,
+      "gw_allies v gw_allies": -0.06
+     },
+     "curriculum": 0.58,
+     "scratch": 0.6625
+    }
+   },
+   "summary": {
+    "mean": -0.11916666666666666,
+    "lower": -0.20617599937337425,
+    "upper": -0.03215733395995907,
+    "positive_seeds": 1
+   }
+  },
+  "random/64": {
+   "seeds": {
+    "12251": {
+     "difference": -0.0125,
+     "lower": -0.0575,
+     "upper": 0.035,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.05,
+      "ur_lessons v gw_allies": -0.07,
+      "gw_allies v ur_lessons": 0.03,
+      "gw_allies v gw_allies": 0.04
+     },
+     "curriculum": 0.7675,
+     "scratch": 0.78
+    },
+    "12252": {
+     "difference": -0.02,
+     "lower": -0.06,
+     "upper": 0.02,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.08,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": 0.03,
+      "gw_allies v gw_allies": -0.07
+     },
+     "curriculum": 0.815,
+     "scratch": 0.835
+    },
+    "12253": {
+     "difference": -0.0075,
+     "lower": -0.05,
+     "upper": 0.0325,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.05,
+      "ur_lessons v gw_allies": -0.01,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": 0.03
+     },
+     "curriculum": 0.765,
+     "scratch": 0.7725
+    },
+    "12271": {
+     "difference": -0.005,
+     "lower": -0.05,
+     "upper": 0.0425,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.07,
+      "ur_lessons v gw_allies": -0.05,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": -0.04
+     },
+     "curriculum": 0.7825,
+     "scratch": 0.7875
+    },
+    "12272": {
+     "difference": -0.0425,
+     "lower": -0.0825,
+     "upper": -0.0025,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.06,
+      "ur_lessons v gw_allies": -0.08,
+      "gw_allies v ur_lessons": -0.01,
+      "gw_allies v gw_allies": -0.14
+     },
+     "curriculum": 0.795,
+     "scratch": 0.8375
+    },
+    "12273": {
+     "difference": -0.0075,
+     "lower": -0.0525,
+     "upper": 0.0375,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.08,
+      "ur_lessons v gw_allies": -0.04,
+      "gw_allies v ur_lessons": -0.02,
+      "gw_allies v gw_allies": -0.05
+     },
+     "curriculum": 0.775,
+     "scratch": 0.7825
+    }
+   },
+   "summary": {
+    "mean": -0.015833333333333335,
+    "lower": -0.030643642912188945,
+    "upper": -0.0010230237544777247,
+    "positive_seeds": 0
+   }
+  },
+  "random/128": {
+   "seeds": {
+    "12251": {
+     "difference": 0.0425,
+     "lower": 0.0025,
+     "upper": 0.085,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.09,
+      "ur_lessons v gw_allies": 0.08,
+      "gw_allies v ur_lessons": -0.01,
+      "gw_allies v gw_allies": 0.01
+     },
+     "curriculum": 0.8325,
+     "scratch": 0.79
+    },
+    "12252": {
+     "difference": 0.0,
+     "lower": -0.0325,
+     "upper": 0.0325,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.04,
+      "ur_lessons v gw_allies": 0.06,
+      "gw_allies v ur_lessons": 0.0,
+      "gw_allies v gw_allies": -0.02
+     },
+     "curriculum": 0.8225,
+     "scratch": 0.8225
+    },
+    "12253": {
+     "difference": 0.0325,
+     "lower": -0.005,
+     "upper": 0.07,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.03,
+      "ur_lessons v gw_allies": 0.03,
+      "gw_allies v ur_lessons": 0.02,
+      "gw_allies v gw_allies": 0.11
+     },
+     "curriculum": 0.8,
+     "scratch": 0.7675
+    },
+    "12271": {
+     "difference": 0.055,
+     "lower": 0.0175,
+     "upper": 0.095,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.13,
+      "ur_lessons v gw_allies": 0.04,
+      "gw_allies v ur_lessons": 0.01,
+      "gw_allies v gw_allies": 0.04
+     },
+     "curriculum": 0.8475,
+     "scratch": 0.7925
+    },
+    "12272": {
+     "difference": 0.0475,
+     "lower": 0.0075,
+     "upper": 0.0875,
+     "cells": {
+      "ur_lessons v ur_lessons": 0.09,
+      "ur_lessons v gw_allies": 0.1,
+      "gw_allies v ur_lessons": 0.02,
+      "gw_allies v gw_allies": -0.02
+     },
+     "curriculum": 0.845,
+     "scratch": 0.7975
+    },
+    "12273": {
+     "difference": 0.0175,
+     "lower": -0.03,
+     "upper": 0.065,
+     "cells": {
+      "ur_lessons v ur_lessons": -0.02,
+      "ur_lessons v gw_allies": 0.07,
+      "gw_allies v ur_lessons": -0.01,
+      "gw_allies v gw_allies": 0.03
+     },
+     "curriculum": 0.815,
+     "scratch": 0.7975
+    }
+   },
+   "summary": {
+    "mean": 0.0325,
+    "lower": 0.010929055281120738,
+    "upper": 0.054070944718879264,
+    "positive_seeds": 5
+   }
+  }
+ },
+ "verdict_by_decision_anchor": {
+  "heuristic": "inconclusive",
+  "scripted_greedy": "no useful effect"
+ },
+ "gain_over_initialization": {
+  "heuristic/curriculum/32": {
+   "mean": 0.06250000000000001,
+   "lower": 0.03300357685745142,
+   "upper": 0.0919964231425486,
+   "positive_seeds": 6
+  },
+  "heuristic/curriculum/64": {
+   "mean": 0.19083333333333333,
+   "lower": 0.17748994728496104,
+   "upper": 0.20417671938170562,
+   "positive_seeds": 6
+  },
+  "heuristic/curriculum/128": {
+   "mean": 0.24458333333333335,
+   "lower": 0.2143759584046182,
+   "upper": 0.2747907082620485,
+   "positive_seeds": 6
+  },
+  "heuristic/scratch/32": {
+   "mean": 0.10875,
+   "lower": 0.06135807443157942,
+   "upper": 0.15614192556842058,
+   "positive_seeds": 6
+  },
+  "heuristic/scratch/64": {
+   "mean": 0.21416666666666662,
+   "lower": 0.1892955586063197,
+   "upper": 0.23903777472701354,
+   "positive_seeds": 6
+  },
+  "heuristic/scratch/128": {
+   "mean": 0.24041666666666664,
+   "lower": 0.21007288041970834,
+   "upper": 0.27076045291362494,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/curriculum/32": {
+   "mean": 0.07291666666666667,
+   "lower": 0.02731096995995145,
+   "upper": 0.1185223633733819,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/curriculum/64": {
+   "mean": 0.27666666666666667,
+   "lower": 0.2632205059082343,
+   "upper": 0.29011282742509903,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/curriculum/128": {
+   "mean": 0.3245833333333334,
+   "lower": 0.31157957366382477,
+   "upper": 0.337587093002842,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/scratch/32": {
+   "mean": 0.14833333333333334,
+   "lower": 0.09709156424392885,
+   "upper": 0.19957510242273785,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/scratch/64": {
+   "mean": 0.28458333333333335,
+   "lower": 0.25553762276462416,
+   "upper": 0.31362904390204255,
+   "positive_seeds": 6
+  },
+  "scripted_greedy/scratch/128": {
+   "mean": 0.31,
+   "lower": 0.28392199944953017,
+   "upper": 0.3360780005504698,
+   "positive_seeds": 6
+  },
+  "random/curriculum/32": {
+   "mean": 0.09041666666666666,
+   "lower": 0.04361911236803599,
+   "upper": 0.13721422096529734,
+   "positive_seeds": 6
+  },
+  "random/curriculum/64": {
+   "mean": 0.2845833333333333,
+   "lower": 0.26285870594480465,
+   "upper": 0.30630796072186195,
+   "positive_seeds": 6
+  },
+  "random/curriculum/128": {
+   "mean": 0.2966666666666667,
+   "lower": 0.27769924847090954,
+   "upper": 0.31563408486242384,
+   "positive_seeds": 6
+  },
+  "random/scratch/32": {
+   "mean": 0.20958333333333334,
+   "lower": 0.14678321005104683,
+   "upper": 0.27238345661561986,
+   "positive_seeds": 6
+  },
+  "random/scratch/64": {
+   "mean": 0.30041666666666667,
+   "lower": 0.26826654741439643,
+   "upper": 0.3325667859189369,
+   "positive_seeds": 6
+  },
+  "random/scratch/128": {
+   "mean": 0.2641666666666666,
+   "lower": 0.24663240070529105,
+   "upper": 0.2817009326280422,
+   "positive_seeds": 6
+  }
+ },
+ "time_to_plus_10": {
+  "heuristic/curriculum": {
+   "12251": 64,
+   "12252": 64,
+   "12253": 64,
+   "12271": 64,
+   "12272": 32,
+   "12273": 64
+  },
+  "heuristic/scratch": {
+   "12251": 32,
+   "12252": 32,
+   "12253": 64,
+   "12271": 32,
+   "12272": 64,
+   "12273": 64
+  },
+  "scripted_greedy/curriculum": {
+   "12251": 64,
+   "12252": 64,
+   "12253": 64,
+   "12271": 64,
+   "12272": 32,
+   "12273": 32
+  },
+  "scripted_greedy/scratch": {
+   "12251": 32,
+   "12252": 32,
+   "12253": 64,
+   "12271": 32,
+   "12272": 32,
+   "12273": 32
+  },
+  "random/curriculum": {
+   "12251": 64,
+   "12252": 64,
+   "12253": 32,
+   "12271": 64,
+   "12272": 32,
+   "12273": 64
+  },
+  "random/scratch": {
+   "12251": 32,
+   "12252": 32,
+   "12253": 32,
+   "12271": 32,
+   "12272": 32,
+   "12273": 32
+  }
+ },
+ "scratch_boundary_vs_continuous": {
+  "heuristic/64": {
+   "12251": {
+    "split": 0.32,
+    "continuous": 0.32
+   },
+   "12252": {
+    "split": 0.33,
+    "continuous": 0.3175
+   },
+   "12253": {
+    "split": 0.3025,
+    "continuous": 0.2875
+   }
+  },
+  "heuristic/128": {
+   "12251": {
+    "split": 0.34,
+    "continuous": 0.3425
+   },
+   "12252": {
+    "split": 0.3225,
+    "continuous": 0.3925
+   },
+   "12253": {
+    "split": 0.29,
+    "continuous": 0.28
+   }
+  },
+  "scripted_greedy/64": {
+   "12251": {
+    "split": 0.525,
+    "continuous": 0.53
+   },
+   "12252": {
+    "split": 0.57,
+    "continuous": 0.5575
+   },
+   "12253": {
+    "split": 0.5325,
+    "continuous": 0.525
+   }
+  },
+  "scripted_greedy/128": {
+   "12251": {
+    "split": 0.55,
+    "continuous": 0.5425
+   },
+   "12252": {
+    "split": 0.5875,
+    "continuous": 0.5825
+   },
+   "12253": {
+    "split": 0.515,
+    "continuous": 0.535
+   }
+  },
+  "random/64": {
+   "12251": {
+    "split": 0.78,
+    "continuous": 0.8025
+   },
+   "12252": {
+    "split": 0.835,
+    "continuous": 0.7975
+   },
+   "12253": {
+    "split": 0.7725,
+    "continuous": 0.775
+   }
+  },
+  "random/128": {
+   "12251": {
+    "split": 0.79,
+    "continuous": 0.81
+   },
+   "12252": {
+    "split": 0.8225,
+    "continuous": 0.8325
+   },
+   "12253": {
+    "split": 0.7675,
+    "continuous": 0.7925
+   }
+  }
+ }
+}

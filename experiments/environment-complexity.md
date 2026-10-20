@@ -149,6 +149,10 @@ Mini evaluation logs are retained at
 `.runs/mtg122/gpu-split-training-2/heuristic-evaluation-logs`. The fetched
 campaign, now 27,238 files, is byte-identical to the Mini's.
 
+**Curriculum follow-up — 2026-10-20.** An L1 warm-up for the first quarter of
+L3 training gives no useful effect (greedy at 64: −0.8 [−4.0, +2.5]); see
+[curriculum.md](curriculum.md).
+
 Historical plans (schema 1 and 2) keep their meaning; the deal families are the
 same by milestone ordinal.
 

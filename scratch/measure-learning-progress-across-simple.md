@@ -1,5 +1,7 @@
 # Curriculum experiment design
 
+**Executed 2026-10-20; results in [experiments/curriculum.md](../experiments/curriculum.md): no useful effect.**
+
 Draft for review, revised 2026-10-19 after the complexity contrast completed.
 Design only; no implementation, rental or experiment launch. Direction: “Jack
 Heart asked for curriculum experiments; design step only” and “Rerun design step
