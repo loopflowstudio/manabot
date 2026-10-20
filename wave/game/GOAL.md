@@ -7,28 +7,48 @@ pm:
 
 ## Objective
 
-Make the existing Allies versus Lessons demo a game the User can follow, express every intended legal play in, finish against an identified trained opponent, and choose to play again.
+Make Academy a lab for researchers: someone who has just trained a manabot can
+load that checkpoint, watch it play or play against it, step through any of its
+decisions, and see why it chose what it did, without writing glue code.
 
-## Current Project and measures
+## Measures
 
-One current Project: **Complete Games** (`9106931a-3e9a-48ef-881b-30ee3363f929`). The User approved this chapter on 2026-09-24; review it on **2026-10-08**. Exact accepted scope, baseline evidence and dispositions live in the [chapter record](../../.lf/chapters/20260924T233419Z-042de726/start.md). The date is a review point, not a promised success deadline.
+1. **Load what you trained.** A checkpoint produced by `uv run manabot train`
+   or a remote run opens in Academy from its path or run, with its world,
+   content and producer identity shown and checked. A checkpoint from an
+   incompatible world is refused with a message that names the mismatch.
 
-1. **Understand each change and next decision.** In real human games, the User can follow casting, targeting, resolution, combat, damage, death, and turn changes and identify whose decision is next. Reproduce reported confusion in exact versioned positions, render from authoritative semantic events, retain regression coverage, and validate the fix through human play, including skip/fast-forward and reduced-motion behavior. No known transition blocker remains at closure. Existing event code alone is insufficient proof.
+2. **See a bot play.** A researcher can play against a checkpoint, or watch two
+   checkpoints (or a checkpoint and a fixed anchor) play each other, on chosen
+   decks, seats and deal seeds. Arena and Tournament games open as replays in
+   the same table.
 
-2. **Express every intended legal play without awkward controls.** Maintain an explicit interaction-family and known-friction ledger for the selected matchup, including large and rare choice sets and the full Learn/Lesson interaction. Every reported awkward action blocks closure until reproduced, fixed and confirmed. Preserve complete legal choices and server Command authority; record exercised and untested coverage. Grouping/staged choice is a design candidate, not a mandated solution.
+3. **Inspect a decision.** At any recorded decision the researcher sees the
+   legal actions, the policy's probabilities over them, the value estimate,
+   and, where they were used, the belief samples and search results that fed
+   the choice. Inspection reads the same recorded state as play; it never
+   reconstructs rules or reveals hidden cards the acting player could not see.
 
-3. **Finish and choose to return.** The User completes games against clearly identified trained checkpoints and voluntarily chooses to play again. Retain all attempted sessions, including abandonment, with match, world, opponent, deck/seat and reproducible Command identities; discover and remove additional stopping friction through those sessions. Agree the concrete human-play cohort before scoring it, revisit repaired interactions across later sessions, and exercise both deck assignments. Automated terminal fixtures do not substitute for this human outcome.
+4. **Try another line.** From any recorded decision the researcher can fork the
+   game, choose a different action or swap in another checkpoint, and compare
+   what follows.
 
-## Ownership and opening work
+## Ownership
 
-Game owns the human experience: understandable progress, complete usable action selection, checkpoint identity, and attempted-game records. Discover friction through actual play; a single awkward intended action blocks the full-game claim, even when rare. Test candidate interaction designs rather than requiring the User to diagnose the interface.
+Game owns Academy as a research instrument: loading checkpoints, the table,
+replay, decision inspection, and forks. Intelligence owns training, the arena
+and strength claims; Game displays their checkpoints and games without
+re-deriving them. Rules owns legality, hidden information and replay. Academy
+is a client of manabot, and manabot never imports Academy.
 
-Rules owns legal choices, Lesson-pool semantics, authoritative consequences and replay. Intelligence owns training, candidate provenance and strength evaluation. Game preserves ordinary revision-bound Commands as the live mutation path. Study remains an existing Game capability; advice and richer Study do not inherit opening priority.
+Start from what already exists: one configured trained opponent
+(`ACADEMY_PLAY_CANDIDATE`), the opponent selector, replay, Study forks, and
+advice. Widen each toward the measures above before adding new surfaces.
 
-Start by reproducing missing transitions and action-selection friction in exact Allies/Lessons positions, then validate focused changes with the User. Coordinate the full Learn/Lesson surface with Rules and expose Intelligence's compatible checkpoints clearly. Preserve launch, recovery, accessibility, asset and replay safeguards; do not claim broad historical certifications from narrow checks.
+## Limits
 
-## Evidence and limits
-
-The existing GW Allies versus UR Lessons demo is the chapter's content boundary. Broader Team Sealed ambitions, portability and unrelated expansion are deferred. Preserve shipped code and frozen evidence without inheriting every historical priority. The baseline covers all 56 current KRs but has incomplete historical lineage; unknown evidence does not mean a broken implementation.
-
-Protocol details and numeric budgets must be justified and fixed before scored measurement. Human-play evidence records stopped attempts as well as completed games. Product work begins in scoped Tasks; accepting this chapter alone does not launch costly experiments. Historical Wave context remains in [memory](MEMORY.md), with the dated charter copy retained in the chapter archive.
+Academy is a local tool for inspecting bots, not a way to play Magic. It is not
+a general Magic client, deck builder or collection manager, and hosted play is
+not a goal. The selected matchup ([UR Lessons versus GW Allies](../../content/DECKS.md))
+is the content boundary. Historical charters and decisions remain in
+[memory](MEMORY.md) and the chapter archive.
