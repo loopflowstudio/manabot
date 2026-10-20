@@ -94,6 +94,12 @@ about a training method use independent training seeds, and experiments are
 preregistered: the prediction and kill criteria are committed before the run
 ([experiments/](experiments/README.md)).
 
+Right now the main open question is the training curriculum: which matchups,
+opponents, and mix of self-play the agent should learn from (for example,
+mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
+just enough to compare curricula, rather than testing current agents across a
+wide range of environments.
+
 ## Not built yet
 
 - **More cards.** Cards are authored as typed programs rather than parsed
