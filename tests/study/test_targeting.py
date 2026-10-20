@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from academy.enums import ActionEnum, ActionSpaceEnum
+from managym.enums import ActionEnum, ActionSpaceEnum
 from experiments.runners.greedy_targeting import audit
 from manabot.study.record import Decision, GameRecord, read_games, write_games
 from manabot.study.targeting import (

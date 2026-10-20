@@ -32,6 +32,10 @@ from typing import Any
 import numpy as np
 import torch
 
+from academy.study_evidence import (
+    build_study_artifact,
+    select_evidence_complete_decision,
+)
 from academy.study_protocol import StudyArtifact
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
@@ -55,10 +59,6 @@ from manabot.sim.search_supervised import (
     ROOT_VALUE_TARGET,
     VISIT_DISTRIBUTION_TARGET,
     train_search_supervised,
-)
-from manabot.sim.study_evidence import (
-    build_study_artifact,
-    select_evidence_complete_decision,
 )
 from manabot.sim.teacher1_evidence import (
     ContractError,
@@ -98,7 +98,7 @@ def _iteration_runtime(seed: int) -> dict[str, Any]:
     runtime = runtime_fingerprints(seed=seed)
     sources = [
         Path(__file__).resolve(),
-        REPO_ROOT / "manabot" / "sim" / "study_evidence.py",
+        REPO_ROOT / "academy" / "study_evidence.py",
         REPO_ROOT / "manabot" / "sim" / "search_supervised.py",
         REPO_ROOT / "manabot" / "sim" / "distill.py",
         REPO_ROOT / "academy" / "study_protocol.py",

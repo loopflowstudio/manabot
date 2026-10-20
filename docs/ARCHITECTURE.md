@@ -107,6 +107,8 @@ The ownership rule follows the repository's naming boundary:
 - **Academy is the inspection UI.** It owns transport, interaction drafts,
   reconnect behavior, presentation, and replay navigation. It does not
   reconstruct rules meaning, and nothing in training depends on it.
+- **Imports follow the same order.** Academy may import manabot and managym;
+  manabot imports managym and never academy; managym imports neither.
 
 Telemetry, behavior trackers, profilers, caches, and user-interface state may
 observe or accelerate these authorities. They never become an alternate source

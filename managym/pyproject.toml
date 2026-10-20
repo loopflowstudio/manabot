@@ -8,6 +8,8 @@ version = "0.2.0"
 description = "A Magic: The Gathering environment for reinforcement learning"
 authors = [{ name = "Jack Heart", email = "jack@loopflow.studio" }]
 requires-python = ">=3.10"
+# managym.experience mirrors the Rust protocol types as Pydantic models.
+dependencies = ["pydantic>=2.12.0"]
 
 [tool.maturin]
 features = ["python"]

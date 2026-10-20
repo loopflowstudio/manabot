@@ -3,8 +3,8 @@
 `managym/src/experience.rs` is the authority for the currently integrated v1
 adapter boundary. It generates `experience-v1.schema.json`, a Draft 2020-12
 schema for one `ProtocolV1ConformanceBundle`: a complete recovery envelope and
-the command selected from that exact frame. `academy/experience_protocol.py` is the
-explicit Pydantic representation used by the Python adapter; automated tests
+the command selected from that exact frame. `managym/experience.py` is the
+explicit Pydantic representation shared by Academy and manabot; automated tests
 compare its fields, required/optional keys, tagged variants, and enums to the
 Rust-generated schema.
 

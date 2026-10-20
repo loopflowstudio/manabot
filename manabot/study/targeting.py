@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Literal
 
-from academy.enums import ActionEnum, ActionSpaceEnum
+from managym.enums import ActionEnum, ActionSpaceEnum
 
 if TYPE_CHECKING:
     from managym import Observation

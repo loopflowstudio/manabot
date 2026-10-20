@@ -1,8 +1,10 @@
-"""Lightweight Python enum mirrors for GUI wire serialization.
+"""Constructible Python mirrors of managym's native enums.
 
-The native PyO3 enums expose constants but are not constructible from integers.
-The training observation module has equivalent mirrors, but importing it pulls
-the full NumPy/Gymnasium/training stack into the exact Search-64 play runtime.
+The PyO3 enums expose constants but cannot be built from integers, so code
+that decodes observation fields, names actions, or validates tensor layouts
+uses these ``IntEnum`` mirrors instead. They are dependency-free so the play
+runtime can import them without the training stack. Values must equal the
+native discriminants; ``tests/env/test_observation.py`` checks that.
 """
 
 from enum import IntEnum
@@ -90,3 +92,12 @@ class EventTypeEnum(IntEnum):
     PERMANENTS_DIED = 10
     TURN_STARTED = 11
     CARD_REVEALED = 12
+
+
+class EventEntityKindEnum(IntEnum):
+    NONE = 0
+    CARD = 1
+    PERMANENT = 2
+    PLAYER = 3
+    OBJECT = 4
+    DEFINITION = 5

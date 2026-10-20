@@ -17,6 +17,8 @@ import pytest
 # Local imports
 from academy import server, trace as trace_store
 from academy.server import app
+from managym import experience_projection
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
@@ -467,7 +469,7 @@ def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
     manifest = session.env.content_pack_manifest()
     assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
     assert session.content_hash == manifest["content_digest"]
-    assert session.content_hash != server.CONTENT_HASH
+    assert session.content_hash != UNVERSIONED_CONTENT_HASH
     assert session.asset_manifest_hash == server.JEONG_INCREMENT_PACK.manifest_sha256
     assert payload["frame"]["content_hash"] == session.content_hash
     assert payload["frame"]["asset_manifest_hash"] == session.asset_manifest_hash
@@ -522,7 +524,7 @@ def test_format_action_uses_magic_terms():
         (_stub_action(int(ActionEnum.CHOOSE_TARGET), [21]), "Target Wind Drake"),
     ]
     for action, expected in cases:
-        assert server._format_action(action, names) == expected
+        assert experience_projection.format_action(action, names) == expected
 
 
 def test_hero_view_swaps_terminal_villain_perspective_and_redacts(monkeypatch):

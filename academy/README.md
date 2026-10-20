@@ -18,8 +18,6 @@ offline. Schemas and three-language conformance fixtures live in
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
   authoritative game loop, viewer-safe observation serialization
-- **`experience_protocol.py`**: Pydantic representation of protocol v1,
-  tested field-for-field against the Rust-generated schema
 - **`presentation.py`**: semantic presentation events (combat, turn
   transitions, spell sequences) derived from engine events
 - **`curated_pack.py`**: the frozen curated matchup asset pack
@@ -36,7 +34,6 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
-- **`enums.py`**: wire enums kept separate so the play runtime stays minimal
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only

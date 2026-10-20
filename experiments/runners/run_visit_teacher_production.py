@@ -96,7 +96,7 @@ def _production_runtime(seed: int) -> dict[str, Any]:
                 REPO_ROOT / "manabot/sim/flat_mc.py",
                 REPO_ROOT / "manabot/sim/distill.py",
                 REPO_ROOT / "manabot/sim/search_supervised.py",
-                REPO_ROOT / "manabot/sim/study_evidence.py",
+                REPO_ROOT / "academy/study_evidence.py",
                 REPO_ROOT / "manabot/verify/competency.py",
                 REPO_ROOT / "academy/study_protocol.py",
                 REPO_ROOT / "protocol/study-v1.schema.json",

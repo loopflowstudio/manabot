@@ -47,10 +47,10 @@ from typing import Any, Literal
 
 import numpy as np
 
-from academy.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 from manabot.env import Env
 from manabot.study.targeting import inspect_target
 import managym
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 
 from .players import ScriptedGreedyPlayer
 

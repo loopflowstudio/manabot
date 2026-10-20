@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from .experience_protocol import Command, InteractionOffer
+from managym.experience import Command, InteractionOffer
+
 from .replay_index import CanonicalReplayProjectionV1, RestoredReplayDecision
 from .study_protocol import StudyArtifact, StudyLandmark
 

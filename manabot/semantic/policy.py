@@ -11,13 +11,13 @@ from dataclasses import dataclass
 import json
 from typing import Any, Literal, Mapping
 
-from academy.experience_protocol import Command, ExperienceFrame
 from manabot.sim.structured_policy import (
     DecodedSubmission,
     RaggedOfferBatch,
     StructuredPolicyError,
     flatten_projection,
 )
+from managym.experience import Command, ExperienceFrame
 
 from .learning import (
     DEFAULT_IR_PATH,
