@@ -1,15 +1,19 @@
 """Curriculum arms continue one learning state across a declared deck switch."""
 
 from pathlib import Path
+import shutil
 
+import numpy as np
 import pytest
 import torch
 
 from experiments.runners.complexity_campaign import (
     TESTED_SCHEDULE,
+    Anchor,
     parameter_digest,
     read_complexity_plan,
 )
+from experiments.runners.curriculum_analysis import paired_difference
 from experiments.runners.curriculum_campaign import (
     BOUNDARY_DEALS,
     COMPLEXITY_PLAN,
@@ -34,7 +38,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.learning_state import admit_learning_state
 from manabot.training.models import IterationSchedule, TrainingRegime, TrainSelfPlay
-from manabot.training.monitor_evaluation import MonitorProtocol
+from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
 
 TINY = Recipe(
     updates=4,
@@ -178,33 +182,65 @@ def test_setup_transfer_admits_only_the_declared_deck_switch(
         _admit(TrainingRegime.model_validate(regime.model_dump()), tmp_path / "agent")
 
 
-def test_scoring_runs_each_arm_and_control_once_and_keeps_failures(
-    fits: dict[Arm, Fit], tmp_path: Path
-) -> None:
-    def protocol(anchor: str, milestone: int) -> MonitorProtocol:
-        return MonitorProtocol(
-            authored_matchup=roster("l3"),
-            include_mirrors=True,
-            deal_seeds=(1_227_990_000 + milestone,),
-            opponent=anchor,  # type: ignore[arg-type]
-        )
+def _protocol(anchor: Anchor, milestone: int) -> MonitorProtocol:
+    return MonitorProtocol(
+        authored_matchup=roster("l3"),
+        include_mirrors=True,
+        deal_seeds=(1_227_990_000 + milestone,),
+        opponent=anchor,
+    )
 
-    def score() -> int:
-        return evaluate_seed(
-            fits,
-            (0, TINY.switch),
-            protocol,
-            tmp_path,
-            lambda: False,
-            anchors=("random",),
-        )
 
+def _score(fits: dict[Arm, Fit], directory: Path) -> int:
+    return evaluate_seed(
+        fits, (0, TINY.switch), _protocol, directory, lambda: False, anchors=("random",)
+    )
+
+
+@pytest.fixture(scope="module")
+def scored(fits: dict[Arm, Fit], tmp_path_factory: pytest.TempPathFactory) -> Path:
+    directory = tmp_path_factory.mktemp("cells")
     # Initialization once, then both arms and the control at the boundary.
-    assert score() == 1 + 3
-    assert score() == 0
-    (tmp_path / f"{TINY.switch}-random-control/monitor.json").unlink()
+    assert _score(fits, directory) == 1 + 3
+    return directory
+
+
+def _cell(directory: Path, name: str) -> MonitorResult:
+    return MonitorResult.model_validate_json(
+        (directory / name / "monitor.json").read_text()
+    )
+
+
+def test_scoring_runs_each_arm_and_control_once_and_keeps_failures(
+    fits: dict[Arm, Fit], scored: Path, tmp_path: Path
+) -> None:
+    copy = tmp_path / "cells"
+    shutil.copytree(scored, copy)
+    assert _score(fits, copy) == 0
+    (copy / f"{TINY.switch}-random-control/monitor.json").unlink()
     with pytest.raises(RuntimeError, match="incomplete attempt"):
-        score()
+        _score(fits, copy)
+
+
+def test_arms_pair_on_identical_deals_and_never_across_milestones(
+    scored: Path,
+) -> None:
+    boundary = TINY.switch
+    curriculum = _cell(scored, f"{boundary}-random-curriculum")
+    scratch = _cell(scored, f"{boundary}-random-scratch")
+    control = _cell(scored, f"{boundary}-random-control")
+    assert curriculum.run_id != scratch.run_id
+    between = paired_difference(curriculum, scratch, bootstrap_replicates=100)
+    assert between.milestone == boundary and len(between.cells) == 4
+    assert between.difference.mean == pytest.approx(
+        np.mean([c.improvement.mean for c in between.cells])
+    )
+    gain = paired_difference(curriculum, control, bootstrap_replicates=100)
+    assert gain.difference.mean == pytest.approx(
+        curriculum.score - control.score  # type: ignore[operator]
+    )
+    with pytest.raises(ValueError, match="differ: protocol"):
+        paired_difference(curriculum, _cell(scored, "0-random-initial"))
 
 
 def _plan(**update: object) -> CurriculumPlan:

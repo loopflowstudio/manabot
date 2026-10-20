@@ -134,7 +134,8 @@ hours on one many-core rented pod. Per-game speed on rented hardware is unmeasur
   (heuristic or greedy, per the rule above) at 64, averaged equally over
   the four matrix cells; six seed effects, mean, 95% t interval (df 5).
 - **Useful:** mean ≥ +5 points, interval lower bound > 0, at least five of six
-  seeds positive, and no random-anchor regression.
+  seeds positive, and no random-anchor regression: the random-anchor A − B
+  six-seed interval is not entirely below zero.
 - **No useful effect:** interval entirely inside (−5, +5).
 - **Harmful:** mean ≤ −5 with interval upper bound < 0.
 - Anything else is inconclusive and reported as such, not rerun with more
@@ -204,6 +205,11 @@ the unchanged-match rule.
 - Untrained initialization checkpoints from `checkpoints()` now record
   `active_training_seconds = 0`. Complexity's own `fit_checkpoints` is
   left unchanged so its frozen cells keep their meaning.
+
+- `experiments/runners/curriculum_analysis.py` encodes the rules below before
+  any data exists: `paired_difference` (pairs two runs on identical
+  protocol, deals, anchor, evaluator, seed and iteration), `six_seed_summary`,
+  `verdict`, `time_to_progress` and `anchor_validation`.
 
 Not implemented yet: reusing complexity cells by digest. Slice 2 scores the
 initialization and controls for every seed, about 7,200 extra greedy/random
