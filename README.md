@@ -104,12 +104,11 @@ wide range of environments.
 
 Training scale per agent. We add a row when a run sets a new high.
 
-| Agent | Date | Hardware | Learner transitions | Updates | Throughput | Spend |
-|---|---|---|---:|---:|---:|---:|
-| Longest run, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10-08 | 1× L4 | 51M | 100,000 | ~900/s (projected) | ~$15 (estimate) |
+| Agent | Date | Hardware | Learner transitions | Updates |
+|---|---|---|---:|---:|
+| `small-100k`, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10 | 1× L4 | ~51M | 100,000 iterations (~800k Adam steps) |
 
-Learner transitions are agent decisions. Throughput is transitions per
-wall-clock second, including updates. Spend is GPU rental only.
+Learner transitions are agent decisions.
 
 ## Earlier results
 
