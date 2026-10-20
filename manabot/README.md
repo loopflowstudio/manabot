@@ -195,17 +195,10 @@ and [the calibration command](../docs/training-calibration.md#capacity-ladder-so
 
 ## Research program
 
-[RESEARCH.md](RESEARCH.md) is the durable map from runnable manabots to a
-bounded superhuman claim. It records the builder's loop, the world-pinned skill
-rating we are establishing, accepted evidence, and the value-learning,
-teacher/student, belief-modeling, and semantic-transfer frontiers. Live work
+[RESEARCH.md](RESEARCH.md) says what we are doing now, what the experiments
+have shown, what we plan to do later, and how we measure results. Live work
 and ownership remain in Linear; frozen predictions and results remain in
 `experiments/`.
-
-[Understanding Strategic Learning](LEARNING_RESEARCH_GUIDE.md) is a scientific
-guide informed by Ataraxos, covering regularization, training trajectories,
-strategic cycling, simulation efficiency, and policy-guided search. It frames
-research questions and experimental interpretation, not an implementation plan.
 
 ## Style
 

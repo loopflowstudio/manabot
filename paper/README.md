@@ -1,4 +1,10 @@
-# The Etude Fantasia paper
+# The July 2026 paper draft
+
+This is a frozen working draft from July 2026, written when the project was
+called Etude Fantasia and leaned on search and distillation. It predates the
+self-play training loop, so its baselines, challenge table and known gaps
+describe that period, not today's system. The [README](../README.md) and
+[architecture](../docs/ARCHITECTURE.md) describe the current system.
 
 > **Charter change (2026-07-10):** this document serves *internal
 > understanding first*. Its job is that the owner can state, for every result:

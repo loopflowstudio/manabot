@@ -3,49 +3,44 @@
 
 homepage:
   hero:
-    tagline: "The study of a game that improvises."
+    tagline: "Training superhuman Magic bots."
     subline: >-
-      Manabot is a way to study Magic: The Gathering. Play a trained
-      manabot in your browser, replay every decision, and train your own —
-      the whole loop also runs on your laptop from one command.
+      Manabot is an open research project to train superhuman Magic: The
+      Gathering bots: a deterministic Rust rules engine built for learning,
+      and Python agents trained by self-play, search, and belief models over
+      hidden cards.
     play_url: "https://play.manabot.gg"
     repo_url: "https://github.com/loopflowstudio/manabot"
 
   showcase:
     image: "/static/board-developed.png"
-    image_alt: "An Academy board mid-game: two players' battlefields on a parchment sheet, with the game log and actions in the margin"
-    caption: "The Sheet: one continuous leaf, ruled regions, and the margin holding the apparatus."
+    image_alt: "The bot inspection table mid-game: two players' battlefields on a parchment sheet, with the game log and actions in the margin"
+    caption: "The inspection table: watch a trained bot play one game, or step through a replay decision by decision."
 
   pillars:
-    heading: "Three subsystems, one loop"
+    heading: "Two halves"
     items:
-      - title: "Academy"
-        register: "island"
-        description: >-
-          The authored play, replay, and study experience. A finished game is
-          study material: the Score restores consequential decisions as you
-          understood them, shows what else was worth considering, and lets
-          you retry a line before the reveal.
-      - title: "manabot"
-        register: "mountain"
-        description: >-
-          The trainable agent — search and learning library, Gymnasium
-          wrappers, and experiment tracking. The default preset trains a
-          small manabot on a laptop CPU in under a minute; serious runs
-          scale to the cloud.
       - title: "managym"
         register: "forest"
         description: >-
           The deterministic Rust rules engine and vectorized environment the
-          agent lives in, with Python bindings. One rules authority plays
-          the game, replays it, and answers what could have been.
+          agent lives in. Fast batched stepping, exact clone and fork for
+          search, replay, and per-player observations that keep hidden
+          information hidden.
+      - title: "manabot"
+        register: "mountain"
+        description: >-
+          The agents: self-play training, search, belief models over hidden
+          cards, and an arena that plays checkpoints against each other and
+          against fixed opponents. A small manabot trains on a laptop CPU in
+          under a minute; longer runs go to rented GPUs.
 
   play:
-    heading: "Play locally"
+    heading: "Inspect a bot"
     intro: >-
-      You need uv, Node, and a Rust toolchain. One command installs locked
-      dependencies, builds the engine, starts backend and frontend, and opens
-      the curated matchup against a trained manabot in your browser.
+      You need uv, Node, and a Rust toolchain. One command builds the engine
+      and opens a local table for stepping through a trained bot's decisions
+      or a replay. It is a tool for inspecting bots, not a way to play Magic.
     code: |
       git clone git@github.com:loopflowstudio/manabot.git
       cd manabot
@@ -54,25 +49,24 @@ homepage:
   train:
     heading: "Train a manabot"
     intro: >-
-      No accounts, no GPU. Checkpoints save locally; point the play screen's
-      opponent selector at what you trained and face it. Play, train, play
-      against your own manabot — that loop is the project.
+      No accounts, no GPU. A small self-play run finishes in under a minute
+      and saves checkpoints locally.
     code: |
       uv run manabot train
 
   research:
     heading: "The research ledger"
     body: >-
-      Manabot's research program is preregistered and reproducible: every
-      experiment states its prediction, budget, and kill criteria before
-      running, and negative results are recorded alongside positive ones.
+      Experiments are preregistered: each states its prediction, budget, and
+      kill criteria before it runs, and negative results are recorded
+      alongside positive ones.
     link_label: "Read the ledger on GitHub"
     link_url: "https://github.com/loopflowstudio/manabot/tree/main/experiments"
 
 colophon:
   identity: >-
-    An étude in studying Magic: play a manabot, replay every decision, and
-    annotate the score.
+    An independent research project on training superhuman Magic: The
+    Gathering bots.
   built_by: "Built by Loopflow Studio."
   built_by_url: "https://loopflow.studio"
   fan_content: >-
