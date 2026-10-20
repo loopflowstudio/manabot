@@ -100,6 +100,44 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
+## Scale
+
+Training scale per agent, compared with Ataraxos's Stratego agent as a
+reference point. We add a row when a run sets a new high.
+
+| Agent | Date | Hardware | Learner transitions | Updates | Throughput | Spend |
+|---|---|---|---:|---:|---:|---:|
+| Ataraxos ([Sokota et al.](https://doi.org/10.1038/s41586-026-11036-y)) | 2026 | CUDA simulator + GPUs | 208B env steps (163M games) | — | — | < $8,000 (rental estimate) |
+| Default recipe, 64×2, 256 streams ([017](experiments/longer-learning-017.md)) | 2026-10-18 | 1× RTX 5090 | 524k | 32 | ~1,700/s | ~$0.10 |
+| Longest run, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10-08 | 1× L4 | 51M | 100,000 | ~900/s (projected) | ~$15 (estimate) |
+
+Throughput is learner transitions per wall-clock second, including updates.
+Transitions are agent decisions; Ataraxos counts environment steps, so the
+units are close but not identical. Spend is GPU rental only. Our longest run
+is about 4,000× smaller than Ataraxos's.
+
+## Earlier results
+
+Before self-play became the main loop, the project leaned on search. These
+results come from that period and from earlier encodings, so their numbers are
+not comparable with today's checkpoints:
+
+- **Search was strong and cheap.** Flat determinized Monte Carlo with 256
+  rollouts beat random 99% of the time. Every early trained policy was weaker
+  than 16-rollout search ([exp-02](experiments/exp-02-flat-mc.md)).
+- **Distillation beat PPO at equal cost**, 90.5% versus 52.7% against random
+  ([exp-03](experiments/exp-03-distillation.md)). Naive expert iteration did
+  not compound: round 1 lost 74–26 to round 0
+  ([exp-07](experiments/exp-07-expert-iteration.md)).
+- **Reward shaping hurt.** Terminal-only reward beat our shaped rewards by
+  about 15 points ([exp-04](experiments/exp-04-potential-shaping.md)).
+- **Win rate hid incompetence.** The search pilot could not play a control
+  deck: it found the right line at most 39% of the time in competency
+  scenarios, and random beat it in 3 of 5
+  ([exp-09](experiments/exp-09-control-competency.md)). Matchup tables mostly
+  measured the pilot and card quality
+  ([exp-08b](experiments/exp-08b-ancestral-dose.md)).
+
 ## Not built yet
 
 - **More cards.** Cards are authored as typed programs rather than parsed
