@@ -97,6 +97,8 @@ def inspect_checkpoint(
     if stat.st_size > MAX_CHECKPOINT_BYTES:
         raise NotAPolicyCheckpoint(f"{resolved} is too large to be a policy")
     summary = _inspect_cached(str(resolved), stat.st_size, stat.st_mtime_ns)
+    if isinstance(summary, NotAPolicyCheckpoint):
+        raise summary
     return replace(
         summary,
         label=label or summary.label,
@@ -106,21 +108,24 @@ def inspect_checkpoint(
 
 
 @lru_cache(maxsize=512)
-def _inspect_cached(path: str, size: int, mtime_ns: int) -> CheckpointSummary:
+def _inspect_cached(
+    path: str, size: int, mtime_ns: int
+) -> CheckpointSummary | NotAPolicyCheckpoint:
+    # Refusals are returned, not raised, so they are cached too: run
+    # directories hold large optimizer and dataset files that every listing
+    # and every game admission would otherwise read again in full.
     del size, mtime_ns  # cache key only: a rewritten file is re-read
     data = Path(path).read_bytes()
     try:
         checkpoint = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
-    except Exception as error:  # torch raises several unpickling types
-        raise NotAPolicyCheckpoint(
-            f"{path} is not a weights-only checkpoint"
-        ) from error
+    except Exception:  # torch raises several unpickling types
+        return NotAPolicyCheckpoint(f"{path} is not a weights-only checkpoint")
     if (
         not isinstance(checkpoint, dict)
         or not isinstance(checkpoint.get("model_state_dict"), Mapping)
         or not isinstance(checkpoint.get("hypers"), Mapping)
     ):
-        raise NotAPolicyCheckpoint(f"{path} holds no policy")
+        return NotAPolicyCheckpoint(f"{path} holds no policy")
     hypers = checkpoint["hypers"]
     binding = checkpoint.get("world_binding")
     world = binding.get("world") if isinstance(binding, Mapping) else None

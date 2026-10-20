@@ -4,12 +4,17 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
 import torch
 
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
-from manabot.model.catalog import discover_checkpoints, inspect_checkpoint
+from manabot.model.catalog import (
+    NotAPolicyCheckpoint,
+    discover_checkpoints,
+    inspect_checkpoint,
+)
 from manabot.model.world import WORLD
 from manabot.sim.distill import save_bc_checkpoint
 import managym
@@ -78,6 +83,22 @@ def test_mismatches_are_named(tmp_path: Path) -> None:
         inspect_checkpoint(tmp_path / "unbound.pt").incompatibility
         == f"trained without a world binding; engine is {WORLD}"
     )
+
+
+def test_non_policy_files_are_refused_without_rereading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    optimizer = tmp_path / "optimizer.pt"
+    torch.save({"state": {}}, optimizer)
+    with pytest.raises(NotAPolicyCheckpoint):
+        inspect_checkpoint(optimizer)
+
+    def no_reload(*args: object, **kwargs: object) -> None:
+        raise AssertionError("an unchanged refusal is read again")
+
+    monkeypatch.setattr(torch, "load", no_reload)
+    with pytest.raises(NotAPolicyCheckpoint, match="holds no policy"):
+        inspect_checkpoint(optimizer)
 
 
 def test_discovery_reads_runs_paths_and_tournaments(tmp_path: Path) -> None:

@@ -7,7 +7,7 @@
   import type { DeckChoice } from '$lib/decks';
   import type { WatchDecision } from '$lib/watch';
   import type { RestoredReplayDecision } from '$lib/replay-index';
-  import type { InteractionOffer, Observation } from '$lib/types';
+  import type { InteractionOffer, Observation, OpponentCatalog } from '$lib/types';
   import type { StudyRetryResponse } from '$lib/study-runtime';
   import { rememberRecordCredential, recordFetch } from '$lib/records';
 
@@ -53,9 +53,11 @@
 
   onMount(() => {
     ready = true;
-    void fetch('/api/opponent').then(r => r.json()).then(data => {
-      trained = data.available;
-      if (data.opponent) trainedName = `${data.opponent.name} · ${data.opponent.sha256.slice(0, 10)}`;
+    // A watched `checkpoint` seat plays the server-configured candidate.
+    void fetch('/api/opponents').then(r => r.json()).then((data: OpponentCatalog) => {
+      const configured = data.opponents.find(opponent => opponent.source === 'candidate');
+      trained = configured?.available ?? false;
+      if (configured) trainedName = `${configured.name} · ${configured.sha256.slice(0, 10)}`;
     }).catch(() => {});
     const selected = new URLSearchParams(location.search).get('trace');
     if (selected) {
