@@ -26,22 +26,24 @@ import type {
   StopSide,
 } from './types';
 
+// Trained opponents are chosen by exact checkpoint digest: `checkpoint:<sha256>`.
 export type OpponentChoice =
   | 'search-16'
   | 'search-64'
   | 'search-256'
   | 'random'
   | 'passive'
-  | 'checkpoint';
+  | `checkpoint:${string}`;
 
-export function buildOpponentConfig(
-  choice: OpponentChoice,
-  opponentSha256: string,
-): OpponentConfig {
-  if (choice === 'checkpoint') {
+export function checkpointChoice(sha256: string): OpponentChoice {
+  return `checkpoint:${sha256}`;
+}
+
+export function buildOpponentConfig(choice: OpponentChoice): OpponentConfig {
+  if (choice.startsWith('checkpoint:')) {
     return {
       villain_type: 'checkpoint',
-      opponent_sha256: opponentSha256,
+      opponent_sha256: choice.slice('checkpoint:'.length),
     };
   }
   if (choice === 'random' || choice === 'passive') {
@@ -73,7 +75,6 @@ export class GameStore {
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<OpponentChoice>('search-64');
-  opponentSha256 = $state('');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
@@ -111,8 +112,7 @@ export class GameStore {
     if (!table) return;
     const previousRole = this.table?.access.role;
     if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
-      this.opponentChoice = 'checkpoint';
-      this.opponentSha256 = table.opponent.sha256;
+      this.opponentChoice = checkpointChoice(table.opponent.sha256);
     }
     this.table = table;
     if (previousRole && previousRole !== table.access.role) {
@@ -172,10 +172,7 @@ export class GameStore {
   }
 
   opponentConfig(): OpponentConfig {
-    return buildOpponentConfig(
-      this.opponentChoice,
-      this.table?.opponent?.sha256 ?? this.opponentSha256,
-    );
+    return buildOpponentConfig(this.opponentChoice);
   }
 
   newGameConfig(): Record<string, unknown> {

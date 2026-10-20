@@ -15,7 +15,7 @@ test('configured trained opponent completes both deck assignments and retains fe
   }));
   await page.goto('/');
   const selector = page.getByTestId('opponent-select');
-  await expect(selector).toHaveValue('checkpoint');
+  await expect(selector).toHaveValue(/^checkpoint:[a-f0-9]{64}$/);
   const identity = await selector.locator('option:checked').textContent();
   expect(identity).toMatch(/seed \d+ · [a-f0-9]{10}/);
   for (let assignment = 0; assignment < 2; assignment++) {

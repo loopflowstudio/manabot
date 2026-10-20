@@ -421,6 +421,28 @@ export interface TraceSummary {
 
 export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
 
+// One entry of GET /api/opponents: the configured candidate or a checkpoint
+// the server found. `reason` names why an unavailable entry cannot play.
+export interface TrainedOpponent {
+  sha256: string;
+  name: string;
+  producer: string;
+  source: 'candidate' | 'path' | 'runs' | 'tournament';
+  world: string | null;
+  model: string | null;
+  parameters: number | null;
+  step: number | null;
+  // Display names of the decks the checkpoint was bound to (either seat).
+  decks: string[];
+  available: boolean;
+  reason: string | null;
+}
+
+export interface OpponentCatalog {
+  opponents: TrainedOpponent[];
+  catalog_error: string | null;
+}
+
 export interface OpponentConfig {
   villain_type: VillainType;
   villain_sims?: number;
