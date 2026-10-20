@@ -1,6 +1,0 @@
-{
-  "artifact_path": "traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
-  "games": 8,
-  "path": ".runs/grid-007/learning-017/mini-calibration-standard/parallel-1-scripted_greedy/transitions-0/deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
-  "sha256": "4e421650d5e8e239174edc72e60dcecaec135c85c09338c6de8191532796b2e1"
-}

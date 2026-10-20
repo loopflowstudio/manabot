@@ -1,6 +1,0 @@
-{
-  "artifact_path": "traces/monitor-checkpoint__monitor-random.commands.jsonl.gz",
-  "games": 8,
-  "path": ".runs/grid-007/learning-017/mini-calibration-standard/parallel-1-random/transitions-0/deal-000/traces/monitor-checkpoint__monitor-random.commands.jsonl.gz",
-  "sha256": "ddad8804688d1ed804fa24c81071f6a50a1c3f38bb5d7f13ab904747be14bf7f"
-}

@@ -1,9 +1,0 @@
-{
-  "observed_at": "2026-10-18T17:12:11.073217+00:00",
-  "pid": 59432,
-  "reason": "Retained control traces already contain game wall-clock budget exhausted failures. Stop further control games and retain this failed admission.",
-  "launcher_process_type": "Background",
-  "observed_priority": 4,
-  "scheduling_cause": "hypothesis to test after correcting launch setting; not established",
-  "full_protocol017_scoring_started": false
-}

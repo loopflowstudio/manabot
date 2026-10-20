@@ -1,7 +1,0 @@
-{
-  "observed_at": "2026-10-18T19:15:15.085146+00:00",
-  "label": "gg.manabot.mtg135.protocol017-analysis",
-  "domain": "gui/502",
-  "entrypoint_sha256": "e9926cee4308319b919aaddde96bd709e2290864de72899357b7d128812b4731",
-  "purpose": "Wait for full panel success, then audit and render; no new games, no publication or automatic retry"
-}
