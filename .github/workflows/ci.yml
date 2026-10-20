@@ -14,8 +14,53 @@ on:
         type: boolean
 
 jobs:
+  # Documentation-only pull requests skip the suites below. Skipped jobs report
+  # as skipped, and "Tests Result" (the required check) accepts that only when
+  # this job classified the change as documentation. Pushes to main and manual
+  # runs always run everything. Markdown that code or tests read (frontend,
+  # website, content, conformance, protocol, experiment protocols and data,
+  # docs/experiment-metrics.md, docs/benchmarks) counts as code.
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+
+      - name: Classify changed files
+        id: classify
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # HEAD is the PR merge commit; its first parent is the base tip.
+          files=$(git diff --name-only HEAD^1 HEAD)
+          echo "$files"
+          docs_only=true
+          [ -n "$files" ] || docs_only=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              content/DECKS.md) ;;
+              frontend/*|website/*|content/*|conformance/*|protocol/*|.github/*) docs_only=false ;;
+              docs/experiment-metrics.md|docs/benchmarks/*) docs_only=false ;;
+              experiments/*/*) docs_only=false ;;
+              paper/*|wave/*|scratch/*|.lf/*|LICENSE) ;;
+              *.md) ;;
+              *) docs_only=false ;;
+            esac
+          done <<< "$files"
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
   rust:
     name: Rust Tests
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +80,8 @@ jobs:
 
   python-unit:
     name: Python Unit Tests
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +105,8 @@ jobs:
 
   integration:
     name: Integration (${{ matrix.os }})
-    needs: [rust]
+    needs: [changes, rust]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -163,6 +211,8 @@ jobs:
 
   protocol-v1:
     name: Protocol v1 Conformance
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -211,7 +261,8 @@ jobs:
 
   semantic-coverage:
     name: Semantic Coverage Gate
-    needs: [rust]
+    needs: [changes, rust]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -236,7 +287,8 @@ jobs:
 
   semantic-conformance:
     name: Semantic Kernel Conformance
-    needs: [rust]
+    needs: [changes, rust]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -270,6 +322,8 @@ jobs:
 
   visual_reference:
     name: Visual Reference Gate
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -339,6 +393,8 @@ jobs:
 
   clean-machine-play:
     name: Clean-machine Play
+    needs: [changes]
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -377,26 +433,35 @@ jobs:
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
+    needs: [changes, rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
     if: always()
     steps:
       - name: Check all jobs
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          RESULTS: >-
+            rust=${{ needs.rust.result }}
+            python-unit=${{ needs.python-unit.result }}
+            integration=${{ needs.integration.result }}
+            protocol-v1=${{ needs.protocol-v1.result }}
+            semantic-coverage=${{ needs.semantic-coverage.result }}
+            semantic-conformance=${{ needs.semantic-conformance.result }}
+            visual_reference=${{ needs.visual_reference.result }}
+            clean-machine-play=${{ needs.clean-machine-play.result }}
         run: |
-          echo "rust: ${{ needs.rust.result }}"
-          echo "python-unit: ${{ needs.python-unit.result }}"
-          echo "integration: ${{ needs.integration.result }}"
-          echo "protocol-v1: ${{ needs.protocol-v1.result }}"
-          echo "semantic-coverage: ${{ needs.semantic-coverage.result }}"
-          echo "semantic-conformance: ${{ needs.semantic-conformance.result }}"
-          echo "visual_reference: ${{ needs.visual_reference.result }}"
-          echo "clean-machine-play: ${{ needs.clean-machine-play.result }}"
-          if [ "${{ needs.rust.result }}" != "success" ] || \
-             [ "${{ needs.python-unit.result }}" != "success" ] || \
-             [ "${{ needs.integration.result }}" != "success" ] || \
-             [ "${{ needs.protocol-v1.result }}" != "success" ] || \
-             [ "${{ needs.semantic-coverage.result }}" != "success" ] || \
-             [ "${{ needs.semantic-conformance.result }}" != "success" ] || \
-             [ "${{ needs.visual_reference.result }}" != "success" ] || \
-             [ "${{ needs.clean-machine-play.result }}" != "success" ]; then
-            exit 1
-          fi
+          echo "changes: $CHANGES (docs_only=$DOCS_ONLY)"
+          [ "$CHANGES" = "success" ] || exit 1
+          failed=0
+          for entry in $RESULTS; do
+            echo "$entry"
+            result="${entry#*=}"
+            if [ "$result" = "success" ]; then
+              continue
+            fi
+            if [ "$DOCS_ONLY" = "true" ] && [ "$result" = "skipped" ]; then
+              continue
+            fi
+            failed=1
+          done
+          exit "$failed"
