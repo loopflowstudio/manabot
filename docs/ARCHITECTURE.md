@@ -74,7 +74,7 @@ main engine. The loop is declared as data and executed by one runner:
   evaluation. These choices follow Ataraxos
   ([Sokota et al., 2026](https://doi.org/10.1038/s41586-026-11036-y)). Each
   is a separate switch tested on Magic, with PPO kept as a control. See the
-  [learning research guide](../manabot/LEARNING_RESEARCH_GUIDE.md) and the
+  [research program](../manabot/RESEARCH.md) and the
   [technique screens](../experiments/ataraxos-technique-screen.md).
 - **Remote execution.** Etude launches regimes on rented GPUs and returns
   verified checkpoints and receipts. Training targets (`JobSpec`) are
