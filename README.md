@@ -102,19 +102,15 @@ wide range of environments.
 
 ## Scale
 
-Training scale per agent, compared with Ataraxos's Stratego agent as a
-reference point. We add a row when a run sets a new high.
+Training scale per agent. We add a row when a run sets a new high.
 
 | Agent | Date | Hardware | Learner transitions | Updates | Throughput | Spend |
 |---|---|---|---:|---:|---:|---:|
-| Ataraxos ([Sokota et al.](https://doi.org/10.1038/s41586-026-11036-y)) | 2026 | CUDA simulator + GPUs | 208B env steps (163M games) | — | — | < $8,000 (rental estimate) |
 | Default recipe, 64×2, 256 streams ([017](experiments/longer-learning-017.md)) | 2026-10-18 | 1× RTX 5090 | 524k | 32 | ~1,700/s | ~$0.10 |
 | Longest run, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10-08 | 1× L4 | 51M | 100,000 | ~900/s (projected) | ~$15 (estimate) |
 
-Throughput is learner transitions per wall-clock second, including updates.
-Transitions are agent decisions; Ataraxos counts environment steps, so the
-units are close but not identical. Spend is GPU rental only. Our longest run
-is about 4,000× smaller than Ataraxos's.
+Learner transitions are agent decisions. Throughput is transitions per
+wall-clock second, including updates. Spend is GPU rental only.
 
 ## Earlier results
 
