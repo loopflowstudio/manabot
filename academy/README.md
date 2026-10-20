@@ -82,3 +82,39 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 [frontend/e2e/](../frontend/e2e/) and documented in
 [docs/clean-machine-play.md](../docs/clean-machine-play.md) and
 [docs/experience-proof.md](../docs/experience-proof.md).
+
+## Watch and recorded bot decisions
+
+Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed.
+The configured checkpoint and random, greedy, heuristic and search anchors use
+GameSession's normal Command authority. Step advances one native decision;
+Play/Pause and speed control that same operation. Previous decisions read saved
+outputs without rerunning the policy. Completed watched games open from Games
+in this same table. Reloading retains the watch credential in the browser.
+
+`watch.py` admits controllers and verified arena/Tournament game JSON or
+`.jsonl.gz` traces; choose a game when a trace contains several. Import verifies
+the original receipt, Commands and state digests without invoking a player.
+The imported Academy replay has its own identity; the source digest is retained
+without rewriting the arena evidence. Missing historical policy outputs are
+marked unavailable. Local-update receipts expose only policy/search vectors
+and an acting-view belief summary, never private sampled hands or branch audits.
+
+`TraceEvent.bot_decision` records the actual policy/value/search outputs at
+choice time. Compound checkpoints record their conditional root-sequence
+factors and values; these are labeled separately from native microchoice
+marginals. Anchors without critics have no value estimate. Watch's acting-view
+inspection endpoint never returns the full mixed canonical replay. The separate
+private analysis observation supplies **Show both hands**, enabled by default
+for bot spectators, including during active watches. Active inspection requires
+the watch credential; completed inspection remains shared. Switching it off
+shows only the acting bot's view. Ordinary trace reads always strip the analysis
+snapshot, and bot inputs and decision evidence retain their acting-view scope.
+
+**Try another line** uses retained Study roots from either acting seat, executes
+one exact semantic Command on an isolated branch, and returns to the recorded
+decision. It does not advance the watched match. Roots and active controllers
+have the ordinary table-session lifetime; saved completed inspection remains
+available after the session expires, while a fresh Study fork requires retained
+roots. Existing structured Study receipts and frozen `erd1` evidence keep their
+original command bindings.
