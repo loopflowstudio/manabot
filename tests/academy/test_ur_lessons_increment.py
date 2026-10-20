@@ -5,12 +5,12 @@ import random
 import numpy as np
 import pytest
 
-from academy.server import describe_actions, serialize_observation
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import MatchHypers, RewardHypers
 import managym
+from managym.experience_projection import describe_actions, serialize_observation
 
 
 def candidate_match():

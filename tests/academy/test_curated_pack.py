@@ -66,6 +66,14 @@ def test_pack_hash_and_backend_deck_views_derive_from_manifest():
     assert CURATED_PACK.manifest_sha256 == expected_hash
     assert len(expected_hash) == 64
     assert server.ASSET_MANIFEST_HASH == expected_hash
+    # manabot records the served pack's digest in its frames without loading it.
+    from manabot.sim.teacher1_evidence import (
+        RECORDED_ASSET_MANIFEST,
+        RECORDED_ASSET_MANIFEST_HASH,
+    )
+
+    assert RECORDED_ASSET_MANIFEST == PACK_MANIFEST_PATH
+    assert RECORDED_ASSET_MANIFEST_HASH == expected_hash
     assert server.UR_LESSONS_DECK == CURATED_PACK.hero_deck
     assert server.GW_ALLIES_DECK == CURATED_PACK.villain_deck
     assert server.DECK_DISPLAY_NAMES["ur_lessons"] == "UR Lessons"

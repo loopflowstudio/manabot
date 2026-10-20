@@ -17,12 +17,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
-from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.arena.replay import read_trace, replay_games, write_trace
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.flat_mc import AgentMatchupPlayer, make_player
-from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.sim.teacher1_evidence import (
+    RECORDED_ASSET_MANIFEST_HASH,
+    build_command,
+    build_viewer_frame,
+)
 from manabot.verify.competency import (
     SCENARIOS,
     ScriptedVillain,
@@ -36,6 +39,7 @@ from manabot.verify.scenario_validation import (
     scenario_identity,
     validate_scenarios,
 )
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class ScenarioScore(BaseModel):
@@ -131,8 +135,8 @@ def score_checkpoint(
                 raw,
                 match_id=game["match_id"],
                 revision=revision,
-                content_hash=CONTENT_HASH,
-                asset_manifest_hash=ASSET_MANIFEST_HASH,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
             )
             if frame["projection"]["opponent"].get("hand"):
                 raise RuntimeError("viewer frame exposes hidden hand")

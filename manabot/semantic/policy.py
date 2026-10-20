@@ -9,15 +9,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import Any, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
-from academy.experience_protocol import Command, ExperienceFrame
 from manabot.sim.structured_policy import (
     DecodedSubmission,
     RaggedOfferBatch,
     StructuredPolicyError,
     flatten_projection,
 )
+
+if TYPE_CHECKING:
+    # Importing any managym module loads the native extension, and
+    # compiler-only imports of manabot.semantic must work before it is built.
+    from managym.experience import Command, ExperienceFrame
 
 from .learning import (
     DEFAULT_IR_PATH,
@@ -88,6 +92,8 @@ class SemanticDecision:
         prompt = self.frame.prompt
         if prompt is None:
             raise SemanticDecisionError("semantic decision frame has no prompt")
+        from managym.experience import Command  # noqa: PLC0415
+
         return Command(
             command_id=command_id
             or f"{self.frame.match_id}:{self.frame.revision}:{submission.offer_id}",
@@ -510,6 +516,7 @@ class SemanticDecisionAdapter:
             build_viewer_frame,
             canonical_sha256,
         )
+        from managym.experience import ExperienceFrame  # noqa: PLC0415
 
         frame = build_viewer_frame(
             observation,

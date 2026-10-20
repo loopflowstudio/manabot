@@ -12,9 +12,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import managym
-
-from .enums import EventTypeEnum
-from .experience_protocol import PresentationEvent
+from managym.enums import EventTypeEnum
+from managym.experience import PresentationEvent
 
 
 @dataclass(frozen=True)

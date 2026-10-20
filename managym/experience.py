@@ -1,8 +1,11 @@
 """Explicit Python representation of the experience protocol-v1 wire boundary.
 
-Rust owns the canonical JSON Schema in ``protocol/experience-v1.schema.json``.
-These Pydantic models give the Python adapter an equally explicit runtime
-representation and are checked against that generated schema in tests.
+Rust owns the protocol types (``managym/src/experience.rs``) and generates the
+canonical JSON Schema in ``protocol/experience-v1.schema.json``. These Pydantic
+models give Python an equally explicit runtime representation and are checked
+against that generated schema in tests. Academy speaks them over its transport;
+manabot records protocol-v1 frames in its replay and teacher evidence, so the
+models live here, below both packages.
 """
 
 from enum import Enum
@@ -11,6 +14,9 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field
 
 PROTOCOL_VERSION: Literal[1] = 1
+# Frames whose content predates versioned content identity carry this content
+# hash. Live play and recorded evidence both depend on the exact string.
+UNVERSIONED_CONTENT_HASH = "legacy-content-unversioned"
 
 UInt8: TypeAlias = Annotated[int, Field(ge=0, le=2**8 - 1)]
 UInt16: TypeAlias = Annotated[int, Field(ge=0, le=2**16 - 1)]

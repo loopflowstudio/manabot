@@ -14,8 +14,9 @@ from jsonschema import Draft202012Validator
 
 # Local imports
 from academy import server, trace as trace_store
-from academy.experience_protocol import ProtocolV1ConformanceBundle
 from academy.server import app
+from managym import experience_projection
+from managym.experience import ProtocolV1ConformanceBundle
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(
@@ -38,7 +39,7 @@ def _recorded_traces(directory):
 
 
 def _pick_action(actions: list[dict]) -> int:
-    preferred_action_types = {*server.ACTION_LABELS, "PRIORITY_PASS_PRIORITY"}
+    preferred_action_types = {*experience_projection.ACTION_LABELS, "PRIORITY_PASS_PRIORITY"}
     for action in actions:
         if action["type"] in preferred_action_types:
             return int(action["index"])

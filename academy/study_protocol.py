@@ -6,7 +6,12 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from academy.experience_protocol import (
+from academy.replay_index import (
+    DecisionAddressV2,
+    decision_payload_sha256,
+    parse_decision_address,
+)
+from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,
@@ -15,11 +20,6 @@ from academy.experience_protocol import (
     UInt8,
     UInt32,
     UInt64,
-)
-from academy.replay_index import (
-    DecisionAddressV2,
-    decision_payload_sha256,
-    parse_decision_address,
 )
 
 STUDY_VERSION: Literal[1] = 1

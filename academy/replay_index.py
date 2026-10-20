@@ -20,7 +20,7 @@ from typing import Any, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
-from .experience_protocol import (
+from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,

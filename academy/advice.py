@@ -41,7 +41,6 @@ from academy.advice_identity import (
     CheckpointArtifact,
     CodeSourceArtifact,
 )
-from academy.experience_protocol import ExperienceFrame, InteractionOffer, ProtocolModel
 from academy.replay_index import (
     DecisionNotFoundError,
     InvalidAddressError,
@@ -54,6 +53,7 @@ from academy.study_branch import (
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
 from academy.testing_house_protocol import BeliefScenario, ViewerIdentity
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 from managym.possible_worlds import (
     POSSIBLE_WORLD_SPACE_VERSION,
     PossibleWorldError,

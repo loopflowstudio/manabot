@@ -223,10 +223,13 @@ def record_game(spec: GameSpec) -> GameRecord:
     """Play one game to the end. Failures are kept as records, never dropped."""
     import torch
 
-    from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
     from manabot.env import Env, Match, ObservationSpace, Reward
     from manabot.infra.hypers import RewardHypers
-    from manabot.sim.teacher1_evidence import build_viewer_frame
+    from manabot.sim.teacher1_evidence import (
+        RECORDED_ASSET_MANIFEST_HASH,
+        build_viewer_frame,
+    )
+    from managym.experience import UNVERSIONED_CONTENT_HASH
 
     torch.set_num_threads(1)
     record = GameRecord(spec.game_id, spec.labels, spec.decks, spec.seed)
@@ -254,8 +257,8 @@ def record_game(spec: GameSpec) -> GameRecord:
                 raw,
                 match_id=spec.game_id,
                 revision=revision,
-                content_hash=CONTENT_HASH,
-                asset_manifest_hash=ASSET_MANIFEST_HASH,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
             )
             began = time.perf_counter()
             action = int(built[actor][0].act(env, obs))

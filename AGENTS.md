@@ -39,6 +39,9 @@ identifiers stay unchanged.
 The shared Etude experiment services retain their names. "Sepia Etude" remains
 the name of the visual language.
 
+Package dependencies flow academy → manabot → managym: manabot never imports
+academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+
 ## Style
 
 - Package style guides live in each package README (`manabot/README.md`,

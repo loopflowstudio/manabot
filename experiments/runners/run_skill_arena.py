@@ -102,7 +102,7 @@ def arena_runtime_fingerprints(**kwargs) -> dict[str, Any]:
 def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
     if kind == "demo_search":
-        return ["academy/villain.py", "manabot/arena/players.py"]
+        return ["manabot/sim/flat_search.py", "manabot/arena/players.py"]
     if kind == "scripted_greedy":
         return ["manabot/arena/players.py"]
     if kind == "heuristic":
@@ -1952,12 +1952,9 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     """Bounded instrument proof on authored Allies/Lessons, without promotion."""
     import math
 
-    from academy.villain import (
-        DEFAULT_MAX_PLAYOUT_STEPS,
-        DEFAULT_ROLLOUTS_PER_WORLD,
-        DEFAULT_SEARCH_SIMS,
-    )
     from manabot.arena.match import SELECTED_SUITE, selected_match
+    from manabot.sim.flat_search import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
+    from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS
 
     if (
         not math.isfinite(args.game_seconds)
@@ -2010,7 +2007,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "rollouts_per_world": DEFAULT_ROLLOUTS_PER_WORLD,
             "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
         },
-        source_sha256=source_digest(["academy/villain.py", "manabot/arena/players.py"]),
+        source_sha256=source_digest(["manabot/sim/flat_search.py", "manabot/arena/players.py"]),
     )
     candidate = (
         candidate
@@ -2032,9 +2029,8 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
                 str(path.relative_to(REPO_ROOT))
                 for path in (REPO_ROOT / "manabot").rglob("*.py")
             ],
-            "academy/villain.py",
-            "academy/server.py",
-            "academy/experience_protocol.py",
+            "managym/experience.py",
+            "managym/experience_projection.py",
             "experiments/runners/run_skill_arena.py",
             "uv.lock",
         }
