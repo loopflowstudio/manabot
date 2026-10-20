@@ -1,0 +1,276 @@
+{
+  "status": "rendered; visual and scientific interpretation review pending",
+  "input_sha256": {
+    ".runs/grid-007/learning-017/analysis/results.json": "cbe2c66780b3e3377c6a970eeaeccb9817c9e7096f86f3b4be30f98514b99faf",
+    ".runs/grid-007/learning-017/resources.json": "e68edf04b7aa8af5d87df38fc0ab031d821472113607ccb46a59602dd14e9334",
+    ".runs/grid-007/learning-017/resolved-recipes/index.json": "dc48d07fc89daa6ae9c98f267cc551771ae5d1c54fe2ecf9d8ea3d38b5f02c22"
+  },
+  "renderer_sha256": "d6fba8c25958f40ad58fa1ba6c7b0982ff174ffa726f47a3704bc9828f8938c0",
+  "files": [
+    {
+      "path": "allocation.json",
+      "bytes": 5872,
+      "sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6"
+    },
+    {
+      "path": "analysis-source/README.md",
+      "bytes": 3226,
+      "sha256": "962f18f0bc465b57de0c0eab8fe6d5c087178875c4432b1976cba68a22fa0355"
+    },
+    {
+      "path": "analysis-source/files/gpu-validation/cli.py",
+      "bytes": 3629,
+      "sha256": "372ec7f1e23be0038415e60d7a30597a1b198bcdf5137c0648b3486c984707a3"
+    },
+    {
+      "path": "analysis-source/files/grid-007/analyze_learning.py",
+      "bytes": 11515,
+      "sha256": "6850776f613e0958658c160007c20e728831a2ddeea7deaa777dd2e562b72875"
+    },
+    {
+      "path": "analysis-source/files/grid-007/audit_completed_numerics.py",
+      "bytes": 4970,
+      "sha256": "8e22a8284aa56fa055a488c18b5f5333e2763f1ad2047f037f86abeeb3f0b499"
+    },
+    {
+      "path": "analysis-source/files/grid-007/check_analysis_readiness.py",
+      "bytes": 3017,
+      "sha256": "0039c6b5e4d371fb023c693fc36d8b81251b5bb0a2c0c6ea6df990acabd6d923"
+    },
+    {
+      "path": "analysis-source/files/grid-007/check_report_readiness.py",
+      "bytes": 6127,
+      "sha256": "de7fe1d41b1937e5ef128b1c26cdc96c9e4542d67713abcb9b0d5481c249967c"
+    },
+    {
+      "path": "analysis-source/files/grid-007/check_resource_readiness.py",
+      "bytes": 3926,
+      "sha256": "21c7e59d58f66d95eb4bb41c626e55e8f63548ff324eca9d7e912a7494f63312"
+    },
+    {
+      "path": "analysis-source/files/grid-007/evaluate_learning.py",
+      "bytes": 4561,
+      "sha256": "7ca9828532e505c6b5beda47c4ee9ffc79d491d1d23921f17381cc85d588d5f8"
+    },
+    {
+      "path": "analysis-source/files/grid-007/evaluation_runtime.py",
+      "bytes": 3677,
+      "sha256": "fc52a1752e0794a900afafd361cc55d369f2bb3ed6f0c583bd3462327efa4339"
+    },
+    {
+      "path": "analysis-source/files/grid-007/export_learning_recipes.py",
+      "bytes": 5250,
+      "sha256": "e554e04fb8270fc02b9cd6379fa06ab16e22f8f32211d5b505c25cd179cd3de2"
+    },
+    {
+      "path": "analysis-source/files/grid-007/learning_figures.py",
+      "bytes": 10052,
+      "sha256": "720a7b9251038d6f6ce3e2e1c5788e72a0e4dfcdfd5b0239e42790be31da8518"
+    },
+    {
+      "path": "analysis-source/files/grid-007/learning_resources.py",
+      "bytes": 13220,
+      "sha256": "f5fcdeb3beacf892a63cfa64e25b89e871c9778731a08b7cf3949caa72526d59"
+    },
+    {
+      "path": "analysis-source/files/grid-007/learning_selection.py",
+      "bytes": 7005,
+      "sha256": "7f054037e1ae3e06ef2bb873f5104de36f23731593749604ba3340b44001f879"
+    },
+    {
+      "path": "analysis-source/files/grid-007/preview_learning_figures.py",
+      "bytes": 3167,
+      "sha256": "4ff935c695c751b96d3cdb5bf14081fb583d60942698e9782ef9d9d61de6891e"
+    },
+    {
+      "path": "analysis-source/files/grid-007/render_learning_report.py",
+      "bytes": 20644,
+      "sha256": "d6fba8c25958f40ad58fa1ba6c7b0982ff174ffa726f47a3704bc9828f8938c0"
+    },
+    {
+      "path": "analysis-source/files/grid-007/retain_analysis_source.py",
+      "bytes": 8781,
+      "sha256": "506433f1ff9ebc101516f12ac9f621a05307fa7a050e0ec383fab167d98bd281"
+    },
+    {
+      "path": "analysis-source/files/grid-007/test_learning_analysis.py",
+      "bytes": 9382,
+      "sha256": "d2ba0c9e4896d9a110da335d974d6e41d732b2d61f84f94c0850bde2d998d1ff"
+    },
+    {
+      "path": "analysis-source/files/grid-007/verify_grouped.py",
+      "bytes": 9122,
+      "sha256": "412253eddc997987f6ed1f78dd069777773bf8a85cbaadcabffe22fd23ecf309"
+    },
+    {
+      "path": "analysis-source/files/grid-007/verify_learning.py",
+      "bytes": 9679,
+      "sha256": "36486bc3ccaac28559f9f5a83f9772cf966d998afcedfa3d595583025dd396d4"
+    },
+    {
+      "path": "analysis-source/manifest.json",
+      "bytes": 4477,
+      "sha256": "11f6bbf55b9331b5a0b35ca452243166fb8a812544a0f09abb7e9782e030d89d"
+    },
+    {
+      "path": "analysis.json",
+      "bytes": 485639,
+      "sha256": "cbe2c66780b3e3377c6a970eeaeccb9817c9e7096f86f3b4be30f98514b99faf"
+    },
+    {
+      "path": "checkpoint-scores.md",
+      "bytes": 15986,
+      "sha256": "36b984ea8b2f8d00057c40a5883967824f6c2dfed6a14f600260e469ae706575"
+    },
+    {
+      "path": "concurrency-amendment.md",
+      "bytes": 1317,
+      "sha256": "fe12861eb5bbae440d5f9652304158ca224dae4d917d4fbcf267ffb9e2742ede"
+    },
+    {
+      "path": "deck-role-scores.csv",
+      "bytes": 53628,
+      "sha256": "8cc7c818f60969b29ff75986f24360d7f22a431370b328f9ca4bf8d999f74d2a"
+    },
+    {
+      "path": "endpoint-tradeoffs.png",
+      "bytes": 90748,
+      "sha256": "e4c4dc0e71aedb47640d8ddd255198e145264d9544836ca46712c0065db4531d"
+    },
+    {
+      "path": "endpoint-tradeoffs.svg",
+      "bytes": 75807,
+      "sha256": "6ec9ea2acd269dac1241b828908c405df00b02b4d3510ceae32d4c5b430f776b"
+    },
+    {
+      "path": "evaluation-runtime.json",
+      "bytes": 2745,
+      "sha256": "5c14b7f310d7937959aa8baf9e570f16c74f9c41904dd99eb26bb9bbe15142e6"
+    },
+    {
+      "path": "evaluation-verification.json",
+      "bytes": 853,
+      "sha256": "bb287f56b71c24942dae132ff7f0f98bc9da8e1f8973a54fbb8fd1024aa41e03"
+    },
+    {
+      "path": "evidence.md",
+      "bytes": 9855,
+      "sha256": "0245b9bd1f7aa5d0088f5b9fe41fb781533a7829cafae1665b1c3c350d418b16"
+    },
+    {
+      "path": "guardian-verification.json",
+      "bytes": 1040,
+      "sha256": "374450c84e31757db9b22239f9ae8ccd5d30ce4cc538189cc51aacdc5aa27baf"
+    },
+    {
+      "path": "learning-active.png",
+      "bytes": 215871,
+      "sha256": "faf8a7e4b326c9eaee2ecf2c00fb4e200b445869a823dd354741047826022137"
+    },
+    {
+      "path": "learning-active.svg",
+      "bytes": 164360,
+      "sha256": "d6b4013b9d852996a26e0bb12f5e4b2c1a80cde7fcb34a31527141658e7bcc9b"
+    },
+    {
+      "path": "learning-inclusive.png",
+      "bytes": 215128,
+      "sha256": "f018732647f1c8c5a76b52305f1a233b2dd1ce3325544e38e19451113be37d4b"
+    },
+    {
+      "path": "learning-inclusive.svg",
+      "bytes": 165662,
+      "sha256": "bbf41ee606109bba28f881be63dafff16fac61c8aa18eacd507f79fe7a49a609"
+    },
+    {
+      "path": "learning-transitions.png",
+      "bytes": 249913,
+      "sha256": "125db7ff9ca9247c57f715f24da7b9f9aa965a7ea9de3c3fc49e40f7e11df283"
+    },
+    {
+      "path": "learning-transitions.svg",
+      "bytes": 157991,
+      "sha256": "8291544fa3b6f76578ec6fffee8d255d1203499518968a1c44f9a28a7317ec2e"
+    },
+    {
+      "path": "protocol.md",
+      "bytes": 9512,
+      "sha256": "f6f22c4ca0ee67848f4d42f1852b0321b7cf18a58c40c1de8d2134a5c2402281"
+    },
+    {
+      "path": "recipes/index.json",
+      "bytes": 10077,
+      "sha256": "dc48d07fc89daa6ae9c98f267cc551771ae5d1c54fe2ecf9d8ea3d38b5f02c22"
+    },
+    {
+      "path": "recipes/large-s256.json",
+      "bytes": 3217,
+      "sha256": "bc9e6ff85db683a8a65fa5678183d8cc99fffcfe20a5d198ae3d98400fa369c0"
+    },
+    {
+      "path": "recipes/large-s64.json",
+      "bytes": 3217,
+      "sha256": "f9048134ed10331cace9c5d0e141effef2374570d84d137872276f4d9df1a261"
+    },
+    {
+      "path": "recipes/large-shallow-s256.json",
+      "bytes": 3223,
+      "sha256": "cff34c149c50775f620cc0bedca8683e3de796060206a563c5a5ab02a1fe9867"
+    },
+    {
+      "path": "recipes/large-shallow-s64.json",
+      "bytes": 3225,
+      "sha256": "31b88b27b7375ee93866b5c98851c15a4cc34aae2407d7b85316be933fc09b15"
+    },
+    {
+      "path": "recipes/middle-s256.json",
+      "bytes": 3216,
+      "sha256": "7f5ec9f1dff715d8e273a4891c0ccda36c27dbfbc475b19723802b7e6613597e"
+    },
+    {
+      "path": "recipes/middle-s64.json",
+      "bytes": 3218,
+      "sha256": "caf1d712269868ce88dd7dab75011b13fc9c61d7c70b0eb1aeeac653b5d5a412"
+    },
+    {
+      "path": "recipes/small-deep-s256.json",
+      "bytes": 3219,
+      "sha256": "e49438249118de346b591b45c736c056549599956c6b18d12dc7712a5c21c9ca"
+    },
+    {
+      "path": "recipes/small-deep-s64.json",
+      "bytes": 3221,
+      "sha256": "ffebaa24058a421c774ac4e7f114729ca998826903b02fdf127cd9e8354fb0ba"
+    },
+    {
+      "path": "recipes/small-s256.json",
+      "bytes": 3214,
+      "sha256": "40eb5144f5c4c9be4ce9dbe70d35a77a047927d8fdf111cefe5455039e65070c"
+    },
+    {
+      "path": "recipes/small-s4.json",
+      "bytes": 3114,
+      "sha256": "bfd3cbaf76abb5316934b88d678cfb8716382051d40146887ea3aff3bbb2d9db"
+    },
+    {
+      "path": "recipes/small-s64.json",
+      "bytes": 3216,
+      "sha256": "f327315a217a4da66869561003641e8fe75e040a86ce3ff1b1f4e76dbcc97ab4"
+    },
+    {
+      "path": "rental-settlement.json",
+      "bytes": 257,
+      "sha256": "fbbb72b4857816ceae1b75209fb11f0db87278869e9a804d373d3930af608dd2"
+    },
+    {
+      "path": "resources.json",
+      "bytes": 27761,
+      "sha256": "e68edf04b7aa8af5d87df38fc0ab031d821472113607ccb46a59602dd14e9334"
+    },
+    {
+      "path": "training-verification.json",
+      "bytes": 147775,
+      "sha256": "fa11d7b0e98f67e2929ec74227541c07ee4cca5da3b91f92c5415cb457e5c5b2"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
+uv run manabot train --regime experiments/regimes/batched-baseline.json  # batched GPU baseline
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -43,6 +44,14 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--seconds` sets a failure deadline without changing the step schedule. Historical
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
+
+For GPU training, start from `experiments/regimes/batched-baseline.json`. It is the
+same 64×2 model trained on 64 streams for 524,288 learner transitions (128
+iterations), with the learning-rate schedule mapped onto 2,048 four-stream
+iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
+it met the competence thresholds on both seeds within 7 minutes on an RTX 5090, and the
+full run takes about 13 minutes versus about 110 at four streams; larger models showed no advantage at this
+horizon. The regime is that study's exact tested recipe; it requires CUDA.
 
 For an identified Allies/Lessons opponent, use the bounded
 [train/export/play workflow](../docs/local-trained-challenger.md). It uses the
@@ -158,6 +167,29 @@ Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
 only reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
+
+Study records retain viewer-safe target source names and target controller sides.
+Audit retained Allies/Lessons records without starting games with
+`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
+seat, including absent cohorts, unfinished records, declined targets and unknown
+identities. Target offers list player 0's objects first, so a first-offer
+policy's target side depends on its seat.
+Older records remain readable and count as unmeasured target prompts; source-less
+trigger choices remain unknown. Labels identify recorded seats, not a verified
+policy implementation. Own-side targeting alone does not establish a misplay,
+and these dependent choice counts are not game-level strength estimates.
+
+`heuristic` (`manabot/arena/heuristic.py`, Study label `heuristic`) is a
+separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
+removal held for a kill, counters held for an opponent's spell, effect polarity
+derived from the semantic card source, attacks unless a blocker kills and
+survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
+stays frozen with its arena source identity. Select it for checkpoint monitoring
+with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
+GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
+0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
+cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained

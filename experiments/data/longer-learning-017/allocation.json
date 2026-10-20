@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-18T00:11:37.595955+00:00",
+  "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+  "transitions": 524288,
+  "checkpoint_transitions": [
+    131072,
+    262144,
+    524288
+  ],
+  "reservation_usd": "17.50",
+  "groups": [
+    {
+      "seed": 13591,
+      "cells": [
+        {
+          "cell": "small:64",
+          "seconds": 1740
+        },
+        {
+          "cell": "small:256",
+          "seconds": 600
+        },
+        {
+          "cell": "small-deep:256",
+          "seconds": 720
+        },
+        {
+          "cell": "small-deep:64",
+          "seconds": 1620
+        },
+        {
+          "cell": "middle:64",
+          "seconds": 1320
+        },
+        {
+          "cell": "middle:256",
+          "seconds": 720
+        },
+        {
+          "cell": "large-shallow:256",
+          "seconds": 660
+        },
+        {
+          "cell": "large-shallow:64",
+          "seconds": 1200
+        },
+        {
+          "cell": "large:64",
+          "seconds": 2220
+        },
+        {
+          "cell": "large:256",
+          "seconds": 1020
+        },
+        {
+          "cell": "small:4",
+          "seconds": 9720
+        }
+      ],
+      "job_seconds": 23715,
+      "rental_seconds": 24600,
+      "reservation_usd": "8.75"
+    },
+    {
+      "seed": 13592,
+      "cells": [
+        {
+          "cell": "small:4",
+          "seconds": 9720
+        },
+        {
+          "cell": "large:256",
+          "seconds": 1020
+        },
+        {
+          "cell": "large:64",
+          "seconds": 2220
+        },
+        {
+          "cell": "large-shallow:64",
+          "seconds": 1200
+        },
+        {
+          "cell": "large-shallow:256",
+          "seconds": 660
+        },
+        {
+          "cell": "middle:256",
+          "seconds": 720
+        },
+        {
+          "cell": "middle:64",
+          "seconds": 1320
+        },
+        {
+          "cell": "small-deep:64",
+          "seconds": 1620
+        },
+        {
+          "cell": "small-deep:256",
+          "seconds": 720
+        },
+        {
+          "cell": "small:256",
+          "seconds": 600
+        },
+        {
+          "cell": "small:64",
+          "seconds": 1740
+        }
+      ],
+      "job_seconds": 23715,
+      "rental_seconds": 24600,
+      "reservation_usd": "8.75"
+    }
+  ],
+  "evaluation": {
+    "workers": 4,
+    "command_seconds": 4500,
+    "work_seconds": 25800,
+    "retention_seconds": 240,
+    "gpu_cost_usd": 0
+  },
+  "inputs": {
+    ".runs/grid-007/feasibility/twelve-complete-results.json": "d279b69f6e3046a2e60608fddcab7924e54859c62c41f258f8e1eb49eee2b9e8",
+    ".runs/grid-007/feasibility/results/small-s4/verification.json": "fb49309a1b09fb1fa7d14b35fd8ca3a370df4331686d9ac249b5e6914d5b2294",
+    ".runs/grid-007/feasibility/results/middle-s4/verification.json": "fb49309a1b09fb1fa7d14b35fd8ca3a370df4331686d9ac249b5e6914d5b2294",
+    ".runs/grid-007/feasibility/results/middle-s64/verification.json": "dc647a80c636b89a88aaa7f085dda348d37760c652722284be54b07ebedba744",
+    ".runs/grid-007/feasibility/results/large-s64/verification.json": "dc647a80c636b89a88aaa7f085dda348d37760c652722284be54b07ebedba744",
+    ".runs/grid-007/feasibility/results/small-s64/verification.json": "dc647a80c636b89a88aaa7f085dda348d37760c652722284be54b07ebedba744",
+    ".runs/grid-007/feasibility/results/large-s128/verification.json": "f9d0d50bf09b1bb861df955060e10855763df34cf0493f4da2e1979bb5db0dbf",
+    ".runs/grid-007/feasibility/results/small-s128/verification.json": "f9d0d50bf09b1bb861df955060e10855763df34cf0493f4da2e1979bb5db0dbf",
+    ".runs/grid-007/feasibility/results/middle-s128/verification.json": "f9d0d50bf09b1bb861df955060e10855763df34cf0493f4da2e1979bb5db0dbf",
+    ".runs/grid-007/feasibility/results/small-s256/verification.json": "041f6e27955d5a0746ae34c702ddbfeaa3c72c603d27ced8d861479d39842afe",
+    ".runs/grid-007/feasibility/results/middle-s256/verification.json": "041f6e27955d5a0746ae34c702ddbfeaa3c72c603d27ced8d861479d39842afe",
+    ".runs/grid-007/feasibility/results/large-s256/verification.json": "041f6e27955d5a0746ae34c702ddbfeaa3c72c603d27ced8d861479d39842afe",
+    ".runs/grid-007/feasibility/results/large-s512/verification.json": "9756c1f2550393f5faac45c0982a19e31686f3c29a66010b1e9e808a720cb245",
+    ".runs/grid-007/grouped-feasibility/verified-results.json": "a45740f5c74fa0b248720f92403fd3695ccf18bef9404765343b654fbe2ba270",
+    ".runs/grid-007/validation-costs.json": "ebb49b2e333cb4abae9a31304e655213ead82d825d62b5af7c2e214be7dd0d80",
+    ".runs/gpu-bottleneck/budget.json": "5843232819fa520511e16500e849f37daa9ab9ac0f8a3f5e22fef1bd15e504ff",
+    ".runs/gpu-validation/sources/3c3681d2b26a7fc8167928fa63fe24a6cd3d058a.projection.receipt.json": "6457f68a92dd57bbd89e0e272a61b8e10e1354351c5d89c7b339dfe8314f301d",
+    ".runs/grid-007/learning-017/source-config.json": "a24ea14b24ae046e09cddc87629e937463c7733082a5bcc73b7ab26b343a2f29",
+    ".runs/grid-007/learning-017/runtime-diff.patch": "f819be7404c75f4af2db8aa76d46c4e0d054959ef035729c7e86947d17ddde31",
+    ".runs/grid-007/validation-protocol-draft.md": "bb08843c1835fbedbe2aeb9b68f4768e611101393caa8d98fc8baefaaba8141b",
+    "experiments/protocols/longer-learning-017.md": "f6f22c4ca0ee67848f4d42f1852b0321b7cf18a58c40c1de8d2134a5c2402281",
+    ".runs/grid-007/learning-017/evaluation-costs.json": "47951f61e58ecf6265c57489d9f9bfd8d0e2ac5879734adebad69eb939688ec2",
+    ".runs/grid-007/price_validation.py": "48bc4915eb24100d1656a511eb3ffe090f5322a97c776b1f2345e5af46102c19",
+    ".runs/grid-007/learning_campaign.py": "b0bab17e1ad19295e8f0e8da1ee03666a4dc37855b5aaef912ef2cefe01c1c94",
+    "experiments/runners/etude_storage_reads.py": "74857810345f4db3ae0cddbaab88c80eadb82feb8c0abf983f0d20425cdbeac3",
+    "experiments/runners/grouped_learning.py": "86eeaf4c0df8a6f8116d8b8843b30e532a09937f464fc0529f5ee2a7086048c4"
+  }
+}

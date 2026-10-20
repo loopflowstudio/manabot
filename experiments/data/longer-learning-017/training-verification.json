@@ -1,0 +1,4036 @@
+{
+  "cells": [
+    {
+      "name": "seed-13591-small-s64",
+      "cell": "small-s64",
+      "seed": 13591,
+      "size": "small",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/small-s64",
+      "summary": {
+        "active_transitions_per_second": 698.7542746897287,
+        "checkpoint_finite": true,
+        "collection_seconds": 490.1916445712559,
+        "environment_decisions": 1071674,
+        "error": null,
+        "inclusive_transitions_per_second": 690.9082699946914,
+        "learner_transitions": 524288,
+        "learning_seconds": 260.12648440591875,
+        "optimizer_exposures": 131072,
+        "parameters": 188610,
+        "peak_cuda_allocated": 426012672,
+        "run_seconds": 758.8387963629793,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "d3903ef1a25e4987979b1a5c60c44e0b",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.11513076350092888,
+          "parameter": "card_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.013633726243185079,
+            "last": 0.04384134417865014,
+            "minimum": -0.15295190252024246,
+            "maximum": 0.34282917221853987
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 2.753403425216675,
+            "last": 0.8457923531532288,
+            "minimum": 0.24950851500034332,
+            "maximum": 7.300111770629883
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.3976283073425293,
+            "last": 0.32680949568748474,
+            "minimum": 0.07608993351459503,
+            "maximum": 1.3976283073425293
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.08088774979114532,
+            "last": 0.5225760340690613,
+            "minimum": 0.019573336467146873,
+            "maximum": 1.160457968711853
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 5.207816684560385e-06,
+            "last": 0.0025182003155350685,
+            "minimum": 4.6565574507440033e-07,
+            "maximum": 0.03557242453098297
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "915c5ef38e787889a2aba7f45f0d6526858f16b2a2b0895f11cda179ce88daa4",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "6bfc2aacd4c1222b8e7b0957d190a0f7c45771a372145fabb9ae796fad84ec91",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 227.21809093499905,
+            "active_training_seconds": 223.1003816811717,
+            "environment_decisions": 280931,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1620
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "873205effa986882ff20d9e6302fdc067e512add87c59d50b2c64f5df7157bc8",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 401.0323508429865,
+            "active_training_seconds": 396.09017960412893,
+            "environment_decisions": 543584,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4561
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s64/study/training/run/self-play-raw.pt",
+            "sha256": "954f079115e384ffd23752ccedf0af362e324bc8e4a533e1c345d76d9290176a",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 758.4225590349815,
+            "active_training_seconds": 750.3181289771746,
+            "environment_decisions": 1071674,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 9976
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-small-s256",
+      "cell": "small-s256",
+      "seed": 13591,
+      "size": "small",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/small-s256",
+      "summary": {
+        "active_transitions_per_second": 1829.6931921723574,
+        "checkpoint_finite": true,
+        "collection_seconds": 216.31573178910185,
+        "environment_decisions": 1091339,
+        "error": null,
+        "inclusive_transitions_per_second": 1816.3794629583522,
+        "learner_transitions": 524288,
+        "learning_seconds": 70.22848351593711,
+        "optimizer_exposures": 131072,
+        "parameters": 188610,
+        "peak_cuda_allocated": 1398950400,
+        "run_seconds": 288.64453198897536,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "5dac6e35990841d1b92b4f6cf12b1693",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.08171774446964264,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.24907773342865835,
+            "last": 0.043210513693650074,
+            "minimum": -0.020637359644075495,
+            "maximum": 0.24907773342865835
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 0.5092381834983826,
+            "last": 1.3072901964187622,
+            "minimum": 0.39642640948295593,
+            "maximum": 7.422196865081787
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.1018728017807007,
+            "last": 0.6146513223648071,
+            "minimum": 0.4677927494049072,
+            "maximum": 1.1018728017807007
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.06285470724105835,
+            "last": 0.5586556792259216,
+            "minimum": 0.02490917779505253,
+            "maximum": 0.7497909069061279
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 4.097256862678478e-07,
+            "last": 0.001814372488297522,
+            "minimum": 2.0931740607466054e-07,
+            "maximum": 0.009143659844994545
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "8285955621d246feb919d12708e83b858bece02a74d8566e8e643a67d6e0720d",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "cc62e4eed9d276e55905d1b30a59a164a04caebea8a57203745f32f1df2e5fdf",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 85.2916897389805,
+            "active_training_seconds": 84.01237716703326,
+            "environment_decisions": 285055,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1351
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "eec399814d12334b96ab40b65aa8b742379e99a45e6284934a1346763e1b6a2b",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 169.4093103039777,
+            "active_training_seconds": 167.84307196101872,
+            "environment_decisions": 567251,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2965
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s256/study/training/run/self-play-raw.pt",
+            "sha256": "ec3dbaff4d8238bf14c625877f74d1406557697ec0d8559559163c845601514d",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 288.57519538898487,
+            "active_training_seconds": 286.54421530503896,
+            "environment_decisions": 1091339,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 8185
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-small-deep-s256",
+      "cell": "small-deep-s256",
+      "seed": 13591,
+      "size": "small-deep",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/small-deep-s256",
+      "summary": {
+        "active_transitions_per_second": 1459.2513976642194,
+        "checkpoint_finite": true,
+        "collection_seconds": 275.7801906320092,
+        "environment_decisions": 1089784,
+        "error": null,
+        "inclusive_transitions_per_second": 1450.4369697048778,
+        "learner_transitions": 524288,
+        "learning_seconds": 83.50539980101166,
+        "optimizer_exposures": 131072,
+        "parameters": 288578,
+        "peak_cuda_allocated": 2105801728,
+        "run_seconds": 361.4689993089996,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "ee0ba1d163fa478ba4771b768334877c",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.08297450747340918,
+          "parameter": "policy_head.2.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.08450118189062059,
+            "last": 0.07809982930930667,
+            "minimum": -0.0386361727846756,
+            "maximum": 0.13838285900120356
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 2.8951120376586914,
+            "last": 4.188497066497803,
+            "minimum": 0.42861342430114746,
+            "maximum": 6.859277725219727
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.1128195524215698,
+            "last": 0.3686663806438446,
+            "minimum": 0.3686663806438446,
+            "maximum": 1.1128195524215698
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.06041644141077995,
+            "last": 0.588701605796814,
+            "minimum": 0.017414001747965813,
+            "maximum": 0.588701605796814
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 1.957124595719506e-06,
+            "last": 0.0029668775387108326,
+            "minimum": 8.294119879792561e-07,
+            "maximum": 0.009079711511731148
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "fc73530963339cad17019a2ad2ea8554bab93df5c36808bee1a5e008fc946511",
+            "bytes": 1232798
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "f59e3e1ae425278062f771da4528c5a2c7f6bc8d51ce1dfd08abd523470a9cef",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 100.87023756399867,
+            "active_training_seconds": 99.5284028329479,
+            "environment_decisions": 281780,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1307
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "df75bfeb325f3f708b6c28cca8af6f16ed93ccd3be48c8021ab228a5cd1c31ed",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 210.2068697080249,
+            "active_training_seconds": 208.6253634749737,
+            "environment_decisions": 564266,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2771
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s256/study/training/run/self-play-raw.pt",
+            "sha256": "f91d09afead06aa236271af400c765183ba05b74cf4fd81b16f8cb9c23f94bc3",
+            "bytes": 1232006
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 361.4015473310137,
+            "active_training_seconds": 359.28559043302084,
+            "environment_decisions": 1089784,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 7918
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-small-deep-s64",
+      "cell": "small-deep-s64",
+      "seed": 13591,
+      "size": "small-deep",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/small-deep-s64",
+      "summary": {
+        "active_transitions_per_second": 575.1807413816039,
+        "checkpoint_finite": true,
+        "collection_seconds": 603.7422580189013,
+        "environment_decisions": 1068384,
+        "error": null,
+        "inclusive_transitions_per_second": 571.4018671761789,
+        "learner_transitions": 524288,
+        "learning_seconds": 307.7764391138335,
+        "optimizer_exposures": 131072,
+        "parameters": 288578,
+        "peak_cuda_allocated": 581043712,
+        "run_seconds": 917.5468792060274,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "556b9703ce64459c8723c8f4981edd1f",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.1002015769481659,
+          "parameter": "semantic_cards.encoder.weight_hh_l0",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": -0.026457873916891098,
+            "last": 0.07595816678278251,
+            "minimum": -0.08435432092707065,
+            "maximum": 0.2145101426073147
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 0.7059960961341858,
+            "last": 1.840928316116333,
+            "minimum": 0.2897607982158661,
+            "maximum": 5.004444122314453
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.2529881000518799,
+            "last": 0.46102678775787354,
+            "minimum": 0.07286107540130615,
+            "maximum": 1.2529881000518799
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.06198656186461449,
+            "last": 0.8731322884559631,
+            "minimum": 0.004561031237244606,
+            "maximum": 1.1887884140014648
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 1.76729338363657e-06,
+            "last": 0.0021621210034936666,
+            "minimum": 1.337284970759356e-06,
+            "maximum": 0.023730464279651642
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "d93d8b920df7e25a9397d103b586497b9dd1650805974ca3645dd37c60d1485c",
+            "bytes": 1232798
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "3b2799b828e7154d4c5e67f4a8f7c37eac7cac841bd6b0b1c1d6e395cdb08acb",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 258.9228071240068,
+            "active_training_seconds": 257.2515625889937,
+            "environment_decisions": 280545,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1622
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "b1dbf65c55534236dff3ac3cdcee3ef65ea8052811a283d2ddfd8c79c7398b1a",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 477.55628327300656,
+            "active_training_seconds": 474.8912357200752,
+            "environment_decisions": 541015,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4384
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-deep-s64/study/training/run/self-play-raw.pt",
+            "sha256": "16a501b875f20ac96084a09a0ea9938be0031fc86c187cd6ec88c5aba520cea2",
+            "bytes": 1232006
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 917.2795184999995,
+            "active_training_seconds": 911.5186971327348,
+            "environment_decisions": 1068384,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 10842
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-middle-s64",
+      "cell": "middle-s64",
+      "seed": 13591,
+      "size": "middle",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/middle-s64",
+      "summary": {
+        "active_transitions_per_second": 541.9789113318413,
+        "checkpoint_finite": true,
+        "collection_seconds": 660.2170197301311,
+        "environment_decisions": 1076316,
+        "error": null,
+        "inclusive_transitions_per_second": 538.159509782288,
+        "learner_transitions": 524288,
+        "learning_seconds": 307.1416524212109,
+        "optimizer_exposures": 131072,
+        "parameters": 2463170,
+        "peak_cuda_allocated": 979606016,
+        "run_seconds": 974.2241667569906,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "44b03c94362e41d0b9bfb67e49396982",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.09644583612680435,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.18702455905492849,
+            "last": -0.004595037306511968,
+            "minimum": -0.10079008576569298,
+            "maximum": 0.4499164005289314
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 13.282082557678223,
+            "last": 0.4805818200111389,
+            "minimum": 0.23946021497249603,
+            "maximum": 13.282082557678223
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 0.9078753590583801,
+            "last": 0.051266178488731384,
+            "minimum": 0.00634735869243741,
+            "maximum": 1.2884098291397095
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.03230779990553856,
+            "last": 0.641880989074707,
+            "minimum": 0.00806939322501421,
+            "maximum": 1.1295015811920166
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.00015606889792252332,
+            "last": 0.00021075890981592238,
+            "minimum": 3.927068235043407e-07,
+            "maximum": 0.14156877994537354
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "288eabd4a04b085e17378c539b835a7804135b81a0106eaef902cb95f7e80866",
+            "bytes": 9931230
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "b5bc6c302491d4d98d42776ba83868caf17f2b3983c30a450e7505b0d18177a4",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 275.6222024089948,
+            "active_training_seconds": 273.52352480596164,
+            "environment_decisions": 274367,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1453
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "8dc71d2a0aec24c3d846839d638dd8e3ab31d62b58f098e77c780d57af3fb78b",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 492.497583496006,
+            "active_training_seconds": 489.42078519202187,
+            "environment_decisions": 538746,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4296
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s64/study/training/run/self-play-raw.pt",
+            "sha256": "59b60d05e2f53e1e2638079d23c78d065ae18bb1d2987904c601fe3492b63db8",
+            "bytes": 9930438
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 974.009552612988,
+            "active_training_seconds": 967.358672151342,
+            "environment_decisions": 1076316,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 10243
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-middle-s256",
+      "cell": "middle-s256",
+      "seed": 13591,
+      "size": "middle",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/middle-s256",
+      "summary": {
+        "active_transitions_per_second": 1521.4606455147464,
+        "checkpoint_finite": true,
+        "collection_seconds": 261.0201448239968,
+        "environment_decisions": 1086651,
+        "error": null,
+        "inclusive_transitions_per_second": 1510.815054845803,
+        "learner_transitions": 524288,
+        "learning_seconds": 83.5750318870123,
+        "optimizer_exposures": 131072,
+        "parameters": 2463170,
+        "peak_cuda_allocated": 3475762176,
+        "run_seconds": 347.02328277600463,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "b2330c7ec64d4e809ff5dfd81e6577be",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.05688971281051636,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.38524660551816603,
+            "last": 0.11245885178681445,
+            "minimum": -0.038352465758712415,
+            "maximum": 0.38524660551816603
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 2.396314859390259,
+            "last": 0.9164580702781677,
+            "minimum": 0.39337560534477234,
+            "maximum": 8.342829704284668
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.1524431705474854,
+            "last": 0.5456674695014954,
+            "minimum": 0.4376341998577118,
+            "maximum": 1.1524431705474854
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.06474822759628296,
+            "last": 0.5089749693870544,
+            "minimum": 0.02019156888127327,
+            "maximum": 0.6199836134910583
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 4.1168055759044364e-05,
+            "last": 0.014312705025076866,
+            "minimum": 5.426698862720514e-06,
+            "maximum": 0.017850622534751892
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "c7327d8be80af873477dd6cc79009aef8e2cfbdc5f27f22414f764fa1fa8e8ed",
+            "bytes": 9931230
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "68331087b735410daed82cf0c2b9e8704855bc2dc9c861cde39ee0e8864b1f55",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 93.47270999199827,
+            "active_training_seconds": 92.12374365807045,
+            "environment_decisions": 276938,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1327
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "30f4cc4510864c927c2355d860f95a95180e55c4dfe423bebf66de83de80cc6b",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 196.8337702389981,
+            "active_training_seconds": 195.1642774330394,
+            "environment_decisions": 561590,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2781
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/middle-s256/study/training/run/self-play-raw.pt",
+            "sha256": "286a918fbec690ca859777ca5e301ded4a6c86487cf42a740ee8b188caf87f58",
+            "bytes": 9930438
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 346.95233707898296,
+            "active_training_seconds": 344.5951767110091,
+            "environment_decisions": 1086651,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 8229
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-large-shallow-s256",
+      "cell": "large-shallow-s256",
+      "seed": 13591,
+      "size": "large-shallow",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/large-shallow-s256",
+      "summary": {
+        "active_transitions_per_second": 1616.7429992188381,
+        "checkpoint_finite": true,
+        "collection_seconds": 242.59347482287558,
+        "environment_decisions": 1093224,
+        "error": null,
+        "inclusive_transitions_per_second": 1601.2107141220108,
+        "learner_transitions": 524288,
+        "learning_seconds": 81.69306932998006,
+        "optimizer_exposures": 130583,
+        "parameters": 6169730,
+        "peak_cuda_allocated": 5125456384,
+        "run_seconds": 327.4322332320153,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "96f0b84b26754ed6be82c037a6784064",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.07171603292226791,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.018604731810990177,
+            "last": 0.08359626770746026,
+            "minimum": -0.07621152819315777,
+            "maximum": 0.12149427822262301
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 0.4100266993045807,
+            "last": 1.4821410179138184,
+            "minimum": 0.4100266993045807,
+            "maximum": 4.22993803024292
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.0451935529708862,
+            "last": 0.39398905634880066,
+            "minimum": 0.25931936502456665,
+            "maximum": 1.0451935529708862
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.04501748085021973,
+            "last": 0.6579521894454956,
+            "minimum": 0.03820795565843582,
+            "maximum": 0.7688758373260498
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 9.363304707221687e-05,
+            "last": 0.027235165238380432,
+            "minimum": 6.901646702317521e-05,
+            "maximum": 0.027235165238380432
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "4454457a4dbe74b6f9ea0a796068d11dd4b3f28d93d7b20d20bb5f550d3a99a4",
+            "bytes": 24748566
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "be7039525f90e4a3f639bc93b4761f8a26be0a27a107ce75366af20864182963",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 89.98077023599762,
+            "active_training_seconds": 88.34715120799956,
+            "environment_decisions": 280203,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32279,
+            "games": 1345
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "311078df5ef35e0ce658aceec0ccbfa39e34d6700e523211469e717dc582bd8d",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 179.1793815199926,
+            "active_training_seconds": 177.17418744286988,
+            "environment_decisions": 563719,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65047,
+            "games": 3003
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s256/study/training/run/self-play-raw.pt",
+            "sha256": "de5519653dc608f187b9463165b8906b26e5880444f7e6c9516a79768e50143a",
+            "bytes": 24747966
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 327.3605085989984,
+            "active_training_seconds": 324.28654415285564,
+            "environment_decisions": 1093224,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 130583,
+            "games": 9640
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-large-shallow-s64",
+      "cell": "large-shallow-s64",
+      "seed": 13591,
+      "size": "large-shallow",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/large-shallow-s64",
+      "summary": {
+        "active_transitions_per_second": 729.5190867556212,
+        "checkpoint_finite": true,
+        "collection_seconds": 463.1180306232418,
+        "environment_decisions": 1050794,
+        "error": null,
+        "inclusive_transitions_per_second": 723.0778398167693,
+        "learner_transitions": 524288,
+        "learning_seconds": 255.5581623899634,
+        "optimizer_exposures": 130953,
+        "parameters": 6169730,
+        "peak_cuda_allocated": 1502959616,
+        "run_seconds": 725.0782296590041,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "7a0fd01dc91544fcac5f8b0eaa529c5d",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.11010937765240669,
+          "parameter": "player_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.029898471509852483,
+            "last": 0.020125788721733453,
+            "minimum": -0.06285892784710283,
+            "maximum": 0.4229646864641631
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 4.007859230041504,
+            "last": 0.7928928732872009,
+            "minimum": 0.1628793179988861,
+            "maximum": 8.071504592895508
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.055095911026001,
+            "last": 0.35593295097351074,
+            "minimum": 0.08439719676971436,
+            "maximum": 1.2208510637283325
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.033135224133729935,
+            "last": 0.8478004336357117,
+            "minimum": 0.005233915988355875,
+            "maximum": 1.1212958097457886
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.0006901053129695356,
+            "last": 0.008096934296190739,
+            "minimum": 0.000174794316990301,
+            "maximum": 0.1207147091627121
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "d29d92226d32717349955a31ca1877256dd2549aba89d53b5eeb2f2a6c3f0bad",
+            "bytes": 24748566
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "c6be51d091d56aa12919610f72393df88620cfd72794b5ce424d08acdbb1c993",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 193.24765558200306,
+            "active_training_seconds": 191.18013508009608,
+            "environment_decisions": 266347,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32649,
+            "games": 1739
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "1c564fe06a20678f2f1669b8dc070165e6aa5d0b2b6048ab1762c712c49c3ecc",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 373.2710181180155,
+            "active_training_seconds": 370.2517291151744,
+            "environment_decisions": 527329,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65417,
+            "games": 4063
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-shallow-s64/study/training/run/self-play-raw.pt",
+            "sha256": "6b3992168cae92522ef54e998a4cd785dd579056b298da15956739cd46a5d057",
+            "bytes": 24747966
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 724.8500921399973,
+            "active_training_seconds": 718.6761930132052,
+            "environment_decisions": 1050794,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 130953,
+            "games": 8766
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-large-s64",
+      "cell": "large-s64",
+      "seed": 13591,
+      "size": "large",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/large-s64",
+      "summary": {
+        "active_transitions_per_second": 401.1422806281258,
+        "checkpoint_finite": true,
+        "collection_seconds": 904.0933556449891,
+        "environment_decisions": 1079676,
+        "error": null,
+        "inclusive_transitions_per_second": 397.7433850765424,
+        "learner_transitions": 524288,
+        "learning_seconds": 402.8942777180346,
+        "optimizer_exposures": 58467,
+        "parameters": 16816514,
+        "peak_cuda_allocated": 3858588672,
+        "run_seconds": 1318.1564286709763,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "5b92123648f2445ab658a92450965109",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.07482097297906876,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.455192779726834,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8115,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 77,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8115
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.0032438427533604897,
+            "last": 0.9933282508915267,
+            "minimum": -0.23912258106291073,
+            "maximum": 2.107770122400261
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 2.1342644691467285,
+            "last": 0.4736485481262207,
+            "minimum": 0.0045307776890695095,
+            "maximum": 22.940765380859375
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.0475521087646484,
+            "last": 1.0322539806365967,
+            "minimum": 0.00042704667430371046,
+            "maximum": 2.079441547393799
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.022432126104831696,
+            "last": 0.007466888055205345,
+            "minimum": -1.5741534298285842e-08,
+            "maximum": 0.6927201747894287
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.000614016957115382,
+            "last": 0.00011459877714514732,
+            "minimum": -5.5253622122108936e-08,
+            "maximum": 0.01916283555328846
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "5e2393bc93ad82818f52344935e4aa323273f5690d2ad9e4b25f6e8305bf90ae",
+            "bytes": 67363151
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "cdba796bc823d79258d825cc5a2ed7d5eac17da0ea814adb020285e260fbc9bb",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2017,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 382.34789753498626,
+            "active_training_seconds": 379.1281414729019,
+            "environment_decisions": 282573,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 11721,
+            "games": 1380
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "0dbeaa34378e51a16c72706367b671df1b0165fb1a17912af229a1b1f3872916",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4046,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 714.397576784977,
+            "active_training_seconds": 709.4865934029222,
+            "environment_decisions": 549604,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 25863,
+            "games": 3505
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s64/study/training/run/self-play-raw.pt",
+            "sha256": "73a78d3bc1c120b1a420b87ad844ef5beef8dedf8cdb2296810a0286babaf651",
+            "bytes": 67361975
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8115,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 1317.7740824409993,
+            "active_training_seconds": 1306.9876333630236,
+            "environment_decisions": 1079676,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 58467,
+            "games": 8384
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-large-s256",
+      "cell": "large-s256",
+      "seed": 13591,
+      "size": "large",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/large-s256",
+      "summary": {
+        "active_transitions_per_second": 831.0309308460941,
+        "checkpoint_finite": true,
+        "collection_seconds": 482.4399244869419,
+        "environment_decisions": 1097875,
+        "error": null,
+        "inclusive_transitions_per_second": 823.7821872613387,
+        "learner_transitions": 524288,
+        "learning_seconds": 148.44874708898715,
+        "optimizer_exposures": 122428,
+        "parameters": 16816514,
+        "peak_cuda_allocated": 14390580224,
+        "run_seconds": 636.4400785879989,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "6485ce62d5f744209d5d662cf3b5f9cc",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.06507034599781036,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.20603892057591766,
+            "last": 0.08622050238860487,
+            "minimum": -0.6677382892446277,
+            "maximum": 0.6637112645356424
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 1.3290632963180542,
+            "last": 1.0974619388580322,
+            "minimum": 0.38372012972831726,
+            "maximum": 30.682422637939453
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.0029282569885254,
+            "last": 0.6561257243156433,
+            "minimum": 0.5691688656806946,
+            "maximum": 1.3862943649291992
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.04839629307389259,
+            "last": 0.40570780634880066,
+            "minimum": 9.623227015254088e-08,
+            "maximum": 0.40570780634880066
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.00044913397869095206,
+            "last": 0.00393611378967762,
+            "minimum": 9.532209332974162e-08,
+            "maximum": 0.013180550187826157
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "1f5421f67b3840e48777dc09878c00cce36ee8e53e19e90f7f01b8cb53dbb1f9",
+            "bytes": 67363151
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "b0f9f673a8656aa884edd029bd98c4a1bc8b656cb42838a677798b88a4d604da",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 163.22697371299728,
+            "active_training_seconds": 160.96788243297487,
+            "environment_decisions": 279328,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 24124,
+            "games": 1329
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "948992414a396d8b11c404963578d5b6cf6436022ddc536914ca2a75018b416d",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 334.4542668770009,
+            "active_training_seconds": 331.4555985080078,
+            "environment_decisions": 563113,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 56892,
+            "games": 2743
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/large-s256/study/training/run/self-play-raw.pt",
+            "sha256": "c50f85a7f7a475c4adc19e3e0a3be37db2349df02adb81dfbd75c23c148fe4c6",
+            "bytes": 67361975
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 636.3700090619968,
+            "active_training_seconds": 630.888671575929,
+            "environment_decisions": 1097875,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 122428,
+            "games": 8017
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13591-small-s4",
+      "cell": "small-s4",
+      "seed": 13591,
+      "size": "small",
+      "streams": 4,
+      "directory": ".runs/grid-007/learning-017/seed-13591/results/small-s4",
+      "summary": {
+        "active_transitions_per_second": 81.70851275419453,
+        "checkpoint_finite": true,
+        "collection_seconds": 3719.025289461395,
+        "environment_decisions": 1055481,
+        "error": null,
+        "inclusive_transitions_per_second": 80.13597055782542,
+        "learner_transitions": 524288,
+        "learning_seconds": 2697.539916874288,
+        "optimizer_exposures": 128591,
+        "parameters": 188610,
+        "peak_cuda_allocated": 105593856,
+        "run_seconds": 6542.480191485025,
+        "seed": 13591,
+        "status": "completed",
+        "updates": 2048
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13591,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 2048,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "1f177b24153142ec81a9d92a6d88e4fd",
+        "seed": 13591,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.25655144453048706,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 66.22527269491658,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 91702,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 39370,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 91702
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 2048,
+            "finite": true,
+            "first": 0.03704506502417455,
+            "last": 0.03306264609579668,
+            "minimum": -0.5894211754949207,
+            "maximum": 5.2355846531474555
+          },
+          "gradient_norm": {
+            "count": 2048,
+            "finite": true,
+            "first": 0.2914329767227173,
+            "last": 0.1461467146873474,
+            "minimum": 0.00817087385803461,
+            "maximum": 32.264896392822266
+          },
+          "entropy": {
+            "count": 2048,
+            "finite": true,
+            "first": 1.6094350814819336,
+            "last": 0.11980625987052917,
+            "minimum": 8.410468694819428e-07,
+            "maximum": 2.243598461151123
+          },
+          "reference_kl": {
+            "count": 2048,
+            "finite": true,
+            "first": 0.1914467066526413,
+            "last": 0.573340892791748,
+            "minimum": -6.306800059974194e-08,
+            "maximum": 2.477937936782837
+          },
+          "collection_kl": {
+            "count": 2048,
+            "finite": true,
+            "first": 3.7543941289186478e-06,
+            "last": 0.0009094881825149059,
+            "minimum": -9.509903975413181e-08,
+            "maximum": 0.22348223626613617
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s4/study/training/run/self-play-initial-raw.pt",
+            "sha256": "cbf2108577fce4ba24771f14129515979d5d207e19fd74713981f4ba61f828a3",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s4/study/training/run/monitor-00000000.pt",
+            "sha256": "9f13fc8529a54b465f6671eb32e76c90a2b47c0f387db80ef45cb64376359eb8",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 512,
+            "optimizer_updates": 22643,
+            "stage_id": "self-play",
+            "updates": 512,
+            "training_seconds": 1655.860123815015,
+            "active_training_seconds": 1636.9149779030995,
+            "environment_decisions": 267622,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32004,
+            "games": 2109
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s4/study/training/run/monitor-00000001.pt",
+            "sha256": "444db4d1da33a60688036df80060e2481832f3cee2595402f1ed079856ef7078",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 1024,
+            "optimizer_updates": 45708,
+            "stage_id": "self-play",
+            "updates": 1024,
+            "training_seconds": 3263.5930438630166,
+            "active_training_seconds": 3211.078486958315,
+            "environment_decisions": 528241,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 64315,
+            "games": 4709
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13591/results/small-s4/study/training/run/self-play-raw.pt",
+            "sha256": "d188c3f3599c472480cdbb7ef821d9de409ffecf77e511cf3ac0f99af3e4723b",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 2048,
+            "optimizer_updates": 91702,
+            "stage_id": "self-play",
+            "updates": 2048,
+            "training_seconds": 6540.131526585028,
+            "active_training_seconds": 6416.565206335683,
+            "environment_decisions": 1055481,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 128591,
+            "games": 10293
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-small-s4",
+      "cell": "small-s4",
+      "seed": 13592,
+      "size": "small",
+      "streams": 4,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/small-s4",
+      "summary": {
+        "active_transitions_per_second": 80.37947040849765,
+        "checkpoint_finite": true,
+        "collection_seconds": 3869.6028842297383,
+        "environment_decisions": 1055342,
+        "error": null,
+        "inclusive_transitions_per_second": 78.8335499142004,
+        "learner_transitions": 524288,
+        "learning_seconds": 2653.0576575169107,
+        "optimizer_exposures": 122613,
+        "parameters": 188610,
+        "peak_cuda_allocated": 105593856,
+        "run_seconds": 6650.569466561079,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 2048
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 2048,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "0fc7918a9ba4448abe7db5272ebb2e9e",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.32038130424916744,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 64.00129043329667,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 88643,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 42429,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 88643
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 2048,
+            "finite": true,
+            "first": 0.04280186110889536,
+            "last": 0.1648097588954873,
+            "minimum": -0.8035047276564707,
+            "maximum": 3.920344136817606
+          },
+          "gradient_norm": {
+            "count": 2048,
+            "finite": true,
+            "first": 2.4855000972747803,
+            "last": 0.9430567026138306,
+            "minimum": 0.004432740155607462,
+            "maximum": 35.45970153808594
+          },
+          "entropy": {
+            "count": 2048,
+            "finite": true,
+            "first": 0.6930849552154541,
+            "last": 0.17916744947433472,
+            "minimum": 4.21485339074934e-07,
+            "maximum": 2.799428939819336
+          },
+          "reference_kl": {
+            "count": 2048,
+            "finite": true,
+            "first": 6.225705146789551e-05,
+            "last": 0.5139796733856201,
+            "minimum": -7.146445568650961e-08,
+            "maximum": 2.8639514446258545
+          },
+          "collection_kl": {
+            "count": 2048,
+            "finite": true,
+            "first": 6.394507363438606e-05,
+            "last": 0.0007887640385888517,
+            "minimum": -1.1843076208606362e-07,
+            "maximum": 0.2280452847480774
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s4/study/training/run/self-play-initial-raw.pt",
+            "sha256": "5cdb664d939a26ca3d4c7e72614d4885a92b2c74b2030ebd8a9b268a90ac25c7",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s4/study/training/run/monitor-00000000.pt",
+            "sha256": "35a9aa450cee58ae32d59a529923a957bf69d7f09b22ae5bb37d0e5a397239d4",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 512,
+            "optimizer_updates": 20225,
+            "stage_id": "self-play",
+            "updates": 512,
+            "training_seconds": 1637.6710680760443,
+            "active_training_seconds": 1616.6865792274475,
+            "environment_decisions": 266917,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 27934,
+            "games": 1809
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s4/study/training/run/monitor-00000001.pt",
+            "sha256": "5688bf8cb3f7ae4df3997ac64fc4a6ab64d19965ed9685eb5c26378288793b31",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 1024,
+            "optimizer_updates": 42324,
+            "stage_id": "self-play",
+            "updates": 1024,
+            "training_seconds": 3262.4568740550894,
+            "active_training_seconds": 3207.3917543137213,
+            "environment_decisions": 528961,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 58410,
+            "games": 4203
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s4/study/training/run/self-play-raw.pt",
+            "sha256": "a175b68eb9169332242e80cffcccbe50e9a8df63312a9ee39daba0ed4ad301c3",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 2048,
+            "optimizer_updates": 88643,
+            "stage_id": "self-play",
+            "updates": 2048,
+            "training_seconds": 6648.1632079590345,
+            "active_training_seconds": 6522.660541746649,
+            "environment_decisions": 1055342,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 122613,
+            "games": 9773
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-large-s256",
+      "cell": "large-s256",
+      "seed": 13592,
+      "size": "large",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/large-s256",
+      "summary": {
+        "active_transitions_per_second": 819.0751622555218,
+        "checkpoint_finite": true,
+        "collection_seconds": 489.8666157897096,
+        "environment_decisions": 1104425,
+        "error": null,
+        "inclusive_transitions_per_second": 811.5723242819646,
+        "learner_transitions": 524288,
+        "learning_seconds": 150.23092856293079,
+        "optimizer_exposures": 128497,
+        "parameters": 16816514,
+        "peak_cuda_allocated": 8455932928,
+        "run_seconds": 646.0151292909868,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "66e1e9454b3f49998c1b25f8876d627a",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.058573104441165924,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.1358144791864613,
+            "last": 0.010014059369719469,
+            "minimum": -0.026502369915138574,
+            "maximum": 0.7569030233369727
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 5.851089000701904,
+            "last": 0.7206610441207886,
+            "minimum": 0.2791482210159302,
+            "maximum": 5.857471942901611
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.0375251770019531,
+            "last": 0.3225778043270111,
+            "minimum": 0.3225778043270111,
+            "maximum": 1.0375251770019531
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.04097561538219452,
+            "last": 0.7333195209503174,
+            "minimum": 0.00849357433617115,
+            "maximum": 0.7333195209503174
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.0004442049830686301,
+            "last": 0.009555830620229244,
+            "minimum": 0.0001716523984214291,
+            "maximum": 0.018575390800833702
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "d2c90c6a88bcfd4291fbe13f8a88e15b263786e633b50ffd5fb71989bef734e6",
+            "bytes": 67363151
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "0635190d094cccd50f30c999f531e121aac8d28facd6ed4fe0bd44996a8498c2",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 170.32378051802516,
+            "active_training_seconds": 167.9760708430549,
+            "environment_decisions": 281181,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 30193,
+            "games": 1320
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "e897c86b527061b9f5af00d3014d02a3f2b4be8c915fee8ca9474af95467acea",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 350.9042433310533,
+            "active_training_seconds": 347.7951142019592,
+            "environment_decisions": 570982,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 62961,
+            "games": 2795
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s256/study/training/run/self-play-raw.pt",
+            "sha256": "546ec415f1ef6b702f0bf268c7b28edf15b1d47af5c84258cff9618daea33bef",
+            "bytes": 67361975
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 645.7887322610477,
+            "active_training_seconds": 640.0975443526404,
+            "environment_decisions": 1104425,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 128497,
+            "games": 8333
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-large-s64",
+      "cell": "large-s64",
+      "seed": 13592,
+      "size": "large",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/large-s64",
+      "summary": {
+        "active_transitions_per_second": 395.499643236897,
+        "checkpoint_finite": true,
+        "collection_seconds": 894.2299797384767,
+        "environment_decisions": 1069535,
+        "error": null,
+        "inclusive_transitions_per_second": 392.4573988054802,
+        "learner_transitions": 524288,
+        "learning_seconds": 431.40459153207485,
+        "optimizer_exposures": 56973,
+        "parameters": 16816514,
+        "peak_cuda_allocated": 2473670144,
+        "run_seconds": 1335.910602260963,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "d3c23eb043d343beb96862d4e3e63739",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.07726216688752174,
+          "parameter": "action_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.443562058165858,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8099,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 93,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8099
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.23626924302222096,
+            "last": 0.6526876871615032,
+            "minimum": -0.4202981925611474,
+            "maximum": 2.3146042988427693
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 4.633363723754883,
+            "last": 2.8156700134277344,
+            "minimum": 0.0268869549036026,
+            "maximum": 28.10671615600586
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.338668704032898,
+            "last": 0.22083988785743713,
+            "minimum": 0.001562547986395657,
+            "maximum": 2.2973227500915527
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.04671693965792656,
+            "last": 0.6074623465538025,
+            "minimum": -4.547473508864641e-09,
+            "maximum": 0.6915846467018127
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.0001362896873615682,
+            "last": 0.0023921611718833447,
+            "minimum": -2.7951045922236517e-08,
+            "maximum": 0.03709150850772858
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "df9d7d9900e67ae376fdd7a690739e40736e2be501e2ad0e48aa339eabf9e5a5",
+            "bytes": 67363151
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "18e48513defeaf24aba72a46cf3dc9104c763d842aa66d06615130cb13d667f1",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2007,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 381.3758840659866,
+            "active_training_seconds": 378.59213442658074,
+            "environment_decisions": 272221,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 10028,
+            "games": 1372
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "7927b6c19f7fbdf2dbe02604061ec8d0561ecf7eca6b3b8a3b77559c65f866d7",
+            "bytes": 67362456
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4025,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 727.5912155909464,
+            "active_training_seconds": 723.1848929817788,
+            "environment_decisions": 545179,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 23866,
+            "games": 3442
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-s64/study/training/run/self-play-raw.pt",
+            "sha256": "93ef0d0d21b053b9144deefa1127d1de3e4e71ebcf2e2d7b29d7c46352db49b8",
+            "bytes": 67361975
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8099,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 1335.7085829009302,
+            "active_training_seconds": 1325.6345712705515,
+            "environment_decisions": 1069535,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 56973,
+            "games": 8377
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-large-shallow-s64",
+      "cell": "large-shallow-s64",
+      "seed": 13592,
+      "size": "large-shallow",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/large-shallow-s64",
+      "summary": {
+        "active_transitions_per_second": 672.653349465883,
+        "checkpoint_finite": true,
+        "collection_seconds": 514.192196471733,
+        "environment_decisions": 1068697,
+        "error": null,
+        "inclusive_transitions_per_second": 666.775741949865,
+        "learner_transitions": 524288,
+        "learning_seconds": 265.2404792390298,
+        "optimizer_exposures": 131072,
+        "parameters": 6169730,
+        "peak_cuda_allocated": 1880197120,
+        "run_seconds": 786.3033506090287,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "952b9647ec7c44bba366a29184e0a34a",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.09332393109798431,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.06331962467989323,
+            "last": -0.11630624046490237,
+            "minimum": -0.1532693885708058,
+            "maximum": 0.4590672315301665
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 7.883181571960449,
+            "last": 0.9085153937339783,
+            "minimum": 0.24196602404117584,
+            "maximum": 8.805962562561035
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.1429036855697632,
+            "last": 0.24314266443252563,
+            "minimum": 0.013610448688268661,
+            "maximum": 1.160096526145935
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.04849056527018547,
+            "last": 0.8031216263771057,
+            "minimum": 0.011479451321065426,
+            "maximum": 1.1557172536849976
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.000243809845414944,
+            "last": 0.001970497192814946,
+            "minimum": 1.2841891475545708e-05,
+            "maximum": 0.2833818793296814
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "c1a6fdfb90d54e579b892785a8b1ed70c578755754fab8ef11e53494ed81a26c",
+            "bytes": 24748566
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "4b1e3e0c97d743b8be0597196bcf69a09ba871f36ec052bf8f385f667c1d2607",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 219.70571039803326,
+            "active_training_seconds": 217.76682240667287,
+            "environment_decisions": 275407,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1475
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "a26128c40ba670a40f74760aa391b15e48f73946baa070f5f9a252d7dd3c5ca5",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 397.70467601600103,
+            "active_training_seconds": 394.8814861625433,
+            "environment_decisions": 540125,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4838
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s64/study/training/run/self-play-raw.pt",
+            "sha256": "81204a968088a31fbc7a8ca8497d060b330907c53967344ad30b29291f2e4a79",
+            "bytes": 24747966
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 786.0821985510411,
+            "active_training_seconds": 779.4326757107629,
+            "environment_decisions": 1068697,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 10879
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-large-shallow-s256",
+      "cell": "large-shallow-s256",
+      "seed": 13592,
+      "size": "large-shallow",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/large-shallow-s256",
+      "summary": {
+        "active_transitions_per_second": 1600.305688307761,
+        "checkpoint_finite": true,
+        "collection_seconds": 247.93134046101477,
+        "environment_decisions": 1093735,
+        "error": null,
+        "inclusive_transitions_per_second": 1584.5269202859452,
+        "learner_transitions": 524288,
+        "learning_seconds": 79.68606653227471,
+        "optimizer_exposures": 131072,
+        "parameters": 6169730,
+        "peak_cuda_allocated": 6263253504,
+        "run_seconds": 330.87983125296887,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "4ff9aa04152e456dbcf07b554c042d7f",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.056676916778087616,
+          "parameter": "card_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.266194968981401,
+            "last": 0.0662252344240915,
+            "minimum": 0.008764900702566707,
+            "maximum": 0.266194968981401
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 3.2260501384735107,
+            "last": 1.139906883239746,
+            "minimum": 0.35889336466789246,
+            "maximum": 7.3256516456604
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 0.9664654731750488,
+            "last": 0.4727054834365845,
+            "minimum": 0.4727054834365845,
+            "maximum": 1.0403907299041748
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.03792405501008034,
+            "last": 0.5523613691329956,
+            "minimum": 0.00947440043091774,
+            "maximum": 0.5892375707626343
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.0003560005279723555,
+            "last": 0.007683563511818647,
+            "minimum": 1.452491596865002e-05,
+            "maximum": 0.015729671344161034
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "07decb5f134fcd1d34b9d0f4bbd8cce0cef641df0437744664a6b5f07c1bfdd7",
+            "bytes": 24748566
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "8b97eab40a8a92687c7b22ef8e828e7923d8a67562ddc6b9053e180858c4fa21",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 92.39546597795561,
+            "active_training_seconds": 90.59901204099879,
+            "environment_decisions": 280678,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1291
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "8c512f524bb19915901ae8302341c3542876389dfe727059c9c1b535b117a2a4",
+            "bytes": 24748167
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 188.46398112596944,
+            "active_training_seconds": 186.30449321202468,
+            "environment_decisions": 568612,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2792
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/large-shallow-s256/study/training/run/self-play-raw.pt",
+            "sha256": "c6ee3546495d8ac1478a6620df650ae898250199c3ae0417b15fc4ecab6368e8",
+            "bytes": 24747966
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 330.8105938109802,
+            "active_training_seconds": 327.6174069932895,
+            "environment_decisions": 1093735,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 8254
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-middle-s256",
+      "cell": "middle-s256",
+      "seed": 13592,
+      "size": "middle",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/middle-s256",
+      "summary": {
+        "active_transitions_per_second": 1509.759489187802,
+        "checkpoint_finite": true,
+        "collection_seconds": 263.2037100082962,
+        "environment_decisions": 1075747,
+        "error": null,
+        "inclusive_transitions_per_second": 1498.5940758304353,
+        "learner_transitions": 524288,
+        "learning_seconds": 84.06219807488378,
+        "optimizer_exposures": 130358,
+        "parameters": 2463170,
+        "peak_cuda_allocated": 5112995328,
+        "run_seconds": 349.85324475506786,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "fbd24bc2e90342aa8a72a8084a7dcc18",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.06319549679756165,
+          "parameter": "card_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.19856781619667652,
+            "last": 0.08629061430999414,
+            "minimum": -0.005104707460775071,
+            "maximum": 0.19856781619667652
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 1.1975071430206299,
+            "last": 2.8745431900024414,
+            "minimum": 0.31508928537368774,
+            "maximum": 4.662683963775635
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 1.1394025087356567,
+            "last": 0.3712148368358612,
+            "minimum": 0.3712148368358612,
+            "maximum": 1.1394025087356567
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.05881449952721596,
+            "last": 0.6340434551239014,
+            "minimum": 0.01799413189291954,
+            "maximum": 0.6340434551239014
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.0006310230819508433,
+            "last": 0.0034313721116632223,
+            "minimum": 4.622520282282494e-05,
+            "maximum": 0.012714382261037827
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "2032c4206e503208e523f4e5f197c30b9c29c60199b1d58b87e50935abecd3fa",
+            "bytes": 9931230
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "c9cd325720c9784ab00d6092c014b24f8ce84a94ca4d82960c76a3fb0ea506d8",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 102.75774722197093,
+            "active_training_seconds": 101.17808683926705,
+            "environment_decisions": 279904,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32054,
+            "games": 1345
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "9f652dc9967e35d12d0c0a274b13ba01119d4f08ca0ccc32794cf3a4eec690ee",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 204.20165679906495,
+            "active_training_seconds": 202.37079244817141,
+            "environment_decisions": 551940,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 64822,
+            "games": 3296
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s256/study/training/run/self-play-raw.pt",
+            "sha256": "e6487413ecb8ae154ca30fb8ae5197d220b9753fbba7c450dd5e13e73b4c0048",
+            "bytes": 9930438
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 349.78113608504646,
+            "active_training_seconds": 347.26590808317997,
+            "environment_decisions": 1075747,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 130358,
+            "games": 9353
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-middle-s64",
+      "cell": "middle-s64",
+      "seed": 13592,
+      "size": "middle",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/middle-s64",
+      "summary": {
+        "active_transitions_per_second": 548.1347511608036,
+        "checkpoint_finite": true,
+        "collection_seconds": 635.3598292241804,
+        "environment_decisions": 1070862,
+        "error": null,
+        "inclusive_transitions_per_second": 544.3153005050493,
+        "learner_transitions": 524288,
+        "learning_seconds": 321.13489928864874,
+        "optimizer_exposures": 130474,
+        "parameters": 2463170,
+        "peak_cuda_allocated": 1439653376,
+        "run_seconds": 963.2064347879495,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "ba52b6ec89eb4bef89b032ca9aa874ab",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.10244089365005493,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.22144828628431795,
+            "last": 0.00998768965700711,
+            "minimum": -0.1376133952580235,
+            "maximum": 0.4405134939763402
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 3.741533041000366,
+            "last": 1.219480276107788,
+            "minimum": 0.23968331515789032,
+            "maximum": 4.5204691886901855
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.1363829374313354,
+            "last": 0.06969258189201355,
+            "minimum": 0.014367621392011642,
+            "maximum": 1.1363829374313354
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.05867723748087883,
+            "last": 0.6598113179206848,
+            "minimum": 7.45470606489107e-05,
+            "maximum": 1.1288585662841797
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.0003075149143114686,
+            "last": 0.008965939283370972,
+            "minimum": 1.6566609701840207e-05,
+            "maximum": 0.07297717779874802
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "639d6b88d13a3e32daff5e248b044634227091e9cf1c5d7ff0d92c8438366f92",
+            "bytes": 9931230
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "84d04888e1a929f6abc52c29b5acee1a2b81970279e7871457c7524221fca21f",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 259.5136735199485,
+            "active_training_seconds": 257.5692730008159,
+            "environment_decisions": 270628,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32169,
+            "games": 1911
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "147a483524c3816f29e07c4ca6dacf7f7c93f7249b070ae1e8048fef7bfcfa08",
+            "bytes": 9930775
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 483.8226127809612,
+            "active_training_seconds": 481.0501547938911,
+            "environment_decisions": 534190,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 64937,
+            "games": 4893
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/middle-s64/study/training/run/self-play-raw.pt",
+            "sha256": "2d0484628945e9f3afc2b516f13acbdbca0daedb7a59396229784ea5f0bea810",
+            "bytes": 9930438
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 962.988763952977,
+            "active_training_seconds": 956.4947285128292,
+            "environment_decisions": 1070862,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 130474,
+            "games": 10833
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-small-deep-s64",
+      "cell": "small-deep-s64",
+      "seed": 13592,
+      "size": "small-deep",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/small-deep-s64",
+      "summary": {
+        "active_transitions_per_second": 558.4654569861049,
+        "checkpoint_finite": true,
+        "collection_seconds": 616.8145885235863,
+        "environment_decisions": 1059725,
+        "error": null,
+        "inclusive_transitions_per_second": 554.9209694634453,
+        "learner_transitions": 524288,
+        "learning_seconds": 321.98653774382547,
+        "optimizer_exposures": 131072,
+        "parameters": 288578,
+        "peak_cuda_allocated": 631392256,
+        "run_seconds": 944.7975997499889,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "2217f2087b64464488fdc263b2051739",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.14958560094237328,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": 0.27372505149641146,
+            "last": 0.08822735965637268,
+            "minimum": -0.08488971843683288,
+            "maximum": 0.355015907670209
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 3.5275728702545166,
+            "last": 0.757008969783783,
+            "minimum": 0.18546152114868164,
+            "maximum": 4.9757080078125
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.293911337852478,
+            "last": 0.1968575268983841,
+            "minimum": 0.15905164182186127,
+            "maximum": 1.293911337852478
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.06337004899978638,
+            "last": 0.9808712601661682,
+            "minimum": 4.68090183858294e-06,
+            "maximum": 0.9808712601661682
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 8.168999920599163e-05,
+            "last": 0.002030404284596443,
+            "minimum": 8.117785910144448e-07,
+            "maximum": 0.046927452087402344
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "96156f1b40130fe9b33df68479ddcb873a0b40459576476f6a2317c361fd28ec",
+            "bytes": 1232798
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "0fd237192fffaf90fcd7d13d10e6114ac26a6ffff54a957dba08cc7ff4084653",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 288.0850520780077,
+            "active_training_seconds": 286.1763184709707,
+            "environment_decisions": 275329,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1409
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "0159fb32eb6b84064493aabad2f1c293dbd0a2540588a0c50d84338cd402eba7",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 510.7558653500164,
+            "active_training_seconds": 508.0976078725653,
+            "environment_decisions": 536474,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4039
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s64/study/training/run/self-play-raw.pt",
+            "sha256": "f97ed45eadd025e081c80c31544ddbfd37dd2ec0235e5527c41b218433dd0065",
+            "bytes": 1232006
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 944.5714758529793,
+            "active_training_seconds": 938.8011262674117,
+            "environment_decisions": 1059725,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 9323
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-small-deep-s256",
+      "cell": "small-deep-s256",
+      "seed": 13592,
+      "size": "small-deep",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/small-deep-s256",
+      "summary": {
+        "active_transitions_per_second": 1323.4468348060964,
+        "checkpoint_finite": true,
+        "collection_seconds": 311.72818677092437,
+        "environment_decisions": 1112628,
+        "error": null,
+        "inclusive_transitions_per_second": 1315.2876597257111,
+        "learner_transitions": 524288,
+        "learning_seconds": 84.42524093878455,
+        "optimizer_exposures": 131072,
+        "parameters": 288578,
+        "peak_cuda_allocated": 2313803264,
+        "run_seconds": 398.6109016709961,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "9b5478e41a4f4553bca59ab71dbe8d80",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.08615723252296448,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": 0.12734368405154514,
+            "last": 0.04954808926464167,
+            "minimum": -0.01480440419646454,
+            "maximum": 0.23626389805986536
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 1.237316370010376,
+            "last": 1.0986055135726929,
+            "minimum": 0.38070258498191833,
+            "maximum": 5.271119117736816
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 0.9998745322227478,
+            "last": 0.544238805770874,
+            "minimum": 0.474931925535202,
+            "maximum": 1.1050677299499512
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.03767216578125954,
+            "last": 0.48822370171546936,
+            "minimum": 0.025916146114468575,
+            "maximum": 0.5241910815238953
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.00011826798436231911,
+            "last": 0.004209162201732397,
+            "minimum": 3.838667907984927e-05,
+            "maximum": 0.012450492940843105
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "07edb82fd3b1fbc8dd88f4a8ae48de4191328081b6d69d2ed87101b0aa74df39",
+            "bytes": 1232798
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "3c7f54a0411e2837be965a9646b566d6bbf4ad3c766ea40516071c44d5b9aa62",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 103.96435989497695,
+            "active_training_seconds": 102.52381211379543,
+            "environment_decisions": 282112,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1342
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "2db2e58e7e0bf9408564e48c97fe895b6dbe9de7b9578d768445c9ecbe132026",
+            "bytes": 1232343
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 213.70136596402153,
+            "active_training_seconds": 212.03966287476942,
+            "environment_decisions": 570339,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2832
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-deep-s256/study/training/run/self-play-raw.pt",
+            "sha256": "1e7b70212a2cd3520ae044af9315e9241174d06ab1857f6951a8b667f6cd1c96",
+            "bytes": 1232006
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 398.535215756041,
+            "active_training_seconds": 396.1534277097089,
+            "environment_decisions": 1112628,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 7244
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-small-s256",
+      "cell": "small-s256",
+      "seed": 13592,
+      "size": "small",
+      "streams": 256,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/small-s256",
+      "summary": {
+        "active_transitions_per_second": 1685.954210290494,
+        "checkpoint_finite": true,
+        "collection_seconds": 237.88683708396275,
+        "environment_decisions": 1087052,
+        "error": null,
+        "inclusive_transitions_per_second": 1674.1116667587871,
+        "learner_transitions": 524288,
+        "learning_seconds": 73.08720764389727,
+        "optimizer_exposures": 131072,
+        "parameters": 188610,
+        "peak_cuda_allocated": 1475521024,
+        "run_seconds": 313.1738523840904,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 32
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 32,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "53245a7d3ae74f81b48c676f95918fda",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.11018684506416321,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 1.0917822688816465,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 2048,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 2048
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 32,
+            "finite": true,
+            "first": -0.0027478673657537617,
+            "last": 0.1163494674145178,
+            "minimum": -0.0027478673657537617,
+            "maximum": 0.15122686110577915
+          },
+          "gradient_norm": {
+            "count": 32,
+            "finite": true,
+            "first": 2.047089099884033,
+            "last": 4.077239513397217,
+            "minimum": 0.15132838487625122,
+            "maximum": 6.260043621063232
+          },
+          "entropy": {
+            "count": 32,
+            "finite": true,
+            "first": 0.9613192677497864,
+            "last": 0.6156423091888428,
+            "minimum": 0.43196746706962585,
+            "maximum": 1.025118112564087
+          },
+          "reference_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 0.030774589627981186,
+            "last": 0.550097644329071,
+            "minimum": 0.019128886982798576,
+            "maximum": 0.550097644329071
+          },
+          "collection_kl": {
+            "count": 32,
+            "finite": true,
+            "first": 9.535642311675474e-05,
+            "last": 0.005469492170959711,
+            "minimum": 1.64213918196765e-06,
+            "maximum": 0.006061574909836054
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s256/study/training/run/self-play-initial-raw.pt",
+            "sha256": "4c578de8b23f2bd55d61936f6cd6cbcc9679eeac1dcd2c2c65a27f81ceca716d",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s256/study/training/run/monitor-00000000.pt",
+            "sha256": "f42f72efcce62210d7ee988b2fb5e205fc57261fc462116682b7322ecbf2468a",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 8,
+            "optimizer_updates": 512,
+            "stage_id": "self-play",
+            "updates": 8,
+            "training_seconds": 82.15717411006335,
+            "active_training_seconds": 80.70229075464886,
+            "environment_decisions": 275805,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1310
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s256/study/training/run/monitor-00000001.pt",
+            "sha256": "d1965a9f9aef0c6b63db19be98b8d1581f937ac51b4b2023686539b510ca1366",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 16,
+            "optimizer_updates": 1024,
+            "stage_id": "self-play",
+            "updates": 16,
+            "training_seconds": 175.65628225100227,
+            "active_training_seconds": 174.03790166659746,
+            "environment_decisions": 559845,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 2786
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s256/study/training/run/self-play-raw.pt",
+            "sha256": "a163bb4d55ff7d12674d50aee7ac82e0606a78624be60eb647309d7024667217",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 313.0945285829948,
+            "active_training_seconds": 310.97404472786,
+            "environment_decisions": 1087052,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 7854
+          }
+        }
+      ]
+    },
+    {
+      "name": "seed-13592-small-s64",
+      "cell": "small-s64",
+      "seed": 13592,
+      "size": "small",
+      "streams": 64,
+      "directory": ".runs/grid-007/learning-017/seed-13592/results/small-s64",
+      "summary": {
+        "active_transitions_per_second": 660.9454782796248,
+        "checkpoint_finite": true,
+        "collection_seconds": 525.930658959318,
+        "environment_decisions": 1072900,
+        "error": null,
+        "inclusive_transitions_per_second": 656.4776516287752,
+        "learner_transitions": 524288,
+        "learning_seconds": 267.3087491756305,
+        "optimizer_exposures": 131072,
+        "parameters": 188610,
+        "peak_cuda_allocated": 440327680,
+        "run_seconds": 798.6380019170465,
+        "seed": 13592,
+        "status": "completed",
+        "updates": 128
+      },
+      "verification": {
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "seed": 13592,
+        "all_manifest_files_verified": true,
+        "manifest_files": 15,
+        "checkpoint_loaded": true,
+        "all_raw_checkpoints_finite": true,
+        "exact_recipe_verified": true,
+        "updates": 128,
+        "checkpoint_transitions": [
+          0,
+          131072,
+          262144,
+          524288
+        ]
+      },
+      "numerical_audit": {
+        "run_id": "a6decea3db104da4998817c6aebe4767",
+        "seed": 13592,
+        "source": "3c3681d2b26a7fc8167928fa63fe24a6cd3d058a",
+        "movement": {
+          "maximum_absolute_change": 0.1321469396352768,
+          "parameter": "perm_embedding.projection.0.weight",
+          "global_adam_upper_bound": 5.511166007183397,
+          "elements_above_bound": 0,
+          "maximum_saved_adam_steps": 8192,
+          "all_parameters_finite": true,
+          "all_moments_finite": true,
+          "negative_second_moments": 0
+        },
+        "diagnostic_counts": {
+          "nonfinite_count": 0,
+          "rejected_steps": 0,
+          "skipped_steps": 0,
+          "legal_underflow_count": 0,
+          "optimizer_steps": 8192
+        },
+        "diagnostic_ranges": {
+          "loss": {
+            "count": 128,
+            "finite": true,
+            "first": -0.009987517382832867,
+            "last": -0.02386671561155604,
+            "minimum": -0.13902926934362173,
+            "maximum": 0.2610113105810583
+          },
+          "gradient_norm": {
+            "count": 128,
+            "finite": true,
+            "first": 1.5511763095855713,
+            "last": 1.5906695127487183,
+            "minimum": 0.21467383205890656,
+            "maximum": 4.808592796325684
+          },
+          "entropy": {
+            "count": 128,
+            "finite": true,
+            "first": 1.1409071683883667,
+            "last": 0.3833371698856354,
+            "minimum": 0.01700007915496826,
+            "maximum": 1.2213953733444214
+          },
+          "reference_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.044101037085056305,
+            "last": 0.8499998450279236,
+            "minimum": 0.0023472474422305822,
+            "maximum": 1.0572677850723267
+          },
+          "collection_kl": {
+            "count": 128,
+            "finite": true,
+            "first": 0.00016912211140152067,
+            "last": 0.014097459614276886,
+            "minimum": 7.223464422168036e-07,
+            "maximum": 0.014097459614276886
+          }
+        },
+        "interpretation": "Coarse retained-state audit; passing does not clear historical anomaly or establish determinism. Diagnostic loss/gradient samples need not cover every optimizer step."
+      },
+      "checkpoints": [
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s64/study/training/run/self-play-initial-raw.pt",
+            "sha256": "ea103bdae2127c55a1b0df26bb7533dcf0c9611ac7ce004a5a92b656725e4716",
+            "bytes": 823830
+          },
+          "coordinates": {
+            "optimizer_updates": 0,
+            "stage_id": "self-play",
+            "updates": 0,
+            "training_seconds": 0.0,
+            "active_training_seconds": 0.0,
+            "environment_decisions": 0,
+            "learner_transitions": 0,
+            "optimizer_exposures": 0,
+            "games": 0
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s64/study/training/run/monitor-00000000.pt",
+            "sha256": "d9e317cc0e379894e9cdd3216cfda1f8045c38aec0adccf1783df988c476c286",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 32,
+            "optimizer_updates": 2048,
+            "stage_id": "self-play",
+            "updates": 32,
+            "training_seconds": 232.9851168260211,
+            "active_training_seconds": 231.38244245015085,
+            "environment_decisions": 283430,
+            "learner_transitions": 131072,
+            "optimizer_exposures": 32768,
+            "games": 1466
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s64/study/training/run/monitor-00000001.pt",
+            "sha256": "47310362c6176353b0adcf005544a2d39d911e8001cb5f33caffbd0aee1ac7e9",
+            "bytes": 823495
+          },
+          "coordinates": {
+            "segment_updates": 64,
+            "optimizer_updates": 4096,
+            "stage_id": "self-play",
+            "updates": 64,
+            "training_seconds": 413.0024025120074,
+            "active_training_seconds": 410.73021645937115,
+            "environment_decisions": 545187,
+            "learner_transitions": 262144,
+            "optimizer_exposures": 65536,
+            "games": 4380
+          }
+        },
+        {
+          "artifact": {
+            "path": "/Users/jack/src/managym-cpu-research/.runs/grid-007/learning-017/seed-13592/results/small-s64/study/training/run/self-play-raw.pt",
+            "sha256": "e30fbbdd37b09155a58c788d32b6689ea1525cec9542622e1b5a9cc62ad8200a",
+            "bytes": 823230
+          },
+          "coordinates": {
+            "segment_updates": 128,
+            "optimizer_updates": 8192,
+            "stage_id": "self-play",
+            "updates": 128,
+            "training_seconds": 798.4146074879682,
+            "active_training_seconds": 793.2394081349485,
+            "environment_decisions": 1072900,
+            "learner_transitions": 524288,
+            "optimizer_exposures": 131072,
+            "games": 10360
+          }
+        }
+      ]
+    }
+  ],
+  "incomplete": [],
+  "provider_absent": true,
+  "complete_cohort": true,
+  "allocation_sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
+  "verifier_sha256": "36486bc3ccaac28559f9f5a83f9772cf966d998afcedfa3d595583025dd396d4",
+  "scope": "Exact frozen trajectories and retained numerical health; no historical anomaly clearance"
+}
