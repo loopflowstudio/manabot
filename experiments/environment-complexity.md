@@ -115,6 +115,40 @@ the failed attempt, so the inclusive total is about $4.85 against the $35 cap. T
 executor time 3,233 seconds over nine fits. Evaluation ran on the Mini with no
 GPU spend.
 
+**Supplementary heuristic anchor — 2026-10-20.** Greedy was near the scoring
+ceiling for some checkpoints, so the same retained exports were also scored
+against MTG-152's `heuristic`. This anchor was chosen after the frozen results,
+so it is supplementary, not a frozen prediction test. Same deals, legs and
+frozen controls as above: 18,000 games (45 cells), source `102509ac`, an engine
+binary byte-identical to the frozen cells', 00:52–03:41 UTC on the Mini, no
+failures or reruns. Before scoring, the heuristic was pointed at the research
+catalog (`complexity.source.json`), so it plays Lightning Bolt by effect.
+Previously it would have fallen back to v1's seat-ordered target and could Bolt
+its own side. The product-card programs are identical in both catalogs.
+
+| Pool | Midpoint gain | Endpoint gain | Endpoint seeds | Endpoint candidate / control | Greedy − heuristic endpoint gain |
+|---|---|---|---|---|---|
+| L1 | +23.1 [+14.0, +32.2] | **+29.1 [+27.5, +30.6]** | +28.5 / +29.8 / +29.0 | 48.1% / 19.0% | +6.2 [+3.8, +8.7] |
+| L2 | +25.4 [+22.6, +28.2] | **+30.2 [+27.0, +33.4]** | +31.2 / +30.5 / +28.7 | 35.4% / 5.3% | +19.7 [+13.4, +25.9] |
+| L3 | +21.5 [+17.7, +25.3] | **+24.7 [+11.0, +38.5]** | +25.2 / +30.0 / +19.0 | 33.8% / 9.1% | +7.0 [−1.7, +15.7] |
+
+- Learning holds against the stronger anchor: every seed in every pool gains
+  at least 19 points. All three pools pass the useful-positive diagnostic
+  against `heuristic` as well.
+- The heuristic is much stronger than greedy where it has rules to apply. In
+  L2 it holds the near-uniform control to 5% (22% for greedy), and the
+  candidate's gain shrinks by about 20 points. In L1, with vanilla creatures
+  only, it barely beats the control harder than greedy does.
+- No trained endpoint beats the heuristic: candidates score 34–48%. Against
+  this anchor, gains rise from midpoint to endpoint in every pool (+6.0, +4.8
+  and +3.2 points), including L2, whose greedy gain was flat (+0.3).
+- L3 has the widest seed spread (seed 12253 gains 19 points; the others gain
+  25 and 30).
+
+Mini evaluation logs are retained at
+`.runs/mtg122/gpu-split-training-2/heuristic-evaluation-logs`. The fetched
+campaign, now 27,238 files, is byte-identical to the Mini's.
+
 Historical plans (schema 1 and 2) keep their meaning; the deal families are the
 same by milestone ordinal.
 
