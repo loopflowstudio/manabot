@@ -217,6 +217,19 @@ def test_scoring_runs_each_arm_and_control_once_and_keeps_failures(
     copy = tmp_path / "cells"
     shutil.copytree(scored, copy)
     assert _score(fits, copy) == 0
+    # Processes sharing a seed select disjoint cells.
+    alone = evaluate_seed(
+        fits,
+        (0, TINY.switch),
+        _protocol,
+        tmp_path / "control-only",
+        lambda: False,
+        anchors=("random",),
+        variants=("control",),
+    )
+    assert alone == 1 and [p.name for p in (tmp_path / "control-only").iterdir()] == [
+        f"{TINY.switch}-random-control"
+    ]
     (copy / f"{TINY.switch}-random-control/monitor.json").unlink()
     with pytest.raises(RuntimeError, match="incomplete attempt"):
         _score(fits, copy)

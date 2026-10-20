@@ -351,6 +351,8 @@ class CurriculumPlan(Strict):
 # ---- Scoring ---------------------------------------------------------------
 
 ProtocolFor = Callable[[Anchor, int], MonitorProtocol]
+Variant = Literal["initial", "curriculum", "scratch", "control"]
+VARIANTS: tuple[Variant, ...] = ("initial", "curriculum", "scratch", "control")
 
 
 def evaluate_seed(
@@ -361,6 +363,7 @@ def evaluate_seed(
     should_stop: Callable[[], bool],
     *,
     anchors: tuple[Anchor, ...] = ANCHORS,
+    variants: tuple[Variant, ...] = VARIANTS,
     training: Path | None = None,
 ) -> int:
     """Score one seed's arms and frozen controls; return cells newly run.
@@ -368,6 +371,8 @@ def evaluate_seed(
     Milestone 0 is the shared initialization, scored once. Later milestones
     score each arm and the unchanged initialization as a same-deal control. A
     completed cell is kept; any other retained attempt stops scoring.
+    `variants` selects cells so separate processes can share one seed; each
+    cell has its own directory.
     """
     initial = initial_checkpoint(
         fits["scratch"], None if training is None else training / "scratch"
@@ -378,7 +383,7 @@ def evaluate_seed(
     }
     evaluated = 0
     for milestone in milestones:
-        variants: list[tuple[str, TrainingRun, Checkpoint]] = (
+        cells: list[tuple[Variant, TrainingRun, Checkpoint]] = (
             [("initial", fits["scratch"].source, initial)]
             if milestone == 0
             else [
@@ -387,7 +392,9 @@ def evaluate_seed(
             ]
         )
         for anchor in anchors:
-            for variant, run, checkpoint in variants:
+            for variant, run, checkpoint in cells:
+                if variant not in variants:
+                    continue
                 cell = directory / f"{milestone}-{anchor}-{variant}"
                 if cell.exists():
                     retained = cell / "monitor.json"
@@ -442,6 +449,8 @@ def evaluate_retained(
     *,
     seeds: tuple[int, ...] = SEEDS,
     anchors: tuple[Anchor, ...] = ANCHORS,
+    milestones: tuple[int, ...] | None = None,
+    variants: tuple[Variant, ...] = VARIANTS,
 ) -> None:
     """Score fetched GPU outputs in place, inside a rented CPU allocation.
 
@@ -454,6 +463,8 @@ def evaluate_retained(
             "curriculum scoring runs in a rented allocation; local forbidden"
         )
     plan = CurriculumPlan.model_validate_json((campaign / "plan.json").read_text())
+    if milestones is not None and not set(milestones) <= set(plan.evaluation_updates):
+        raise ValueError("unplanned milestone")
     expected = json.loads((campaign / "initialization-parameters.json").read_text())
     should_stop = allocation_stop(
         datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
@@ -473,11 +484,12 @@ def evaluate_retained(
                 raise ValueError(f"{arm}-{seed} initialization differs from preflight")
         count = evaluate_seed(
             fits,
-            plan.evaluation_updates,
+            plan.evaluation_updates if milestones is None else milestones,
             plan.protocol,
             campaign / f"evaluation/{seed}",
             should_stop,
             anchors=anchors,
+            variants=variants,
             training=campaign,
         )
         print(f"{seed}: {count} cells evaluated", flush=True)
@@ -561,12 +573,18 @@ if __name__ == "__main__":
     evaluate.add_argument("campaign", type=Path)
     evaluate.add_argument("--seed", type=int, choices=SEEDS, action="append")
     evaluate.add_argument("--anchor", choices=ANCHORS, action="append")
+    evaluate.add_argument("--milestone", type=int, action="append")
+    evaluate.add_argument("--variant", choices=VARIANTS, action="append")
     arguments = parser.parse_args()
     if arguments.command == "evaluate":
         evaluate_retained(
             arguments.campaign,
             seeds=tuple(arguments.seed or SEEDS),
             anchors=tuple(arguments.anchor or ANCHORS),
+            milestones=None
+            if arguments.milestone is None
+            else tuple(arguments.milestone),
+            variants=tuple(arguments.variant or VARIANTS),
         )
     else:
         # Etude worker entry: the job config carries the frozen plan.
