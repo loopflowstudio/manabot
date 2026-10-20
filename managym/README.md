@@ -1,12 +1,12 @@
 # managym
 
-The deterministic Magic: The Gathering rules engine and search environment
-behind Fantasia. Rust, with PyO3 bindings consumed by `manabot` (the
-agent) and `academy` (the experience server).
+The deterministic Magic: The Gathering rules engine and training environment
+behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
+and `academy` (the optional play UI).
 
 ## Architecture
 
-managym is Fantasia's authoritative world: match execution, semantic
+managym is Manabot's authoritative world: match execution, semantic
 Commands, viewer Observations, deterministic replay, exact forks, and the
 meaning and materialization of possible worlds. The cross-package contracts
 and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
