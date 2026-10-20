@@ -1,8 +1,8 @@
 # managym
 
-The deterministic Magic: The Gathering rules engine and search environment
-behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the
-agent) and `academy` (the experience server).
+The deterministic Magic: The Gathering rules engine and training environment
+behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
+and `academy` (the optional play UI).
 
 ## Architecture
 

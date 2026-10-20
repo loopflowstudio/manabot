@@ -12,9 +12,9 @@ provider and consumer work without redefining those contracts.
 
 | Wave | Owns |
 |---|---|
+| [intelligence/](intelligence/GOAL.md) | manabot training: self-play, policy/value learning, beliefs, search, and arena evaluation |
 | [rules/](rules/GOAL.md) | managym authority: curated semantic worlds, match/Command/replay, canonical Observations, possible-world queries, and safe high-throughput forks |
-| [game/](game/GOAL.md) | The authored playing experience: instant, legible, recoverable human-vs-manabot play over one versioned experience protocol |
-| [intelligence/](intelligence/GOAL.md) | manabot beliefs, conditional planning, policy/value learning, self-play, arena evaluation, and Study evidence |
+| [game/](game/GOAL.md) | The Academy play UI used to inspect bots: legible, recoverable human-vs-manabot games over one versioned experience protocol |
 
 Retired portfolios are preserved under [archive/](archive/README.md) with
 their dispositions.
