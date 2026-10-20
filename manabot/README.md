@@ -90,6 +90,11 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
+`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+state before the policy head, so offer choices that depend on the state stay
+learnable from any start. It is opt-in: omitted, it serializes as the historical
+additive policy. The learnability diagnostic uses it; ordinary recipes do not yet.
+
 An observation/action-shape or rules-meaning change is a world version.
 The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,

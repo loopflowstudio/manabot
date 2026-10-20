@@ -43,7 +43,9 @@ Learn Lesson identity, and ability selector projection. No semantic-program
 cohort is necessary to isolate these generic-input defects. Existing focused
 semantic target tests remain in `tests/model/test_action_identity.py`.
 
-The model has width 32, two attention heads and feed-forward width 64. Each of
+The model has width 32, two attention heads and feed-forward width 64, with the
+FiLM-conditioned policy (`AgentSpec(policy_film=True)`, protocol
+`learnability-2`; see [starting-weight sensitivity](#starting-weight-sensitivity)). Each of
 240 Adam updates (learning rate .003) uses the same 24 fit cases, for 5,760
 supervised sample exposures per seed. No early stopping or model selection.
 All 24 held-out cases are evaluated only after training and weight reload.
@@ -80,6 +82,39 @@ Capacity weights span several setups and intentionally omit semantic programs.
 They are diagnostic artifacts, not playable checkpoints with an invented match
 binding. The separate PPO layer below tests ordinary production checkpoint
 admission and reload.
+
+## Starting-weight sensitivity
+
+Protocol `learnability-1` trained the additive policy. There, offer and state
+meet only by addition inside the ReLU `action_layer` and `policy_head`. In the
+attack, mode and ability cases the two offers differ in one selector column,
+and public life chooses the label. If no hidden unit changes activation across
+those offers and life levels, the offers' logit gap cannot depend on life.
+Equal logits are then stationary, and the loss stays at ln 2. Whether a start
+has such a unit is luck. Over seeds 1–300 at the frozen budget, 55 additive
+starts stuck on at least one of those families. Changing
+`CARD_DEFINITION_COUNT` reshuffles every later initialization, which is how
+MTG-122's three vanilla cards turned seed 17 red.
+
+`learnability-2` keeps every case, seed, budget and threshold. It adds one
+multiplicative path: the head reads each action embedding scaled by
+`1 + W·state`, where `state` is the masked mean of the post-attention objects
+(FiLM, Perez et al. 2018, scale only). The product has a gradient at the
+symmetric point from any start. `W` starts at zero, so the initial function and
+all historical parameters are unchanged. The gate is still as sensitive:
+`identity_removed` inputs still produce exact ties, and zeroing the
+attack/mode/ability selector columns in training fails all 30 of 30 seeds.
+
+| Seeds 1–300 | Seeds failing | Stuck fit (attack / mode / ability) | Held-out misses |
+|---|---|---|---|
+| additive (`learnability-1`) | 78 | 34 / 25 / 25 | Learn 28, Learn fit 1 |
+| FiLM (`learnability-2`) | 31 | 0 / 0 / 0 | Learn 29, target 2 |
+
+One held-out miss remains, unchanged by FiLM. Held-out variant 1's native
+shuffle puts a hand card (definition 3) that the Learn fit cases never show.
+In every checked miss, replacing it with a fit-seen definition restores the
+correct preference. This is case-design generalization, not a stuck start.
+It still fails roughly one seed in ten.
 
 ## Broader choice separability
 

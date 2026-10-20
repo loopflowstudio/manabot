@@ -126,6 +126,9 @@ class AgentSpec(BaseHypersModel):
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
         "historical_mean"
     )
+    # Scale each action embedding by the pooled game state before the policy
+    # head (FiLM). False is the historical additive policy and its receipts.
+    policy_film: bool = Field(default=False, exclude_if=lambda value: not value)
     attention_layers: int = Field(default=1, ge=1)
     # Omitted defaults preserve historical recipe and checkpoint identities.
     attention_feedforward_dim: int | None = Field(
@@ -162,6 +165,8 @@ class AgentSpec(BaseHypersModel):
             raise ValueError(
                 "compound critic does not support value aggregation variants"
             )
+        if self.compound_decisions and self.policy_film:
+            raise ValueError("compound decoder owns its own state conditioning")
         return self
 
 

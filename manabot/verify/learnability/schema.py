@@ -21,11 +21,14 @@ class PPOResult:
 
 class Config(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    version: str = "learnability-1"
+    # learnability-2 trains the FiLM-conditioned policy; learnability-1 used
+    # the additive policy, whose verdict depended on the starting weights.
+    version: str = "learnability-2"
     seeds: tuple[int, ...] = (17, 29, 43)
     updates: int = 240
     learning_rate: float = 0.003
     hidden_dim: int = 32
+    policy_film: bool = True
     probability: float = 0.9
     invariance_tolerance: float = 0.0001
     timeout_seconds: int = 480
@@ -50,7 +53,7 @@ class Score(BaseModel):
 
 
 class Result(BaseModel):
-    version: str = "learnability-1"
+    version: str = "learnability-2"
     status: Literal["running", "passed", "failed", "error", "timeout"] = "running"
     source: str
     source_digest: str
