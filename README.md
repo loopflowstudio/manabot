@@ -13,10 +13,9 @@ It has two halves:
   belief models over hidden cards, and an arena for evaluating checkpoints
   against fixed opponents.
 
-The bots are nowhere near superhuman yet. They play one fixed 40-card
-matchup from the *Avatar: The Last Airbender* set, UR Lessons versus GW
-Allies, with sideboards for Learn. The work so far has gone into a correct
-engine, cheap experiments, and honest measurement.
+We are currently focusing on a very small but fairly complicated set of decks:
+[UR Lessons versus GW Allies](content/DECKS.md), from the *Avatar: The Last
+Airbender* set.
 
 ## Quickstart
 
