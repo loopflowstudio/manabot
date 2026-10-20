@@ -36,6 +36,26 @@ from managym.decision import (
     SemanticTransition,
     TransitionReceipt,
 )
+from managym.enums import (
+    ActionSpaceEnum,
+    EventTypeEnum,
+    StepEnum,
+    ZoneEnum,
+)
+from managym.experience import (
+    PROTOCOL_VERSION,
+    UNVERSIONED_CONTENT_HASH,
+    Command,
+    ExperienceFrame,
+)
+from managym.experience_projection import (
+    HERO_PLAYER_INDEX,
+    describe_actions,
+    enum_name,
+    offer_verb,
+    redact_observation,
+    serialize_observation,
+)
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -50,15 +70,6 @@ from .curated_pack import (
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
-from .enums import (
-    ActionEnum,
-    ActionSpaceEnum,
-    EventTypeEnum,
-    PhaseEnum,
-    StepEnum,
-    ZoneEnum,
-)
-from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
 from .opponent import configured_opponent, opponent_availability
 from .presentation import PresentationProjector
@@ -164,12 +175,10 @@ DEFAULT_VILLAIN_DECK_NAME = CURATED_PACK.villain_deck_id
 DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
-HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
 MAX_ACCEPTED_COMMANDS = 64
 MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
-CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
@@ -199,15 +208,6 @@ DEFAULT_STOPS: dict[str, list[str]] = {
     "my": ["main1", "main2"],
     "opponent": ["end_step"],
 }
-ACTION_LABELS = {
-    "PRIORITY_PLAY_LAND": "Play land",
-    "PRIORITY_CAST_SPELL": "Cast spell",
-    "PRIORITY_ACTIVATE_ABILITY": "Activate ability",
-    "DECLARE_ATTACKER": "Declare attacker",
-    "DECLARE_BLOCKER": "Declare blocker",
-    "CHOOSE_TARGET": "Choose target",
-}
-
 app = FastAPI(title="Academy")
 
 # Capture loaded runtime identity at process startup, before later source edits
@@ -366,149 +366,6 @@ class StudyAttempt:
     evidence: JoinedStudyEvidence | None = None
 
 
-def _enum_name(enum_type, value: Any) -> str:
-    try:
-        return enum_type(int(value)).name
-    except Exception:
-        return str(int(value))
-
-
-def _serialize_card(card: managym.Card) -> dict[str, Any]:
-    return {
-        "id": int(card.id),
-        "registry_key": int(card.registry_key),
-        "name": card.name,
-        "text_box": card.text_box,
-        "zone": _enum_name(ZoneEnum, card.zone),
-        "owner_id": int(card.owner_id),
-        "power": int(card.power),
-        "toughness": int(card.toughness),
-        "mana_value": int(card.mana_cost.mana_value),
-        "types": {
-            "is_creature": bool(card.card_types.is_creature),
-            "is_land": bool(card.card_types.is_land),
-            "is_spell": bool(card.card_types.is_spell),
-            "is_artifact": bool(card.card_types.is_artifact),
-            "is_enchantment": bool(card.card_types.is_enchantment),
-            "is_planeswalker": bool(card.card_types.is_planeswalker),
-            "is_battle": bool(card.card_types.is_battle),
-        },
-    }
-
-
-def _serialize_permanent(
-    permanent: managym.Permanent,
-    card: managym.Card | None,
-) -> dict[str, Any]:
-    return {
-        "id": int(permanent.id),
-        "name": card.name if card else None,
-        "text_box": card.text_box if card else "",
-        "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
-        "controller_id": int(permanent.controller_id),
-        "tapped": bool(permanent.tapped),
-        "damage": int(permanent.damage),
-        "summoning_sick": bool(permanent.is_summoning_sick),
-        # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
-        "power": int(permanent.power),
-        "toughness": int(permanent.toughness),
-        "base_power": int(card.power) if card else None,
-        "base_toughness": int(card.toughness) if card else None,
-        "plus1_counters": int(permanent.plus1_counters),
-    }
-
-
-def _serialize_player(
-    player: managym.Player,
-    cards: list[managym.Card],
-    permanents: list[managym.Permanent],
-) -> dict[str, Any]:
-    grouped_cards: dict[str, list[dict[str, Any]]] = {
-        "HAND": [],
-        "GRAVEYARD": [],
-        "EXILE": [],
-        "STACK": [],
-    }
-    battlefield_cards: list[managym.Card] = []
-    for card in cards:
-        zone_name = _enum_name(ZoneEnum, card.zone)
-        if zone_name == "BATTLEFIELD":
-            battlefield_cards.append(card)
-        elif zone_name in grouped_cards:
-            grouped_cards[zone_name].append(_serialize_card(card))
-
-    # Permanents and battlefield cards correspond 1:1 in order.
-    # Fall back to None if the lists don't align.
-    serialized_permanents = []
-    for i, permanent in enumerate(permanents):
-        card = battlefield_cards[i] if i < len(battlefield_cards) else None
-        serialized_permanents.append(_serialize_permanent(permanent, card))
-
-    zone_counts = {
-        _enum_name(ZoneEnum, index): int(count)
-        for index, count in enumerate(player.zone_counts)
-    }
-
-    return {
-        "player_index": int(player.player_index),
-        "id": int(player.id),
-        "is_active": bool(player.is_active),
-        "is_agent": bool(player.is_agent),
-        "life": int(player.life),
-        "zone_counts": zone_counts,
-        "library_count": zone_counts.get("LIBRARY", 0),
-        "known_hand": {
-            str(key): int(count) for key, count in player.known_hand.items()
-        },
-        "sideboard_counts": {
-            str(key): int(count) for key, count in player.sideboard_counts.items()
-        },
-        "remaining_sideboard_counts": {
-            str(key): int(count)
-            for key, count in player.remaining_sideboard_counts.items()
-        },
-        "hand": grouped_cards["HAND"],
-        "graveyard": grouped_cards["GRAVEYARD"],
-        "exile": grouped_cards["EXILE"],
-        "stack": grouped_cards["STACK"],
-        "battlefield": serialized_permanents,
-    }
-
-
-def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
-    data = {
-        "game_over": bool(obs.game_over),
-        "won": bool(obs.won),
-        "turn": {
-            "turn_number": int(obs.turn.turn_number),
-            "phase": _enum_name(PhaseEnum, obs.turn.phase),
-            "step": _enum_name(StepEnum, obs.turn.step),
-            "active_player_id": int(obs.turn.active_player_id),
-            "agent_player_id": int(obs.turn.agent_player_id),
-        },
-        "agent": _serialize_player(obs.agent, obs.agent_cards, obs.agent_permanents),
-        "opponent": _serialize_player(
-            obs.opponent,
-            obs.opponent_cards,
-            obs.opponent_permanents,
-        ),
-    }
-
-    data["agent"]["sideboard"] = [
-        {
-            "candidate_id": int(card.candidate_id),
-            "owner_id": int(card.owner_id),
-            "registry_key": int(card.registry_key),
-            "name": card.name,
-            "text_box": card.text_box,
-        }
-        for card in obs.agent_sideboard
-    ]
-    return data
-
-
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
     """Resolve live card, permanent, and stack identities to typed definitions."""
 
@@ -520,7 +377,7 @@ def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
         for card in cards:
             result[int(card.id)] = int(card.registry_key)
         battlefield_cards = [
-            card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+            card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
         ]
         for index, permanent in enumerate(permanents):
             if index < len(battlefield_cards):
@@ -554,7 +411,7 @@ def _semantic_event_payload(
         ):
             related_definitions.add(definition_ids[identity])
     return {
-        "event_type": _enum_name(EventTypeEnum, event.event_type),
+        "event_type": enum_name(EventTypeEnum, event.event_type),
         "source_kind": int(event.source_kind),
         "source_id": int(event.source_id),
         "source_incarnation": int(event.source_incarnation),
@@ -608,7 +465,7 @@ def _encountered_definition_ids(
             battlefield_cards = [
                 card
                 for card in cards
-                if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+                if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
             ]
             for index, permanent in enumerate(permanents):
                 if index < len(battlefield_cards):
@@ -621,142 +478,6 @@ def _encountered_definition_ids(
         if current is not None and not was_tapped and current[1]:
             definitions.add(definition_id)
     return sorted(definitions)
-
-
-def _player_label(player: managym.Player) -> str:
-    return "Hero" if int(player.player_index) == HERO_PLAYER_INDEX else "Villain"
-
-
-def _permanent_names(
-    cards: list[managym.Card],
-    permanents: list[managym.Permanent],
-) -> dict[int, str]:
-    """Map permanent ids to card names.
-
-    Permanents carry their own object ids (distinct from card ids), but the
-    observation lists permanents and battlefield cards in the same order —
-    the same alignment _serialize_player relies on.
-    """
-    battlefield_cards = [
-        card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-    ]
-    names: dict[int, str] = {}
-    for index, permanent in enumerate(permanents):
-        if index < len(battlefield_cards):
-            names[int(permanent.id)] = battlefield_cards[index].name
-    return names
-
-
-def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
-    """Map object ids (players, cards, permanents) to display names."""
-    names: dict[int, str] = {
-        int(obs.agent.id): _player_label(obs.agent),
-        int(obs.opponent.id): _player_label(obs.opponent),
-    }
-    names.update(
-        {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
-    )
-    names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
-    names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
-    names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
-    return names
-
-
-def _format_action(
-    action: managym.Action,
-    names: dict[int, str],
-    space_kind: str = "",
-    declared: bool | None = None,
-) -> str:
-    """Render a legal action in Magic terms with card names.
-
-    Focus semantics (managym observation.rs action_focus):
-      PLAY_LAND / CAST_SPELL: [card_id]
-      DECLARE_ATTACKER:       [attacker_permanent_id]
-      DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
-                              (one entry means "this creature does not block")
-      CHOOSE_TARGET:          [player_id or permanent_id]
-      SCRY_* / SELECT_CARD:   [card_id] (library cards revealed by the
-                              pending decision are in the observation)
-      TAP_FOR_COST:           [permanent_id]
-      DECLINE/PAY/MODE:       [resolving or cast card_id]
-      PASS_PRIORITY:          []
-    """
-    action_name = _enum_name(ActionEnum, action.action_type)
-    if declared is None:
-        declared = getattr(action, "declared", None)
-    focus_names = [names.get(int(value)) for value in action.focus]
-    first = focus_names[0] if focus_names else None
-
-    if action_name == "PRIORITY_PASS_PRIORITY":
-        return "Pass priority"
-    if action_name == "PRIORITY_PLAY_LAND" and first:
-        return f"Play {first}"
-    if action_name == "PRIORITY_CAST_SPELL" and first:
-        return f"Cast {first}"
-    if action_name == "DECLARE_ATTACKER" and first:
-        return (
-            f"Do not attack with {first}"
-            if declared is False
-            else f"Attack with {first}"
-        )
-    if action_name == "DECLARE_BLOCKER" and first:
-        if len(focus_names) >= 2 and focus_names[1]:
-            return f"Block {focus_names[1]} with {first}"
-        return f"{first}: do not block"
-    if action_name == "CHOOSE_TARGET" and first:
-        return f"Target {first}"
-    # Mid-resolution decision actions (scry / look-and-select / learn /
-    # pay-or-not / modal / waterbend) in Magic terms.
-    if action_name == "SCRY_KEEP" and first:
-        return f"Keep {first} on top"
-    if action_name == "SCRY_BOTTOM" and first:
-        return f"Put {first} on the bottom"
-    if action_name == "LEARN_TAKE_LESSON" and first:
-        return f"Take {first}"
-    if action_name == "LEARN_DISCARD" and first:
-        return f"Discard {first}, then draw a card"
-    if action_name == "SELECT_CARD" and first:
-        if space_kind == "DISCARD":
-            return f"Discard {first}"
-        if space_kind == "LEGEND_RULE":
-            return f"Keep {first} (legend rule)"
-        return f"Put {first} into your hand"
-    if action_name == "DECLINE_CHOICE":
-        if space_kind == "LEARN":
-            return "Decline Learn"
-        return "Decline"
-    if action_name == "PAY_COST":
-        return f"Pay the cost ({first})" if first else "Pay the cost"
-    if action_name == "CHOOSE_MODE":
-        return f"Choose a mode ({first})" if first else "Choose a mode"
-    if action_name == "TAP_FOR_COST" and first:
-        return f"Tap {first} to help pay"
-
-    label = ACTION_LABELS.get(action_name, action_name)
-    if first:
-        return f"{label}: {first}"
-    return label
-
-
-def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    names = _build_id_to_name(obs)
-    space_kind = _enum_name(ActionSpaceEnum, int(obs.action_space.action_space_type))
-    for index, action in enumerate(obs.action_space.actions):
-        focus = [int(value) for value in action.focus]
-        results.append(
-            {
-                "index": index,
-                "type": _enum_name(ActionEnum, action.action_type),
-                "focus": focus,
-                "declared": action.declared,
-                "description": _format_action(
-                    action, names, space_kind, action.declared
-                ),
-            }
-        )
-    return results
 
 
 def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
@@ -772,7 +493,7 @@ def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
         data["agent"], data["opponent"] = data["opponent"], data["agent"]
         data["won"] = bool(obs.game_over) and not bool(obs.won)
 
-    trace_store.redact_observation(data)
+    redact_observation(data)
     return data
 
 
@@ -816,18 +537,6 @@ def _pass_priority_index(actions: list[dict[str, Any]]) -> int | None:
         if action["type"] == "PRIORITY_PASS_PRIORITY":
             return int(action["index"])
     return None
-
-
-def _offer_verb(action_type: str) -> str:
-    return {
-        "PRIORITY_CAST_SPELL": "cast",
-        "PRIORITY_PLAY_LAND": "play_land",
-        "PRIORITY_ACTIVATE_ABILITY": "activate",
-        "PRIORITY_PASS_PRIORITY": "pass_priority",
-        "DECLARE_ATTACKER": "declare_attackers",
-        "DECLARE_BLOCKER": "declare_blockers",
-        "PAY_COST": "pay",
-    }.get(action_type, "choose")
 
 
 def _parse_stops(value: Any) -> dict[str, list[str]]:
@@ -1043,7 +752,7 @@ class GameSession:
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
-        self.content_hash = CONTENT_HASH
+        self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
@@ -1183,12 +892,12 @@ class GameSession:
         if selected_pack is not None:
             self.asset_manifest_hash = selected_pack.manifest_sha256
             self.content_hash = (
-                CONTENT_HASH
+                UNVERSIONED_CONTENT_HASH
                 if selected_pack is CURATED_PACK
                 else str(manifest["content_digest"])
             )
         else:
-            self.content_hash = CONTENT_HASH
+            self.content_hash = UNVERSIONED_CONTENT_HASH
             self.asset_manifest_hash = ASSET_MANIFEST_HASH
 
         self.deck_names = {
@@ -1683,7 +1392,7 @@ class GameSession:
                     action_space=(
                         context.action_space
                         if context is not None
-                        else _enum_name(
+                        else enum_name(
                             ActionSpaceEnum,
                             before_observation.action_space.action_space_type,
                         )
@@ -1824,7 +1533,7 @@ class GameSession:
         if self.stop_on_stack and len(obs.stack_objects) > 0:
             return True
 
-        step_name = _enum_name(StepEnum, obs.turn.step)
+        step_name = enum_name(StepEnum, obs.turn.step)
         stop_step = ENGINE_STEP_TO_STOP_STEP.get(step_name)
         if stop_step is None:
             # Untap/cleanup/end-of-combat: no stop exists for these steps.
@@ -1949,7 +1658,7 @@ class GameSession:
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
         actions = describe_actions(obs)
-        action_space = _enum_name(
+        action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
         prompt_id = self._next_prompt_id
@@ -1961,7 +1670,7 @@ class GameSession:
             {
                 "id": offer_id,
                 "actor": viewer,
-                "verb": _offer_verb(str(action.get("type", ""))),
+                "verb": offer_verb(str(action.get("type", ""))),
                 "source": None,
                 "label": action["description"],
                 "help": None,

@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
-from academy.experience_protocol import ProtocolV1ConformanceBundle
+from managym.experience import ProtocolV1ConformanceBundle
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(

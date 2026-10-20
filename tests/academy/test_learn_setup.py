@@ -137,9 +137,9 @@ def test_recorded_named_root_rejects_missing_sideboards_and_old_asset_identity()
     "kind", ["LEARN_TAKE_LESSON", "LEARN_DISCARD", "DECLINE_CHOICE"]
 )
 def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(tmp_path, kind):
-    from academy.experience_protocol import ExperienceFrame
     from academy.learn_demo import load_learn_demo
     from academy.server import viewer_view
+    from managym.experience import ExperienceFrame
 
     session = server.GameSession(trace_dir=tmp_path)
     frame = session.new_game({"demo": "learn"})["frame"]

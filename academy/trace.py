@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 import managym
+from managym.experience_projection import redact_observation
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
@@ -175,33 +176,6 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
 
     summaries.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
     return summaries
-
-
-def _redact_hand(player_state: dict[str, Any]) -> None:
-    hand = player_state.get("hand")
-    if not isinstance(hand, list):
-        return
-    zone_counts = player_state.get("zone_counts")
-    if isinstance(zone_counts, dict) and "HAND" in zone_counts:
-        player_state["hand_hidden_count"] = int(zone_counts["HAND"])
-    else:
-        player_state["hand_hidden_count"] = len(hand)
-    player_state["hand"] = []
-
-
-def redact_observation(observation: dict[str, Any]) -> None:
-    """Strip the opponent's hidden information from a serialized observation.
-
-    Mutates in place. Libraries are never serialized (only counts), so the
-    opponent's hand is the only hidden zone to remove.
-    """
-    if not isinstance(observation, dict):
-        return
-
-    opponent = observation.get("opponent")
-    if isinstance(opponent, dict):
-        _redact_hand(opponent)
-        opponent.pop("sideboard", None)
 
 
 def normalize_observation_to_hero(observation: dict[str, Any]) -> None:

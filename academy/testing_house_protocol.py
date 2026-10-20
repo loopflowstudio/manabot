@@ -12,8 +12,9 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, TypeAdapter
 
+from managym.experience import Command, ProtocolModel, UInt64
+
 from .advice_identity import AdviceIdentity
-from .experience_protocol import Command, ProtocolModel, UInt64
 
 TESTING_HOUSE_VERSION: Literal["testing-house-v1"] = "testing-house-v1"
 

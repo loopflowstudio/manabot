@@ -8,15 +8,18 @@ import json
 from pathlib import Path
 from typing import Any
 
-from academy.experience_protocol import Command
-from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
 from manabot.model.world import checkpoint_world
-from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.sim.teacher1_evidence import (
+    RECORDED_ASSET_MANIFEST_HASH,
+    build_command,
+    build_viewer_frame,
+)
 from manabot.verify.competency import SCENARIOS, build_scenario_env
 from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.util import INTERACTIVE_DECK
+from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 
 from .models import canonical_json, canonical_sha256, file_sha256
 
@@ -169,8 +172,8 @@ def replay_games(
                 env.last_raw_obs,
                 match_id=str(game["match_id"]),
                 revision=revision,
-                content_hash=CONTENT_HASH,
-                asset_manifest_hash=ASSET_MANIFEST_HASH,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
             )
             if canonical_sha256(frame) != expected["frame_sha256"]:
                 counts["frame_mismatches"] += 1

@@ -483,6 +483,7 @@ def _source_manifest() -> dict[str, Any]:
         "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
+        "managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
         "manabot/belief/tracker.py",

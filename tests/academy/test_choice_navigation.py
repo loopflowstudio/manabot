@@ -5,8 +5,8 @@ from pathlib import Path
 from pydantic import BaseModel
 import pytest
 
-from academy.experience_protocol import ExperienceFrame
 from academy.server import GameSession
+from managym.experience import ExperienceFrame
 
 
 class PrefixStep(BaseModel):

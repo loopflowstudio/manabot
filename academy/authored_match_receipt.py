@@ -10,7 +10,8 @@ from random import Random
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from .experience_protocol import InteractionOffer
+from managym.experience import InteractionOffer
+
 from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]

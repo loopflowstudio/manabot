@@ -160,7 +160,7 @@ uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
 ```
 
 Without a candidate registration this runs Random against the shipped default
-demo Search-64. It calls `academy.villain.SearchVillain` itself: 64 simulations
+demo Search-64. It calls `manabot.sim.flat_search.FlatSearchPolicy` itself: 64 simulations
 per legal action, four rollouts per world, 2,000-step playout cap, deterministic
 first-maximum selection, CPU, one worker and one Torch thread. The baseline
 registration pins the policy source bytes; the protocol additionally pins the

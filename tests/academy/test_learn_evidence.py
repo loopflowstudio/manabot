@@ -11,8 +11,8 @@ from academy.authored_match_receipt import (
 )
 from academy.learn_lesson_evidence import attempt, verify_attempt
 from academy.server import GameSession
-from academy.villain import SearchVillain
 from manabot.semantic.decision_contract import SemanticDecisionContract
+from manabot.sim.flat_search import FlatSearchPolicy
 import managym
 
 
@@ -35,7 +35,7 @@ def test_configured_search_executes_learn_without_moving_source(reverse):
         pytest.fail("registered setup did not reach Learn")
     before = engine.search_witness_json()
     obs = engine.observation_for_player(contract.frame.actor)
-    selected = SearchVillain(seed=0)(engine, obs)
+    selected = FlatSearchPolicy(seed=0)(engine, obs)
     assert engine.search_witness_json() == before
     assert 0 <= selected < len(contract.frame.offers)
     branch = engine.clone_env()
