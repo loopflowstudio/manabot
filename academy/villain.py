@@ -28,6 +28,8 @@ from manabot.sim.flat_search import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 import managym
 from managym.enums import ActionEnum
 
+from .bot_decision import BotDecision, PolicyFactor
+
 if TYPE_CHECKING:
     from .trace import GameConfig
 
@@ -54,7 +56,7 @@ def passive_policy(env: managym.Env, obs: managym.Observation) -> int:
 class RandomVillain:
     """Select a uniformly random legal action."""
 
-    def __init__(self, seed: int = 0):
+    def __init__(self, seed: int = 0) -> None:
         self._rng = random.Random(seed)
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
@@ -84,13 +86,12 @@ class CheckpointVillain:
         # Keep the optional Torch/model stack behind checkpoint construction.
         from manabot.sim.compound import CompoundPolicy
         from manabot.sim.flat_mc import load_checkpoint_agent
-        from manabot.verify.util import _select_agent_action
 
-        self._select_action = _select_agent_action
         self.agent, self.obs_space = load_checkpoint_agent(path)
         if player_configs is not None:
             validate_agent_setup(self.agent, player_configs)
         self.deterministic = deterministic
+        self.last_decision: BotDecision | None = None
         self.compound = (
             CompoundPolicy(self.agent, deterministic=deterministic)
             if self.agent.hypers.compound_decisions
@@ -98,8 +99,25 @@ class CheckpointVillain:
         )
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
+        self.last_decision = None
         if self.compound is not None:
-            return self.compound.act(env, obs)
+            action = self.compound.act(env, obs)
+            decision = self.compound.last_decision
+            assert decision is not None
+            output = decision.output
+            self.last_decision = BotDecision(
+                action,
+                value=float(output.values[0].item()),
+                value_semantic="signed_outcome at compound root",
+                factors=[
+                    PolicyFactor(token, probabilities.tolist(), float(value.item()))
+                    for token, probabilities, value in zip(
+                        output.tokens, output.probabilities, output.values, strict=True
+                    )
+                ],
+                unavailable="Compound policy: conditional root-sequence factors are shown below; native microchoice marginals are unavailable.",
+            )
+            return action
         # Policy weights score each action independently of the padded action
         # count. At inference preserve the entire rules offer list, including
         # decisions wider than the training batch's storage capacity.
@@ -115,9 +133,57 @@ class CheckpointVillain:
                 )
             )
         encoded = space.encode(obs)
-        return int(
-            self._select_action(self.agent, encoded, deterministic=self.deterministic)
-        )
+        import torch
+
+        from manabot.verify.util import _agent_device, _tensor_observation
+
+        with torch.no_grad():
+            logits, value = self.agent(
+                _tensor_observation(encoded, device=_agent_device(self.agent))
+            )
+            distribution = torch.distributions.Categorical(logits=logits)
+            action = int(
+                (
+                    logits.argmax(dim=-1)
+                    if self.deterministic
+                    else distribution.sample()
+                ).item()
+            )
+            self.last_decision = BotDecision(
+                action=action,
+                probabilities=distribution.probs[
+                    0, : len(obs.action_space.actions)
+                ].tolist(),
+                value=float(value.item()),
+                value_semantic=self.agent.value_semantic or "undeclared critic units",
+            )
+        return action
+
+
+def choose_bot(
+    policy: VillainPolicy, env: managym.Env, obs: managym.Observation
+) -> BotDecision:
+    """Choose once and retain only outputs that actually fed this decision."""
+    action = policy(env, obs)
+    count = len(obs.action_space.actions)
+    if not 0 <= action < count:
+        raise ValueError("Bot selected an action outside the authority offers")
+    if isinstance(policy, CheckpointVillain):
+        assert policy.last_decision is not None
+        return policy.last_decision
+    probabilities = (
+        [1.0 / count] * count
+        if isinstance(policy, RandomVillain)
+        else [float(index == action) for index in range(count)]
+    )
+    return BotDecision(
+        action=action,
+        probabilities=probabilities,
+        search_scores=policy.last_scores
+        if isinstance(policy, FlatSearchPolicy)
+        else [],
+        unavailable="This anchor has no value head.",
+    )
 
 
 def build_villain_policy(config: "GameConfig") -> VillainPolicy:

@@ -11,9 +11,12 @@
     { href: '/', label: 'Play' },
     { href: '/games', label: 'Games' },
     { href: '/replay', label: 'Replay' },
+    { href: '/replay?watch=1', label: 'Watch' },
   ];
 
   function isActive(href: string): boolean {
+    if (href.includes('?watch')) return page.url.pathname === '/replay' && page.url.searchParams.has('watch');
+    if (href === '/replay' && page.url.searchParams.has('watch')) return false;
     return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
   }
 </script>

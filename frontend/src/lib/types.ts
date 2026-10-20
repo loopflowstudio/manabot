@@ -428,6 +428,7 @@ export interface OpponentConfig {
 }
 
 export interface TraceConfig {
+  watch_players?: string[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
