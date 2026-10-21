@@ -12,7 +12,7 @@
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
-  import TestingHousePanel from '$lib/components/TestingHousePanel.svelte';
+  import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { checkpointChoice, gameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
@@ -276,7 +276,7 @@
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
   <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
     {#if gameStore.table}
-      <TestingHousePanel
+      <SharedTablePanel
         table={gameStore.table}
         scenarios={adviceMetaState?.scenarios ?? []}
         selectedScenarioId={adviceSelectedScenario}

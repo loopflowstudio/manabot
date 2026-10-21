@@ -4,11 +4,11 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 
 import {
-  TESTING_HOUSE_REQUEST_TYPES,
-  TESTING_HOUSE_VERSION,
-  type TestingHouseRequest,
-  type TestingHouseV1ConformanceBundle,
-} from './testing-house-protocol';
+  SHARED_TABLE_REQUEST_TYPES,
+  SHARED_TABLE_VERSION,
+  type SharedTableRequest,
+  type SharedTableV1ConformanceBundle,
+} from './shared-table-protocol';
 
 interface SchemaNode {
   $defs?: Record<string, SchemaNode>;
@@ -26,36 +26,36 @@ const fixture: unknown = JSON.parse(readFileSync(
   'utf8',
 ));
 const validate = new Ajv2020({ strict: false, validateFormats: false })
-  .compile<TestingHouseV1ConformanceBundle>(schema);
+  .compile<SharedTableV1ConformanceBundle>(schema);
 
-describe('testing-house-v1 control conformance', () => {
+describe('shared-table control conformance (testing-house-v1)', () => {
   it('validates and round-trips the checked control fixture', () => {
     expect(validate(fixture), JSON.stringify(validate.errors)).toBe(true);
     if (!validate(fixture)) throw new Error('control fixture did not conform');
-    const typed: TestingHouseV1ConformanceBundle = fixture;
-    expect(typed.contract).toBe(TESTING_HOUSE_VERSION);
-    expect(typed.requests.map(({ type }) => type)).toEqual(TESTING_HOUSE_REQUEST_TYPES);
+    const typed: SharedTableV1ConformanceBundle = fixture;
+    expect(typed.contract).toBe(SHARED_TABLE_VERSION);
+    expect(typed.requests.map(({ type }) => type)).toEqual(SHARED_TABLE_REQUEST_TYPES);
     expect(JSON.parse(JSON.stringify(typed))).toEqual(fixture);
   });
 
   it('keeps the TypeScript operation vocabulary equal to the schema discriminator', () => {
     const mapping = schema.properties?.requests?.items?.discriminator?.mapping ?? {};
-    expect(Object.keys(mapping).sort()).toEqual([...TESTING_HOUSE_REQUEST_TYPES].sort());
+    expect(Object.keys(mapping).sort()).toEqual([...SHARED_TABLE_REQUEST_TYPES].sort());
 
-    const typedRequests: TestingHouseRequest[] = (
-      fixture as TestingHouseV1ConformanceBundle
+    const typedRequests: SharedTableRequest[] = (
+      fixture as SharedTableV1ConformanceBundle
     ).requests;
-    expect(typedRequests).toHaveLength(TESTING_HOUSE_REQUEST_TYPES.length);
+    expect(typedRequests).toHaveLength(SHARED_TABLE_REQUEST_TYPES.length);
   });
 
   it('rejects unknown operations and unmodelled room defaults', () => {
     expect(validate({
-      contract: TESTING_HOUSE_VERSION,
+      contract: SHARED_TABLE_VERSION,
       requests: [{ type: 'chat', message: 'hello' }],
       events: [],
     })).toBe(false);
 
-    const sidecar = structuredClone(fixture) as TestingHouseV1ConformanceBundle & {
+    const sidecar = structuredClone(fixture) as SharedTableV1ConformanceBundle & {
       room_default?: string;
     };
     sidecar.room_default = 'shared';

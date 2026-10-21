@@ -1,10 +1,11 @@
+// Implements the `testing-house-v1` wire schema (frozen identifier).
 import type { RestoredReplayDecision } from './replay-index';
 import type { AdviceRequestIdentity } from './advice';
 import type { Command, Observation, PresentationEvent } from './types';
 
-export const TESTING_HOUSE_VERSION = 'testing-house-v1' as const;
+export const SHARED_TABLE_VERSION = 'testing-house-v1' as const;
 
-export const TESTING_HOUSE_REQUEST_TYPES = [
+export const SHARED_TABLE_REQUEST_TYPES = [
   'join_table',
   'resume',
   'new_game',
@@ -80,7 +81,7 @@ export interface TableDecisionSummary {
 }
 
 export interface TableSnapshot {
-  contract: typeof TESTING_HOUSE_VERSION;
+  contract: typeof SHARED_TABLE_VERSION;
   table_id: string;
   table_revision: number;
   mode: 'live' | 'study';
@@ -98,7 +99,7 @@ interface GrantedRequest {
   grant_revision: number;
 }
 
-export type TestingHouseRequest =
+export type SharedTableRequest =
   | {
       type: 'join_table';
       table_id: string;
@@ -147,7 +148,7 @@ export interface BranchRetryPayload {
   };
 }
 
-export type TestingHouseControlEvent =
+export type SharedTableControlEvent =
   | { type: 'table_snapshot'; table: TableSnapshot }
   | { type: 'belief_changed'; table: TableSnapshot; belief: BeliefScenario }
   | { type: 'role_changed'; table: TableSnapshot }
@@ -182,8 +183,8 @@ export type TestingHouseControlEvent =
       table?: TableSnapshot | null;
     };
 
-export interface TestingHouseV1ConformanceBundle {
-  contract: typeof TESTING_HOUSE_VERSION;
-  requests: TestingHouseRequest[];
-  events: TestingHouseControlEvent[];
+export interface SharedTableV1ConformanceBundle {
+  contract: typeof SHARED_TABLE_VERSION;
+  requests: SharedTableRequest[];
+  events: SharedTableControlEvent[];
 }
