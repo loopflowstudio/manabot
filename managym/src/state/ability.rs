@@ -16,24 +16,14 @@ impl Ability {
             Ability::Triggered { effects, .. } => effects,
         }
     }
-
-    /// The target spec of the ability's single targeted effect, if any.
-    /// At most one effect per ability may carry a target.
-    pub fn target_spec(&self) -> Option<&TargetSpec> {
-        self.effects()
-            .iter()
-            .find_map(|effect| effect.target_spec())
-    }
-
-    /// "Up to one target" — the controller may decline choosing a target.
-    pub fn target_optional(&self) -> bool {
-        self.effects().iter().any(|effect| effect.target_optional())
-    }
 }
 
 /// The event that causes a triggered ability to trigger (CR 603.1).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
+    YouCastSpell {
+        predicate: CardPredicate,
+    },
     /// "When [subject] enters the battlefield."
     EntersTheBattlefield {
         subject: TriggerSubject,
@@ -86,6 +76,7 @@ pub enum TriggerCondition {
 /// checks, evaluated for a specific controller ("you").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticCondition {
+    Always,
     CardsDrawnAtLeast {
         count: u32,
     },
@@ -111,12 +102,71 @@ pub enum TriggerSubject {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
+    CreaturesWithCounters,
+    BattlefieldMatching { predicate: CardPredicate },
     GraveyardMatching { base: i32, predicate: CardPredicate },
     CardsDrawnMinus { subtract: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
+    CantBeBlockedTarget {
+        target: TargetSpec,
+    },
+    ReturnGraveyardTarget {
+        target: TargetSpec,
+    },
+    MillCards {
+        count: usize,
+    },
+    MillAndSelect {
+        count: usize,
+        predicate: CardPredicate,
+        if_declined: Vec<Effect>,
+    },
+    DrainLifeValue {
+        amount: EffectValue,
+    },
+    /// A distinct targeting clause. Effects within it refer to the same
+    /// chosen objects; different clauses may choose the same object.
+    TargetClause {
+        requirement: TargetRequirement,
+        effects: Vec<Effect>,
+    },
+    /// Internal cursor emitted when clauses are lowered into a frame queue.
+    SelectTargetRequirement {
+        index: usize,
+    },
+    /// Search is a private choice that always shuffles, including failure to find.
+    SearchBasicLand {
+        subtype: Option<String>,
+    },
+    OptionalDiscardDraw {
+        count: usize,
+    },
+    DiscardTargetPlayer {
+        count: usize,
+        target: TargetSpec,
+    },
+    Destroy {
+        target: TargetSpec,
+    },
+    Exile {
+        target: TargetSpec,
+    },
+    BuffTargetValue {
+        power: EffectValue,
+        toughness: i32,
+        target: TargetSpec,
+    },
+    ReturnToHandDrawIfControlled {
+        target: TargetSpec,
+    },
+    /// Modify the exact permanent that caused the trigger, without targeting.
+    ModifyTriggeringPermanent {
+        counters: i32,
+        keywords: Keywords,
+    },
     Discard,
     DealDamageValue {
         amount: EffectValue,
@@ -155,6 +205,17 @@ pub enum Effect {
     MassDamage {
         amount: i32,
     },
+    DamageOpponentCreatures {
+        amount: i32,
+    },
+    CreateTokensValue {
+        token_name: String,
+        count: EffectValue,
+    },
+    ExileWithControllerToken {
+        target: TargetSpec,
+        token_name: String,
+    },
     /// Create `count` tokens from the registered token definition
     /// `token_name`, under the resolving player's control.
     CreateToken {
@@ -188,10 +249,7 @@ pub enum Effect {
         n: u32,
         effect: Box<Effect>,
     },
-    /// Scry `count` (CR 701.26): the controller looks at the top `count`
-    /// cards and decides, one at a time from the top, whether each goes to
-    /// the bottom of the library or stays on top. Kept cards retain their
-    /// relative order (no reordering — engine simplification).
+    /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry {
         count: usize,
     },
@@ -200,6 +258,8 @@ pub enum Effect {
     /// hand and the rest on the bottom of your library in a random order."
     /// `min_select` > 0 makes the selection mandatory when possible.
     LookAndSelect {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        reveal: bool,
         look: usize,
         min_select: usize,
         max_select: usize,
@@ -213,8 +273,8 @@ pub enum Effect {
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
-    /// "Choose one —" modal effect. Mode effects must be targetless (engine
-    /// limitation, see Stage 2 notes).
+    /// Spell-level modes are selected during casting. Within a resolving
+    /// ability this remains a resolution-time choice.
     Modal {
         modes: Vec<Vec<Effect>>,
     },
@@ -307,6 +367,17 @@ pub enum Effect {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TargetSpec {
+    PermanentYouControl {
+        predicate: CardPredicate,
+    },
+    GraveyardCardYouOwn {
+        predicate: CardPredicate,
+    },
+    Player,
+    Opponent,
+    Permanent {
+        predicate: CardPredicate,
+    },
     Creature,
     CreatureOrPlayer,
     Spell,
@@ -354,6 +425,22 @@ impl TargetRequirement {
 impl Effect {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
+            Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
+            Effect::SelectTargetRequirement { .. }
+            | Effect::MillCards { .. }
+            | Effect::MillAndSelect { .. }
+            | Effect::DrainLifeValue { .. } => None,
+            Effect::CantBeBlockedTarget { target }
+            | Effect::ReturnGraveyardTarget { target }
+            | Effect::ExileWithControllerToken { target, .. }
+            | Effect::DiscardTargetPlayer { target, .. }
+            | Effect::Destroy { target }
+            | Effect::Exile { target }
+            | Effect::BuffTargetValue { target, .. }
+            | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
+            Effect::SearchBasicLand { .. }
+            | Effect::OptionalDiscardDraw { .. }
+            | Effect::ModifyTriggeringPermanent { .. } => None,
             Effect::DealDamageValue { target, .. }
             | Effect::PutCountersValue { target, .. }
             | Effect::ExileIfDiesThisTurn { target } => Some(target),
@@ -382,6 +469,8 @@ impl Effect {
             Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
+            | Effect::DamageOpponentCreatures { .. }
+            | Effect::CreateTokensValue { .. }
             | Effect::CreateToken { .. }
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
@@ -401,10 +490,51 @@ impl Effect {
             | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
         }
     }
+}
 
-    /// Whether the effect's target is "up to one" (the trigger's controller
-    /// may decline to choose a target).
-    pub fn target_optional(&self) -> bool {
-        matches!(self, Effect::ExileUntilSourceLeaves { .. })
+/// Explicit clauses preserve independent targets, including repeated specs.
+/// Unwrapped effects retain the shared "that target" convention.
+pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> {
+    let clauses: Vec<_> = effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::TargetClause { requirement, .. } => Some(requirement.clone()),
+            _ => None,
+        })
+        .collect();
+    if clauses.is_empty() {
+        effects
+            .iter()
+            .find_map(Effect::target_spec)
+            .map(|spec| {
+                // The implicit exile-link clause is "up to one target".
+                let optional = effects
+                    .iter()
+                    .any(|effect| matches!(effect, Effect::ExileUntilSourceLeaves { .. }));
+                vec![TargetRequirement {
+                    spec: spec.clone(),
+                    min: usize::from(!optional),
+                    max: 1,
+                }]
+            })
+            .unwrap_or_default()
+    } else {
+        clauses
     }
+}
+
+pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
+    let mut bound = Vec::new();
+    let mut index = 0;
+    for effect in effects {
+        match effect {
+            Effect::TargetClause { effects, .. } => {
+                bound.push(Effect::SelectTargetRequirement { index });
+                index += 1;
+                bound.extend(effects);
+            }
+            effect => bound.push(effect),
+        }
+    }
+    bound
 }

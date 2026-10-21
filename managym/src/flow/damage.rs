@@ -165,6 +165,17 @@ impl Game {
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+        if delta > 0
+            && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
+                self.battlefield_permanents(owner).into_iter().any(|id| {
+                    self.state.permanents[id]
+                        .as_ref()
+                        .is_some_and(|p| self.state.cards[p.card].prevents_life_gain)
+                })
+            })
+        {
+            return false;
+        }
         self.journal_player(player);
         let Some(player_state) = self.state.players.get_mut(player.0) else {
             return false;

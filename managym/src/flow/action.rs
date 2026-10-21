@@ -5,28 +5,11 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{Game, PendingChoice},
     state::{
-        game_object::{CardId, PlayerId, Target},
+        game_object::{CardId, PlayerId},
         mana::Mana,
-        target::Target as ActionTarget,
         zone::ZoneType,
     },
 };
-
-fn to_action_target(target: Target) -> ActionTarget {
-    match target {
-        Target::Player(p) => ActionTarget::Player(p),
-        Target::Permanent(p) => ActionTarget::Permanent(p),
-        Target::StackSpell(c) => ActionTarget::StackSpell(c),
-    }
-}
-
-fn to_game_target(target: ActionTarget) -> Target {
-    match target {
-        ActionTarget::Player(p) => Target::Player(p),
-        ActionTarget::Permanent(p) => Target::Permanent(p),
-        ActionTarget::StackSpell(c) => Target::StackSpell(c),
-    }
-}
 
 impl Game {
     pub(crate) fn can_player_act(&mut self, player: PlayerId) -> bool {
@@ -75,6 +58,16 @@ impl Game {
             };
             let card = &self.state.cards[permanent.card];
             for (ability_index, ability) in card.activated_abilities.iter().enumerate() {
+                if ability.effect.target_spec().is_some()
+                    && self
+                        .activated_ability_targets(player, permanent_id, ability_index)
+                        .is_empty()
+                {
+                    continue;
+                }
+                if ability.tap_source && !permanent.can_tap(card) {
+                    continue;
+                }
                 let affordable = if ability.waterbend {
                     self.can_pay_with_waterbend(player, &ability.mana_cost, waterbend_candidates)
                 } else {
@@ -123,6 +116,9 @@ impl Game {
             return None;
         }
 
+        if card.spell_modes().is_some() && self.legal_spell_modes(player, card_id).is_empty() {
+            return None;
+        }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in self.state.cards[card_id].target_requirements() {
             if requirement.min > 0
@@ -159,6 +155,36 @@ impl Game {
     pub(crate) fn pending_choice_action_space(&self) -> Option<ActionSpace> {
         let choice = self.pending_choice.as_ref()?;
         match choice {
+            PendingChoice::ActivatedTarget {
+                player,
+                permanent,
+                ability_index,
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: self
+                    .activated_ability_targets(*player, *permanent, *ability_index)
+                    .into_iter()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
+            PendingChoice::SpellMode { player, card, .. } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: self
+                    .legal_spell_modes(*player, *card)
+                    .into_iter()
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+                focus: vec![self.state.cards[card].id],
+            }),
             PendingChoice::KickerChoice { player, card } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -172,6 +198,7 @@ impl Game {
                 player,
                 card,
                 requirement_index,
+                mode,
                 chosen_req_indices,
                 legal_targets,
                 ..
@@ -181,10 +208,10 @@ impl Game {
                     .copied()
                     .map(|target| Action::ChooseTarget {
                         player: *player,
-                        target: to_action_target(target),
+                        target,
                     })
                     .collect();
-                let requirements = self.state.cards[card].target_requirements();
+                let requirements = self.state.cards[card].target_requirements_for_mode(*mode);
                 let chosen_in_req = chosen_req_indices
                     .iter()
                     .filter(|i| **i == *requirement_index)
@@ -262,12 +289,17 @@ impl Game {
                 ability_index,
             } => self.activate_ability_action(*player, *permanent, *ability_index),
             Action::ChooseTarget { player, target } => {
-                let target = to_game_target(*target);
+                let target = *target;
                 if matches!(
                     self.pending_choice,
                     Some(PendingChoice::ChooseTargets { .. })
                 ) {
                     self.choose_target_action(*player, target)
+                } else if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ActivatedTarget { .. })
+                ) {
+                    self.choose_activated_target(*player, target)
                 } else if self.state.pending_trigger_choice.is_some() {
                     self.choose_trigger_target(*player, target)
                 } else {
@@ -288,6 +320,11 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
+            Action::ChooseMode { player, mode }
+                if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
+            {
+                self.spell_mode_action(*player, *mode)
+            }
             Action::ScryCard { .. }
             | Action::SelectCard { .. }
             | Action::ChooseMode { .. }

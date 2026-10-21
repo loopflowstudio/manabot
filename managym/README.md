@@ -40,6 +40,14 @@ Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
 
+Spell-level modes are announced before targets and payment. Independent target
+clauses use `Effect::TargetClause`; effects within a clause share its targets.
+Repeated specs in separate clauses may choose the same object. A resolving
+frame retains its active clause across suspended decisions. Graveyard targets
+carry an exact `ObjectRef`, so continuations cannot follow a physical card into
+a later incarnation. Journal permanent mutations at their event authority;
+source-relative effects require the original battlefield object.
+
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Its per-definition changes have dedicated
 undo entries; `journal_player` still captures only scalars. Exercise nested
@@ -63,7 +71,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w4-v1](../conformance/semantic-kernel-w4-v1/).
+[semantic-kernel-w7-v1](../conformance/semantic-kernel-w7-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 

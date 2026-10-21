@@ -123,10 +123,8 @@ def test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits(
     experiment = demo_declaration()
     out = tmp_path / "comparison"
     record = run_experiment(experiment, hardware(), out)
-    assert record.status == "completed", (
-        record.model_dump_json(),
-        list(out.glob("*.log")),
-    )
+    if record.status != "completed":
+        pytest.fail(_experiment_failures(record, out / "monitoring"), pytrace=False)
     assert len(record.attempts) == 4
     assert all(a.run_id for a in record.attempts)
     evaluation_attempts = [
@@ -253,7 +251,9 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
 def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -> None:
     experiment = demo_declaration()
     assert experiment.schedule is not None
-    schedule = experiment.schedule.model_copy(update={"process_seconds": 651})
+    schedule = experiment.schedule.model_copy(
+        update={"process_seconds": experiment.schedule.monitoring.seconds + 1}
+    )
     out = tmp_path / "no-room"
     with pytest.raises(TimeoutError, match="monitoring reserve"):
         run_experiment(replace(experiment, schedule=schedule), hardware(), out)

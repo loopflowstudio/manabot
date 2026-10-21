@@ -1,4 +1,5 @@
 pub mod alpha;
+pub mod elemental;
 pub mod ice_age;
 pub mod mkm;
 pub mod strixhaven;

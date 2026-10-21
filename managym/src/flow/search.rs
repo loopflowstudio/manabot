@@ -9,7 +9,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
-    flow::game::Game,
+    flow::{decision::Decision, game::Game},
     state::{
         game_object::{CardId, PlayerId},
         zone::ZoneType,
@@ -45,7 +45,7 @@ impl Game {
     /// - `perspective`'s own library is reshuffled (its order is unknown to
     ///   them, but its contents are determined by the public zones + hand).
     ///
-    /// Public facts and own choices are preserved; opponent Learn choices refresh.
+    /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
@@ -61,9 +61,23 @@ impl Game {
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
 
         self.repin_revealed_library_cards();
-        if self.current_action_space.as_ref().is_some_and(|space| {
-            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
-        }) {
+        // An opponent's hidden hand can change under resampling. Rebuild
+        // private choices from that sampled authority, never keep old hand IDs.
+        let refresh = self
+            .state
+            .suspended_decision
+            .as_ref()
+            .is_some_and(|suspended| {
+                suspended.decision.player() == opponent
+                    && matches!(
+                        suspended.decision,
+                        Decision::Learn { .. }
+                            | Decision::Discard { .. }
+                            | Decision::OptionalDiscardDraw { .. }
+                            | Decision::SearchBasicLand { .. }
+                    )
+            });
+        if refresh {
             if let Some(space) = self.suspended_decision_action_space() {
                 self.publish_action_space(space);
             }

@@ -252,6 +252,7 @@ class StackTargetKindEnum(IntEnum):
     PLAYER = 0
     PERMANENT = 1
     STACK_OBJECT = 2
+    CARD = 3
 
 class EventTypeEnum(IntEnum):
     CARD_MOVED = 0
@@ -277,6 +278,7 @@ class EventEntityKindEnum(IntEnum):
     DEFINITION = 5
 
 class ManaCost:
+    hybrid: List[tuple[int, int]]
     cost: List[int]
     mana_value: int
 
@@ -308,6 +310,7 @@ class Keywords:
     defender: bool
     menace: bool
     hexproof: bool
+    indestructible: bool
 
 class Player:
     player_index: int
@@ -385,6 +388,7 @@ class StackTarget:
     player_id: int | None
     permanent_id: int | None
     stack_object_id: int | None
+    card_id: int | None
 
 class StackObject:
     stack_object_id: int
@@ -392,6 +396,7 @@ class StackObject:
     controller_id: int
     source_card_registry_key: int
     source_permanent_id: int | None
+    chosen_mode: int | None
     ability_index: int | None
     targets: List[StackTarget]
 

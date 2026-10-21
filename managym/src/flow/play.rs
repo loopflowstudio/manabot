@@ -2,7 +2,7 @@
 // Spell casting, land plays, and activated abilities.
 //
 // Casting is a staged pipeline driven by `PendingChoice`:
-//   kicker choice (optional) -> target selection per requirement -> payment.
+//   kicker choice (optional) -> spell mode (if any) -> targets per clause -> payment.
 // Waterbend activations run their own payment sub-decision before the
 // ability reaches the stack.
 
@@ -20,6 +20,13 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+#[derive(Default)]
+struct TargetSelection {
+    requirement_index: usize,
+    chosen: Vec<Target>,
+    chosen_req_indices: Vec<usize>,
+}
 
 impl Game {
     pub fn can_cast_sorceries(&self, player: PlayerId) -> bool {
@@ -71,6 +78,14 @@ impl Game {
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
             for reduction in &self.state.cards[permanent.card].spell_cost_reductions {
+                if reduction.first_on_own_turn
+                    && (self.active_player() != player
+                        || self.state.turn.spells_cast[player.0]
+                            .iter()
+                            .any(|cast| reduction.predicate.matches_card(&self.state.cards[*cast])))
+                {
+                    continue;
+                }
                 if reduction.predicate.matches_card(card_ref)
                     && self.check_static_condition(&reduction.condition, player)
                 {
@@ -149,7 +164,7 @@ impl Game {
             }
         }
 
-        self.begin_target_selection(player, card, false)
+        self.begin_mode_selection(player, card, false)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -169,17 +184,65 @@ impl Game {
             return Err(AgentError("wrong player for kicker choice".to_string()));
         }
         self.pending_choice = None;
-        self.begin_target_selection(player, card, pay)
+        self.begin_mode_selection(player, card, pay)
     }
 
-    /// Start (or continue) target selection at requirement 0.
-    fn begin_target_selection(
+    pub(crate) fn legal_spell_modes(&self, player: PlayerId, card: CardId) -> Vec<usize> {
+        self.state.cards[card]
+            .spell_modes()
+            .map_or_else(Vec::new, |modes| {
+                (0..modes.len())
+                    .filter(|mode| {
+                        self.state.cards[card]
+                            .target_requirements_for_mode(Some(*mode))
+                            .iter()
+                            .all(|req| {
+                                req.min == 0
+                                    || self.legal_targets_for_requirement(player, card, req).len()
+                                        >= req.min
+                            })
+                    })
+                    .collect()
+            })
+    }
+
+    fn begin_mode_selection(
         &mut self,
         player: PlayerId,
         card: CardId,
         kicked: bool,
     ) -> Result<(), AgentError> {
-        self.advance_target_selection(player, card, kicked, 0, Vec::new(), Vec::new())
+        if self.state.cards[card].spell_modes().is_some() {
+            if self.legal_spell_modes(player, card).is_empty() {
+                return Err(AgentError("no legal spell mode".into()));
+            }
+            self.pending_choice = Some(PendingChoice::SpellMode {
+                player,
+                card,
+                kicked,
+            });
+            return Ok(());
+        }
+        self.advance_target_selection(player, card, kicked, None, TargetSelection::default())
+    }
+
+    pub(crate) fn spell_mode_action(
+        &mut self,
+        player: PlayerId,
+        mode: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::SpellMode {
+            player: chooser,
+            card,
+            kicked,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no spell mode is pending".into()));
+        };
+        if chooser != player || !self.legal_spell_modes(player, card).contains(&mode) {
+            return Err(AgentError("illegal spell mode".into()));
+        }
+        self.advance_target_selection(player, card, kicked, Some(mode), TargetSelection::default())
     }
 
     /// Move the casting pipeline to `requirement_index`, skipping
@@ -190,16 +253,27 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
-        mut requirement_index: usize,
-        chosen: Vec<Target>,
-        chosen_req_indices: Vec<usize>,
+        mode: Option<usize>,
+        selection: TargetSelection,
     ) -> Result<(), AgentError> {
-        let requirements = self.state.cards[card].target_requirements();
+        let TargetSelection {
+            mut requirement_index,
+            chosen,
+            chosen_req_indices,
+        } = selection;
+        let requirements = self.state.cards[card].target_requirements_for_mode(mode);
         loop {
             let Some(requirement) = requirements.get(requirement_index) else {
-                return self.finish_casting(player, card, kicked, chosen, chosen_req_indices);
+                return self.finish_casting(player, card, kicked, mode, chosen, chosen_req_indices);
             };
-            let legal = self.remaining_legal_targets(player, card, requirement, &chosen);
+            let legal = self.remaining_legal_targets(
+                player,
+                card,
+                requirement,
+                requirement_index,
+                &chosen,
+                &chosen_req_indices,
+            );
             if legal.is_empty() {
                 if requirement.min == 0 {
                     requirement_index += 1;
@@ -211,6 +285,7 @@ impl Game {
                 player,
                 card,
                 kicked,
+                mode,
                 requirement_index,
                 chosen,
                 chosen_req_indices,
@@ -225,11 +300,19 @@ impl Game {
         player: PlayerId,
         card: CardId,
         requirement: &TargetRequirement,
+        requirement_index: usize,
         chosen: &[Target],
+        chosen_req_indices: &[usize],
     ) -> Vec<Target> {
         self.legal_targets_for_requirement(player, card, requirement)
             .into_iter()
-            .filter(|target| !chosen.contains(target))
+            // Distinctness is local to the clause; other clauses may reuse a target.
+            .filter(|target| {
+                !chosen
+                    .iter()
+                    .zip(chosen_req_indices)
+                    .any(|(chosen, index)| *index == requirement_index && chosen == target)
+            })
             .collect()
     }
 
@@ -243,6 +326,7 @@ impl Game {
             player: chooser,
             card,
             kicked,
+            mode,
             requirement_index,
             chosen,
             chosen_req_indices,
@@ -257,6 +341,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                mode,
                 requirement_index,
                 chosen,
                 chosen_req_indices,
@@ -269,6 +354,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                mode,
                 requirement_index,
                 chosen,
                 chosen_req_indices,
@@ -282,7 +368,7 @@ impl Game {
         chosen.push(target);
         chosen_req_indices.push(requirement_index);
 
-        let requirements = self.state.cards[card].target_requirements();
+        let requirements = self.state.cards[card].target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -294,27 +380,41 @@ impl Game {
                 player,
                 card,
                 kicked,
-                requirement_index + 1,
-                chosen,
-                chosen_req_indices,
+                mode,
+                TargetSelection {
+                    requirement_index: requirement_index + 1,
+                    chosen,
+                    chosen_req_indices,
+                },
             );
         }
 
-        let legal = self.remaining_legal_targets(player, card, requirement, &chosen);
+        let legal = self.remaining_legal_targets(
+            player,
+            card,
+            requirement,
+            requirement_index,
+            &chosen,
+            &chosen_req_indices,
+        );
         if legal.is_empty() {
             return self.advance_target_selection(
                 player,
                 card,
                 kicked,
-                requirement_index + 1,
-                chosen,
-                chosen_req_indices,
+                mode,
+                TargetSelection {
+                    requirement_index: requirement_index + 1,
+                    chosen,
+                    chosen_req_indices,
+                },
             );
         }
         self.pending_choice = Some(PendingChoice::ChooseTargets {
             player,
             card,
             kicked,
+            mode,
             requirement_index,
             chosen,
             chosen_req_indices,
@@ -330,6 +430,7 @@ impl Game {
             player: chooser,
             card,
             kicked,
+            mode,
             requirement_index,
             chosen,
             chosen_req_indices,
@@ -343,6 +444,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                mode,
                 requirement_index,
                 chosen,
                 chosen_req_indices,
@@ -351,7 +453,7 @@ impl Game {
             return Err(AgentError("wrong player for target choice".to_string()));
         }
 
-        let requirements = self.state.cards[card].target_requirements();
+        let requirements = self.state.cards[card].target_requirements_for_mode(mode);
         let requirement = &requirements[requirement_index];
         let chosen_in_req = chosen_req_indices
             .iter()
@@ -362,6 +464,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                mode,
                 requirement_index,
                 chosen,
                 chosen_req_indices,
@@ -375,9 +478,12 @@ impl Game {
             player,
             card,
             kicked,
-            requirement_index + 1,
-            chosen,
-            chosen_req_indices,
+            mode,
+            TargetSelection {
+                requirement_index: requirement_index + 1,
+                chosen,
+                chosen_req_indices,
+            },
         )
     }
 
@@ -386,6 +492,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
@@ -398,6 +505,9 @@ impl Game {
         }
 
         self.cast_spell(player, card, targets, target_req_indices, kicked)?;
+        if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
+            spell.mode = mode;
+        }
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())
     }
@@ -414,6 +524,8 @@ impl Game {
         if owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
+        self.journal_turn();
+        self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.
         self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, kicked);
         self.emit(GameEvent::SpellCast {
@@ -422,7 +534,11 @@ impl Game {
         });
         // Ward (CR 702.21) — targeted permanents see the spell that
         // targeted them.
+        let mut notified = std::collections::HashSet::new();
         for target in targets {
+            if !notified.insert(target) {
+                continue;
+            }
             if let Target::Permanent(permanent) = target {
                 self.emit(GameEvent::PermanentTargeted {
                     permanent,
@@ -466,6 +582,21 @@ impl Game {
             return Err(AgentError("invalid ability index".to_string()));
         };
 
+        if ability.effect.target_spec().is_some() {
+            if self
+                .activated_ability_targets(player, permanent_id, ability_index)
+                .is_empty()
+            {
+                return Err(AgentError("no legal ability targets".into()));
+            }
+            self.pending_choice = Some(PendingChoice::ActivatedTarget {
+                player,
+                permanent: permanent_id,
+                ability_index,
+            });
+            return Ok(());
+        }
+
         // Waterbend costs open a payment sub-decision instead of paying
         // directly (the generic part may be paid by tapping permanents).
         let generic = ability.mana_cost.generic();
@@ -481,7 +612,62 @@ impl Game {
 
         self.produce_mana(player, &ability.mana_cost)?;
         self.spend_mana(player, &ability.mana_cost)?;
-        self.push_activated_ability(player, permanent_id, ability_index)
+        self.push_activated_ability(player, permanent_id, ability_index, Vec::new())
+    }
+
+    pub(crate) fn activated_ability_targets(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -> Vec<Target> {
+        let Some(source) = self.state.permanents[permanent].as_ref() else {
+            return Vec::new();
+        };
+        let Some(ability) = self.state.cards[source.card]
+            .activated_abilities
+            .get(ability_index)
+        else {
+            return Vec::new();
+        };
+        ability.effect.target_spec().map_or_else(Vec::new, |spec| {
+            self.legal_targets_for_spec(spec, player)
+                .into_iter()
+                .filter(|target| *target != Target::Permanent(permanent))
+                .collect()
+        })
+    }
+
+    pub(crate) fn choose_activated_target(
+        &mut self,
+        player: PlayerId,
+        target: Target,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::ActivatedTarget {
+            player: chooser,
+            permanent,
+            ability_index,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no activated target pending".into()));
+        };
+        if player != chooser
+            || !self
+                .activated_ability_targets(player, permanent, ability_index)
+                .contains(&target)
+        {
+            return Err(AgentError("illegal activated target".into()));
+        }
+        let source = self.state.permanents[permanent]
+            .as_ref()
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        let cost = self.state.cards[source.card].activated_abilities[ability_index]
+            .mana_cost
+            .clone();
+        self.produce_mana(player, &cost)?;
+        self.spend_mana(player, &cost)?;
+        self.pending_choice = None;
+        self.push_activated_ability(player, permanent, ability_index, vec![target])
     }
 
     /// Untapped artifacts/creatures `player` controls — the permanents that
@@ -607,7 +793,7 @@ impl Game {
             self.spend_mana(player, &remainder)?;
         }
         self.pending_choice = None;
-        self.push_activated_ability(player, permanent_id, ability_index)
+        self.push_activated_ability(player, permanent_id, ability_index, Vec::new())
     }
 
     /// Costs are paid: put the activated ability on the stack (handling
@@ -617,6 +803,7 @@ impl Game {
         player: PlayerId,
         permanent_id: PermanentId,
         ability_index: usize,
+        targets: Vec<Target>,
     ) -> Result<(), AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
@@ -632,6 +819,12 @@ impl Game {
             return Err(AgentError("invalid ability index".to_string()));
         };
 
+        if ability.tap_source {
+            if !permanent.can_tap(&self.state.cards[source_card]) {
+                return Err(AgentError("source cannot pay tap cost".into()));
+            }
+            self.tap_permanent(permanent_id, false);
+        }
         if ability.sacrifice_source {
             // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
             // moves the source to its owner's graveyard immediately.
@@ -647,7 +840,7 @@ impl Game {
             source_card,
             source_permanent_object_id,
             ability_index,
-            targets: Vec::new(),
+            targets,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

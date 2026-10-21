@@ -59,6 +59,33 @@ class Opcode(IntEnum):
     EXILE_UNTIL_SOURCE_LEAVES = 21
     DEAL_POWER_DAMAGE = 22
     SET_POWER_FROM_COUNT = 23
+    SEARCH_BASIC_LAND = 24
+    OPTIONAL_DISCARD_DRAW = 25
+    DISCARD_TARGET_PLAYER = 26
+    DESTROY = 27
+    EXILE = 28
+    BUFF_TARGET_VALUE = 29
+    RETURN_TO_HAND_DRAW_IF_CONTROLLED = 30
+    MODIFY_TRIGGERING_PERMANENT = 31
+    DEAL_DAMAGE_VALUE = 32
+    PUT_COUNTERS_VALUE = 33
+    CREATE_TOKENS_VALUE = 34
+    EXILE_WITH_CONTROLLER_TOKEN = 35
+    DAMAGE_OPPONENT_CREATURES = 36
+    MILL_CARDS = 37
+    MILL_AND_SELECT = 38
+    DRAIN_LIFE_VALUE = 39
+    COUNTER_SPELL = 40
+    CANT_BE_BLOCKED_TARGET = 41
+    RETURN_GRAVEYARD_TARGET = 42
+    MODAL = 43
+    TARGET_CLAUSE = 44
+    PREVENT_LIFE_GAIN = 45
+    COMBAT_REQUIRES_OTHER = 46
+    BLOCKING_RESTRICTION = 47
+    POWER_FROM_LAND_COUNTERS = 48
+    SPELL_COST_REDUCTION = 49
+    STATIC_PT = 50
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -84,6 +111,7 @@ KEYWORDS = {
     "flying",
     "haste",
     "hexproof",
+    "indestructible",
     "lifelink",
     "menace",
     "reach",
@@ -99,6 +127,8 @@ TRIGGER_EVENTS = {
     "enters_battlefield",
     "tapped_for_mana",
     "upkeep_begins",
+    "combat_begins",
+    "cast_spell",
 }
 SUBJECT_KINDS = {"another_you_control", "any_you_control", "this"}
 SELECTOR_KINDS = {
@@ -110,6 +140,11 @@ SELECTOR_KINDS = {
     "permanent_opponent_controls",
     "spell",
     "spell_or_permanent",
+    "permanent",
+    "permanent_you_control",
+    "graveyard_card_you_own",
+    "player",
+    "opponent",
 }
 PREDICATE_KINDS = {
     "all",
@@ -117,11 +152,19 @@ PREDICATE_KINDS = {
     "card_type",
     "not_card_types",
     "power_at_most",
+    "power_at_least",
+    "mana_value_at_least",
+    "flying",
+    "types_any",
+    "subtypes_any",
+    "not_subtypes",
     "subtype",
 }
 CONDITION_KINDS = {
     "graveyard_at_least",
     "kicked",
+    "always",
+    "cards_drawn_at_least",
     "nth_resolution",
     "target_matches",
 }
@@ -145,7 +188,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "counter_unless_pays": ({"target", "cost"}, set()),
     "look_and_select": (
         {"look", "min_select", "max_select", "predicate", "destination"},
-        {"remainder", "remainder_order"},
+        {"remainder", "remainder_order", "reveal"},
     ),
     "branch": ({"condition", "then", "otherwise"}, set()),
     "for_each_target": ({"role", "body"}, set()),
@@ -153,6 +196,36 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "exile_until_source_leaves": ({"target"}, set()),
     "deal_power_damage": ({"sources", "target"}, set()),
     "set_power_from_count": ({"predicate", "zone", "controller"}, set()),
+    "search_basic_land": ({"subtype"}, set()),
+    "optional_discard_draw": ({"count"}, set()),
+    "discard_target_player": ({"count", "target"}, set()),
+    "destroy": ({"target"}, set()),
+    "exile": ({"target"}, set()),
+    "buff_target_value": ({"power", "toughness", "target"}, set()),
+    "return_to_hand_draw_if_controlled": ({"target"}, set()),
+    "modify_triggering_permanent": ({"counters", "keywords"}, set()),
+    "deal_damage_value": ({"amount", "target"}, set()),
+    "put_counters_value": ({"count", "target"}, set()),
+    "create_tokens_value": ({"definition_ref", "count"}, set()),
+    "exile_with_controller_token": ({"target", "definition_ref"}, set()),
+    "damage_opponent_creatures": ({"amount"}, set()),
+    "mill_cards": ({"count"}, set()),
+    "mill_and_select": ({"count", "predicate", "if_declined"}, set()),
+    "drain_life_value": ({"amount"}, set()),
+    "counter_spell": ({"target"}, set()),
+    "cant_be_blocked_target": ({"target"}, set()),
+    "return_graveyard_target": ({"target"}, set()),
+    "modal": ({"modes"}, set()),
+    "target_clause": ({"role", "body"}, set()),
+    "prevent_life_gain": (set(), set()),
+    "combat_requires_other": ({"predicate"}, set()),
+    "blocking_restriction": ({"predicate", "direction"}, set()),
+    "power_from_land_counters": (set(), set()),
+    "spell_cost_reduction": (
+        {"predicate", "condition", "generic", "first_on_own_turn"},
+        set(),
+    ),
+    "static_pt": ({"power", "toughness", "condition"}, set()),
 }
 
 
@@ -232,21 +305,28 @@ def _validate_predicate(value: Any, context: str) -> dict[str, Any]:
     kind = _string(predicate.get("kind"), f"{context}.kind")
     if kind not in PREDICATE_KINDS:
         _fail(context, f"unknown predicate kind {kind!r}")
-    if kind == "any":
+    if kind in {"any", "flying"}:
         _keys(predicate, context, required={"kind"})
     elif kind in {"card_type", "subtype"}:
         _keys(predicate, context, required={"kind", "value"})
         value_string = _string(predicate["value"], f"{context}.value")
         if kind == "card_type" and value_string not in CARD_TYPES:
             _fail(context, f"unknown card type {value_string!r}")
-    elif kind == "power_at_most":
+    elif kind in {"power_at_most", "power_at_least", "mana_value_at_least"}:
         _keys(predicate, context, required={"kind", "value"})
         _integer(predicate["value"], f"{context}.value")
-    elif kind == "not_card_types":
+    elif kind in {"not_card_types", "types_any", "subtypes_any", "not_subtypes"}:
         _keys(predicate, context, required={"kind", "values"})
-        values = [_string(item, f"{context}.values") for item in _array(predicate["values"], context)]
+        values = [
+            _string(item, f"{context}.values")
+            for item in _array(predicate["values"], context)
+        ]
         _unique(values, f"{context}.values")
-        unknown = set(values) - CARD_TYPES
+        unknown = (
+            set(values) - CARD_TYPES
+            if kind in {"not_card_types", "types_any"}
+            else set()
+        )
         if unknown:
             _fail(context, f"unknown card types: {', '.join(sorted(unknown))}")
     else:
@@ -264,8 +344,11 @@ def _validate_condition(value: Any, context: str) -> dict[str, Any]:
     kind = _string(condition.get("kind"), f"{context}.kind")
     if kind not in CONDITION_KINDS:
         _fail(context, f"unknown condition kind {kind!r}")
-    if kind == "kicked":
+    if kind in {"kicked", "always"}:
         _keys(condition, context, required={"kind"})
+    elif kind == "cards_drawn_at_least":
+        _keys(condition, context, required={"kind", "count"})
+        _integer(condition["count"], context, minimum=0)
     elif kind == "graveyard_at_least":
         _keys(condition, context, required={"kind", "count", "predicate"})
         _integer(condition["count"], f"{context}.count", minimum=1)
@@ -286,15 +369,25 @@ def _validate_selector(value: Any, context: str) -> dict[str, Any]:
         selector,
         context,
         required={"kind"},
-        optional={"min_mana_value", "types_any"},
+        optional={"min_mana_value", "types_any", "predicate"},
     )
     kind = _string(selector["kind"], f"{context}.kind")
     if kind not in SELECTOR_KINDS:
         _fail(context, f"unknown selector kind {kind!r}")
+    predicate_kinds = {"permanent", "permanent_you_control", "graveyard_card_you_own"}
+    if kind in predicate_kinds and "predicate" not in selector:
+        _fail(context, f"{kind} requires a predicate")
+    if "predicate" in selector:
+        if kind not in predicate_kinds:
+            _fail(context, f"{kind} does not accept a predicate")
+        _validate_predicate(selector["predicate"], f"{context}.predicate")
     if "min_mana_value" in selector:
         _integer(selector["min_mana_value"], f"{context}.min_mana_value", minimum=0)
     if "types_any" in selector:
-        types = [_string(item, f"{context}.types_any") for item in _array(selector["types_any"], context)]
+        types = [
+            _string(item, f"{context}.types_any")
+            for item in _array(selector["types_any"], context)
+        ]
         _unique(types, f"{context}.types_any")
         unknown = set(types) - CARD_TYPES
         if unknown:
@@ -304,7 +397,12 @@ def _validate_selector(value: Any, context: str) -> dict[str, Any]:
 
 def _validate_trigger(value: Any, context: str) -> dict[str, Any]:
     trigger = _object(value, context)
-    _keys(trigger, context, required={"event", "subject"}, optional={"n", "if"})
+    _keys(
+        trigger,
+        context,
+        required={"event", "subject"},
+        optional={"n", "if", "predicate"},
+    )
     event = _string(trigger["event"], f"{context}.event")
     if event not in TRIGGER_EVENTS:
         _fail(context, f"unknown trigger event {event!r}")
@@ -319,6 +417,10 @@ def _validate_trigger(value: Any, context: str) -> dict[str, Any]:
         if "predicate" not in subject:
             _fail(context, f"{subject_kind!r} requires a predicate")
         _validate_predicate(subject["predicate"], f"{context}.subject.predicate")
+    if event == "cast_spell":
+        _validate_predicate(trigger.get("predicate"), f"{context}.predicate")
+    elif "predicate" in trigger:
+        _fail(context, "only cast_spell accepts predicate")
     if event == "draw_nth_card":
         _integer(trigger.get("n"), f"{context}.n", minimum=1)
     elif "n" in trigger:
@@ -346,32 +448,102 @@ def _validate_cost(value: Any, context: str) -> dict[str, Any]:
         cost,
         context,
         required={"mana"},
-        optional={"kicker", "sacrifice_source", "waterbend", "affinity"},
+        optional={"kicker", "sacrifice_source", "waterbend", "affinity", "tap_source"},
     )
     _string(cost["mana"], f"{context}.mana")
     if "kicker" in cost:
         _string(cost["kicker"], f"{context}.kicker")
-    if "sacrifice_source" in cost:
-        _boolean(cost["sacrifice_source"], f"{context}.sacrifice_source")
-    if "waterbend" in cost:
-        _boolean(cost["waterbend"], f"{context}.waterbend")
+    for field in ("sacrifice_source", "tap_source", "waterbend"):
+        if field in cost:
+            _boolean(cost[field], f"{context}.{field}")
     if "affinity" in cost:
         _validate_predicate(cost["affinity"], f"{context}.affinity")
     return deepcopy(cost)
 
 
-def _validate_instruction_scalars(op: str, instruction: Mapping[str, Any], context: str) -> None:
-    for field in {"amount", "count", "look", "max_select", "min_select", "power", "toughness"}:
+def _validate_value_expression(value: Any, context: str) -> None:
+    expression = _object(value, context)
+    kind = _string(expression.get("kind"), context)
+    fields = {
+        "creatures_with_counters": set(),
+        "battlefield_matching": {"predicate"},
+        "graveyard_matching": {"predicate", "base"},
+        "cards_drawn_minus": {"subtract"},
+    }
+    if kind not in fields:
+        _fail(context, f"unknown quantity {kind!r}")
+    _keys(expression, context, required={"kind", *fields[kind]})
+    if "predicate" in expression:
+        _validate_predicate(expression["predicate"], context)
+    for field in {"base", "subtract"} & expression.keys():
+        _integer(expression[field], context, minimum=0 if field == "subtract" else None)
+
+
+def _validate_instruction_scalars(
+    op: str, instruction: Mapping[str, Any], context: str
+) -> None:
+    for field in {
+        "amount",
+        "count",
+        "look",
+        "max_select",
+        "min_select",
+        "power",
+        "toughness",
+    }:
         if field in instruction:
-            minimum = 0 if field in {"count", "look", "max_select", "min_select"} else None
-            _integer(instruction[field], f"{context}.{field}", minimum=minimum)
-    for field in {"target", "sources", "role", "mana", "until", "duration", "cost", "zone", "controller", "destination", "remainder", "remainder_order"}:
+            minimum = (
+                0 if field in {"count", "look", "max_select", "min_select"} else None
+            )
+            if (op, field) in {
+                ("buff_target_value", "power"),
+                ("deal_damage_value", "amount"),
+                ("put_counters_value", "count"),
+                ("create_tokens_value", "count"),
+                ("drain_life_value", "amount"),
+            }:
+                _validate_value_expression(instruction[field], f"{context}.{field}")
+            else:
+                _integer(instruction[field], f"{context}.{field}", minimum=minimum)
+    for field in {
+        "target",
+        "sources",
+        "role",
+        "mana",
+        "until",
+        "duration",
+        "cost",
+        "zone",
+        "controller",
+        "destination",
+        "remainder",
+        "remainder_order",
+    }:
         if field in instruction:
             _string(instruction[field], f"{context}.{field}")
+    for field in {"generic", "counters"}:
+        if field in instruction:
+            _integer(instruction[field], f"{context}.{field}", minimum=0)
+    if "first_on_own_turn" in instruction:
+        _boolean(instruction["first_on_own_turn"], context)
+    if "condition" in instruction:
+        _validate_condition(instruction["condition"], context)
+    if "direction" in instruction and instruction["direction"] not in {
+        "blocking",
+        "blocked_by",
+    }:
+        _fail(context, "unknown blocking direction")
+    if "subtype" in instruction and instruction["subtype"] is not None:
+        _string(instruction["subtype"], context)
     if "tapped_and_attacking" in instruction:
         _boolean(instruction["tapped_and_attacking"], f"{context}.tapped_and_attacking")
+    if "reveal" in instruction:
+        _boolean(instruction["reveal"], context)
     if "keywords" in instruction:
-        keywords = [_string(item, f"{context}.keywords") for item in _array(instruction["keywords"], context)]
+        keywords = [
+            _string(item, f"{context}.keywords")
+            for item in _array(instruction["keywords"], context)
+        ]
         _unique(keywords, f"{context}.keywords")
         unknown = set(keywords) - KEYWORDS
         if unknown:
@@ -397,28 +569,32 @@ def _compile_instructions(
         _keys(instruction, item_context, required={"op", *required}, optional=optional)
         _validate_instruction_scalars(op, instruction, item_context)
 
-        lowered = {key: deepcopy(value) for key, value in instruction.items() if key != "op"}
+        lowered = {
+            key: deepcopy(value) for key, value in instruction.items() if key != "op"
+        }
         if "definition_ref" in lowered:
-            reference = _string(lowered.pop("definition_ref"), f"{item_context}.definition_ref")
+            reference = _string(
+                lowered.pop("definition_ref"), f"{item_context}.definition_ref"
+            )
             if reference not in definition_indexes:
                 _fail(item_context, f"unknown definition reference {reference!r}")
             lowered["definition_index"] = definition_indexes[reference]
-        if op == "branch":
-            lowered["condition"] = _validate_condition(
-                instruction["condition"], f"{item_context}.condition"
-            )
-            lowered["then"] = _compile_instructions(
-                instruction["then"], f"{item_context}.then", definition_indexes
-            )
-            lowered["otherwise"] = _compile_instructions(
-                instruction["otherwise"],
-                f"{item_context}.otherwise",
-                definition_indexes,
-            )
-        elif op == "for_each_target":
-            lowered["body"] = _compile_instructions(
-                instruction["body"], f"{item_context}.body", definition_indexes
-            )
+        # Every nested instruction list crosses the same compiler boundary.
+        for field in ("then", "otherwise", "body", "if_declined"):
+            if field in instruction:
+                lowered[field] = _compile_instructions(
+                    instruction[field], f"{item_context}.{field}", definition_indexes
+                )
+        if op == "modal":
+            modes = _array(instruction["modes"], f"{item_context}.modes")
+            if not modes:
+                _fail(item_context, "modal requires modes")
+            lowered["modes"] = [
+                _compile_instructions(
+                    mode, f"{item_context}.modes[{index}]", definition_indexes
+                )
+                for index, mode in enumerate(modes)
+            ]
         lowered["opcode"] = int(OPCODES[op])
         lowered["op_name"] = op
         compiled.append(lowered)
@@ -442,17 +618,26 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
             "toughness",
         },
     )
-    types = [_string(item, f"{context}.types") for item in _array(characteristics["types"], context)]
+    types = [
+        _string(item, f"{context}.types")
+        for item in _array(characteristics["types"], context)
+    ]
     _unique(types, f"{context}.types")
     unknown_types = set(types) - CARD_TYPES
     if unknown_types:
         _fail(context, f"unknown card types: {', '.join(sorted(unknown_types))}")
     for field in {"colors", "subtypes", "supertypes"}:
         if field in characteristics:
-            values = [_string(item, f"{context}.{field}") for item in _array(characteristics[field], context)]
+            values = [
+                _string(item, f"{context}.{field}")
+                for item in _array(characteristics[field], context)
+            ]
             _unique(values, f"{context}.{field}")
     if "keywords" in characteristics:
-        keywords = [_string(item, f"{context}.keywords") for item in _array(characteristics["keywords"], context)]
+        keywords = [
+            _string(item, f"{context}.keywords")
+            for item in _array(characteristics["keywords"], context)
+        ]
         _unique(keywords, f"{context}.keywords")
         unknown = set(keywords) - KEYWORDS
         if unknown:
@@ -467,11 +652,15 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
     return deepcopy(characteristics)
 
 
-def _walk_instructions(instructions: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+def _walk_instructions(
+    instructions: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
     walked: list[Mapping[str, Any]] = []
     for instruction in instructions:
         walked.append(instruction)
-        for field in ("then", "otherwise", "body"):
+        for mode in instruction.get("modes", []):
+            walked.extend(_walk_instructions(mode))
+        for field in ("then", "otherwise", "body", "if_declined"):
             nested = instruction.get(field)
             if isinstance(nested, list):
                 walked.extend(_walk_instructions(nested))
@@ -495,9 +684,14 @@ def _validate_instruction_references(
             if reference is None or str(reference).startswith("each:"):
                 continue
             if reference not in target_roles and reference not in builtins:
-                _fail(item_context, f"{field} references unknown target role {reference!r}")
+                _fail(
+                    item_context,
+                    f"{field} references unknown target role {reference!r}",
+                )
         op_name = instruction["op_name"]
-        if op_name == "for_each_target":
+        for mode in instruction.get("modes", []):
+            _validate_instruction_references(mode, target_roles, item_context)
+        if op_name in {"for_each_target", "target_clause"}:
             role = instruction["role"]
             if role not in target_roles:
                 _fail(item_context, f"role references unknown target role {role!r}")
@@ -507,7 +701,7 @@ def _validate_instruction_references(
                 f"{item_context}.body",
                 current_target_available=True,
             )
-        for field in ("then", "otherwise"):
+        for field in ("then", "otherwise", "if_declined"):
             nested = instruction.get(field)
             if isinstance(nested, list):
                 _validate_instruction_references(
@@ -560,7 +754,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             context,
             required={"key", "registry_name", "characteristics", "programs"},
         )
-        registry_name = _string(raw_definition["registry_name"], f"{context}.registry_name")
+        registry_name = _string(
+            raw_definition["registry_name"], f"{context}.registry_name"
+        )
         characteristics = _validate_characteristics(
             raw_definition["characteristics"], f"{context}.characteristics"
         )
@@ -579,8 +775,13 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 raw_program,
                 program_context,
                 required={"key", "kind", "ops"},
-                optional={"cost", "targets", "trigger"},
+                optional={"cost", "targets", "trigger", "target_binding"},
             )
+            if raw_program.get("target_binding", "explicit") not in {
+                "explicit",
+                "inferred",
+            }:
+                _fail(program_context, "unknown target binding")
             kind_name = _string(raw_program["kind"], f"{program_context}.kind")
             if kind_name not in PROGRAM_KINDS:
                 _fail(program_context, f"unknown program kind {kind_name!r}")
@@ -617,6 +818,8 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 "semantic_key": program_key,
                 "targets": targets,
             }
+            if "target_binding" in raw_program:
+                program["target_binding"] = raw_program["target_binding"]
             if "cost" in raw_program:
                 program["cost"] = _validate_cost(
                     raw_program["cost"], f"{program_context}.cost"
@@ -642,7 +845,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         )
     _unique(program_keys, "programs")
 
-    registry_names = [definition["content_pack_binding"]["value"] for definition in definitions]
+    registry_names = [
+        definition["content_pack_binding"]["value"] for definition in definitions
+    ]
     _unique(registry_names, "legacy registry adapters")
 
     decks: list[dict[str, Any]] = []
@@ -651,8 +856,10 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         deck_context = f"source.decks[{deck_index}]"
         deck = _object(raw_deck, deck_context)
         _keys(
-            deck, deck_context,
-            required={"key", "card_count", "cards"}, optional={"sideboard"},
+            deck,
+            deck_context,
+            required={"key", "card_count", "cards"},
+            optional={"sideboard"},
         )
         deck_key = _string(deck["key"], f"{deck_context}.key")
         expected_card_count = _integer(
@@ -670,7 +877,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 card_context = f"{deck_context}.{field}[{card_index}]"
                 card = _object(raw_card, card_context)
                 _keys(card, card_context, required={"definition", "count"})
-                definition_key = _string(card["definition"], f"{card_context}.definition")
+                definition_key = _string(
+                    card["definition"], f"{card_context}.definition"
+                )
                 if definition_key not in definition_indexes:
                     _fail(card_context, f"unknown definition {definition_key!r}")
                 index = definition_indexes[definition_key]
@@ -717,7 +926,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         for instruction in _walk_instructions(program["instructions"])
         if "definition_index" in instruction
     }
-    closure_indexes = {definition_indexes[key] for key in deck_definition_keys} | referenced_indexes
+    closure_indexes = {
+        definition_indexes[key] for key in deck_definition_keys
+    } | referenced_indexes
     opcode_counts = Counter(
         instruction["op_name"]
         for program in programs
@@ -725,7 +936,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
     )
     coverage_definitions = []
     for definition in definitions:
-        definition_programs = [programs[index] for index in definition["program_indexes"]]
+        definition_programs = [
+            programs[index] for index in definition["program_indexes"]
+        ]
         op_names = sorted(
             {
                 instruction["op_name"]
@@ -737,7 +950,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             {
                 "in_admission_closure": definition["semantic_index"] in closure_indexes,
                 "program_count": len(definition_programs),
-                "program_kinds": sorted({program["kind_name"] for program in definition_programs}),
+                "program_kinds": sorted(
+                    {program["kind_name"] for program in definition_programs}
+                ),
                 "semantic_key": definition["semantic_key"],
                 "opcodes": op_names,
             }
@@ -778,7 +993,9 @@ def _opcode_trace(instructions: Sequence[Mapping[str, Any]]) -> list[str]:
     trace: list[str] = []
     for instruction in instructions:
         trace.append(instruction["op_name"])
-        for field in ("then", "otherwise", "body"):
+        for mode in instruction.get("modes", []):
+            trace.extend(f"mode:{item}" for item in _opcode_trace(mode))
+        for field in ("then", "otherwise", "body", "if_declined"):
             nested = instruction.get(field)
             if isinstance(nested, list):
                 trace.extend(f"{field}:{item}" for item in _opcode_trace(nested))
@@ -806,7 +1023,9 @@ def validate_fixtures(ir: Mapping[str, Any], fixtures: Mapping[str, Any]) -> Non
         ]
         actual = _opcode_trace(programs[program_key]["instructions"])
         if actual != expected:
-            _fail(context, f"opcode trace mismatch: expected {expected!r}, got {actual!r}")
+            _fail(
+                context, f"opcode trace mismatch: expected {expected!r}, got {actual!r}"
+            )
     _unique(names, "fixtures.cases")
 
 

@@ -102,6 +102,8 @@ def fixture_torch_observation() -> dict[str, torch.Tensor]:
         "agent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
         "opponent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
         "actions_valid": torch.zeros((batch, encoder.max_actions)),
+        "semantic_cards": torch.zeros((batch, 2, encoder.cards_per_player)),
+        "known_hand": torch.zeros((batch, 2, encoder.cards_per_player, 2)),
     }
     observation["actions"][0, 0, 0] = 1.0
     observation["actions"][0, 1, 1] = 1.0

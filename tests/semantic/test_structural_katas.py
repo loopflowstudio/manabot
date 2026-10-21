@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import json
+from pathlib import Path
 
 import pytest
 
+from manabot.semantic import structural_katas
 from manabot.semantic.structural import KATA_FAMILIES
 from manabot.semantic.structural_katas import (
+    StructuralKataError,
     artifact_bytes,
+    build_source,
+    build_suite,
     load_contract,
     load_suite,
     validate_oracle_fixtures,
@@ -25,6 +31,28 @@ def test_checked_artifacts_rebuild_byte_identically() -> None:
     assert SOURCE_PATH.read_bytes() == source
     assert SUITE_PATH.read_bytes() == suite
     assert CONTRACT_PATH.read_bytes() == contract
+
+
+def test_frozen_katas_reject_changed_compiler_output() -> None:
+    source, metadata = build_source()
+    source["pack_key"] = "changed-kata-pack"
+
+    with pytest.raises(StructuralKataError, match="compiled kata IR differs"):
+        build_suite(source, metadata)
+
+
+def test_frozen_katas_reject_changed_token_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, metadata = build_source()
+    schema = json.loads(structural_katas.SCHEMA_PATH.read_bytes())
+    schema["token_kinds"]["integer"] = 999
+    path = tmp_path / "schema.json"
+    path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
+    monkeypatch.setattr(structural_katas, "SCHEMA_PATH", path)
+
+    with pytest.raises(StructuralKataError, match="learning-schema bytes differ"):
+        build_suite(source, metadata)
 
 
 def test_suite_contains_five_pair_safe_content_addressed_katas() -> None:
@@ -58,9 +86,10 @@ def test_suite_contains_five_pair_safe_content_addressed_katas() -> None:
         assert Counter(members[0]["model_input"]["token_ids"]) == Counter(
             members[1]["model_input"]["token_ids"]
         )
-        assert members[0]["model_input"]["token_ids"] != members[1]["model_input"][
-            "token_ids"
-        ]
+        assert (
+            members[0]["model_input"]["token_ids"]
+            != members[1]["model_input"]["token_ids"]
+        )
 
 
 def test_anti_template_audit_is_fail_closed_and_explicit() -> None:

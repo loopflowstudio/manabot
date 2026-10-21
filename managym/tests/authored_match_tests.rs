@@ -168,3 +168,47 @@ fn non_authored_decks_keep_the_general_content_pack() {
 
     assert!(game.state.content.compiled_semantics().is_none());
 }
+
+#[test]
+fn compiled_elemental_closure_matches_all_native_rules() {
+    let semantic = SemanticPack::elemental().expect("Elemental IR parses");
+    let compiled = semantic.compile_content_pack().expect("Elemental lowers");
+    let native = ContentPack::default();
+    assert_eq!(semantic.definitions.len(), 51); // 42 owned cards, five basics, four tokens.
+    for definition in &semantic.definitions {
+        let name = &definition.registry_name;
+        let mut actual = compiled
+            .definition(compiled.definition_id(name).unwrap())
+            .unwrap()
+            .clone();
+        let mut expected = native
+            .definition(native.definition_id(name).unwrap())
+            .unwrap()
+            .clone();
+        actual
+            .abilities
+            .sort_by_key(|ability| format!("{ability:?}"));
+        expected
+            .abilities
+            .sort_by_key(|ability| format!("{ability:?}"));
+        assert_eq!(actual, expected, "compiled Elemental drift for {name}");
+    }
+}
+
+#[test]
+fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
+    let semantic = SemanticPack::elemental().unwrap();
+    let configs = vec![
+        semantic.player_config("left", "elemental_left").unwrap(),
+        semantic.player_config("right", "elemental_right").unwrap(),
+    ];
+    for configs in [configs.clone(), configs.into_iter().rev().collect()] {
+        let mut game = Game::new(configs, 161, true);
+        assert_eq!(
+            game.state.content.compiled_semantics().unwrap().ir_hash,
+            semantic.ir_hash
+        );
+        assert!(game.random_playout(100_000, None).unwrap().is_some());
+        assert!(game.is_game_over());
+    }
+}

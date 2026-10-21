@@ -32,7 +32,7 @@ from managym.decision import (
 from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
-from .authored_match_receipt import DEFAULT_RECEIPT_PATH
+from .authored_match_receipt import HISTORICAL_RECEIPT_PATH
 from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
@@ -72,7 +72,7 @@ def _require(field: str, expected: object, actual: object) -> None:
 
 
 def _load_authority() -> dict[str, Any]:
-    raw = DEFAULT_RECEIPT_PATH.read_bytes()
+    raw = HISTORICAL_RECEIPT_PATH.read_bytes()
     _require("authority receipt SHA-256", AUTHORITY_RECEIPT_SHA256, _sha256(raw))
     authority = json.loads(raw)
     _require("authority commands", 132, len(authority["decisions"]))
