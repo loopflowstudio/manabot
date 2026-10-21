@@ -1,4 +1,4 @@
-"""Cross-language conformance for the testing-house-v1 control envelope."""
+"""Cross-language conformance for the shared-table control envelope (`testing-house-v1`)."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ from jsonschema import Draft202012Validator
 import pytest
 
 from academy import server
-from academy.testing_house_protocol import (
+from academy.shared_table_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
     BeliefScenario,
-    TestingHouseV1ConformanceBundle as ControlBundle,
-    testing_house_schema as control_schema,
+    SharedTableV1ConformanceBundle as ControlBundle,
+    shared_table_schema as control_schema,
 )
 
 PROTOCOL = Path(__file__).parents[2] / "protocol"

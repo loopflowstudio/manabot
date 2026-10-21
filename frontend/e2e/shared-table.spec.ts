@@ -49,7 +49,7 @@ async function openSharedTable(
   await pilot.getByTestId('opponent-select').selectOption('passive');
   await pilot.getByRole('button', { name: 'New Game' }).first().click();
 
-  const pilotPanel = pilot.getByTestId('testing-house-panel');
+  const pilotPanel = pilot.getByTestId('shared-table-panel');
   await expect(pilotPanel).toContainText('You are the pilot');
   const tableId = await pilotPanel.getAttribute('data-table-id');
   expect(tableId).toBeTruthy();
@@ -65,11 +65,11 @@ async function openSharedTable(
   await expect(watcher.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await expect(watcher.getByTestId('testing-house-panel')).toContainText(
+  await expect(watcher.getByTestId('shared-table-panel')).toContainText(
     'You are the watcher',
   );
   await expect(pilotPanel).toContainText('both connected');
-  await expect(watcher.getByTestId('testing-house-panel')).toHaveAttribute(
+  await expect(watcher.getByTestId('shared-table-panel')).toHaveAttribute(
     'data-table-id',
     tableId!,
   );
@@ -106,7 +106,7 @@ async function expectNoAuthorityMutation(
 }
 
 async function expectPoliteAnnouncement(page: Page, text: string): Promise<void> {
-  const announcement = page.getByTestId('testing-house-announcement');
+  const announcement = page.getByTestId('shared-table-announcement');
   await expect(announcement).toHaveAttribute('role', 'status');
   await expect(announcement).toHaveAttribute('aria-live', 'polite');
   await expect(announcement).toHaveAttribute('aria-atomic', 'true');
@@ -141,9 +141,9 @@ async function synchronizedAction(
     await page.locator('main').evaluate((node, expectedRevision) => {
       const main = node as HTMLElement;
       const target = window as typeof window & {
-        __testingHouseAdvance?: Promise<RevisionAdvance>;
+        __sharedTableAdvance?: Promise<RevisionAdvance>;
       };
-      target.__testingHouseAdvance = new Promise<RevisionAdvance>((resolve, reject) => {
+      target.__sharedTableAdvance = new Promise<RevisionAdvance>((resolve, reject) => {
         const capture = (): boolean => {
           const revision = Number(main.dataset.frameRevision);
           if (revision <= expectedRevision) return false;
@@ -178,10 +178,10 @@ async function synchronizedAction(
   await pilot.getByTestId('action-option').first().click();
   const readAdvance = (page: Page): Promise<RevisionAdvance> => page.evaluate(async () => {
     const source = window as typeof window & {
-      __testingHouseAdvance?: Promise<RevisionAdvance>;
+      __sharedTableAdvance?: Promise<RevisionAdvance>;
     };
-    if (!source.__testingHouseAdvance) throw new Error('revision probe was not installed');
-    return source.__testingHouseAdvance;
+    if (!source.__sharedTableAdvance) throw new Error('revision probe was not installed');
+    return source.__sharedTableAdvance;
   });
   const [pilotAdvance, watcherAdvance] = await Promise.all([
     readAdvance(pilot),
@@ -250,17 +250,17 @@ test('pilot and watcher prove shared authority through terminal Study', async ({
     await expect(watcher.getByTestId('author-belief')).toBeEnabled();
     await watcher.getByTestId('author-belief').focus();
     await watcher.keyboard.press('Enter');
-    await expect(watcher.getByTestId('testing-house-panel')).toContainText(
+    await expect(watcher.getByTestId('shared-table-panel')).toContainText(
       'Your read · personal',
     );
-    await expect(pilot.getByTestId('testing-house-panel')).not.toContainText('Shared read');
+    await expect(pilot.getByTestId('shared-table-panel')).not.toContainText('Shared read');
     await expectPoliteAnnouncement(watcher, 'Your read is private.');
     await watcher.getByRole('button', { name: /Compare advice for/ }).click();
     await assertPinnedAdvice(watcher);
 
     await watcher.getByTestId('share-belief').focus();
     await watcher.keyboard.press('Space');
-    await expect(pilot.getByTestId('testing-house-panel')).toContainText(
+    await expect(pilot.getByTestId('shared-table-panel')).toContainText(
       'Shared read · table',
     );
     await expectPoliteAnnouncement(pilot, 'A read was shared with the table.');
@@ -279,12 +279,12 @@ test('pilot and watcher prove shared authority through terminal Study', async ({
       maximumBroadcastLag: Math.max(...timings.map(({ maximumBroadcastLag }) => maximumBroadcastLag)),
       timings,
     };
-    await testInfo.attach('testing-house-20-action-latency.json', {
+    await testInfo.attach('shared-table-20-action-latency.json', {
       body: Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`),
       contentType: 'application/json',
     });
     console.info(
-      `testing-house 20-action receipt: p95=${receipt.p95Ms.toFixed(1)}ms, maximum broadcast lag=${receipt.maximumBroadcastLag}`,
+      `shared-table 20-action receipt: p95=${receipt.p95Ms.toFixed(1)}ms, maximum broadcast lag=${receipt.maximumBroadcastLag}`,
     );
     expect(receipt.samples).toBe(20);
     expect(receipt.p95Ms).toBeLessThanOrEqual(250);
@@ -316,8 +316,8 @@ test('pilot and watcher prove shared authority through terminal Study', async ({
 
     await pilot.getByTestId('transfer-pilot').focus();
     await pilot.keyboard.press('Enter');
-    await expect(pilot.getByTestId('testing-house-panel')).toContainText('You are the watcher');
-    await expect(watcher.getByTestId('testing-house-panel')).toContainText('You are the pilot');
+    await expect(pilot.getByTestId('shared-table-panel')).toContainText('You are the watcher');
+    await expect(watcher.getByTestId('shared-table-panel')).toContainText('You are the pilot');
     await expectPoliteAnnouncement(pilot, 'You are now the watcher.');
     await expectPoliteAnnouncement(watcher, 'You are now the pilot.');
     await expect(pilot.getByTestId('action-option').first()).toBeDisabled();
@@ -327,12 +327,12 @@ test('pilot and watcher prove shared authority through terminal Study', async ({
     expect(await watcher.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     )).toBe(false);
-    for (const button of await watcher.getByTestId('testing-house-panel').getByRole('button').all()) {
+    for (const button of await watcher.getByTestId('shared-table-panel').getByRole('button').all()) {
       const box = await button.boundingBox();
       if (box) expect(box.height).toBeGreaterThanOrEqual(44);
     }
     const accessibility = await new AxeBuilder({ page: watcher })
-      .include('[data-testid="testing-house-panel"]')
+      .include('[data-testid="shared-table-panel"]')
       .analyze();
     expect(accessibility.violations).toEqual([]);
 
@@ -344,19 +344,19 @@ test('pilot and watcher prove shared authority through terminal Study', async ({
       'aria-label',
       'Connection status: connected',
     );
-    await expect(pilot.getByTestId('testing-house-panel')).toContainText('You are the watcher');
-    await expect(watcher.getByTestId('testing-house-panel')).toContainText('You are the pilot');
-    await expect(pilot.getByTestId('testing-house-panel')).toHaveAttribute('data-table-id', tableId);
+    await expect(pilot.getByTestId('shared-table-panel')).toContainText('You are the watcher');
+    await expect(watcher.getByTestId('shared-table-panel')).toContainText('You are the pilot');
+    await expect(pilot.getByTestId('shared-table-panel')).toHaveAttribute('data-table-id', tableId);
 
     await finishMatch(watcher, pilot);
-    const pilotPanel = pilot.getByTestId('testing-house-panel');
-    const watcherPanel = watcher.getByTestId('testing-house-panel');
+    const pilotPanel = pilot.getByTestId('shared-table-panel');
+    const watcherPanel = watcher.getByTestId('shared-table-panel');
     await expect(pilotPanel).toHaveAttribute('data-table-id', tableId);
     await expect(watcherPanel).toHaveAttribute('data-table-id', tableId);
     await expect(pilotPanel).toHaveAttribute('data-table-mode', 'study');
     await expect(watcherPanel).toHaveAttribute('data-table-mode', 'study');
-    await expect(pilotPanel).toContainText('Testing house · study');
-    await expect(watcherPanel).toContainText('Testing house · study');
+    await expect(pilotPanel).toContainText('Shared table · study');
+    await expect(watcherPanel).toContainText('Shared table · study');
     const pilotDecisions = await decisionAddresses(pilot);
     const watcherDecisions = await decisionAddresses(watcher);
     expect(pilotDecisions.length).toBeGreaterThan(0);
