@@ -27,6 +27,11 @@ _CATALOGS = {
     "ur-lessons-vs-gw-allies": PolicyCatalogSpec(
         "two_deck.ir.json", ("ur_lessons", "gw_allies")
     ),
+    "elemental-combat-v1": PolicyCatalogSpec(
+        "elemental.ir.json",
+        ("elemental_left", "elemental_right"),
+        "../w7/learning_schema.json",
+    ),
     "mtg122-complexity-v1": PolicyCatalogSpec(
         "complexity.ir.json",
         ("l1_swift", "l1_heavy"),

@@ -164,3 +164,323 @@ impl ContentPack {
             Keywords::default(),
             "",
         );
+    }
+
+    pub fn register_card(&mut self, mut definition: CardDefinition) {
+        // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
+        // becomes the target of a spell an opponent controls, counter it
+        // unless that player pays [cost]."
+        if let Some(ward_cost) = definition.ward.clone() {
+            definition.abilities.push(Ability::Triggered {
+                condition: TriggerCondition::BecomesTargeted {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::CounterUnlessPays { cost: ward_cost }],
+            });
+        }
+        let definition_id = CardDefId(
+            self.definitions
+                .len()
+                .try_into()
+                .expect("content pack exceeds CardDefId capacity"),
+        );
+        let name = definition.name.clone();
+        assert!(
+            self.cards_by_name.insert(name, definition_id).is_none(),
+            "duplicate card definition"
+        );
+        self.definitions.push(Arc::new(definition));
+    }
+
+    /// Iterate every registered card definition (conformance tests audit
+    /// these against the Scryfall fixture).
+    pub fn definitions(&self) -> impl Iterator<Item = &CardDefinition> {
+        self.definitions.iter().map(Arc::as_ref)
+    }
+
+    /// Stable `(CardDefId, definition)` pairs for replay, measurement, and
+    /// content fingerprinting without inspecting the pack's storage layout.
+    pub fn definition_entries(&self) -> impl Iterator<Item = (CardDefId, &CardDefinition)> {
+        self.definitions
+            .iter()
+            .enumerate()
+            .map(|(index, definition)| (CardDefId(index as u32), definition.as_ref()))
+    }
+
+    pub fn len(&self) -> usize {
+        self.definitions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.definitions.is_empty()
+    }
+
+    pub fn definition_id(&self, name: &str) -> Option<CardDefId> {
+        self.cards_by_name.get(name).copied()
+    }
+
+    pub fn definition(&self, id: CardDefId) -> Option<&CardDefinition> {
+        self.definitions.get(id.0 as usize).map(Arc::as_ref)
+    }
+
+    pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
+        let definition_id = self.definition_id(name)?;
+        let definition = Arc::clone(self.definitions.get(definition_id.0 as usize)?);
+        Some(Card::from_definition(
+            object_id,
+            owner,
+            definition_id,
+            definition,
+        ))
+    }
+
+    fn register_basic_lands(&mut self) {
+        self.register_card(basic_land("Plains", Color::White));
+        self.register_card(basic_land("Island", Color::Blue));
+        self.register_card(basic_land("Swamp", Color::Black));
+        self.register_card(basic_land("Mountain", Color::Red));
+        self.register_card(basic_land("Forest", Color::Green));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn register_creature(
+        &mut self,
+        name: &str,
+        mana_cost: &str,
+        subtypes: &[&str],
+        power: i32,
+        toughness: i32,
+        keywords: Keywords,
+        text_box: &str,
+    ) {
+        self.register_card(CardDefinition {
+            name: name.to_string(),
+            mana_cost: Some(ManaCost::parse(mana_cost)),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: subtypes
+                .iter()
+                .map(|subtype| (*subtype).to_string())
+                .collect(),
+            keywords,
+            text_box: text_box.to_string(),
+            power: Some(power),
+            toughness: Some(toughness),
+            ..Default::default()
+        });
+    }
+
+    fn register_alpha(&mut self) {
+        self.register_card(CardDefinition {
+            name: "Llanowar Elves".to_string(),
+            mana_cost: Some(ManaCost::parse("G")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".to_string(), "Druid".to_string()],
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::single(Color::Green),
+            }],
+            text_box: "{T}: Add {G}.".to_string(),
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_creature("Gray Ogre", "2R", &["Ogre"], 2, 2, Keywords::default(), "");
+
+        self.register_card(CardDefinition {
+            name: "Lightning Bolt".to_string(),
+            mana_cost: Some(ManaCost::parse("R")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::DealDamage {
+                amount: 3,
+                target: TargetSpec::CreatureOrPlayer,
+            }],
+            text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
+            ..Default::default()
+        });
+
+        // DEVIATION (documented in wave/rules/01-two-deck-slice.md): oracle
+        // is "Target player draws three cards." — the engine has no
+        // target-player draw, so the caster always draws (the self-target
+        // case; the opponent-draw line is not available).
+        self.register_card(CardDefinition {
+            name: "Ancestral Recall".to_string(),
+            mana_cost: Some(ManaCost::parse("U")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::DrawCards { count: 3 }],
+            text_box: "Target player draws three cards.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Counterspell".to_string(),
+            mana_cost: Some(ManaCost::parse("UU")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::CounterSpell {
+                target: TargetSpec::Spell,
+            }],
+            text_box: "Counter target spell.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_creature(
+            "Wind Drake",
+            "2U",
+            &["Drake"],
+            2,
+            2,
+            Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            "Flying",
+        );
+        self.register_creature(
+            "Giant Spider",
+            "3G",
+            &["Spider"],
+            2,
+            4,
+            Keywords {
+                reach: true,
+                ..Default::default()
+            },
+            "Reach (This creature can block creatures with flying.)",
+        );
+        self.register_creature(
+            "Raging Goblin",
+            "R",
+            &["Goblin", "Berserker"],
+            1,
+            1,
+            Keywords {
+                haste: true,
+                ..Default::default()
+            },
+            "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+        );
+        self.register_creature(
+            "Serra Angel",
+            "3WW",
+            &["Angel"],
+            4,
+            4,
+            Keywords {
+                flying: true,
+                vigilance: true,
+                ..Default::default()
+            },
+            "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
+        );
+        self.register_creature(
+            "Typhoid Rats",
+            "B",
+            &["Rat"],
+            1,
+            1,
+            Keywords {
+                deathtouch: true,
+                ..Default::default()
+            },
+            "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+        );
+        self.register_creature(
+            "War Mammoth",
+            "3G",
+            &["Elephant"],
+            3,
+            3,
+            Keywords {
+                trample: true,
+                ..Default::default()
+            },
+            "Trample",
+        );
+        self.register_creature(
+            "Wall of Stone",
+            "1RR",
+            &["Wall"],
+            0,
+            8,
+            Keywords {
+                defender: true,
+                ..Default::default()
+            },
+            "Defender (This creature can't attack.)",
+        );
+        self.register_creature(
+            "Boggart Brute",
+            "2R",
+            &["Goblin", "Warrior"],
+            3,
+            2,
+            Keywords {
+                menace: true,
+                ..Default::default()
+            },
+            "Menace (This creature can't be blocked except by two or more creatures.)",
+        );
+        self.register_creature(
+            "Youthful Knight",
+            "1W",
+            &["Human", "Knight"],
+            2,
+            1,
+            Keywords {
+                first_strike: true,
+                ..Default::default()
+            },
+            "First strike",
+        );
+        self.register_creature(
+            "Fencing Ace",
+            "1W",
+            &["Human", "Soldier"],
+            1,
+            1,
+            Keywords {
+                double_strike: true,
+                ..Default::default()
+            },
+            "Double strike (This creature deals both first-strike and regular combat damage.)",
+        );
+        self.register_creature(
+            "Healer's Hawk",
+            "W",
+            &["Bird"],
+            1,
+            1,
+            Keywords {
+                flying: true,
+                lifelink: true,
+                ..Default::default()
+            },
+            "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
+        );
+        self.register_creature("Craw Wurm", "4GG", &["Wurm"], 6, 4, Keywords::default(), "");
+        self.register_card(CardDefinition {
+            name: "Shivan Dragon".to_string(),
+            mana_cost: Some(ManaCost::parse("4RR")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".to_string()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
+                mana_cost: ManaCost::parse("R"),
+                sacrifice_source: false,
+                waterbend: false,
+                effect: Effect::ModifyUntilEot {
+                    power_delta: 1,
+                    toughness_delta: 0,
+                },
+                ..Default::default()
+            }],
+            text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),
+            power: Some(5),
+            toughness: Some(5),
+            ..Default::default()
+        });
+    }
+}

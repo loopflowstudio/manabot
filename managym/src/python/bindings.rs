@@ -3405,3 +3405,67 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         crate::semantic::SemanticPack::sacrifice(),
         crate::semantic::SemanticPack::temur(),
         crate::semantic::SemanticPack::complexity(),
+    ];
+    for pack in packs {
+        let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;
+        if pack.pack_key == pack_key {
+            let config = pack
+                .player_config(deck_key, deck_key)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            return Ok(PyPlayerConfig {
+                name: config.name,
+                decklist: config.decklist.into_iter().collect(),
+                sideboard: config.sideboard.into_iter().collect(),
+                content_pack: Some(pack_key.to_string()),
+            });
+        }
+    }
+    Err(PyValueError::new_err(format!(
+        "unknown authored pack {pack_key:?}"
+    )))
+}
+
+#[cfg(feature = "python")]
+#[pymodule]
+pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
+    m.add(
+        "CARD_DEFINITION_COUNT",
+        crate::cardsets::alpha::CardRegistry::default().len(),
+    )?;
+    m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
+
+    m.add_class::<ZoneEnum>()?;
+    m.add_class::<PhaseEnum>()?;
+    m.add_class::<StepEnum>()?;
+    m.add_class::<ActionEnum>()?;
+    m.add_class::<ActionSpaceEnum>()?;
+    m.add_class::<StackObjectKindEnum>()?;
+    m.add_class::<StackTargetKindEnum>()?;
+    m.add_class::<EventTypeEnum>()?;
+    m.add_class::<EventEntityKindEnum>()?;
+
+    m.add_class::<PyPlayerConfig>()?;
+    m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
+    m.add_class::<PyObservation>()?;
+    m.add_class::<PyPlayer>()?;
+    m.add_class::<PyTurn>()?;
+    m.add_class::<PyCard>()?;
+    m.add_class::<PySideboardCard>()?;
+    m.add_class::<PyCardTypes>()?;
+    m.add_class::<PyKeywords>()?;
+    m.add_class::<PyManaCost>()?;
+    m.add_class::<PyPermanent>()?;
+    m.add_class::<PyAction>()?;
+    m.add_class::<PyActionSpace>()?;
+    m.add_class::<PyStackTarget>()?;
+    m.add_class::<PyStackObject>()?;
+    m.add_class::<PyEventData>()?;
+
+    m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PySelectedBranchRuntime>()?;
+    m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
+    m.add_class::<PyEnv>()?;
+    crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
+    Ok(())
+}
