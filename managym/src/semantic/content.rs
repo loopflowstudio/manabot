@@ -199,6 +199,9 @@ mod catalog_tests {
                 .iter()
                 .find(|d| d.semantic_key == key)
                 .unwrap();
+            assert!(ContentPack::default()
+                .definition_id(&definition.registry_name)
+                .is_none());
             assert!(!semantic
                 .programs
                 .iter()
@@ -251,7 +254,10 @@ impl SemanticPack {
     /// presentation text across the migration boundary; every rules-relevant
     /// characteristic and program is lowered from this IR.
     pub fn compile_content_pack(&self) -> Result<ContentPack, IrError> {
-        let presentation = ContentPack::default();
+        let mut presentation = ContentPack::default();
+        if self.pack_key == "mtg122-complexity-v1" {
+            presentation.register_complexity_presentation();
+        }
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;

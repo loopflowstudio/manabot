@@ -136,7 +136,11 @@ impl ContentPack {
         self.register_elemental();
         self.register_sacrifice();
         self.register_temur();
-        // Append research vanilla definitions without renumbering existing cards.
+    }
+
+    /// Presentation entries for the isolated complexity catalog. The default
+    /// registry and its checked content digest must remain unchanged.
+    pub(crate) fn register_complexity_presentation(&mut self) {
         self.register_creature(
             "Savannah Lions",
             "W",
