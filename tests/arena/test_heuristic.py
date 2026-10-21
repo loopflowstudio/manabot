@@ -156,7 +156,9 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Allies at Last": "harmful",
         "Yip Yip!": "beneficial",
         "Fancy Footwork": "beneficial",
+        "Lightning Bolt": "harmful",
     }
+    assert spells["Lightning Bolt"].damage == 3
     fire = spells["Firebending Lesson"]
     assert (fire.damage, fire.kicked_damage) == (2, 5)
     assert spells["Fancy Footwork"].pump == (2, 2)

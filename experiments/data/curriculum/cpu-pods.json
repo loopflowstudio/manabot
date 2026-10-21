@@ -1,0 +1,102 @@
+{
+ "pods": [
+  {
+   "name": "a",
+   "id": "7cfm4k1garjx2w",
+   "created": 1792474255.351275,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "note": "created; client parse failed, receipt recorded from listing",
+   "deleted": "1792474999.2111518 (EU-SE-1 SSH never reachable)"
+  },
+  {
+   "name": "b",
+   "id": "wiwd6z8l4jcwvi",
+   "created": 1792474256.9482172,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792475001.965523 (EU-SE-1 SSH never reachable)"
+  },
+  {
+   "name": "c",
+   "id": "zx6a702qbxy91z",
+   "created": 1792474258.047015,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792494863.430175 (finished and uploaded; results/c.tar verified)"
+  },
+  {
+   "name": "d",
+   "id": "keuy3xtsdb9y2t",
+   "created": 1792474259.180746,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792494864.091891 (finished and uploaded; results/d.tar verified)"
+  },
+  {
+   "name": "e",
+   "id": "nr5o6263h14yg3",
+   "created": 1792474260.171714,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792495878.424126 (finished and uploaded; results/e.tar verified)"
+  },
+  {
+   "name": "f",
+   "id": "i1hl1np6t9c9lb",
+   "created": 1792474261.382038,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792493743.023633 (finished and uploaded; results/f.tar verified)"
+  },
+  {
+   "name": "a2",
+   "id": "zozyotyffbn0or",
+   "created": 1792475021.5879009,
+   "deadline_unix": 1792501063,
+   "flavor": "cpu3c",
+   "vcpu": 8,
+   "usd_per_hour": 0.24,
+   "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+   "deleted": "1792475039.175401 (placed in EU-SE-1)"
+  },
+  {
+   "name": "g-US-CA-2",
+   "error": "RunPod POST returned HTTP 500",
+   "at": 1792475040.821852
+  },
+  {
+   "name": "g-EUR-IS-1",
+   "error": "RunPod POST returned HTTP 500",
+   "at": 1792475041.8508868
+  },
+  {
+   "name": "g-EU-RO-1",
+   "error": "RunPod POST returned HTTP 500",
+   "at": 1792475042.7947898
+  },
+  {
+   "name": "g-US-KS-2",
+   "error": "RunPod POST returned HTTP 500",
+   "at": 1792475043.682107
+  }
+ ]
+}
