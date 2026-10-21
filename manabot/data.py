@@ -15,6 +15,7 @@ from the standard SDK chain.
     uv run --extra artifacts python -m manabot.data publish experiments/data/new-run
 """
 
+import argparse
 from collections.abc import Iterable
 import hashlib
 import os
@@ -24,7 +25,6 @@ import tempfile
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-import typer
 
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, split_s3_uri
 
@@ -205,45 +205,41 @@ def _relative(path: str) -> str:
     return Path(os.path.normpath(absolute)).relative_to(ROOT).as_posix()
 
 
-app = typer.Typer(
-    help="Fetch or publish experiment data recorded in experiments/data.manifest.json",
-    pretty_exceptions_show_locals=False,
-    no_args_is_help=True,
-)
-
-
-@app.command("fetch")
-def fetch_command(
-    paths: list[str] = typer.Argument(
-        None, help="Files or directories to fetch; everything when omitted"
-    ),
-) -> None:
-    """Download missing files by digest; files already present are verified."""
-    try:
-        report = fetch_data(paths or ())
-    except (DataUnavailable, ValueError) as error:
-        print(f"fetch failed: {error}", file=sys.stderr)
-        raise typer.Exit(1) from error
-    print(
-        f"fetched {len(report.fetched)} files ({report.fetched_bytes} bytes); "
-        f"{len(report.present)} already present"
+def main(argv: list[str] | None = None) -> int:
+    # argparse rather than Typer: tests/conftest.py imports this module, and some
+    # CI environments deliberately omit Typer.
+    parser = argparse.ArgumentParser(
+        description="Fetch or publish experiment data in experiments/data.manifest.json"
     )
-
-
-@app.command("publish")
-def publish_command(
-    paths: list[str] = typer.Argument(..., help="Files or directories to upload"),
-) -> None:
-    """Upload to the team's S3 store and update the manifest; commit it afterwards."""
+    commands = parser.add_subparsers(dest="command", required=True)
+    fetch = commands.add_parser(
+        "fetch", help="Download missing files by digest; verify files already present"
+    )
+    fetch.add_argument(
+        "paths", nargs="*", help="Files or directories; everything when omitted"
+    )
+    publish = commands.add_parser(
+        "publish", help="Upload to the S3 store and update the manifest to commit"
+    )
+    publish.add_argument("paths", nargs="+", help="Files or directories to upload")
+    args = parser.parse_args(argv)
     try:
-        changed = publish_data(paths)
-    except ValueError as error:
-        print(f"publish failed: {error}", file=sys.stderr)
-        raise typer.Exit(1) from error
-    for path in changed:
-        print(f"published {path}")
-    print(f"{len(changed)} manifest entries added or changed")
+        if args.command == "fetch":
+            report = fetch_data(args.paths)
+            print(
+                f"fetched {len(report.fetched)} files ({report.fetched_bytes} bytes); "
+                f"{len(report.present)} already present"
+            )
+        else:
+            changed = publish_data(args.paths)
+            for path in changed:
+                print(f"published {path}")
+            print(f"{len(changed)} manifest entries added or changed")
+    except (DataUnavailable, ValueError) as error:
+        print(f"{args.command} failed: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())
