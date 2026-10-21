@@ -86,6 +86,11 @@ class Opcode(IntEnum):
     POWER_FROM_LAND_COUNTERS = 48
     SPELL_COST_REDUCTION = 49
     STATIC_PT = 50
+    SEARCH_BASIC_LANDS = 51
+    SACRIFICE = 52
+    DEAL_DAMAGE_TO_CONTROLLER = 53
+    DRAIN_LIFE = 54
+    UNBLOCKABLE_IF = 55
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -119,6 +124,7 @@ KEYWORDS = {
     "vigilance",
 }
 TRIGGER_EVENTS = {
+    "sacrificed",
     "attacks",
     "becomes_tapped",
     "becomes_targeted",
@@ -170,6 +176,14 @@ CONDITION_KINDS = {
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
+    "search_basic_lands": (
+        {"count", "tapped", "untap_if_lands", "bottom_source"},
+        set(),
+    ),
+    "sacrifice": ({"predicate"}, set()),
+    "deal_damage_to_controller": ({"amount"}, set()),
+    "drain_life": ({"amount"}, set()),
+    "unblockable_if": ({"condition"}, set()),
     "add_mana": ({"mana"}, {"until"}),
     "draw_cards": ({"count"}, set()),
     "put_top_cards_in_hand": ({"count"}, set()),
@@ -401,7 +415,14 @@ def _validate_trigger(value: Any, context: str) -> dict[str, Any]:
         trigger,
         context,
         required={"event", "subject"},
-        optional={"n", "if", "predicate"},
+        optional={
+            "n",
+            "if",
+            "predicate",
+            "controller_only",
+            "once_each_turn",
+            "own_turn_only",
+        },
     )
     event = _string(trigger["event"], f"{context}.event")
     if event not in TRIGGER_EVENTS:
@@ -417,10 +438,13 @@ def _validate_trigger(value: Any, context: str) -> dict[str, Any]:
         if "predicate" not in subject:
             _fail(context, f"{subject_kind!r} requires a predicate")
         _validate_predicate(subject["predicate"], f"{context}.subject.predicate")
-    if event == "cast_spell":
+    for flag in ("controller_only", "once_each_turn", "own_turn_only"):
+        if flag in trigger:
+            _boolean(trigger[flag], f"{context}.{flag}")
+    if event in {"cast_spell", "sacrificed"}:
         _validate_predicate(trigger.get("predicate"), f"{context}.predicate")
     elif "predicate" in trigger:
-        _fail(context, "only cast_spell accepts predicate")
+        _fail(context, "only cast_spell and sacrificed accept predicate")
     if event == "draw_nth_card":
         _integer(trigger.get("n"), f"{context}.n", minimum=1)
     elif "n" in trigger:
@@ -448,9 +472,29 @@ def _validate_cost(value: Any, context: str) -> dict[str, Any]:
         cost,
         context,
         required={"mana"},
-        optional={"kicker", "sacrifice_source", "waterbend", "affinity", "tap_source"},
+        optional={
+            "kicker",
+            "sacrifice_source",
+            "waterbend",
+            "affinity",
+            "tap_source",
+            "sacrifice",
+            "own_turn_only",
+            "life",
+        },
     )
     _string(cost["mana"], f"{context}.mana")
+    if "sacrifice" in cost:
+        sacrifice = _object(cost["sacrifice"], context)
+        _keys(sacrifice, context, required={"predicate", "another", "or_mana"})
+        _validate_predicate(sacrifice["predicate"], context)
+        _boolean(sacrifice["another"], context)
+        if sacrifice["or_mana"] is not None:
+            _string(sacrifice["or_mana"], context)
+    if "life" in cost:
+        _integer(cost["life"], context, minimum=0)
+    if "own_turn_only" in cost:
+        _boolean(cost["own_turn_only"], context)
     if "kicker" in cost:
         _string(cost["kicker"], f"{context}.kicker")
     for field in ("sacrifice_source", "tap_source", "waterbend"):
@@ -524,6 +568,11 @@ def _validate_instruction_scalars(
     for field in {"generic", "counters"}:
         if field in instruction:
             _integer(instruction[field], f"{context}.{field}", minimum=0)
+    for flag in ("tapped", "bottom_source"):
+        if flag in instruction:
+            _boolean(instruction[flag], context)
+    if "untap_if_lands" in instruction and instruction["untap_if_lands"] is not None:
+        _integer(instruction["untap_if_lands"], context, minimum=0)
     if "first_on_own_turn" in instruction:
         _boolean(instruction["first_on_own_turn"], context)
     if "condition" in instruction:

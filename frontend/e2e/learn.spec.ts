@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import prefix from '../../academy/fixtures/learn-demo-w7.json' with { type: 'json' };
+import prefix from '../../academy/fixtures/learn-demo-w8.json' with { type: 'json' };
 
 test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async ({ page }) => {
   await page.addInitScript((config) => {

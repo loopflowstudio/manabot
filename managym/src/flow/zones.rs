@@ -17,6 +17,32 @@ use crate::{
 };
 
 impl Game {
+    /// A sacrifice is a committed event distinct from destruction (CR 701.17).
+    /// Match its triggers against the pre-departure battlefield, including the
+    /// sacrificed source, before replacement effects can change its destination.
+    pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) {
+        let Some(source) = self.state.permanents[permanent].as_ref() else {
+            return;
+        };
+        let card = source.card;
+        let controller = source.controller;
+        let sources = self.snapshot_trigger_sources();
+        self.emit(GameEvent::PermanentSacrificed { card, controller });
+        self.process_game_events_with_sources(&sources);
+        self.move_card(card, ZoneType::Graveyard);
+    }
+
+    pub(crate) fn sacrifice_candidates(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> Vec<PermanentId> {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .collect()
+    }
+
     /// Stable private search candidates, independent of library order.
     pub(crate) fn basic_land_search_candidates(
         &self,

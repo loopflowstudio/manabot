@@ -74,6 +74,8 @@ impl Game {
         let permanent = self.state.permanents[permanent_id].as_ref()?;
         let definition = &self.state.cards[card];
         Some(ObjectLki {
+            keywords: self.effective_keywords(permanent_id),
+            animated_creature: permanent.animated,
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,

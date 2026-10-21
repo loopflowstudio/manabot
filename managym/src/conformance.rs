@@ -81,11 +81,16 @@ pub enum Orientation {
     GwAlliesVsUrLessons,
     ElementalLeftVsRight,
     ElementalRightVsLeft,
+    SacrificeLeftVsRight,
+    SacrificeRightVsLeft,
 }
 
 impl Orientation {
     fn source_bytes(self) -> &'static [u8] {
         match self {
+            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => {
+                include_bytes!("../../content/semantic/v1/sacrifice.source.json")
+            }
             Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => {
                 include_bytes!("../../content/semantic/v1/elemental.source.json")
             }
@@ -97,6 +102,11 @@ impl Orientation {
     }
     fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
         match self {
+            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::new(
+                crate::semantic::SemanticPack::sacrifice()
+                    .and_then(|pack| pack.compile_content_pack())
+                    .map_err(|error| error.to_string())?,
+            )),
             Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::new(
                 crate::semantic::SemanticPack::elemental()
                     .and_then(|pack| pack.compile_content_pack())
@@ -111,6 +121,8 @@ impl Orientation {
             Self::GwAlliesVsUrLessons => ("gw_allies", "ur_lessons"),
             Self::ElementalLeftVsRight => ("elemental_left", "elemental_right"),
             Self::ElementalRightVsLeft => ("elemental_right", "elemental_left"),
+            Self::SacrificeLeftVsRight => ("sacrifice_left", "sacrifice_right"),
+            Self::SacrificeRightVsLeft => ("sacrifice_right", "sacrifice_left"),
         }
     }
 }
@@ -1017,11 +1029,13 @@ pub fn fuzz(
     }
     let mut total_commands = 0;
     for case_index in 0..cases {
-        let orientation = match case_index % 4 {
+        let orientation = match case_index % 6 {
             0 => Orientation::UrLessonsVsGwAllies,
             1 => Orientation::GwAlliesVsUrLessons,
             2 => Orientation::ElementalLeftVsRight,
-            _ => Orientation::ElementalRightVsLeft,
+            3 => Orientation::ElementalRightVsLeft,
+            4 => Orientation::SacrificeLeftVsRight,
+            _ => Orientation::SacrificeRightVsLeft,
         };
         let spec = CaseSpec {
             id: format!("fuzz-{case_index:04}"),

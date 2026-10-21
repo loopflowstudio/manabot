@@ -134,6 +134,7 @@ impl ContentPack {
         self.register_tla_lessons_increment();
         self.register_mkm();
         self.register_elemental();
+        self.register_sacrifice();
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {
@@ -445,6 +446,7 @@ impl ContentPack {
                     power_delta: 1,
                     toughness_delta: 0,
                 },
+                ..Default::default()
             }],
             text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(5),

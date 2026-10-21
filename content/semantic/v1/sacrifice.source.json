@@ -1,0 +1,1416 @@
+{
+  "decks": [
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 1,
+          "definition": "sacrifice.bastion_of_remembrance"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.callous_inspector"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.curious_farm_animals"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.cycle_of_renewal"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.deadly_dispute"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.deadly_precision"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.fabled_passage"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.june_bounty_hunter"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.lotus_cobra"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.mayhem_devil"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.prismatic_vista"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.sazh_s_chocobo"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tireless_provisioner"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tireless_tracker"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tolls_of_war"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.unlucky_cabbage_merchant"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.weaponize_the_monsters"
+        },
+        {
+          "count": 4,
+          "definition": "sacrifice.plains"
+        },
+        {
+          "count": 4,
+          "definition": "sacrifice.island"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.mountain"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.swamp"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.forest"
+        }
+      ],
+      "key": "sacrifice_left"
+    },
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 1,
+          "definition": "sacrifice.bastion_of_remembrance"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.callous_inspector"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.curious_farm_animals"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.cycle_of_renewal"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.deadly_dispute"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.deadly_precision"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.fabled_passage"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.june_bounty_hunter"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.lotus_cobra"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.mayhem_devil"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.prismatic_vista"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.sazh_s_chocobo"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tireless_provisioner"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tireless_tracker"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.tolls_of_war"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.unlucky_cabbage_merchant"
+        },
+        {
+          "count": 1,
+          "definition": "sacrifice.weaponize_the_monsters"
+        },
+        {
+          "count": 4,
+          "definition": "sacrifice.plains"
+        },
+        {
+          "count": 4,
+          "definition": "sacrifice.island"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.mountain"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.swamp"
+        },
+        {
+          "count": 5,
+          "definition": "sacrifice.forest"
+        }
+      ],
+      "key": "sacrifice_right"
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Plains"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.plains",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "W",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Plains"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Island"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.island",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "U",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Island"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Swamp"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.swamp",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "B",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Swamp"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.mountain",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "R",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Mountain"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Forest"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.forest",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "G",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Forest"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.ally",
+      "programs": [],
+      "registry_name": "Ally"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Clue"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "key": "sacrifice.clue",
+      "programs": [
+        {
+          "cost": {
+            "mana": "2",
+            "sacrifice_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "count": 1,
+              "op": "draw_cards"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Clue"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Food"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "key": "sacrifice.food",
+      "programs": [
+        {
+          "cost": {
+            "mana": "2",
+            "sacrifice_source": true,
+            "tap_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "amount": 3,
+              "op": "gain_life"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Food"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "key": "sacrifice.bastion_of_remembrance",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.human_soldier",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "triggered",
+          "ops": [
+            {
+              "amount": 1,
+              "op": "drain_life"
+            }
+          ],
+          "trigger": {
+            "event": "dies",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            }
+          }
+        }
+      ],
+      "registry_name": "Bastion of Remembrance"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "menace"
+        ],
+        "mana_cost": "B",
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.callous_inspector",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "amount": 1,
+              "op": "deal_damage_to_controller"
+            },
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.clue",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "event": "dies",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        }
+      ],
+      "registry_name": "Callous Inspector"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "W",
+        "power": 1,
+        "subtypes": [
+          "Boar",
+          "Elk",
+          "Bird",
+          "Ox"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.curious_farm_animals",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "amount": 3,
+              "op": "gain_life"
+            }
+          ],
+          "trigger": {
+            "event": "dies",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "cost": {
+            "mana": "2",
+            "sacrifice_source": true
+          },
+          "key": "p1",
+          "kind": "activated",
+          "ops": [
+            {
+              "body": [
+                {
+                  "op": "destroy",
+                  "target": "target_0"
+                }
+              ],
+              "op": "target_clause",
+              "role": "target_0"
+            }
+          ],
+          "target_binding": "inferred",
+          "targets": [
+            {
+              "max": 1,
+              "min": 0,
+              "role": "target_0",
+              "selector": {
+                "kind": "permanent",
+                "predicate": {
+                  "kind": "types_any",
+                  "values": [
+                    "artifact",
+                    "enchantment"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "registry_name": "Curious Farm Animals"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "subtypes": [
+          "Lesson"
+        ],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "instant"
+        ]
+      },
+      "key": "sacrifice.cycle_of_renewal",
+      "programs": [
+        {
+          "cost": {
+            "mana": "2G"
+          },
+          "key": "p0",
+          "kind": "spell",
+          "ops": [
+            {
+              "op": "sacrifice",
+              "predicate": {
+                "kind": "card_type",
+                "value": "land"
+              }
+            },
+            {
+              "bottom_source": false,
+              "count": 2,
+              "op": "search_basic_lands",
+              "tapped": true,
+              "untap_if_lands": null
+            }
+          ]
+        }
+      ],
+      "registry_name": "Cycle of Renewal"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "instant"
+        ]
+      },
+      "key": "sacrifice.deadly_dispute",
+      "programs": [
+        {
+          "cost": {
+            "mana": "1B",
+            "sacrifice": {
+              "another": false,
+              "or_mana": null,
+              "predicate": {
+                "kind": "types_any",
+                "values": [
+                  "artifact",
+                  "creature"
+                ]
+              }
+            }
+          },
+          "key": "p0",
+          "kind": "spell",
+          "ops": [
+            {
+              "count": 2,
+              "op": "draw_cards"
+            },
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.treasure",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ]
+        }
+      ],
+      "registry_name": "Deadly Dispute"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "sorcery"
+        ]
+      },
+      "key": "sacrifice.deadly_precision",
+      "programs": [
+        {
+          "cost": {
+            "mana": "B",
+            "sacrifice": {
+              "another": false,
+              "or_mana": "4",
+              "predicate": {
+                "kind": "types_any",
+                "values": [
+                  "artifact",
+                  "creature"
+                ]
+              }
+            }
+          },
+          "key": "p0",
+          "kind": "spell",
+          "ops": [
+            {
+              "op": "destroy",
+              "target": "target_0"
+            }
+          ],
+          "target_binding": "inferred",
+          "targets": [
+            {
+              "max": 1,
+              "min": 1,
+              "role": "target_0",
+              "selector": {
+                "kind": "creature"
+              }
+            }
+          ]
+        }
+      ],
+      "registry_name": "Deadly Precision"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.fabled_passage",
+      "programs": [
+        {
+          "cost": {
+            "mana": "0",
+            "sacrifice_source": true,
+            "tap_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "bottom_source": false,
+              "count": 1,
+              "op": "search_basic_lands",
+              "tapped": true,
+              "untap_if_lands": 4
+            }
+          ]
+        }
+      ],
+      "registry_name": "Fabled Passage"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1B",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Mercenary"
+        ],
+        "supertypes": [
+          "Legendary"
+        ],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.june_bounty_hunter",
+      "programs": [
+        {
+          "cost": {
+            "mana": "1",
+            "own_turn_only": true,
+            "sacrifice": {
+              "another": true,
+              "or_mana": null,
+              "predicate": {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            }
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.clue",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ]
+        },
+        {
+          "key": "unblockable",
+          "kind": "static",
+          "ops": [
+            {
+              "condition": {
+                "count": 2,
+                "kind": "cards_drawn_at_least"
+              },
+              "op": "unblockable_if"
+            }
+          ]
+        }
+      ],
+      "registry_name": "June, Bounty Hunter"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1G",
+        "power": 2,
+        "subtypes": [
+          "Snake"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.lotus_cobra",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "mana": "W",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "U",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "B",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "R",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "G",
+                    "op": "add_mana"
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "land"
+              }
+            }
+          }
+        }
+      ],
+      "registry_name": "Lotus Cobra"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1BR",
+        "power": 3,
+        "subtypes": [
+          "Devil"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.mayhem_devil",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "amount": 1,
+              "op": "deal_damage",
+              "target": "target_0"
+            }
+          ],
+          "target_binding": "inferred",
+          "targets": [
+            {
+              "max": 1,
+              "min": 1,
+              "role": "target_0",
+              "selector": {
+                "kind": "creature_or_player"
+              }
+            }
+          ],
+          "trigger": {
+            "controller_only": false,
+            "event": "sacrificed",
+            "predicate": {
+              "kind": "any"
+            },
+            "subject": {
+              "kind": "this"
+            }
+          }
+        }
+      ],
+      "registry_name": "Mayhem Devil"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "sacrifice.prismatic_vista",
+      "programs": [
+        {
+          "cost": {
+            "life": 1,
+            "mana": "0",
+            "sacrifice_source": true,
+            "tap_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "bottom_source": false,
+              "count": 1,
+              "op": "search_basic_lands",
+              "tapped": false,
+              "untap_if_lands": null
+            }
+          ]
+        }
+      ],
+      "registry_name": "Prismatic Vista"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "G",
+        "power": 0,
+        "subtypes": [
+          "Bird"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.sazh_s_chocobo",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "op": "put_counters",
+              "target": "source"
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "land"
+              }
+            }
+          }
+        }
+      ],
+      "registry_name": "Sazh's Chocobo"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "power": 3,
+        "subtypes": [
+          "Elf",
+          "Scout"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.tireless_provisioner",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "count": 1,
+                    "definition_ref": "sacrifice.food",
+                    "op": "create_token",
+                    "tapped_and_attacking": false
+                  }
+                ],
+                [
+                  {
+                    "count": 1,
+                    "definition_ref": "sacrifice.treasure",
+                    "op": "create_token",
+                    "tapped_and_attacking": false
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "land"
+              }
+            }
+          }
+        }
+      ],
+      "registry_name": "Tireless Provisioner"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Scout"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.tireless_tracker",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.clue",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "land"
+              }
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "op": "put_counters",
+              "target": "source"
+            }
+          ],
+          "trigger": {
+            "controller_only": true,
+            "event": "sacrificed",
+            "predicate": {
+              "kind": "subtype",
+              "value": "Clue"
+            },
+            "subject": {
+              "kind": "this"
+            }
+          }
+        }
+      ],
+      "registry_name": "Tireless Tracker"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "WB",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "key": "sacrifice.tolls_of_war",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.clue",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.ally",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "controller_only": true,
+            "event": "sacrificed",
+            "once_each_turn": true,
+            "own_turn_only": true,
+            "predicate": {
+              "kind": "any"
+            },
+            "subject": {
+              "kind": "this"
+            }
+          }
+        }
+      ],
+      "registry_name": "Tolls of War"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1G",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Citizen"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.unlucky_cabbage_merchant",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "definition_ref": "sacrifice.food",
+              "op": "create_token",
+              "tapped_and_attacking": false
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "triggered",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "bottom_source": true,
+                    "count": 1,
+                    "op": "search_basic_lands",
+                    "tapped": true,
+                    "untap_if_lands": null
+                  }
+                ],
+                []
+              ],
+              "op": "modal"
+            }
+          ],
+          "trigger": {
+            "controller_only": true,
+            "event": "sacrificed",
+            "predicate": {
+              "kind": "subtype",
+              "value": "Food"
+            },
+            "subject": {
+              "kind": "this"
+            }
+          }
+        }
+      ],
+      "registry_name": "Unlucky Cabbage Merchant"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "R",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "key": "sacrifice.weaponize_the_monsters",
+      "programs": [
+        {
+          "cost": {
+            "mana": "2",
+            "sacrifice": {
+              "another": false,
+              "or_mana": null,
+              "predicate": {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            }
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "amount": 2,
+              "op": "deal_damage",
+              "target": "target_0"
+            }
+          ],
+          "target_binding": "inferred",
+          "targets": [
+            {
+              "max": 1,
+              "min": 1,
+              "role": "target_0",
+              "selector": {
+                "kind": "creature_or_player"
+              }
+            }
+          ]
+        }
+      ],
+      "registry_name": "Weaponize the Monsters"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Treasure"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "key": "sacrifice.treasure",
+      "programs": [
+        {
+          "cost": {
+            "mana": "0",
+            "sacrifice_source": true,
+            "tap_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "mana": "W",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "U",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "B",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "R",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "G",
+                    "op": "add_mana"
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Treasure"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "sacrifice.human_soldier",
+      "programs": [],
+      "registry_name": "Human Soldier"
+    }
+  ],
+  "pack_key": "elemental-sacrifice-v1",
+  "schema_version": 1
+}

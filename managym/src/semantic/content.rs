@@ -17,7 +17,7 @@ use crate::{
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            SpellCostReduction, StaticPtBuff, StaticScope, TriggeredManaAbility,
+            SacrificeCost, SpellCostReduction, StaticPtBuff, StaticScope, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
@@ -79,6 +79,7 @@ fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
                 SemanticPack::two_deck()?,
                 SemanticPack::jeong_increment()?,
                 SemanticPack::elemental()?,
+                SemanticPack::sacrifice()?,
             ]
             .into_iter()
             .map(AuthoredRuntime::compile)
@@ -331,6 +332,7 @@ fn apply_program(
             if definition.mana_cost.as_ref() != Some(&mana_cost) {
                 return unsupported(program, "spell cost disagrees with characteristics");
             }
+            definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
             definition.cost_reduction_per = cost.affinity;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
@@ -385,6 +387,9 @@ fn apply_program(
             definition
                 .activated_abilities
                 .push(ActivatedAbilityDefinition {
+                    sacrifice: cost.sacrifice,
+                    own_turn_only: cost.own_turn_only,
+                    life_cost: cost.life,
                     tap_source: cost.tap_source,
                     mana_cost: cost
                         .mana
@@ -405,6 +410,9 @@ struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
     affinity: Option<CardPredicate>,
+    sacrifice: Option<SacrificeCost>,
+    own_turn_only: bool,
+    life: u32,
     sacrifice_source: bool,
     tap_source: bool,
     waterbend: bool,
@@ -424,6 +432,34 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
+        sacrifice: value
+            .get("sacrifice")
+            .map(|cost| {
+                Ok::<_, IrError>(SacrificeCost {
+                    predicate: predicate_value(object_field(cost, "predicate")?)?,
+                    another: opt_bool_field(cost, "another")?
+                        .ok_or_else(|| malformed(program, "missing another"))?,
+                    or_mana: match cost
+                        .get("or_mana")
+                        .ok_or_else(|| malformed(program, "missing sacrifice alternative"))?
+                    {
+                        Value::Null => None,
+                        Value::String(mana) => Some(ManaCost::parse(mana)),
+                        _ => return Err(malformed(program, "invalid sacrifice alternative")),
+                    },
+                })
+            })
+            .transpose()?,
+        own_turn_only: opt_bool_field(value, "own_turn_only")?.unwrap_or(false),
+        life: value
+            .get("life")
+            .map(|v| {
+                v.as_u64()
+                    .and_then(|n| u32::try_from(n).ok())
+                    .ok_or_else(|| malformed(program, "invalid life cost"))
+            })
+            .transpose()?
+            .unwrap_or(0),
         tap_source: opt_bool_field(value, "tap_source")?.unwrap_or(false),
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
@@ -506,6 +542,10 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
     let trigger = object_field(&program.metadata, "trigger")?;
     let subject = trigger_subject(object_field(trigger, "subject")?)?;
     let base = match str_field(trigger, "event")? {
+        "sacrificed" => TriggerCondition::Sacrificed {
+            predicate: predicate_value(object_field(trigger, "predicate")?)?,
+            controller_only: opt_bool_field(trigger, "controller_only")?.unwrap_or(true),
+        },
         "enters_battlefield" => TriggerCondition::EntersTheBattlefield { subject },
         "dies" => TriggerCondition::Dies { subject },
         "attacks" => TriggerCondition::Attacks { subject },
@@ -523,14 +563,31 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
         },
         other => return unsupported(program, &format!("unsupported trigger event {other:?}")),
     };
-    if let Some(condition) = trigger.get("if") {
-        Ok(TriggerCondition::ActiveIf {
+    let base = if let Some(condition) = trigger.get("if") {
+        TriggerCondition::ActiveIf {
             active_if: lower_condition(&parse_condition(condition)?)?,
             condition: Box::new(base),
-        })
+        }
     } else {
-        Ok(base)
-    }
+        base
+    };
+    let base = if opt_bool_field(trigger, "own_turn_only")?.unwrap_or(false) {
+        TriggerCondition::ActiveIf {
+            active_if: StaticCondition::YourTurn,
+            condition: Box::new(base),
+        }
+    } else {
+        base
+    };
+    Ok(
+        if opt_bool_field(trigger, "once_each_turn")?.unwrap_or(false) {
+            TriggerCondition::OnceEachTurn {
+                condition: Box::new(base),
+            }
+        } else {
+            base
+        },
+    )
 }
 
 fn trigger_subject(value: &Value) -> Result<TriggerSubject, IrError> {
@@ -550,6 +607,9 @@ fn trigger_subject(value: &Value) -> Result<TriggerSubject, IrError> {
 
 fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<(), IrError> {
     match program.steps.as_slice() {
+        [Step::UnblockableIf { condition }] => {
+            definition.unblockable_if = Some(lower_condition(condition)?);
+        }
         [Step::PreventLifeGain] => definition.prevents_life_gain = true,
         [Step::CombatRequiresOther { predicate }] => {
             definition.combat_requires_other = Some(predicate_card(predicate)?)
@@ -659,6 +719,9 @@ fn lower_steps(
 
 fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Effect, IrError> {
     let effect = match step {
+        Step::UnblockableIf { .. } => {
+            return unsupported(program, "unblockable_if requires static program")
+        }
         Step::AddMana { mana, until } => Effect::AddMana {
             mana: Mana::parse(mana),
             until_end_of_combat: match until.as_deref() {
@@ -847,8 +910,33 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
         },
         Step::DealPowerDamage { .. } => Effect::TargetCreaturesDealPowerDamageToLastTarget,
+        Step::SearchBasicLands {
+            count,
+            tapped,
+            untap_if_lands,
+            bottom_source,
+        } => Effect::SearchBasicLand {
+            subtype: None,
+            count: *count,
+            tapped: *tapped,
+            untap_if_lands: *untap_if_lands,
+            bottom_source: *bottom_source,
+        },
+        Step::Sacrifice { predicate } => Effect::Sacrifice {
+            predicate: predicate_card(predicate)?,
+        },
+        Step::DealDamageToController { amount } => Effect::DealDamageToController {
+            amount: i32::try_from(*amount).map_err(|_| malformed(program, "damage exceeds i32"))?,
+        },
+        Step::DrainLife { amount } => Effect::DrainLife {
+            amount: i32::try_from(*amount).map_err(|_| malformed(program, "drain exceeds i32"))?,
+        },
         Step::SearchBasicLand { subtype } => Effect::SearchBasicLand {
             subtype: subtype.clone(),
+            count: 1,
+            tapped: true,
+            untap_if_lands: None,
+            bottom_source: false,
         },
         Step::OptionalDiscardDraw { count } => Effect::OptionalDiscardDraw { count: *count },
         Step::DiscardTargetPlayer { count, target } => Effect::DiscardTargetPlayer {

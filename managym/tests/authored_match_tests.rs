@@ -212,3 +212,21 @@ fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
         assert!(game.is_game_over());
     }
 }
+
+#[test]
+fn compiled_sacrifice_closure_matches_all_native_rules() {
+    let semantic = SemanticPack::sacrifice().unwrap();
+    let compiled = semantic.compile_content_pack().unwrap();
+    let native = ContentPack::default();
+    assert_eq!(semantic.definitions.len(), 27);
+    for definition in &semantic.definitions {
+        let name = &definition.registry_name;
+        let actual = compiled
+            .definition(compiled.definition_id(name).unwrap())
+            .unwrap();
+        let expected = native
+            .definition(native.definition_id(name).unwrap())
+            .unwrap();
+        assert_eq!(actual, expected, "compiled sacrifice drift for {name}");
+    }
+}

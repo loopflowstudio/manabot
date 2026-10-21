@@ -148,6 +148,7 @@ impl Game {
     ) -> bool {
         match condition {
             StaticCondition::Always => true,
+            StaticCondition::YourTurn => self.active_player() == controller,
             StaticCondition::CardsDrawnAtLeast { count } => {
                 self.state.turn.cards_drawn_this_turn[controller.0] >= *count
             }

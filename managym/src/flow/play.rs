@@ -10,7 +10,7 @@ use crate::{
     agent::action::AgentError,
     flow::{
         event::GameEvent,
-        game::{Game, PendingChoice},
+        game::{Game, Payment, PendingChoice},
     },
     state::{
         ability::TargetRequirement,
@@ -158,7 +158,8 @@ impl Game {
         // targets. Only offer the choice when the kicked cost is payable.
         if self.state.cards[card].kicker.is_some() {
             let kicked_cost = self.effective_spell_cost(player, card, true);
-            if kicked_cost.is_some_and(|cost| self.can_pay_mana_cost(player, &cost)) {
+            if kicked_cost.is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
+            {
                 self.pending_choice = Some(PendingChoice::KickerChoice { player, card });
                 return Ok(());
             }
@@ -496,20 +497,18 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        self.pending_choice = None;
-
-        // CR 601.2f-h — Determine and pay costs as the final part of casting.
-        if let Some(cost) = self.effective_spell_cost(player, card, kicked) {
-            self.produce_mana(player, &cost)?;
-            self.spend_mana(player, &cost)?;
-        }
-
-        self.cast_spell(player, card, targets, target_req_indices, kicked)?;
-        if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
-            spell.mode = mode;
-        }
-        self.state.priority.on_non_pass_action(self.active_player());
-        Ok(())
+        let cost = self.state.cards[card].sacrifice_cost.clone();
+        self.begin_payment(
+            player,
+            Payment::Spell {
+                card,
+                kicked,
+                mode,
+                targets,
+                target_req_indices,
+            },
+            cost,
+        )
     }
 
     pub(crate) fn cast_spell(
@@ -582,10 +581,27 @@ impl Game {
             return Err(AgentError("invalid ability index".to_string()));
         };
 
+        if ability.mana_choices().is_some() {
+            return self.activate_mana_ability(player, permanent_id, ability_index);
+        }
+        if ability.own_turn_only && self.active_player() != player {
+            return Err(AgentError("activation requires your turn".into()));
+        }
+        if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
+            return Err(AgentError("source cannot tap".into()));
+        }
+        if self.state.players[player.0].life < ability.life_cost as i32 {
+            return Err(AgentError("cannot pay life cost".into()));
+        }
         if ability.effect.target_spec().is_some() {
-            if self
-                .activated_ability_targets(player, permanent_id, ability_index)
-                .is_empty()
+            if crate::state::ability::effect_target_requirements(std::slice::from_ref(
+                &ability.effect,
+            ))
+            .first()
+            .is_some_and(|requirement| requirement.min > 0)
+                && self
+                    .activated_ability_targets(player, permanent_id, ability_index)
+                    .is_empty()
             {
                 return Err(AgentError("no legal ability targets".into()));
             }
@@ -610,9 +626,7 @@ impl Game {
             return Ok(());
         }
 
-        self.produce_mana(player, &ability.mana_cost)?;
-        self.spend_mana(player, &ability.mana_cost)?;
-        self.push_activated_ability(player, permanent_id, ability_index, Vec::new())
+        self.begin_activation_payment(player, permanent_id, ability_index, Vec::new())
     }
 
     pub(crate) fn activated_ability_targets(
@@ -638,6 +652,31 @@ impl Game {
         })
     }
 
+    pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
+        let Some(PendingChoice::ActivatedTarget {
+            player: chooser,
+            permanent,
+            ability_index,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no activated target pending".into()));
+        };
+        let source = self.state.permanents[permanent]
+            .as_ref()
+            .ok_or_else(|| AgentError("missing activation source".into()))?;
+        let ability = &self.state.cards[source.card].activated_abilities[ability_index];
+        if chooser != player
+            || !crate::state::ability::effect_target_requirements(std::slice::from_ref(
+                &ability.effect,
+            ))
+            .first()
+            .is_some_and(|requirement| requirement.min == 0)
+        {
+            return Err(AgentError("target required".into()));
+        }
+        self.begin_activation_payment(player, permanent, ability_index, Vec::new())
+    }
+
     pub(crate) fn choose_activated_target(
         &mut self,
         player: PlayerId,
@@ -658,16 +697,215 @@ impl Game {
         {
             return Err(AgentError("illegal activated target".into()));
         }
+        self.begin_activation_payment(player, permanent, ability_index, vec![target])
+    }
+
+    pub(crate) fn payment_candidates(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        cost: &crate::state::card::SacrificeCost,
+    ) -> Vec<PermanentId> {
+        self.sacrifice_candidates(player, &cost.predicate)
+            .into_iter()
+            .filter(|id| {
+                !cost.another
+                    || !matches!(payment, Payment::Activation { permanent, .. } if permanent == id)
+            })
+            .collect()
+    }
+
+    fn begin_activation_payment(
+        &mut self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        targets: Vec<Target>,
+    ) -> Result<(), AgentError> {
         let source = self.state.permanents[permanent]
             .as_ref()
             .ok_or_else(|| AgentError("missing source".into()))?;
         let cost = self.state.cards[source.card].activated_abilities[ability_index]
-            .mana_cost
+            .sacrifice
             .clone();
+        self.begin_payment(
+            player,
+            Payment::Activation {
+                permanent,
+                ability_index,
+                targets,
+            },
+            cost,
+        )
+    }
+
+    fn begin_payment(
+        &mut self,
+        player: PlayerId,
+        payment: Payment,
+        cost: Option<crate::state::card::SacrificeCost>,
+    ) -> Result<(), AgentError> {
+        if let Some(cost) = cost {
+            self.pending_choice = Some(PendingChoice::SacrificePayment {
+                player,
+                cost: Box::new(cost),
+                payment: Box::new(payment),
+            });
+            Ok(())
+        } else {
+            self.begin_mana_payment(player, payment, None, None)
+        }
+    }
+
+    pub(crate) fn sacrifice_payment_action(
+        &mut self,
+        player: PlayerId,
+        card: Option<CardId>,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::SacrificePayment {
+            player: chooser,
+            payment,
+            cost,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no sacrifice payment pending".into()));
+        };
+        if player != chooser {
+            return Err(AgentError("wrong payer".into()));
+        }
+        let selected = if let Some(card) = card {
+            Some(
+                self.payment_candidates(player, &payment, &cost)
+                    .into_iter()
+                    .find(|id| {
+                        self.state.permanents[*id]
+                            .as_ref()
+                            .is_some_and(|p| p.card == card)
+                    })
+                    .ok_or_else(|| AgentError("illegal sacrifice cost".into()))?,
+            )
+        } else if cost.or_mana.is_some() {
+            None
+        } else {
+            return Err(AgentError("sacrifice required".into()));
+        };
+        let alternative = if selected.is_none() {
+            cost.or_mana
+        } else {
+            None
+        };
+        self.begin_mana_payment(player, *payment, selected, alternative)
+    }
+
+    pub(crate) fn payment_mana_cost(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        alternative: Option<&ManaCost>,
+    ) -> ManaCost {
+        let base = match payment {
+            Payment::Spell { card, kicked, .. } => self
+                .effective_spell_cost(player, *card, *kicked)
+                .unwrap_or_default(),
+            Payment::Activation {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let source = self.state.permanents[*permanent]
+                    .as_ref()
+                    .expect("pending activation source");
+                self.state.cards[source.card].activated_abilities[*ability_index]
+                    .mana_cost
+                    .clone()
+            }
+        };
+        match alternative {
+            Some(extra) => base.plus(extra),
+            None => base,
+        }
+    }
+
+    fn begin_mana_payment(
+        &mut self,
+        player: PlayerId,
+        payment: Payment,
+        sacrifice: Option<PermanentId>,
+        alternative: Option<ManaCost>,
+    ) -> Result<(), AgentError> {
+        if !self.mana_ability_actions(player, sacrifice).is_empty() {
+            self.pending_choice = Some(PendingChoice::ManaPayment {
+                player,
+                payment: Box::new(payment),
+                sacrifice,
+                alternative,
+            });
+            return Ok(());
+        }
+        self.commit_payment(player, payment, sacrifice, alternative)
+    }
+
+    pub(crate) fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
+        let Some(PendingChoice::ManaPayment {
+            player: chooser,
+            payment,
+            sacrifice,
+            alternative,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no mana payment pending".into()));
+        };
+        if chooser != player {
+            return Err(AgentError("wrong payer".into()));
+        }
+        self.commit_payment(player, *payment, sacrifice, alternative)
+    }
+
+    fn commit_payment(
+        &mut self,
+        player: PlayerId,
+        payment: Payment,
+        sacrifice: Option<PermanentId>,
+        alternative: Option<ManaCost>,
+    ) -> Result<(), AgentError> {
+        let cost = self.payment_mana_cost(player, &payment, alternative.as_ref());
         self.produce_mana(player, &cost)?;
+        // Commit the complete announced cost once, before sacrifice triggers
+        // can observe a departing permanent or a spell reaches the stack.
         self.spend_mana(player, &cost)?;
+        if let Some(selected) = sacrifice {
+            self.sacrifice_permanent(selected);
+        }
         self.pending_choice = None;
-        self.push_activated_ability(player, permanent, ability_index, vec![target])
+        match payment {
+            Payment::Spell {
+                card,
+                kicked,
+                mode,
+                targets,
+                target_req_indices,
+            } => {
+                self.cast_spell(player, card, targets, target_req_indices, kicked)?;
+                if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
+                    spell.mode = mode;
+                }
+                self.state.priority.on_non_pass_action(self.active_player());
+                Ok(())
+            }
+            Payment::Activation {
+                permanent,
+                ability_index,
+                targets,
+            } => {
+                let source = self.state.permanents[permanent].as_ref().ok_or_else(|| {
+                    AgentError("activation source sacrificed as another cost".into())
+                })?;
+                let life =
+                    self.state.cards[source.card].activated_abilities[ability_index].life_cost;
+                self.change_life(player, -(life as i32));
+                self.push_activated_ability(player, permanent, ability_index, targets)
+            }
+        }
     }
 
     /// Untapped artifacts/creatures `player` controls — the permanents that
@@ -696,6 +934,22 @@ impl Game {
         cost: &ManaCost,
         candidates: usize,
     ) -> bool {
+        if !self.mana_ability_actions(player, None).is_empty() {
+            if self.can_pay_with_mana_abilities(player, cost, None) {
+                return true;
+            }
+            if candidates == 0 || cost.generic() == 0 {
+                return false;
+            }
+            return self
+                .waterbend_candidates(player)
+                .into_iter()
+                .any(|candidate| {
+                    let mut probe = self.clone();
+                    probe.tap_permanent(candidate, true);
+                    probe.can_pay_with_waterbend(player, &cost.reduced_generic(1), candidates - 1)
+                });
+        }
         let tappable = candidates.min(cost.generic() as usize) as u8;
         self.available_mana(player)
             .can_pay(&cost.reduced_generic(tappable))
@@ -808,7 +1062,9 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
         };
-        let source_permanent_object_id = permanent.id;
+        let source_ref = self
+            .permanent_object_ref(permanent_id)
+            .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
         let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self.state.cards[source_card]
@@ -828,7 +1084,7 @@ impl Game {
         if ability.sacrifice_source {
             // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
             // moves the source to its owner's graveyard immediately.
-            self.move_card(source_card, ZoneType::Graveyard);
+            self.sacrifice_permanent(permanent_id);
             self.invalidate_mana_cache(player);
         }
 
@@ -838,7 +1094,7 @@ impl Game {
             controller: player,
             source_definition_id,
             source_card,
-            source_permanent_object_id,
+            source_ref,
             ability_index,
             targets,
         }));

@@ -83,7 +83,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
 ) -> None:
     space = ObservationSpace()
     binding = checkpoint_world(Match().to_rust(), space)
-    assert binding["world"] == "w7"
+    assert binding["world"] == "w8"
     binding["world"] = old_world
     binding["input_schema"]["actions"]["shape"][-1] = width
     path = tmp_path / "w4.pt"
@@ -98,7 +98,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         },
         path,
     )
-    with pytest.raises(ValueError, match="compatible w7 world binding"):
+    with pytest.raises(ValueError, match="compatible w8 world binding"):
         load_checkpoint_agent(str(path))
 
 

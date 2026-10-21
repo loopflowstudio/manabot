@@ -28,6 +28,8 @@ use crate::state::card::CardDefId;
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
+const SACRIFICE_IR: &str = include_str!("../../../content/semantic/v1/generated/sacrifice.ir.json");
+
 const ELEMENTAL_IR: &str = include_str!("../../../content/semantic/v1/generated/elemental.ir.json");
 
 const TWO_DECK_IR: &str = include_str!("../../../content/semantic/v1/generated/two_deck.ir.json");
@@ -93,6 +95,11 @@ pub enum Opcode {
     PowerFromLandCounters = 48,
     SpellCostReduction = 49,
     StaticPt = 50,
+    SearchBasicLands = 51,
+    Sacrifice = 52,
+    DealDamageToController = 53,
+    DrainLife = 54,
+    UnblockableIf = 55,
 }
 
 impl Opcode {
@@ -148,6 +155,11 @@ impl Opcode {
             48 => Opcode::PowerFromLandCounters,
             49 => Opcode::SpellCostReduction,
             50 => Opcode::StaticPt,
+            51 => Opcode::SearchBasicLands,
+            52 => Opcode::Sacrifice,
+            53 => Opcode::DealDamageToController,
+            54 => Opcode::DrainLife,
+            55 => Opcode::UnblockableIf,
             other => return Err(IrError::UnknownOpcode(other)),
         };
         Ok(opcode)
@@ -230,6 +242,24 @@ pub enum Condition {
 /// their own step lists, matching the compiler's `then`/`otherwise`/`body`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
+    SearchBasicLands {
+        count: usize,
+        tapped: bool,
+        untap_if_lands: Option<usize>,
+        bottom_source: bool,
+    },
+    Sacrifice {
+        predicate: Predicate,
+    },
+    DealDamageToController {
+        amount: i64,
+    },
+    DrainLife {
+        amount: i64,
+    },
+    UnblockableIf {
+        condition: Condition,
+    },
     AddMana {
         mana: String,
         until: Option<String>,
@@ -576,6 +606,10 @@ pub struct DefaultContext;
 impl InterpreterContext for DefaultContext {}
 
 impl SemanticPack {
+    pub fn sacrifice() -> Result<Self, IrError> {
+        Self::from_json(SACRIFICE_IR)
+    }
+
     pub fn elemental() -> Result<Self, IrError> {
         Self::from_json(ELEMENTAL_IR)
     }
@@ -868,6 +902,11 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
+            Step::SearchBasicLands { .. }
+            | Step::Sacrifice { .. }
+            | Step::DealDamageToController { .. }
+            | Step::DrainLife { .. }
+            | Step::UnblockableIf { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::SearchBasicLand { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::OptionalDiscardDraw { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::DiscardTargetPlayer { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
@@ -1067,6 +1106,34 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::DealPowerDamage => Step::DealPowerDamage {
             sources: str_field(value, "sources")?.to_owned(),
             target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::SearchBasicLands => Step::SearchBasicLands {
+            count: usize_field(value, "count")?,
+            tapped: opt_bool_field(value, "tapped")?
+                .ok_or_else(|| IrError::Malformed("missing tapped".into()))?,
+            untap_if_lands: value
+                .get("untap_if_lands")
+                .filter(|v| !v.is_null())
+                .map(|v| {
+                    v.as_u64()
+                        .and_then(|v| usize::try_from(v).ok())
+                        .ok_or_else(|| IrError::Malformed("invalid untap land count".into()))
+                })
+                .transpose()?,
+            bottom_source: opt_bool_field(value, "bottom_source")?
+                .ok_or_else(|| IrError::Malformed("missing bottom_source".into()))?,
+        },
+        Opcode::Sacrifice => Step::Sacrifice {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::DealDamageToController => Step::DealDamageToController {
+            amount: i64_field(value, "amount")?,
+        },
+        Opcode::DrainLife => Step::DrainLife {
+            amount: i64_field(value, "amount")?,
+        },
+        Opcode::UnblockableIf => Step::UnblockableIf {
+            condition: parse_condition(object_field(value, "condition")?)?,
         },
         Opcode::SearchBasicLand => Step::SearchBasicLand {
             subtype: match field(value, "subtype")? {

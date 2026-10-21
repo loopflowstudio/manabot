@@ -375,6 +375,7 @@ class Action:
     action_type: ActionEnum
     focus: List[int]
     declared: bool | None
+    description: str | None
     mode_index: int | None
     ability_index: int | None
 

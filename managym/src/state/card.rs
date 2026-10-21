@@ -111,7 +111,7 @@ pub struct TriggeredManaAbility {
     pub mana: Mana,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Keywords {
     pub flying: bool,
     pub reach: bool,
@@ -210,8 +210,47 @@ pub enum ReplacementEffect {
     EntersWithPlusOneCounters { count: i32 },
 }
 
+impl ActivatedAbilityDefinition {
+    pub fn mana_choices(&self) -> Option<Vec<Mana>> {
+        match &self.effect {
+            Effect::AddMana {
+                mana,
+                until_end_of_combat: false,
+            } => Some(vec![mana.clone()]),
+            Effect::Modal { modes } => modes
+                .iter()
+                .map(|effects| match effects.as_slice() {
+                    [Effect::AddMana {
+                        mana,
+                        until_end_of_combat: false,
+                    }] => Some(mana.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => None,
+        }
+    }
+}
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SacrificeCost {
+    pub predicate: CardPredicate,
+    pub another: bool,
+    pub or_mana: Option<ManaCost>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sacrifice: Option<SacrificeCost>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub own_turn_only: bool,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
     pub mana_cost: ManaCost,
@@ -236,6 +275,10 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unblockable_if: Option<StaticCondition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sacrifice_cost: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prevents_life_gain: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

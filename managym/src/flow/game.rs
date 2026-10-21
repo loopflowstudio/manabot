@@ -64,11 +64,39 @@ pub struct GameState {
     pub content: Arc<ContentPack>,
 }
 
+/// A fully announced spell or activation waiting for selected costs.
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum Payment {
+    Spell {
+        card: CardId,
+        kicked: bool,
+        mode: Option<usize>,
+        targets: Vec<Target>,
+        target_req_indices: Vec<usize>,
+    },
+    Activation {
+        permanent: PermanentId,
+        ability_index: usize,
+        targets: Vec<Target>,
+    },
+}
+
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
 /// KickerChoice? -> ChooseTargets (per requirement) -> payment; activating a
 /// waterbend ability walks Waterbend until the cost is paid.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
+    ManaPayment {
+        player: PlayerId,
+        payment: Box<Payment>,
+        sacrifice: Option<PermanentId>,
+        alternative: Option<crate::state::mana::ManaCost>,
+    },
+    SacrificePayment {
+        player: PlayerId,
+        payment: Box<Payment>,
+        cost: Box<crate::state::card::SacrificeCost>,
+    },
     ActivatedTarget {
         player: PlayerId,
         permanent: PermanentId,
