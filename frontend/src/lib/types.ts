@@ -575,13 +575,13 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string }
 ) & {
-  table?: import('./testing-house-protocol').TableSnapshot;
+  table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;
   resume_token?: string;
   participant_id?: string;
 };
 
-export type ClientMessage = import('./testing-house-protocol').TestingHouseRequest;
+export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
 
 export type ConnectionState =
   | 'disconnected'

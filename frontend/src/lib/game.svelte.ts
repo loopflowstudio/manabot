@@ -13,7 +13,7 @@ import type {
   BranchRetryPayload,
   TableCapability,
   TableSnapshot,
-} from './testing-house-protocol';
+} from './shared-table-protocol';
 import type {
   ActionOption,
   ConnectionState,

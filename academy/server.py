@@ -98,20 +98,7 @@ from .replay_index import (
     projection_with_addresses,
     restore_decision,
 )
-from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
-from .study_runtime import (
-    HistoricalStudyEvidenceProvider,
-    HistoricalStudyEvidenceRequest,
-    JoinedStudyEvidence,
-    StudyEvidenceMismatchError,
-    StudyEvidenceUnavailableError,
-    StudyPlanKind,
-    StudyPlanUnavailableError,
-    UnavailableHistoricalStudyEvidenceProvider,
-    join_historical_study_evidence,
-    select_study_plan,
-)
-from .testing_house_protocol import (
+from .shared_table_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
     ROLE_CAPABILITIES,
@@ -137,6 +124,19 @@ from .testing_house_protocol import (
     ViewerAccess,
     ViewerIdentity,
     ViewerRole,
+)
+from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
+from .study_runtime import (
+    HistoricalStudyEvidenceProvider,
+    HistoricalStudyEvidenceRequest,
+    JoinedStudyEvidence,
+    StudyEvidenceMismatchError,
+    StudyEvidenceUnavailableError,
+    StudyPlanKind,
+    StudyPlanUnavailableError,
+    UnavailableHistoricalStudyEvidenceProvider,
+    join_historical_study_evidence,
+    select_study_plan,
 )
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
@@ -2744,7 +2744,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
 }
 
 if set(DISPATCH_CAPABILITIES) | {"join_table", "resume"} != set(REQUEST_TYPES):
-    raise RuntimeError("testing-house request vocabulary and dispatch drifted")
+    raise RuntimeError("shared-table request vocabulary and dispatch drifted")
 
 
 def _parse_table_request(raw: Any) -> Any:

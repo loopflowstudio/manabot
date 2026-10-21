@@ -3,6 +3,8 @@
 The match protocol remains authoritative and role-neutral.  These models cover
 only participant leases, role capabilities, belief visibility, and the
 participant-local Study controls around that match truth.
+
+Implements the `testing-house-v1` wire schema (frozen identifier).
 """
 
 from __future__ import annotations
@@ -10,13 +12,13 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import Field, TypeAdapter
+from pydantic import ConfigDict, Field, TypeAdapter
 
 from managym.experience import Command, ProtocolModel, UInt64
 
 from .advice_identity import AdviceIdentity
 
-TESTING_HOUSE_VERSION: Literal["testing-house-v1"] = "testing-house-v1"
+SHARED_TABLE_VERSION: Literal["testing-house-v1"] = "testing-house-v1"
 
 
 class ViewerRole(str, Enum):
@@ -131,7 +133,7 @@ class OpponentIdentity(ProtocolModel):
 
 
 class TableSnapshot(ProtocolModel):
-    contract: Literal["testing-house-v1"] = TESTING_HOUSE_VERSION
+    contract: Literal["testing-house-v1"] = SHARED_TABLE_VERSION
     table_id: str
     table_revision: UInt64
     mode: Literal["live", "study"]
@@ -251,7 +253,7 @@ class ReturnToLiveMessage(ProtocolModel):
     grant_revision: UInt64
 
 
-TestingHouseRequest: TypeAlias = Annotated[
+SharedTableRequest: TypeAlias = Annotated[
     JoinTableMessage
     | ResumeMessage
     | NewGameMessage
@@ -272,7 +274,7 @@ TestingHouseRequest: TypeAlias = Annotated[
     Field(discriminator="type"),
 ]
 
-REQUEST_ADAPTER = TypeAdapter(TestingHouseRequest)
+REQUEST_ADAPTER = TypeAdapter(SharedTableRequest)
 REQUEST_TYPES = (
     "join_table",
     "resume",
@@ -345,7 +347,7 @@ class ControlErrorEvent(ProtocolModel):
     table: TableSnapshot | None = None
 
 
-TestingHouseControlEvent: TypeAlias = Annotated[
+SharedTableControlEvent: TypeAlias = Annotated[
     TableSnapshotEvent
     | BeliefChangedEvent
     | RoleChangedEvent
@@ -357,15 +359,18 @@ TestingHouseControlEvent: TypeAlias = Annotated[
 ]
 
 
-class TestingHouseV1ConformanceBundle(ProtocolModel):
-    contract: Literal["testing-house-v1"] = TESTING_HOUSE_VERSION
-    requests: list[TestingHouseRequest]
-    events: list[TestingHouseControlEvent]
+class SharedTableV1ConformanceBundle(ProtocolModel):
+    # The checked schema's title is part of the frozen `testing-house-v1` bytes.
+    model_config = ConfigDict(title="TestingHouseV1ConformanceBundle")
+
+    contract: Literal["testing-house-v1"] = SHARED_TABLE_VERSION
+    requests: list[SharedTableRequest]
+    events: list[SharedTableControlEvent]
 
 
-def testing_house_schema() -> dict[str, object]:
+def shared_table_schema() -> dict[str, object]:
     """Return the checked Draft 2020-12 control schema."""
-    return TestingHouseV1ConformanceBundle.model_json_schema()
+    return SharedTableV1ConformanceBundle.model_json_schema()
 
 
 def request_types() -> tuple[str, ...]:
