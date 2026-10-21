@@ -1,9 +1,0 @@
-{
-  "id": "etu125-laptop-20261008-1",
-  "started_unix": 1791439200.0,
-  "deadline_unix": 1791468000.0,
-  "seconds": 28800,
-  "cpu_threads": 1,
-  "max_evaluators": 1,
-  "paid_compute": false
-}

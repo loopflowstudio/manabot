@@ -635,6 +635,9 @@ pub struct DefaultContext;
 
 impl InterpreterContext for DefaultContext {}
 
+const COMPLEXITY_IR: &str =
+    include_str!("../../../content/semantic/v1/generated/complexity.ir.json");
+
 impl SemanticPack {
     pub fn temur() -> Result<Self, IrError> {
         Self::from_json(include_str!(
@@ -658,6 +661,11 @@ impl SemanticPack {
     /// Parse the checked-in Jeong Jeong's Deserters increment.
     pub fn jeong_increment() -> Result<Self, IrError> {
         Self::from_json(JEONG_INCREMENT_IR)
+    }
+
+    /// Parse the isolated MTG-122 research catalog and its exact deck roster.
+    pub fn complexity() -> Result<Self, IrError> {
+        Self::from_json(COMPLEXITY_IR)
     }
 
     /// Parse an IR document from JSON text.

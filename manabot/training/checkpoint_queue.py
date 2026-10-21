@@ -144,7 +144,8 @@ def checkpoints(
                             )
                         }
                         if origin is not None
-                        else {},
+                        # Untrained: every clock is zero, not unknown.
+                        else {"active_training_seconds": 0.0},
                     ),
                 )
             )

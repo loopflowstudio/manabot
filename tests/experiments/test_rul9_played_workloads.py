@@ -424,6 +424,10 @@ def test_real_semantic_census_is_ragged_and_fail_closed() -> None:
     assert sum(sample["tokens_by_zone"].values()) == sample["expanded_semantic_tokens"]
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-9-played-workloads-v1.json",
+    "experiments/data/rul-9-played-workloads-v1.measurement.json",
+)
 def test_checked_receipt_is_fail_closed_when_present() -> None:
     if not rul9.DEFAULT_OUT.exists():
         pytest.skip("canonical RUL-9 evidence is generated after preregistration")
@@ -453,6 +457,10 @@ def test_checked_receipt_is_fail_closed_when_present() -> None:
             rul9.verify_receipt(registered, payload, check_current=False)
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-9-played-workloads-v1.json",
+    "experiments/data/rul-9-played-workloads-v1.measurement.json",
+)
 def test_checked_report_matches_checked_receipt() -> None:
     if not rul9.DEFAULT_OUT.exists():
         pytest.skip("canonical RUL-9 evidence is generated after preregistration")

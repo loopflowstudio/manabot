@@ -129,6 +129,7 @@ def load_artifact() -> dict:
         ("cells", 0, "repeats", 0, "sampler"),
     ],
 )
+@pytest.mark.experiment_data("experiments/data/w2-182-search-branching-v1.json")
 def test_verifier_rejects_missing_contract_fields(path: tuple[str | int, ...]) -> None:
     payload = load_artifact()
     cursor = payload
@@ -141,6 +142,7 @@ def test_verifier_rejects_missing_contract_fields(path: tuple[str | int, ...]) -
         bench.verify(payload)
 
 
+@pytest.mark.experiment_data("experiments/data/w2-182-search-branching-v1.json")
 def test_verifier_rejects_worker_failure() -> None:
     payload = load_artifact()
     repeat = payload["cells"][0]["repeats"][0]
@@ -151,6 +153,7 @@ def test_verifier_rejects_worker_failure() -> None:
         bench.verify(payload)
 
 
+@pytest.mark.experiment_data("experiments/data/w2-182-search-branching-v1.json")
 def test_verifier_rejects_reused_process_group() -> None:
     payload = load_artifact()
     first = payload["cells"][0]["repeats"][0]
@@ -313,6 +316,7 @@ def test_new_cargo_build_script_must_be_admitted(tmp_path: Path) -> None:
         bench.production_compile_time_inputs(root=root)
 
 
+@pytest.mark.experiment_data("experiments/data/w2-182-search-branching-v1.json")
 def test_verifier_rejects_wrong_source_method_and_path_closure() -> None:
     payload = load_artifact()
     payload["run"]["canonical"] = False
@@ -329,23 +333,22 @@ def test_verifier_rejects_wrong_source_method_and_path_closure() -> None:
         bench.verify(payload)
 
 
+@pytest.mark.experiment_data("experiments/data/w2-182-search-branching-v1.json")
 def test_matrix_projection_ignores_only_physical_measurements() -> None:
     payload = load_artifact()
     physical = copy.deepcopy(payload)
-    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
-        "elapsed_seconds"
-    ] = 0.001
-    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
-        "cow_bytes"
-    ] = 4096
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"]["elapsed_seconds"] = (
+        0.001
+    )
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"]["cow_bytes"] = 4096
     physical["cells"][2]["repeats"][0]["rss_peak_bytes"] += 1234
     assert bench.matched_matrix_projection(payload) == bench.matched_matrix_projection(
         physical
     )
 
-    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
-        "result_checksum"
-    ] = "logical-drift"
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"]["result_checksum"] = (
+        "logical-drift"
+    )
     assert bench.matched_matrix_projection(payload) != bench.matched_matrix_projection(
         physical
     )

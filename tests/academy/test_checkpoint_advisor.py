@@ -71,6 +71,7 @@ def _unavailable_for_identity(
     return response.reason
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_checked_checkpoint_fixture_is_served_by_the_existing_endpoint(
     runtime: CheckpointAdvisorRuntime,
 ) -> None:
@@ -89,6 +90,7 @@ def test_checked_checkpoint_fixture_is_served_by_the_existing_endpoint(
     assert response.content == expected
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_fresh_live_and_study_checkpoint_advice_is_byte_identical(
     runtime: CheckpointAdvisorRuntime,
 ) -> None:
@@ -108,6 +110,7 @@ def test_fresh_live_and_study_checkpoint_advice_is_byte_identical(
     )
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 @pytest.mark.parametrize("drift", ("changed", "generated"))
 def test_checkpoint_fixture_rejects_retained_evidence_drift(
     runtime: CheckpointAdvisorRuntime,
@@ -249,6 +252,7 @@ def test_available_checkpoint_evidence_has_complete_exact_identities(
         ),
     ),
 )
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_checkpoint_registry_mismatches_fail_closed(
     runtime: CheckpointAdvisorRuntime,
     field: str,
@@ -264,6 +268,7 @@ def test_checkpoint_registry_mismatches_fail_closed(
     assert _unavailable_for_identity(runtime, identity) == "advisor_artifact_mismatch"
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_model_and_protocol_abi_mismatches_fail_closed(
     runtime: CheckpointAdvisorRuntime,
 ) -> None:
@@ -299,6 +304,7 @@ def test_model_and_protocol_abi_mismatches_fail_closed(
     )
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_address_and_viewer_mismatches_fail_closed(
     runtime: CheckpointAdvisorRuntime,
 ) -> None:
@@ -346,6 +352,7 @@ def test_address_and_viewer_mismatches_fail_closed(
     assert viewer_response.reason == "belief_viewer_mismatch"
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_drifted_retained_root_fails_closed(
     runtime: CheckpointAdvisorRuntime,
 ) -> None:

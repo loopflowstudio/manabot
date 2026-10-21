@@ -1,7 +1,0 @@
-{
-  "status": "passed",
-  "exit_code": 0,
-  "seconds": 6.0124895829940215,
-  "seconds_limit": 15,
-  "kind": "focused correctness; not a scaling measurement"
-}

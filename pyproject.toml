@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "manabot"
 version = "0.1.0"
 description = "The trainable Magic: The Gathering agent for Manabot"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.24.0",
     "pandas>=2.0.0",
@@ -17,7 +17,8 @@ dependencies = [
     "wandb>=0.18.7",
     "psutil>=5.9.0",
     "fastapi>=0.116.0",
-    "uvicorn[standard]>=0.34.0"
+    "uvicorn[standard]>=0.34.0",
+    "etude-sdk==0.1.1",
 ]
 
 [project.scripts]
@@ -63,6 +64,7 @@ play-runtime = [
     "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
     "wandb>=0.18.7",
+    "etude-sdk==0.1.1",
 ]
 
 [tool.uv]

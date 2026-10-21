@@ -17,8 +17,9 @@ import re
 from statistics import mean
 from typing import Literal
 
+from etude.track.records import RunFile as EtudeRunFile
 from matplotlib.figure import Figure
-from pydantic import ConfigDict, JsonValue
+from pydantic import ConfigDict, JsonValue, TypeAdapter
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.training.experiment_execution import ExperimentRun
@@ -51,6 +52,9 @@ class RetainedRun(TrainingRun):
     model_config = ConfigDict(extra="allow")
     __pydantic_extra__: dict[str, JsonValue]
     regime: RetainedRegime
+
+
+_RUN_RECORD = TypeAdapter(RetainedRun | EtudeRunFile)
 
 
 class RetainedExecution(ExperimentRun):
@@ -115,9 +119,15 @@ class ReportEvidence:
 
 
 def load_evidence(root: Path) -> ReportEvidence:
-    """Read saved JSON only; malformed records fail instead of disappearing."""
+    """Read saved JSON, validating both training and Etude tracker run files.
+
+    Tracker declarations share the name ``run.json`` with TrainingRun exports;
+    they remain evidence sources but do not add training trajectories. Invalid
+    records of either kind fail instead of disappearing.
+    """
     root = root.resolve()
     runs = tuple(sorted(root.rglob("run.json")))
+    records = tuple(_RUN_RECORD.validate_json(p.read_text()) for p in runs)
     monitors = tuple(sorted(root.rglob("monitor.json")))
     executions = tuple(sorted(root.rglob("experiment.json")))
     attempts = tuple(sorted(root.rglob("attempt-*/attempt.json")))
@@ -128,7 +138,7 @@ def load_evidence(root: Path) -> ReportEvidence:
     )
     return ReportEvidence(
         root,
-        tuple(RetainedRun.model_validate_json(p.read_text()) for p in runs),
+        tuple(record for record in records if isinstance(record, RetainedRun)),
         tuple(
             RetainedMonitor.model_validate_json(p.read_text())
             for p in monitors

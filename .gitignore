@@ -32,3 +32,7 @@ scratch/*.json
 
 # Generated Loopflow context and runtime state stay local.
 .lf/tmp/
+
+# Experiment data lives in S3, recorded by experiments/data.manifest.json.
+# Fetch it with `uv run --extra artifacts python -m manabot.data fetch`.
+experiments/data/

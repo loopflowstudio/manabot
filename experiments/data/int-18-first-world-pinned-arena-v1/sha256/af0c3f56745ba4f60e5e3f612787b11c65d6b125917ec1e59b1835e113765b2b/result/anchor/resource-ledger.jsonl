@@ -1,2 +1,0 @@
-{"event_sha256": "65011e4ef50caad9158f6c3a5489f0f0cccaa4c06ade2008e0bf1b224bed6c3a", "payload": {"contract_sha256": "fc9cb76c0d80ad64951455ac6fede94b1355f383dde2f2964d0e578f62671a71", "profile": "production"}, "previous_event_sha256": null, "recorded_unix": 1784410687.10189, "stage": "preflight"}
-{"event_sha256": "55d87cfdf27945bcbce87d4ee723f8f085ebf27d62016351fbd9ec79dede0cf3", "payload": {"cells": 10, "games": 480}, "previous_event_sha256": "65011e4ef50caad9158f6c3a5489f0f0cccaa4c06ade2008e0bf1b224bed6c3a", "recorded_unix": 1784411371.625182, "stage": "complete"}

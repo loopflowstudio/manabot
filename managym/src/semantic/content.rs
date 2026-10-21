@@ -81,6 +81,7 @@ fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
                 SemanticPack::elemental()?,
                 SemanticPack::sacrifice()?,
                 SemanticPack::temur()?,
+                SemanticPack::complexity()?,
             ]
             .into_iter()
             .map(AuthoredRuntime::compile)
@@ -180,6 +181,60 @@ mod catalog_tests {
     }
 
     #[test]
+    fn complexity_roster_is_explicit_and_vanilla() {
+        let catalog = authored_runtime_catalog().unwrap();
+        let runtime = catalog
+            .iter()
+            .find(|r| r.pack_key == "mtg122-complexity-v1")
+            .unwrap();
+        assert_eq!(runtime.setups.len(), 6);
+        let semantic = SemanticPack::complexity().unwrap();
+        for key in [
+            "research.savannah_lions",
+            "research.glory_seeker",
+            "research.hill_giant",
+        ] {
+            let definition = semantic
+                .definitions
+                .iter()
+                .find(|d| d.semantic_key == key)
+                .unwrap();
+            assert!(ContentPack::default()
+                .definition_id(&definition.registry_name)
+                .is_none());
+            assert!(!semantic
+                .programs
+                .iter()
+                .any(|p| p.definition_index == definition.semantic_index));
+        }
+        for setup in &runtime.setups {
+            let mut config = setup.clone();
+            config.content_pack = Some(runtime.pack_key.clone());
+            assert_eq!(
+                select_authored_runtime(&[config.clone(), config], &catalog)
+                    .unwrap()
+                    .unwrap()
+                    .pack_key,
+                "mtg122-complexity-v1"
+            );
+        }
+        // An ordinary product pair must still choose the original product pack.
+        let pair = catalog
+            .iter()
+            .find(|r| r.pack_key == "ur-lessons-vs-gw-allies")
+            .unwrap()
+            .setups
+            .clone();
+        assert_eq!(
+            select_authored_runtime(&pair, &catalog)
+                .unwrap()
+                .unwrap()
+                .pack_key,
+            "ur-lessons-vs-gw-allies"
+        );
+    }
+
+    #[test]
     fn duplicate_exact_catalog_entries_fail_closed() {
         let semantic = SemanticPack::jeong_increment().expect("Jeong IR parses");
         let player_configs = configs(&semantic, "ur_lessons", "gw_allies_jeong");
@@ -199,7 +254,10 @@ impl SemanticPack {
     /// presentation text across the migration boundary; every rules-relevant
     /// characteristic and program is lowered from this IR.
     pub fn compile_content_pack(&self) -> Result<ContentPack, IrError> {
-        let presentation = ContentPack::default();
+        let mut presentation = ContentPack::default();
+        if self.pack_key == "mtg122-complexity-v1" {
+            presentation.register_complexity_presentation();
+        }
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
