@@ -1,11 +1,11 @@
-"""Export the Game-owned testing-house-v1 control schema."""
+"""Export the Game-owned shared-table control schema (frozen identifier `testing-house-v1`)."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from academy.testing_house_protocol import testing_house_schema
+from academy.shared_table_protocol import shared_table_schema
 
 
 def main() -> None:
@@ -13,7 +13,7 @@ def main() -> None:
         Path(__file__).parents[1] / "protocol" / "testing-house-v1.schema.json"
     )
     destination.write_text(
-        json.dumps(testing_house_schema(), indent=2, sort_keys=True) + "\n",
+        json.dumps(shared_table_schema(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 

@@ -1,4 +1,4 @@
-"""Two-participant integration proof for the bounded testing-house table."""
+"""Two-participant integration proof for the bounded shared table."""
 
 from __future__ import annotations
 

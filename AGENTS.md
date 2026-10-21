@@ -5,8 +5,9 @@ Never add "Co-Authored by:" tags in commits
 - **Manabot** — the whole project and public brand at `manabot.gg`.
   The repository is `loopflowstudio/manabot` (renamed at Jack Heart's request
   on 2026-10-15).
-- **Academy** — the web app players use: the `academy` package, the frontend,
-  and their service namespaces. The project website uses Manabot.
+- **Academy** — the browser UI for inspecting bots and replays: the `academy`
+  package, the frontend, and their service namespaces. It is a client of
+  manabot and secondary to training. The project website uses Manabot.
 - **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
@@ -18,9 +19,9 @@ Never add "Co-Authored by:" tags in commits
   Always ASCII (never "Étude").
 
 Jack Heart selected Manabot and `manabot.gg` on 2026-10-14, replacing the
-provisional Fantasia project name. Academy remains the web app.
+provisional Fantasia project name. Academy remains the name of the UI.
 
-Boundary rule for anything those lines don't settle: if it faces the player,
+Boundary rule for anything those lines don't settle: if it is the browser UI,
 it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
 world, it is managym; if it launches or records experiments, it is Etude. So
 the play server, experience protocol, curated packs, and their env/error
@@ -103,7 +104,7 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
   `managym/_managym.cpython-312-darwin.so`.
-- Play against the bot: `./scripts/play` (installs locked local dependencies,
+- Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
 ## Testing

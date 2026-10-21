@@ -1,4 +1,4 @@
-"""Identity values shared by Academy's advice and testing-house contracts.
+"""Identity values shared by Academy's advice and shared-table contracts.
 
 The legacy four-string identity remains import-compatible through
 ``academy.advice``.  ``AdvisorIdentity`` is the versioned, closed superset used

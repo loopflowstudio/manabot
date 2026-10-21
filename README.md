@@ -69,7 +69,7 @@ with advantage filtering, annealed step sizes, and an EMA of the weights for
 evaluation. Those choices follow
 [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y) (Sokota et al., 2026),
 and each one is a separate switch that we test on Magic rather than adopt on
-the paper's authority ([research guide](manabot/LEARNING_RESEARCH_GUIDE.md)).
+the paper's authority ([research program](manabot/RESEARCH.md)).
 Training recipes are declared as JSON *regimes*
 ([experiments/regimes/](experiments/regimes/)) and can run locally or on
 rented GPUs ([remote training](docs/remote-training.md)).

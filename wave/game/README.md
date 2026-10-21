@@ -1,73 +1,46 @@
 # Game
 
-Game owns the complete experience of playing Academy. Its standard is not "a
-working GUI" but a small, authored game whose smoothness, performance, visual
-polish, reliability, and portability equal or exceed Phase for the exact decks
-the creator chooses to support.
+Game owns Academy as a lab for researchers: the local tool for loading a
+trained manabot, watching it play or playing against it, and inspecting its
+decisions. The objective and measures are in [GOAL.md](GOAL.md).
 
-The product remains intentionally narrow. It is not a generic Commander
-client, deck builder, collection manager, or format-legality service. Curated
-content is an artistic constraint, not missing platform work.
+The product stays narrow. It is not a general Magic client, deck builder,
+collection manager or format-legality service, and it is not a way to play
+Magic in place of other products. The selected matchup is the content
+boundary.
 
-## Product principles
+## Principles
 
-1. One authoritative, versioned experience contract connects the rules engine,
-   bots, replay, and every client surface.
-2. The client renders semantic game meaning rather than reconstructing rules
-   from mutable snapshots.
-3. Every prompt is complete and legal by construction; every command is bound
-   to an exact revision, prompt, and offer and is safe to retry.
-4. Reconnect and replay are normal execution paths, not emergency patches.
-5. Card art, crops, sounds, and interaction treatments ship as exact curated
-   packs with deterministic fallbacks and no network dependency during play.
-6. Direct play, decision inspection, and research traces are different views of
-   the same match, not separate products with drifting semantics.
-7. WASM is an adapter option to earn through measurement. Portability begins
-   with a transport-neutral protocol and a tiny client.
+1. One authoritative, versioned experience protocol connects the rules engine,
+   bots, replay and every client view.
+2. The client renders what the server decides; it never reconstructs rules or
+   reveals information the viewer could not see.
+3. Play, replay and decision inspection are views of the same recorded game,
+   not separate products.
+4. Every checkpoint shown is identified exactly: its world, content and
+   producer are checked before it plays.
+5. Academy is a client of manabot. It reads manabot's checkpoints, arena games
+   and evidence; manabot never imports Academy.
 
-## Portfolio
+## What exists
 
-### Experience contract and recovery
+- `./scripts/play` starts the server and table locally.
+- One trained opponent can be configured through `ACADEMY_PLAY_CANDIDATE`
+  ([local challenger](../../docs/local-trained-challenger.md)), chosen in the
+  opponent selector.
+- Finished games are recorded as traces and open as replays.
+- Study forks a recorded decision and lets you try another action.
+- Advice shows a policy's distribution at a live decision.
 
-Turn `ExperienceFrame + InteractionOffer/Command + PresentationEvent +
-RecoveryEnvelope` into the stable authority boundary. Prove stale-command
-rejection, idempotency, resume, reconnect, and replay from checkpoints.
-
-### Semantic presentation and interaction
-
-Build the event-driven table: prompt-specific interaction, meaningful animation
-beats, audio/haptics seams, accessibility, and a decision inspector fed by the
-same state and events as direct play.
-
-### Curated packs and portable runtime
-
-Produce exact deck/card asset manifests, offline-first loading, deterministic
-fallbacks, process/worker adapters, packaging, and measured browser portability.
-Adopt WASM only where it improves startup, latency, deployment, or offline use.
-
-### Experience proof
-
-Make polish computable: end-to-end flows for every curated prompt family,
-reconnect and duplicate-command fault injection, replay equivalence, visual and
-accessibility checks, frame/interaction latency budgets, and clean-machine
-launch verification.
-
-## Near-term sequence
-
-1. Land the protocol types and one end-to-end Lightning Bolt interaction.
-2. Add revision-safe commands and snapshot-plus-event recovery.
-3. Drive presentation from semantic events while preserving the current table.
-4. Package one exact curated matchup as the experience proof.
-5. Benchmark process, worker, and only then WASM authority adapters.
-
-Reference designs live in `docs/research/phase-experience.md` and
-`docs/architecture/experience-protocol-v1.md`. The previous instrument-only charter is
-preserved in `legacy-gui-charter.md`.
+Reference designs: [experience protocol v1](../../docs/architecture/experience-protocol-v1.md)
+and [Phase experience notes](../../docs/research/phase-experience.md). Earlier
+charters are kept in [legacy-gui-charter.md](legacy-gui-charter.md) and
+[MEMORY.md](MEMORY.md).
 
 ## Non-goals
 
+- Hosted or public play
 - Broad Commander or multiplayer UX
 - Deck construction, collection browsing, or general format legality
 - Supporting arbitrary cards through runtime natural-language parsing
 - A parallel client-side rules engine
-- WASM as an architectural identity

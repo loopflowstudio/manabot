@@ -1,6 +1,7 @@
 # Academy Visual Design System — Sepia Etude
 
-The design contract for Academy's player-facing surfaces. It
+The design contract for Academy, the browser UI for inspecting bots and
+replays. It
 describes one visual language in three artifacts: **the Sheet** (Play),
 **the Plate** (the card), and **the Score** (Replay, and Study as it
 grows). `frontend/src/app.css` is the single source of truth for every

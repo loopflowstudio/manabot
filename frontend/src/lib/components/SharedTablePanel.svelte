@@ -2,7 +2,7 @@
   import { browser } from '$app/environment';
 
   import type { RestoredReplayDecision } from '$lib/replay-index';
-  import type { TableSnapshot } from '$lib/testing-house-protocol';
+  import type { TableSnapshot } from '$lib/shared-table-protocol';
 
   interface ScenarioSummary {
     landmark_id: string;
@@ -61,16 +61,16 @@
 </script>
 
 <section
-  data-testid="testing-house-panel"
+  data-testid="shared-table-panel"
   data-table-id={table.table_id}
   data-table-mode={table.mode}
-  aria-labelledby="testing-house-heading"
+  aria-labelledby="shared-table-heading"
   class="border-b border-line bg-field px-5 py-4 md:px-10"
 >
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="type-rubric text-mountain-ink">Testing house · {table.mode}</p>
-      <h2 id="testing-house-heading" class="type-title mt-1 text-display">
+      <p class="type-rubric text-mountain-ink">Shared table · {table.mode}</p>
+      <h2 id="shared-table-heading" class="type-title mt-1 text-display">
         You are the {table.access.role}
       </h2>
       <p class="type-caption mt-1 text-ink-2">
@@ -219,7 +219,7 @@
 
   <p
     class="sr-only"
-    data-testid="testing-house-announcement"
+    data-testid="shared-table-announcement"
     role="status"
     aria-live="polite"
     aria-atomic="true"
