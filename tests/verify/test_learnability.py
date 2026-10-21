@@ -78,10 +78,8 @@ def test_native_outcomes_and_object_order_invariance() -> None:
 
 
 def test_held_out_cases_only_show_fit_definitions() -> None:
-    cases = curriculum()
-    assert not unseen_definitions(cases)
-    # Learn variant 1's Pop Quiz draws a Mountain no Learn fit case shows.
-    stale = [c for c in cases if c.family == "learn" and c.split == "fit"]
+    # curriculum() asserts the rule; the native seed-112 variant must trip it.
+    stale = [c for c in curriculum() if c.family == "learn" and c.split == "fit"]
     stale.append(decision_case("learn", variant=1, split="held_out"))
     assert unseen_definitions(stale) == {"learn/1/0": {3}}
 

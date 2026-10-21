@@ -302,11 +302,11 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
 
 
 # Version of the case set `curriculum()` builds; bump it when its digest changes.
-# action-cases-2 gave Learn held-out variant 1 its own native seed: seed 112's
-# Pop Quiz draws a Mountain, which no Learn fit case shows.
 CASE_SET = "action-cases-2"
 # Held-out cases change state only: every definition they show appears in that
-# family's fit cases (`unseen_definitions` enforces it). Seed 116 draws an Island.
+# family's fit cases (`curriculum` asserts it). action-cases-2 moved Learn
+# held-out variant 1 from seed 112, whose Pop Quiz draws a Mountain no Learn fit
+# case shows, to seed 116, which draws an Island.
 _NATIVE_SEEDS: dict[tuple[Family, int], int] = {("learn", 1): 116}
 
 
