@@ -50,3 +50,30 @@ SSH key to observe bootstrap before a supervisor receipt exists. The standard
 launcher admits11.9 hours ($7.259 plus $0.10 guardian allowance), keeping the
 prior $1.53126 failure and this rental below $10 inclusive. No further rental
 or paid evaluator is authorized. Job ID mtg165-two-seat-002.
+
+Pilot 002 is running. Source fabb96db2 (full identity retained in plan.json),
+job mtg165-two-seat-002, TrainingRun b855d41288c542ffb8af8c337db81186. Guardian
+proof passed; new L4 resource dsist8j859mj94 at $0.59/hour, independently owned
+from the still-running v1 ladder. Bootstrap completed, including the native
+release build in20.25 seconds. A job-specific public SSH diagnostic key made
+pre-supervisor logs readable; standard S3 supervision and scoped worker
+credentials remain the lifecycle owners. The account also has CPU evaluation
+pods, which the local diagnostic provider excludes from its GPU inventory.
+
+Confirmed2 completed updates on cuda:0:525 complete games,101,463 environment
+decisions and101,463 learner decisions,25,367 retained optimizer exposures and
+397 optimizer steps. Both updates report zero nonfinite values and rejected
+optimizer steps. Collection24.75 seconds; learning50.51 seconds (early observations,
+not a cost/strength comparison). Generation000004 was fetched and verified at
+.runs/mtg165-two-seat-002/fetched/generation-000004; it includes the initial raw
+checkpoint and current training evidence. Learned milestone exports are every250
+updates and were still pending at this observation.
+
+Learning cutoff2026-10-22 07:37:48 UTC; independent deletion deadline07:47:48 UTC
+(00:47:48 Pacific). Rental admission$7.259 plus$0.10 guardian allowance and
+prior attempt$1.53125984 totals$8.89025984, below$10 inclusive. No extension,
+replacement or additional evaluator was launched. The supervisor continues
+training, exports, S3 snapshots and cleanup independently of this conversation.
+Reconnect with uv run --extra artifacts manabot deploy status --job-id
+mtg165-two-seat-002. Existing PR330 is updated with the batching correction and
+frozen recipe/protocol; no merge or Task completion.
