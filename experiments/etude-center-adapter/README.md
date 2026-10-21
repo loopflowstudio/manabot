@@ -3,7 +3,9 @@
 This folder holds the code that publishes Fantasia's experiment records to the
 Etude research center. **Nothing here runs by default.** It is not installed,
 not imported by manabot or the play product, and not collected by `pytest` or
-CI (`testpaths = ["tests"]`). Fantasia does not depend on Etude.
+CI (`testpaths = ["tests"]`). This historical adapter is separate from the
+public `etude-sdk` now used by Manabot’s live learner tracking. The retained
+module names and source history below predate the project rename.
 
 It was written in the private repository now named `loopflowstudio/etude-studio`
 (formerly `loopflowstudio/etude`, EXP-2) and

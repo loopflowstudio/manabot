@@ -1,0 +1,12 @@
+c {"seed": "12251", "anchor": "heuristic", "games": 400, "differing_games": 0, "first": null}
+c {"seed": "12252", "anchor": "scripted_greedy", "games": 400, "differing_games": 0, "first": null}
+c {"seed": "12253", "anchor": "random", "games": 400, "differing_games": 0, "first": null}
+c 0
+d {"seed": "12251", "anchor": "scripted_greedy", "games": 400, "differing_games": 0, "first": null}
+d {"seed": "12252", "anchor": "random", "games": 400, "differing_games": 0, "first": null}
+d 0
+e {"seed": "12251", "anchor": "random", "games": 400, "differing_games": 0, "first": null}
+e {"seed": "12253", "anchor": "heuristic", "games": 400, "differing_games": 0, "first": null}
+e 0
+f {"seed": "12252", "anchor": "heuristic", "games": 400, "differing_games": 0, "first": null}
+f 0
