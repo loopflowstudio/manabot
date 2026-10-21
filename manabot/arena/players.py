@@ -9,6 +9,7 @@ import numpy as np
 
 from manabot.env import Env, ObservationSpace
 from manabot.sim.flat_mc import MatchupPlayer, make_player
+from manabot.sim.flat_search import FlatSearchPolicy
 from manabot.sim.mcts import puct_source_sha256
 import managym
 
@@ -19,9 +20,7 @@ class DemoSearchPlayer:
     """Run the exact demo policy, including its forced-offer seed behavior."""
 
     def __init__(self, spec: dict[str, Any], seed: int):
-        from academy.villain import SearchVillain
-
-        self.policy = SearchVillain(
+        self.policy = FlatSearchPolicy(
             sims=spec["sims"],
             rollouts_per_world=spec["rollouts_per_world"],
             max_steps=spec["max_steps"],

@@ -18,8 +18,6 @@ offline. Schemas and three-language conformance fixtures live in
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
   authoritative game loop, viewer-safe observation serialization
-- **`experience_protocol.py`**: Pydantic representation of protocol v1,
-  tested field-for-field against the Rust-generated schema
 - **`presentation.py`**: semantic presentation events (combat, turn
   transitions, spell sequences) derived from engine events
 - **`curated_pack.py`**: the frozen curated matchup asset pack
@@ -36,7 +34,9 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
-- **`enums.py`**: wire enums kept separate so the play runtime stays minimal
+- **`opponent.py`**: trained opponents — the configured `candidate.json`
+  bundle and the checkpoint catalog (`GET /api/opponents`), both chosen by
+  exact SHA-256 and verified before play
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only
@@ -74,6 +74,20 @@ The [local trained-challenger workflow](../docs/local-trained-challenger.md)
 covers training, the built same-origin server, feedback, and read-only SQL.
 Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
 
+Any other trained checkpoint is selectable from the Opponent menu. The table
+lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
+and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
+Tournament files, separated by `:` — with world, model shape, training step
+and producer. manabot's `manabot.model.catalog` reads them with Torch's
+weights-only loader and checks each world binding against the running engine;
+an incompatible checkpoint stays listed, disabled, with the mismatch (for
+example `trained in w5, engine is w6`), and the server refuses it with the same
+sentence. The browser sends only a digest; the server re-hashes the bytes,
+checks the selected decks against the checkpoint's binding (either seat), and
+records the exact checkpoint identity as the trace's `opponent_checkpoint`.
+Listing needs the training dependencies; a play-only install reports that the
+catalog is unavailable and still serves the configured candidate.
+
 Replacement admission must keep the old GameSession authority intact until the
 new environment resets successfully. Invalid native deck setup can raise
 PyO3's `PanicException` (a direct `BaseException`, with no importable Python
@@ -85,3 +99,39 @@ proofs (launch, offline reload, accessibility, release prompts) are under
 [frontend/e2e/](../frontend/e2e/) and documented in
 [docs/clean-machine-play.md](../docs/clean-machine-play.md) and
 [docs/experience-proof.md](../docs/experience-proof.md).
+
+## Watch and recorded bot decisions
+
+Open **Watch** (`/replay?watch=1`) to select both seats, decks and a deal seed.
+The configured checkpoint and random, greedy, heuristic and search anchors use
+GameSession's normal Command authority. Step advances one native decision;
+Play/Pause and speed control that same operation. Previous decisions read saved
+outputs without rerunning the policy. Completed watched games open from Games
+in this same table. Reloading retains the watch credential in the browser.
+
+`watch.py` admits controllers and verified arena/Tournament game JSON or
+`.jsonl.gz` traces; choose a game when a trace contains several. Import verifies
+the original receipt, Commands and state digests without invoking a player.
+The imported Academy replay has its own identity; the source digest is retained
+without rewriting the arena evidence. Missing historical policy outputs are
+marked unavailable. Local-update receipts expose only policy/search vectors
+and an acting-view belief summary, never private sampled hands or branch audits.
+
+`TraceEvent.bot_decision` records the actual policy/value/search outputs at
+choice time. Compound checkpoints record their conditional root-sequence
+factors and values; these are labeled separately from native microchoice
+marginals. Anchors without critics have no value estimate. Watch's acting-view
+inspection endpoint never returns the full mixed canonical replay. The separate
+private analysis observation supplies **Show both hands**, enabled by default
+for bot spectators, including during active watches. Active inspection requires
+the watch credential; completed inspection remains shared. Switching it off
+shows only the acting bot's view. Ordinary trace reads always strip the analysis
+snapshot, and bot inputs and decision evidence retain their acting-view scope.
+
+**Try another line** uses retained Study roots from either acting seat, executes
+one exact semantic Command on an isolated branch, and returns to the recorded
+decision. It does not advance the watched match. Roots and active controllers
+have the ordinary table-session lifetime; saved completed inspection remains
+available after the session expires, while a fresh Study fork requires retained
+roots. Existing structured Study receipts and frozen `erd1` evidence keep their
+original command bindings.

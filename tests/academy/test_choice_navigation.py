@@ -5,8 +5,8 @@ from pathlib import Path
 from pydantic import BaseModel
 import pytest
 
-from academy.experience_protocol import ExperienceFrame
 from academy.server import GameSession
+from managym.experience import ExperienceFrame
 
 
 class PrefixStep(BaseModel):
@@ -25,7 +25,7 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation.json"
+FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w9.json"
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 

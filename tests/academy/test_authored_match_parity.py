@@ -6,16 +6,16 @@ from academy.authored_match_parity import ParityDivergence, verify_receipt
 def test_checked_authored_match_parity_receipt() -> None:
     receipt = verify_receipt()
     assert receipt["summary"] == {
-        "commands_per_surface": 132,
-        "checkpoints_per_surface": 133,
-        "ordered_transition_groups_per_surface": 132,
-        "viewer_projection_checks": 798,
+        "commands_per_surface": 156,
+        "checkpoints_per_surface": 157,
+        "ordered_transition_groups_per_surface": 156,
+        "viewer_projection_checks": 942,
         "canonical_player_projections": 2,
         "spectator_admitted": False,
         "first_divergence": None,
     }
     stale = receipt["stale_object_proof"]
-    assert stale["captured_render_ref"] == {"entity": 102, "incarnation": 2}
+    assert stale["captured_render_ref"] == {"entity": 96, "incarnation": 3}
     assert stale["current_rejection"] == {
         "code": "stale_object",
         "state_witness_unchanged": True,
@@ -28,12 +28,12 @@ def test_checked_authored_match_parity_receipt() -> None:
     }
     assert receipt["surfaces"]["live"]["presentation"] == {
         "0": {
-            "events": 61,
-            "sha256": "1fe2a948748f34f6972c345c20a3d13d055dcda8865996d56d02d6643ec76bb9",
+            "events": 55,
+            "sha256": "398c0b961bf1141b9f84172374a8d5d47f94ec328a85a4406d608eb0905aee15",
         },
         "1": {
-            "events": 61,
-            "sha256": "8594022c1bf96287d79b378f2295b7c48f1dcdda1913b09db8002496f4874aa1",
+            "events": 55,
+            "sha256": "4ec22fd5da2a6f47b9a7c880e778c7a4079673640a515c6aed3d4c0f8fab6cb6",
         },
     }
 

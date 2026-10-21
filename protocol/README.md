@@ -3,8 +3,8 @@
 `managym/src/experience.rs` is the authority for the currently integrated v1
 adapter boundary. It generates `experience-v1.schema.json`, a Draft 2020-12
 schema for one `ProtocolV1ConformanceBundle`: a complete recovery envelope and
-the command selected from that exact frame. `academy/experience_protocol.py` is the
-explicit Pydantic representation used by the Python adapter; automated tests
+the command selected from that exact frame. `managym/experience.py` is the
+explicit Pydantic representation shared by Academy and manabot; automated tests
 compare its fields, required/optional keys, tagged variants, and enums to the
 Rust-generated schema.
 
@@ -70,9 +70,11 @@ represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
 
-## Testing-house control v1
+## Shared-table control v1
 
-`academy/testing_house_protocol.py` owns the Game control envelope around the
+The shared table is where a pilot and a watcher share one game. Its wire schema
+keeps the frozen identifier `testing-house-v1` (`testing-house-v1.schema.json`).
+`academy/shared_table_protocol.py` owns the Game control envelope around the
 unchanged match protocol. It closes the one-pilot/one-watcher request
 vocabulary, server-derived roles and capabilities, participant leases,
 personal-until-shared GAM-6 scenario references, and participant-local Study
@@ -82,7 +84,7 @@ remain bound server-side to the same player-0 rules projection.
 Regenerate the checked schema after changing the Pydantic authority:
 
 ```bash
-uv run --python 3.12 --locked python scripts/export_testing_house_protocol.py
+uv run --python 3.12 --locked python scripts/export_shared_table_protocol.py
 ```
 
 `fixtures/testing-house-control-v1.json` contains pilot/watcher access and one

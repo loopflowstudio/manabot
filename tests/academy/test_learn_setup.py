@@ -1,6 +1,7 @@
 """Full authored setup survives real session startup, seat reversal and storage."""
 
 from dataclasses import asdict
+from pathlib import Path
 
 import pytest
 
@@ -12,10 +13,26 @@ from manabot.infra.hypers import MatchHypers, RewardHypers
 import managym
 
 
-def test_session_reveal_evidence_uses_definition_identity():
-    from academy.authored_match_receipt import play_fixed_authored_match
-
-    session, _ = play_fixed_authored_match()
+def test_session_reveal_evidence_uses_definition_identity(tmp_path: Path) -> None:
+    session = server.GameSession(trace_dir=tmp_path, capture_authority_evidence=True)
+    frame = session.new_game({"demo": "learn"})["frame"]
+    offer = next(o for o in frame["offers"] if o["action_type"] == "LEARN_TAKE_LESSON")
+    expected_name = next(
+        card.name
+        for card in session.env.observation_for_player(0).agent_sideboard
+        if card.candidate_id in offer["focus"]
+    )
+    result = session.hero_command(
+        {
+            "command_id": "reveal-lesson",
+            "match_id": frame["match_id"],
+            "expected_revision": frame["revision"],
+            "prompt_id": frame["prompt"]["id"],
+            "offer_id": offer["id"],
+            "answers": [],
+        }
+    )
+    assert result["status"] == "accepted"
     reveals = [
         event
         for transition in session.authority_transitions
@@ -26,10 +43,8 @@ def test_session_reveal_evidence_uses_definition_identity():
         definition["card_def_id"]: definition["registry_name"]
         for definition in session.env.content_pack_manifest()["definitions"]
     }
-    assert {definitions[event["source_id"]] for event in reveals} == {
-        "Accumulate Wisdom",
-        "It'll Quench Ya!",
-    }
+    assert len(reveals) == 1
+    assert {definitions[event["source_id"]] for event in reveals} == {expected_name}
     for event in reveals:
         assert event["event_type"] == "CARD_REVEALED"
         assert event["definition_ids"] == [event["source_id"]]
@@ -137,9 +152,9 @@ def test_recorded_named_root_rejects_missing_sideboards_and_old_asset_identity()
     "kind", ["LEARN_TAKE_LESSON", "LEARN_DISCARD", "DECLINE_CHOICE"]
 )
 def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(tmp_path, kind):
-    from academy.experience_protocol import ExperienceFrame
     from academy.learn_demo import load_learn_demo
     from academy.server import viewer_view
+    from managym.experience import ExperienceFrame
 
     session = server.GameSession(trace_dir=tmp_path)
     frame = session.new_game({"demo": "learn"})["frame"]

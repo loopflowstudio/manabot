@@ -16,15 +16,6 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from academy import trace as trace_store
-from academy.experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
-from academy.server import (
-    ASSET_MANIFEST_HASH,
-    CONTENT_HASH,
-    _offer_verb,
-    describe_actions,
-    serialize_observation,
-)
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum, ActionSpaceEnum
 from manabot.infra.hypers import MatchHypers, RewardHypers
@@ -36,9 +27,34 @@ from manabot.sim.mcts import (
 from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 import managym
+from managym.experience import (
+    PROTOCOL_VERSION,
+    UNVERSIONED_CONTENT_HASH,
+    Command,
+    ExperienceFrame,
+)
+from managym.experience_projection import (
+    describe_actions,
+    offer_verb,
+    redact_observation,
+    serialize_observation,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
+# Recorded protocol-v1 frames name the curated asset pack Academy serves by
+# default. manabot records its digest as provenance and never loads the pack;
+# tests/academy/test_curated_pack.py checks it equals Academy's served pack.
+RECORDED_ASSET_MANIFEST = (
+    REPO_ROOT
+    / "frontend"
+    / "src"
+    / "lib"
+    / "packs"
+    / "tla-ur-lessons-vs-gw-allies"
+    / "v2"
+    / "manifest.json"
+)
 
 
 class ContractError(ValueError):
@@ -56,6 +72,9 @@ def file_sha256(path: str | Path) -> str:
         while chunk := source.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+RECORDED_ASSET_MANIFEST_HASH = file_sha256(RECORDED_ASSET_MANIFEST)
 
 
 def source_bundle_sha256(paths: Iterable[Path]) -> str:
@@ -142,8 +161,8 @@ def runtime_fingerprints(
         "observation_abi_sha256": canonical_sha256(observation_schema),
         "action_abi_sha256": canonical_sha256(action_abi),
         "experience_protocol_sha256": file_sha256(PROTOCOL_SCHEMA),
-        "experience_content_hash": CONTENT_HASH,
-        "asset_manifest_hash": ASSET_MANIFEST_HASH,
+        "experience_content_hash": UNVERSIONED_CONTENT_HASH,
+        "asset_manifest_hash": RECORDED_ASSET_MANIFEST_HASH,
         "matchup_sha256": canonical_sha256(matchup.model_dump()),
         "matchup": matchup.model_dump(),
     }
@@ -181,7 +200,7 @@ def build_viewer_frame(
     """Build the protocol frame for exactly the acting player's observation."""
 
     projection = serialize_observation(raw)
-    trace_store.redact_observation(projection)
+    redact_observation(projection)
     actor = int(raw.agent.player_index)
     actions = describe_actions(raw)
     action_space = _action_space_name(raw)
@@ -189,7 +208,7 @@ def build_viewer_frame(
         {
             "id": int(action["index"]),
             "actor": actor,
-            "verb": _offer_verb(str(action["type"])),
+            "verb": offer_verb(str(action["type"])),
             "source": None,
             "label": str(action["description"]),
             "help": None,

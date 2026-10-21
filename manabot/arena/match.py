@@ -11,15 +11,19 @@ from typing import Any, Literal
 
 import numpy as np
 
-from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.sim.local_update import LocalUpdatePlayer
 from manabot.sim.mcts import DeterminizedPuctPlayer
-from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.sim.teacher1_evidence import (
+    RECORDED_ASSET_MANIFEST_HASH,
+    build_command,
+    build_viewer_frame,
+)
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 from managym.decision import Command, DecisionFrame
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 from .guidance import build_arena_player
 from .matchup import AuthoredMatchup
@@ -140,8 +144,8 @@ def _execute_game(
                 raw,
                 match_id=game["match_id"],
                 revision=revision,
-                content_hash=CONTENT_HASH,
-                asset_manifest_hash=ASSET_MANIFEST_HASH,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
             )
             if frame["projection"]["opponent"].get("hand"):
                 game["integrity"]["private_exposures"] += 1

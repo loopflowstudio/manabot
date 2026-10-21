@@ -77,13 +77,13 @@ def test_native_attack_choice_can_learn_either_preference(
         torch.set_num_threads(previous_threads)
 
 
-@pytest.mark.parametrize("old_world,width", [("w4", 17), ("w5", 18)])
+@pytest.mark.parametrize("old_world,width", [("w4", 17), ("w5", 18), ("w6", 20)])
 def test_old_checkpoint_is_rejected_before_loading_weights(
     tmp_path: Path, old_world: str, width: int
 ) -> None:
     space = ObservationSpace()
     binding = checkpoint_world(Match().to_rust(), space)
-    assert binding["world"] == "w6"
+    assert binding["world"] == "w9"
     binding["world"] = old_world
     binding["input_schema"]["actions"]["shape"][-1] = width
     path = tmp_path / "w4.pt"
@@ -98,7 +98,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         },
         path,
     )
-    with pytest.raises(ValueError, match="compatible w6 world binding"):
+    with pytest.raises(ValueError, match="compatible w9 world binding"):
         load_checkpoint_agent(str(path))
 
 

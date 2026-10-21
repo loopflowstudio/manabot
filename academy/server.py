@@ -36,6 +36,26 @@ from managym.decision import (
     SemanticTransition,
     TransitionReceipt,
 )
+from managym.enums import (
+    ActionSpaceEnum,
+    EventTypeEnum,
+    StepEnum,
+    ZoneEnum,
+)
+from managym.experience import (
+    PROTOCOL_VERSION,
+    UNVERSIONED_CONTENT_HASH,
+    Command,
+    ExperienceFrame,
+)
+from managym.experience_projection import (
+    HERO_PLAYER_INDEX,
+    describe_actions,
+    enum_name,
+    offer_verb,
+    redact_observation,
+    serialize_observation,
+)
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -45,22 +65,19 @@ from .advice import (
     request_versioned_fixture_advice,
 )
 from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
+from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
-from .enums import (
-    ActionEnum,
-    ActionSpaceEnum,
-    EventTypeEnum,
-    PhaseEnum,
-    StepEnum,
-    ZoneEnum,
-)
-from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
-from .opponent import configured_opponent, opponent_availability
+from .opponent import (
+    Opponent,
+    catalog_opponent,
+    configured_opponent,
+    opponent_catalog,
+)
 from .presentation import PresentationProjector
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -81,20 +98,7 @@ from .replay_index import (
     projection_with_addresses,
     restore_decision,
 )
-from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
-from .study_runtime import (
-    HistoricalStudyEvidenceProvider,
-    HistoricalStudyEvidenceRequest,
-    JoinedStudyEvidence,
-    StudyEvidenceMismatchError,
-    StudyEvidenceUnavailableError,
-    StudyPlanKind,
-    StudyPlanUnavailableError,
-    UnavailableHistoricalStudyEvidenceProvider,
-    join_historical_study_evidence,
-    select_study_plan,
-)
-from .testing_house_protocol import (
+from .shared_table_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
     ROLE_CAPABILITIES,
@@ -120,6 +124,19 @@ from .testing_house_protocol import (
     ViewerAccess,
     ViewerIdentity,
     ViewerRole,
+)
+from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
+from .study_runtime import (
+    HistoricalStudyEvidenceProvider,
+    HistoricalStudyEvidenceRequest,
+    JoinedStudyEvidence,
+    StudyEvidenceMismatchError,
+    StudyEvidenceUnavailableError,
+    StudyPlanKind,
+    StudyPlanUnavailableError,
+    UnavailableHistoricalStudyEvidenceProvider,
+    join_historical_study_evidence,
+    select_study_plan,
 )
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
@@ -164,12 +181,10 @@ DEFAULT_VILLAIN_DECK_NAME = CURATED_PACK.villain_deck_id
 DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
-HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
 MAX_ACCEPTED_COMMANDS = 64
 MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
-CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
@@ -199,15 +214,6 @@ DEFAULT_STOPS: dict[str, list[str]] = {
     "my": ["main1", "main2"],
     "opponent": ["end_step"],
 }
-ACTION_LABELS = {
-    "PRIORITY_PLAY_LAND": "Play land",
-    "PRIORITY_CAST_SPELL": "Cast spell",
-    "PRIORITY_ACTIVATE_ABILITY": "Activate ability",
-    "DECLARE_ATTACKER": "Declare attacker",
-    "DECLARE_BLOCKER": "Declare blocker",
-    "CHOOSE_TARGET": "Choose target",
-}
-
 app = FastAPI(title="Academy")
 
 # Capture loaded runtime identity at process startup, before later source edits
@@ -366,149 +372,6 @@ class StudyAttempt:
     evidence: JoinedStudyEvidence | None = None
 
 
-def _enum_name(enum_type, value: Any) -> str:
-    try:
-        return enum_type(int(value)).name
-    except Exception:
-        return str(int(value))
-
-
-def _serialize_card(card: managym.Card) -> dict[str, Any]:
-    return {
-        "id": int(card.id),
-        "registry_key": int(card.registry_key),
-        "name": card.name,
-        "text_box": card.text_box,
-        "zone": _enum_name(ZoneEnum, card.zone),
-        "owner_id": int(card.owner_id),
-        "power": int(card.power),
-        "toughness": int(card.toughness),
-        "mana_value": int(card.mana_cost.mana_value),
-        "types": {
-            "is_creature": bool(card.card_types.is_creature),
-            "is_land": bool(card.card_types.is_land),
-            "is_spell": bool(card.card_types.is_spell),
-            "is_artifact": bool(card.card_types.is_artifact),
-            "is_enchantment": bool(card.card_types.is_enchantment),
-            "is_planeswalker": bool(card.card_types.is_planeswalker),
-            "is_battle": bool(card.card_types.is_battle),
-        },
-    }
-
-
-def _serialize_permanent(
-    permanent: managym.Permanent,
-    card: managym.Card | None,
-) -> dict[str, Any]:
-    return {
-        "id": int(permanent.id),
-        "name": card.name if card else None,
-        "text_box": card.text_box if card else "",
-        "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
-        "controller_id": int(permanent.controller_id),
-        "tapped": bool(permanent.tapped),
-        "damage": int(permanent.damage),
-        "summoning_sick": bool(permanent.is_summoning_sick),
-        # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
-        "power": int(permanent.power),
-        "toughness": int(permanent.toughness),
-        "base_power": int(card.power) if card else None,
-        "base_toughness": int(card.toughness) if card else None,
-        "plus1_counters": int(permanent.plus1_counters),
-    }
-
-
-def _serialize_player(
-    player: managym.Player,
-    cards: list[managym.Card],
-    permanents: list[managym.Permanent],
-) -> dict[str, Any]:
-    grouped_cards: dict[str, list[dict[str, Any]]] = {
-        "HAND": [],
-        "GRAVEYARD": [],
-        "EXILE": [],
-        "STACK": [],
-    }
-    battlefield_cards: list[managym.Card] = []
-    for card in cards:
-        zone_name = _enum_name(ZoneEnum, card.zone)
-        if zone_name == "BATTLEFIELD":
-            battlefield_cards.append(card)
-        elif zone_name in grouped_cards:
-            grouped_cards[zone_name].append(_serialize_card(card))
-
-    # Permanents and battlefield cards correspond 1:1 in order.
-    # Fall back to None if the lists don't align.
-    serialized_permanents = []
-    for i, permanent in enumerate(permanents):
-        card = battlefield_cards[i] if i < len(battlefield_cards) else None
-        serialized_permanents.append(_serialize_permanent(permanent, card))
-
-    zone_counts = {
-        _enum_name(ZoneEnum, index): int(count)
-        for index, count in enumerate(player.zone_counts)
-    }
-
-    return {
-        "player_index": int(player.player_index),
-        "id": int(player.id),
-        "is_active": bool(player.is_active),
-        "is_agent": bool(player.is_agent),
-        "life": int(player.life),
-        "zone_counts": zone_counts,
-        "library_count": zone_counts.get("LIBRARY", 0),
-        "known_hand": {
-            str(key): int(count) for key, count in player.known_hand.items()
-        },
-        "sideboard_counts": {
-            str(key): int(count) for key, count in player.sideboard_counts.items()
-        },
-        "remaining_sideboard_counts": {
-            str(key): int(count)
-            for key, count in player.remaining_sideboard_counts.items()
-        },
-        "hand": grouped_cards["HAND"],
-        "graveyard": grouped_cards["GRAVEYARD"],
-        "exile": grouped_cards["EXILE"],
-        "stack": grouped_cards["STACK"],
-        "battlefield": serialized_permanents,
-    }
-
-
-def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
-    data = {
-        "game_over": bool(obs.game_over),
-        "won": bool(obs.won),
-        "turn": {
-            "turn_number": int(obs.turn.turn_number),
-            "phase": _enum_name(PhaseEnum, obs.turn.phase),
-            "step": _enum_name(StepEnum, obs.turn.step),
-            "active_player_id": int(obs.turn.active_player_id),
-            "agent_player_id": int(obs.turn.agent_player_id),
-        },
-        "agent": _serialize_player(obs.agent, obs.agent_cards, obs.agent_permanents),
-        "opponent": _serialize_player(
-            obs.opponent,
-            obs.opponent_cards,
-            obs.opponent_permanents,
-        ),
-    }
-
-    data["agent"]["sideboard"] = [
-        {
-            "candidate_id": int(card.candidate_id),
-            "owner_id": int(card.owner_id),
-            "registry_key": int(card.registry_key),
-            "name": card.name,
-            "text_box": card.text_box,
-        }
-        for card in obs.agent_sideboard
-    ]
-    return data
-
-
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
     """Resolve live card, permanent, and stack identities to typed definitions."""
 
@@ -520,7 +383,7 @@ def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
         for card in cards:
             result[int(card.id)] = int(card.registry_key)
         battlefield_cards = [
-            card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+            card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
         ]
         for index, permanent in enumerate(permanents):
             if index < len(battlefield_cards):
@@ -554,7 +417,7 @@ def _semantic_event_payload(
         ):
             related_definitions.add(definition_ids[identity])
     return {
-        "event_type": _enum_name(EventTypeEnum, event.event_type),
+        "event_type": enum_name(EventTypeEnum, event.event_type),
         "source_kind": int(event.source_kind),
         "source_id": int(event.source_id),
         "source_incarnation": int(event.source_incarnation),
@@ -608,7 +471,7 @@ def _encountered_definition_ids(
             battlefield_cards = [
                 card
                 for card in cards
-                if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+                if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
             ]
             for index, permanent in enumerate(permanents):
                 if index < len(battlefield_cards):
@@ -621,142 +484,6 @@ def _encountered_definition_ids(
         if current is not None and not was_tapped and current[1]:
             definitions.add(definition_id)
     return sorted(definitions)
-
-
-def _player_label(player: managym.Player) -> str:
-    return "Hero" if int(player.player_index) == HERO_PLAYER_INDEX else "Villain"
-
-
-def _permanent_names(
-    cards: list[managym.Card],
-    permanents: list[managym.Permanent],
-) -> dict[int, str]:
-    """Map permanent ids to card names.
-
-    Permanents carry their own object ids (distinct from card ids), but the
-    observation lists permanents and battlefield cards in the same order —
-    the same alignment _serialize_player relies on.
-    """
-    battlefield_cards = [
-        card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-    ]
-    names: dict[int, str] = {}
-    for index, permanent in enumerate(permanents):
-        if index < len(battlefield_cards):
-            names[int(permanent.id)] = battlefield_cards[index].name
-    return names
-
-
-def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
-    """Map object ids (players, cards, permanents) to display names."""
-    names: dict[int, str] = {
-        int(obs.agent.id): _player_label(obs.agent),
-        int(obs.opponent.id): _player_label(obs.opponent),
-    }
-    names.update(
-        {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
-    )
-    names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
-    names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
-    names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
-    return names
-
-
-def _format_action(
-    action: managym.Action,
-    names: dict[int, str],
-    space_kind: str = "",
-    declared: bool | None = None,
-) -> str:
-    """Render a legal action in Magic terms with card names.
-
-    Focus semantics (managym observation.rs action_focus):
-      PLAY_LAND / CAST_SPELL: [card_id]
-      DECLARE_ATTACKER:       [attacker_permanent_id]
-      DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
-                              (one entry means "this creature does not block")
-      CHOOSE_TARGET:          [player_id or permanent_id]
-      SCRY_* / SELECT_CARD:   [card_id] (library cards revealed by the
-                              pending decision are in the observation)
-      TAP_FOR_COST:           [permanent_id]
-      DECLINE/PAY/MODE:       [resolving or cast card_id]
-      PASS_PRIORITY:          []
-    """
-    action_name = _enum_name(ActionEnum, action.action_type)
-    if declared is None:
-        declared = getattr(action, "declared", None)
-    focus_names = [names.get(int(value)) for value in action.focus]
-    first = focus_names[0] if focus_names else None
-
-    if action_name == "PRIORITY_PASS_PRIORITY":
-        return "Pass priority"
-    if action_name == "PRIORITY_PLAY_LAND" and first:
-        return f"Play {first}"
-    if action_name == "PRIORITY_CAST_SPELL" and first:
-        return f"Cast {first}"
-    if action_name == "DECLARE_ATTACKER" and first:
-        return (
-            f"Do not attack with {first}"
-            if declared is False
-            else f"Attack with {first}"
-        )
-    if action_name == "DECLARE_BLOCKER" and first:
-        if len(focus_names) >= 2 and focus_names[1]:
-            return f"Block {focus_names[1]} with {first}"
-        return f"{first}: do not block"
-    if action_name == "CHOOSE_TARGET" and first:
-        return f"Target {first}"
-    # Mid-resolution decision actions (scry / look-and-select / learn /
-    # pay-or-not / modal / waterbend) in Magic terms.
-    if action_name == "SCRY_KEEP" and first:
-        return f"Keep {first} on top"
-    if action_name == "SCRY_BOTTOM" and first:
-        return f"Put {first} on the bottom"
-    if action_name == "LEARN_TAKE_LESSON" and first:
-        return f"Take {first}"
-    if action_name == "LEARN_DISCARD" and first:
-        return f"Discard {first}, then draw a card"
-    if action_name == "SELECT_CARD" and first:
-        if space_kind == "DISCARD":
-            return f"Discard {first}"
-        if space_kind == "LEGEND_RULE":
-            return f"Keep {first} (legend rule)"
-        return f"Put {first} into your hand"
-    if action_name == "DECLINE_CHOICE":
-        if space_kind == "LEARN":
-            return "Decline Learn"
-        return "Decline"
-    if action_name == "PAY_COST":
-        return f"Pay the cost ({first})" if first else "Pay the cost"
-    if action_name == "CHOOSE_MODE":
-        return f"Choose a mode ({first})" if first else "Choose a mode"
-    if action_name == "TAP_FOR_COST" and first:
-        return f"Tap {first} to help pay"
-
-    label = ACTION_LABELS.get(action_name, action_name)
-    if first:
-        return f"{label}: {first}"
-    return label
-
-
-def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    names = _build_id_to_name(obs)
-    space_kind = _enum_name(ActionSpaceEnum, int(obs.action_space.action_space_type))
-    for index, action in enumerate(obs.action_space.actions):
-        focus = [int(value) for value in action.focus]
-        results.append(
-            {
-                "index": index,
-                "type": _enum_name(ActionEnum, action.action_type),
-                "focus": focus,
-                "declared": action.declared,
-                "description": _format_action(
-                    action, names, space_kind, action.declared
-                ),
-            }
-        )
-    return results
 
 
 def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
@@ -772,7 +499,7 @@ def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
         data["agent"], data["opponent"] = data["opponent"], data["agent"]
         data["won"] = bool(obs.game_over) and not bool(obs.won)
 
-    trace_store.redact_observation(data)
+    redact_observation(data)
     return data
 
 
@@ -816,18 +543,6 @@ def _pass_priority_index(actions: list[dict[str, Any]]) -> int | None:
         if action["type"] == "PRIORITY_PASS_PRIORITY":
             return int(action["index"])
     return None
-
-
-def _offer_verb(action_type: str) -> str:
-    return {
-        "PRIORITY_CAST_SPELL": "cast",
-        "PRIORITY_PLAY_LAND": "play_land",
-        "PRIORITY_ACTIVATE_ABILITY": "activate",
-        "PRIORITY_PASS_PRIORITY": "pass_priority",
-        "DECLARE_ATTACKER": "declare_attackers",
-        "DECLARE_BLOCKER": "declare_blockers",
-        "PAY_COST": "pay",
-    }.get(action_type, "choose")
 
 
 def _parse_stops(value: Any) -> dict[str, list[str]]:
@@ -908,6 +623,64 @@ def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str
     return deck, "custom"
 
 
+def _select_opponent(sha256: Any) -> Opponent:
+    """Resolve the requested trained opponent by exact digest, verified.
+
+    Without a digest the configured candidate plays (its historical default).
+    A digest names the configured candidate or a catalog checkpoint; catalog
+    refusals carry the mismatch that makes the checkpoint unplayable here.
+    """
+
+    try:
+        configured = configured_opponent()
+    except ValueError:
+        # A broken candidate bundle must not hide catalog checkpoints.
+        if sha256 is None:
+            raise
+        configured = None
+    if sha256 is None:
+        if configured is None:
+            raise ValueError("No trained opponent is configured on this server.")
+        sha256 = configured.sha256
+    if not isinstance(sha256, str):
+        raise ValueError("opponent_sha256 must be a checkpoint digest.")
+    if configured is not None and sha256 == configured.sha256:
+        configured.verify()
+        return configured
+    opponent = catalog_opponent(sha256)
+    if opponent is None:
+        raise ValueError("The selected opponent is no longer available.")
+    return opponent
+
+
+def _deck_label(setup: dict) -> str:
+    for name, deck in NAMED_DECKS.items():
+        if deck == setup.get("deck"):
+            return DECK_DISPLAY_NAMES.get(name, name)
+    return "a custom deck"
+
+
+def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
+    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
+
+    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
+    so the bot plays either of its decks from either seat. Candidate bundles
+    check their decks after reset against the engine manifest instead.
+    """
+
+    if not opponent.setups:
+        return
+
+    def key(setup: dict) -> str:
+        return json.dumps(setup, sort_keys=True)
+
+    if sorted(map(key, setups)) != sorted(map(key, opponent.setups)):
+        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
+        raise ValueError(
+            f"{opponent.name} was trained on {trained}; choose those decks to play it."
+        )
+
+
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
@@ -941,18 +714,6 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
-
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
-    if villain_type == "checkpoint":
-        opponent = configured_opponent()
-        if opponent is None:
-            raise ValueError("No trained opponent is configured on this server.")
-        if data.get("opponent_sha256", opponent.sha256) != opponent.sha256:
-            raise ValueError("The selected opponent is no longer available.")
-        opponent.verify()
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
     hero_deck, hero_deck_name = _normalize_deck(
         data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
@@ -988,6 +749,21 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(f"{seat}_sideboard must match the named deck setup")
         sideboards[seat] = sideboard
 
+    villain_checkpoint: str | None = None
+    villain_deterministic = False
+    opponent: Opponent | None = None
+    if villain_type == "checkpoint":
+        opponent = _select_opponent(data.get("opponent_sha256"))
+        _check_opponent_decks(
+            opponent,
+            [
+                {"deck": hero_deck, "sideboard": sideboards["hero"]},
+                {"deck": villain_deck, "sideboard": sideboards["villain"]},
+            ],
+        )
+        villain_checkpoint = str(opponent.checkpoint)
+        villain_deterministic = opponent.deterministic
+
     return GameConfig(
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -1002,7 +778,8 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
-        opponent=opponent.identity() if villain_type == "checkpoint" else None,
+        opponent=opponent.identity() if opponent is not None else None,
+        opponent_checkpoint=opponent.record() if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
@@ -1020,8 +797,14 @@ class GameSession:
         capture_authority_evidence: bool = False,
         historical_evidence_provider: HistoricalStudyEvidenceProvider | None = None,
         allow_fixture_study_evidence: bool = False,
-    ):
+        watch_mode: bool = False,
+    ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
+        self.watch_mode = watch_mode
+        self.watch_policies: (
+            tuple[villain_module.VillainPolicy, villain_module.VillainPolicy] | None
+        ) = None
+        self._bot_decision: BotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -1043,7 +826,7 @@ class GameSession:
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
-        self.content_hash = CONTENT_HASH
+        self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
@@ -1137,17 +920,20 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        if config.opponent is not None:
+        # Candidate bundles pin the engine manifest and decks outside the
+        # checkpoint; catalog checkpoints were checked by their world binding.
+        if (
+            config.opponent_checkpoint is not None
+            and config.opponent_checkpoint["source"] == "candidate"
+        ):
             opponent = configured_opponent()
             assert opponent is not None
             if manifest != opponent.content_manifest:
                 raise ValueError(
                     "Trained opponent is incompatible with the current world."
                 )
-            if (
-                config.hero_deck not in opponent.decks.values()
-                or config.villain_deck not in opponent.decks.values()
-            ):
+            decks = (opponent.decks or {}).values()
+            if config.hero_deck not in decks or config.villain_deck not in decks:
                 raise ValueError("Trained opponent does not support these decks.")
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
@@ -1169,6 +955,8 @@ class GameSession:
             player_config.get("player_token"),
             player_config.get("player_name"),
         )
+        if self.watch_mode and self.record_players is not None:
+            players = self.record_players
         if (
             not player_config.get("player_token")
             and self.record_players
@@ -1183,12 +971,12 @@ class GameSession:
         if selected_pack is not None:
             self.asset_manifest_hash = selected_pack.manifest_sha256
             self.content_hash = (
-                CONTENT_HASH
+                UNVERSIONED_CONTENT_HASH
                 if selected_pack is CURATED_PACK
                 else str(manifest["content_digest"])
             )
         else:
-            self.content_hash = CONTENT_HASH
+            self.content_hash = UNVERSIONED_CONTENT_HASH
             self.asset_manifest_hash = ASSET_MANIFEST_HASH
 
         self.deck_names = {
@@ -1512,6 +1300,14 @@ class GameSession:
             raise RuntimeError("Cannot step without an active game.")
 
         observation = serialize_observation(self.obs)
+        analysis_observation = None
+        if self.watch_mode:
+            analysis_observation = deepcopy(observation)
+            other = serialize_observation(
+                self.env.observation_for_player(1 - int(self.obs.agent.player_index))
+            )
+            analysis_observation["opponent"]["hand"] = other["agent"]["hand"]
+            analysis_observation["opponent"]["hand_hidden_count"] = 0
         before_observation = self.obs
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
@@ -1661,9 +1457,12 @@ class GameSession:
                 action_description=action_description,
                 reward=float(reward),
                 auto=auto,
+                bot_decision=self._bot_decision,
+                analysis_observation=analysis_observation,
             )
         )
         self.obs = next_obs
+        self._bot_decision = None
         self._advance_protocol_revision()
         caused_by = None if command is None else str(command["command_id"])
         presentation_events = self._commit_step_presentation(
@@ -1683,7 +1482,7 @@ class GameSession:
                     action_space=(
                         context.action_space
                         if context is not None
-                        else _enum_name(
+                        else enum_name(
                             ActionSpaceEnum,
                             before_observation.action_space.action_space_type,
                         )
@@ -1730,7 +1529,10 @@ class GameSession:
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
-                    action_index = int(self.villain_policy(self.env, self.obs))
+                    self._bot_decision = villain_module.choose_bot(
+                        self.villain_policy, self.env, self.obs
+                    )
+                    action_index = self._bot_decision.action
                 except Exception as exc:
                     raise RuntimeError(
                         "The opponent could not continue this game."
@@ -1763,7 +1565,12 @@ class GameSession:
         over or a hero decision surfaces per the stop rules. Bounded so a
         stuck engine cannot spin the server forever.
         """
-        if self.env is None or self.obs is None or self.trace is None:
+        if (
+            self.watch_mode
+            or self.env is None
+            or self.obs is None
+            or self.trace is None
+        ):
             return
 
         hero_passes = 0
@@ -1824,7 +1631,7 @@ class GameSession:
         if self.stop_on_stack and len(obs.stack_objects) > 0:
             return True
 
-        step_name = _enum_name(StepEnum, obs.turn.step)
+        step_name = enum_name(StepEnum, obs.turn.step)
         stop_step = ENGINE_STEP_TO_STOP_STEP.get(step_name)
         if stop_step is None:
             # Untap/cleanup/end-of-combat: no stop exists for these steps.
@@ -1949,7 +1756,7 @@ class GameSession:
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
         actions = describe_actions(obs)
-        action_space = _enum_name(
+        action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
         prompt_id = self._next_prompt_id
@@ -1961,7 +1768,7 @@ class GameSession:
             {
                 "id": offer_id,
                 "actor": viewer,
-                "verb": _offer_verb(str(action.get("type", ""))),
+                "verb": offer_verb(str(action.get("type", ""))),
                 "source": None,
                 "label": action["description"],
                 "help": None,
@@ -2204,6 +2011,7 @@ class GameSession:
             asdict(retained),
             finished=finished,
             players=self.record_players,
+            origin="bot_evaluation" if self.watch_mode else None,
         )
         if finished:
             self._study_provider = study_provider
@@ -2303,8 +2111,13 @@ class GameSession:
         )
 
     def fork_study(self, raw_address: str) -> StudyBranch:
-        """Fork one retained player-0 replay decision for ephemeral Study."""
-        return self.study_fork_provider().fork(raw_address, HERO_PLAYER_INDEX)
+        """Fork an authorized acting-player decision for ephemeral Study."""
+        viewer = (
+            int(parse_decision_address(raw_address).viewer)
+            if self.watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        return self.study_fork_provider().fork(raw_address, viewer)
 
     def retry_study(
         self,
@@ -2326,8 +2139,13 @@ class GameSession:
             for attempt in self._study_attempts.values()
         ):
             raise StudyCommandUnavailableError("study_attempt_active")
-        projection = project_replay(replay, HERO_PLAYER_INDEX)
-        restored = restore_decision(replay, raw_address, HERO_PLAYER_INDEX)
+        viewer = (
+            int(parse_decision_address(raw_address).viewer)
+            if self.watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        projection = project_replay(replay, viewer)
+        restored = restore_decision(replay, raw_address, viewer)
         command = Command.model_validate(raw_command)
         prompt = restored.frame.prompt
         if (
@@ -2499,6 +2317,26 @@ class GameSession:
         if canonical_offer is None:
             raise StudyCommandUnavailableError("study_command_offer_missing")
 
+        if self.watch_mode:
+            before = branch.current_observation()
+            projector = PresentationProjector()
+            projector.note_action(
+                before,
+                {
+                    "type": canonical_offer.action_type,
+                    "focus": list(canonical_offer.focus),
+                },
+                actor_index=restored.viewer,
+            )
+            observation = branch.submit_semantic(command)
+            projector.observe(observation)
+            presentation = projector.drain(
+                from_revision=restored.revision,
+                to_revision=restored.revision + 1,
+                caused_by=command.command_id,
+            )
+            return viewer_view(observation, restored.viewer), presentation
+
         try:
             structured = branch.structured_offers()
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
@@ -2575,6 +2413,7 @@ class GameSession:
         self.env = None
         self.obs = None
         self.villain_policy = None
+        self.watch_policies = None
         if self._live_beliefs is not None:
             self._live_beliefs.close()
             self._live_beliefs = None
@@ -2905,7 +2744,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
 }
 
 if set(DISPATCH_CAPABILITIES) | {"join_table", "resume"} != set(REQUEST_TYPES):
-    raise RuntimeError("testing-house request vocabulary and dispatch drifted")
+    raise RuntimeError("shared-table request vocabulary and dispatch drifted")
 
 
 def _parse_table_request(raw: Any) -> Any:
@@ -3318,9 +3157,13 @@ async def play_socket(websocket: WebSocket) -> None:
             await websocket.close()
 
 
-@app.get("/api/opponent")
-async def get_opponent() -> dict[str, Any]:
-    return opponent_availability()
+@app.get("/api/opponents")
+async def get_opponents() -> dict[str, Any]:
+    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
+    catalog = await asyncio.to_thread(opponent_catalog)
+    for entry in catalog["opponents"]:
+        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
+    return catalog
 
 
 def _record_owners(tokens: str | None) -> set[str]:
@@ -3554,10 +3397,26 @@ async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")
-async def get_trace_decision(trace_id: str, address: str) -> dict[str, Any]:
+async def get_trace_decision(
+    trace_id: str,
+    address: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
+    payload = trace_store.load_trace(trace_id)
+    watch_mode = bool(payload["config"].get("watch_players"))
+    if watch_mode and not (
+        payload["end_reason"] == "game_over"
+        and payload["final_observation"]["game_over"]
+    ):
+        _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
-        restored = restore_decision(replay, address, HERO_PLAYER_INDEX)
+        viewer = (
+            int(parse_decision_address(address).viewer)
+            if watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        restored = restore_decision(replay, address, viewer)
     except InvalidAddressError as exc:
         raise HTTPException(status_code=400, detail="invalid_address") from exc
     except DecisionNotFoundError as exc:
@@ -3697,3 +3556,60 @@ async def post_advice(payload: AdviceRequest) -> dict[str, Any] | Response:
     assert payload.identity is not None
     response = request_advice(payload.address, payload.scenario_id, payload.identity)
     return response.model_dump(mode="json")
+
+
+@app.post("/api/watch")
+def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import WatchRequest, create_watch
+
+    try:
+        return create_watch(WatchRequest.model_validate(payload))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/watch/{trace_id}/step")
+async def advance_bot_watch(
+    trace_id: str,
+    payload: dict[str, Any],
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import record_for_watch, step_watch
+
+    revision = payload.get("revision")
+    if type(revision) is not int:
+        raise HTTPException(400, "revision_required")
+    record = record_for_watch(trace_id, x_etude_participant_token)
+    async with record.lock:
+        return await asyncio.to_thread(
+            step_watch, trace_id, x_etude_participant_token, revision
+        )
+
+
+@app.get("/api/watch/{trace_id}/decisions/{ordinal}")
+def inspect_bot_watch(
+    trace_id: str,
+    ordinal: int,
+    reveal: bool = False,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import inspect_watch
+
+    if ordinal < 0:
+        raise HTTPException(400, "invalid_ordinal")
+    try:
+        return inspect_watch(trace_id, ordinal, x_etude_participant_token, reveal)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "watch_not_found") from exc
+    except ValueError as exc:
+        raise HTTPException(400, "watch_record_invalid") from exc
+
+
+@app.post("/api/watch/import")
+def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import import_arena
+
+    try:
+        return import_arena(payload)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, "arena_import_invalid") from exc

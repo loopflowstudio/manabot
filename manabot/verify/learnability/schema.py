@@ -21,7 +21,10 @@ class PPOResult:
 
 class Config(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    version: str = "learnability-1"
+    # learnability-2 trains the FiLM-conditioned policy on case set
+    # action-cases-2; learnability-1 used the additive policy, whose verdict
+    # depended on the starting weights, on action-cases-1.
+    version: str = "learnability-2"
     seeds: tuple[int, ...] = (17, 29, 43)
     updates: int = 240
     learning_rate: float = 0.003
@@ -29,6 +32,7 @@ class Config(BaseModel):
     probability: float = 0.9
     invariance_tolerance: float = 0.0001
     timeout_seconds: int = 480
+    ppo_timeout_seconds: int = 300
     ppo: bool = True
 
 
@@ -50,7 +54,7 @@ class Score(BaseModel):
 
 
 class Result(BaseModel):
-    version: str = "learnability-1"
+    version: str = "learnability-2"
     status: Literal["running", "passed", "failed", "error", "timeout"] = "running"
     source: str
     source_digest: str
@@ -60,6 +64,8 @@ class Result(BaseModel):
     torch_version: str | None = None
     fit_cases: int = 0
     held_out_cases: int = 0
+    # `action_cases.CASE_SET`; None in reports that predate case-set versions.
+    case_set: str | None = None
     cases_digest: str | None = None
     platform: str
     started_at: str

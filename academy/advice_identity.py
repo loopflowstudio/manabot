@@ -1,4 +1,4 @@
-"""Identity values shared by Academy's advice and testing-house contracts.
+"""Identity values shared by Academy's advice and shared-table contracts.
 
 The legacy four-string identity remains import-compatible through
 ``academy.advice``.  ``AdvisorIdentity`` is the versioned, closed superset used
@@ -11,7 +11,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
-from .experience_protocol import ProtocolModel, UInt32, UInt64
+from managym.experience import ProtocolModel, UInt32, UInt64
 
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
 

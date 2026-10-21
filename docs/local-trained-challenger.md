@@ -92,6 +92,16 @@ Search, Random and Passive remain selectable controls. The browser never needs
 a checkpoint path. The server verifies the artifact digest, rules binary,
 content manifest and decks. Replacing checkpoint bytes fails clearly.
 
+Checkpoints from `uv run manabot train`, regime runs and Tournament files
+are listed below the candidate under **Trained checkpoints**. Everything under
+`.runs/` appears automatically; add other files, run directories or Tournament
+JSON with `ACADEMY_PLAY_CHECKPOINTS="/path/a.pt:/path/run-dir:/path/grid.json"`.
+Tournament entrants resolve beside the Tournament file or in a listed
+directory, and only with their pinned bytes. A checkpoint bound to another
+world, content or deck setup is listed with the mismatch and cannot be started.
+Choose the checkpoint's decks in either seat; its world, model, step and
+producer show under the menu, and its exact identity is recorded on the trace.
+
 Play, optionally save a note, and choose Play Again. Open replay beside the note
 to revisit that attempt. Attempts are saved at startup and each surfaced
 revision, including incomplete prefixes. Replacement, expiry, runtime error
@@ -160,7 +170,7 @@ uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
 ```
 
 Without a candidate registration this runs Random against the shipped default
-demo Search-64. It calls `academy.villain.SearchVillain` itself: 64 simulations
+demo Search-64. It calls `manabot.sim.flat_search.FlatSearchPolicy` itself: 64 simulations
 per legal action, four rollouts per world, 2,000-step playout cap, deterministic
 first-maximum selection, CPU, one worker and one Torch thread. The baseline
 registration pins the policy source bytes; the protocol additionally pins the

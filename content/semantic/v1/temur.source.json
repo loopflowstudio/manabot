@@ -1,0 +1,658 @@
+{
+  "decks": [
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 3,
+          "definition": "temur.great_divide_guide"
+        },
+        {
+          "count": 3,
+          "definition": "temur.hermitic_herbalist"
+        },
+        {
+          "count": 3,
+          "definition": "temur.iroh_grand_lotus"
+        },
+        {
+          "count": 3,
+          "definition": "temur.prophetic_prism"
+        },
+        {
+          "count": 3,
+          "definition": "temur.ran_and_shaw"
+        },
+        {
+          "count": 3,
+          "definition": "temur.waterbending_lesson"
+        },
+        {
+          "count": 8,
+          "definition": "temur.forest"
+        },
+        {
+          "count": 7,
+          "definition": "temur.island"
+        },
+        {
+          "count": 7,
+          "definition": "temur.mountain"
+        }
+      ],
+      "key": "temur_left",
+      "sideboard": []
+    },
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 3,
+          "definition": "temur.great_divide_guide"
+        },
+        {
+          "count": 3,
+          "definition": "temur.hermitic_herbalist"
+        },
+        {
+          "count": 3,
+          "definition": "temur.iroh_grand_lotus"
+        },
+        {
+          "count": 3,
+          "definition": "temur.prophetic_prism"
+        },
+        {
+          "count": 3,
+          "definition": "temur.ran_and_shaw"
+        },
+        {
+          "count": 3,
+          "definition": "temur.waterbending_lesson"
+        },
+        {
+          "count": 8,
+          "definition": "temur.forest"
+        },
+        {
+          "count": 7,
+          "definition": "temur.island"
+        },
+        {
+          "count": 7,
+          "definition": "temur.mountain"
+        }
+      ],
+      "key": "temur_right",
+      "sideboard": []
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Island"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "temur.island",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "U",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Island"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "temur.mountain",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "R",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Mountain"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Forest"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "key": "temur.forest",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "mana",
+          "ops": [
+            {
+              "mana": "G",
+              "op": "add_mana"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Forest"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{1}{G}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Scout",
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "temur.great_divide_guide",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "grant_mana",
+              "predicates": [
+                {
+                  "kind": "card_type",
+                  "value": "land"
+                },
+                {
+                  "kind": "subtype",
+                  "value": "Ally"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "registry_name": "Great Divide Guide"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{G}{U}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Druid",
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "temur.hermitic_herbalist",
+      "programs": [
+        {
+          "cost": {
+            "mana": "0",
+            "tap_source": true
+          },
+          "key": "p0",
+          "kind": "activated",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "mana": "W",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "U",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "B",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "R",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "G",
+                    "op": "add_mana"
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ]
+        },
+        {
+          "cost": {
+            "mana": "0",
+            "tap_source": true
+          },
+          "key": "p1",
+          "kind": "activated",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "mana": "WW",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "WU",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "WB",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "WR",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "WG",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "UU",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "UB",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "UR",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "UG",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "BB",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "BR",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "BG",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "RR",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "RG",
+                    "op": "add_lesson_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "GG",
+                    "op": "add_lesson_mana"
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Hermitic Herbalist"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{3}{G}{U}{R}",
+        "power": 5,
+        "subtypes": [
+          "Human",
+          "Noble",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "token": false,
+        "toughness": 5,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "temur.iroh_grand_lotus",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "mana": "RR",
+              "op": "add_mana",
+              "until": "end_of_combat"
+            }
+          ],
+          "trigger": {
+            "event": "attacks",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "grant_flashback"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Iroh, Grand Lotus"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{2}",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "artifact"
+        ]
+      },
+      "key": "temur.prophetic_prism",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "count": 1,
+              "op": "draw_cards"
+            }
+          ],
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "cost": {
+            "mana": "1",
+            "tap_source": true
+          },
+          "key": "p1",
+          "kind": "activated",
+          "ops": [
+            {
+              "modes": [
+                [
+                  {
+                    "mana": "W",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "U",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "B",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "R",
+                    "op": "add_mana"
+                  }
+                ],
+                [
+                  {
+                    "mana": "G",
+                    "op": "add_mana"
+                  }
+                ]
+              ],
+              "op": "modal"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Prophetic Prism"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{3}{R}{R}",
+        "power": 4,
+        "subtypes": [
+          "Dragon"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "token": false,
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "key": "temur.ran_and_shaw",
+      "programs": [
+        {
+          "key": "p0",
+          "kind": "triggered",
+          "ops": [
+            {
+              "mana": "RR",
+              "op": "add_mana",
+              "until": "end_of_combat"
+            }
+          ],
+          "trigger": {
+            "event": "attacks",
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "key": "p1",
+          "kind": "triggered",
+          "ops": [
+            {
+              "condition": {
+                "count": 3,
+                "kind": "graveyard_at_least",
+                "predicate": {
+                  "kind": "subtypes_any",
+                  "values": [
+                    "Dragon",
+                    "Lesson"
+                  ]
+                }
+              },
+              "op": "branch",
+              "otherwise": [],
+              "then": [
+                {
+                  "op": "create_nonlegendary_copy"
+                }
+              ]
+            }
+          ],
+          "trigger": {
+            "event": "cast_enters",
+            "if": {
+              "count": 3,
+              "kind": "graveyard_at_least",
+              "predicate": {
+                "kind": "subtypes_any",
+                "values": [
+                  "Dragon",
+                  "Lesson"
+                ]
+              }
+            },
+            "subject": {
+              "kind": "this"
+            }
+          }
+        },
+        {
+          "cost": {
+            "mana": "3R"
+          },
+          "key": "p2",
+          "kind": "activated",
+          "ops": [
+            {
+              "op": "modify_controlled",
+              "power": 2,
+              "predicate": {
+                "kind": "subtype",
+                "value": "Dragon"
+              },
+              "toughness": 0
+            }
+          ]
+        }
+      ],
+      "registry_name": "Ran and Shaw"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{3}{U}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "sorcery"
+        ]
+      },
+      "key": "temur.waterbending_lesson",
+      "programs": [
+        {
+          "cost": {
+            "mana": "3U"
+          },
+          "key": "p0",
+          "kind": "spell",
+          "ops": [
+            {
+              "count": 3,
+              "op": "draw_cards"
+            },
+            {
+              "generic": 2,
+              "op": "waterbend_or_discard"
+            }
+          ]
+        }
+      ],
+      "registry_name": "Waterbending Lesson"
+    }
+  ],
+  "pack_key": "elemental-temur-v1",
+  "schema_version": 1
+}

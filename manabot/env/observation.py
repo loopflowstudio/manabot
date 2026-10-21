@@ -15,7 +15,6 @@ Additional updates in this version:
   is_valid flag.
 """
 
-from enum import IntEnum
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
@@ -26,75 +25,16 @@ from manabot.infra.hypers import ObservationSpaceHypers
 from manabot.infra.log import getLogger
 import managym
 
-
-# -----------------------------------------------------------------------------
-# Game Enums - mirror managym for validation
-# -----------------------------------------------------------------------------
-class PhaseEnum(IntEnum):
-    """Mirrors managym.PhaseEnum for validation."""
-
-    BEGINNING = 0
-    PRECOMBAT_MAIN = 1
-    COMBAT = 2
-    POSTCOMBAT_MAIN = 3
-    ENDING = 4
-
-
-class StepEnum(IntEnum):
-    """Mirrors managym.StepEnum for validation."""
-
-    BEGINNING_UNTAP = 0
-    BEGINNING_UPKEEP = 1
-    BEGINNING_DRAW = 2
-    PRECOMBAT_MAIN_STEP = 3
-    COMBAT_BEGIN = 4
-    COMBAT_DECLARE_ATTACKERS = 5
-    COMBAT_DECLARE_BLOCKERS = 6
-    COMBAT_DAMAGE = 7
-    COMBAT_END = 8
-    POSTCOMBAT_MAIN_STEP = 9
-    ENDING_END = 10
-    ENDING_CLEANUP = 11
-
-
-class ActionEnum(IntEnum):
-    """Mirrors managym.ActionEnum for validation."""
-
-    PRIORITY_PLAY_LAND = 0
-    PRIORITY_CAST_SPELL = 1
-    PRIORITY_PASS_PRIORITY = 2
-    DECLARE_ATTACKER = 3
-    DECLARE_BLOCKER = 4
-    CHOOSE_TARGET = 5
-    PRIORITY_ACTIVATE_ABILITY = 6
-    SCRY_KEEP = 7
-    SCRY_BOTTOM = 8
-    SELECT_CARD = 9
-    DECLINE_CHOICE = 10
-    PAY_COST = 11
-    CHOOSE_MODE = 12
-    TAP_FOR_COST = 13
-    LEARN_TAKE_LESSON = 14
-    LEARN_DISCARD = 15
-
-
-class ActionSpaceEnum(IntEnum):
-    """Mirrors managym.ActionSpaceEnum for validation."""
-
-    GAME_OVER = 0
-    PRIORITY = 1
-    DECLARE_ATTACKER = 2
-    DECLARE_BLOCKER = 3
-    CHOOSE_TARGET = 4
-    SCRY = 5
-    LOOK_AND_SELECT = 6
-    PAY_OR_NOT = 7
-    MODAL = 8
-    LEARN = 9
-    WATERBEND = 10
-    DISCARD = 11
-    LEGEND_RULE = 12
-
+# Many modules import the enum mirrors from here; managym.enums owns them.
+from managym.enums import (  # noqa: F401
+    ActionEnum,
+    ActionSpaceEnum,
+    EventEntityKindEnum,
+    EventTypeEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
 
 # Native action tensor: family, declaration, mode/ability selectors, validity.
 ACTION_TYPE_DIM = len(ActionEnum)
@@ -103,47 +43,6 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
-
-
-class ZoneEnum(IntEnum):
-    """Mirrors managym.ZoneEnum for validation."""
-
-    LIBRARY = 0
-    HAND = 1
-    BATTLEFIELD = 2
-    GRAVEYARD = 3
-    STACK = 4
-    EXILE = 5
-    COMMAND = 6
-
-
-class EventTypeEnum(IntEnum):
-    """Mirrors managym.EventTypeEnum for validation."""
-
-    CARD_MOVED = 0
-    DAMAGE_DEALT = 1
-    LIFE_CHANGED = 2
-    SPELL_CAST = 3
-    SPELL_RESOLVED = 4
-    SPELL_COUNTERED = 5
-    ABILITY_TRIGGERED = 6
-    COMBAT_ATTACKERS_DECLARED = 7
-    BLOCKERS_DECLARED = 8
-    COMBAT_DAMAGE_DEALT = 9
-    PERMANENTS_DIED = 10
-    TURN_STARTED = 11
-    CARD_REVEALED = 12
-
-
-class EventEntityKindEnum(IntEnum):
-    """Mirrors managym.EventEntityKindEnum for validation."""
-
-    NONE = 0
-    CARD = 1
-    PERMANENT = 2
-    PLAYER = 3
-    OBJECT = 4
-    DEFINITION = 5
 
 
 # -----------------------------------------------------------------------------
@@ -173,17 +72,17 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 2
+        # lessons + until-end-of-combat mana + pooled and Lesson-only colors.
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 14
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 2
+        # kicker flag/cost + hexproof + outside + indestructible + legendary + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 4
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
-        self.permanent_dim = 26
+        self.permanent_dim = 27
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -311,7 +210,7 @@ class ObservationEncoder:
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
             row = start + offset
             out["agent_cards"][row, 7] = 1.0
-            out["agent_cards"][row, -2] = 1.0
+            out["agent_cards"][row, 37] = 1.0
             out["agent_cards"][row, -1] = 1.0
             self.object_to_index[card.candidate_id] = 2 + row
         for key, perms, is_mine in (
@@ -376,6 +275,9 @@ class ObservationEncoder:
 
         arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
         arr[step_start + self.num_steps + 1] = float(player.combat_mana) / 10.0
+
+        arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
+        arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -459,6 +361,8 @@ class ObservationEncoder:
         arr[i] = float(card.kicker_cost) / 10.0
         i += 1
         arr[i] = float(card.keywords.hexproof)
+        arr[38] = float(card.keywords.indestructible)
+        arr[39] = float(card.is_legendary)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -507,6 +411,7 @@ class ObservationEncoder:
         arr[21] = float(perm.keywords.menace)
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
+        arr[25] = float(perm.keywords.indestructible)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -541,7 +446,9 @@ class ObservationEncoder:
             ):
                 if selector is not None:
                     if not 0 <= selector <= MAX_ACTION_SELECTOR:
-                        raise ValueError("observation capacity exceeded: action selector")
+                        raise ValueError(
+                            "observation capacity exceeded: action selector"
+                        )
                     arr[idx, column] = selector + 1
 
             if len(action.focus) > self.max_focus_objects:

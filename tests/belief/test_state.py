@@ -223,13 +223,23 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         "5a73465a8502d7d658ac625bf6d402ce65eeb024711759666ef125407926dcef",
         "71b27f9f081d668ff9209c2cd94935bdd194f4fe1114d8d985d8b07219817803",
     )
-    for (belief, prior_catalog_receipt, historical_receipt), receipt in zip(
-        cases, current_w4_receipts, strict=True
+    current_w7_receipts = (
+        "2493ddd10a0bb40ac15b84fe08a07abf40a37faea7a720b769d51bc21416f8d9",
+        "164755ad7ecb497d52c35ed2f3a45f1c9a4b45a8c0ecf2534eecef9a1059f538",
+        "66c0b6e1c90034a2dd0db3e5724413e12f9abe29082ba6bf6f1c2ddd3db23f7f",
+        "95c66ac66e1f977466c8e4df1d4f06acdbda29499de1be2bde73490897940fe4",
+    )
+    for (belief, prior_catalog_receipt, historical_receipt), w4_receipt, receipt in zip(
+        cases, current_w4_receipts, current_w7_receipts, strict=True
     ):
         assert isinstance(belief, BeliefState)
         encoded = encode_belief(belief, schema)
         assert encoded.encoding_receipt == receipt
-        assert encoded.encoding_receipt not in (prior_catalog_receipt, historical_receipt)
+        assert encoded.encoding_receipt not in (
+            prior_catalog_receipt,
+            historical_receipt,
+            w4_receipt,
+        )
         with pytest.raises(BeliefError, match="world schema"):
             encode_belief(belief, old_schema)
         # Independent scalar accumulation checks numerical meaning as well as

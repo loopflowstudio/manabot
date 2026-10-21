@@ -111,7 +111,7 @@ pub struct TriggeredManaAbility {
     pub mana: Mana,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Keywords {
     pub flying: bool,
     pub reach: bool,
@@ -129,6 +129,7 @@ pub struct Keywords {
     /// CR 702.11 — Can't be the target of spells or abilities opponents
     /// control.
     pub hexproof: bool,
+    pub indestructible: bool,
 }
 
 impl Keywords {
@@ -148,6 +149,7 @@ impl Keywords {
             defender: self.defender || other.defender,
             menace: self.menace || other.menace,
             hexproof: self.hexproof || other.hexproof,
+            indestructible: self.indestructible || other.indestructible,
         }
     }
 }
@@ -155,6 +157,7 @@ impl Keywords {
 /// Characteristic-defining power (CR 604.3): recomputed on every read.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PowerCda {
+    CountersOnLandsYouControl,
     /// "This creature's power is equal to the number of creatures you
     /// control." (Suki, Kyoshi Warrior.)
     CreaturesYouControl,
@@ -207,8 +210,49 @@ pub enum ReplacementEffect {
     EntersWithPlusOneCounters { count: i32 },
 }
 
+impl ActivatedAbilityDefinition {
+    pub fn mana_choices(&self) -> Option<Vec<Mana>> {
+        match &self.effect {
+            Effect::AddMana {
+                mana,
+                until_end_of_combat: false,
+            } => Some(vec![mana.clone()]),
+            Effect::Modal { modes } => modes
+                .iter()
+                .map(|effects| match effects.as_slice() {
+                    [Effect::AddMana {
+                        mana,
+                        until_end_of_combat: false,
+                    }] => Some(mana.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => None,
+        }
+    }
+}
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SacrificeCost {
+    pub predicate: CardPredicate,
+    pub another: bool,
+    pub or_mana: Option<ManaCost>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sacrifice: Option<SacrificeCost>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub own_turn_only: bool,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub life_cost: u32,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tap_source: bool,
     pub mana_cost: ManaCost,
     /// Sacrifice the source permanent as an additional activation cost
     /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
@@ -216,13 +260,14 @@ pub struct ActivatedAbilityDefinition {
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
-    /// "tapped for mana" (triggered mana abilities compose).
+    /// cost payment rather than a mana ability (CR 702.177).
     pub waterbend: bool,
     pub effect: Effect,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellCostReduction {
+    pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
     pub condition: StaticCondition,
     pub generic: u8,
@@ -230,6 +275,23 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    /// During your turn, grant graveyard flashback (Lessons cost {1}).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub grants_flashback: bool,
+    /// Each matching permanent you control gains a chosen-color tap ability.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mana_grant: Vec<CardPredicate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unblockable_if: Option<StaticCondition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sacrifice_cost: Option<SacrificeCost>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prevents_life_gain: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub combat_requires_other: Option<CardPredicate>,
+    /// This creature cannot block attackers matching this predicate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocking_restriction: Option<CardPredicate>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub spell_cost_reductions: Vec<SpellCostReduction>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -332,18 +394,39 @@ impl Card {
         self.types.is_instant() || self.keywords.flash
     }
 
-    /// The spell's targeting clauses, in choice order. Explicit `targeting`
-    /// wins; otherwise a single 1-of-1 requirement is derived from the
-    /// first targeted spell effect (the Stage-1 convention).
-    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
+    /// modal effects participate; choices inside resolving abilities do not.
+    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
+        self.spell_effects
+            .iter()
+            .flat_map(|effect| match (effect, mode) {
+                (Effect::Modal { modes }, Some(index)) => {
+                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
+                }
+                _ => std::slice::from_ref(effect),
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
         if !self.targeting.is_empty() {
             return self.targeting.clone();
         }
-        self.spell_effects
-            .iter()
-            .find_map(|effect| effect.target_spec())
-            .map(|spec| vec![TargetRequirement::one(spec.clone())])
-            .unwrap_or_default()
+        crate::state::ability::effect_target_requirements(&self.spell_effects_for_mode(mode))
+    }
+
+    /// Explicit clauses bind distinct targets; repeated effects on "that"
+    /// target share the inferred single clause.
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        self.target_requirements_for_mode(None)
     }
 }
 

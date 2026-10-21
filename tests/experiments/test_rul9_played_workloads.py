@@ -46,7 +46,7 @@ def release_game(surface: str, fallback_names: list[str]) -> dict:
         "commands": 132,
         "token_samples": [token_sample()],
         "game_seconds": 0.1,
-        "terminal_state_sha256": rul9.parity.TERMINAL_STATE,
+        "terminal_state_sha256": rul9.parity.HISTORICAL_TERMINAL_STATE,
         "logical_trace_sha256": "logical",
         "fallback_counters": {name: 0 for name in fallback_names},
     }

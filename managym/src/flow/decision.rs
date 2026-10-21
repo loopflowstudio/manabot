@@ -52,6 +52,7 @@ pub struct EffectFrame {
     pub targets: Vec<Target>,
     /// Requirement index for each chosen target (multi-target spells).
     pub target_req_indices: Vec<usize>,
+    pub active_requirement: usize,
     /// Trigger-context object (e.g. the spell that targeted a warded
     /// permanent) — used as the primary target when none was chosen.
     pub context_target: Option<Target>,
@@ -68,10 +69,26 @@ impl EffectFrame {
         }
     }
 
-    /// The single target most effects act on: the first chosen target, or
-    /// the trigger-context object.
+    /// Chosen targets for the active clause, or all targets for legacy frames
+    /// without clause indices. Trigger context is not a chosen target.
+    pub fn active_targets(&self) -> impl Iterator<Item = Target> + '_ {
+        self.targets
+            .iter()
+            .enumerate()
+            .filter_map(|(index, target)| {
+                (self.target_req_indices.is_empty()
+                    || self.target_req_indices.get(index) == Some(&self.active_requirement))
+                .then_some(*target)
+            })
+    }
+
+    /// The first target in the active clause. Only legacy frames without
+    /// clause indices may fall back to the trigger-context object.
     pub fn primary_target(&self) -> Option<Target> {
-        self.targets.first().copied().or(self.context_target)
+        self.active_targets().next().or_else(|| {
+            self.context_target
+                .filter(|_| self.target_req_indices.is_empty())
+        })
     }
 }
 
@@ -80,15 +97,58 @@ impl EffectFrame {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
-    /// Scry: decide keep-or-bottom for `remaining[0]`, then continue.
+    WaterbendOrDiscard {
+        player: PlayerId,
+        remaining: u8,
+        started: bool,
+    },
+    ManaChoice {
+        player: PlayerId,
+        choices: Vec<crate::state::mana::Mana>,
+        resume: Option<Box<Decision>>,
+    },
+    Sacrifice {
+        player: PlayerId,
+        predicate: CardPredicate,
+    },
+    SelectMilled {
+        player: PlayerId,
+        cards: Vec<CardId>,
+        if_declined: Vec<Effect>,
+    },
+    /// Candidates come from the current library, not stored or pinned cards.
+    SearchBasicLand {
+        player: PlayerId,
+        subtype: Option<String>,
+        #[serde(skip_serializing_if = "is_one")]
+        remaining: usize,
+        #[serde(skip_serializing_if = "is_true")]
+        tapped: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        untap_if_lands: Option<usize>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        bottom_source: bool,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        selected: Vec<CardId>,
+    },
+    OptionalDiscardDraw {
+        player: PlayerId,
+        count: usize,
+    },
+    /// Choose cards in their desired top/bottom order (CR 701.26).
     Scry {
         player: PlayerId,
-        /// Undecided revealed cards, top of library first.
+        /// All inspected cards stay pinned until the whole reorder commits.
+        looked: Vec<CardId>,
         remaining: Vec<CardId>,
+        top: Vec<CardId>,
+        bottom: Vec<CardId>,
     },
     /// Look at top N, select up to K matching cards to hand, rest to the
     /// bottom of the library in random order.
     LookAndSelect {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        reveal: bool,
         player: PlayerId,
         /// Looked-at cards still in the library, top first.
         looked: Vec<CardId>,
@@ -115,6 +175,7 @@ pub enum Decision {
     },
     Discard {
         player: PlayerId,
+        remaining: usize,
     },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
@@ -124,28 +185,46 @@ pub enum Decision {
     },
 }
 
+fn is_one(value: &usize) -> bool {
+    *value == 1
+}
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
-            Decision::Scry { player, .. }
+            Decision::WaterbendOrDiscard { player, .. }
+            | Decision::ManaChoice { player, .. }
+            | Decision::Sacrifice { player, .. } => *player,
+            Decision::SelectMilled { player, .. }
+            | Decision::SearchBasicLand { player, .. }
+            | Decision::OptionalDiscardDraw { player, .. }
+            | Decision::Scry { player, .. }
             | Decision::LookAndSelect { player, .. }
             | Decision::PayOrNot { player, .. }
             | Decision::Modal { player, .. }
             | Decision::Learn { player }
-            | Decision::Discard { player }
+            | Decision::Discard { player, .. }
             | Decision::LegendRule { player, .. } => *player,
         }
     }
 
-    /// Library cards revealed to the deciding player (empty for decisions
-    /// that only concern public objects). Top of library first. These are
-    /// added to the deciding agent's observation and pinned in place by
-    /// `Game::determinize`.
+    /// Exact top-of-library cards inspected by scry/look decisions, top first.
+    /// These enter the deciding player's observation and stay pinned during
+    /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
-            Decision::Scry { remaining, .. } => remaining,
+            Decision::WaterbendOrDiscard { .. }
+            | Decision::ManaChoice { .. }
+            | Decision::Sacrifice { .. } => &[],
+            Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
-            Decision::PayOrNot { .. }
+            Decision::SelectMilled { .. }
+            | Decision::SearchBasicLand { .. }
+            | Decision::OptionalDiscardDraw { .. }
+            | Decision::PayOrNot { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
             | Decision::Discard { .. }
@@ -172,6 +251,7 @@ impl Game {
                 kicked: false,
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
+                active_requirement: 0,
                 context_target: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
@@ -194,10 +274,6 @@ impl Game {
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
         if let FrameFinalize::Spell { card } = frame.finalize {
-            if let Some(index) = self.find_spell_on_stack_index(card) {
-                self.journal_stack();
-                self.state.stack_objects.remove(index);
-            }
             let is_permanent = self.state.cards[card].types.is_permanent();
             if is_permanent {
                 self.move_card(card, ZoneType::Battlefield);
@@ -221,26 +297,147 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
-            Decision::Scry { player, remaining } => {
-                let card = *remaining.first()?;
+            Decision::WaterbendOrDiscard {
+                player,
+                remaining,
+                started,
+            } => {
+                let mut actions = self.mana_ability_actions(*player, None);
+                if *remaining > 0 {
+                    for permanent in self.waterbend_candidates(*player) {
+                        let mut probe = self.clone();
+                        probe.tap_permanent(permanent, false);
+                        if probe.can_pay_with_waterbend(
+                            *player,
+                            &ManaCost::default().with_generic(*remaining - 1),
+                        ) {
+                            actions.push(Action::WaterbendTap {
+                                player: *player,
+                                permanent,
+                            });
+                        }
+                    }
+                }
+                if self
+                    .available_mana(*player)
+                    .can_pay(&ManaCost::default().with_generic(*remaining))
+                {
+                    actions.push(Action::PayCost { player: *player });
+                }
+                if !started {
+                    actions.push(Action::Decline { player: *player });
+                }
                 ActionSpace {
                     player: Some(*player),
-                    kind: ActionSpaceKind::Scry,
-                    actions: vec![
-                        Action::ScryCard {
-                            player: *player,
-                            card,
-                            to_bottom: false,
-                        },
-                        Action::ScryCard {
-                            player: *player,
-                            card,
-                            to_bottom: true,
-                        },
-                    ],
-                    focus: vec![self.state.cards[card].id],
+                    kind: ActionSpaceKind::Waterbend,
+                    actions,
+                    focus: source_focus,
                 }
             }
+            Decision::ManaChoice {
+                player, choices, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: (0..choices.len())
+                    .filter(|mode| self.mana_choice_completes_payment(*player, &choices[*mode]))
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
+            Decision::Sacrifice { player, predicate } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .sacrifice_candidates(*player, predicate)
+                    .into_iter()
+                    .map(|id| Action::SelectCard {
+                        player: *player,
+                        card: self.state.permanents[id].as_ref().unwrap().card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::SearchBasicLand {
+                player, subtype, ..
+            } => {
+                let mut actions: Vec<Action> = self
+                    .basic_land_search_candidates(*player, subtype)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
+                    .collect();
+                actions.push(Action::Decline { player: *player });
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    actions,
+                    focus: source_focus,
+                }
+            }
+            Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
+                let mut actions: Vec<Action> = self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Hand, *player)
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect();
+                if matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }) {
+                    actions.push(Action::Decline { player: *player });
+                }
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Discard,
+                    actions,
+                    focus: source_focus,
+                }
+            }
+
+            Decision::SelectMilled { player, cards, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: cards
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .chain(std::iter::once(Action::Decline { player: *player }))
+                    .collect(),
+                focus: cards
+                    .iter()
+                    .map(|card| self.state.cards[*card].id)
+                    .collect(),
+            },
+            Decision::Scry {
+                player, remaining, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Scry,
+                actions: remaining
+                    .iter()
+                    .flat_map(|card| {
+                        [false, true].map(|to_bottom| Action::ScryCard {
+                            player: *player,
+                            card: *card,
+                            to_bottom,
+                        })
+                    })
+                    .collect(),
+                focus: remaining
+                    .iter()
+                    .map(|card| self.state.cards[card].id)
+                    .collect(),
+            },
             Decision::LookAndSelect {
                 player,
                 looked,
@@ -271,7 +468,7 @@ impl Game {
                 }
             }
             Decision::PayOrNot { player, cost, .. } => {
-                let mut actions = Vec::with_capacity(2);
+                let mut actions = self.mana_ability_actions(*player, None);
                 if self.available_mana(*player).can_pay(cost) {
                     actions.push(Action::PayCost { player: *player });
                 }
@@ -290,21 +487,6 @@ impl Game {
                     .map(|mode| Action::ChooseMode {
                         player: *player,
                         mode,
-                    })
-                    .collect(),
-                focus: source_focus,
-            },
-            Decision::Discard { player } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::Discard,
-                actions: self
-                    .state
-                    .zones
-                    .zone_cards(ZoneType::Hand, *player)
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
                     })
                     .collect(),
                 focus: source_focus,
@@ -372,21 +554,228 @@ impl Game {
 
         match (&mut suspended.decision, action) {
             (
-                Decision::Scry { remaining, .. },
+                Decision::WaterbendOrDiscard {
+                    player,
+                    remaining,
+                    started,
+                },
+                Action::WaterbendTap { permanent, .. },
+            ) if *remaining > 0 && self.waterbend_candidates(*player).contains(permanent) => {
+                // Tapping to waterbend pays a generic cost; it is not tapping for mana.
+                self.tap_permanent(*permanent, false);
+                *remaining -= 1;
+                *started = true;
+                self.state.suspended_decision = Some(suspended);
+                Ok(())
+            }
+            (
+                Decision::WaterbendOrDiscard {
+                    player, remaining, ..
+                },
+                Action::PayCost { .. },
+            ) => {
+                let cost = ManaCost::default().with_generic(*remaining);
+                self.produce_mana(*player, &cost)?;
+                self.spend_mana(*player, &cost)?;
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::WaterbendOrDiscard { started: false, .. }, Action::Decline { .. }) => {
+                suspended
+                    .frame
+                    .prepend_effects([Effect::Discard].into_iter());
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::ManaChoice {
+                    player,
+                    choices,
+                    resume,
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                let Some(mana) = choices.get(*mode) else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal mana color".into()));
+                };
+                if !self.mana_choice_completes_payment(*player, mana) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("mana color cannot complete the payment".into()));
+                }
+                self.journal_player(*player);
+                self.state.players[player.0].mana_pool.add(mana);
+                if let Some(resume) = resume.take() {
+                    suspended.decision = *resume;
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    // An activated mana ability retains its payer's priority;
+                    // its empty rule frame is not a resolving stack object.
+                    self.state.priority.on_non_pass_action(*player);
+                }
+                Ok(())
+            }
+            (Decision::Sacrifice { player, predicate }, Action::SelectCard { card, .. }) => {
+                let selected = self
+                    .sacrifice_candidates(*player, predicate)
+                    .into_iter()
+                    .find(|id| {
+                        self.state.permanents[*id]
+                            .as_ref()
+                            .is_some_and(|p| p.card == *card)
+                    });
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal sacrifice selection".into()));
+                };
+                self.sacrifice_permanent(selected);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchBasicLand {
+                    player,
+                    subtype,
+                    remaining,
+                    tapped,
+                    untap_if_lands,
+                    bottom_source,
+                    selected,
+                },
+                Action::SelectCard { .. } | Action::Decline { .. },
+            ) => {
+                let player = *player;
+                if let Action::SelectCard { card, .. } = action {
+                    if !self
+                        .basic_land_search_candidates(player, subtype)
+                        .contains(card)
+                    {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("not a matching basic land in library".into()));
+                    }
+                    self.move_card_with_entry(
+                        *card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::BattlefieldEntry {
+                            tapped: *tapped,
+                            ..Default::default()
+                        },
+                    );
+                    selected.push(*card);
+                    *remaining -= 1;
+                    if *remaining > 0 {
+                        self.state.suspended_decision = Some(suspended);
+                        return Ok(());
+                    }
+                }
+                if *bottom_source {
+                    if let Some(source) = self.source_permanent_id(&suspended.frame) {
+                        let card = self.state.permanents[source].as_ref().unwrap().card;
+                        self.move_card(card, ZoneType::Library);
+                        self.put_on_bottom_of_library(card);
+                    }
+                }
+                self.journal_zones();
+                self.state
+                    .zones
+                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                if untap_if_lands.is_some_and(|minimum| {
+                    self.battlefield_permanents(player)
+                        .into_iter()
+                        .filter(|id| {
+                            self.permanent_matches_predicate(
+                                *id,
+                                &CardPredicate {
+                                    card_type: Some(crate::state::card::CardType::Land),
+                                    ..Default::default()
+                                },
+                            )
+                        })
+                        .count()
+                        >= minimum
+                }) {
+                    for card in selected {
+                        if let Some(id) = self.state.card_to_permanent[*card] {
+                            self.journal_permanent(id);
+                            if let Some(permanent) = self.state.permanents[id].as_mut() {
+                                permanent.untap();
+                            }
+                        }
+                    }
+                    self.invalidate_mana_cache(player);
+                }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::OptionalDiscardDraw { player, count }, Action::SelectCard { card, .. }) => {
+                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("discard must be from hand".into()));
+                }
+                let count = *count;
+                self.move_card(*card, ZoneType::Graveyard);
+                suspended
+                    .frame
+                    .queue
+                    .push_front(Effect::DrawCards { count });
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::OptionalDiscardDraw { .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::Discard { player, remaining }, Action::SelectCard { card, .. }) => {
+                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("discard must be from hand".into()));
+                }
+                self.move_card(*card, ZoneType::Graveyard);
+                *remaining -= 1;
+                if *remaining == 0
+                    || self
+                        .state
+                        .zones
+                        .zone_cards(ZoneType::Hand, *player)
+                        .is_empty()
+                {
+                    self.run_frame(suspended.frame);
+                } else {
+                    self.state.suspended_decision = Some(suspended);
+                }
+                Ok(())
+            }
+
+            (
+                Decision::Scry {
+                    player,
+                    looked,
+                    remaining,
+                    top,
+                    bottom,
+                },
                 Action::ScryCard {
                     card, to_bottom, ..
                 },
             ) => {
-                if remaining.first() != Some(card) {
-                    let err = AgentError("scry decision is for a different card".to_string());
+                let Some(index) = remaining.iter().position(|candidate| candidate == card) else {
                     self.state.suspended_decision = Some(suspended);
-                    return Err(err);
-                }
-                remaining.remove(0);
+                    return Err(AgentError("card is not in the pending scry".into()));
+                };
+                remaining.remove(index);
                 if *to_bottom {
-                    self.put_on_bottom_of_library(*card);
+                    bottom.push(*card);
+                } else {
+                    top.push(*card);
                 }
                 if remaining.is_empty() {
+                    self.journal_zones();
+                    let library = self.state.zones.zone_cards_mut(ZoneType::Library, *player);
+                    library.retain(|card| !looked.contains(card));
+                    for card in bottom.iter().rev() {
+                        library.insert(0, *card);
+                    }
+                    library.extend(top.iter().rev());
                     self.run_frame(suspended.frame);
                 } else {
                     self.state.suspended_decision = Some(suspended);
@@ -399,6 +788,7 @@ impl Game {
                     looked,
                     predicate,
                     selected,
+                    reveal,
                     max_select,
                     ..
                 },
@@ -414,7 +804,11 @@ impl Game {
                 let player = *player;
                 looked.retain(|c| c != card);
                 *selected += 1;
-                self.move_card(*card, ZoneType::Hand);
+                if *reveal {
+                    self.reveal_card_to_hand(*card, player);
+                } else {
+                    self.move_card(*card, ZoneType::Hand);
+                }
                 self.invalidate_mana_cache(player);
 
                 let more_selectable = looked
@@ -482,6 +876,18 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
+                if cards.contains(card) =>
+            {
+                self.reveal_card_to_hand(*card, *player);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::SelectMilled { if_declined, .. }, Action::Decline { .. }) => {
+                suspended.frame.prepend_effects(if_declined.iter().cloned());
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::Modal { modes, .. }, Action::ChooseMode { mode, .. }) => {
                 if *mode >= modes.len() {
                     let err = AgentError("modal mode out of range".to_string());
@@ -490,15 +896,6 @@ impl Game {
                 }
                 let effects = std::mem::take(&mut modes[*mode]);
                 suspended.frame.prepend_effects(effects.into_iter());
-                self.run_frame(suspended.frame);
-                Ok(())
-            }
-            (Decision::Discard { player }, Action::SelectCard { card, .. }) => {
-                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("card to discard is not in hand".into()));
-                }
-                self.move_card(*card, ZoneType::Graveyard);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -547,20 +944,7 @@ impl Game {
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
                 }
-                let definition = self.state.cards[*card].definition_id;
-                self.emit(crate::flow::event::GameEvent::CardRevealed {
-                    owner: *player,
-                    definition,
-                });
-                self.move_card(*card, ZoneType::Hand);
-                if self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                    let count = self.state.players[player.0]
-                        .known_hand
-                        .get(&definition)
-                        .copied()
-                        .unwrap_or(0);
-                    self.set_known_hand_count(*player, definition, count + 1);
-                }
+                self.reveal_card_to_hand(*card, *player);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -676,6 +1060,7 @@ mod learn_tests {
             kicked: false,
             targets: vec![],
             target_req_indices: vec![],
+            active_requirement: 0,
             context_target: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,

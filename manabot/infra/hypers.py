@@ -127,6 +127,10 @@ class AgentSpec(BaseHypersModel):
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
         "historical_mean"
     )
+    # Scale each action embedding by the pooled game state before the policy
+    # head (FiLM). Omitted is the historical additive policy, so frozen
+    # recipes and checkpoints keep their meaning; see `new_agent_spec`.
+    policy_film: bool = Field(default=False, exclude_if=lambda value: not value)
     attention_layers: int = Field(default=1, ge=1)
     # Omitted defaults preserve historical recipe and checkpoint identities.
     attention_feedforward_dim: int | None = Field(
@@ -163,7 +167,21 @@ class AgentSpec(BaseHypersModel):
             raise ValueError(
                 "compound critic does not support value aggregation variants"
             )
+        if self.compound_decisions and self.policy_film:
+            raise ValueError(
+                "compound decoder owns its own state conditioning; "
+                "set agent.policy_film=false"
+            )
         return self
+
+
+def new_agent_spec() -> AgentSpec:
+    """The model a new training run builds when its caller names none.
+
+    FiLM: the additive policy leaves some initializations unable to learn
+    state-conditioned offer choices (docs/nightly-learnability.md).
+    """
+    return AgentSpec(policy_film=True)
 
 
 class TrainHypers(BaseHypersModel):
@@ -233,7 +251,7 @@ class Hypers(BaseHypersModel):
     match: MatchHypers = Field(default_factory=MatchHypers)
     train: TrainHypers = Field(default_factory=TrainHypers)
     reward: RewardHypers = Field(default_factory=RewardHypers)
-    agent: AgentSpec = Field(default_factory=AgentSpec)
+    agent: AgentSpec = Field(default_factory=new_agent_spec)
     experiment: ExperimentHypers = Field(default_factory=ExperimentHypers)
 
     @model_validator(mode="after")

@@ -12,9 +12,9 @@ import { presentationPlayer } from './presentation.svelte';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
-  TestingHouseControlEvent,
-  TestingHouseRequest,
-} from './testing-house-protocol';
+  SharedTableControlEvent,
+  SharedTableRequest,
+} from './shared-table-protocol';
 import type {
   ClientMessage,
   FrameUpdate,
@@ -37,7 +37,7 @@ const VALID_SERVER_TYPES = new Set([
   'control_error',
 ]);
 
-type TableServerMessage = ServerMessage | TestingHouseControlEvent;
+type TableServerMessage = ServerMessage | SharedTableControlEvent;
 
 interface ResumeCredentials {
   session_id: string;
@@ -117,7 +117,7 @@ export class GameSocketController {
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
   private pendingResume = false;
-  private outboundQueue: TestingHouseRequest[] = [];
+  private outboundQueue: SharedTableRequest[] = [];
   private inFlightCommand: string | null = null;
   private presentationCursor: number | null = null;
 
@@ -339,7 +339,7 @@ export class GameSocketController {
     this.send({ type: 'return_to_live', grant_revision: grantRevision });
   }
 
-  private send(message: TestingHouseRequest): void {
+  private send(message: SharedTableRequest): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
       return;
@@ -606,8 +606,8 @@ export class GameSocketController {
     });
   }
 
-  private persistControlCredentials(message: TestingHouseControlEvent): void {
-    const envelope = message as TestingHouseControlEvent & {
+  private persistControlCredentials(message: SharedTableControlEvent): void {
+    const envelope = message as SharedTableControlEvent & {
       session_id?: string;
       resume_token?: string;
     };

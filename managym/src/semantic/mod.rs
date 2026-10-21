@@ -28,6 +28,10 @@ use crate::state::card::CardDefId;
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
+const SACRIFICE_IR: &str = include_str!("../../../content/semantic/v1/generated/sacrifice.ir.json");
+
+const ELEMENTAL_IR: &str = include_str!("../../../content/semantic/v1/generated/elemental.ir.json");
+
 const TWO_DECK_IR: &str = include_str!("../../../content/semantic/v1/generated/two_deck.ir.json");
 
 /// Additive Jeong increment. The original two-deck IR remains a separate,
@@ -64,6 +68,44 @@ pub enum Opcode {
     ExileUntilSourceLeaves = 21,
     DealPowerDamage = 22,
     SetPowerFromCount = 23,
+    SearchBasicLand = 24,
+    OptionalDiscardDraw = 25,
+    DiscardTargetPlayer = 26,
+    Destroy = 27,
+    Exile = 28,
+    BuffTargetValue = 29,
+    ReturnToHandDrawIfControlled = 30,
+    ModifyTriggeringPermanent = 31,
+    DealDamageValue = 32,
+    PutCountersValue = 33,
+    CreateTokensValue = 34,
+    ExileWithControllerToken = 35,
+    DamageOpponentCreatures = 36,
+    MillCards = 37,
+    MillAndSelect = 38,
+    DrainLifeValue = 39,
+    CounterSpell = 40,
+    CantBeBlockedTarget = 41,
+    ReturnGraveyardTarget = 42,
+    Modal = 43,
+    TargetClause = 44,
+    PreventLifeGain = 45,
+    CombatRequiresOther = 46,
+    BlockingRestriction = 47,
+    PowerFromLandCounters = 48,
+    SpellCostReduction = 49,
+    StaticPt = 50,
+    SearchBasicLands = 51,
+    Sacrifice = 52,
+    DealDamageToController = 53,
+    DrainLife = 54,
+    UnblockableIf = 55,
+    AddLessonMana = 56,
+    GrantFlashback = 57,
+    GrantMana = 58,
+    CreateNonlegendaryCopy = 59,
+    ModifyControlled = 60,
+    WaterbendOrDiscard = 61,
 }
 
 impl Opcode {
@@ -92,6 +134,45 @@ impl Opcode {
             21 => Opcode::ExileUntilSourceLeaves,
             22 => Opcode::DealPowerDamage,
             23 => Opcode::SetPowerFromCount,
+            24 => Opcode::SearchBasicLand,
+            25 => Opcode::OptionalDiscardDraw,
+            26 => Opcode::DiscardTargetPlayer,
+            27 => Opcode::Destroy,
+            28 => Opcode::Exile,
+            29 => Opcode::BuffTargetValue,
+            30 => Opcode::ReturnToHandDrawIfControlled,
+            31 => Opcode::ModifyTriggeringPermanent,
+            32 => Opcode::DealDamageValue,
+            33 => Opcode::PutCountersValue,
+            34 => Opcode::CreateTokensValue,
+            35 => Opcode::ExileWithControllerToken,
+            36 => Opcode::DamageOpponentCreatures,
+            37 => Opcode::MillCards,
+            38 => Opcode::MillAndSelect,
+            39 => Opcode::DrainLifeValue,
+            40 => Opcode::CounterSpell,
+            41 => Opcode::CantBeBlockedTarget,
+            42 => Opcode::ReturnGraveyardTarget,
+            43 => Opcode::Modal,
+            44 => Opcode::TargetClause,
+            45 => Opcode::PreventLifeGain,
+            46 => Opcode::CombatRequiresOther,
+            47 => Opcode::BlockingRestriction,
+            48 => Opcode::PowerFromLandCounters,
+            49 => Opcode::SpellCostReduction,
+            50 => Opcode::StaticPt,
+            51 => Opcode::SearchBasicLands,
+            52 => Opcode::Sacrifice,
+            53 => Opcode::DealDamageToController,
+            54 => Opcode::DrainLife,
+            55 => Opcode::UnblockableIf,
+            56 => Opcode::AddLessonMana,
+            57 => Opcode::GrantFlashback,
+            58 => Opcode::GrantMana,
+            59 => Opcode::CreateNonlegendaryCopy,
+            60 => Opcode::ModifyControlled,
+            61 => Opcode::WaterbendOrDiscard,
+
             other => return Err(IrError::UnknownOpcode(other)),
         };
         Ok(opcode)
@@ -151,12 +232,20 @@ pub enum Predicate {
     Subtype(String),
     NotCardTypes(Vec<String>),
     PowerAtMost(i64),
+    PowerAtLeast(i64),
+    ManaValueAtLeast(u8),
+    Flying,
+    TypesAny(Vec<String>),
+    SubtypesAny(Vec<String>),
+    NotSubtypes(Vec<String>),
 }
 
 /// A reviewed runtime condition gating a [`Step::Branch`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Condition {
     Kicked,
+    Always,
+    CardsDrawnAtLeast(u32),
     NthResolution(u64),
     GraveyardAtLeast { count: u64, predicate: Predicate },
     TargetMatches { role: String, predicate: Predicate },
@@ -166,6 +255,41 @@ pub enum Condition {
 /// their own step lists, matching the compiler's `then`/`otherwise`/`body`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
+    AddLessonMana {
+        mana: String,
+    },
+    GrantFlashback,
+    GrantMana {
+        predicates: Vec<Predicate>,
+    },
+    CreateNonlegendaryCopy,
+    ModifyControlled {
+        predicate: Predicate,
+        power: i64,
+        toughness: i64,
+    },
+    WaterbendOrDiscard {
+        generic: u8,
+    },
+
+    SearchBasicLands {
+        count: usize,
+        tapped: bool,
+        untap_if_lands: Option<usize>,
+        bottom_source: bool,
+    },
+    Sacrifice {
+        predicate: Predicate,
+    },
+    DealDamageToController {
+        amount: i64,
+    },
+    DrainLife {
+        amount: i64,
+    },
+    UnblockableIf {
+        condition: Condition,
+    },
     AddMana {
         mana: String,
         until: Option<String>,
@@ -226,6 +350,7 @@ pub enum Step {
         cost: String,
     },
     LookAndSelect {
+        reveal: bool,
         look: i64,
         min_select: i64,
         max_select: i64,
@@ -256,6 +381,100 @@ pub enum Step {
         zone: String,
         controller: String,
         predicate: Predicate,
+    },
+    SearchBasicLand {
+        subtype: Option<String>,
+    },
+    OptionalDiscardDraw {
+        count: usize,
+    },
+    DiscardTargetPlayer {
+        count: usize,
+        target: String,
+    },
+    Destroy {
+        target: String,
+    },
+    Exile {
+        target: String,
+    },
+    BuffTargetValue {
+        power: ValueExpression,
+        toughness: i32,
+        target: String,
+    },
+    ReturnToHandDrawIfControlled {
+        target: String,
+    },
+    ModifyTriggeringPermanent {
+        counters: i32,
+        keywords: Vec<String>,
+    },
+    DealDamageValue {
+        amount: ValueExpression,
+        target: String,
+    },
+    PutCountersValue {
+        count: ValueExpression,
+        target: String,
+    },
+    CreateTokensValue {
+        definition_index: usize,
+        count: ValueExpression,
+    },
+    ExileWithControllerToken {
+        target: String,
+        definition_index: usize,
+    },
+    DamageOpponentCreatures {
+        amount: i32,
+    },
+    MillCards {
+        count: usize,
+    },
+    MillAndSelect {
+        count: usize,
+        predicate: Predicate,
+        if_declined: Vec<Step>,
+    },
+    DrainLifeValue {
+        amount: ValueExpression,
+    },
+    CounterSpell {
+        target: String,
+    },
+    CantBeBlockedTarget {
+        target: String,
+    },
+    ReturnGraveyardTarget {
+        target: String,
+    },
+    Modal {
+        modes: Vec<Vec<Step>>,
+    },
+    TargetClause {
+        role: String,
+        body: Vec<Step>,
+    },
+    PreventLifeGain,
+    CombatRequiresOther {
+        predicate: Predicate,
+    },
+    BlockingRestriction {
+        predicate: Predicate,
+        direction: String,
+    },
+    PowerFromLandCounters,
+    SpellCostReduction {
+        predicate: Predicate,
+        condition: Condition,
+        generic: usize,
+        first_on_own_turn: bool,
+    },
+    StaticPt {
+        power: i32,
+        toughness: i32,
+        condition: Condition,
     },
 }
 
@@ -314,6 +533,7 @@ pub struct BoundPack<'a> {
 /// assert on these sequences.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceEvent {
+    RuleStep(Step),
     AddMana {
         mana: String,
         until: Option<String>,
@@ -384,6 +604,9 @@ pub enum TraceEvent {
 /// never reaches into game state directly, which keeps it deterministic and
 /// unit-testable.
 pub trait InterpreterContext {
+    fn cards_drawn_this_turn(&self) -> u32 {
+        0
+    }
     fn kicked(&self) -> bool {
         false
     }
@@ -416,6 +639,20 @@ const COMPLEXITY_IR: &str =
     include_str!("../../../content/semantic/v1/generated/complexity.ir.json");
 
 impl SemanticPack {
+    pub fn temur() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/v1/generated/temur.ir.json"
+        ))
+    }
+
+    pub fn sacrifice() -> Result<Self, IrError> {
+        Self::from_json(SACRIFICE_IR)
+    }
+
+    pub fn elemental() -> Result<Self, IrError> {
+        Self::from_json(ELEMENTAL_IR)
+    }
+
     /// Parse the process-wide checked-in two-deck IR.
     pub fn two_deck() -> Result<Self, IrError> {
         Self::from_json(TWO_DECK_IR)
@@ -669,6 +906,7 @@ impl<'a> BoundPack<'a> {
                 cost: cost.clone(),
             }),
             Step::LookAndSelect {
+                reveal: _,
                 look,
                 min_select,
                 max_select,
@@ -708,6 +946,48 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
+            Step::AddLessonMana { .. }
+            | Step::GrantFlashback
+            | Step::GrantMana { .. }
+            | Step::CreateNonlegendaryCopy
+            | Step::ModifyControlled { .. }
+            | Step::WaterbendOrDiscard { .. }
+            | Step::SearchBasicLands { .. }
+            | Step::Sacrifice { .. }
+            | Step::DealDamageToController { .. }
+            | Step::DrainLife { .. }
+            | Step::UnblockableIf { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::SearchBasicLand { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::OptionalDiscardDraw { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::DiscardTargetPlayer { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::Destroy { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::Exile { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::BuffTargetValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::ReturnToHandDrawIfControlled { .. } => {
+                trace.push(TraceEvent::RuleStep(step.clone()))
+            }
+            Step::ModifyTriggeringPermanent { .. } => {
+                trace.push(TraceEvent::RuleStep(step.clone()))
+            }
+            Step::DealDamageValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::PutCountersValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::CreateTokensValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::ExileWithControllerToken { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::DamageOpponentCreatures { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::MillCards { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::MillAndSelect { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::DrainLifeValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::CounterSpell { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::CantBeBlockedTarget { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::ReturnGraveyardTarget { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::Modal { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::TargetClause { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::PreventLifeGain => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::CombatRequiresOther { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::BlockingRestriction { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::PowerFromLandCounters => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::SpellCostReduction { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::StaticPt { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::SetPowerFromCount {
                 zone, controller, ..
             } => trace.push(TraceEvent::SetPowerFromCount {
@@ -721,6 +1001,8 @@ impl<'a> BoundPack<'a> {
 
 fn evaluate_condition(condition: &Condition, context: &dyn InterpreterContext) -> bool {
     match condition {
+        Condition::Always => true,
+        Condition::CardsDrawnAtLeast(count) => context.cards_drawn_this_turn() >= *count,
         Condition::Kicked => context.kicked(),
         Condition::NthResolution(n) => context.nth_resolution() == *n,
         Condition::GraveyardAtLeast { count, predicate } => {
@@ -788,6 +1070,26 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
     }
     let opcode = Opcode::from_u64(u64_field(value, "opcode")?)?;
     let step = match opcode {
+        Opcode::AddLessonMana => Step::AddLessonMana {
+            mana: str_field(value, "mana")?.to_owned(),
+        },
+        Opcode::GrantFlashback => Step::GrantFlashback,
+        Opcode::GrantMana => Step::GrantMana {
+            predicates: array_field(value, "predicates")?
+                .iter()
+                .map(parse_predicate)
+                .collect::<Result<_, _>>()?,
+        },
+        Opcode::CreateNonlegendaryCopy => Step::CreateNonlegendaryCopy,
+        Opcode::ModifyControlled => Step::ModifyControlled {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            power: i64_field(value, "power")?,
+            toughness: i64_field(value, "toughness")?,
+        },
+        Opcode::WaterbendOrDiscard => Step::WaterbendOrDiscard {
+            generic: u8::try_from(u64_field(value, "generic")?)
+                .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+        },
         Opcode::AddMana => Step::AddMana {
             mana: str_field(value, "mana")?.to_owned(),
             until: opt_str_field(value, "until")?.map(str::to_owned),
@@ -848,6 +1150,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             cost: str_field(value, "cost")?.to_owned(),
         },
         Opcode::LookAndSelect => Step::LookAndSelect {
+            reveal: opt_bool_field(value, "reveal")?.unwrap_or(false),
             look: i64_field(value, "look")?,
             min_select: i64_field(value, "min_select")?,
             max_select: i64_field(value, "max_select")?,
@@ -874,6 +1177,149 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             sources: str_field(value, "sources")?.to_owned(),
             target: str_field(value, "target")?.to_owned(),
         },
+        Opcode::SearchBasicLands => Step::SearchBasicLands {
+            count: usize_field(value, "count")?,
+            tapped: opt_bool_field(value, "tapped")?
+                .ok_or_else(|| IrError::Malformed("missing tapped".into()))?,
+            untap_if_lands: value
+                .get("untap_if_lands")
+                .filter(|v| !v.is_null())
+                .map(|v| {
+                    v.as_u64()
+                        .and_then(|v| usize::try_from(v).ok())
+                        .ok_or_else(|| IrError::Malformed("invalid untap land count".into()))
+                })
+                .transpose()?,
+            bottom_source: opt_bool_field(value, "bottom_source")?
+                .ok_or_else(|| IrError::Malformed("missing bottom_source".into()))?,
+        },
+        Opcode::Sacrifice => Step::Sacrifice {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::DealDamageToController => Step::DealDamageToController {
+            amount: i64_field(value, "amount")?,
+        },
+        Opcode::DrainLife => Step::DrainLife {
+            amount: i64_field(value, "amount")?,
+        },
+        Opcode::UnblockableIf => Step::UnblockableIf {
+            condition: parse_condition(object_field(value, "condition")?)?,
+        },
+        Opcode::SearchBasicLand => Step::SearchBasicLand {
+            subtype: match field(value, "subtype")? {
+                Value::Null => None,
+                Value::String(subtype) if !subtype.is_empty() => Some(subtype.clone()),
+                _ => {
+                    return Err(IrError::Malformed(
+                        "search subtype must be a string or null".into(),
+                    ))
+                }
+            },
+        },
+        Opcode::OptionalDiscardDraw => Step::OptionalDiscardDraw {
+            count: usize_field(value, "count")?,
+        },
+        Opcode::DiscardTargetPlayer => Step::DiscardTargetPlayer {
+            count: usize_field(value, "count")?,
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::Destroy => Step::Destroy {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::Exile => Step::Exile {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::BuffTargetValue => Step::BuffTargetValue {
+            power: ValueExpression::parse(object_field(value, "power")?)?,
+            toughness: i32::try_from(i64_field(value, "toughness")?)
+                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::ReturnToHandDrawIfControlled => Step::ReturnToHandDrawIfControlled {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::ModifyTriggeringPermanent => Step::ModifyTriggeringPermanent {
+            counters: i32::try_from(i64_field(value, "counters")?)
+                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            keywords: str_array_field(value, "keywords")?,
+        },
+        Opcode::DealDamageValue => Step::DealDamageValue {
+            amount: ValueExpression::parse(object_field(value, "amount")?)?,
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::PutCountersValue => Step::PutCountersValue {
+            count: ValueExpression::parse(object_field(value, "count")?)?,
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::CreateTokensValue => Step::CreateTokensValue {
+            definition_index: usize_field(value, "definition_index")?,
+            count: ValueExpression::parse(object_field(value, "count")?)?,
+        },
+        Opcode::ExileWithControllerToken => Step::ExileWithControllerToken {
+            target: str_field(value, "target")?.to_owned(),
+            definition_index: usize_field(value, "definition_index")?,
+        },
+        Opcode::DamageOpponentCreatures => Step::DamageOpponentCreatures {
+            amount: i32::try_from(i64_field(value, "amount")?)
+                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+        },
+        Opcode::MillCards => Step::MillCards {
+            count: usize_field(value, "count")?,
+        },
+        Opcode::MillAndSelect => Step::MillAndSelect {
+            count: usize_field(value, "count")?,
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            if_declined: parse_steps(array_field(value, "if_declined")?)?,
+        },
+        Opcode::DrainLifeValue => Step::DrainLifeValue {
+            amount: ValueExpression::parse(object_field(value, "amount")?)?,
+        },
+        Opcode::CounterSpell => Step::CounterSpell {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::CantBeBlockedTarget => Step::CantBeBlockedTarget {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::ReturnGraveyardTarget => Step::ReturnGraveyardTarget {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::Modal => Step::Modal {
+            modes: array_field(value, "modes")?
+                .iter()
+                .map(|v| {
+                    v.as_array()
+                        .ok_or_else(|| IrError::Malformed("mode must be array".into()))
+                        .and_then(|v| parse_steps(v))
+                })
+                .collect::<Result<_, _>>()?,
+        },
+        Opcode::TargetClause => Step::TargetClause {
+            role: str_field(value, "role")?.to_owned(),
+            body: parse_steps(array_field(value, "body")?)?,
+        },
+        Opcode::PreventLifeGain => Step::PreventLifeGain,
+        Opcode::CombatRequiresOther => Step::CombatRequiresOther {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::BlockingRestriction => Step::BlockingRestriction {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            direction: str_field(value, "direction")?.to_owned(),
+        },
+        Opcode::PowerFromLandCounters => Step::PowerFromLandCounters,
+        Opcode::SpellCostReduction => Step::SpellCostReduction {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            condition: parse_condition(object_field(value, "condition")?)?,
+            generic: usize_field(value, "generic")?,
+            first_on_own_turn: opt_bool_field(value, "first_on_own_turn")?
+                .ok_or_else(|| IrError::Malformed("missing boolean".into()))?,
+        },
+        Opcode::StaticPt => Step::StaticPt {
+            power: i32::try_from(i64_field(value, "power")?)
+                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            toughness: i32::try_from(i64_field(value, "toughness")?)
+                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            condition: parse_condition(object_field(value, "condition")?)?,
+        },
         Opcode::SetPowerFromCount => Step::SetPowerFromCount {
             zone: str_field(value, "zone")?.to_owned(),
             controller: str_field(value, "controller")?.to_owned(),
@@ -887,6 +1333,11 @@ fn parse_condition(value: &Value) -> Result<Condition, IrError> {
     let kind = str_field(value, "kind")?;
     let condition = match kind {
         "kicked" => Condition::Kicked,
+        "always" => Condition::Always,
+        "cards_drawn_at_least" => Condition::CardsDrawnAtLeast(
+            u32::try_from(u64_field(value, "count")?)
+                .map_err(|_| IrError::Malformed("count exceeds u32".into()))?,
+        ),
         "nth_resolution" => Condition::NthResolution(u64_field(value, "n")?),
         "graveyard_at_least" => Condition::GraveyardAtLeast {
             count: u64_field(value, "count")?,
@@ -919,6 +1370,15 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
         "subtype" => Predicate::Subtype(str_field(value, "value")?.to_owned()),
         "not_card_types" => Predicate::NotCardTypes(str_array_field(value, "values")?),
         "power_at_most" => Predicate::PowerAtMost(i64_field(value, "value")?),
+        "power_at_least" => Predicate::PowerAtLeast(i64_field(value, "value")?),
+        "mana_value_at_least" => Predicate::ManaValueAtLeast(
+            u8::try_from(u64_field(value, "value")?)
+                .map_err(|_| IrError::Malformed("mana value exceeds u8".into()))?,
+        ),
+        "flying" => Predicate::Flying,
+        "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
+        "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
+        "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),
         other => {
             return Err(IrError::Malformed(format!(
                 "unknown predicate kind {other:?}"
@@ -1001,5 +1461,34 @@ fn object_field<'a>(value: &'a Value, name: &str) -> Result<&'a Value, IrError> 
         Err(IrError::Malformed(format!(
             "field {name:?} must be an object"
         )))
+    }
+}
+
+/// Quantities evaluated by the live engine relative to the resolving controller.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueExpression {
+    CreaturesWithCounters,
+    BattlefieldMatching(Predicate),
+    GraveyardMatching { base: i32, predicate: Predicate },
+    CardsDrawnMinus(u32),
+}
+impl ValueExpression {
+    fn parse(value: &Value) -> Result<Self, IrError> {
+        Ok(match str_field(value, "kind")? {
+            "creatures_with_counters" => Self::CreaturesWithCounters,
+            "battlefield_matching" => {
+                Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)
+            }
+            "graveyard_matching" => Self::GraveyardMatching {
+                base: i32::try_from(i64_field(value, "base")?)
+                    .map_err(|_| IrError::Malformed("base exceeds i32".into()))?,
+                predicate: parse_predicate(object_field(value, "predicate")?)?,
+            },
+            "cards_drawn_minus" => Self::CardsDrawnMinus(
+                u32::try_from(u64_field(value, "subtract")?)
+                    .map_err(|_| IrError::Malformed("subtract exceeds u32".into()))?,
+            ),
+            other => return Err(IrError::Malformed(format!("unknown quantity {other}"))),
+        })
     }
 }

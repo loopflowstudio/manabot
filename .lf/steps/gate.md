@@ -55,8 +55,12 @@ extension imports and mocked service startup alone cannot prove cold ordering.
 ## Required checks for authored rules and setup changes
 
 Run the complete debug Rust suite, including checked conformance receipts, and
-the release prompt matrix contract and browser scenario. Pack versions, prompt
-families and seeded opponent choices can change together. Preserve historical
+the release prompt matrix contract and browser scenario. Also run
+`uv run pytest tests/academy/test_choice_navigation.py -q`: live browser coverage replays
+only two of its five retained positions, so browser passes alone miss stale
+native digests and other prefixes. Bind refreshed positions to a new world file
+and retain the prior corpus. Pack versions, prompt families and seeded opponent
+choices can change together. Preserve historical
 receipts and screenshots; create a new corpus version for an accepted rules
 change, document its scope, and reproduce it before switching CI to it. Generate
 and compare visual references on the pinned Linux profile. A digest-only edit

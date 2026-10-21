@@ -5,12 +5,12 @@ import random
 import numpy as np
 import pytest
 
-from academy.server import describe_actions, serialize_observation
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import MatchHypers, RewardHypers
 import managym
+from managym.experience_projection import describe_actions, serialize_observation
 
 
 def candidate_match():
@@ -48,11 +48,11 @@ def test_match_hypers_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == 26
-    assert managym.WORLD_VERSION == "w6"
+    assert space.encoder.permanent_dim == 27
+    assert managym.WORLD_VERSION == "w9"
     env = Env(match, space, Reward(RewardHypers()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == "w6"
+    assert env.content_pack_manifest()["world_version"] == "w9"
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -135,19 +135,21 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
         pytest.fail("required choice was not reached")
 
 
-def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> None:
+def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> (
+    None
+):
     from manabot.sim.teacher1_evidence import runtime_fingerprints
     from scripts.train_challenger import world_identity
 
     identity = world_identity({})
-    assert identity["version"] == "w6"
-    assert identity["content_manifest"]["world_version"] == "w6"
+    assert identity["version"] == "w9"
+    assert identity["content_manifest"]["world_version"] == "w9"
     assert identity["dims"] == {
-        "player": 28,
-        "card": 39,
-        "permanent": 26,
+        "player": 40,
+        "card": 41,
+        "permanent": 27,
         "action_types": 16,
     }
-    for old_world in ("w2", "w3", "w4", "w5"):
+    for old_world in ("w2", "w3", "w4", "w5", "w6"):
         with pytest.raises(ValueError, match="cannot register"):
             runtime_fingerprints(world=old_world)

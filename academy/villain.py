@@ -10,7 +10,7 @@ villain's perspective.
 Supported villain types (see ``build_villain_policy``):
   - "passive":    pass priority whenever possible (debugging baseline)
   - "random":     uniform random over legal actions
-  - "search":     flat determinized Monte Carlo via managym.Env.flat_mc_scores
+  - "search":     manabot's FlatSearchPolicy, flat determinized Monte Carlo
                   (strength dial: sims per legal action, default 64)
   - "checkpoint": a trained Agent loaded from a .pt training checkpoint,
                   acting stochastically or greedily (deterministic flag)
@@ -22,19 +22,19 @@ from collections.abc import Sequence
 import random
 from typing import TYPE_CHECKING, Callable
 
+from manabot.sim.flat_search import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
+
 # Local imports
 import managym
+from managym.enums import ActionEnum
 
-from .enums import ActionEnum
+from .bot_decision import BotDecision, PolicyFactor
 
 if TYPE_CHECKING:
     from .trace import GameConfig
 
 VillainPolicy = Callable[[managym.Env, managym.Observation], int]
 
-DEFAULT_SEARCH_SIMS = 64
-DEFAULT_ROLLOUTS_PER_WORLD = 4
-DEFAULT_MAX_PLAYOUT_STEPS = 2000
 MAX_SEARCH_SIMS = 4096
 
 
@@ -56,7 +56,7 @@ def passive_policy(env: managym.Env, obs: managym.Observation) -> int:
 class RandomVillain:
     """Select a uniformly random legal action."""
 
-    def __init__(self, seed: int = 0):
+    def __init__(self, seed: int = 0) -> None:
         self._rng = random.Random(seed)
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
@@ -65,57 +65,6 @@ class RandomVillain:
         if not actions:
             raise ValueError("No available actions for villain policy.")
         return self._rng.randrange(len(actions))
-
-
-class SearchVillain:
-    """Flat determinized Monte Carlo (see manabot/sim/flat_mc.py).
-
-    ``sims`` is the strength dial N: simulations per legal action, split as
-    W worlds x R rollouts. Determinization never peeks at the hero's hand:
-    the engine replaces the *opponent-of-the-searcher*'s hand with a uniform
-    redraw from their unseen pool, so search plays by the same hidden-info
-    rules as a human.
-    """
-
-    def __init__(
-        self,
-        sims: int = DEFAULT_SEARCH_SIMS,
-        *,
-        rollouts_per_world: int = DEFAULT_ROLLOUTS_PER_WORLD,
-        max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
-        seed: int = 0,
-    ):
-        if sims < 1:
-            raise ValueError("search sims must be >= 1")
-        self.sims = sims
-        self.rollouts = max(1, min(rollouts_per_world, sims))
-        self.worlds = max(1, sims // self.rollouts)
-        self.max_steps = max_steps
-        self._seed = seed
-        self._calls = 0
-
-    def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
-        actions = obs.action_space.actions
-        if not actions:
-            raise ValueError("No available actions for villain policy.")
-        if len(actions) == 1:
-            return 0
-
-        self._calls += 1
-        call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
-        scores, _, _ = env.flat_mc_scores(
-            self.worlds,
-            self.rollouts,
-            call_seed,
-            self.max_steps,
-        )
-        best_index = 0
-        best_score = float("-inf")
-        for index, score in enumerate(scores):
-            if float(score) > best_score:
-                best_index = index
-                best_score = float(score)
-        return best_index
 
 
 class CheckpointVillain:
@@ -137,13 +86,12 @@ class CheckpointVillain:
         # Keep the optional Torch/model stack behind checkpoint construction.
         from manabot.sim.compound import CompoundPolicy
         from manabot.sim.flat_mc import load_checkpoint_agent
-        from manabot.verify.util import _select_agent_action
 
-        self._select_action = _select_agent_action
         self.agent, self.obs_space = load_checkpoint_agent(path)
         if player_configs is not None:
             validate_agent_setup(self.agent, player_configs)
         self.deterministic = deterministic
+        self.last_decision: BotDecision | None = None
         self.compound = (
             CompoundPolicy(self.agent, deterministic=deterministic)
             if self.agent.hypers.compound_decisions
@@ -151,8 +99,25 @@ class CheckpointVillain:
         )
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
+        self.last_decision = None
         if self.compound is not None:
-            return self.compound.act(env, obs)
+            action = self.compound.act(env, obs)
+            decision = self.compound.last_decision
+            assert decision is not None
+            output = decision.output
+            self.last_decision = BotDecision(
+                action,
+                value=float(output.values[0].item()),
+                value_semantic="signed_outcome at compound root",
+                factors=[
+                    PolicyFactor(token, probabilities.tolist(), float(value.item()))
+                    for token, probabilities, value in zip(
+                        output.tokens, output.probabilities, output.values, strict=True
+                    )
+                ],
+                unavailable="Compound policy: conditional root-sequence factors are shown below; native microchoice marginals are unavailable.",
+            )
+            return action
         # Policy weights score each action independently of the padded action
         # count. At inference preserve the entire rules offer list, including
         # decisions wider than the training batch's storage capacity.
@@ -168,9 +133,57 @@ class CheckpointVillain:
                 )
             )
         encoded = space.encode(obs)
-        return int(
-            self._select_action(self.agent, encoded, deterministic=self.deterministic)
-        )
+        import torch
+
+        from manabot.verify.util import _agent_device, _tensor_observation
+
+        with torch.no_grad():
+            logits, value = self.agent(
+                _tensor_observation(encoded, device=_agent_device(self.agent))
+            )
+            distribution = torch.distributions.Categorical(logits=logits)
+            action = int(
+                (
+                    logits.argmax(dim=-1)
+                    if self.deterministic
+                    else distribution.sample()
+                ).item()
+            )
+            self.last_decision = BotDecision(
+                action=action,
+                probabilities=distribution.probs[
+                    0, : len(obs.action_space.actions)
+                ].tolist(),
+                value=float(value.item()),
+                value_semantic=self.agent.value_semantic or "undeclared critic units",
+            )
+        return action
+
+
+def choose_bot(
+    policy: VillainPolicy, env: managym.Env, obs: managym.Observation
+) -> BotDecision:
+    """Choose once and retain only outputs that actually fed this decision."""
+    action = policy(env, obs)
+    count = len(obs.action_space.actions)
+    if not 0 <= action < count:
+        raise ValueError("Bot selected an action outside the authority offers")
+    if isinstance(policy, CheckpointVillain):
+        assert policy.last_decision is not None
+        return policy.last_decision
+    probabilities = (
+        [1.0 / count] * count
+        if isinstance(policy, RandomVillain)
+        else [float(index == action) for index in range(count)]
+    )
+    return BotDecision(
+        action=action,
+        probabilities=probabilities,
+        search_scores=policy.last_scores
+        if isinstance(policy, FlatSearchPolicy)
+        else [],
+        unavailable="This anchor has no value head.",
+    )
 
 
 def build_villain_policy(config: "GameConfig") -> VillainPolicy:
@@ -184,7 +197,7 @@ def build_villain_policy(config: "GameConfig") -> VillainPolicy:
         return RandomVillain(seed=seed)
     if villain_type == "search":
         sims = config.villain_sims or DEFAULT_SEARCH_SIMS
-        return SearchVillain(sims=sims, seed=seed)
+        return FlatSearchPolicy(sims=sims, seed=seed)
     if villain_type == "checkpoint":
         if not config.villain_checkpoint:
             raise ValueError("checkpoint villain requires villain_checkpoint path.")

@@ -22,7 +22,6 @@ from typing import Any, Mapping, Sequence, cast
 
 import torch
 
-from academy.experience_protocol import Command
 from manabot.semantic import SemanticDecision, SemanticDecisionAdapter
 from manabot.semantic.runtime_policy import (
     POLICY_ARMS,
@@ -39,6 +38,7 @@ from manabot.semantic.runtime_policy import (
 )
 from manabot.sim.structured_policy import DecodedSubmission, RaggedPolicyDecoder
 import managym
+from managym.experience import Command
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WORKLOAD = ROOT / "experiments/workloads/int-11-semantic-runtime-policy-v1.json"

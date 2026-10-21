@@ -14,7 +14,7 @@ provider and consumer work without redefining those contracts.
 |---|---|
 | [intelligence/](intelligence/GOAL.md) | manabot training: self-play, policy/value learning, beliefs, search, and arena evaluation |
 | [rules/](rules/GOAL.md) | managym authority: curated semantic worlds, match/Command/replay, canonical Observations, possible-world queries, and safe high-throughput forks |
-| [game/](game/GOAL.md) | The Academy play UI used to inspect bots: legible, recoverable human-vs-manabot games over one versioned experience protocol |
+| [game/](game/GOAL.md) | Academy as a lab for researchers: load a trained manabot, watch it play or play against it, and inspect its decisions |
 
 Retired portfolios are preserved under [archive/](archive/README.md) with
 their dispositions.

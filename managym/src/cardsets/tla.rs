@@ -316,6 +316,7 @@ impl CardRegistry {
                 predicate: CardPredicate::subtype("Lesson"),
                 then: vec![Effect::PutTopCardsInHand { count: 3 }],
                 otherwise: vec![Effect::LookAndSelect {
+                    reveal: false,
                     look: 3,
                     min_select: 1,
                     max_select: 1,
@@ -337,10 +338,12 @@ impl CardRegistry {
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("5"),
                 sacrifice_source: false,
                 waterbend: true,
                 effect: Effect::LookAndSelect {
+                    reveal: false,
                     look: 4,
                     min_select: 0,
                     max_select: 1,
@@ -350,7 +353,8 @@ impl CardRegistry {
                         ..CardPredicate::default()
                     },
                 },
-            }],
+            ..Default::default()
+}],
             text_box: "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)".to_string(),
             power: Some(2),
             toughness: Some(2),
@@ -432,6 +436,7 @@ impl CardRegistry {
                 }],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("2"),
                 sacrifice_source: false,
                 waterbend: false,
@@ -439,7 +444,8 @@ impl CardRegistry {
                     power_delta: 1,
                     toughness_delta: 0,
                 },
-            }],
+            ..Default::default()
+}],
             text_box: "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(1),
             toughness: Some(2),
@@ -783,10 +789,12 @@ impl CardRegistry {
             subtypes: vec!["Clue".into()],
             is_token: true,
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("2"),
                 sacrifice_source: true,
                 waterbend: false,
                 effect: Effect::DrawCards { count: 1 },
+                ..Default::default()
             }],
             text_box: "{2}, Sacrifice this token: Draw a card.".to_string(),
             ..Default::default()
@@ -809,6 +817,7 @@ impl CardRegistry {
                 effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
             }],
             spell_cost_reductions: vec![SpellCostReduction {
+                first_on_own_turn: false,
                 predicate: CardPredicate { not_card_types: vec![CardType::Creature], ..Default::default() },
                 condition: StaticCondition::GraveyardAtLeast { count: 3, predicate: lesson() },
                 generic: 1,

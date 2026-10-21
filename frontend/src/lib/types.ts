@@ -421,6 +421,28 @@ export interface TraceSummary {
 
 export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
 
+// One entry of GET /api/opponents: the configured candidate or a checkpoint
+// the server found. `reason` names why an unavailable entry cannot play.
+export interface TrainedOpponent {
+  sha256: string;
+  name: string;
+  producer: string;
+  source: 'candidate' | 'path' | 'runs' | 'tournament';
+  world: string | null;
+  model: string | null;
+  parameters: number | null;
+  step: number | null;
+  // Display names of the decks the checkpoint was bound to (either seat).
+  decks: string[];
+  available: boolean;
+  reason: string | null;
+}
+
+export interface OpponentCatalog {
+  opponents: TrainedOpponent[];
+  catalog_error: string | null;
+}
+
 export interface OpponentConfig {
   villain_type: VillainType;
   villain_sims?: number;
@@ -428,6 +450,7 @@ export interface OpponentConfig {
 }
 
 export interface TraceConfig {
+  watch_players?: string[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
@@ -552,13 +575,13 @@ export type ServerMessage = (
     ))
   | { type: 'error'; message: string }
 ) & {
-  table?: import('./testing-house-protocol').TableSnapshot;
+  table?: import('./shared-table-protocol').TableSnapshot;
   session_id?: string;
   resume_token?: string;
   participant_id?: string;
 };
 
-export type ClientMessage = import('./testing-house-protocol').TestingHouseRequest;
+export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
 
 export type ConnectionState =
   | 'disconnected'

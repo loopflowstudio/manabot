@@ -26,7 +26,7 @@ import numpy as np
 import psutil
 
 from academy import authored_match_parity as parity, server, trace as trace_store
-from academy.authored_match_receipt import DEFAULT_RECEIPT_PATH
+from academy.authored_match_receipt import HISTORICAL_RECEIPT_PATH
 from academy.replay_index import CanonicalReplayV1
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.sim.mcts import _mix_seed, determinized_puct
@@ -46,7 +46,7 @@ DEFAULT_MEASUREMENT_ORIGIN = (
     ROOT / "experiments/data/rul-9-played-workloads-v1.measurement.json"
 )
 DEFAULT_REPORT = ROOT / "experiments/rul-9-played-workloads-v1.md"
-PARITY_RECEIPT_PATH = parity.RECEIPT_PATH
+PARITY_RECEIPT_PATH = parity.HISTORICAL_RECEIPT_PATH
 CONTRACT_SCHEMA_VERSION = 1
 MEASUREMENT_SCHEMA_VERSION = 1
 DERIVED_SCHEMA_VERSION = 2
@@ -62,7 +62,8 @@ SOURCE_SINGLETONS = (
     "academy/authored_match_parity.py",
     "academy/authored_match_receipt.py",
     "academy/curated_pack.py",
-    "academy/experience_protocol.py",
+    "managym/experience.py",
+    "managym/experience_projection.py",
     "academy/presentation.py",
     "academy/replay_index.py",
     "academy/semantic_boundary.py",
@@ -232,7 +233,7 @@ def runtime_identity() -> dict[str, Any]:
             "uv": _command_output(("uv", "--version")),
         },
         "workload": {
-            "authority_receipt_sha256": sha256_file(DEFAULT_RECEIPT_PATH),
+            "authority_receipt_sha256": sha256_file(HISTORICAL_RECEIPT_PATH),
             "parity_receipt_sha256": sha256_file(PARITY_RECEIPT_PATH),
             "semantic_ir_file_sha256": sha256_file(
                 ROOT / "content/semantic/v1/generated/two_deck.ir.json"
@@ -271,9 +272,9 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
     training = contract.get("training")
     if not isinstance(release, Mapping) or not isinstance(training, Mapping):
         raise Rul9Error("RUL-9 contract is missing workload cells")
-    if release.get("authority_receipt_sha256") != parity.AUTHORITY_SHA256:
+    if release.get("authority_receipt_sha256") != parity.HISTORICAL_AUTHORITY_SHA256:
         raise Rul9Error("release contract does not pin the landed authority tape")
-    if release.get("terminal_state_sha256") != parity.TERMINAL_STATE:
+    if release.get("terminal_state_sha256") != parity.HISTORICAL_TERMINAL_STATE:
         raise Rul9Error("release contract terminal state drifted")
     if release.get("surfaces") != ["live", "headless", "replay"]:
         raise Rul9Error("release contract surfaces drifted")
@@ -370,6 +371,12 @@ class _TokenCensus:
             card_def_id = int(card.registry_key)
             by_zone[zone] += tokens
             by_definition[self.name_by_id[card_def_id]] += tokens
+        for candidate in observation.agent_sideboard:
+            definition_row = definition_rows[row_cursor]
+            row_cursor += 1
+            tokens = int(self.totals[definition_row])
+            by_zone["outside"] += tokens
+            by_definition[self.name_by_id[int(candidate.registry_key)]] += tokens
         for stack_object in observation.stack_objects:
             if int(stack_object.kind) == 0:
                 continue
@@ -428,8 +435,8 @@ class _MeasuredGameSession(server.GameSession):
 
 
 def _authority() -> dict[str, Any]:
-    raw = DEFAULT_RECEIPT_PATH.read_bytes()
-    if sha256_bytes(raw) != parity.AUTHORITY_SHA256:
+    raw = HISTORICAL_RECEIPT_PATH.read_bytes()
+    if sha256_bytes(raw) != parity.HISTORICAL_AUTHORITY_SHA256:
         raise Rul9Error("landed RUL-5 authority receipt changed")
     payload = json.loads(raw)
     if len(payload.get("decisions", ())) != 132:

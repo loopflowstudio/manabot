@@ -1,8 +1,2 @@
-use super::game_object::{CardId, PermanentId, PlayerId};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-pub enum Target {
-    Player(PlayerId),
-    Permanent(PermanentId),
-    StackSpell(CardId),
-}
+// Actions and resolving effects share target identity and serialization.
+pub use super::game_object::Target;

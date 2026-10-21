@@ -88,10 +88,12 @@ class CompoundPolicy:
         self.decisions = 0
         self.microchoices = 0
         self.seconds = 0.0
+        self.last_decision: CompoundDecision | None = None
 
     def reset(self) -> None:
         self.pending.clear()
         self.engine = None
+        self.last_decision = None
 
     def act(self, engine: managym.Env, observation: managym.Observation) -> int:
         if self.engine is not engine:
@@ -107,6 +109,7 @@ class CompoundPolicy:
                     deterministic=self.deterministic,
                 )
             self.pending.extend(decision.commands)
+            self.last_decision = decision
             self.decisions += 1
             self.seconds += decision.seconds
         command = self.pending.popleft()

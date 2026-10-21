@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from academy.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 from manabot.arena.heuristic import (
     HeuristicPlayer,
     TargetedSpell,

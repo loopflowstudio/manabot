@@ -19,19 +19,24 @@ no preference or approval by Jack Heart is implied.
 
 ## Retained positions and coverage
 
-[The fixture](../academy/fixtures/choice-navigation.json) pins source commit,
+[The fixture](../academy/fixtures/choice-navigation-w9.json) pins source commit,
 configuration, every prefix offer ID/label, native digest and full viewer frame.
 These are actual ordinary GameSession positions in UR Lessons versus GW Allies,
-with Random opponents and auto-pass off. They are newly captured software
-fixtures, not the unidentified original awkward human position or scored games.
+with Random opponents. Each configuration records its auto-pass setting. These
+are software fixtures, not the unidentified original awkward human position or
+scored games.
 
 | Family | Hero / seed | Prefix Commands / revision | Choices | Intended review action |
 |---|---|---|---|---|
 | Target | UR / 3 | 62 / 109 | 9 | Target Earth Kingdom Jailer; also locate each of three distinct Allies |
-| Cleanup discard | GW / 62 | 11 / 30 | 8 | Discard Kyoshi Warriors; locate both Earth Kingdom Jailer copies |
+| Cleanup discard | UR / 0 | 26 / 90 | 8 | Discard Igneous Inspiration; locate both copies |
 | Learn | UR / 51 | 24 / 54 | 10 | Take It'll Quench Ya!; cancel discard navigation before selecting a Lesson |
-| Block | UR / 3 | 91 / 176 | 6 | Block Suki with Tiger-Seal, or choose not to block |
-| Optional cost | UR / 0 | 43 / 87 | 2 | Pay Firebending Lesson's cost, or decline |
+| Block | UR / 51 | 20 / 64 | 4 | Block Earth Kingdom Jailer with Tiger-Seal, or choose not to block |
+| Optional cost | UR / 51 | 19 / 54 | 2 | Pay Firebending Lesson's cost, or decline |
+
+The w9 corpus replaces the active pre-w9 positions after the Temur mana rules
+changed seeded trajectories and native state hashing. The original
+`choice-navigation.json` remains historical evidence.
 
 Native tests reconstruct all five prefixes and compare exact state and offers;
 stale Commands leave the state unchanged. Browser tests retain every matching

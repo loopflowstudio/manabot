@@ -6,13 +6,28 @@ import pytest
 
 from manabot.arena.models import (
     ArenaContract,
+    ArenaKey,
     PlayerRegistration,
     canonical_sha256,
     file_sha256,
 )
 from manabot.arena.players import build_player
+from managym import WORLD_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_current_world_round_trips_arena_and_player_identities() -> None:
+    contract = ArenaContract.model_validate_json(
+        (ROOT / "experiments/contracts/int-6-skill-arena-v1.json").read_text()
+    )
+    key = contract.key.model_dump() | {"world": WORLD_VERSION}
+    player = contract.anchors[0].model_dump() | {"world": WORLD_VERSION}
+    assert ArenaKey.model_validate(key).world == WORLD_VERSION
+    assert PlayerRegistration.model_validate(player).world == WORLD_VERSION
+    for model, raw in ((ArenaKey, key), (PlayerRegistration, player)):
+        with pytest.raises(ValidationError, match="world"):
+            model.model_validate(raw | {"world": "unknown"})
 
 
 def test_checked_contract_has_exact_code_only_base() -> None:

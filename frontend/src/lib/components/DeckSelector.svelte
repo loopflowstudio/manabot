@@ -7,6 +7,8 @@
     hero?: DeckChoice;
     villain?: DeckChoice;
     disabled?: boolean;
+    heroLabel?: string;
+    villainLabel?: string;
     onHeroChange?: (value: DeckChoice) => void;
     onVillainChange?: (value: DeckChoice) => void;
   }
@@ -15,6 +17,8 @@
     hero = 'ur_lessons',
     villain = 'gw_allies',
     disabled = false,
+    heroLabel = 'Your deck',
+    villainLabel = 'Opponent deck',
     onHeroChange = undefined,
     onVillainChange = undefined,
   }: Props = $props();
@@ -26,7 +30,7 @@
 
 <div class="flex flex-wrap items-end gap-3">
   <label class="flex flex-col gap-1.5">
-    <span class="type-label text-ink-2">Your deck</span>
+    <span class="type-label text-ink-2">{heroLabel}</span>
     <span class="flex items-center gap-1.5 rounded border border-line bg-field py-2 pl-3 pr-1">
       <DeckIdentity name={labelFor(hero)} symbolsOnly />
       <select
@@ -45,7 +49,7 @@
   </label>
 
   <label class="flex flex-col gap-1.5">
-    <span class="type-label text-ink-2">Opponent deck</span>
+    <span class="type-label text-ink-2">{villainLabel}</span>
     <span class="flex items-center gap-1.5 rounded border border-line bg-field py-2 pl-3 pr-1">
       <DeckIdentity name={labelFor(villain)} symbolsOnly />
       <select

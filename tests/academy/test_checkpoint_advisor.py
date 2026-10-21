@@ -21,8 +21,8 @@ from academy.advice import (
 )
 from academy.advice_identity import AdvisorIdentity, CheckpointArtifact
 from academy.server import app
+from academy.shared_table_protocol import ViewerIdentity
 from academy.study_branch import StudyForkProvider
-from academy.testing_house_protocol import ViewerIdentity
 from experiments.runners.run_checkpoint_strategy_advisor import (
     CheckpointAdvisorRuntime,
     build_checkpoint_runtime,
