@@ -212,6 +212,9 @@ def test_generated_runtime_belief_passes_directly_to_search() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> None:
     """Keep INT-13 evidence frozen while checking its behavioral payload."""
 
@@ -492,6 +495,9 @@ def test_viewer_safe_layer_has_no_hidden_truth() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_planner_named_determinized_puct() -> None:
     """The planner is 'determinized_puct', no ISMCTS or equilibrium claim."""
 
