@@ -1,13 +1,13 @@
-# Build the Etude Fantasia paper.
+# Build the Manabot working report.
 #
-#   make        -> paper/etude.pdf
+#   make        -> paper/manabot.pdf
 #   make watch  -> rebuild on save
 #   make clean
 #
 # Requires tectonic (brew install tectonic). It fetches TeX packages on first
 # run and caches them; no TeXLive install needed.
 
-PDF := etude.pdf
+PDF := manabot.pdf
 
 $(PDF): main.tex refs.bib
 	tectonic -X compile main.tex --outdir . --keep-logs
