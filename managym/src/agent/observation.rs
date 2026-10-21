@@ -246,6 +246,8 @@ pub struct EventData {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionOption {
+    /// Engine-owned meaning for choices whose index alone is insufficient.
+    pub description: Option<String>,
     pub action_type: ActionType,
     pub focus: Vec<i32>,
     /// Native yes/no declaration, shared by learning and experience consumers.
@@ -341,6 +343,7 @@ impl Observation {
                         .actions
                         .iter()
                         .map(|action| ActionOption {
+                            description: game.action_description(action),
                             action_type: action.action_type(),
                             focus: Self::action_focus(game, action)
                                 .into_iter()
@@ -474,9 +477,9 @@ impl Observation {
         if let Some(suspended) = &game.state.suspended_decision {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
-                    crate::flow::decision::Decision::SearchBasicLand { player, subtype } => {
-                        game.basic_land_search_candidates(*player, subtype)
-                    }
+                    crate::flow::decision::Decision::SearchBasicLand {
+                        player, subtype, ..
+                    } => game.basic_land_search_candidates(*player, subtype),
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {
@@ -629,9 +632,12 @@ impl Observation {
             },
             controller_id: game.state.players[stack_object.controller().0].id.0 as i32,
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
-            source_permanent_id: stack_object
-                .source_permanent_object_id()
-                .map(|id| id.0 as i32),
+            source_permanent_id: match stack_object {
+                StackObject::ActivatedAbility(ability) => game
+                    .object_event_ref(ability.source_ref)
+                    .map(|object| object.entity.0 as i32),
+                _ => None,
+            },
             chosen_mode: match stack_object {
                 StackObject::Spell(spell) => spell.mode,
                 _ => None,
@@ -710,6 +716,7 @@ impl Observation {
     pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
+            GameEvent::PermanentSacrificed { .. } => Vec::new(),
             GameEvent::CardRevealed { owner, definition } => {
                 let mut data =
                     Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));
@@ -1015,6 +1022,10 @@ impl Observation {
                                 .as_ref()
                                 .map(|perm| perm.card)
                         }
+                        Some(
+                            crate::flow::game::PendingChoice::SacrificePayment { .. }
+                            | crate::flow::game::PendingChoice::ManaPayment { .. },
+                        ) => None,
                         None => None,
                     });
                 card.map(|card| vec![game.state.cards[card].id])
@@ -1123,13 +1134,17 @@ impl Observation {
             .actions
             .iter()
             .map(|action| {
-                json!({
+                let mut value = json!({
                     "type": action.action_type as i32,
                     "focus": action.focus,
                     "declared": action.declared,
                     "mode_index": action.mode_index,
                     "ability_index": action.ability_index,
-                })
+                });
+                if let Some(description) = &action.description {
+                    value["description"] = serde_json::Value::String(description.clone());
+                }
+                value
             })
             .collect::<Vec<_>>();
 

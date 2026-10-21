@@ -141,7 +141,7 @@ def test_instructions_dispatch_only_on_typed_opcodes_and_resolved_references():
     assert not any(json.dumps(name) in compiler_source for name in selected_names)
 
 
-def test_opcode_numbers_are_an_explicit_compatibility_surface():
+def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
     assert {opcode.name: int(opcode) for opcode in Opcode} == {
         "ADD_MANA": 1,
         "DRAW_CARDS": 2,
@@ -193,6 +193,11 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface():
         "POWER_FROM_LAND_COUNTERS": 48,
         "SPELL_COST_REDUCTION": 49,
         "STATIC_PT": 50,
+        "SEARCH_BASIC_LANDS": 51,
+        "SACRIFICE": 52,
+        "DEAL_DAMAGE_TO_CONTROLLER": 53,
+        "DRAIN_LIFE": 54,
+        "UNBLOCKABLE_IF": 55,
     }
 
 

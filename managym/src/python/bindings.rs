@@ -1449,6 +1449,8 @@ impl From<PyPermanent> for PermanentData {
 #[derive(Clone)]
 pub struct PyAction {
     #[pyo3(get, set)]
+    pub description: Option<String>,
+    #[pyo3(get, set)]
     pub action_type: ActionEnum,
     #[pyo3(get, set)]
     pub focus: Vec<i32>,
@@ -1563,6 +1565,7 @@ impl From<ActionOption> for PyAction {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
         }
@@ -1576,6 +1579,7 @@ impl From<PyAction> for ActionOption {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
         }
@@ -3385,6 +3389,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         crate::semantic::SemanticPack::two_deck(),
         crate::semantic::SemanticPack::jeong_increment(),
         crate::semantic::SemanticPack::elemental(),
+        crate::semantic::SemanticPack::sacrifice(),
     ];
     for pack in packs {
         let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;

@@ -17,9 +17,10 @@ was dead on arrival in exp-10.)
 | **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
 | **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
+| **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
 
-**Current development world: w7.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w6) are **not comparable** to w7; do not reuse their
+**Current development world: w8.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w7) are **not comparable** to w8; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -49,7 +50,7 @@ operations, quantities, hybrid pips and nested choices. The frozen learning
 schema and earlier authored sources remain unchanged. Model permanent features
 retain indestructible while excluding only the categorical definition join.
 
-The current rules corpus is
+The w7 rules corpus is
 [semantic-kernel-w7-v1](conformance/semantic-kernel-w7-v1/), including inherited
 matchup cases and compiled Elemental cases in both seat orders. Earlier corpora,
 `erd1` receipts, authored IR and checkpoints retain their identities. Release
@@ -160,3 +161,20 @@ top of tensor dimensions:
 
 The full rationale and required controls are in
 [`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
+
+## w8: Sacrifice and landfall (not yet frozen)
+
+MTG-162 adds selected sacrifice costs, payment alternatives, immediate chosen-color
+mana abilities, sacrifice triggers and per-incarnation turn limits. Basic-land
+search retains one native operation with count, entry and continuation options.
+Last-known facts retain animation for creature-death triggers and effective
+keywords for damage after a source leaves. Match-state hash
+version 5 includes the additional trigger state. Choice descriptions are native
+presentation metadata; bounded tensor widths stay unchanged.
+
+The `elemental-sacrifice-v1` pack contains all 17 owned real cards, five basics
+and five tokens. Its two validation rosters are separate from the final ten
+decks. Learning schema 4 is at `content/semantic/w8/learning_schema.json`.
+The current rules corpus is [semantic-kernel-w8-v1](conformance/semantic-kernel-w8-v1/).
+Earlier worlds, sources, schemas, receipts and experiment evidence remain unchanged.
+World freeze and release certification remain separate from implementation.

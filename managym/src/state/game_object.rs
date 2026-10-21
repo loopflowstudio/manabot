@@ -63,6 +63,9 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    pub keywords: crate::state::card::Keywords,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub animated_creature: bool,
     pub object_ref: ObjectRef,
     pub card: CardId,
     pub from_zone: ZoneType,

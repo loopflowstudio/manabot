@@ -26,3 +26,5 @@ pub mod structured_offers;
 pub mod tla_cards;
 
 pub mod ur_lessons_increment;
+
+pub mod sacrifice_cards;

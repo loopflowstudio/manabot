@@ -136,13 +136,7 @@ impl Game {
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
-        let source_ref = self.state.card_to_permanent[ability.source_card]
-            .filter(|id| {
-                self.state.permanents[*id]
-                    .as_ref()
-                    .is_some_and(|p| p.id == ability.source_permanent_object_id)
-            })
-            .and_then(|id| self.permanent_object_ref(id));
+        let source_ref = Some(ability.source_ref);
 
         let frame = EffectFrame {
             source: Some(ability.source_card),
@@ -154,7 +148,9 @@ impl Game {
             target_req_indices: Vec::new(),
             active_requirement: 0,
             context_target: None,
-            queue: VecDeque::from(vec![definition.effect]),
+            queue: VecDeque::from(crate::state::ability::bind_effect_clauses(vec![
+                definition.effect,
+            ])),
             finalize: FrameFinalize::None,
         };
         self.run_frame(frame);
@@ -249,6 +245,22 @@ impl Game {
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         match effect {
+            Effect::Sacrifice { predicate } => {
+                let candidates = self.sacrifice_candidates(frame.controller, predicate);
+                (!candidates.is_empty()).then_some(Decision::Sacrifice {
+                    player: frame.controller,
+                    predicate: predicate.clone(),
+                })
+            }
+            Effect::DealDamageToController { amount } => {
+                self.apply_player_damage(frame.source_ref, frame.controller, *amount);
+                None
+            }
+            Effect::DrainLife { amount } => {
+                self.change_life(PlayerId(1 - frame.controller.0), -*amount);
+                self.gain_life(frame.controller, *amount);
+                None
+            }
             Effect::CantBeBlockedTarget { target: spec } => {
                 let target = frame.primary_target()?;
                 if self.target_is_legal(target, spec, frame.controller) {
@@ -339,9 +351,20 @@ impl Game {
                 }
                 None
             }
-            Effect::SearchBasicLand { subtype } => Some(Decision::SearchBasicLand {
+            Effect::SearchBasicLand {
+                subtype,
+                count,
+                tapped,
+                untap_if_lands,
+                bottom_source,
+            } => Some(Decision::SearchBasicLand {
                 player: frame.controller,
                 subtype: subtype.clone(),
+                remaining: *count,
+                tapped: *tapped,
+                untap_if_lands: *untap_if_lands,
+                bottom_source: *bottom_source,
+                selected: Vec::new(),
             }),
             Effect::OptionalDiscardDraw { count } => Some(Decision::OptionalDiscardDraw {
                 player: frame.controller,
@@ -957,7 +980,7 @@ impl Game {
         permanent.controller != targeter && self.effective_keywords(permanent_id).hexproof
     }
 
-    fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
+    pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
             .and_then(|source| self.lookup_current_permanent(source).ok())

@@ -16,7 +16,7 @@ use managym::{
     },
 };
 
-fn setup(names: &[&str]) -> Scenario {
+pub(super) fn setup(names: &[&str]) -> Scenario {
     let mut deck: BTreeMap<String, usize> = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
         .into_iter()
         .map(|name| (name.into(), 16))
@@ -33,7 +33,7 @@ fn setup(names: &[&str]) -> Scenario {
     s
 }
 
-fn card(s: &Scenario, player: usize, name: &str) -> CardId {
+pub(super) fn card(s: &Scenario, player: usize, name: &str) -> CardId {
     s.game()
         .state
         .cards
@@ -48,7 +48,7 @@ fn card(s: &Scenario, player: usize, name: &str) -> CardId {
         .unwrap_or_else(|| panic!("no {name}"))
 }
 
-fn cast(s: &mut Scenario, name: &str) -> CardId {
+pub(super) fn cast(s: &mut Scenario, name: &str) -> CardId {
     let id = card(s, 0, name);
     s.game_mut().move_card(id, ZoneType::Hand);
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -62,7 +62,7 @@ fn cast(s: &mut Scenario, name: &str) -> CardId {
     id
 }
 
-fn settle(s: &mut Scenario) {
+pub(super) fn settle(s: &mut Scenario) {
     for _ in 0..100 {
         if s.action_space().kind == ActionSpaceKind::Priority
             && s.game().state.stack_objects.is_empty()
@@ -81,7 +81,7 @@ fn settle(s: &mut Scenario) {
     panic!("resolution did not settle")
 }
 
-fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
+pub(super) fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
     for _ in 0..10 {
         if s.action_space().kind == kind {
             return;
@@ -91,11 +91,11 @@ fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
     assert_eq!(s.action_space().kind, kind);
 }
 
-fn permanent(s: &Scenario, name: &str) -> PermanentId {
+pub(super) fn permanent(s: &Scenario, name: &str) -> PermanentId {
     s.battlefield_permanents_named(0, name)[0]
 }
 
-fn counters(s: &Scenario, id: PermanentId) -> i32 {
+pub(super) fn counters(s: &Scenario, id: PermanentId) -> i32 {
     s.game().state.permanents[id]
         .as_ref()
         .unwrap()
@@ -1178,7 +1178,7 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
 
 /// Exercise every offered atomic continuation through the real Command
 /// authority, with an independent replay and a nested exact-fork rollback.
-fn assert_choice_contract(s: &Scenario) {
+pub(super) fn assert_choice_contract(s: &Scenario) {
     use managym::{
         decision::Command,
         search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
