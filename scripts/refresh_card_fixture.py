@@ -100,9 +100,16 @@ def oracle_cards() -> dict[str, dict]:
     """Download the Oracle-Cards bulk file and index by exact card name."""
     index = json.loads(http_get(BULK_INDEX))
     entry = next(item for item in index["data"] if item["type"] == "oracle_cards")
-    size_mb = entry.get("size", 0) / 1e6
+    size_mb = entry.get("size", entry.get("compressed_size", 0)) / 1e6
     print(f"downloading oracle_cards bulk data ({size_mb:.0f} MB, updated {entry.get('updated_at')})...")
-    cards = json.loads(http_get(entry["download_uri"]))
+    if "download_uri" in entry:
+        cards = json.loads(http_get(entry["download_uri"]))
+    else:
+        # Scryfall now publishes bulk files as gzipped JSON Lines only.
+        data = http_get(entry["jsonl_download_uri"])
+        if data[:2] == b"\x1f\x8b":
+            data = gzip.decompress(data)
+        cards = [json.loads(line) for line in data.splitlines() if line.strip()]
     print(f"bulk data: {len(cards)} oracle cards")
     by_name: dict[str, dict] = {}
     for card in cards:

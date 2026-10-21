@@ -138,6 +138,38 @@ impl ContentPack {
         self.register_temur();
     }
 
+    /// Presentation entries for the isolated complexity catalog. The default
+    /// registry and its checked content digest must remain unchanged.
+    pub(crate) fn register_complexity_presentation(&mut self) {
+        self.register_creature(
+            "Savannah Lions",
+            "W",
+            &["Cat"],
+            2,
+            1,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Glory Seeker",
+            "1W",
+            &["Human", "Soldier"],
+            2,
+            2,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Hill Giant",
+            "3R",
+            &["Giant"],
+            3,
+            3,
+            Keywords::default(),
+            "",
+        );
+    }
+
     pub fn register_card(&mut self, mut definition: CardDefinition) {
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
         // becomes the target of a spell an opponent controls, counter it
