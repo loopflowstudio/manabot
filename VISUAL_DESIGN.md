@@ -4,7 +4,7 @@ The design contract for Academy, the browser UI for inspecting bots and
 replays. It
 describes one visual language in three artifacts: **the Sheet** (Play),
 **the Plate** (the card), and **the Score** (Replay, and Study as it
-grows). `frontend/src/app.css` is the single source of truth for every
+grows). `academy/ui/src/app.css` is the single source of truth for every
 token value; this document explains what the values mean and the rules
 that keep them coherent. If the two disagree, `app.css` wins and this
 document is the bug.
@@ -163,7 +163,7 @@ forest / plains / island / swamp / mountain   register bases
 ```
 
 The migration recipe and full mapping live in
-`frontend/docs/semantic-utilities.md`.
+`academy/ui/docs/semantic-utilities.md`.
 
 ### The voices
 
@@ -295,7 +295,7 @@ shows no oval. Every visual state is also stated in the card's accessible
 name.
 
 **Card art is versioned content, not runtime fetches.**
-`frontend/scripts/fetch-card-art.mjs` pulls each curated-pack identity's
+`academy/ui/scripts/fetch-card-art.mjs` pulls each curated-pack identity's
 art crop from Scryfall exactly once per machine (identified User-Agent,
 150ms pacing, cache-first, never at runtime) into `src/lib/card-art/` (bundler-known, so a missing file is a lookup miss, never a request);
 CardImage layers it over the procedural treatment, which remains the

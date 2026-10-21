@@ -10,7 +10,7 @@ from academy.curated_pack import CURATED_PACK
 from manabot.env.observation import ActionSpaceEnum
 
 ROOT = Path(__file__).resolve().parents[2]
-MATRIX_PATH = ROOT / "frontend" / "e2e" / "release-prompt-matrix.json"
+MATRIX_PATH = ROOT / "academy" / "ui" / "e2e" / "release-prompt-matrix.json"
 
 
 def test_release_prompt_matrix_classifies_and_covers_selected_matchup() -> None:

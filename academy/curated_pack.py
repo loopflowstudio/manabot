@@ -13,7 +13,8 @@ import managym
 
 PACK_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
-    / "frontend"
+    / "academy"
+    / "ui"
     / "src"
     / "lib"
     / "packs"
@@ -23,7 +24,8 @@ PACK_MANIFEST_PATH = (
 )
 JEONG_INCREMENT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
-    / "frontend"
+    / "academy"
+    / "ui"
     / "src"
     / "lib"
     / "packs"

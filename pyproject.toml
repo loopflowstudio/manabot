@@ -98,6 +98,10 @@ torch = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["manabot", "academy"]
+exclude = ["academy/ui/**"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

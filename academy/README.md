@@ -1,7 +1,7 @@
 # academy
 
 The Academy experience server: authoritative play, presentation, and
-study. The Svelte client in [frontend/](../frontend/) renders what this
+study. The Svelte client in [academy/ui/](../academy/ui/) renders what this
 package decides; the client never invents rules meaning.
 
 ## Authority model
@@ -50,15 +50,67 @@ recorded offer and Command.
 ```bash
 ./scripts/play          # certified one-command path from fresh checkout
 ./scripts/play --demo learn  # checked prefix into Learn, then ordinary play
+./scripts/play --demo precision  # Treasure-funded Deadly Precision
+./scripts/play --demo precision-mana  # the four-mana additional-cost alternative
 ./scripts/verify-clean-machine   # the clean-machine proof
 ```
 
+Populate optional local Scryfall art with
+`npm --prefix academy/ui run fetch:card-art`. The downloader caches curated and
+demo cards, preserves artist/source credits, and respects rate-limit cooldowns.
+Play uses the cache without contacting Scryfall; missing art keeps the procedural
+card treatment. Artist credits are available in the footer.
+
 The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
-Back control; only selecting a card commits the choice. **New Game** repeats
+Back control; only choosing its explicit offer commits the choice. **New Game** repeats
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
+
+The table reads **Who decides / What is happening / Your choices**. Inspect any
+visible card without submitting; choose an explicit legal offer to commit one
+Command. Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
+stays visible while a card or text filter narrows navigation; **Show all** and
+**Clear filter** restore the full set. At every width, the board comes first,
+followed by full-width play selection. History, advice and table tools stay
+collapsed until opened; **Compare advice** opens and focuses Advice. Native card
+types group creatures, lands, other
+permanents and artifact tokens into bounded battlefield lanes; dense lanes
+compact their cards, then offer explicit paging. Focusing a legal offer reveals
+its objects' pages without submitting a choice. Public mana
+pools, Lesson restrictions and chooser-only inspected cards come from native
+observations. Historical frames without those fields say details were not recorded.
+
+Academy constructs the native environment with `skip_trivial=False`. Sole legal
+mana colors and payment continuations remain explicit and recoverable. Priority
+stop/F6 automation runs through recorded authority Commands and remains labeled
+as automation. This uses the existing native execution setting; training defaults,
+world identities, tensor inputs and frozen evidence are unchanged. Native
+`decision_context_json` summarizes already-observed choices and the current
+continuation; `decision_offer_subjects_json` binds the exact rule entity,
+incarnation and board display ID. These read-only projections introduce no legal
+actions or editable payment transaction. Other viewers receive only public
+ownership/kind and committed facts. Retained frames omit these optional fields.
+
+For Precision, click **New Game**, inspect **Deadly Precision**, then explicitly
+choose its cast offer and an Inspector target. In the Treasure demo, reserve that
+Inspector as sacrifice, activate Treasure, explicitly choose **Add {B}**, then
+finish payment. The context distinguishes the unpaid reservation from the already
+sacrificed Treasure. Reload before/after activation or color to recover the actual
+pending decision; **Back** cannot refund costs. The mana demo instead offers the
+four-mana additional cost while preserving the Inspector until resolution. Both
+prefixes use normal Commands from seeded custom stress decks, without scenario
+injection. Attempts are marked `automated_validation`, including any later human
+continuation, so the authored prefix cannot be counted as human play. They are
+runtime fixtures, not curated-deck admission or human usability
+evidence. New Game repeats the selected prefix.
+
+Replay labels recorded actions and automated passes separately. Live, Watch,
+Replay and Study use the same decision renderer. Study executes the exact semantic
+offer on a retained isolated root, then **Return to recorded decision** restores
+its original address/frame/Command; **Return to live** is a separate destination.
+Expired roots remain unavailable rather than being reconstructed from the screen.
 
 Long action lists have an optional **Find an action** filter. See the
 [retained choice positions and local walkthrough](../docs/choice-navigation.md)
@@ -96,7 +148,7 @@ letting process interrupts escape. Do not broaden gameplay error suppression.
 
 Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
-[frontend/e2e/](../frontend/e2e/) and documented in
+[academy/ui/e2e/](../academy/ui/e2e/) and documented in
 [docs/clean-machine-play.md](../docs/clean-machine-play.md) and
 [docs/experience-proof.md](../docs/experience-proof.md).
 
@@ -122,10 +174,10 @@ choice time. Compound checkpoints record their conditional root-sequence
 factors and values; these are labeled separately from native microchoice
 marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
-private analysis observation supplies **Show both hands**, enabled by default
+private analysis observation supplies **Show both hands**, available explicitly
 for bot spectators, including during active watches. Active inspection requires
-the watch credential; completed inspection remains shared. Switching it off
-shows only the acting bot's view. Ordinary trace reads always strip the analysis
+the watch credential; completed inspection remains shared. The default
+is the acting bot's view. Ordinary trace reads always strip the analysis
 snapshot, and bot inputs and decision evidence retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes

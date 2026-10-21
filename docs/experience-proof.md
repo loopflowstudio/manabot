@@ -6,7 +6,7 @@ records current behavior and catches regressions; it is not a Phase-parity or
 release-readiness claim.
 
 The machine-readable source of truth is
-[`frontend/e2e/experience-proof-baseline.ts`](../frontend/e2e/experience-proof-baseline.ts).
+[`academy/ui/e2e/experience-proof-baseline.ts`](../academy/ui/e2e/experience-proof-baseline.ts).
 It pins the reference profile, sample counts, initial measurements, regression
 budgets, and explicit exclusions. Each proof run attaches its full observed
 distribution as `experience-proof.json`.
@@ -17,17 +17,17 @@ Prepare the repository's pinned CPython 3.12 extension as described in
 `AGENTS.md`, then run:
 
 ```bash
-npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
 ```
 
 The complete scoped verification is:
 
 ```bash
 uv run pytest tests/academy
-npm --prefix frontend run check
-npm --prefix frontend test
-npm --prefix frontend run build
-npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+npm --prefix academy/ui run check
+npm --prefix academy/ui test
+npm --prefix academy/ui run build
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
 ```
 
 All Python entry points remain behind `uv` (or the uv-managed interpreter path
@@ -90,7 +90,7 @@ families; absence is reported rather than inferred from frontend support.
 ## Terminal release-build matrix
 
 The deterministic follow-on gate is defined by
-[`frontend/e2e/release-prompt-matrix.json`](../frontend/e2e/release-prompt-matrix.json).
+[`academy/ui/e2e/release-prompt-matrix.json`](../academy/ui/e2e/release-prompt-matrix.json).
 It runs the built Svelte application through Vite preview, proxies the shipped
 HTTP/WebSocket paths to uvicorn, and drives two fixed-seed games to terminal.
 The default UR-hero orientation covers the seven UR-side families; a proof-only
@@ -101,7 +101,7 @@ Run the release gate with:
 
 ```bash
 uv run pytest tests/academy/test_release_prompt_matrix.py
-npm --prefix frontend run test:e2e:release -- release-prompt-matrix.spec.ts
+npm --prefix academy/ui run test:e2e:release -- release-prompt-matrix.spec.ts
 ```
 
 There is no runtime seed search or retry. Each scenario pins its prompt counts,
@@ -127,7 +127,7 @@ assistive-technology automation, or a new performance baseline.
 ## Versioned visual references
 
 The same two terminal trajectories compare 18 committed references under
-[`frontend/e2e/visual-references/v7`](../frontend/e2e/visual-references/v7):
+[`academy/ui/e2e/visual-references/v7`](../academy/ui/e2e/visual-references/v7):
 
 - one Actions-panel reference for every one of the ten reachable prompt
   families;

@@ -6,13 +6,15 @@ the opponent's hidden hand so the projection is viewer-safe, and
 ``describe_actions`` / ``offer_verb`` name the legal actions as protocol-v1
 offers. Academy uses this to render live tables and traces; manabot uses the
 same functions to record replay and teacher evidence, so recorded frame hashes
-depend on this module byte for byte. Change it only together with the frozen
-evidence it reproduces.
+depend on the default projection byte for byte. ``include_details`` adds current
+Academy's existing native pools and chooser-visible inspection cards; default
+serialization remains byte-identical for frozen evidence readers.
 """
 
 from __future__ import annotations
 
 from enum import IntEnum
+import json
 from typing import Any
 
 import managym
@@ -23,6 +25,7 @@ from managym.enums import (
     StepEnum,
     ZoneEnum,
 )
+from managym.experience import LegacyHeroObservation
 
 # The protocol-v1 projection labels seat 0 "Hero" and seat 1 "Villain".
 HERO_PLAYER_INDEX = 0
@@ -71,8 +74,17 @@ def _serialize_card(card: managym.Card) -> dict[str, Any]:
 def _serialize_permanent(
     permanent: managym.Permanent,
     card: managym.Card | None,
+    *,
+    include_details: bool = False,
 ) -> dict[str, Any]:
+    details: dict[str, Any] = {}
+    if include_details and card is not None:
+        types = _serialize_card(card)["types"]
+        # Earthbend makes a land a creature without changing its printed card.
+        types["is_creature"] = bool(types["is_creature"] or permanent.is_animated)
+        details = {"types": types, "is_token": bool(card.is_token)}
     return {
+        **details,
         "id": int(permanent.id),
         "name": card.name if card else None,
         "text_box": card.text_box if card else "",
@@ -96,8 +108,11 @@ def _serialize_player(
     player: managym.Player,
     cards: list[managym.Card],
     permanents: list[managym.Permanent],
+    *,
+    include_details: bool = False,
 ) -> dict[str, Any]:
     grouped_cards: dict[str, list[dict[str, Any]]] = {
+        "LIBRARY": [],
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
@@ -116,14 +131,27 @@ def _serialize_player(
     serialized_permanents = []
     for i, permanent in enumerate(permanents):
         card = battlefield_cards[i] if i < len(battlefield_cards) else None
-        serialized_permanents.append(_serialize_permanent(permanent, card))
+        serialized_permanents.append(
+            _serialize_permanent(permanent, card, include_details=include_details)
+        )
 
     zone_counts = {
         enum_name(ZoneEnum, index): int(count)
         for index, count in enumerate(player.zone_counts)
     }
 
+    details = (
+        {
+            "mana": list(player.mana),
+            "lesson_mana": list(player.lesson_mana),
+            "combat_mana": int(player.combat_mana),
+            "inspected": grouped_cards["LIBRARY"],
+        }
+        if include_details
+        else {}
+    )
     return {
+        **details,
         "player_index": int(player.player_index),
         "id": int(player.id),
         "is_active": bool(player.is_active),
@@ -149,7 +177,9 @@ def _serialize_player(
     }
 
 
-def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
+def serialize_observation(
+    obs: managym.Observation, *, include_details: bool = False
+) -> dict[str, Any]:
     data = {
         "game_over": bool(obs.game_over),
         "won": bool(obs.won),
@@ -160,11 +190,17 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
             "active_player_id": int(obs.turn.active_player_id),
             "agent_player_id": int(obs.turn.agent_player_id),
         },
-        "agent": _serialize_player(obs.agent, obs.agent_cards, obs.agent_permanents),
+        "agent": _serialize_player(
+            obs.agent,
+            obs.agent_cards,
+            obs.agent_permanents,
+            include_details=include_details,
+        ),
         "opponent": _serialize_player(
             obs.opponent,
             obs.opponent_cards,
             obs.opponent_permanents,
+            include_details=include_details,
         ),
     }
 
@@ -179,6 +215,40 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
         for card in obs.agent_sideboard
     ]
     return data
+
+
+def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
+    """Current viewer projection for play, recorded decisions and Study roots.
+
+    The native fixed-viewer observation owns inspection visibility; the native
+    continuation owns explanatory context. Default historical serialization is
+    deliberately separate and unchanged.
+    """
+    observation = env.observation_for_player(viewer)
+    data = serialize_observation(observation, include_details=True)
+    context = json.loads(env.decision_context_json(viewer))
+    if context is not None:
+        data["decision_context"] = context
+    data["definition_names"] = {
+        str(row["card_def_id"]): row["registry_name"]
+        for row in env.content_pack_manifest()["definitions"]
+    }
+    data["stack_objects"] = [
+        {
+            "id": int(entry.stack_object_id),
+            "kind": {0: "spell", 1: "activated_ability", 2: "triggered_ability"}[
+                int(entry.kind)
+            ],
+            "controller": int(entry.controller_id),
+            "label": data["definition_names"][str(entry.source_card_registry_key)],
+            "source_permanent": entry.source_permanent_id,
+            "ability_index": entry.ability_index,
+            "chosen_mode": entry.chosen_mode,
+        }
+        for entry in observation.stack_objects
+    ]
+    redact_observation(data)
+    return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
 
 
 def _player_label(player: managym.Player) -> str:
@@ -346,13 +416,25 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
 def redact_observation(observation: dict[str, Any]) -> None:
     """Strip the opponent's hidden information from a serialized observation.
 
-    Mutates in place. Libraries are never serialized (only counts), so the
-    opponent's hand is the only hidden zone to remove.
+    Mutates in place. Only chooser-visible library candidates can be projected;
+    opponent hands, inspection cards and private continuation details are removed.
     """
     if not isinstance(observation, dict):
         return
 
+    context = observation.get("decision_context")
+    agent = observation.get("agent", {})
+    if isinstance(context, dict) and context.get("actor") != agent.get("player_index"):
+        observation["decision_context"] = {
+            **context,
+            "source": None,
+            "targets": [],
+            "reserved_sacrifice": None,
+            "mana_cost": None,
+            "chosen_mode": None,
+        }
     opponent = observation.get("opponent")
     if isinstance(opponent, dict):
         _redact_hand(opponent)
         opponent.pop("sideboard", None)
+        opponent.pop("inspected", None)
