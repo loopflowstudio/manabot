@@ -1862,6 +1862,18 @@
    "sha256": "3f31ea7a149e49c6ccd43fee007c13eea7e0cc659c0f3eae9fbaf6bccbd40f33",
    "bytes": 3752
   },
+  "experiments/data/scale-ladder/allocation-allies-lessons-v1.json": {
+   "sha256": "7c5d4db3368a9ae18dab421b53bdb21782b3be85e7bb8c8e67c66d6e2c6c56e0",
+   "bytes": 780
+  },
+  "experiments/data/scale-ladder/calibration-20261020.json": {
+   "sha256": "d21e0142b9566d3bf7b5bb22d88d1479a617bf7119fba51a90f0939df65a42e6",
+   "bytes": 922
+  },
+  "experiments/data/scale-ladder/v1-evaluation.json": {
+   "sha256": "ce26391450805414156519e8a735d0c322207d6027fbc9eef875ce80e3e08a0b",
+   "bytes": 6737
+  },
   "experiments/data/structural-semantic-katas-v1-discriminator.json": {
    "sha256": "80310051bd32ba0efc98d549b347607ba2efc91c6a714edfb9be3a125746115d",
    "bytes": 2724085
