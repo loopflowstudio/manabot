@@ -120,3 +120,30 @@ were copied. Jack Heart was also asked to run
 `aws sso login --profile manabot-controller`. Both sign-ins must be verified
 before installing/starting the budget-owning service. The $50 queue is prepared,
 not yet active; the current GPU run continues independently meanwhile.
+
+### $50 controller active after sign-in
+
+Jack Heart completed Doppler and AWS SSO login on the mini. Installed missing
+GnuPG 2.5.24 there, per Doppler's CLI prerequisite. AWS account readback matched
+the existing Manabot account. SSH could not retrieve the Doppler token from the
+macOS keychain (exit 36), so activation ran through a temporary LaunchAgent in
+the mini's logged-in GUI domain. This succeeded without copying the token.
+
+Service `manabot.cohort.mtg165-two-seat-50` is running under launchd on
+mini-heart.local, PID 76098 at verification, state directory
+`/Users/jack/.manabot/mtg165-two-seat-50`. Authoritative S3 cohort readback showed
+phase running, heartbeat age 12.94 seconds, no error, exactly original job
+mtg165-two-seat-002 adopted at its unchanged deadline, and 441 completed updates.
+Continuations 003–008 are queued. Reserved total is $49.98125984094739 against
+$50; overall deadline is 2026-10-28 19:53:48.795631 UTC. The existing run was not
+restarted, and no new training rental was created during activation.
+
+A separate GUI-domain preflight successfully issued and discarded job-scoped
+credentials for a full 11.9-hour planned worker lease using the existing issuer
+and role. Only `{ok: true, hours_admitted: 11.9, rental_created: false}` was
+retained; no credential values were stored or printed. Local receipts are
+`.runs/mtg165-two-seat-50/active-state.json` and `credentials-result.json`.
+Both temporary activation/preflight LaunchAgents were removed after success;
+the budget-owning cohort service remains loaded. The controller now owns later
+admission, exact exported-state binding, cost accounting, and cleanup without
+this laptop or conversation remaining connected.
