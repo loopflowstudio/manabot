@@ -47,7 +47,8 @@ PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
 # tests/academy/test_curated_pack.py checks it equals Academy's served pack.
 RECORDED_ASSET_MANIFEST = (
     REPO_ROOT
-    / "frontend"
+    / "academy"
+    / "ui"
     / "src"
     / "lib"
     / "packs"

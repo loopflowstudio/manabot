@@ -76,10 +76,10 @@ not bind to this world. The first corrected-world executions are in the
 Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
 ```sh
-npm --prefix frontend ci
-ACADEMY_STATIC_BUILD=1 npm --prefix frontend run build
+npm --prefix academy/ui ci
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
 ACADEMY_PLAY_CANDIDATE="$PWD/.runs/my-challenger/candidate.json" \
-ACADEMY_FRONTEND_BUILD="$PWD/frontend/build" \
+ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" \
 ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
 ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \

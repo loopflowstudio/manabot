@@ -125,7 +125,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_canonical_replay -- protocol/canonical-replay-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test canonical_replay_tests
 uv run --extra dev pytest -q tests/gui/test_replay_index.py
-npm --prefix frontend test -- --run src/lib/replay-index.test.ts
+npm --prefix academy/ui test -- --run src/lib/replay-index.test.ts
 ```
 
 ## Study artifact v1
@@ -153,7 +153,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_study_protocol -- protocol/study-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
 uv run pytest -q tests/academy/test_study_protocol.py
-npm --prefix frontend test -- --run src/lib/study-protocol.test.ts
+npm --prefix academy/ui test -- --run src/lib/study-protocol.test.ts
 ```
 
 This certifies portable restoration and evidence labelling only. V1 contains

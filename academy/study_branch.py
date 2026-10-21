@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 import managym
 from managym.decision import Command as SemanticCommand, DecisionFrame
 from managym.experience import Command
+from managym.experience_projection import decision_surface_view
 
 from .replay_index import (
     CanonicalReplayV1,
@@ -119,10 +120,15 @@ class StudyBranch:
         self._published_offer_sets += 1
         return projection
 
-    def current_observation(self) -> managym.Observation:
-        """Return the branch's current viewer-safe authority observation."""
+    def presentation_subjects(self) -> dict[str, dict[str, Any]]:
+        """Native public event-address map, captured at the transition boundary."""
+        env, _ = self._require_open()
+        return json.loads(env.presentation_subjects_json())
+
+    def current_projection(self) -> dict[str, Any]:
+        """Project the isolated root with the same native explanation as play."""
         env, restored = self._require_open()
-        return env.observation_for_player(restored.viewer)
+        return decision_surface_view(env, restored.viewer)
 
     def submit(
         self,
@@ -177,9 +183,9 @@ class StudyBranch:
         )
 
     def submit_semantic(self, command: Command) -> managym.Observation:
-        """Execute an exact recorded watch offer on its isolated native root.
+        """Execute an exact recorded offer on its isolated native root.
 
-        Watch records every native microchoice. These already bind one semantic
+        Academy records every native microchoice. These already bind one semantic
         offer, so no structured-offer grouping or label matching is necessary.
         """
         env, restored = self._require_open()

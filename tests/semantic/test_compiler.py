@@ -27,7 +27,8 @@ def _source() -> dict:
 def _named_product_decks() -> dict[str, dict[str, int]]:
     manifest_path = (
         ROOT
-        / "frontend"
+        / "academy"
+        / "ui"
         / "src"
         / "lib"
         / "packs"

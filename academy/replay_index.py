@@ -134,7 +134,11 @@ class ReplayDecision(ProtocolModel):
         projection = self.frame.projection
         if projection.agent.player_index != self.viewer:
             raise ValueError("decision frame is not oriented to its acting viewer")
-        if projection.opponent.hand or projection.opponent.sideboard:
+        if (
+            projection.opponent.hand
+            or projection.opponent.sideboard
+            or projection.opponent.inspected
+        ):
             raise ValueError(
                 "decision frame exposes opponent-private hand identities or sideboard candidates"
             )

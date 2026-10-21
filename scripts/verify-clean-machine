@@ -14,16 +14,16 @@ proof_error() {
 }
 
 [ ! -e .venv ] || proof_error proof.dirty ".venv exists before the clean proof"
-[ ! -e frontend/node_modules ] || \
-  proof_error proof.dirty "frontend/node_modules exists before the clean proof"
-[ ! -e frontend/.svelte-kit ] || \
-  proof_error proof.dirty "frontend/.svelte-kit exists before the clean proof"
-[ ! -e frontend/build ] || \
-  proof_error proof.dirty "frontend/build exists before the clean proof"
-[ ! -e frontend/.vite ] || \
-  proof_error proof.dirty "frontend/.vite exists before the clean proof"
-[ ! -e frontend/test-results ] || \
-  proof_error proof.dirty "frontend/test-results exists before the clean proof"
+[ ! -e academy/ui/node_modules ] || \
+  proof_error proof.dirty "academy/ui/node_modules exists before the clean proof"
+[ ! -e academy/ui/.svelte-kit ] || \
+  proof_error proof.dirty "academy/ui/.svelte-kit exists before the clean proof"
+[ ! -e academy/ui/build ] || \
+  proof_error proof.dirty "academy/ui/build exists before the clean proof"
+[ ! -e academy/ui/.vite ] || \
+  proof_error proof.dirty "academy/ui/.vite exists before the clean proof"
+[ ! -e academy/ui/test-results ] || \
+  proof_error proof.dirty "academy/ui/test-results exists before the clean proof"
 [ ! -e .cache ] || proof_error proof.dirty ".cache exists before the clean proof"
 [ ! -e managym/target ] || proof_error proof.dirty "managym/target exists before the clean proof"
 if find managym -maxdepth 1 -name '_managym*.so' -print -quit | grep -q .; then
@@ -57,7 +57,7 @@ start_browser_proof() {
   ACADEMY_CLEAN_START_MS=$start_ms \
   ACADEMY_CLEAN_RECEIPT=$receipt \
   ACADEMY_LAUNCH_LOG=$log \
-    npm --prefix frontend run test:e2e -- clean-machine.spec.ts &
+    npm --prefix academy/ui run test:e2e -- clean-machine.spec.ts &
   proof_pid=$!
 }
 
@@ -97,7 +97,7 @@ while ! grep -q '^ACADEMY_PLAY_READY ' "$log" 2>/dev/null; do
   # npm's locked install completes independently of the native build. Prepare
   # Chromium now; the browser scenario waits for the launcher's ready record.
   if [ -z "$proof_pid" ] && \
-      [ -f frontend/node_modules/.academy-package-lock.sha256 ]; then
+      [ -f academy/ui/node_modules/.academy-package-lock.sha256 ]; then
     start_browser_proof
   fi
   sleep 0.1
