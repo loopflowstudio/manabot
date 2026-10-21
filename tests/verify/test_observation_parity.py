@@ -283,3 +283,38 @@ def test_vector_env_set_buffers_validates_contract():
     )
     with pytest.raises(RuntimeError):
         unconfigured.reset_all_into_buffers(player_configs)
+
+
+def test_elemental_indestructible_encoding_preserves_outside_and_definition_columns() -> (
+    None
+):
+    env = managym.Env(seed=161, skip_trivial=False)
+    env.reset(make_player_configs())
+    env.scenario_force_battlefield(0, "Gray Ogre")
+    obs = env.scenario_refresh()
+    cards = obs.agent_cards
+    card = cards[0]
+    keywords = card.keywords
+    keywords.indestructible = True
+    card.keywords = keywords
+    cards[0] = card
+    obs.agent_cards = cards
+    permanents = obs.agent_permanents
+    permanent = permanents[0]
+    keywords = permanent.keywords
+    keywords.indestructible = True
+    permanent.keywords = keywords
+    permanents[0] = permanent
+    obs.agent_permanents = permanents
+
+    encoder = ObservationEncoder(ObservationSpaceHypers())
+    expected = encoder.encode(obs)
+    actual = env.encode_observation(obs)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    assert actual["agent_cards"].shape[-1] == 40
+    assert actual["agent_permanents"].shape[-1] == 27
+    assert actual["agent_cards"][0, 38] == 1
+    assert actual["agent_cards"][0, 37] == 0
+    assert actual["agent_permanents"][0, 25] == 1
+    assert actual["agent_permanents"][0, 24] == permanent.registry_key + 1

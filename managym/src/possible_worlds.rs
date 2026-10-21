@@ -540,12 +540,12 @@ impl HiddenHandConstraints {
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             match kind {
                 ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
-                ActionSpaceKind::Learn => {
+                ActionSpaceKind::Learn
+                | ActionSpaceKind::LookAndSelect
+                | ActionSpaceKind::Discard => {
                     let refreshed = branch
                         .suspended_decision_action_space()
-                        .filter(|space| {
-                            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
-                        })
+                        .filter(|space| space.player == Some(opponent) && space.kind == kind)
                         .ok_or(MaterializeError::UnsupportedActingPrompt)?;
                     branch.publish_action_space(refreshed);
                 }

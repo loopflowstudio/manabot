@@ -6,6 +6,9 @@ use crate::state::{
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PendingTrigger {
     pub source_card: CardId,
+    pub targets: Vec<Target>,
+    pub target_req_indices: Vec<usize>,
+    pub requirement_index: usize,
     /// Exact source object captured when the ability triggered. Synthetic
     /// test/delayed triggers may have no battlefield source.
     pub source_ref: Option<ObjectRef>,

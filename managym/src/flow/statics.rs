@@ -68,6 +68,13 @@ impl Game {
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
+            PowerCda::CountersOnLandsYouControl => self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .filter_map(|id| self.state.permanents[id].as_ref())
+                .filter(|p| self.state.cards[p.card].types.is_land())
+                .map(|p| p.plus1_counters)
+                .sum(),
             PowerCda::CreaturesYouControl => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -140,6 +147,7 @@ impl Game {
         controller: PlayerId,
     ) -> bool {
         match condition {
+            StaticCondition::Always => true,
             StaticCondition::CardsDrawnAtLeast { count } => {
                 self.state.turn.cards_drawn_this_turn[controller.0] >= *count
             }
@@ -193,6 +201,11 @@ impl Game {
             return false;
         };
         let card = &self.state.cards[permanent.card];
+        if predicate.flying && !self.effective_keywords(permanent_id).flying {
+            return false;
+        }
+        let mut predicate = predicate.clone();
+        predicate.flying = false;
         predicate.matches(card, self.effective_power(permanent_id), permanent.animated)
     }
 }

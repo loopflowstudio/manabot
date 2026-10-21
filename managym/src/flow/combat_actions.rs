@@ -11,6 +11,20 @@ use crate::{
 };
 
 impl Game {
+    fn combat_condition_met(&self, id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card]
+            .combat_requires_other
+            .as_ref()
+            .is_none_or(|predicate| {
+                self.battlefield_permanents(permanent.controller)
+                    .into_iter()
+                    .any(|other| other != id && self.permanent_matches_predicate(other, predicate))
+            })
+    }
+
     pub(crate) fn declare_attacker(
         &mut self,
         permanent_id: PermanentId,
@@ -25,7 +39,7 @@ impl Game {
                 return Err(AgentError("attacker permanent not found".to_string()));
             };
             let card = &self.state.cards[permanent.card];
-            if !permanent.can_attack(card) {
+            if !permanent.can_attack(card) || !self.combat_condition_met(permanent_id) {
                 return Err(AgentError("permanent cannot attack".to_string()));
             }
             permanent.effective_keywords(card).vigilance
@@ -210,7 +224,7 @@ impl Game {
                 continue;
             };
             let card = &self.state.cards[permanent.card];
-            if permanent.can_attack(card) {
+            if permanent.can_attack(card) && self.combat_condition_met(permanent_id) {
                 out.push(permanent_id);
             }
         }
@@ -224,7 +238,7 @@ impl Game {
                 continue;
             };
             let card = &self.state.cards[permanent.card];
-            if permanent.can_block(card) {
+            if permanent.can_block(card) && self.combat_condition_met(permanent_id) {
                 out.push(permanent_id);
             }
         }
@@ -245,10 +259,17 @@ impl Game {
         let blocker_card = &self.state.cards[blocker.card];
         let attacker_card = &self.state.cards[attacker.card];
 
-        if !blocker.can_block(blocker_card) {
+        if !blocker.can_block(blocker_card) || !self.combat_condition_met(blocker_id) {
             return false;
         }
 
+        if blocker_card
+            .blocking_restriction
+            .as_ref()
+            .is_some_and(|predicate| self.permanent_matches_predicate(attacker_id, predicate))
+        {
+            return false;
+        }
         if attacker.cant_be_blocked_this_turn {
             return false;
         }

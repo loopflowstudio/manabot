@@ -1,4 +1,17 @@
 {
+  "Abandon Attachments": {
+    "name": "Abandon Attachments",
+    "mana_cost": "{1}{U/R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "You may discard a card. If you do, draw two cards.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
   "Accumulate Wisdom": {
     "name": "Accumulate Wisdom",
     "mana_cost": "{1}{U}",
@@ -77,6 +90,32 @@
       "R"
     ]
   },
+  "Boomerang Basics": {
+    "name": "Boomerang Basics",
+    "mana_cost": "{U}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return target nonland permanent to its owner's hand. If you controlled that permanent, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Cat-Gator": {
+    "name": "Cat-Gator",
+    "mana_cost": "{6}{B}",
+    "type_line": "Creature — Fish Crocodile",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink\nWhen this creature enters, it deals damage equal to the number of Swamps you control to any target.",
+    "colors": [
+      "B"
+    ]
+  },
   "Combustion Technique": {
     "name": "Combustion Technique",
     "mana_cost": "{1}{R}",
@@ -101,6 +140,18 @@
     "oracle_text": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
     "colors": [
       "W"
+    ]
+  },
+  "Corrupt Court Official": {
+    "name": "Corrupt Court Official",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Human Advisor",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, target opponent discards a card.",
+    "colors": [
+      "B"
     ]
   },
   "Counterspell": {
@@ -196,6 +247,47 @@
       "W"
     ]
   },
+  "Enthusiastic Study": {
+    "name": "Enthusiastic Study",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "Target creature gets +3/+1 and gains trample until end of turn.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Epic Downfall": {
+    "name": "Epic Downfall",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Exile target creature with mana value 3 or greater.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Eyetwitch": {
+    "name": "Eyetwitch",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Eye Bat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Learn"
+    ],
+    "oracle_text": "Flying\nWhen this creature dies, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "B"
+    ]
+  },
   "Fancy Footwork": {
     "name": "Fancy Footwork",
     "mana_cost": "{2}{W}",
@@ -220,6 +312,20 @@
     "oracle_text": "Double strike (This creature deals both first-strike and regular combat damage.)",
     "colors": [
       "W"
+    ]
+  },
+  "Field Trip": {
+    "name": "Field Trip",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "Search your library for a basic Forest card, put that card onto the battlefield tapped, then shuffle.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "G"
     ]
   },
   "Fire Nation Cadets": {
@@ -262,6 +368,33 @@
       "U"
     ]
   },
+  "Fists of Flame": {
+    "name": "Fists of Flame",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw a card. Until end of turn, target creature gains trample and gets +1/+0 for each card you've drawn this turn. (A creature with trample can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Foggy Swamp Spirit Keeper": {
+    "name": "Foggy Swamp Spirit Keeper",
+    "mana_cost": "{1}{U}{B}",
+    "type_line": "Creature — Human Druid Ally",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink\nWhenever you draw your second card each turn, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
   "Forecasting Fortune Teller": {
     "name": "Forecasting Fortune Teller",
     "mana_cost": "{1}{U}",
@@ -283,6 +416,20 @@
     "keywords": [],
     "oracle_text": "({T}: Add {G}.)",
     "colors": []
+  },
+  "Giant Cindermaw": {
+    "name": "Giant Cindermaw",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Dinosaur Beast",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nPlayers can't gain life.",
+    "colors": [
+      "R"
+    ]
   },
   "Giant Spider": {
     "name": "Giant Spider",
@@ -313,6 +460,21 @@
       "W"
     ]
   },
+  "Gnarled Professor": {
+    "name": "Gnarled Professor",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Treefolk Druid",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Trample",
+      "Learn"
+    ],
+    "oracle_text": "Trample\nWhen this creature enters, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "G"
+    ]
+  },
   "Gran-Gran": {
     "name": "Gran-Gran",
     "mana_cost": "{U}",
@@ -335,6 +497,20 @@
     "oracle_text": "",
     "colors": [
       "R"
+    ]
+  },
+  "Haru, Hidden Talent": {
+    "name": "Haru, Hidden Talent",
+    "mana_cost": "{1}{G}",
+    "type_line": "Legendary Creature — Human Peasant Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Whenever another Ally you control enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
     ]
   },
   "Healer's Hawk": {
@@ -414,6 +590,20 @@
       "W"
     ]
   },
+  "Knowledge Seeker": {
+    "name": "Knowledge Seeker",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Fox Spirit",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
   "Kyoshi Warriors": {
     "name": "Kyoshi Warriors",
     "mana_cost": "{3}{W}",
@@ -434,6 +624,18 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Lightning Strike": {
+    "name": "Lightning Strike",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Lightning Strike deals 3 damage to any target.",
     "colors": [
       "R"
     ]
@@ -462,6 +664,50 @@
       "U"
     ]
   },
+  "Master Piandao": {
+    "name": "Master Piandao",
+    "mana_cost": "{4}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike\nWhenever Master Piandao attacks, look at the top four cards of your library. You may reveal an Ally, Equipment, or Lesson card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Messenger Hawk": {
+    "name": "Messenger Hawk",
+    "mana_cost": "{2}{U/B}",
+    "type_line": "Creature — Bird Scout",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nThis creature gets +2/+0 as long as you've drawn two or more cards this turn.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Monastery Swiftspear": {
+    "name": "Monastery Swiftspear",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Human Monk",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Prowess",
+      "Haste"
+    ],
+    "oracle_text": "Haste\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
+    "colors": [
+      "R"
+    ]
+  },
   "Mountain": {
     "name": "Mountain",
     "mana_cost": "",
@@ -471,6 +717,18 @@
     "keywords": [],
     "oracle_text": "({T}: Add {R}.)",
     "colors": []
+  },
+  "Octopus Form": {
+    "name": "Octopus Form",
+    "mana_cost": "{U}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature you control gets +1/+1 and gains hexproof until end of turn. Untap it. (It can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "U"
+    ]
   },
   "Otter-Penguin": {
     "name": "Otter-Penguin",
@@ -482,6 +740,18 @@
     "oracle_text": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
     "colors": [
       "U"
+    ]
+  },
+  "Ozai's Cruelty": {
+    "name": "Ozai's Cruelty",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Ozai's Cruelty deals 2 damage to target player. That player discards two cards.",
+    "colors": [
+      "B"
     ]
   },
   "Plains": {
@@ -506,6 +776,45 @@
     "oracle_text": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
     "colors": [
       "U"
+    ]
+  },
+  "Power Word Kill": {
+    "name": "Power Word Kill",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Pretending Poxbearers": {
+    "name": "Pretending Poxbearers",
+    "mana_cost": "{1}{W/B}",
+    "type_line": "Creature — Human Citizen Ally",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature dies, create a 1/1 white Ally creature token.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
+  "Professor of Symbology": {
+    "name": "Professor of Symbology",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Kor Cleric",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "When this creature enters, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "W"
     ]
   },
   "Proft's Eidetic Memory": {
@@ -546,6 +855,20 @@
       "R"
     ]
   },
+  "Savor": {
+    "name": "Savor",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "Target creature gets -2/-2 until end of turn. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+    "colors": [
+      "B"
+    ]
+  },
   "Serra Angel": {
     "name": "Serra Angel",
     "mana_cost": "{3}{W}{W}",
@@ -559,6 +882,18 @@
     "oracle_text": "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
     "colors": [
       "W"
+    ]
+  },
+  "Shared Roots": {
+    "name": "Shared Roots",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
     ]
   },
   "Shivan Dragon": {
@@ -587,6 +922,21 @@
       "W"
     ]
   },
+  "Spectral Sailor": {
+    "name": "Spectral Sailor",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Spirit Pirate",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\n{3}{U}: Draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
   "Suki, Kyoshi Warrior": {
     "name": "Suki, Kyoshi Warrior",
     "mana_cost": "{2}{G/W}{G/W}",
@@ -610,6 +960,18 @@
     "oracle_text": "({T}: Add {B}.)",
     "colors": []
   },
+  "Tiger-Dillo": {
+    "name": "Tiger-Dillo",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Cat Armadillo",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "This creature can't attack or block unless you control another creature with power 4 or greater.",
+    "colors": [
+      "R"
+    ]
+  },
   "Tiger-Seal": {
     "name": "Tiger-Seal",
     "mana_cost": "{U}",
@@ -624,6 +986,20 @@
       "U"
     ]
   },
+  "Toph, the Blind Bandit": {
+    "name": "Toph, the Blind Bandit",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "*",
+    "toughness": "3",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When Toph enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nToph's power is equal to the number of +1/+1 counters on lands you control.",
+    "colors": [
+      "G"
+    ]
+  },
   "Typhoid Rats": {
     "name": "Typhoid Rats",
     "mana_cost": "{B}",
@@ -636,6 +1012,21 @@
     "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
     "colors": [
       "B"
+    ]
+  },
+  "Uncle Iroh": {
+    "name": "Uncle Iroh",
+    "mana_cost": "{1}{R/G}{R/G}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nLesson spells you cast cost {1} less to cast.",
+    "colors": [
+      "G",
+      "R"
     ]
   },
   "Wall of Stone": {
@@ -664,6 +1055,20 @@
     "oracle_text": "Trample",
     "colors": [
       "G"
+    ]
+  },
+  "Wartime Protestors": {
+    "name": "Wartime Protestors",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Human Rebel Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste\nWhenever another Ally you control enters, put a +1/+1 counter on that creature and it gains haste until end of turn.",
+    "colors": [
+      "R"
     ]
   },
   "Water Tribe Rallier": {
@@ -749,5 +1154,145 @@
     "colors": [
       "W"
     ]
+  },
+  "Azula Always Lies": {
+    "name": "Azula Always Lies",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant — Lesson",
+    "oracle_text": "Choose one or both —\n• Target creature gets -1/-1 until end of turn.\n• Put a +1/+1 counter on target creature.",
+    "colors": [
+      "B"
+    ],
+    "keywords": []
+  },
+  "Iroh's Demonstration": {
+    "name": "Iroh's Demonstration",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery — Lesson",
+    "oracle_text": "Choose one —\n• Iroh's Demonstration deals 1 damage to each creature your opponents control.\n• Iroh's Demonstration deals 4 damage to target creature.",
+    "colors": [
+      "R"
+    ],
+    "keywords": []
+  },
+  "Origin of Metalbending": {
+    "name": "Origin of Metalbending",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant — Lesson",
+    "oracle_text": "Choose one —\n• Destroy target artifact or enchantment.\n• Put a +1/+1 counter on target creature you control. It gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)",
+    "colors": [
+      "G"
+    ],
+    "keywords": []
+  },
+  "Gather the White Lotus": {
+    "name": "Gather the White Lotus",
+    "mana_cost": "{4}{W}",
+    "type_line": "Sorcery",
+    "oracle_text": "Create a 1/1 white Ally creature token for each Plains you control. Scry 2. (Look at the top two cards of your library, then put any number of them on the bottom and the rest on top in any order.)",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Scry"
+    ]
+  },
+  "Zuko's Exile": {
+    "name": "Zuko's Exile",
+    "mana_cost": "{5}",
+    "type_line": "Instant — Lesson",
+    "oracle_text": "Exile target artifact, creature, or enchantment. Its controller creates a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [],
+    "keywords": []
+  },
+  "Dai Li Agents": {
+    "name": "Dai Li Agents",
+    "mana_cost": "{3}{B}{G}",
+    "type_line": "Creature — Human Soldier",
+    "oracle_text": "When this creature enters, earthbend 1, then earthbend 1. (To earthbend 1, target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever this creature attacks, each opponent loses X life and you gain X life, where X is the number of creatures you control with +1/+1 counters on them.",
+    "power": "3",
+    "toughness": "4",
+    "colors": [
+      "B",
+      "G"
+    ],
+    "keywords": [
+      "Earthbend"
+    ]
+  },
+  "Jet, Freedom Fighter": {
+    "name": "Jet, Freedom Fighter",
+    "mana_cost": "{2}{R/W}{R/W}{R/W}",
+    "type_line": "Legendary Creature — Human Rebel Ally",
+    "oracle_text": "When Jet enters, he deals damage equal to the number of creatures you control to target creature an opponent controls.\nWhen Jet dies, put a +1/+1 counter on each of up to two target creatures.",
+    "power": "3",
+    "toughness": "1",
+    "colors": [
+      "R",
+      "W"
+    ],
+    "keywords": []
+  },
+  "Ostrich-Horse": {
+    "name": "Ostrich-Horse",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Bird Horse",
+    "oracle_text": "When this creature enters, mill three cards. You may put a land card from among them into your hand. If you don't, put a +1/+1 counter on this creature. (To mill three cards, put the top three cards of your library into your graveyard.)",
+    "power": "3",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "keywords": [
+      "Mill"
+    ]
+  },
+  "Sokka's Haiku": {
+    "name": "Sokka's Haiku",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Instant — Lesson",
+    "oracle_text": "Counter target spell.\nDraw a card, then mill three cards.\nUntap target land.",
+    "colors": [
+      "U"
+    ],
+    "keywords": [
+      "Mill"
+    ]
+  },
+  "Momo, Friendly Flier": {
+    "name": "Momo, Friendly Flier",
+    "mana_cost": "{W}",
+    "type_line": "Legendary Creature — Lemur Bat Ally",
+    "oracle_text": "Flying\nThe first non-Lemur creature spell with flying you cast during each of your turns costs {1} less to cast.\nWhenever another creature you control with flying enters, Momo gets +1/+1 until end of turn.",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "W"
+    ],
+    "keywords": [
+      "Flying"
+    ]
+  },
+  "Deserter's Disciple": {
+    "name": "Deserter's Disciple",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Rebel Ally",
+    "oracle_text": "{T}: Another target creature you control with power 2 or less can't be blocked this turn.",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "R"
+    ],
+    "keywords": []
+  },
+  "True Ancestry": {
+    "name": "True Ancestry",
+    "mana_cost": "{1}{G}",
+    "type_line": "Sorcery — Lesson",
+    "oracle_text": "Return up to one target permanent card from your graveyard to your hand.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "G"
+    ],
+    "keywords": []
   }
 }

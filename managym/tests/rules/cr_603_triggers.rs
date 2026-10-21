@@ -128,6 +128,9 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
     let p1_source = find_owned_card(&s, 1, "Man-o'-War");
     s.game_mut().state.pending_triggers = vec![
         PendingTrigger {
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
             source_card: p1_source,
             source_ref: None,
             source_lki: None,
@@ -138,6 +141,9 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             inline_effects: None,
         },
         PendingTrigger {
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
             source_card: p0_source,
             source_ref: None,
             source_lki: None,
@@ -248,6 +254,9 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
 
     let source = find_owned_card(&s, 0, "Man-o'-War");
     s.game_mut().state.pending_triggers.push(PendingTrigger {
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        requirement_index: 0,
         source_card: source,
         source_ref: None,
         source_lki: None,

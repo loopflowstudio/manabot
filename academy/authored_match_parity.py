@@ -21,6 +21,7 @@ from managym.decision import (
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
+from .curated_pack import load_curated_pack
 from .replay_index import (
     CanonicalReplayV1,
     DecisionNotFoundError,
@@ -30,10 +31,22 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
+    / "conformance/authored-match-parity-w7-v1/release-live-headless-replay-seed-0.json"
+)
+AUTHORITY_SHA256 = "b02a204475b119ccd3443b1f33de9528230a81a5549f508e2cbac63ce753dfbe"
+TERMINAL_STATE = "29ba6b219d37e3e8a6afd2b98c10eb703265e078422c561ca6d375453d788994"
+
+COMMAND_COUNT = 156
+HISTORICAL_AUTHORITY_SHA256 = (
+    "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
+)
+HISTORICAL_TERMINAL_STATE = (
+    "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7"
+)
+HISTORICAL_RECEIPT_PATH = (
+    ROOT
     / "conformance/authored-match-parity-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
-TERMINAL_STATE = "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7"
 
 
 def _json_bytes(value: object) -> bytes:
@@ -82,9 +95,13 @@ def _load_authority() -> dict[str, Any]:
     receipt = json.loads(raw)
     decisions = receipt["decisions"]
     _equal("input", 0, "version", 1, receipt["version"])
-    _equal("input", 0, "commands", 132, len(decisions))
+    _equal("input", 0, "commands", COMMAND_COUNT, len(decisions))
     _equal(
-        "input", 0, "terminal_revision", 132, receipt["terminal_witness"]["revision"]
+        "input",
+        0,
+        "terminal_revision",
+        COMMAND_COUNT,
+        receipt["terminal_witness"]["revision"],
     )
     _equal(
         "input",
@@ -94,7 +111,11 @@ def _load_authority() -> dict[str, Any]:
         receipt["terminal_witness"]["state_digest"],
     )
     _equal(
-        "input", 0, "ordinals", list(range(132)), [row["ordinal"] for row in decisions]
+        "input",
+        0,
+        "ordinals",
+        list(range(COMMAND_COUNT)),
+        [row["ordinal"] for row in decisions],
     )
     _equal(
         "input",
@@ -225,7 +246,7 @@ def _capture_object_candidate(
             for candidate in choice["candidates"]["initial"]:
                 subject = candidate["value"]["subject"]
                 if subject["kind"] == "object" and subject["id"] == {
-                    "entity": 102,
+                    "entity": 107,
                     "incarnation": 2,
                 }:
                     rendered = dict(subject["id"])
@@ -233,7 +254,7 @@ def _capture_object_candidate(
                     candidate_id = int(candidate["id"])
                     offer_id = int(offer["id"])
     if rendered is None:
-        raise ParityDivergence("headless", 35, "object_candidate", "102@2", "absent")
+        raise ParityDivergence("headless", 35, "object_candidate", "107@2", "absent")
     address = next(
         candidate
         for candidate in frame["object_candidates"]
@@ -256,8 +277,8 @@ def _run_engine(
         config.to_rust()
         if config is not None
         else [
-            managym.PlayerConfig("Hero", dict(server.UR_LESSONS_DECK)),
-            managym.PlayerConfig("Villain", dict(server.GW_ALLIES_DECK)),
+            load_curated_pack().player_config("ur_lessons", "Hero"),
+            load_curated_pack().player_config("gw_allies", "Villain"),
         ]
     )
     checkpoints = [_checkpoint(env, surface, 0, [])]
@@ -510,7 +531,13 @@ def _run_live(
             server._new_game_session = original_factory
             server.SESSION_REGISTRY.clear()
 
-        _equal("live", 132, "transition_count", 132, len(session.authority_transitions))
+        _equal(
+            "live",
+            COMMAND_COUNT,
+            "transition_count",
+            COMMAND_COUNT,
+            len(session.authority_transitions),
+        )
         checkpoints: list[dict[str, Any]] = []
         for ordinal, (row, transition) in enumerate(
             zip(decisions, session.authority_transitions, strict=True)
@@ -548,7 +575,9 @@ def _run_live(
                 root = session._study_roots[0]
                 checkpoints.append(_checkpoint(root, "live", 0, []))
             root_after = (
-                session.env if ordinal == 131 else session._study_roots[ordinal + 1]
+                session.env
+                if ordinal == COMMAND_COUNT - 1
+                else session._study_roots[ordinal + 1]
             )
             assert root_after is not None
             checkpoints.append(
@@ -575,7 +604,7 @@ def _run_live(
             actual = [event.model_dump(mode="json") for event in actual_tracks[viewer]]
             _equal(
                 "live",
-                132,
+                COMMAND_COUNT,
                 f"presentation_track_{viewer}",
                 expected_presentation[viewer],
                 actual,
@@ -588,7 +617,7 @@ def _run_live(
             for viewer, events in expected_presentation.items()
         }
         return {
-            "commands": 132,
+            "commands": COMMAND_COUNT,
             "checkpoints": checkpoints,
             "presentation": presentation,
         }, replay
@@ -596,11 +625,12 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w7-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/v1/generated/two_deck.ir.json",
         "content/semantic/v1/two_deck.source.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
+        "academy/authored_match_receipt.py",
         "managym/experience.py",
         "managym/experience_projection.py",
         "academy/presentation.py",
@@ -651,7 +681,7 @@ def build_receipt() -> dict[str, Any]:
         for row, persisted in zip(decisions, replay.decisions, strict=True)
     ]
     replay_surface, _ = _run_engine("replay", persisted_decisions)
-    for revision in range(133):
+    for revision in range((COMMAND_COUNT + 1)):
         expected = live["checkpoints"][revision]
         for name, surface in (("headless", headless), ("replay", replay_surface)):
             _equal(
@@ -671,10 +701,10 @@ def build_receipt() -> dict[str, Any]:
 
     projections = [project_replay(replay, viewer) for viewer in (0, 1)]
     for viewer, projection in enumerate(projections):
-        _equal("replay", 132, "projection_viewer", viewer, projection.viewer)
+        _equal("replay", COMMAND_COUNT, "projection_viewer", viewer, projection.viewer)
         _equal(
             "replay",
-            132,
+            COMMAND_COUNT,
             "projection_rows",
             [row for row in replay.decisions if row.viewer == viewer],
             projection.decisions,
@@ -728,7 +758,9 @@ def build_receipt() -> dict[str, Any]:
     except DecisionNotFoundError:
         spectator_admitted = False
     else:
-        raise ParityDivergence("replay", 132, "spectator", "rejected", "admitted")
+        raise ParityDivergence(
+            "replay", COMMAND_COUNT, "spectator", "rejected", "admitted"
+        )
 
     source = _source_manifest()
     return {
@@ -743,10 +775,10 @@ def build_receipt() -> dict[str, Any]:
             "relevant_source": source,
         },
         "summary": {
-            "commands_per_surface": 132,
-            "checkpoints_per_surface": 133,
-            "ordered_transition_groups_per_surface": 132,
-            "viewer_projection_checks": 3 * 133 * 2,
+            "commands_per_surface": COMMAND_COUNT,
+            "checkpoints_per_surface": (COMMAND_COUNT + 1),
+            "ordered_transition_groups_per_surface": COMMAND_COUNT,
+            "viewer_projection_checks": 3 * (COMMAND_COUNT + 1) * 2,
             "canonical_player_projections": 2,
             "spectator_admitted": spectator_admitted,
             "first_divergence": None,
@@ -766,15 +798,6 @@ def write_receipt() -> dict[str, Any]:
 def verify_receipt() -> dict[str, Any]:
     checked = json.loads(RECEIPT_PATH.read_text())
     generated = build_receipt()
-    # The checked PR #153 source manifest is frozen provenance. Later provider
-    # closures re-prove the same behavior under their own current-source
-    # derivation receipts, so verification compares every replay consequence
-    # while retaining the historical source and semantic-address identities
-    # byte-for-byte.
-    generated["identity"]["relevant_source"] = checked["identity"]["relevant_source"]
-    generated["stale_object_proof"]["candidate_address"]["decision_fingerprint"] = (
-        checked["stale_object_proof"]["candidate_address"]["decision_fingerprint"]
-    )
     if generated != checked:
         raise RuntimeError("checked authored-match parity receipt is stale")
     return checked

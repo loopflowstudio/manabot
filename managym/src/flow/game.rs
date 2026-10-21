@@ -69,14 +69,25 @@ pub struct GameState {
 /// waterbend ability walks Waterbend until the cost is paid.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
+    ActivatedTarget {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice { player: PlayerId, card: CardId },
+    SpellMode {
+        player: PlayerId,
+        card: CardId,
+        kicked: bool,
+    },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        mode: Option<usize>,
         requirement_index: usize,
         chosen: Vec<Target>,
         chosen_req_indices: Vec<usize>,

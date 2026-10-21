@@ -19,7 +19,7 @@ use crate::{
     state::{
         ability::TargetSpec,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
-        target::Target as ActionTarget,
+        zone::ZoneType,
     },
 };
 
@@ -230,6 +230,7 @@ pub enum BoundTarget {
     Player(PlayerId),
     Permanent(ObjectRef),
     StackSpell(CardId),
+    GraveyardCard(ObjectRef),
 }
 
 #[derive(Clone, Debug)]
@@ -1799,25 +1800,33 @@ impl Game {
                 .map(BoundTarget::Permanent)
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             Target::StackSpell(card) => Ok(BoundTarget::StackSpell(card)),
+            Target::GraveyardCard(object) => Ok(BoundTarget::GraveyardCard(object)),
         }
     }
 
-    fn resolve_bound_target(
-        &self,
-        target: BoundTarget,
-    ) -> Result<ActionTarget, StructuredOfferError> {
+    fn resolve_bound_target(&self, target: BoundTarget) -> Result<Target, StructuredOfferError> {
         match target {
-            BoundTarget::Player(player) => Ok(ActionTarget::Player(player)),
+            BoundTarget::Player(player) => Ok(Target::Player(player)),
             BoundTarget::Permanent(object_ref) => self
                 .lookup_current_permanent(object_ref)
-                .map(ActionTarget::Permanent)
+                .map(Target::Permanent)
                 .map_err(|_| {
                     StructuredOfferError::StaleOrIllegal(format!(
                         "target object {}@{} is no longer current",
                         object_ref.entity.0, object_ref.incarnation.0
                     ))
                 }),
-            BoundTarget::StackSpell(card) => Ok(ActionTarget::StackSpell(card)),
+            BoundTarget::StackSpell(card) => Ok(Target::StackSpell(card)),
+            BoundTarget::GraveyardCard(object) => {
+                let card = CardId::from(object.entity);
+                if self.current_object_ref(card) == Some(object)
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                {
+                    Ok(Target::GraveyardCard(object))
+                } else {
+                    Err(StructuredOfferError::InvalidCurrentTarget)
+                }
+            }
         }
     }
 
@@ -1847,6 +1856,18 @@ impl Game {
                         id: object_render_id(permanent_ref.id, object_ref.incarnation.0),
                     },
                     self.state.cards[permanent_ref.card].name.clone(),
+                ))
+            }
+            BoundTarget::GraveyardCard(object) => {
+                let card = CardId::from(object.entity);
+                if self.current_object_ref(card) != Some(object) {
+                    return Err(StructuredOfferError::InvalidCurrentTarget);
+                }
+                Ok((
+                    SubjectRef::Object {
+                        id: object_render_id(self.state.cards[card].id, object.incarnation.0),
+                    },
+                    self.state.cards[card].name.clone(),
                 ))
             }
             BoundTarget::StackSpell(_) => Err(StructuredOfferError::InvalidCurrentTarget),

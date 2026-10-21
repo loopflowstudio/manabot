@@ -96,6 +96,7 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
         Target::StackSpell(card) => card_reference(game, card),
+        Target::GraveyardCard(object) => card_reference(game, CardId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
             .map(|exact| card_reference(game, CardId::from(exact.entity)))

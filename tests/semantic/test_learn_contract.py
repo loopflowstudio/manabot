@@ -315,7 +315,8 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
             candidate = obs.agent_sideboard[focus - 2 - len(obs.agent_cards)]
             assert candidate.candidate_id == action.focus[0]
             assert row[:7].sum() == 0  # outside is not an eighth game zone
-            assert row[-2:].tolist() == [1, 1]
+            assert row[37] == 1  # outside marker precedes indestructible
+            assert row[-1] == 1  # validity
         else:
             assert row[1] == 1  # hand
             assert row[-2] == 0

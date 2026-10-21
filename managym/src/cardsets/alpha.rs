@@ -133,6 +133,7 @@ impl ContentPack {
         self.register_tla();
         self.register_tla_lessons_increment();
         self.register_mkm();
+        self.register_elemental();
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {
@@ -436,6 +437,7 @@ impl ContentPack {
                 ..Default::default()
             },
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("R"),
                 sacrifice_source: false,
                 waterbend: false,

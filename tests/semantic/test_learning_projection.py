@@ -375,7 +375,7 @@ def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path):
     schema["schema_version"] = 999
     bad_schema = tmp_path / "schema.json"
     bad_schema.write_text(json.dumps(schema), encoding="utf-8")
-    with pytest.raises(UnknownSchemaError, match="expected 2, got 999"):
+    with pytest.raises(UnknownSchemaError, match="expected 2 or 3, got 999"):
         LearningSchema.load(bad_schema)
 
     ir = _json(DEFAULT_IR_PATH)
@@ -447,5 +447,5 @@ def test_learning_schema_rejects_the_pre_sideboard_contract(tmp_path):
     schema["object_roles"].pop("agent_sideboard")
     path = tmp_path / "old-schema.json"
     path.write_text(json.dumps(schema), encoding="utf-8")
-    with pytest.raises(UnknownSchemaError, match="expected 2, got 1"):
+    with pytest.raises(UnknownSchemaError, match="expected 2 or 3, got 1"):
         LearningSchema.load(path)
