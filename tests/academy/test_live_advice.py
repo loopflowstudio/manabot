@@ -61,6 +61,7 @@ def test_current_ed2_promotes_to_the_exact_committed_replay_identity(
     game.close("test")
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_selected_live_root_rejects_retired_likelihood_checkpoint(
     tmp_path: Path,
 ) -> None:

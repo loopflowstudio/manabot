@@ -122,6 +122,7 @@ def test_verifier_requires_consuming_failure_evidence(smoke_payload: dict) -> No
         )
 
 
+@pytest.mark.experiment_data("experiments/data/rul-6-study-branch-v1.json")
 def test_checked_canonical_artifact_verifies() -> None:
     payload = json.loads(bench.DEFAULT_RAW.read_text(encoding="utf-8"))
     bench.verify(

@@ -5,6 +5,28 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 **Runners:** the exp-specific driver scripts live in [runners/](runners/) —
 `manabot/` keeps only reusable instruments.
 
+## Data
+
+```bash
+uv run --extra artifacts python -m manabot.data fetch                # everything
+uv run --extra artifacts python -m manabot.data fetch experiments/data/etu126
+uv run --extra artifacts python -m manabot.data publish experiments/data/<new-run>
+```
+
+`data/` is not in git. [`data.manifest.json`](data.manifest.json) records each
+file's path, sha256 and size; the bytes live once per digest at
+`s3://etudefantasia/manabot/sha256/<sha256>` and need the team's AWS
+credentials. `fetch` restores files to their original paths, verifies every
+digest, skips files already present and refuses to overwrite a file whose bytes
+differ. Runs still write results under `data/`; `publish` uploads them (S3
+checks each SHA-256; nothing is read back) and updates the manifest, which you
+commit with the report. Every worktree on a machine shares one read-only cache,
+`$MANABOT_DATA_CACHE` (default `~/.cache/manabot/sha256/<sha256>`), filled by
+`publish` and by downloads, so a machine reads each digest from S3 at most once. Tests that read data are marked
+`experiment_data(...)`: they fetch what they name, or skip with this command
+when the store is unreachable. Data committed before the manifest remains in git
+history.
+
 ## Discipline
 
 1. **Build before diagnosing.** Primary experiments exercise a runnable agent,

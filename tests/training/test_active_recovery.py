@@ -193,11 +193,12 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
     def request_pause(
         queue: CheckpointQueue, sources: list[Path], *, launch: bool = True
     ) -> None:
-        tick(queue, sources, launch=launch)
-        # The first coordinator poll occurs with a live child. Waiting for its
-        # run.json races the five-second polling interval against this tiny run.
-        # The learner handles this request at its first safe update boundary.
+        # The supervisor invokes this after starting the learner. Request at
+        # startup rather than waiting for a running export: twelve tiny updates
+        # can finish between its five-second polls. The worker must still reach
+        # an exact recovery boundary before honoring the request.
         (root / "pause.request").touch()
+        tick(queue, sources, launch=launch)
 
     with monkeypatch.context() as patch:
         patch.setattr(CheckpointQueue, "tick", request_pause)

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from experiments.runners import run_int18_arena_rating as int18
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -11,6 +13,7 @@ RESULT_ROOT = (
 )
 
 
+@pytest.mark.experiment_data("experiments/data/int-18-first-world-pinned-arena-v1")
 def test_verify_only_authenticates_retained_exact_range_receipt(
     monkeypatch,
 ) -> None:

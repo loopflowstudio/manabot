@@ -14,6 +14,7 @@ INPUT_ROOT = (
 )
 
 
+@pytest.mark.experiment_data("experiments/data/int-8-retained-int-4-smoke-v1")
 def test_retained_input_passes_exact_current_loaders() -> None:
     receipt = int8_input.verify_retained_input(INPUT_ROOT / "input-manifest.json")
 
@@ -28,6 +29,7 @@ def test_retained_input_passes_exact_current_loaders() -> None:
     assert all(row["deterministic_repeated_bytes"] for row in receipt["checkpoints"])
 
 
+@pytest.mark.experiment_data("experiments/data/int-8-retained-int-4-smoke-v1")
 def test_retained_input_tamper_fails_before_loader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

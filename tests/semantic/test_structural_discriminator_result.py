@@ -20,6 +20,9 @@ def _runs(result: dict, arm: str) -> list[dict]:
     )
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/structural-semantic-katas-v1-discriminator.json"
+)
 def test_checked_discriminator_result_selects_registered_capacity_branch() -> None:
     result = _result()
 
@@ -34,6 +37,9 @@ def test_checked_discriminator_result_selects_registered_capacity_branch() -> No
     assert result["provenance"]["measurement_code_revision"] == PREREGISTRATION
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/structural-semantic-katas-v1-discriminator.json"
+)
 def test_bag_control_and_cached_equivalence_remain_exact() -> None:
     result = _result()
     bag_runs = _runs(result, "bag_v1")
@@ -57,6 +63,9 @@ def test_bag_control_and_cached_equivalence_remain_exact() -> None:
             )
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/structural-semantic-katas-v1-discriminator.json"
+)
 def test_optimization_and_message_arms_do_not_fit_all_five_seeds() -> None:
     result = _result()
     optimization = _runs(result, "relational_semantic_encoder_v1_opt4000")
@@ -80,6 +89,9 @@ def test_optimization_and_message_arms_do_not_fit_all_five_seeds() -> None:
     assert {run["performance"]["parameter_count"] for run in message} == {9030}
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/structural-semantic-katas-v1-discriminator.json"
+)
 def test_cost_attribution_is_derived_from_raw_receipts_without_changing_stop() -> None:
     result = _result()
     bag = _runs(result, "bag_v1")
@@ -116,6 +128,9 @@ def test_cost_attribution_is_derived_from_raw_receipts_without_changing_stop() -
         assert not receipt["cached_cost_gate"]
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/structural-semantic-katas-v1-discriminator.json"
+)
 def test_result_preserves_static_claim_boundary() -> None:
     result = _result()
 

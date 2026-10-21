@@ -26,6 +26,7 @@ from managym.decision import Command, DecisionFrame
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
 from .guidance import build_arena_player
+from .matchup import AuthoredMatchup
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
 from .replay import replay_environment, replay_games, write_trace
 
@@ -325,26 +326,35 @@ def play_cell(
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
     matchup_mode: MatchupMode = "cross",
+    authored_matchup: AuthoredMatchup | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
     if player_a.player_id == player_b.player_id:
         raise ValueError("arena players must be distinct")
     selected = key.content_suite == SELECTED_SUITE
-    if not selected and key.content_suite != "w2-interactive-mirror-v1":
+    authored = selected or authored_matchup is not None
+    if (
+        authored_matchup is not None
+        and key.content_suite != authored_matchup.content_suite
+    ):
+        raise ValueError("arena suite differs from explicit authored matrix")
+    if not authored and key.content_suite != "w2-interactive-mirror-v1":
         raise ValueError("unknown arena content suite")
     if not deal_seeds or len(set(deal_seeds)) != len(deal_seeds):
         raise ValueError("deal seeds must be nonempty and unique")
     checkpoint_paths = checkpoint_paths or {}
     match = (
-        selected_match()
+        authored_matchup.match()
+        if authored_matchup is not None
+        else selected_match()
         if selected
         else MatchHypers(
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    if selected:
+    if authored:
         if key.world != WORLD_VERSION:
             raise ValueError("selected matchup requires corrected-world identity")
         for player in (player_a, player_b):
@@ -358,8 +368,8 @@ def play_cell(
     if matchup_mode not in ("cross", "mirrors", "all"):
         raise ValueError("unknown arena matchup mode")
     if matchup_mode in ("mirrors", "all"):
-        if not selected:
-            raise ValueError("mirrors require the selected authored deck roster")
+        if not authored:
+            raise ValueError("mirrors require an explicit authored deck roster")
         for player in (player_a, player_b):
             if (
                 player.runner_kind == "checkpoint"
@@ -390,15 +400,19 @@ def play_cell(
             if matchup_mode == "all"
             else range(4, 8)
             if matchup_mode == "mirrors"
-            else range(4 if selected else 2)
+            else range(4 if authored else 2)
         )
         for leg in legs:
             seat_players = (
                 [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]
             )
-            seat_decks = selected_decks(leg)
+            seat_decks = (
+                authored_matchup.decks(leg) if authored_matchup else selected_decks(leg)
+            )
             setup = (
-                MatchHypers.authored("ur-lessons-vs-gw-allies", *seat_decks)
+                authored_matchup.match(leg)
+                if authored_matchup is not None
+                else MatchHypers.authored("ur-lessons-vs-gw-allies", *seat_decks)
                 if selected
                 else match.model_copy(deep=True)
             )
@@ -432,7 +446,7 @@ def play_cell(
                     )
                 },
             }
-            if selected:
+            if authored:
                 game["seat_decks"] = list(seat_decks)
             started = time.perf_counter()
             game = _bounded_game(
@@ -490,7 +504,7 @@ def play_cell(
                 "latency": {},
                 "game_seconds": seconds,
             }
-            if selected:
+            if authored:
                 row["seat_decks"] = list(seat_decks)
             for player_id in pair:
                 values = [

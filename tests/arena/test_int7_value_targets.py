@@ -22,6 +22,7 @@ INPUT_ROOT = (
 )
 
 
+@pytest.mark.experiment_data("experiments/data/int-8-retained-int-4-smoke-v1")
 def test_retained_phase_strata_are_decoded_without_new_metadata() -> None:
     dataset = load_shards(sorted((INPUT_ROOT / "payload/dataset").glob("shard_*.npz")))
 
@@ -82,6 +83,7 @@ def test_resource_cap_fails_closed_before_launch(tmp_path: Path) -> None:
     assert "resource_cap_exceeded" in ledger.path.read_text()
 
 
+@pytest.mark.experiment_data("experiments/data/int-8-retained-int-4-smoke-v1")
 def test_registration_keeps_neutral_variant_profile_only() -> None:
     checkpoint = (
         INPUT_ROOT / "payload/training/visit_policy_value-seed-197-b97a4796a6cbcad0.pt"

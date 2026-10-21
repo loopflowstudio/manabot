@@ -144,7 +144,16 @@ def validate_regime(
     )
     if require_current_world and regime.world != managym.WORLD_VERSION:
         raise ValueError("regime world differs from native runtime")
-    if regime.world not in {"w2", "w3", "w4", "w5", managym.WORLD_VERSION}:
+    if regime.world not in {
+        "w2",
+        "w3",
+        "w4",
+        "w5",
+        "w6",
+        "w7",
+        "w8",
+        managym.WORLD_VERSION,
+    }:
         raise ValueError("unsupported regime world")
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
@@ -199,6 +208,7 @@ def execute_regime(
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
     pause_path: Path | None = None,
+    stop_path: Path | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
@@ -296,6 +306,7 @@ def execute_regime(
             checkpoint_updates=checkpoint_updates,
             checkpoint_milestones=checkpoint_milestones,
             pause_path=pause_path,
+            stop_path=stop_path,
             initial_admission=initial_admission,
             allocation=allocation,
         )
@@ -313,6 +324,7 @@ def _execute_regime(
     checkpoint_updates: int | None = None,
     checkpoint_milestones: tuple[int, ...] = (),
     pause_path: Path | None = None,
+    stop_path: Path | None = None,
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
 ) -> TrainingRun:
@@ -484,7 +496,7 @@ def _execute_regime(
             + sum(s.cpu_seconds for s in run.stages[:-1]),
         }
 
-    def monitor_checkpoint(model: Agent) -> None:
+    def monitor_checkpoint(model: Agent, experiment: Experiment | None = None) -> None:
         nonlocal last_monitor_seconds
         active_endpoint = (
             isinstance(stage, TrainSelfPlay) and stage.active_seconds is not None
@@ -561,6 +573,10 @@ def _execute_regime(
             ):
                 load_checkpoint_agent(str(target))
             receipt.artifact = artifact(target)
+            if experiment is not None:
+                experiment.checkpoint(
+                    target, transitions=int(point["learner_transitions"])
+                )
         except Exception as error:
             receipt.error = f"{type(error).__name__}: {error}"
             if target.exists():
@@ -687,6 +703,10 @@ def _execute_regime(
                 if now - last_memory_sample < 1.0:
                     return
                 last_memory_sample = now
+                if stop_path is not None and stop_path.exists():
+                    # Cancellation retains failed scientific receipts; unlike
+                    # pause it makes no complete-state recovery promise.
+                    raise RuntimeError("training cancelled by launcher")
                 memory = process_tree_rss(psutil.Process())
                 if not restoring_completed:
                     record.sampled_peak_rss_bytes = max(
@@ -1236,9 +1256,33 @@ def _execute_regime(
                             exp_name=stage.id,
                             device=stage.execution.device,
                             log_level="WARNING",
+                        ),
+                        resolved_config={
+                            "regime": regime.model_dump(mode="json"),
+                            "run_id": run.id,
+                            "identities": run.identities,
+                        },
+                    )
+                    resources.callback(
+                        lambda exp=experiment: exp.close(
+                            "finished" if run.status == "completed" else "failed"
                         )
                     )
-                    resources.callback(experiment.close)
+                    if snapshot is None:
+                        # Retain the same admitted initialization used by frozen
+                        # controls. SDK copying does not draw policy RNG samples.
+                        tick = time.perf_counter()
+                        point = coordinates()
+                        experiment.log_update(
+                            {},
+                            updates=int(point["updates"]),
+                            transitions=int(point["learner_transitions"]),
+                        )
+                        experiment.checkpoint(
+                            Path(record.artifacts["initial_raw"]["path"]),
+                            transitions=int(point["learner_transitions"]),
+                        )
+                        record.export_seconds += time.perf_counter() - tick
                     trainer = NetOpponentTrainer(
                         agent,
                         experiment,
@@ -1417,11 +1461,18 @@ def _execute_regime(
                         - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    trainer.experiment.log_update(
+                        diagnostic,
+                        updates=int(diagnostic["coordinates"]["updates"]),
+                        transitions=int(
+                            diagnostic["coordinates"]["learner_transitions"]
+                        ),
+                    )
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds
                     ):
-                        monitor_checkpoint(trainer.agent)
+                        monitor_checkpoint(trainer.agent, trainer.experiment)
                     pausing = pause_path is not None and pause_path.exists()
                     cadence = (
                         regime.recovery.checkpoint_updates
@@ -1581,6 +1632,13 @@ def _execute_regime(
                         record.rejected_artifacts[name] = candidate
                         raise
                     record.artifacts[name] = candidate
+                    if isinstance(stage, TrainSelfPlay) and name == "raw":
+                        # The SDK retains admitted policy bytes, not a promise of
+                        # collector/RNG recovery. Charge its copy as export cost.
+                        trainer.experiment.checkpoint(
+                            target,
+                            transitions=int(coordinates()["learner_transitions"]),
+                        )
                 optimizer_path = out / f"{stage.id}-optimizer.pt"
                 torch.save(
                     optimizer_state,

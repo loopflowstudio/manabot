@@ -13,6 +13,7 @@ This version uses CleanRL-style flat rollout tensors with shape (num_steps, num_
 """
 
 import argparse
+from pathlib import Path
 import time
 from typing import Any, Dict, Sequence, Tuple
 
@@ -91,7 +92,6 @@ class Trainer:
 
         self.logger = getLogger(__name__)
 
-        self.wandb = self.experiment.wandb_run
         self.rollout_health = self._new_rollout_health()
         self.rollout_health_update = self._new_rollout_health()
         self.last_explained_variance = float("nan")
@@ -103,20 +103,11 @@ class Trainer:
         self._obs_space = env.observation_space
         self._reward = env.reward
 
-        if self.wandb:
-            self.wandb.summary.update(
-                {
-                    "max_episode_return": float("-inf"),
-                    "best_win_rate": 0.0,
-                    "time_to_converge": None,
-                }
-            )
-            self.logger.info(f"wandb: {self.wandb.get_url()}")
         self.logger.info("Trainer initialized.")
 
     def train(self) -> None:
         # Use context manager for root timer
-        with self.profiler.track("train"):
+        with self.experiment, self.profiler.track("train"):
             hypers = self.hypers
             env = self.env
             device = self.experiment.device
@@ -151,17 +142,15 @@ class Trainer:
                 ) = self._init_rollout_buffers(next_obs)
 
                 self.logger.info("Starting rollout data collection.")
-                if self.wandb:
-                    self.wandb.log({"rollout/step": 0}, step=self.global_step)
+                self.experiment.log({"rollout/step": 0}, step=self.global_step)
 
                 if update % 10 == 0 and self.agent.hypers.attention_on:
                     self.logger.info("Verifying attention masking mechanism...")
                     attention_valid = self.verify_attention_masking(next_obs)
-                    if self.wandb:
-                        self.wandb.log(
-                            {"verification/attention_valid": int(attention_valid)},
-                            step=self.global_step,
-                        )
+                    self.experiment.log(
+                        {"verification/attention_valid": int(attention_valid)},
+                        step=self.global_step,
+                    )
 
                 with self.profiler.track("rollout"):
                     with self.profiler.track("step"):
@@ -266,23 +255,24 @@ class Trainer:
                 self.last_explained_variance = float(explained_var)
 
                 sps = int(self.global_step / (time.time() - self.start_time))
-                if self.wandb:
-                    self.wandb.log(
-                        {
-                            "charts/learning_rate": self.optimizer.param_groups[0][
-                                "lr"
-                            ],
-                            "losses/explained_variance": explained_var,
-                            "charts/SPS": sps,
-                        },
-                        step=self.global_step,
-                    )
+                self.experiment.log(
+                    {
+                        "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
+                        "losses/explained_variance": explained_var,
+                        "charts/SPS": sps,
+                    },
+                    step=self.global_step,
+                )
 
                 self.experiment.log_performance(step=self.global_step)
 
                 time_since_start = time.time() - self.start_time
                 self.logger.info(
                     f"Update {update}/{num_updates} | SPS: {sps} | Total time: {time_since_start:.2f}s"
+                )
+
+                self.experiment.log_update(
+                    {}, updates=update, transitions=self.global_step
                 )
 
                 if update % hypers.eval_interval == 0:
@@ -340,7 +330,7 @@ class Trainer:
         return new_obs, reward, done, action, logprob, value
 
     def _run_periodic_eval(self, update: int) -> None:
-        """Run evaluation games and log to metrics DB + wandb."""
+        """Run evaluation games and log to metrics DB and Etude."""
         hypers = self.hypers
         match = Match(self.experiment.full_hypers.match)
         eval_metrics = run_evaluation(
@@ -367,46 +357,43 @@ class Trainer:
             f"mean_steps={eval_metrics['mean_steps']:.1f}"
         )
 
-        if self.wandb:
-            self.wandb.log(
-                {
-                    "eval/win_rate": eval_metrics["win_rate"],
-                    "eval/attack_rate": eval_metrics["attack_rate"],
-                    "eval/passed_when_able": eval_metrics["passed_when_able"],
-                    "eval/attacked_when_able": eval_metrics["attacked_when_able"],
-                    "eval/landed_when_able": eval_metrics["landed_when_able"],
-                    "eval/cast_when_able": eval_metrics["cast_when_able"],
-                    "eval/mean_steps": eval_metrics["mean_steps"],
-                    "eval/could_pass": eval_metrics["could_pass"],
-                    "eval/could_attack": eval_metrics["could_attack"],
-                    "eval/could_land": eval_metrics["could_land"],
-                    "eval/could_spell": eval_metrics["could_spell"],
-                    "eval/single_valid_decisions": eval_metrics[
-                        "single_valid_decisions"
-                    ],
-                    "eval/multi_valid_decisions": eval_metrics["multi_valid_decisions"],
-                    "eval/pass_land_decisions": eval_metrics["pass_land_decisions"],
-                    "eval/pass_land_pass_rate": eval_metrics["pass_land_pass_rate"],
-                    "eval/pass_land_land_rate": eval_metrics["pass_land_land_rate"],
-                    "eval/pass_land_spell_rate": eval_metrics["pass_land_spell_rate"],
-                    "eval/mean_pass_prob": eval_metrics["mean_pass_prob"],
-                    "eval/mean_land_prob": eval_metrics["mean_land_prob"],
-                    "eval/mean_spell_prob": eval_metrics["mean_spell_prob"],
-                    "eval/mean_pass_prob_when_land_available": eval_metrics[
-                        "mean_pass_prob_when_land_available"
-                    ],
-                    "eval/mean_land_prob_when_land_available": eval_metrics[
-                        "mean_land_prob_when_land_available"
-                    ],
-                    "eval/mean_pass_prob_when_pass_land": eval_metrics[
-                        "mean_pass_prob_when_pass_land"
-                    ],
-                    "eval/mean_land_prob_when_pass_land": eval_metrics[
-                        "mean_land_prob_when_pass_land"
-                    ],
-                },
-                step=self.global_step,
-            )
+        self.experiment.log(
+            {
+                "eval/win_rate": eval_metrics["win_rate"],
+                "eval/attack_rate": eval_metrics["attack_rate"],
+                "eval/passed_when_able": eval_metrics["passed_when_able"],
+                "eval/attacked_when_able": eval_metrics["attacked_when_able"],
+                "eval/landed_when_able": eval_metrics["landed_when_able"],
+                "eval/cast_when_able": eval_metrics["cast_when_able"],
+                "eval/mean_steps": eval_metrics["mean_steps"],
+                "eval/could_pass": eval_metrics["could_pass"],
+                "eval/could_attack": eval_metrics["could_attack"],
+                "eval/could_land": eval_metrics["could_land"],
+                "eval/could_spell": eval_metrics["could_spell"],
+                "eval/single_valid_decisions": eval_metrics["single_valid_decisions"],
+                "eval/multi_valid_decisions": eval_metrics["multi_valid_decisions"],
+                "eval/pass_land_decisions": eval_metrics["pass_land_decisions"],
+                "eval/pass_land_pass_rate": eval_metrics["pass_land_pass_rate"],
+                "eval/pass_land_land_rate": eval_metrics["pass_land_land_rate"],
+                "eval/pass_land_spell_rate": eval_metrics["pass_land_spell_rate"],
+                "eval/mean_pass_prob": eval_metrics["mean_pass_prob"],
+                "eval/mean_land_prob": eval_metrics["mean_land_prob"],
+                "eval/mean_spell_prob": eval_metrics["mean_spell_prob"],
+                "eval/mean_pass_prob_when_land_available": eval_metrics[
+                    "mean_pass_prob_when_land_available"
+                ],
+                "eval/mean_land_prob_when_land_available": eval_metrics[
+                    "mean_land_prob_when_land_available"
+                ],
+                "eval/mean_pass_prob_when_pass_land": eval_metrics[
+                    "mean_pass_prob_when_pass_land"
+                ],
+                "eval/mean_land_prob_when_pass_land": eval_metrics[
+                    "mean_land_prob_when_pass_land"
+                ],
+            },
+            step=self.global_step,
+        )
 
     def _init_rollout_buffers(
         self, sample_obs: Dict[str, torch.Tensor]
@@ -553,12 +540,11 @@ class Trainer:
             for key in ROLLOUT_HEALTH_KEYS
         ]
         self.logger.info(f"Update {update} rollout health | {', '.join(rollout_parts)}")
-        if self.wandb:
-            metrics = {}
-            for key in ROLLOUT_HEALTH_KEYS:
-                metrics[f"rollout/{key}"] = self.rollout_health_update[key]
-                metrics[f"rollout/{key}_total"] = self.rollout_health[key]
-            self.wandb.log(metrics, step=self.global_step)
+        metrics = {}
+        for key in ROLLOUT_HEALTH_KEYS:
+            metrics[f"rollout/{key}"] = self.rollout_health_update[key]
+            metrics[f"rollout/{key}_total"] = self.rollout_health[key]
+        self.experiment.log(metrics, step=self.global_step)
 
     def _optimize_step(
         self,
@@ -614,23 +600,22 @@ class Trainer:
                 (torch.abs(ratio - 1) > hypers.clip_coef).float().mean().item()
             )
 
-        if self.wandb:
-            self.wandb.log(
-                {
-                    "losses/policy_loss": pg_loss.item(),
-                    "losses/value_loss": v_loss.item(),
-                    "losses/entropy": entropy_loss.item(),
-                    "losses/approx_kl": approx_kl,
-                    "losses/clip_fraction": clip_fraction,
-                    "ppo/losses": {
-                        "policy": pg_loss.item(),
-                        "value": v_loss.item(),
-                        "entropy": entropy_loss.item(),
-                    },
-                    "ppo/metrics": {"kl": approx_kl, "clip_fraction": clip_fraction},
+        self.experiment.log(
+            {
+                "losses/policy_loss": pg_loss.item(),
+                "losses/value_loss": v_loss.item(),
+                "losses/entropy": entropy_loss.item(),
+                "losses/approx_kl": approx_kl,
+                "losses/clip_fraction": clip_fraction,
+                "ppo/losses": {
+                    "policy": pg_loss.item(),
+                    "value": v_loss.item(),
+                    "entropy": entropy_loss.item(),
                 },
-                step=self.global_step,
-            )
+                "ppo/metrics": {"kl": approx_kl, "clip_fraction": clip_fraction},
+            },
+            step=self.global_step,
+        )
 
         self.logger.debug(
             f"Optimize step: approx_kl={approx_kl}, clip_fraction={clip_fraction}"
@@ -729,17 +714,13 @@ class Trainer:
         if validity_stats["actions_valid"] < 1:
             self.logger.warning("No valid actions in observation!")
 
-        # Log to wandb
-        if self.wandb:
-            wandb_stats = {f"observation/{k}": v for k, v in validity_stats.items()}
-            self.wandb.log(wandb_stats, step=self.global_step)
+        # Record through Etude
+        observation_metrics = {f"observation/{k}": v for k, v in validity_stats.items()}
+        self.experiment.log(observation_metrics, step=self.global_step)
 
         return True
 
     def _log_system_metrics(self):
-        if not self.wandb:
-            return
-
         metrics = {
             "system/memory_used": psutil.Process().memory_info().rss / (1024 * 1024),
             "system/cpu_percent": psutil.cpu_percent(),
@@ -757,7 +738,7 @@ class Trainer:
                     / (1024 * 1024),
                 }
             )
-        self.wandb.log(metrics, step=self.global_step)
+        self.experiment.log(metrics, step=self.global_step)
         self.logger.debug(f"Logged system metrics: {metrics}")
 
     def _log_gradient_norms(self) -> None:
@@ -834,21 +815,20 @@ class Trainer:
             for name, norm in top_grads:
                 self.logger.debug(f"  {name}: {norm:.6f}")
 
-        if self.wandb:
-            self.wandb.log(
-                {
-                    "gradients/total_norm": total_grad_norm,
-                    "gradients/embedding_norm": embedding_grad_norm,
-                    "gradients/attention_norm": attention_grad_norm,
-                    "gradients/policy_head_norm": policy_head_grad_norm,
-                    "gradients/value_head_norm": value_head_grad_norm,
-                    "gradients/other_norm": other_grad_norm,
-                    "gradients/max_layer_norm": max_layer_norm,
-                    "gradients/min_layer_norm": min_layer_norm,
-                    "gradients/max_to_min_ratio": max_to_min_ratio,
-                },
-                step=self.global_step,
-            )
+        self.experiment.log(
+            {
+                "gradients/total_norm": total_grad_norm,
+                "gradients/embedding_norm": embedding_grad_norm,
+                "gradients/attention_norm": attention_grad_norm,
+                "gradients/policy_head_norm": policy_head_grad_norm,
+                "gradients/value_head_norm": value_head_grad_norm,
+                "gradients/other_norm": other_grad_norm,
+                "gradients/max_layer_norm": max_layer_norm,
+                "gradients/min_layer_norm": min_layer_norm,
+                "gradients/max_to_min_ratio": max_to_min_ratio,
+            },
+            step=self.global_step,
+        )
 
     def save(self) -> None:
         # Save all relevant hyperparameters
@@ -858,7 +838,7 @@ class Trainer:
             "train_hypers": self.hypers.model_dump(),
         }
 
-        # Always persist locally, independent of wandb (checkpoints are the
+        # Persist the ordinary admitted policy bytes locally (checkpoints are the
         # instrument for the strength ladder — never train without saving).
         path = str(self.experiment.runs_dir / f"step_{self.global_step}.pt")
         checkpoint = {
@@ -881,8 +861,8 @@ class Trainer:
         )
         torch.save(checkpoint, path)
 
-        # Model bytes stay local until explicitly published to S3. W&B receives
-        # metrics and storage references, never checkpoint uploads.
+        self.experiment.checkpoint(Path(path), transitions=self.global_step)
+        # Etude retains a local copy; remote destinations require explicit configuration.
         self.logger.info(f"Saved model at step {self.global_step}: {path}")
 
 

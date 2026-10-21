@@ -194,6 +194,7 @@ def test_calibration_charges_prior_exploration_before_launch(
         baseline.calibration(tmp_path / "exhausted", baseline.MAX_ACTIVE_SECONDS)
 
 
+@pytest.mark.experiment_data("experiments/data/etu105")
 def test_recipe_matches_retained_actor_critic_settings() -> None:
     retained = json.loads(
         gzip.decompress(

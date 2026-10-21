@@ -27,6 +27,7 @@ EXPECTED = {
 }
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 @pytest.mark.parametrize(("seed", "checkpoint_sha256"), EXPECTED.items())
 def test_retained_registry_verifies_all_policy_only_bytes(
     seed: int,
@@ -61,6 +62,7 @@ def test_retained_registry_missing_manifest_is_typed_unavailable(
         retained_int7_policy_only_checkpoint(197)
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -85,6 +87,7 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
         retained_int7_policy_only_checkpoint(197)
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_retained_evidence_snapshot_closes_the_full_root() -> None:
     before = retained_int7_evidence_snapshot((197,))
     after = retained_int7_evidence_snapshot((197,))
@@ -119,6 +122,7 @@ def test_retained_evidence_snapshot_closes_the_full_root() -> None:
     assert selected.max_steps == 2000
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_seed_197_checkpoint_model_abis_match_the_registry() -> None:
     registration = retained_int7_policy_only_checkpoint(197)
     agent, observation_space = load_checkpoint_agent(str(registration.checkpoint_path))
