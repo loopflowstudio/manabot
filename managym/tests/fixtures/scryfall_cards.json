@@ -1513,5 +1513,85 @@
     "colors": [
       "R"
     ]
+  },
+  "Great Divide Guide": {
+    "name": "Great Divide Guide",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Scout Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Each land and Ally you control has \"{T}: Add one mana of any color.\"",
+    "colors": [
+      "G"
+    ]
+  },
+  "Hermitic Herbalist": {
+    "name": "Hermitic Herbalist",
+    "mana_cost": "{G}{U}",
+    "type_line": "Creature — Human Druid Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{T}: Add one mana of any color.\n{T}: Add two mana in any combination of colors. Spend this mana only to cast Lesson spells.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Iroh, Grand Lotus": {
+    "name": "Iroh, Grand Lotus",
+    "mana_cost": "{3}{G}{U}{R}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2\nDuring your turn, each non-Lesson instant and sorcery card in your graveyard has flashback. The flashback cost is equal to that card's mana cost. (You may cast a card from your graveyard for its flashback cost. Then exile it.)\nDuring your turn, each Lesson card in your graveyard has flashback {1}.",
+    "colors": [
+      "G",
+      "R",
+      "U"
+    ]
+  },
+  "Prophetic Prism": {
+    "name": "Prophetic Prism",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this artifact enters, draw a card.\n{1}, {T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Ran and Shaw": {
+    "name": "Ran and Shaw",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Legendary Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Firebending"
+    ],
+    "oracle_text": "Flying, firebending 2\nWhen Ran and Shaw enter, if you cast them and there are three or more Dragon and/or Lesson cards in your graveyard, create a token that's a copy of Ran and Shaw, except it's not legendary.\n{3}{R}: Dragons you control get +2/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Waterbending Lesson": {
+    "name": "Waterbending Lesson",
+    "mana_cost": "{3}{U}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "Draw three cards. Then discard a card unless you waterbend {2}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
   }
 }

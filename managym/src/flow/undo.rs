@@ -746,6 +746,9 @@ mod tests {
             "UndoEntry grew to {} bytes; box the variant that widened it",
             size_of::<UndoEntry>()
         );
-        assert!(size_of::<PlayerVitals>() <= 24);
+        // Two pools each retain six ordinary and six Lesson-restricted colors,
+        // alongside life and flags. These scalars remain allocation-free and
+        // fit within the unchanged UndoEntry budget above.
+        assert!(size_of::<PlayerVitals>() <= 32);
     }
 }

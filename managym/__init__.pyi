@@ -324,6 +324,8 @@ class Player:
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
     combat_mana: int
+    mana: tuple[int, int, int, int, int, int]
+    lesson_mana: tuple[int, int, int, int, int, int]
 
 class Card:
     zone: ZoneEnum
@@ -334,6 +336,7 @@ class Card:
     power: int
     toughness: int
     is_token: bool
+    is_legendary: bool
     is_ally: bool
     is_lesson: bool
     ward_cost: int

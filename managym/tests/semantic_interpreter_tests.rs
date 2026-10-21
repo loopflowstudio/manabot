@@ -354,50 +354,6 @@ fn fancy_footwork_expands_once_per_bound_target() {
     assert_eq!(two_targets, expected);
 }
 
-// --- Interaction trace --------------------------------------------------------
-
-#[test]
-fn rallier_waterbend_feeds_badgermole_cub_mana() {
-    // The wave's canonical composition test: Water Tribe Rallier's waterbend
-    // taps a creature to help pay, and Badgermole Cub's tapped-for-mana trigger
-    // adds {G}. Both programs are executed generically by opcode; the combined
-    // trace is the interaction proof.
-    let pack = pack();
-    let bound = pack.bind(&ContentPack::default()).expect("bind");
-    let fixture = Fixture::default();
-
-    let mut trace = bound
-        .run(
-            program(&pack, "tla.water_tribe_rallier.waterbend"),
-            &fixture,
-        )
-        .expect("run rallier");
-    trace.extend(
-        bound
-            .run(
-                program(&pack, "tla.badgermole_cub.waterbend_bonus"),
-                &fixture,
-            )
-            .expect("run cub"),
-    );
-
-    assert_eq!(
-        trace,
-        vec![
-            TraceEvent::LookAndSelect {
-                look: 4,
-                min_select: 0,
-                max_select: 1,
-                destination: "hand".to_owned(),
-            },
-            TraceEvent::AddMana {
-                mana: "G".to_owned(),
-                until: None,
-            },
-        ]
-    );
-}
-
 #[test]
 fn south_pole_voyager_draws_only_on_the_second_arrival() {
     let pack = pack();

@@ -31,10 +31,10 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w8-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w9-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "310e683669a2af0a4cccafdd6f987017975bb51a35a63727c835ebe6f1d50969"
-TERMINAL_STATE = "0113510fbcfedfc4e18840bb4636d2654b1ab0590357858c5becd899ab44208e"
+AUTHORITY_SHA256 = "530afbfe6863e3edf65ad1ec9a4125e1751afbb9b3103aae76d0ed691cde72fb"
+TERMINAL_STATE = "243e9b59e5320b92b4b68ffb436c61f3f9881dab035b7c96395567fa3827ce8a"
 
 COMMAND_COUNT = 156
 HISTORICAL_AUTHORITY_SHA256 = (
@@ -246,15 +246,15 @@ def _capture_object_candidate(
             for candidate in choice["candidates"]["initial"]:
                 subject = candidate["value"]["subject"]
                 if subject["kind"] == "object" and subject["id"] == {
-                    "entity": 107,
-                    "incarnation": 2,
+                    "entity": 96,
+                    "incarnation": 3,
                 }:
                     rendered = dict(subject["id"])
                     role = int(choice["role"])
                     candidate_id = int(candidate["id"])
                     offer_id = int(offer["id"])
     if rendered is None:
-        raise ParityDivergence("headless", 35, "object_candidate", "107@2", "absent")
+        raise ParityDivergence("headless", 15, "object_candidate", "96@3", "absent")
     address = next(
         candidate
         for candidate in frame["object_candidates"]
@@ -311,7 +311,7 @@ def _run_engine(
             surface, revision, "offer_count", row["offer_count"], len(frame["offers"])
         )
 
-        if prove_stale and revision == 35:
+        if prove_stale and revision == 15:
             captured_address, rendered_ref = _capture_object_candidate(env, frame)
             stale_revision_command = _semantic_command(row, frame)
             current_clone = env.clone_env()
@@ -330,10 +330,10 @@ def _run_engine(
                 or current_clone.semantic_event_cursor() <= current_cursor
             ):
                 raise ParityDivergence(
-                    surface, 35, "current_object_binding", "committed", "unchanged"
+                    surface, 15, "current_object_binding", "committed", "unchanged"
                 )
 
-        if prove_stale and revision == 37:
+        if prove_stale and revision == 30:
             assert (
                 captured_address is not None
                 and rendered_ref is not None
@@ -401,11 +401,11 @@ def _run_engine(
                 env.semantic_event_cursor(),
             )
             stale_proof = {
-                "captured_revision": 35,
+                "captured_revision": 15,
                 "captured_render_ref": rendered_ref,
                 "candidate_address": captured_address,
-                "death_transition": "36->37",
-                "current_revision": 37,
+                "departure_transition": "29->30",
+                "current_revision": 30,
                 "current_rejection": {
                     "code": "stale_object",
                     "state_witness_unchanged": True,
@@ -625,7 +625,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w8-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w9-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/v1/generated/two_deck.ir.json",
         "content/semantic/v1/two_deck.source.json",
         "academy/curated_pack.py",

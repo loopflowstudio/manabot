@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 5;
+pub const MATCH_STATE_HASH_VERSION: u32 = 6;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,6 +51,8 @@ impl fmt::Display for MatchStateHash {
 
 #[derive(Serialize)]
 struct CanonicalCard {
+    /// Copied tokens can differ from their registered source definition.
+    copied_characteristics: Option<super::card::CardDefinition>,
     object_id: ObjectId,
     definition_id: CardDefId,
     owner: PlayerId,
@@ -187,6 +189,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
         let cards = cards
             .iter()
             .map(|card| CanonicalCard {
+                copied_characteristics: card.is_token.then(|| (**card).clone()),
                 object_id: card.id,
                 definition_id: card.definition_id,
                 owner: card.owner,

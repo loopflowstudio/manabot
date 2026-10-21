@@ -18,9 +18,10 @@ was dead on arrival in exp-10.)
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
 | **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
 | **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
+| **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
 
-**Current development world: w8.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w7) are **not comparable** to w8; do not reuse their
+**Current development world: w9.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w8) are **not comparable** to w9; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -178,3 +179,19 @@ decks. Learning schema 4 is at `content/semantic/w8/learning_schema.json`.
 The current rules corpus is [semantic-kernel-w8-v1](conformance/semantic-kernel-w8-v1/).
 Earlier worlds, sources, schemas, receipts and experiment evidence remain unchanged.
 World freeze and release certification remain separate from implementation.
+
+## w9: Temur mana and graveyard casting (not yet frozen)
+
+[The Temur rules contract](docs/rules/elemental-temur.md) covers six added real
+cards, granted mana abilities, Lesson-restricted mana, Iroh flashback, and Ran
+and Shaw's nonlegendary token. Player features grow from 28 to 40 to retain both
+ordinary and Lesson-restricted W/U/B/R/G/C pool counts. Card features grow from
+40 to 41 to expose actual legendary status, including copied tokens. Action and
+permanent widths remain 20 and 27. Mutable state hash version 6 includes copied
+token characteristics; cast provenance lives on stack and battlefield objects.
+
+Learning schema 5 is `content/semantic/w9/learning_schema.json`; earlier schemas
+and receipts retain their original contents. The current conformance corpus is
+[semantic-kernel-w9-v1](conformance/semantic-kernel-w9-v1/). The validation pack
+is separate from MTG-164's final ten-deck admission. These are rules and
+integration changes, without a strength claim or a promoted checkpoint.

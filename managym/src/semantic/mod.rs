@@ -100,6 +100,12 @@ pub enum Opcode {
     DealDamageToController = 53,
     DrainLife = 54,
     UnblockableIf = 55,
+    AddLessonMana = 56,
+    GrantFlashback = 57,
+    GrantMana = 58,
+    CreateNonlegendaryCopy = 59,
+    ModifyControlled = 60,
+    WaterbendOrDiscard = 61,
 }
 
 impl Opcode {
@@ -160,6 +166,13 @@ impl Opcode {
             53 => Opcode::DealDamageToController,
             54 => Opcode::DrainLife,
             55 => Opcode::UnblockableIf,
+            56 => Opcode::AddLessonMana,
+            57 => Opcode::GrantFlashback,
+            58 => Opcode::GrantMana,
+            59 => Opcode::CreateNonlegendaryCopy,
+            60 => Opcode::ModifyControlled,
+            61 => Opcode::WaterbendOrDiscard,
+
             other => return Err(IrError::UnknownOpcode(other)),
         };
         Ok(opcode)
@@ -242,6 +255,23 @@ pub enum Condition {
 /// their own step lists, matching the compiler's `then`/`otherwise`/`body`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
+    AddLessonMana {
+        mana: String,
+    },
+    GrantFlashback,
+    GrantMana {
+        predicates: Vec<Predicate>,
+    },
+    CreateNonlegendaryCopy,
+    ModifyControlled {
+        predicate: Predicate,
+        power: i64,
+        toughness: i64,
+    },
+    WaterbendOrDiscard {
+        generic: u8,
+    },
+
     SearchBasicLands {
         count: usize,
         tapped: bool,
@@ -606,6 +636,12 @@ pub struct DefaultContext;
 impl InterpreterContext for DefaultContext {}
 
 impl SemanticPack {
+    pub fn temur() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/v1/generated/temur.ir.json"
+        ))
+    }
+
     pub fn sacrifice() -> Result<Self, IrError> {
         Self::from_json(SACRIFICE_IR)
     }
@@ -902,7 +938,13 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
-            Step::SearchBasicLands { .. }
+            Step::AddLessonMana { .. }
+            | Step::GrantFlashback
+            | Step::GrantMana { .. }
+            | Step::CreateNonlegendaryCopy
+            | Step::ModifyControlled { .. }
+            | Step::WaterbendOrDiscard { .. }
+            | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
             | Step::DrainLife { .. }
@@ -1020,6 +1062,26 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
     }
     let opcode = Opcode::from_u64(u64_field(value, "opcode")?)?;
     let step = match opcode {
+        Opcode::AddLessonMana => Step::AddLessonMana {
+            mana: str_field(value, "mana")?.to_owned(),
+        },
+        Opcode::GrantFlashback => Step::GrantFlashback,
+        Opcode::GrantMana => Step::GrantMana {
+            predicates: array_field(value, "predicates")?
+                .iter()
+                .map(parse_predicate)
+                .collect::<Result<_, _>>()?,
+        },
+        Opcode::CreateNonlegendaryCopy => Step::CreateNonlegendaryCopy,
+        Opcode::ModifyControlled => Step::ModifyControlled {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            power: i64_field(value, "power")?,
+            toughness: i64_field(value, "toughness")?,
+        },
+        Opcode::WaterbendOrDiscard => Step::WaterbendOrDiscard {
+            generic: u8::try_from(u64_field(value, "generic")?)
+                .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+        },
         Opcode::AddMana => Step::AddMana {
             mana: str_field(value, "mana")?.to_owned(),
             until: opt_str_field(value, "until")?.map(str::to_owned),

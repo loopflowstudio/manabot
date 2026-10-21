@@ -21,6 +21,10 @@ impl Ability {
 /// The event that causes a triggered ability to trigger (CR 603.1).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
+    /// The entering source must have been cast, rather than created or returned.
+    WasCast {
+        condition: Box<TriggerCondition>,
+    },
     Sacrificed {
         predicate: CardPredicate,
         controller_only: bool,
@@ -120,6 +124,16 @@ pub enum EffectValue {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
+    /// Copy the source's copiable characteristics, removing legendary.
+    CreateNonlegendaryCopy,
+    ModifyControlled {
+        predicate: CardPredicate,
+        power: i32,
+        toughness: i32,
+    },
+    WaterbendOrDiscard {
+        generic: u8,
+    },
     Sacrifice {
         predicate: CardPredicate,
     },
@@ -463,6 +477,25 @@ impl Default for Effect {
 }
 
 impl Effect {
+    /// One immediate mana output per mode, preserving the authored color order.
+    pub(crate) fn mana_choice(outputs: impl IntoIterator<Item = Mana>) -> Self {
+        Self::Modal {
+            modes: outputs
+                .into_iter()
+                .map(|mana| {
+                    vec![Self::AddMana {
+                        mana,
+                        until_end_of_combat: false,
+                    }]
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn any_color_mana() -> Self {
+        Self::mana_choice(["W", "U", "B", "R", "G"].map(Mana::parse))
+    }
+
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Effect::Sacrifice { .. }
@@ -509,7 +542,10 @@ impl Effect {
             Effect::IfTargetMatches { then, .. } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::ModifyUntilEot { .. }
+            Effect::CreateNonlegendaryCopy
+            | Effect::ModifyControlled { .. }
+            | Effect::WaterbendOrDiscard { .. }
+            | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
             | Effect::DamageOpponentCreatures { .. }

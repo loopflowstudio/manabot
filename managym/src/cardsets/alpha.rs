@@ -135,6 +135,7 @@ impl ContentPack {
         self.register_mkm();
         self.register_elemental();
         self.register_sacrifice();
+        self.register_temur();
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

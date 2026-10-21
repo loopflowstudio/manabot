@@ -1,0 +1,213 @@
+{
+  "purpose": "unscored browser regression, not registered parity",
+  "config": {
+    "seed": 0,
+    "villain_type": "random",
+    "auto_pass": false
+  },
+  "manifest": {
+    "world_version": "w9",
+    "schema_version": 1,
+    "content_digest": "5952d9c2156d8e068d1c50bb636d61afe9c006ed94f2f0baea76b4a14a6fbca4",
+    "compiled_semantics": {
+      "pack_key": "ur-lessons-vs-gw-allies",
+      "ir_hash": "7a70679a4f4952976a286c4a31ffa90318bd0569745aace26353348fe6ee1edd",
+      "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c"
+    },
+    "definitions": [
+      {
+        "card_def_id": 0,
+        "registry_name": "Forest"
+      },
+      {
+        "card_def_id": 1,
+        "registry_name": "Island"
+      },
+      {
+        "card_def_id": 2,
+        "registry_name": "Mountain"
+      },
+      {
+        "card_def_id": 3,
+        "registry_name": "Plains"
+      },
+      {
+        "card_def_id": 4,
+        "registry_name": "Divide by Zero"
+      },
+      {
+        "card_def_id": 5,
+        "registry_name": "Igneous Inspiration"
+      },
+      {
+        "card_def_id": 6,
+        "registry_name": "Pop Quiz"
+      },
+      {
+        "card_def_id": 7,
+        "registry_name": "Accumulate Wisdom"
+      },
+      {
+        "card_def_id": 8,
+        "registry_name": "Allies at Last"
+      },
+      {
+        "card_def_id": 9,
+        "registry_name": "Badgermole Cub"
+      },
+      {
+        "card_def_id": 10,
+        "registry_name": "Compassionate Healer"
+      },
+      {
+        "card_def_id": 11,
+        "registry_name": "Dragonfly Swarm"
+      },
+      {
+        "card_def_id": 12,
+        "registry_name": "Earth Kingdom Jailer"
+      },
+      {
+        "card_def_id": 13,
+        "registry_name": "Earth King's Lieutenant"
+      },
+      {
+        "card_def_id": 14,
+        "registry_name": "Fancy Footwork"
+      },
+      {
+        "card_def_id": 15,
+        "registry_name": "Fire Nation Cadets"
+      },
+      {
+        "card_def_id": 16,
+        "registry_name": "Firebending Lesson"
+      },
+      {
+        "card_def_id": 17,
+        "registry_name": "First-Time Flyer"
+      },
+      {
+        "card_def_id": 18,
+        "registry_name": "Forecasting Fortune Teller"
+      },
+      {
+        "card_def_id": 19,
+        "registry_name": "Invasion Reinforcements"
+      },
+      {
+        "card_def_id": 20,
+        "registry_name": "It'll Quench Ya!"
+      },
+      {
+        "card_def_id": 21,
+        "registry_name": "Kyoshi Warriors"
+      },
+      {
+        "card_def_id": 22,
+        "registry_name": "Otter-Penguin"
+      },
+      {
+        "card_def_id": 23,
+        "registry_name": "South Pole Voyager"
+      },
+      {
+        "card_def_id": 24,
+        "registry_name": "Suki, Kyoshi Warrior"
+      },
+      {
+        "card_def_id": 25,
+        "registry_name": "Tiger-Seal"
+      },
+      {
+        "card_def_id": 26,
+        "registry_name": "Water Tribe Rallier"
+      },
+      {
+        "card_def_id": 27,
+        "registry_name": "White Lotus Reinforcements"
+      },
+      {
+        "card_def_id": 28,
+        "registry_name": "Yip Yip!"
+      },
+      {
+        "card_def_id": 29,
+        "registry_name": "Ally"
+      },
+      {
+        "card_def_id": 30,
+        "registry_name": "Clue"
+      }
+    ]
+  },
+  "prefix": [
+    {
+      "offer_id": 1,
+      "label": "Play Island",
+      "before_digest": "359fa55741b1925e8e5eef1e975b68c9bd1b0fedd0323cd45beef0292e7a5734"
+    },
+    {
+      "offer_id": 1,
+      "label": "Pass priority",
+      "before_digest": "c069c5ae45bdbee032726ad412acbf29671732cf849bafe6206d05456fb24fb3"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast Tiger-Seal",
+      "before_digest": "2fdef292726469c1d83155a180168fb76a2c86dc30c1f671121de25dce56d8e0"
+    },
+    {
+      "offer_id": 1,
+      "label": "Play Island",
+      "before_digest": "ffe599108b8212a44e9486734a63086696f786258d2b70ea5d40e01bfe111cf2"
+    },
+    {
+      "offer_id": 3,
+      "label": "Pass priority",
+      "before_digest": "394a9070f405a5f1f5c4c6e1cca4836908fb13b178acb35f7e3af1e76ebf30e7"
+    },
+    {
+      "offer_id": 3,
+      "label": "Pass priority",
+      "before_digest": "552f3542e7b6f71d1f352fc63941756c52be6d646ca8c4dc93d90d9dd2acbb7f"
+    },
+    {
+      "offer_id": 0,
+      "label": "Play Mountain",
+      "before_digest": "c22ab5f035d0494ea7422348829b061764b9547928d90b4d0da60aa026a29cd2"
+    },
+    {
+      "offer_id": 3,
+      "label": "Pass priority",
+      "before_digest": "804f348b17daca9f6c9386a1005af51eef0b0fa386a9fbab8e5822773946a62d"
+    },
+    {
+      "offer_id": 1,
+      "label": "Cast Firebending Lesson",
+      "before_digest": "8153cf89deb509d95650a9f9ca80721a8bba6e159a0ac943f897d2451316ff18"
+    },
+    {
+      "offer_id": 2,
+      "label": "Target Badgermole Cub",
+      "before_digest": "42f5bd8fbacee624e5053d7eac095acdf9874abf1528dccd3875327fcf5ccccf"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast It'll Quench Ya!",
+      "before_digest": "6e57d8b020ecb31727e5ad03084b8e16e8404247a0c3153945bbfec4541cabe5"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast Divide by Zero",
+      "before_digest": "c0ea273dda4efefb80dc20f06a0092275710c9abe1ec90ba69ddf643401b0f45"
+    },
+    {
+      "offer_id": 1,
+      "label": "Target Badgermole Cub",
+      "before_digest": "6b6ee01add6d5b5067cb13f4b74ded71e15edca4b86aa884a144c7ce51c753c9"
+    }
+  ],
+  "learn_digest": "0f853a35d0555f5008f93502d085e736b7e1cd92ecb587894d0673450b12fbf4",
+  "learn_revision": 30
+}

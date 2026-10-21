@@ -97,6 +97,11 @@ impl EffectFrame {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    WaterbendOrDiscard {
+        player: PlayerId,
+        remaining: u8,
+        started: bool,
+    },
     ManaChoice {
         player: PlayerId,
         choices: Vec<crate::state::mana::Mana>,
@@ -190,7 +195,9 @@ fn is_true(value: &bool) -> bool {
 impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
-            Decision::ManaChoice { player, .. } | Decision::Sacrifice { player, .. } => *player,
+            Decision::WaterbendOrDiscard { player, .. }
+            | Decision::ManaChoice { player, .. }
+            | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -209,7 +216,9 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
-            Decision::ManaChoice { .. } | Decision::Sacrifice { .. } => &[],
+            Decision::WaterbendOrDiscard { .. }
+            | Decision::ManaChoice { .. }
+            | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SelectMilled { .. }
@@ -265,10 +274,6 @@ impl Game {
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
         if let FrameFinalize::Spell { card } = frame.finalize {
-            if let Some(index) = self.find_spell_on_stack_index(card) {
-                self.journal_stack();
-                self.state.stack_objects.remove(index);
-            }
             let is_permanent = self.state.cards[card].types.is_permanent();
             if is_permanent {
                 self.move_card(card, ZoneType::Battlefield);
@@ -292,6 +297,43 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::WaterbendOrDiscard {
+                player,
+                remaining,
+                started,
+            } => {
+                let mut actions = self.mana_ability_actions(*player, None);
+                if *remaining > 0 {
+                    for permanent in self.waterbend_candidates(*player) {
+                        let mut probe = self.clone();
+                        probe.tap_permanent(permanent, false);
+                        if probe.can_pay_with_waterbend(
+                            *player,
+                            &ManaCost::default().with_generic(*remaining - 1),
+                        ) {
+                            actions.push(Action::WaterbendTap {
+                                player: *player,
+                                permanent,
+                            });
+                        }
+                    }
+                }
+                if self
+                    .available_mana(*player)
+                    .can_pay(&ManaCost::default().with_generic(*remaining))
+                {
+                    actions.push(Action::PayCost { player: *player });
+                }
+                if !started {
+                    actions.push(Action::Decline { player: *player });
+                }
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Waterbend,
+                    actions,
+                    focus: source_focus,
+                }
+            }
             Decision::ManaChoice {
                 player, choices, ..
             } => ActionSpace {
@@ -511,6 +553,40 @@ impl Game {
         }
 
         match (&mut suspended.decision, action) {
+            (
+                Decision::WaterbendOrDiscard {
+                    player,
+                    remaining,
+                    started,
+                },
+                Action::WaterbendTap { permanent, .. },
+            ) if *remaining > 0 && self.waterbend_candidates(*player).contains(permanent) => {
+                // Tapping to waterbend pays a generic cost; it is not tapping for mana.
+                self.tap_permanent(*permanent, false);
+                *remaining -= 1;
+                *started = true;
+                self.state.suspended_decision = Some(suspended);
+                Ok(())
+            }
+            (
+                Decision::WaterbendOrDiscard {
+                    player, remaining, ..
+                },
+                Action::PayCost { .. },
+            ) => {
+                let cost = ManaCost::default().with_generic(*remaining);
+                self.produce_mana(*player, &cost)?;
+                self.spend_mana(*player, &cost)?;
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::WaterbendOrDiscard { started: false, .. }, Action::Decline { .. }) => {
+                suspended
+                    .frame
+                    .prepend_effects([Effect::Discard].into_iter());
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (
                 Decision::ManaChoice {
                     player,

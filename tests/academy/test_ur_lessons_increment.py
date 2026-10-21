@@ -49,10 +49,10 @@ def test_match_hypers_candidate_finishes_with_complete_native_and_python_encodin
         match = match.swapped()
     space = ObservationSpace()
     assert space.encoder.permanent_dim == 27
-    assert managym.WORLD_VERSION == "w8"
+    assert managym.WORLD_VERSION == "w9"
     env = Env(match, space, Reward(RewardHypers()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == "w8"
+    assert env.content_pack_manifest()["world_version"] == "w9"
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -142,11 +142,11 @@ def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels
     from scripts.train_challenger import world_identity
 
     identity = world_identity({})
-    assert identity["version"] == "w8"
-    assert identity["content_manifest"]["world_version"] == "w8"
+    assert identity["version"] == "w9"
+    assert identity["content_manifest"]["world_version"] == "w9"
     assert identity["dims"] == {
-        "player": 28,
-        "card": 40,
+        "player": 40,
+        "card": 41,
         "permanent": 27,
         "action_types": 16,
     }

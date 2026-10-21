@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
 
 from experiments.runners.run_semantic_runtime_policy import (
+    RuntimeExample,
     RuntimeExperimentError,
     _bootstrap_adapter,
     bind_recipe,
@@ -22,6 +24,7 @@ from experiments.runners.run_semantic_runtime_policy import (
     replay_rows,
     train_policy,
 )
+from manabot.semantic import SemanticDecisionAdapter
 from manabot.semantic.runtime_policy import (
     POLICY_ARMS,
     RuntimePolicyError,
@@ -82,7 +85,9 @@ def test_dataset_is_authoritative_replayable_and_keeps_holdouts_out_of_training(
 
 
 def test_all_arms_have_matched_capacity_and_decode_normal_legal_commands(
-    workload, adapter, examples
+    workload: dict[str, Any],  # The experiment loader validates this JSON boundary.
+    adapter: SemanticDecisionAdapter,
+    examples: list[RuntimeExample],
 ) -> None:
     projector = RuntimePolicyProjector(adapter.pack)
     frontier = next(
@@ -111,12 +116,25 @@ def test_all_arms_have_matched_capacity_and_decode_normal_legal_commands(
             (features, comparison), definitions
         )
         sequential_comparison = model(comparison, definitions)
-        assert torch.allclose(
-            comparison_output.offer_logits, sequential_comparison.offer_logits
-        )
-        assert torch.allclose(
-            comparison_output.candidate_logits,
-            sequential_comparison.candidate_logits,
+        # Ragged batch sizes select different float32 matrix kernels. Permit
+        # four epsilon of absolute roundoff near zero (observed maximum 2.4e-7),
+        # while retaining the relative bound and requiring identical Commands.
+        for batched, sequential in (
+            (comparison_output.offer_logits, sequential_comparison.offer_logits),
+            (
+                comparison_output.candidate_logits,
+                sequential_comparison.candidate_logits,
+            ),
+        ):
+            torch.testing.assert_close(
+                batched,
+                sequential,
+                rtol=1e-5,
+                atol=4 * torch.finfo(torch.float32).eps,
+            )
+        _, comparison_decision = bind_recipe(examples[0].recipe, adapter)
+        assert decode_output(comparison_decision, comparison_output) == decode_output(
+            comparison_decision, sequential_comparison
         )
         submission = decode_output(decision, output)
         command = decision.command(submission, command_id=f"test:{arm}")

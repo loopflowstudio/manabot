@@ -4,6 +4,8 @@ use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Targe
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
+    pub cast_from: super::zone::ZoneType,
+    pub flashback: bool,
     pub id: ObjectId,
     pub card: CardId,
     pub controller: PlayerId,

@@ -29,6 +29,8 @@ pub struct Permanent {
     /// Object-local replacement, removed at cleanup or when this incarnation leaves.
     pub exile_if_dies_this_turn: bool,
     pub attacking: bool,
+    /// True only for this incarnation entering as a resolving cast spell.
+    pub was_cast: bool,
 }
 
 impl Permanent {
@@ -49,6 +51,7 @@ impl Permanent {
             temp_keywords: Keywords::default(),
             exile_if_dies_this_turn: false,
             attacking: false,
+            was_cast: false,
         }
     }
 

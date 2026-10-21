@@ -171,6 +171,8 @@ fn card_names_are_compatibility_data_not_state_identity() {
 #[test]
 fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
     let spell = SpellOnStack {
+        cast_from: managym::state::zone::ZoneType::Hand,
+        flashback: false,
         id: ObjectId(101),
         card: CardId(3),
         controller: PlayerId(0),

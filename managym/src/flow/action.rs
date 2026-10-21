@@ -12,13 +12,20 @@ use crate::{
 };
 
 fn mana_label(mana: &Mana) -> String {
-    ["W", "U", "B", "R", "G", "C"]
+    let mut label: String = ["W", "U", "B", "R", "G", "C"]
         .into_iter()
         .enumerate()
         .flat_map(|(index, symbol)| {
-            std::iter::repeat_n(format!("{{{symbol}}}"), mana.mana[index] as usize)
+            std::iter::repeat_n(
+                format!("{{{symbol}}}"),
+                mana.mana[index] as usize + mana.lesson[index] as usize,
+            )
         })
-        .collect()
+        .collect();
+    if mana.lesson.iter().any(|amount| *amount > 0) {
+        label.push_str(" (Lesson spells only)");
+    }
+    label
 }
 
 impl Game {
@@ -56,6 +63,7 @@ impl Game {
                             mana: alternative.cost[..6]
                                 .try_into()
                                 .expect("six colored mana slots"),
+                            ..Default::default()
                         };
                         label.push_str(&mana_label(&colored));
                         format!("Pay {label} instead of sacrificing")
@@ -96,6 +104,12 @@ impl Game {
             .zones
             .zone_cards(ZoneType::Hand, player)
             .iter()
+            .chain(
+                self.state
+                    .zones
+                    .zone_cards(ZoneType::Graveyard, player)
+                    .iter(),
+            )
             .copied()
             .any(|card| self.priority_action_for_card(player, card).is_some())
             || self
@@ -113,6 +127,12 @@ impl Game {
             .zones
             .zone_cards(ZoneType::Hand, player)
             .iter()
+            .chain(
+                self.state
+                    .zones
+                    .zone_cards(ZoneType::Graveyard, player)
+                    .iter(),
+            )
             .copied()
         {
             if let Some(action) = self.priority_action_for_card(player, card) {
@@ -127,13 +147,16 @@ impl Game {
 
     fn priority_activate_ability_actions(&self, player: PlayerId) -> Vec<Action> {
         let mut actions = Vec::new();
-        let waterbend_candidates = self.waterbend_candidates(player).len();
         for permanent_id in self.battlefield_permanents(player) {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
             let card = &self.state.cards[permanent.card];
-            for (ability_index, ability) in card.activated_abilities.iter().enumerate() {
+            for (ability_index, ability) in self
+                .activated_abilities_for(permanent_id)
+                .iter()
+                .enumerate()
+            {
                 if ability.effect.target_spec().is_some()
                     && crate::state::ability::effect_target_requirements(std::slice::from_ref(
                         &ability.effect,
@@ -178,9 +201,13 @@ impl Game {
                     continue;
                 }
                 let affordable = if ability.waterbend {
-                    self.can_pay_with_waterbend(player, &ability.mana_cost, waterbend_candidates)
+                    self.can_pay_with_waterbend(player, &ability.mana_cost)
                 } else {
-                    self.can_pay_with_mana_abilities(player, &ability.mana_cost, None)
+                    self.can_pay_with_mana_abilities(
+                        player,
+                        &ability.mana_cost,
+                        (ability.tap_source || ability.sacrifice_source).then_some(permanent_id),
+                    )
                 };
                 if affordable {
                     actions.push(Action::ActivateAbility {
@@ -196,6 +223,11 @@ impl Game {
 
     fn priority_action_for_card(&self, player: PlayerId, card_id: CardId) -> Option<Action> {
         let card = &self.state.cards[card_id];
+        if self.state.zones.zone_of(card_id) != Some(ZoneType::Hand)
+            && self.flashback_cost(player, card_id).is_none()
+        {
+            return None;
+        }
         if card.types.is_land() {
             return self.can_play_land(player).then_some(Action::PlayLand {
                 player,
@@ -428,8 +460,8 @@ impl Game {
                     // Only offer taps that keep the rest of the cost payable.
                     let after_tap = remainder.reduced_generic(1);
                     let mut probe = self.clone();
-                    probe.tap_permanent(*candidate, true);
-                    if probe.can_pay_with_waterbend(*player, &after_tap, candidates.len() - 1) {
+                    probe.tap_permanent(*candidate, false);
+                    if probe.can_pay_with_waterbend(*player, &after_tap) {
                         actions.push(Action::WaterbendTap {
                             player: *player,
                             permanent: *candidate,
@@ -564,6 +596,9 @@ impl Game {
                 }
             }
             Action::WaterbendTap { player, permanent } => {
+                if self.state.suspended_decision.is_some() {
+                    return self.execute_decision_action(action);
+                }
                 self.waterbend_tap_action(*player, *permanent)
             }
         }
