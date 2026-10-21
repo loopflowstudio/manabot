@@ -67,6 +67,15 @@ first, then AvL, LvL, AvA; bootstrap over whole deals. Also score a log-spaced
 curve (updates 0, 250, 1,000, 4,000, 16,000 and the tier checkpoints) against
 heuristic.
 
+The small-tier checkpoint is update 9,250 (`monitor-00000036`, saved at
+2026-10-21 14:40 UTC, $9.88 of pod time): 151.6M learner decisions, 308.9M
+environment decisions. Recorded before scoring: the monitor evaluator plays only
+code opponents, so the frozen Mini 12261@10k checkpoint (SHA-256 `1a9933b0…`, from
+the Mini's MTG-153 retained copy) is played through the head-to-head tournament
+runner instead. That runner uses its 100 fixed cross-deck deals × 4 legs (400
+games), not the 25 mirror deals. Heuristic and greedy units use a 600-second game
+budget on rented CPU; head-to-head keeps its fixed 120 seconds.
+
 Predictions: the small-tier checkpoint scores at least 0.40 against heuristic
 as Lessons vs Allies (MTG-137's 25k-update GPU checkpoints reached 0.46–0.52 from
 about 6.4M transitions; this tier sees roughly 150M). The medium tier scores at
