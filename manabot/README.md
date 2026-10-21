@@ -90,6 +90,14 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
+`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+state before the policy head, so offer choices that depend on the state stay
+learnable from any start. New runs train it: `new_agent_spec()` is the
+`manabot train` default, and the ordinary baseline recipe is `baseline-v2`.
+Omitted, the field serializes as the historical additive policy, so frozen
+recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
+keep their meaning. The learnability gate trains the same FiLM policy.
+
 An observation/action-shape or rules-meaning change is a world version.
 The current development world is **w7** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,

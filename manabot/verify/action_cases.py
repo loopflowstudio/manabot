@@ -155,10 +155,13 @@ def decision_case(
     variant: int = 0,
     split: str = "fit",
     legacy_selectors: bool = False,
+    seed: int | None = None,
 ) -> DecisionCase:
+    """Build one decision; `variant` sets the life offset and, unless `seed`
+    overrides it, the native shuffle seed (111 + variant)."""
     env = initial(
         authored=kind not in {"mode", "ability", "attack"},
-        seed=111 + variant,
+        seed=111 + variant if seed is None else seed,
         deck={"Gray Ogre": 36, "Mountain": 4} if kind == "attack" else None,
     )
     # Public life supplies coherent opposite labels within a single policy.
@@ -308,11 +311,56 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     return result
 
 
+# Version of the case set `curriculum()` builds; bump it when its digest changes.
+CASE_SET = "action-cases-2"
+# Held-out cases change state only: every definition they show appears in that
+# family's fit cases (`curriculum` asserts it). action-cases-2 moved Learn
+# held-out variant 1 from seed 112, whose Pop Quiz draws a Mountain no Learn fit
+# case shows, to seed 116, which draws an Island.
+_NATIVE_SEEDS: dict[tuple[Family, int], int] = {("learn", 1): 116}
+
+
+def _definitions(obs: dict[str, torch.Tensor]) -> set[int]:
+    """Card definitions visible anywhere in one observation (registry key + 1)."""
+    found = {int(x) for x in obs["semantic_cards"].flatten() if x > 0}
+    found |= {int(x) for x in obs["known_hand"][..., 0].flatten() if x > 0}
+    for key in ("agent_permanents", "opponent_permanents"):
+        rows = obs[key][obs[key + "_valid"] > 0]
+        found |= {
+            int(x) for x in rows[:, observation_schema.PERMANENT_DEFINITION_INDEX]
+        }
+    return found
+
+
+def unseen_definitions(cases: list[DecisionCase]) -> dict[str, set[int]]:
+    """Held-out case key -> definitions its family's fit cases never show."""
+    fit: dict[Family, set[int]] = {family: set() for family in FAMILIES}
+    for case in cases:
+        if case.split == "fit":
+            fit[case.family] |= _definitions(case.observation)
+    unseen: dict[str, set[int]] = {}
+    for case in cases:
+        if case.split == "held_out":
+            extra = _definitions(case.observation) - fit[case.family]
+            if extra:
+                unseen[f"{case.family}/{case.variant}/{case.preference}"] = extra
+    return unseen
+
+
 def curriculum() -> list[DecisionCase]:
-    return [
-        decision_case(family, preference=preference, variant=variant, split=split)
+    cases = [
+        decision_case(
+            family,
+            preference=preference,
+            variant=variant,
+            split=split,
+            seed=_NATIVE_SEEDS.get((family, variant)),
+        )
         for split, variants in (("fit", (0, 2)), ("held_out", (1, 3)))
         for variant in variants
         for family in FAMILIES
         for preference in (0, 1)
     ]
+    unseen = unseen_definitions(cases)
+    assert not unseen, f"held-out cases show definitions absent from fit: {unseen}"
+    return cases
