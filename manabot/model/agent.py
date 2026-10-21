@@ -196,6 +196,20 @@ class Agent(nn.Module):
         self.recent_events = (
             RecentEventEncoder(embed_dim) if hypers.recent_events else None
         )
+        # FiLM policy conditioning (Perez et al., 2018, scale only): the head
+        # reads informed_action * (1 + W @ state) for the masked mean of the
+        # post-attention objects. Without it, offer and state meet additively in
+        # the ReLU heads; when no unit changes activation across a decision's
+        # offers and states, the logit gap between offers cannot depend on the
+        # state and equal logits are stationary ("prefer A at low life, B at
+        # high life" stays at ln 2). The product has a gradient there from any
+        # start. Zero weights keep the initial function additive, and skip_init
+        # draws no RNG, so earlier parameters keep their historical values.
+        self.policy_film: nn.Linear | None = None
+        if hypers.policy_film:
+            self.policy_film = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
+            nn.init.zeros_(self.policy_film.weight)
+            nn.init.zeros_(self.policy_film.bias)
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -248,6 +262,10 @@ class Agent(nn.Module):
         informed_actions = self._gather_informed_actions(
             obs, post_attention_objects, history
         )
+        if self.policy_film is not None:
+            informed_actions = self._condition_actions(
+                informed_actions, post_attention_objects, validity
+            )
 
         logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
         if self.debug:
@@ -255,6 +273,19 @@ class Agent(nn.Module):
             self.last_raw_logits = logits_before_mask.detach().cpu()
         logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
         return logits, self._value_from_objects(encoded, validity)
+
+    def _condition_actions(
+        self, actions: torch.Tensor, objects: torch.Tensor, validity: torch.Tensor
+    ) -> torch.Tensor:
+        """Scale actions [B,A,D] by a state code from valid objects [B,N,D].
+
+        The mean is invariant to object and offer order, so the policy's
+        permutation contracts are unchanged.
+        """
+        assert self.policy_film is not None
+        valid = validity.unsqueeze(-1)
+        state = (objects * valid).sum(1) / valid.sum(1).clamp_min(1)
+        return actions * (1 + self.policy_film(state).unsqueeze(1))
 
     def _attend_objects(
         self,

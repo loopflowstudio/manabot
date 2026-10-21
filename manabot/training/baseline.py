@@ -36,7 +36,8 @@ from manabot.verify.learning_regression import report_baseline
 import managym
 
 BASELINE_STEPS = 128
-BASELINE_VERSION = "baseline-v1"
+# v2 trains the FiLM policy; baseline-v1 (the qualification receipt) was additive.
+BASELINE_VERSION = "baseline-v2"
 # Separate from the existing scientific and monitoring cohorts. Repeated nightly
 # use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
@@ -84,10 +85,11 @@ def baseline(
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
     The scalar, width-64, depth-2 model follows the existing ordinary self-play
-    baseline. The explicit schedule mapping is a new recipe choice: its first
-    and last rates match iterations 1 and 10,000 of the historical rule. Short
-    runs are compressed schedules, not prefixes of a longer run. Reward remains
-    the executor's terminal game outcome. Wall time is only a failure bound.
+    baseline, with the FiLM policy that new runs train. The explicit schedule
+    mapping is a new recipe choice: its first and last rates match iterations 1
+    and 10,000 of the historical rule. Short runs are compressed schedules, not
+    prefixes of a longer run. Reward remains the executor's terminal game
+    outcome. Wall time is only a failure bound.
     """
     schedule = IterationSchedule(steps=steps)
     allowance = seconds if seconds is not None else max(1680.0, steps * 8.0 + 600)
@@ -110,6 +112,7 @@ def baseline(
                 semantic_pack=PACK,
                 value_kind="scalar",
                 value_aggregation="masked_mean",
+                policy_film=True,
             ),
             stages=[
                 TrainSelfPlay(
