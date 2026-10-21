@@ -47,3 +47,46 @@ does not predict a 2× speedup or certify improved strength. Report actual
 learner decisions, environment decisions, updates, time and inclusive dollars.
 The existing ladder's heuristic cohorts can later compare checkpoints; no
 additional paid evaluation rental is included in this authorization.
+
+## $50 ladder amendment (2026-10-21)
+
+Jack Heart raised this experiment to $50, selected the ladder in
+[PR #333](https://github.com/loopflowstudio/manabot/pull/333), authorized necessary
+Etude changes, and selected the Mac mini as controller. This supersedes the
+single-attempt $10 limit above. The current 002 lease remains unchanged.
+
+Use the existing recipe, seed, machine class and 250-update checkpoint cadence.
+The small tier is $10 within one day; the medium tier is $50 within seven days
+of the original 002 admission. Both refer to the same learner lineage. Retain
+actual learner and environment decisions separately, actual cumulative costs,
+and earlier failed-attempt costs; this does not retroactively change v1.
+
+The mini is reachable as `jack@mini-heart.local`. Keep 002 as the exact adopted
+first job of cohort `mtg165-two-seat-50`. After each clean allocation pause,
+verified final raw/EMA/Adam/run exports and confirmed provider cleanup permit
+one declared successor. The explicit `last-complete` selector binds the actual
+finalized update, never an intermediate checkpoint. Failures, incomplete exports,
+unknown cleanup and spending overruns stop admission. No failed-job replacement
+is included. CUDA collector/game/RNG streams restart, while model, Adam, EMA,
+absolute iteration schedules and cumulative counters continue.
+
+The prepared queue has five more 11.9-hour windows at $7.36 each, then one
+4.9-hour window at $3.10. Including 002's existing $8.35 reservation, the prior
+$1.5312598409473894 and $0.20 controller allowance, aggregate reservations are
+$49.98125984094739. Each reservation includes its guardian proof allowance.
+All windows share the original seven-day ceiling; each has its own immutable
+shutdown deadline. Unspent reserves are retained, not automatically rerented.
+The exact machine and recipe plans are in the private cohort intent.
+
+Controller credentials are required on the mini itself; laptop credentials are
+not sent to workers or embedded in plans. Keep its process under launchd, with a
+permanent host/directory ownership binding. The controller uses a retained exact
+checkout of worker source `fabb96db2` while its own version handles budget-pause
+continuation. This bridge is needed because 002 predates Etude-managed launch;
+Etude's SSH controller is configured for the mini without moving existing records.
+
+Evaluation follows #333's heuristic anchor and paired 25-deal/mirror protocol,
+with Lessons vs Allies first. CPU evaluation is separate from the training
+allocation; this amendment does not allocate another paid evaluation rental.
+Predict only retained two-seat decisions and exportable checkpoints. Strength,
+throughput-per-dollar and the effect of restart boundaries remain measurements.
