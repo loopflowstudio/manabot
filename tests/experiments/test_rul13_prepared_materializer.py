@@ -21,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 RECEIPT = ROOT / "experiments/data/rul-13-prepared-possible-world-materializer-v1.json"
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-13-prepared-possible-world-materializer-v1.json"
+)
 def test_locked_provider_receipt_proves_linear_bounded_materialization() -> None:
     receipt = json.loads(RECEIPT.read_text())
     verify_receipt(receipt)
@@ -59,6 +62,7 @@ def test_locked_provider_receipt_proves_linear_bounded_materialization() -> None
     }
 
 
+@pytest.mark.experiment_data("experiments/data/int-17-belief-calibration-v1")
 def test_int17_v1_contract_and_failure_remain_immutable() -> None:
     assert file_sha256(V1_CONTRACT) == (
         "221ef4979ae0e4421efb5953473276b125cb5fdaf91983f4a66660b065d44473"
@@ -77,6 +81,9 @@ def test_int17_v1_contract_and_failure_remain_immutable() -> None:
         "engine_extension_sha256",
     ],
 )
+@pytest.mark.experiment_data(
+    "experiments/data/rul-13-prepared-possible-world-materializer-v1.json"
+)
 def test_receipt_rejects_runtime_drift(field: str) -> None:
     receipt = json.loads(RECEIPT.read_text())
     receipt["runtime"][field] = "0" * 64
@@ -93,6 +100,9 @@ def test_receipt_rejects_runtime_drift(field: str) -> None:
         ("maximum_live_prepared_branches", 257),
         ("space_constructions", 2),
     ],
+)
+@pytest.mark.experiment_data(
+    "experiments/data/rul-13-prepared-possible-world-materializer-v1.json"
 )
 def test_receipt_rejects_incomplete_or_unbounded_work(field: str, value: int) -> None:
     receipt = json.loads(RECEIPT.read_text())

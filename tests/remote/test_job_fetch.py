@@ -30,7 +30,7 @@ class Artifacts(S3ArtifactStore):
             uri=f"s3://bucket/sha256/{sha}", sha256=sha, bytes=len(data)
         )
 
-    def _download(self, reference: StoredArtifact, target: Path) -> str | None:
+    def download(self, reference: StoredArtifact, target: Path) -> str | None:
         self.downloads.append(reference.sha256)
         if self.fail == reference.sha256:
             self.fail = None

@@ -3,9 +3,12 @@
 from pathlib import Path
 import shutil
 
+import pytest
+
 from experiments.runners.cuda_capacity_report import render_report
 
 
+@pytest.mark.experiment_data("experiments/data/cuda-capacity")
 def test_compact_evidence_regenerates_stable_report(tmp_path: Path) -> None:
     evidence = (
         Path(__file__).resolve().parents[2]

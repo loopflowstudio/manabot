@@ -101,12 +101,13 @@ class S3ArtifactStore:
                 version_id=version,
             )
             # Readback checks actual bytes, never multipart ETags or user metadata.
-            downloaded_version = self._download(reference, Path(directory) / "readback")
+            downloaded_version = self.download(reference, Path(directory) / "readback")
             return reference.model_copy(
                 update={"version_id": reference.version_id or downloaded_version}
             )
 
-    def _download(self, reference: StoredArtifact, target: Path) -> str | None:
+    def download(self, reference: StoredArtifact, target: Path) -> str | None:
+        """Write verified bytes to target and return the version read, if any."""
         bucket, key = split_s3_uri(reference.uri)
         request = {"Bucket": bucket, "Key": key}
         if reference.version_id is not None:
@@ -136,7 +137,7 @@ class S3ArtifactStore:
             return target
         with tempfile.TemporaryDirectory(dir=cache, prefix="download-") as directory:
             temporary = Path(directory) / "bytes"
-            self._download(reference, temporary)
+            self.download(reference, temporary)
             temporary.replace(target)
         return target
 

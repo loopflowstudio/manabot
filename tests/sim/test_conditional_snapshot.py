@@ -257,11 +257,17 @@ def test_consumer_fails_on_shard_condition_provenance_drift(tmp_path: Path) -> N
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_int13_fixture_conforms_to_pinned_shape() -> None:
     fixture = json.loads(INT_13_FIXTURE.read_text())
     assert_conforms_to_conditional_strategy_shape(fixture)
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_int13_fixture_adapter_ingests_with_no_contract_change() -> None:
     fixture = json.loads(INT_13_FIXTURE.read_text())
     rows = viewer_safe_to_condition_rows(fixture)
@@ -273,6 +279,9 @@ def test_int13_fixture_adapter_ingests_with_no_contract_change() -> None:
         assert row.condition_scores.shape == (fixture["action_count"],)
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_shape_rejects_wrong_condition_count() -> None:
     fixture = json.loads(INT_13_FIXTURE.read_text())
     fixture["viewer_safe"]["conditions"].append(fixture["viewer_safe"]["conditions"][0])
@@ -280,6 +289,9 @@ def test_shape_rejects_wrong_condition_count() -> None:
         assert_conforms_to_conditional_strategy_shape(fixture)
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_shape_rejects_wrong_planner() -> None:
     fixture = json.loads(INT_13_FIXTURE.read_text())
     fixture["planner"] = "something_else"

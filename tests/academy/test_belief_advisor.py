@@ -403,6 +403,7 @@ def test_belief_digest_mismatch_is_typed_unavailable(
     assert response.strategy is None
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_unregistered_checkpoint_identity_is_never_substituted(
     runtime: AdvisorRuntime,
 ) -> None:
