@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "contract_id": "manabot.semantic-kernel-conformance.v1",
+  "matchup_source_digest": "e998a100250a88436ce305ce6925bedae358794eb0a4c17568120e7b09b2b30e",
+  "content_digest": "3670fc754ebd090645db882a3f385d7dbc5a5991d58f622d8a8b3133b0d2531a",
+  "reference": "reference/explicit-step-v1",
+  "optimized": "optimized/skip-trivial-v1",
+  "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
+  "replays": [
+    {
+      "case_id": "ur-vs-gw-5eed",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 144,
+      "outcome": "terminal",
+      "final_state_hash": "v5:ccebf789806ffca03d25ddbceb1dde68ec9b0eba954596dc3d2193b078ac6c2a"
+    },
+    {
+      "case_id": "gw-vs-ur-5eee",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 48,
+      "outcome": "terminal",
+      "final_state_hash": "v5:eb3198500de577595efff90541e1b6d8c89ae2f79b99181115f55bcc0f83b826"
+    },
+    {
+      "case_id": "ur-vs-gw-5eef",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 154,
+      "outcome": "terminal",
+      "final_state_hash": "v5:953e75b21071d6509d844e9509464debe8fc38b0a4260ebbc2b3f073b307cb5a"
+    },
+    {
+      "case_id": "gw-vs-ur-5ef0",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 221,
+      "outcome": "terminal",
+      "final_state_hash": "v5:54b6e20caebc39788c26d608c059b403bad3aebb6a7a5431c3d9865532e92031"
+    },
+    {
+      "case_id": "elemental-161",
+      "orientation": "elemental_left_vs_right",
+      "commands": 129,
+      "outcome": "terminal",
+      "final_state_hash": "v5:31a25d203473402deeaab156634e867750c8f123b28533856030af38471720c1"
+    },
+    {
+      "case_id": "elemental-162",
+      "orientation": "elemental_right_vs_left",
+      "commands": 80,
+      "outcome": "terminal",
+      "final_state_hash": "v5:15c9efeefbef16f593829c53cce3e8714944a6cd2f8f192f5aa1dd906b23671d"
+    },
+    {
+      "case_id": "elemental-163",
+      "orientation": "elemental_left_vs_right",
+      "commands": 135,
+      "outcome": "terminal",
+      "final_state_hash": "v5:0743a0329cc1aebd97ac4563fc32df791db553060d52db2f7b6d19e592b4b5c6"
+    },
+    {
+      "case_id": "elemental-164",
+      "orientation": "elemental_right_vs_left",
+      "commands": 196,
+      "outcome": "terminal",
+      "final_state_hash": "v5:f076b701488561aee913e3af532337374119a39d036715d0a0659a77614057ff"
+    },
+    {
+      "case_id": "sacrifice-162",
+      "orientation": "sacrifice_left_vs_right",
+      "commands": 219,
+      "outcome": "terminal",
+      "final_state_hash": "v5:dfd84fbb794d6b81edb37ce7e926703ad771adb898c08946eface1b9571d16a6"
+    },
+    {
+      "case_id": "sacrifice-163",
+      "orientation": "sacrifice_right_vs_left",
+      "commands": 181,
+      "outcome": "terminal",
+      "final_state_hash": "v5:8bc11de652a71e1be5039be316b3cd5c4902f79fd02998e368fa86d02bc7f24e"
+    }
+  ],
+  "exercised_prompt_kinds": [
+    "ChooseTarget",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "Discard",
+    "Learn",
+    "LookAndSelect",
+    "Modal",
+    "PayOrNot",
+    "Priority",
+    "Scry",
+    "Waterbend"
+  ],
+  "exercised_action_types": [
+    "ChooseMode",
+    "ChooseTarget",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "DeclineChoice",
+    "LearnDiscard",
+    "PayCost",
+    "PriorityActivateAbility",
+    "PriorityCastSpell",
+    "PriorityPassPriority",
+    "PriorityPlayLand",
+    "ScryBottom",
+    "ScryKeep",
+    "SelectCard",
+    "TapForCost"
+  ],
+  "property_checks": [
+    "fresh_same_seed_semantic_tapes_are_identical",
+    "semantic_action_lookup_is_independent_of_diagnostic_index",
+    "nonterminal_prompts_are_nonempty",
+    "cloned_sibling_does_not_mutate_root"
+  ],
+  "metamorphic_checks": [
+    "explicit_singletons_equal_trivial_step_collapse",
+    "equal_content_pack_reallocation_preserves_trace",
+    "compatibility_card_renames_preserve_trace",
+    "fresh_and_cloned_roots_preserve_trace"
+  ],
+  "fuzz": {
+    "seed": 24301,
+    "cases": 32,
+    "max_commands": 512
+  },
+  "phase_revision": "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d",
+  "phase_status_counts": {
+    "excluded": 7,
+    "match": 3,
+    "mismatch": 5
+  },
+  "phase_mismatches": [
+    "mana-suki-hybrid",
+    "continuous-suki-and-dragonfly",
+    "conditional-cadets-firebending",
+    "card-flow-learn-and-bottom-order",
+    "ward-trigger-scope"
+  ]
+}

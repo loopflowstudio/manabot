@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 4;
+pub const MATCH_STATE_HASH_VERSION: u32 = 5;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -63,6 +63,8 @@ struct CanonicalTurn {
     lands_played: u32,
     spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     cards_drawn_this_turn: [u32; 2],
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
     current_phase: usize,
     current_step: usize,
@@ -79,6 +81,11 @@ impl From<&TurnState> for CanonicalTurn {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             cards_drawn_this_turn: turn.cards_drawn_this_turn,
+            ability_triggers_this_turn: turn
+                .ability_triggers_this_turn
+                .iter()
+                .map(|((source, index), count)| (*source, *index, *count))
+                .collect(),
             ability_resolutions_this_turn: turn
                 .ability_resolutions_this_turn
                 .iter()

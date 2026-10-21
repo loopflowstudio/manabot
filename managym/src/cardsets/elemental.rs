@@ -349,7 +349,8 @@ impl CardRegistry {
                 sacrifice_source: false,
                 waterbend: false,
                 effect: Effect::DrawCards { count: 1 },
-            }],
+            ..Default::default()
+}],
             ..Default::default()
         });
         self.register_card(CardDefinition {
@@ -505,7 +506,7 @@ impl CardRegistry {
             types: CardTypes::new([CardType::Sorcery]),
             subtypes: vec!["Lesson".into()],
             text_box: "Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.".into(),
-            spell_effects: vec![Effect::SearchBasicLand { subtype: None }],
+            spell_effects: vec![Effect::SearchBasicLand { subtype: None, count: 1, tapped: true, untap_if_lands: None, bottom_source: false }],
             ..Default::default()
         });
         self.register_card(CardDefinition {
@@ -515,7 +516,7 @@ impl CardRegistry {
             text_box: "Search your library for a basic Forest card, put that card onto the battlefield tapped, then shuffle.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)".into(),
             spell_effects: vec![
                 Effect::SearchBasicLand {
-                    subtype: Some("Forest".into()),
+                    subtype: Some("Forest".into()), count: 1, tapped: true, untap_if_lands: None, bottom_source: false,
                 },
                 Effect::Learn,
             ],
@@ -635,6 +636,7 @@ impl CardRegistry {
                 sacrifice_source: true,
                 waterbend: false,
                 effect: Effect::GainLife { amount: 3 },
+                ..Default::default()
             }],
             text_box: "{2}, {T}, Sacrifice this token: You gain 3 life.".into(),
             ..Default::default()
@@ -930,6 +932,7 @@ impl CardRegistry {
                         },
                     },
                 },
+                ..Default::default()
             }],
             ..Default::default()
         });

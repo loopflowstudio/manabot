@@ -117,9 +117,9 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version not in {2, 3}:
+        if version not in {2, 3, 4}:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 2 or 3, got {version}"
+                f"learning_schema.schema_version: expected 2, 3 or 4, got {version}"
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -177,7 +177,11 @@ class LearningSchema:
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
-            if version == 3 or int(opcode) <= 23
+            if (
+                version == 4
+                or (version == 3 and int(opcode) <= 50)
+                or int(opcode) <= 23
+            )
         }
         if opcodes != expected_opcodes:
             raise SemanticProjectionError(
@@ -525,7 +529,7 @@ class _TokenBuilder:
             self.emit("integer", value)
             return
         if isinstance(value, str):
-            if field in {"mana", "mana_cost", "kicker", "cost"}:
+            if field in {"mana", "mana_cost", "kicker", "cost", "or_mana"}:
                 self.mana(value, f"{context}.{field}")
             elif field in {"role", "sources", "target"}:
                 self.role(value, roles)
@@ -907,29 +911,26 @@ class BoundSemanticPack:
         ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
         provenance = manifest.get("compiled_semantics")
-        elemental = (
-            isinstance(provenance, Mapping)
-            and provenance.get("pack_key") == "elemental-combat-v1"
-        )
-        schema_path = schema_path or (
-            ROOT / "content/semantic/w7/learning_schema.json"
-            if elemental
-            else DEFAULT_SCHEMA_PATH
-        )
-        ir_path = ir_path or (
-            ROOT / "content/semantic/v1/generated/elemental.ir.json"
-            if elemental
-            else DEFAULT_IR_PATH
-        )
-        schema = LearningSchema.load(schema_path)
-        ir = SemanticIr.load(schema, ir_path)
-        if elemental and (
+        default_schema, default_ir = DEFAULT_SCHEMA_PATH, DEFAULT_IR_PATH
+        if isinstance(provenance, Mapping):
+            match provenance.get("pack_key"):
+                case "elemental-combat-v1":
+                    default_schema = ROOT / "content/semantic/w7/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/elemental.ir.json"
+                    )
+                case "elemental-sacrifice-v1":
+                    default_schema = ROOT / "content/semantic/w8/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/sacrifice.ir.json"
+                    )
+        schema = LearningSchema.load(schema_path or default_schema)
+        ir = SemanticIr.load(schema, ir_path or default_ir)
+        if default_ir != DEFAULT_IR_PATH and (
             provenance.get("ir_hash") != ir.ir_hash
             or provenance.get("source_hash") != ir.raw["source_hash"]
         ):
-            raise ContentPackBindingError(
-                "Elemental IR differs from the live compiled pack"
-            )
+            raise ContentPackBindingError("Compiled IR differs from the live pack")
         manifest = _mapping(manifest, "content_pack_manifest")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"

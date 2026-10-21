@@ -130,3 +130,23 @@ Elemental manifest and rejects source/IR drift. No latest-pack alias changes
 historical meanings. Full structure parity against the native registry lives
 in `managym/tests/authored_match_tests.rs`; consumer admission lives in
 `tests/semantic/test_elemental.py`.
+
+## Sacrifice and landfall development pack (w8)
+
+`elemental-sacrifice-v1` adds the 17 owned sacrifice/landfall cards, five basics
+and five tokens in separate 40-card validation rosters. Schema 4 is at
+`w8/learning_schema.json`. It adds typed sacrifice costs, payment alternatives,
+per-turn trigger limits and search options. Earlier sources and learning
+schemas retain their identities and vocabularies. The native search authority
+is shared with frozen opcode 24, while opcode 51 supplies its additional options.
+
+```bash
+uv run scripts/compile_semantic_content.py --check \
+  --source content/semantic/v1/sacrifice.source.json \
+  --fixtures content/semantic/v1/sacrifice.fixtures.json \
+  --ir-output content/semantic/v1/generated/sacrifice.ir.json \
+  --coverage-output content/semantic/v1/generated/sacrifice.coverage.json
+```
+
+The [rule contracts](../../docs/rules/elemental-sacrifice.md) identify behavioral
+coverage and the separate final-deck and release boundaries.

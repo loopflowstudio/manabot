@@ -270,6 +270,13 @@ impl Game {
         {
             return false;
         }
+        if self.state.cards[attacker.card]
+            .unblockable_if
+            .as_ref()
+            .is_some_and(|condition| self.check_static_condition(condition, attacker.controller))
+        {
+            return false;
+        }
         if attacker.cant_be_blocked_this_turn {
             return false;
         }

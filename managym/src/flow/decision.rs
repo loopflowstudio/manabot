@@ -97,6 +97,15 @@ impl EffectFrame {
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    ManaChoice {
+        player: PlayerId,
+        choices: Vec<crate::state::mana::Mana>,
+        resume: Option<Box<Decision>>,
+    },
+    Sacrifice {
+        player: PlayerId,
+        predicate: CardPredicate,
+    },
     SelectMilled {
         player: PlayerId,
         cards: Vec<CardId>,
@@ -106,6 +115,16 @@ pub enum Decision {
     SearchBasicLand {
         player: PlayerId,
         subtype: Option<String>,
+        #[serde(skip_serializing_if = "is_one")]
+        remaining: usize,
+        #[serde(skip_serializing_if = "is_true")]
+        tapped: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        untap_if_lands: Option<usize>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        bottom_source: bool,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        selected: Vec<CardId>,
     },
     OptionalDiscardDraw {
         player: PlayerId,
@@ -161,9 +180,17 @@ pub enum Decision {
     },
 }
 
+fn is_one(value: &usize) -> bool {
+    *value == 1
+}
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
+            Decision::ManaChoice { player, .. } | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -182,6 +209,7 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
+            Decision::ManaChoice { .. } | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SelectMilled { .. }
@@ -264,7 +292,36 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
-            Decision::SearchBasicLand { player, subtype } => {
+            Decision::ManaChoice {
+                player, choices, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: (0..choices.len())
+                    .filter(|mode| self.mana_choice_completes_payment(*player, &choices[*mode]))
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
+            Decision::Sacrifice { player, predicate } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .sacrifice_candidates(*player, predicate)
+                    .into_iter()
+                    .map(|id| Action::SelectCard {
+                        player: *player,
+                        card: self.state.permanents[id].as_ref().unwrap().card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::SearchBasicLand {
+                player, subtype, ..
+            } => {
                 let mut actions: Vec<Action> = self
                     .basic_land_search_candidates(*player, subtype)
                     .into_iter()
@@ -369,7 +426,7 @@ impl Game {
                 }
             }
             Decision::PayOrNot { player, cost, .. } => {
-                let mut actions = Vec::with_capacity(2);
+                let mut actions = self.mana_ability_actions(*player, None);
                 if self.available_mana(*player).can_pay(cost) {
                     actions.push(Action::PayCost { player: *player });
                 }
@@ -455,7 +512,60 @@ impl Game {
 
         match (&mut suspended.decision, action) {
             (
-                Decision::SearchBasicLand { player, subtype },
+                Decision::ManaChoice {
+                    player,
+                    choices,
+                    resume,
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                let Some(mana) = choices.get(*mode) else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal mana color".into()));
+                };
+                if !self.mana_choice_completes_payment(*player, mana) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("mana color cannot complete the payment".into()));
+                }
+                self.journal_player(*player);
+                self.state.players[player.0].mana_pool.add(mana);
+                if let Some(resume) = resume.take() {
+                    suspended.decision = *resume;
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    // An activated mana ability retains its payer's priority;
+                    // its empty rule frame is not a resolving stack object.
+                    self.state.priority.on_non_pass_action(*player);
+                }
+                Ok(())
+            }
+            (Decision::Sacrifice { player, predicate }, Action::SelectCard { card, .. }) => {
+                let selected = self
+                    .sacrifice_candidates(*player, predicate)
+                    .into_iter()
+                    .find(|id| {
+                        self.state.permanents[*id]
+                            .as_ref()
+                            .is_some_and(|p| p.card == *card)
+                    });
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal sacrifice selection".into()));
+                };
+                self.sacrifice_permanent(selected);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchBasicLand {
+                    player,
+                    subtype,
+                    remaining,
+                    tapped,
+                    untap_if_lands,
+                    bottom_source,
+                    selected,
+                },
                 Action::SelectCard { .. } | Action::Decline { .. },
             ) => {
                 let player = *player;
@@ -471,15 +581,53 @@ impl Game {
                         *card,
                         ZoneType::Battlefield,
                         crate::flow::proposed_event::BattlefieldEntry {
-                            tapped: true,
+                            tapped: *tapped,
                             ..Default::default()
                         },
                     );
+                    selected.push(*card);
+                    *remaining -= 1;
+                    if *remaining > 0 {
+                        self.state.suspended_decision = Some(suspended);
+                        return Ok(());
+                    }
+                }
+                if *bottom_source {
+                    if let Some(source) = self.source_permanent_id(&suspended.frame) {
+                        let card = self.state.permanents[source].as_ref().unwrap().card;
+                        self.move_card(card, ZoneType::Library);
+                        self.put_on_bottom_of_library(card);
+                    }
                 }
                 self.journal_zones();
                 self.state
                     .zones
                     .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                if untap_if_lands.is_some_and(|minimum| {
+                    self.battlefield_permanents(player)
+                        .into_iter()
+                        .filter(|id| {
+                            self.permanent_matches_predicate(
+                                *id,
+                                &CardPredicate {
+                                    card_type: Some(crate::state::card::CardType::Land),
+                                    ..Default::default()
+                                },
+                            )
+                        })
+                        .count()
+                        >= minimum
+                }) {
+                    for card in selected {
+                        if let Some(id) = self.state.card_to_permanent[*card] {
+                            self.journal_permanent(id);
+                            if let Some(permanent) = self.state.permanents[id].as_mut() {
+                                permanent.untap();
+                            }
+                        }
+                    }
+                    self.invalidate_mana_cache(player);
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }

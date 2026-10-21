@@ -27,7 +27,7 @@ pub struct ActivatedAbilityOnStack {
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
     pub source_card: CardId,
-    pub source_permanent_object_id: ObjectId,
+    pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
 }
@@ -89,13 +89,6 @@ impl StackObject {
     /// integer registry key with the same value.
     pub fn source_card_registry_key(&self) -> ObjectId {
         ObjectId(self.source_definition_id().0)
-    }
-
-    pub fn source_permanent_object_id(&self) -> Option<ObjectId> {
-        match self {
-            StackObject::Spell(_) | StackObject::TriggeredAbility(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_permanent_object_id),
-        }
     }
 
     pub fn ability_index(&self) -> Option<usize> {

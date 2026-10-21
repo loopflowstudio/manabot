@@ -154,7 +154,7 @@ enum UndoEntry {
     Permanent(PermanentId, Box<Option<crate::state::permanent::Permanent>>),
     CardToPermanent(CardId, Option<PermanentId>),
     Incarnation(CardId, Incarnation),
-    ObjectLki(ObjectRef, Option<ObjectLki>),
+    ObjectLki(ObjectRef, Option<Box<ObjectLki>>),
     /// Bulk zone rewrites (reshuffle, reorder, determinize) are rare, so they
     /// are boxed: inline they would be 360 bytes and, as the largest variant,
     /// would set that size for every entry in the journal.
@@ -188,6 +188,7 @@ impl UndoEntry {
         match self {
             Self::Zones(zones) => zones.allocated_bytes(),
             Self::Permanent(_, _) => size_of::<Option<crate::state::permanent::Permanent>>(),
+            Self::ObjectLki(_, old) => old.as_ref().map_or(0, |_| size_of::<ObjectLki>()),
             Self::Turn(turn) => turn
                 .ability_resolutions_this_turn
                 .len()
@@ -238,7 +239,6 @@ impl UndoEntry {
             | Self::ZoneMove { .. }
             | Self::CardToPermanent(_, _)
             | Self::Incarnation(_, _)
-            | Self::ObjectLki(_, _)
             | Self::Priority(_)
             | Self::ManaCache(_, _)
             | Self::EventLength(_, _)
@@ -275,7 +275,7 @@ impl UndoEntry {
             Self::CardToPermanent(card, old) => game.state.card_to_permanent[card] = old,
             Self::Incarnation(card, old) => game.state.object_incarnations[card] = old,
             Self::ObjectLki(object, Some(old)) => {
-                game.state.object_lki.insert(object, old);
+                game.state.object_lki.insert(object, *old);
             }
             Self::ObjectLki(object, None) => {
                 game.state.object_lki.remove(&object);
@@ -575,7 +575,7 @@ impl Game {
     pub(crate) fn journal_object_lki(&mut self, object: ObjectRef) {
         self.record_undo(UndoEntry::ObjectLki(
             object,
-            self.state.object_lki.get(&object).copied(),
+            self.state.object_lki.get(&object).copied().map(Box::new),
         ));
     }
 

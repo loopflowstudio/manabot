@@ -21,6 +21,15 @@ impl Ability {
 /// The event that causes a triggered ability to trigger (CR 603.1).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
+    Sacrificed {
+        predicate: CardPredicate,
+        controller_only: bool,
+    },
+    /// Wrap the whole condition, including ActiveIf. The limit is recorded
+    /// when the event fires, once per exact source incarnation and turn.
+    OnceEachTurn {
+        condition: Box<TriggerCondition>,
+    },
     YouCastSpell {
         predicate: CardPredicate,
     },
@@ -76,6 +85,7 @@ pub enum TriggerCondition {
 /// checks, evaluated for a specific controller ("you").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticCondition {
+    YourTurn,
     Always,
     CardsDrawnAtLeast {
         count: u32,
@@ -110,6 +120,15 @@ pub enum EffectValue {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
+    Sacrifice {
+        predicate: CardPredicate,
+    },
+    DealDamageToController {
+        amount: i32,
+    },
+    DrainLife {
+        amount: i32,
+    },
     CantBeBlockedTarget {
         target: TargetSpec,
     },
@@ -140,6 +159,14 @@ pub enum Effect {
     /// Search is a private choice that always shuffles, including failure to find.
     SearchBasicLand {
         subtype: Option<String>,
+        #[serde(skip_serializing_if = "is_one")]
+        count: usize,
+        #[serde(skip_serializing_if = "is_true")]
+        tapped: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        untap_if_lands: Option<usize>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        bottom_source: bool,
     },
     OptionalDiscardDraw {
         count: usize,
@@ -422,9 +449,25 @@ impl TargetRequirement {
     }
 }
 
+fn is_one(value: &usize) -> bool {
+    *value == 1
+}
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
+impl Default for Effect {
+    fn default() -> Self {
+        Self::DrawCards { count: 0 }
+    }
+}
+
 impl Effect {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
+            Effect::Sacrifice { .. }
+            | Effect::DealDamageToController { .. }
+            | Effect::DrainLife { .. } => None,
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::SelectTargetRequirement { .. }
             | Effect::MillCards { .. }

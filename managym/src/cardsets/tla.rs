@@ -353,7 +353,8 @@ impl CardRegistry {
                         ..CardPredicate::default()
                     },
                 },
-            }],
+            ..Default::default()
+}],
             text_box: "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)".to_string(),
             power: Some(2),
             toughness: Some(2),
@@ -443,7 +444,8 @@ impl CardRegistry {
                     power_delta: 1,
                     toughness_delta: 0,
                 },
-            }],
+            ..Default::default()
+}],
             text_box: "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(1),
             toughness: Some(2),
@@ -792,6 +794,7 @@ impl CardRegistry {
                 sacrifice_source: true,
                 waterbend: false,
                 effect: Effect::DrawCards { count: 1 },
+                ..Default::default()
             }],
             text_box: "{2}, Sacrifice this token: Draw a card.".to_string(),
             ..Default::default()

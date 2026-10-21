@@ -31,10 +31,10 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w7-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w8-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "b02a204475b119ccd3443b1f33de9528230a81a5549f508e2cbac63ce753dfbe"
-TERMINAL_STATE = "29ba6b219d37e3e8a6afd2b98c10eb703265e078422c561ca6d375453d788994"
+AUTHORITY_SHA256 = "310e683669a2af0a4cccafdd6f987017975bb51a35a63727c835ebe6f1d50969"
+TERMINAL_STATE = "0113510fbcfedfc4e18840bb4636d2654b1ab0590357858c5becd899ab44208e"
 
 COMMAND_COUNT = 156
 HISTORICAL_AUTHORITY_SHA256 = (
@@ -625,7 +625,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w7-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w8-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/v1/generated/two_deck.ir.json",
         "content/semantic/v1/two_deck.source.json",
         "academy/curated_pack.py",

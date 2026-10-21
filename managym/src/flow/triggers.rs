@@ -328,19 +328,41 @@ impl Game {
                 self.state.cards[source.card].abilities.iter().enumerate()
             {
                 let Ability::Triggered { condition, .. } = ability;
-                if self.trigger_condition_fires(
-                    condition,
-                    source.card,
-                    source.controller,
-                    true,
-                    event,
-                ) {
+                if (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
+                    || !self
+                        .state
+                        .turn
+                        .ability_triggers_this_turn
+                        .contains_key(&(source.lki.object_ref, ability_index)))
+                    && self.trigger_condition_fires(
+                        condition,
+                        source.card,
+                        source.controller,
+                        true,
+                        event,
+                    )
+                {
                     fired.push((source.card, ability_index, source.controller, source.lki));
                 }
             }
         }
 
         for (source_card, ability_index, controller, source_lki) in fired {
+            if matches!(
+                &self.state.cards[source_card].abilities[ability_index],
+                Ability::Triggered {
+                    condition: TriggerCondition::OnceEachTurn { .. },
+                    ..
+                }
+            ) {
+                self.journal_turn();
+                *self
+                    .state
+                    .turn
+                    .ability_triggers_this_turn
+                    .entry((source_lki.object_ref, ability_index))
+                    .or_default() += 1;
+            }
             let context = if self.state.cards[source_card].abilities[ability_index]
                 .effects()
                 .iter()
@@ -466,6 +488,24 @@ impl Game {
         event: &GameEvent,
     ) -> bool {
         match (condition, event) {
+            (TriggerCondition::OnceEachTurn { condition }, _) => self.trigger_condition_fires(
+                condition,
+                source_card,
+                source_controller,
+                source_was_on_battlefield,
+                event,
+            ),
+            (
+                TriggerCondition::Sacrificed {
+                    predicate,
+                    controller_only,
+                },
+                GameEvent::PermanentSacrificed { card, controller },
+            ) => {
+                (!controller_only || *controller == source_controller)
+                    && self.state.card_to_permanent[*card]
+                        .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
+            }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.state.cards[*card].owner == source_controller
                     && predicate.matches_card(&self.state.cards[*card])
@@ -617,18 +657,36 @@ impl Game {
         moved_card: CardId,
         moved_controller: PlayerId,
     ) -> bool {
+        let animated = self.state.card_to_permanent[moved_card]
+            .and_then(|id| self.state.permanents[id].as_ref())
+            .map(|p| p.animated)
+            .unwrap_or_else(|| {
+                self.state
+                    .object_lki
+                    .iter()
+                    .rev()
+                    .find_map(|(_, lki)| (lki.card == moved_card).then_some(lki.animated_creature))
+                    .unwrap_or(false)
+            });
+        let matches = |predicate: &crate::state::predicate::CardPredicate| {
+            predicate.matches(
+                &self.state.cards[moved_card],
+                self.state.cards[moved_card].power.unwrap_or(0),
+                animated,
+            )
+        };
         match subject {
             TriggerSubject::This => moved_card == source_card,
             TriggerSubject::AnotherYouControl(predicate) => {
                 moved_card != source_card
                     && moved_controller == source_controller
                     && source_was_on_battlefield
-                    && predicate.matches_card(&self.state.cards[moved_card])
+                    && matches(predicate)
             }
             TriggerSubject::AnyYouControl(predicate) => {
                 moved_controller == source_controller
                     && source_was_on_battlefield
-                    && predicate.matches_card(&self.state.cards[moved_card])
+                    && matches(predicate)
             }
         }
     }

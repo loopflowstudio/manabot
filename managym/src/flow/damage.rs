@@ -212,14 +212,11 @@ impl Game {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return Some(self.effective_keywords(permanent_id));
         }
-        if let Some(definition) = self.object_lki_definition(source) {
-            return Some(definition.keywords.clone());
+        if let Some(lki) = self.object_lki(source) {
+            return Some(lki.keywords);
         }
         let card = CardId::from(source.entity);
-        self.state
-            .cards
-            .get(card.0)
-            .map(|card| card.keywords.clone())
+        self.state.cards.get(card.0).map(|card| card.keywords)
     }
 
     fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {

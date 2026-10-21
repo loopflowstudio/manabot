@@ -240,6 +240,8 @@ def format_action(
       DECLINE/PAY/MODE:       [resolving or cast card_id]
       PASS_PRIORITY:          []
     """
+    if description := getattr(action, "description", None):
+        return str(description)
     action_name = enum_name(ActionEnum, action.action_type)
     if declared is None:
         declared = getattr(action, "declared", None)
