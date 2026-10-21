@@ -18,9 +18,11 @@ file's path, sha256 and size; the bytes live once per digest at
 `s3://etudefantasia/manabot/sha256/<sha256>` and need the team's AWS
 credentials. `fetch` restores files to their original paths, verifies every
 digest, skips files already present and refuses to overwrite a file whose bytes
-differ. Runs still write results under `data/`; `publish` uploads them (never
-overwriting a stored digest, reading each upload back) and updates the manifest,
-which you commit with the report. Tests that read data are marked
+differ. Runs still write results under `data/`; `publish` uploads them (S3
+checks each SHA-256; nothing is read back) and updates the manifest, which you
+commit with the report. Every worktree on a machine shares one read-only cache,
+`$MANABOT_DATA_CACHE` (default `~/.cache/manabot/sha256/<sha256>`), filled by
+`publish` and by downloads, so a machine reads each digest from S3 at most once. Tests that read data are marked
 `experiment_data(...)`: they fetch what they name, or skip with this command
 when the store is unreachable. Data committed before the manifest remains in git
 history.

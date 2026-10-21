@@ -64,8 +64,10 @@ class S3ArtifactStore:
     def publish(
         self, path: Path, destination: str, *, sha256: str, size: int
     ) -> StoredArtifact:
-        """Upload a stable snapshot, then read it back; retries verify existing bytes.
+        """Upload a stable snapshot that S3 verifies; reads no object body.
 
+        The PUT carries the SHA-256, so S3 rejects bytes that differ in transit.
+        An existing key is confirmed by a HEAD of its stored size and SHA-256.
         Single PUT is deliberately bounded to 5 GiB. Failures leave local evidence
         intact and may leave unreferenced remote blobs, safe to reuse on retry.
         """
@@ -75,6 +77,7 @@ class S3ArtifactStore:
             raise ValueError("artifact exceeds the supported 5 GiB single-PUT limit")
         bucket, prefix = split_s3_uri(destination)
         key = "/".join(filter(None, (prefix.rstrip("/"), "sha256", sha256)))
+        checksum = base64.b64encode(bytes.fromhex(sha256)).decode()
         with tempfile.TemporaryDirectory(prefix="manabot-upload-") as directory:
             snapshot = Path(directory) / "bytes"
             shutil.copyfile(path, snapshot)
@@ -86,25 +89,29 @@ class S3ArtifactStore:
                         Key=key,
                         Body=source,
                         ContentLength=size,
-                        ChecksumSHA256=base64.b64encode(bytes.fromhex(sha256)).decode(),
+                        ChecksumSHA256=checksum,
                         IfNoneMatch="*",
                     )
-                    version = result.get("VersionId")
                 except ClientError as error:
                     if error.response["ResponseMetadata"]["HTTPStatusCode"] != 412:
                         raise
-                    version = None
-            reference = StoredArtifact(
-                uri=f"s3://{bucket}/{key}",
-                sha256=sha256,
-                bytes=size,
-                version_id=version,
-            )
-            # Readback checks actual bytes, never multipart ETags or user metadata.
-            downloaded_version = self.download(reference, Path(directory) / "readback")
-            return reference.model_copy(
-                update={"version_id": reference.version_id or downloaded_version}
-            )
+                    result = self._client.head_object(
+                        Bucket=bucket, Key=key, ChecksumMode="ENABLED"
+                    )
+                    if (
+                        result["ContentLength"] != size
+                        or result.get("ChecksumSHA256") != checksum
+                    ):
+                        raise ValueError(
+                            f"existing S3 object differs from receipt: {key}"
+                        ) from error
+        version = result.get("VersionId")
+        return StoredArtifact(
+            uri=f"s3://{bucket}/{key}",
+            sha256=sha256,
+            bytes=size,
+            version_id=version if isinstance(version, str) else None,
+        )
 
     def download(self, reference: StoredArtifact, target: Path) -> str | None:
         """Write verified bytes to target and return the version read, if any."""

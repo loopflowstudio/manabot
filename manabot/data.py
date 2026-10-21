@@ -5,10 +5,17 @@ git keeps only ``experiments/data.manifest.json``: each repository-relative path
 with the sha256 and size of its bytes. The bytes live once per digest at
 ``<store>sha256/<digest>`` (``S3ArtifactStore`` owns the S3 protocol).
 
+A machine-wide cache, shared by every worktree, holds one read-only file per
+digest at ``$MANABOT_DATA_CACHE/<digest>`` (default
+``${XDG_CACHE_HOME:-~/.cache}/manabot/sha256``). It keeps S3 reads within budget:
+``publish`` fills it from the local file and reads nothing back, and ``fetch``
+downloads a digest only when the cache lacks it, so each machine reads each
+digest from S3 at most once. Worktree files are clones or copies of cache files,
+never hardlinks, so editing one cannot change the cache.
+
 ``fetch`` restores manifest paths byte-for-byte and never overwrites a local file
-whose bytes differ. ``publish`` is the only command that uploads: it stores new
-or changed local files and records them in the manifest. AWS credentials come
-from the standard SDK chain.
+whose bytes differ. ``publish`` is the only command that uploads. AWS
+credentials come from the standard SDK chain.
 
     uv run --extra artifacts python -m manabot.data fetch
     uv run --extra artifacts python -m manabot.data fetch experiments/data/etu126
@@ -16,13 +23,15 @@ from the standard SDK chain.
 """
 
 import argparse
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+import ctypes
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
+import shutil
 import sys
-import tempfile
 from typing import Literal
+import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -47,8 +56,7 @@ class DataManifest(BaseModel):
     store: str
     files: dict[str, DataFile]
 
-    def stored(self, path: str) -> StoredArtifact:
-        entry = self.files[path]
+    def stored(self, entry: DataFile) -> StoredArtifact:
         bucket, prefix = split_s3_uri(self.store)
         key = "/".join(filter(None, (prefix.rstrip("/"), "sha256", entry.sha256)))
         return StoredArtifact(
@@ -84,10 +92,14 @@ class DataUnavailable(RuntimeError):
 
 
 class FetchReport(BaseModel):
+    """Paths installed by a fetch, and how many digests S3 had to supply."""
+
     model_config = ConfigDict(frozen=True)
     fetched: list[str]
     present: list[str]
-    fetched_bytes: int
+    from_cache: int
+    downloaded: int
+    downloaded_bytes: int
 
 
 def load_manifest(path: Path = MANIFEST) -> DataManifest:
@@ -100,42 +112,55 @@ def file_entry(path: Path) -> DataFile:
     return DataFile(sha256=digest, bytes=path.stat().st_size)
 
 
-def _missing(selected: list[str], manifest: DataManifest) -> list[str]:
-    """Manifest paths that are absent locally; raises if present bytes differ."""
-    missing: list[str] = []
-    for path in selected:
-        target = ROOT / path
-        if not target.exists():
-            missing.append(path)
-        elif file_entry(target) != manifest.files[path]:
-            raise ValueError(
-                f"{path} differs from experiments/data.manifest.json; "
-                "move it aside or publish it"
-            )
-    return missing
+def cache_directory() -> Path:
+    configured = os.environ.get("MANABOT_DATA_CACHE")
+    if configured:
+        return Path(configured).expanduser()
+    base = Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
+    return base / "manabot" / "sha256"
 
 
 def fetch_data(
     paths: Iterable[str] = (), *, manifest: DataManifest | None = None
 ) -> FetchReport:
-    """Download missing manifest paths, verifying each digest before it appears."""
+    """Install missing manifest paths from the cache, downloading only cache misses.
+
+    Every installed file has been verified against its digest. A corrupt cache
+    file raises; it is never installed or silently replaced.
+    """
     manifest = manifest or load_manifest()
     selected = manifest.select(paths)
     missing = _missing(selected, manifest)
-    if missing:
-        _download(missing, manifest)
+    cache = cache_directory()
+    absent = sorted(
+        {
+            manifest.files[path]
+            for path in missing
+            if _cached(cache, manifest.files[path]) is None
+        },
+        key=lambda entry: entry.sha256,
+    )
+    if absent:
+        _download(absent, manifest, cache)
+    for path in missing:
+        cached = _cached(cache, manifest.files[path])
+        assert cached is not None  # every absent digest was just downloaded
+        _install(cached, ROOT / path)
     return FetchReport(
         fetched=missing,
         present=[path for path in selected if path not in missing],
-        fetched_bytes=sum(manifest.files[path].bytes for path in missing),
+        from_cache=len({manifest.files[path] for path in missing}) - len(absent),
+        downloaded=len(absent),
+        downloaded_bytes=sum(entry.bytes for entry in absent),
     )
 
 
 def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> list[str]:
     """Upload local files under experiments/data and record them in the manifest.
 
-    The store never overwrites a digest and reads every upload back. Returns the
-    paths whose manifest entry was added or changed.
+    S3 verifies each upload's SHA-256 and never overwrites a digest; nothing is
+    read back. The same local bytes fill the cache. Returns the paths whose
+    manifest entry was added or changed.
     """
     manifest = load_manifest(manifest_path)
     files: list[str] = []
@@ -155,6 +180,7 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
         else:
             raise ValueError(f"no local file or directory at {request}")
     store = S3ArtifactStore()
+    cache = cache_directory()
     entries = dict(manifest.files)
     changed: list[str] = []
     for path in files:
@@ -164,6 +190,8 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
         store.publish(
             ROOT / path, manifest.store, sha256=entry.sha256, size=entry.bytes
         )
+        if _cached(cache, entry) is None:
+            _admit(cache, entry, lambda partial: shutil.copyfile(ROOT / path, partial))
         entries[path] = entry
         changed.append(path)
     updated = manifest.model_copy(update={"files": dict(sorted(entries.items()))})
@@ -171,25 +199,81 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
     return changed
 
 
-def _download(paths: list[str], manifest: DataManifest) -> None:
+# -- local files ---------------------------------------------------------------
+
+
+def _missing(selected: list[str], manifest: DataManifest) -> list[str]:
+    """Manifest paths that are absent locally; raises if present bytes differ."""
+    missing: list[str] = []
+    for path in selected:
+        target = ROOT / path
+        if not target.exists():
+            missing.append(path)
+        elif file_entry(target) != manifest.files[path]:
+            raise ValueError(
+                f"{path} differs from experiments/data.manifest.json; "
+                "move it aside or publish it"
+            )
+    return missing
+
+
+def _cached(cache: Path, entry: DataFile) -> Path | None:
+    path = cache / entry.sha256
+    if not path.exists():
+        return None
+    if file_entry(path) != entry:
+        raise ValueError(f"cached experiment data is corrupt; delete {path}")
+    return path
+
+
+def _admit(cache: Path, entry: DataFile, write: Callable[[Path], object]) -> None:
+    """Write a digest's bytes to a temporary file, verify, then publish read-only."""
+    cache.mkdir(parents=True, exist_ok=True)
+    partial = cache / f".{entry.sha256}.{uuid.uuid4().hex}"
     try:
-        # boto3 is the optional `artifacts` extra; reads of present data need none.
+        write(partial)
+        if file_entry(partial) != entry:
+            raise ValueError(f"bytes for {entry.sha256} differ from the manifest")
+        partial.chmod(0o444)
+        partial.replace(cache / entry.sha256)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _install(cached: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.parent / f".fetch-{uuid.uuid4().hex}"
+    try:
+        _clone_or_copy(cached, partial)
+        partial.chmod(0o644)
+        partial.replace(target)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _clone_or_copy(source: Path, target: Path) -> None:
+    """APFS copy-on-write clone where available, else a byte copy; never a link."""
+    if sys.platform == "darwin":
+        clonefile = ctypes.CDLL(None, use_errno=True).clonefile
+        if clonefile(os.fsencode(source), os.fsencode(target), 0) == 0:
+            return
+    shutil.copyfile(source, target)
+
+
+# -- the store -----------------------------------------------------------------
+
+
+def _download(entries: list[DataFile], manifest: DataManifest, cache: Path) -> None:
+    try:
+        # boto3 is the optional `artifacts` extra; cached or present data needs none.
         from botocore.exceptions import BotoCoreError, ClientError
     except ImportError as error:
         raise DataUnavailable("fetching needs `uv run --extra artifacts`") from error
     try:
         store = S3ArtifactStore()
-        for path in paths:
-            target = ROOT / path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            # Download beside the target so the final rename is atomic.
-            descriptor, partial = tempfile.mkstemp(dir=target.parent, prefix=".fetch-")
-            os.close(descriptor)
-            try:
-                store.download(manifest.stored(path), Path(partial))
-                Path(partial).replace(target)
-            finally:
-                Path(partial).unlink(missing_ok=True)
+        for entry in entries:
+            reference = manifest.stored(entry)
+            _admit(cache, entry, lambda partial: store.download(reference, partial))
     except BotoCoreError as error:  # no credentials, endpoint or connection
         raise DataUnavailable(str(error)) from error
     except ClientError as error:
@@ -227,8 +311,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "fetch":
             report = fetch_data(args.paths)
             print(
-                f"fetched {len(report.fetched)} files ({report.fetched_bytes} bytes); "
-                f"{len(report.present)} already present"
+                f"fetched {len(report.fetched)} files; {len(report.present)} already "
+                f"present; {report.from_cache} digests from the cache, "
+                f"{report.downloaded} downloaded ({report.downloaded_bytes} bytes)"
             )
         else:
             changed = publish_data(args.paths)
