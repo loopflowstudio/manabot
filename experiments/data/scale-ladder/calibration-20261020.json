@@ -1,8 +1,0 @@
-{"recipe": "64x2, 256 streams x 64 transitions, 32 updates, absolute LR schedule, seed 15901, source e6a2aab1",
- "measure": "transitions/s between the update-8 monitor export and the final export (24 updates = 393,216 transitions)",
- "pods": [
-  {"gpu": "L4", "rate": 0.59, "cpu": "AMD EPYC 9254", "vcpus": 6, "seconds": 149.4, "transitions_per_second": 2632, "transitions_per_dollar": 16.06e6},
-  {"gpu": "A40", "rate": 0.59, "cpu": "Intel Xeon Gold 6342", "vcpus": 9, "seconds": 231.7, "transitions_per_second": 1697, "transitions_per_dollar": 10.36e6},
-  {"gpu": "RTX 4090", "rate": 0.89, "cpu": "AMD EPYC 7532", "vcpus": 12, "seconds": 212.7, "transitions_per_second": 1849, "transitions_per_dollar": 7.48e6}],
- "created": "2026-10-20T21:37:40Z", "deleted": "2026-10-20T21:49Z", "estimated_dollars": 0.40,
- "note": "Pods deleted before run directories were copied; timings are from remote file mtimes read over SSH."}
