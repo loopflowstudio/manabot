@@ -79,6 +79,14 @@ iterations, so v1's tiers compare directly only with runs at the same
 decisions per iteration. A later version may put the schedule on a decisions
 clock.
 
+v1 records only one seat per game: the opponent seat is played by the same
+live policy, but its decisions are not trained on. Jack Heart decided on
+2026-10-20 that self-play should learn from both sides (MTG-165). v1 runs to its
+$50 checkpoint unchanged. A second Allies vs Lessons run, **v2**, follows MTG-165
+at the same tiers and machine class, training on both seats' decisions, and is
+reported as its own rows. Its recipe, allocation and predictions are committed
+before it launches.
+
 | World | Tier | Iterations | Learner decisions | Hours | vs heuristic (LvA) | vs heuristic (mean) |
 |---|---|---:|---:|---:|---|---|
 | Allies vs Lessons v1 | $10 / 1 day | pending | | | | |
