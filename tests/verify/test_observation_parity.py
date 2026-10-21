@@ -312,7 +312,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     actual = env.encode_observation(obs)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    assert actual["agent_cards"].shape[-1] == 40
+    assert actual["agent_cards"].shape[-1] == 41
     assert actual["agent_permanents"].shape[-1] == 27
     assert actual["agent_cards"][0, 38] == 1
     assert actual["agent_cards"][0, 37] == 0

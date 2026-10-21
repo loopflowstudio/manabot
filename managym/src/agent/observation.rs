@@ -38,6 +38,9 @@ pub struct PlayerData {
     pub graveyard_lessons: i32,
     /// Total until-end-of-combat mana in this player's pool (firebending).
     pub combat_mana: i32,
+    /// Public pooled mana by W/U/B/R/G/C; restricted mana remains separate.
+    pub mana: [i32; 6],
+    pub lesson_mana: [i32; 6],
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
@@ -70,6 +73,7 @@ pub struct CardData {
     pub power: i32,
     pub toughness: i32,
     pub is_token: bool,
+    pub is_legendary: bool,
     /// Subtype tags the current pool cares about.
     pub is_ally: bool,
     pub is_lesson: bool,
@@ -444,6 +448,12 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
+            mana: std::array::from_fn(|slot| {
+                i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
+            }),
+            lesson_mana: std::array::from_fn(|slot| {
+                i32::from(p.mana_pool.lesson[slot]) + i32::from(p.combat_mana_pool.lesson[slot])
+            }),
             known_hand: p
                 .known_hand
                 .iter()
@@ -591,6 +601,10 @@ impl Observation {
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
+            is_legendary: card
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary")),
             is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
@@ -1081,6 +1095,7 @@ impl Observation {
                 "power": card.power,
                 "toughness": card.toughness,
                 "is_token": card.is_token,
+                "is_legendary": card.is_legendary,
                 "is_ally": card.is_ally,
                 "is_lesson": card.is_lesson,
                 "ward_cost": card.ward_cost,

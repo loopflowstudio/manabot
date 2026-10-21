@@ -198,6 +198,12 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "DEAL_DAMAGE_TO_CONTROLLER": 53,
         "DRAIN_LIFE": 54,
         "UNBLOCKABLE_IF": 55,
+        "ADD_LESSON_MANA": 56,
+        "GRANT_FLASHBACK": 57,
+        "GRANT_MANA": 58,
+        "CREATE_NONLEGENDARY_COPY": 59,
+        "MODIFY_CONTROLLED": 60,
+        "WATERBEND_OR_DISCARD": 61,
     }
 
 

@@ -158,26 +158,29 @@ impl Game {
         true
     }
 
-    /// Triggered mana abilities (CR 605.1b): "Whenever you tap a [predicate]
-    /// for mana, add [mana]." They don't use the stack — mana is added to
-    /// the controller's pool immediately, so it can help pay the very cost
-    /// that caused the tap (waterbend composition).
-    fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
-        let mut produced = Vec::new();
+    /// Immediate bonus from tapping this source for mana (CR 605.1b).
+    /// Waterbend taps are cost payment and never enter this authority.
+    pub(crate) fn tap_mana_bonus(
+        &self,
+        tapped: PermanentId,
+        controller: PlayerId,
+    ) -> crate::state::mana::Mana {
+        let mut produced = crate::state::mana::Mana::default();
         for permanent_id in self.battlefield_permanents(controller) {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                continue;
-            };
+            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             for ability in &self.state.cards[permanent.card].triggered_mana_abilities {
                 if self.permanent_matches_predicate(tapped, &ability.predicate) {
-                    produced.push(ability.mana.clone());
+                    produced.add(&ability.mana);
                 }
             }
         }
-        for mana in produced {
-            self.journal_player(controller);
-            self.state.players[controller.0].mana_pool.add(&mana);
-        }
+        produced
+    }
+
+    fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
+        let produced = self.tap_mana_bonus(tapped, controller);
+        self.journal_player(controller);
+        self.state.players[controller.0].mana_pool.add(&produced);
     }
 
     /// Create a token from a registered token definition under `controller`'s
@@ -264,6 +267,8 @@ impl Game {
         target_req_indices: Vec<usize>,
         kicked: bool,
     ) {
+        let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
+        let flashback = cast_from == ZoneType::Graveyard;
         self.move_card(card, ZoneType::Stack);
         self.journal_stack();
         self.state
@@ -272,6 +277,8 @@ impl Game {
                 id: self.state.id_gen.next_id(),
                 card,
                 controller,
+                cast_from,
+                flashback,
                 source_definition_id: self.state.cards[card].definition_id,
                 targets,
                 target_req_indices,
@@ -305,6 +312,10 @@ impl Game {
         entry: BattlefieldEntry,
     ) {
         let from = self.state.zones.zone_of(card);
+        let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
+            && self.find_spell_on_stack_index(card).is_some_and(|index| {
+                matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
+            }) { ZoneType::Exile } else { to_zone };
         let object = from.and_then(|_| self.current_object_ref(card));
         let committed = self.apply_proposed_event(ProposedEvent::ZoneMove {
             card,
@@ -377,6 +388,8 @@ impl Game {
         if let Some(lki) = departing_lki {
             self.record_object_lki(lki);
         }
+        let was_cast =
+            old_zone == Some(ZoneType::Stack) && self.find_spell_on_stack_index(card).is_some();
         if old_zone == Some(ZoneType::Stack) {
             if let Some(index) = self.find_spell_on_stack_index(card) {
                 self.journal_stack();
@@ -391,6 +404,7 @@ impl Game {
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent =
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
+            permanent.was_cast = was_cast;
             permanent.tapped = entry.tapped;
             permanent.plus1_counters = entry.plus_one_counters.max(0);
             event_controller = permanent.controller;

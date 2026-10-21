@@ -80,6 +80,7 @@ fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
                 SemanticPack::jeong_increment()?,
                 SemanticPack::elemental()?,
                 SemanticPack::sacrifice()?,
+                SemanticPack::temur()?,
             ]
             .into_iter()
             .map(AuthoredRuntime::compile)
@@ -546,6 +547,9 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
             predicate: predicate_value(object_field(trigger, "predicate")?)?,
             controller_only: opt_bool_field(trigger, "controller_only")?.unwrap_or(true),
         },
+        "cast_enters" => TriggerCondition::WasCast {
+            condition: Box::new(TriggerCondition::EntersTheBattlefield { subject }),
+        },
         "enters_battlefield" => TriggerCondition::EntersTheBattlefield { subject },
         "dies" => TriggerCondition::Dies { subject },
         "attacks" => TriggerCondition::Attacks { subject },
@@ -607,6 +611,13 @@ fn trigger_subject(value: &Value) -> Result<TriggerSubject, IrError> {
 
 fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<(), IrError> {
     match program.steps.as_slice() {
+        [Step::GrantFlashback] => definition.grants_flashback = true,
+        [Step::GrantMana { predicates }] => {
+            definition.mana_grant = predicates
+                .iter()
+                .map(predicate_card)
+                .collect::<Result<_, _>>()?
+        }
         [Step::UnblockableIf { condition }] => {
             definition.unblockable_if = Some(lower_condition(condition)?);
         }
@@ -719,6 +730,33 @@ fn lower_steps(
 
 fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Effect, IrError> {
     let effect = match step {
+        Step::GrantFlashback | Step::GrantMana { .. } => {
+            return unsupported(
+                program,
+                "mana and flashback grants require a static program",
+            )
+        }
+        Step::AddLessonMana { mana } => {
+            let mut mana = Mana::parse(mana);
+            mana.lesson = mana.mana;
+            mana.mana = [0; 6];
+            Effect::AddMana {
+                mana,
+                until_end_of_combat: false,
+            }
+        }
+        Step::CreateNonlegendaryCopy => Effect::CreateNonlegendaryCopy,
+        Step::ModifyControlled {
+            predicate,
+            power,
+            toughness,
+        } => Effect::ModifyControlled {
+            predicate: predicate_card(predicate)?,
+            power: i32::try_from(*power).map_err(|_| malformed(program, "power exceeds i32"))?,
+            toughness: i32::try_from(*toughness)
+                .map_err(|_| malformed(program, "toughness exceeds i32"))?,
+        },
+        Step::WaterbendOrDiscard { generic } => Effect::WaterbendOrDiscard { generic: *generic },
         Step::UnblockableIf { .. } => {
             return unsupported(program, "unblockable_if requires static program")
         }

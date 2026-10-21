@@ -51,6 +51,26 @@ impl Game {
         self.available_mana(player).can_pay(cost)
     }
 
+    /// Iroh's continuous grant is restricted to its controller's turn.
+    pub(crate) fn flashback_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
+        let definition = &self.state.cards[card];
+        if self.active_player() != player
+            || !definition.types.is_spell()
+            || !self.state.zones.contains(card, ZoneType::Graveyard, player)
+            || !self.battlefield_permanents(player).iter().any(|id| {
+                let source = self.state.permanents[*id].as_ref().unwrap();
+                self.state.cards[source.card].grants_flashback
+            })
+        {
+            return None;
+        }
+        if definition.has_subtype("Lesson") {
+            Some(ManaCost::parse("{1}"))
+        } else {
+            definition.mana_cost.clone()
+        }
+    }
+
     /// The cost to cast `card` right now: base (+ kicker if `kicked`),
     /// with affinity-style reductions applied (CR 601.2f).
     pub(crate) fn effective_spell_cost(
@@ -60,7 +80,12 @@ impl Game {
         kicked: bool,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
-        let mut cost = card_ref.mana_cost.clone()?;
+        let mut cost = if self.state.zones.zone_of(card) == Some(ZoneType::Graveyard) {
+            self.flashback_cost(player, card)?
+        } else {
+            card_ref.mana_cost.clone()?
+        };
+        cost.spend_on_lesson = card_ref.has_subtype("Lesson");
         if kicked {
             if let Some(kicker) = &card_ref.kicker {
                 cost = cost.plus(kicker);
@@ -135,6 +160,11 @@ impl Game {
             )
         };
 
+        if !self.state.zones.contains(card, ZoneType::Hand, player)
+            && self.flashback_cost(player, card).is_none()
+        {
+            return Err(AgentError("card is not in a permitted casting zone".into()));
+        }
         if is_land {
             return Err(AgentError("land cards cannot be cast".to_string()));
         }
@@ -573,8 +603,8 @@ impl Game {
         }
 
         let source_card = permanent.card;
-        let Some(ability) = self.state.cards[source_card]
-            .activated_abilities
+        let Some(ability) = self
+            .activated_abilities_for(permanent_id)
             .get(ability_index)
             .cloned()
         else {
@@ -826,6 +856,30 @@ impl Game {
         }
     }
 
+    pub(crate) fn reserved_payment_source(&self, payment: &Payment) -> Option<PermanentId> {
+        match payment {
+            Payment::Activation {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let source = self.state.permanents[*permanent].as_ref().unwrap();
+                let ability = &self.state.cards[source.card].activated_abilities[*ability_index];
+                (ability.tap_source || ability.sacrifice_source).then_some(*permanent)
+            }
+            Payment::Spell { .. } => None,
+        }
+    }
+
+    pub(crate) fn pending_mana_source(&self) -> Option<PermanentId> {
+        match &self.pending_choice {
+            Some(PendingChoice::ManaPayment { payment, .. }) => {
+                self.reserved_payment_source(payment)
+            }
+            _ => None,
+        }
+    }
+
     fn begin_mana_payment(
         &mut self,
         player: PlayerId,
@@ -833,13 +887,13 @@ impl Game {
         sacrifice: Option<PermanentId>,
         alternative: Option<ManaCost>,
     ) -> Result<(), AgentError> {
+        self.pending_choice = Some(PendingChoice::ManaPayment {
+            player,
+            payment: Box::new(payment.clone()),
+            sacrifice,
+            alternative: alternative.clone(),
+        });
         if !self.mana_ability_actions(player, sacrifice).is_empty() {
-            self.pending_choice = Some(PendingChoice::ManaPayment {
-                player,
-                payment: Box::new(payment),
-                sacrifice,
-                alternative,
-            });
             return Ok(());
         }
         self.commit_payment(player, payment, sacrifice, alternative)
@@ -869,7 +923,8 @@ impl Game {
         alternative: Option<ManaCost>,
     ) -> Result<(), AgentError> {
         let cost = self.payment_mana_cost(player, &payment, alternative.as_ref());
-        self.produce_mana(player, &cost)?;
+        let reserved = self.reserved_payment_source(&payment);
+        self.produce_mana_without(player, &cost, reserved)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
         self.spend_mana(player, &cost)?;
@@ -926,33 +981,22 @@ impl Game {
             .collect()
     }
 
-    /// Can `player` cover `cost` using up to `candidates` waterbend taps
+    /// Can `player` cover `cost` with untapped waterbend candidates
     /// ({1} each, generic only) plus available mana?
-    pub(crate) fn can_pay_with_waterbend(
-        &self,
-        player: PlayerId,
-        cost: &ManaCost,
-        candidates: usize,
-    ) -> bool {
-        if !self.mana_ability_actions(player, None).is_empty() {
-            if self.can_pay_with_mana_abilities(player, cost, None) {
-                return true;
-            }
-            if candidates == 0 || cost.generic() == 0 {
-                return false;
-            }
-            return self
-                .waterbend_candidates(player)
-                .into_iter()
-                .any(|candidate| {
-                    let mut probe = self.clone();
-                    probe.tap_permanent(candidate, true);
-                    probe.can_pay_with_waterbend(player, &cost.reduced_generic(1), candidates - 1)
-                });
+    pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
+        if self.can_pay_with_mana_abilities(player, cost, None) {
+            return true;
         }
-        let tappable = candidates.min(cost.generic() as usize) as u8;
-        self.available_mana(player)
-            .can_pay(&cost.reduced_generic(tappable))
+        if cost.generic() == 0 {
+            return false;
+        }
+        self.waterbend_candidates(player)
+            .into_iter()
+            .any(|candidate| {
+                let mut probe = self.clone();
+                probe.tap_permanent(candidate, false);
+                probe.can_pay_with_waterbend(player, &cost.reduced_generic(1))
+            })
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.
@@ -982,9 +1026,8 @@ impl Game {
             ));
         }
 
-        // Waterbend taps count as tapping for mana — triggered mana
-        // abilities (Badgermole Cub) fire and add to the pool immediately.
-        self.tap_permanent(tap_permanent, true);
+        // Waterbend pays a cost without activating a mana ability.
+        self.tap_permanent(tap_permanent, false);
         let remaining_generic = remaining_generic - 1;
 
         if remaining_generic == 0 {
@@ -1026,13 +1069,12 @@ impl Game {
         ability_index: usize,
         remaining_generic: u8,
     ) -> Result<(), AgentError> {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+        let Some(_) = self.state.permanents[permanent_id].as_ref() else {
             self.pending_choice = None;
             return Err(AgentError("source permanent does not exist".to_string()));
         };
-        let source_card = permanent.card;
-        let Some(ability) = self.state.cards[source_card]
-            .activated_abilities
+        let Some(ability) = self
+            .activated_abilities_for(permanent_id)
             .get(ability_index)
             .cloned()
         else {
@@ -1067,8 +1109,8 @@ impl Game {
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
         let source_definition_id = self.state.cards[source_card].definition_id;
-        let Some(ability) = self.state.cards[source_card]
-            .activated_abilities
+        let Some(ability) = self
+            .activated_abilities_for(permanent_id)
             .get(ability_index)
             .cloned()
         else {
