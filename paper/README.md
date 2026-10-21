@@ -1,90 +1,61 @@
-# The Manabot working report
+# Manabot: results, then methods
 
-`main.tex` is the current draft (October 2026): a working report on training
-*Magic: The Gathering* agents by self-play. It says what was built, what was
-tried, what worked and what did not. Part I is a short account of what we have
-demonstrated, owning the failures; Part II shares the recipe with honest
-citation of the work behind each component; Appendix A maps game-RL
-difficulties to the literature.
+The active paper is a dated internal research note for readers who already know
+RL: what Manabot has demonstrated, where it failed, and how the current recipes
+work. Both the active and archived draft subtitles say:
 
-The July 2026 draft, written when the project was called Etude Fantasia and
-leaned on search and distillation, is kept unchanged as
-`drafts/02-platform-and-challenges.tex` (with its PDF). Its search-era tables,
-challenge set and calibration ledger remain the detailed record of that period.
+> Written by AI. Not yet intended for distribution.
 
-> **Charter (2026-07-10, still in force):** this document serves *internal
-> understanding first*. Its job is that the owner can state, for every result:
-> what was measured, why the mechanism explanation is believed, and what would
-> change our mind. Publication is a later fork of a subset.
-
-## Reading it
+## Reading and building
 
 ```bash
 open paper/manabot.pdf
+brew install tectonic   # one-time; fetches TeX packages on demand
+make -C paper          # -> paper/manabot.pdf
 ```
 
-## Building it
+`make -C paper watch` rebuilds on save.
 
-```bash
-brew install tectonic   # one-time; fetches TeX packages on demand, no TeXLive
-cd paper && make        # -> paper/manabot.pdf
-make watch              # rebuild on save
-```
+## Structure
 
-## Files
+1. **What we have demonstrated** (2–4 pages): measured results and failures,
+   each linked to its retained report with its original world, recipe, budget,
+   opponents and uncertainty. Earlier results do not certify w9 or FiLM.
+2. **Methods as recipes**: the current model, collection, learning, search and
+   evaluation paths, with code owners, cited influences and local adaptations.
 
-- `main.tex` — the paper. Figures are inline pgfplots; no external image files.
-- `refs.bib` — bibliography.
-- `drafts/` — superseded drafts, kept for the record.
-  - `02-platform-and-challenges.tex` / `.pdf` — the July 2026 platform and
-    challenge-set draft (search era).
-  - `01-refuted-ledger.tex` — the first framing: a negative-results paper
-    organized around the ledger of refuted claims. Superseded when the goal
-    became "set up the problem space for new researchers," but its §7 survives
-    as the calibration-findings section of the current draft.
+The paper describes source at `a04dcdc2`. It is selective rather than an
+exhaustive experiment ledger or a claim of strong human play. The
+[research program](../manabot/RESEARCH.md), [architecture](../docs/ARCHITECTURE.md)
+and individual reports hold broader context. Frozen experiment evidence remains
+unchanged.
 
-## Structure of the current draft
+## Evidence and implementation map
 
-The title page says "Written by AI. Not yet intended for distribution."
+| Topic | Retained source |
+| --- | --- |
+| Batching, model size, cost and qualification rule | [Longer learning 017](../experiments/longer-learning-017.md) |
+| Pooling and advantage floor | [Paired follow-up](../experiments/pooling-filter-followup.md) |
+| Critic coverage/filter scope | [Technique screen](../experiments/ataraxos-technique-screen.md) |
+| Failed short full-game improvement criterion | [Current-baseline debugging results](../experiments/current-baseline.md#retained-debugging-results) |
+| Reset seeding and retracted seat claims | [World-growth investigation](../experiments/exp-06-newworld-training.md), [understanding F1–F3](understanding.md) |
+| Value-search gate and narrow training deals | [Value gate](../experiments/exp-10-value-gate.md) |
+| Failed expert-iteration crank / control behavior | [Expert iteration](../experiments/exp-07-expert-iteration.md), [competency suite](../experiments/exp-09-control-competency.md) |
+| Current model and ordinary baseline | [Agent](../manabot/model/agent.py), [baseline recipe](../manabot/training/baseline.py) |
+| Ataraxos fidelity and departures | [Fidelity guide](../docs/ataraxos.md), [objective](../manabot/training/ataraxos.py) |
+| Search and distillation contracts | [Local policy search](../docs/local-policy-search.md) |
 
-- **Part I — What we have demonstrated** (short): status, what works, what
-  failed and what it taught us, what is not yet demonstrated, and how the
-  approach evolved.
-- **Part II — Methods: the recipe and its influences.** Assumes the reader
-  knows why game RL is hard. Opens with a component → what we do → influences
-  → code table, then one section per component (rules engine, network,
-  collection, update, beliefs and local search, evaluation), with departures
-  from each source stated.
-- **Appendix A** — the problem-first map: difficulty → how it showed up →
-  techniques (citations) → Manabot now.
+## Files and history
 
-## Where the numbers come from
+- `main.tex` — active results-first paper; report links pin its source base.
+- `manabot.pdf` — built active paper.
+- `refs.bib` — cited influences and older entries retained for the archives.
+- `drafts/02-platform-and-challenges.tex` / `.pdf` — preserved July platform
+  and challenge-set draft, also available at `a04dcdc2:paper/main.tex`.
+  Its extreme random-play seat claims were later retracted.
+- `drafts/01-refuted-ledger.tex` — historical negative-results draft with the
+  distribution subtitle above.
+- `understanding.md` — historical findings and corrections, including the seeding
+  bug. It is not a second current paper or the live work queue.
 
-Every figure traces to a report in `experiments/`, which is the source of
-truth; `manabot/RESEARCH.md` summarizes current findings with links. When a
-report lands, update the paper.
-
-| Paper section | Report |
-|---|---|
-| Engine path and throughput | `sps-closeout.md`, `exp-07-expert-iteration.md` |
-| Where training time goes | `training-time.md` |
-| Self-play cohort | `current-baseline.md` |
-| Batching and model size | `longer-learning-017.md` |
-| Opponent effect | `mirror-curriculum.md` |
-| Technique screen | `ataraxos-technique-screen.md` |
-| Learnability | `learnability-search.md` |
-| Ataraxos recipe fidelity | `docs/ataraxos.md` |
-| Search era | `exp-02`, `exp-03`, `exp-04`, `exp-07`, `exp-08b`, `exp-09`, `exp-11` |
-| Fusion test design (unrun) | `wave/intelligence/04-2x2-diagnosis.md` |
-
-## Known gaps in the current draft
-
-- **Citations to verify.** Bibliography entries added in October 2026 carry a
-  `note = {verify}` where details were written from memory. The Ataraxos entry
-  has a placeholder title and author list.
-- The "energy reserve" wording should be checked against the Ataraxos paper.
-- The MMD comparison with the paper's α and β assumes comparable value scales;
-  this is unchecked.
-- The held-out comparison for the self-play cohort is pending.
-- No human evaluation; scripted anchors are saturating.
-- The strategy-fusion 2×2 test is designed but has not been run.
+Archived claims are historical evidence, not current baselines.
