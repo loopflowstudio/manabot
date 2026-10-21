@@ -147,7 +147,15 @@ def admit_learning_state(
         or source.regime.schedule_clock != regime.schedule_clock
     ):
         raise ValueError("learning-state model/world/setup/schedule mismatch")
-    for name in ("learning", "streams", "transitions", "behavior", "opponent"):
+    for name in (
+        "learning",
+        "streams",
+        "transitions",
+        "behavior",
+        "opponent",
+        "learning_seats",
+        "games_per_stream",
+    ):
         if getattr(definition, name) != getattr(stage, name):
             raise ValueError(f"learning-state recipe mismatch: {name}")
     origin = _origin(source, record)

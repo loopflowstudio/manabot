@@ -36,7 +36,7 @@ from manabot.verify.learning_regression import report_baseline
 import managym
 
 BASELINE_STEPS = 128
-BASELINE_VERSION = "baseline-v1"
+BASELINE_VERSION = "baseline-v2"
 # Separate from the existing scientific and monitoring cohorts. Repeated nightly
 # use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
