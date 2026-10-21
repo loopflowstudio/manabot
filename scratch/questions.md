@@ -1,0 +1,6 @@
+# Assumptions
+
+- 2026-10-21: No separate design was supplied. The current checkout's Task description is the accepted brief. Rewrite the active paper around selected, auditable results rather than exhaustively summarizing every experiment; keep historical evidence in its original reports and archived draft.
+- The active paper describes current source at base `a04dcdc2`, but historical experiments retain their own worlds, recipes and source identities. No historical result is transferred to baseline-v2/FiLM or w9.
+- Headless validation uses TeX logs and PDF text/page checks; visual review remains with the later review step. The PDF skill's artifact-marker script is unavailable in this repository; the repository's TeX build remains authoritative.
+- 2026-10-21: Upstream `f15196e1` introduced a July archive and renamed the active output to `manabot.pdf` while the implementation was stashed. Retain the results-first rewrite and corrected citations, union the bibliography with upstream entries, preserve the July source/PDF, and use the upstream output filename. The stashed active PDF had landed under the July archive filename; restored that archive from HEAD and rebuilt the active output.
