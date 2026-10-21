@@ -21,8 +21,9 @@ class PPOResult:
 
 class Config(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    # learnability-2 trains the FiLM-conditioned policy; learnability-1 used
-    # the additive policy, whose verdict depended on the starting weights.
+    # learnability-2 trains the FiLM-conditioned policy on case set
+    # action-cases-2; learnability-1 used the additive policy, whose verdict
+    # depended on the starting weights, on action-cases-1.
     version: str = "learnability-2"
     seeds: tuple[int, ...] = (17, 29, 43)
     updates: int = 240
@@ -62,6 +63,8 @@ class Result(BaseModel):
     torch_version: str | None = None
     fit_cases: int = 0
     held_out_cases: int = 0
+    # `action_cases.CASE_SET`; None in reports that predate case-set versions.
+    case_set: str | None = None
     cases_digest: str | None = None
     platform: str
     started_at: str

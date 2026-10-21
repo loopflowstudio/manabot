@@ -53,7 +53,9 @@ All 24 held-out cases are evaluated only after training and weight reload.
 
 Both preferences occur in each family: public life 5/7 selects candidate zero,
 35/33 selects candidate one. Held-out life 6/8 and 34/32, with different native
-shuffle seeds, tests interpolation over changed states. These labels are an
+shuffle seeds, tests interpolation over changed states. Held-out cases change
+state only: case creation asserts that every card definition a held-out case
+shows also appears in its family's fit cases. These labels are an
 artificial visible context, **not a claim that low life strategically favors
 attacking or any particular Lesson**. No identical observable state has opposite
 labels. Case creation asserts native/scalar encoding equality.
@@ -97,7 +99,7 @@ starts stuck on at least one of those families. Changing
 `CARD_DEFINITION_COUNT` reshuffles every later initialization, which is how
 MTG-122's three vanilla cards turned seed 17 red.
 
-`learnability-2` keeps every case, seed, budget and threshold. It adds one
+`learnability-2` keeps every seed, budget and threshold. It adds one
 multiplicative path: the head reads each action embedding scaled by
 `1 + W·state`, where `state` is the masked mean of the post-attention objects
 (FiLM, Perez et al. 2018, scale only). The product has a gradient at the
@@ -106,16 +108,22 @@ all historical parameters are unchanged. The gate is still as sensitive:
 `identity_removed` inputs still produce exact ties, and zeroing the
 attack/mode/ability selector columns in training fails all 30 of 30 seeds.
 
-| Seeds 1–300 | Seeds failing | Stuck fit (attack / mode / ability) | Held-out misses |
-|---|---|---|---|
-| additive (`learnability-1`) | 78 | 34 / 25 / 25 | Learn 28, Learn fit 1 |
-| FiLM (`learnability-2`) | 31 | 0 / 0 / 0 | Learn 29, target 2 |
+It also uses case set `action-cases-2`. In `action-cases-1`, Learn's held-out
+variant 1 (native seed 112) has Pop Quiz draw a Mountain. No Learn fit case shows
+that definition, and about one FiLM seed in ten missed that case. Variant 1 now
+uses seed 116, which draws an Island, at the same life totals. Case creation
+rejects any held-out definition missing from the family's fit cases; no other
+family had one.
 
-One held-out miss remains, unchanged by FiLM. Held-out variant 1's native
-shuffle puts a hand card (definition 3) that the Learn fit cases never show.
-In every checked miss, replacing it with a fit-seen definition restores the
-correct preference. This is case-design generalization, not a stuck start.
-It still fails roughly one seed in ten.
+| Seeds 1–300 | Seeds failing | Stuck fit (attack / mode / ability) | Other misses |
+|---|---|---|---|
+| additive, `action-cases-1` (`learnability-1`) | 78 | 34 / 25 / 25 | held-out Learn 28; Learn fit 1 |
+| FiLM, `action-cases-1` | 31 | 0 / 0 / 0 | held-out Learn 29, target 2 |
+| additive, `action-cases-2` | 57 | 34 / 25 / 25 | held-out Learn 1; Learn fit 1 |
+| FiLM, `action-cases-2` (`learnability-2`) | 3 | 0 / 0 / 0 | held-out Learn 1, target 2 |
+
+All remaining held-out misses involve only definitions their fit cases show:
+they vary only life or native state, so they are generalization misses.
 
 The weakness is not confined to the probe's one-column contrasts. On 96 real
 authored decisions (choice-corpus rounds 0–2, ten families, each at life 5 and

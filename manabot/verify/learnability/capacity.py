@@ -18,6 +18,7 @@ from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
 from manabot.verify.action_cases import (
+    CASE_SET,
     DecisionCase,
     curriculum,
     identity_removed,
@@ -92,6 +93,7 @@ def run(out: Path, result: Result) -> None:
     ).hexdigest()
     result.torch_version = torch.__version__
     cases = curriculum()
+    result.case_set = CASE_SET
     result.cases_digest = _digest_cases(cases)
     case_path = out / "cases.json"
     case_path.write_text(
@@ -157,6 +159,7 @@ def run(out: Path, result: Result) -> None:
                 "source": result.source,
                 "source_digest": result.source_digest,
                 "world": result.world,
+                "case_set": result.case_set,
                 "cases_digest": result.cases_digest,
                 "seed": seed,
             },

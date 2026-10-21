@@ -10,7 +10,13 @@ import torch
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
-from manabot.verify.action_cases import curriculum, identity_removed, reorder_objects
+from manabot.verify.action_cases import (
+    curriculum,
+    decision_case,
+    identity_removed,
+    reorder_objects,
+    unseen_definitions,
+)
 from manabot.verify.learnability import publish as publisher
 from manabot.verify.learnability.__main__ import supervise
 from manabot.verify.learnability.report import save
@@ -69,6 +75,15 @@ def test_native_outcomes_and_object_order_invariance() -> None:
                 )
     finally:
         torch.set_num_threads(previous)
+
+
+def test_held_out_cases_only_show_fit_definitions() -> None:
+    cases = curriculum()
+    assert not unseen_definitions(cases)
+    # Learn variant 1's Pop Quiz draws a Mountain no Learn fit case shows.
+    stale = [c for c in cases if c.family == "learn" and c.split == "fit"]
+    stale.append(decision_case("learn", variant=1, split="held_out"))
+    assert unseen_definitions(stale) == {"learn/1/0": {3}}
 
 
 def test_discord_failure_receipt_and_duplicate_prevention(
