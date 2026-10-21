@@ -48,16 +48,13 @@ class CardReferences:
 class SemanticCardEncoder(nn.Module):
     def __init__(self, pack_key: str, hidden_dim: int) -> None:
         super().__init__()
-        decks = {
-            "ur-lessons-vs-gw-allies": ("ur_lessons", "gw_allies"),
-            "elemental-combat-v1": ("elemental_left", "elemental_right"),
-        }
-        if pack_key not in decks:
-            raise ValueError(f"unsupported policy semantic pack: {pack_key}")
+        keys = managym.authored_deck_keys(pack_key)
+        if len(keys) < 2:
+            raise ValueError(
+                f"semantic policy pack requires at least two setups: {pack_key}"
+            )
         engine = managym.Env(seed=0)
-        engine.reset(
-            [managym.authored_deck_setup(pack_key, key) for key in decks[pack_key]]
-        )
+        engine.reset([managym.authored_deck_setup(pack_key, key) for key in keys[:2]])
         pack = BoundSemanticPack.from_env(engine)
         catalog = pack.catalog
         pairs = list(

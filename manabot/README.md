@@ -99,11 +99,12 @@ recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w9** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w10** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w8 artifacts, are not compatible with w9. Elemental combat,
+including w9 artifacts, are not compatible with w10. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
-release certification remains unfinished. The local
+[ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
+`elemental-world-v1`; release certification remains unfinished. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).

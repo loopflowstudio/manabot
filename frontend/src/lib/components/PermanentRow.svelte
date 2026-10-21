@@ -39,6 +39,7 @@
       tapped={permanent.tapped}
       dimmed={permanent.summoning_sick}
       counters={permanent.plus1_counters}
+      temporarySubtypes={permanent.temp_subtypes ?? []}
       damage={permanent.damage}
       onSelect={() => onSelectTarget?.(permanent.id)}
       onHoverStart={() => {

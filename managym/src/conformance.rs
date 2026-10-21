@@ -85,11 +85,16 @@ pub enum Orientation {
     TemurRightVsLeft,
     SacrificeLeftVsRight,
     SacrificeRightVsLeft,
+    ElementalWorldGrVsUg,
+    ElementalWorldUgVsGr,
 }
 
 impl Orientation {
     fn source_bytes(self) -> &'static [u8] {
         match self {
+            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => {
+                include_bytes!("../../content/semantic/v1/elemental_world.source.json")
+            }
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => {
                 include_bytes!("../../content/semantic/v1/temur.source.json")
             }
@@ -107,6 +112,11 @@ impl Orientation {
     }
     fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
         match self {
+            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
+                crate::semantic::SemanticPack::elemental_world()
+                    .and_then(|pack| pack.compile_content_pack())
+                    .map_err(|error| error.to_string())?,
+            )),
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::new(
                 crate::semantic::SemanticPack::temur()
                     .and_then(|pack| pack.compile_content_pack())
@@ -127,6 +137,8 @@ impl Orientation {
     }
     fn seat_keys(self) -> (&'static str, &'static str) {
         match self {
+            Self::ElementalWorldGrVsUg => ("elemental_gr", "elemental_ug"),
+            Self::ElementalWorldUgVsGr => ("elemental_ug", "elemental_gr"),
             Self::TemurLeftVsRight => ("temur_left", "temur_right"),
             Self::TemurRightVsLeft => ("temur_right", "temur_left"),
             Self::UrLessonsVsGwAllies => ("ur_lessons", "gw_allies"),

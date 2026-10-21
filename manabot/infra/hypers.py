@@ -86,7 +86,12 @@ class MatchHypers(BaseHypersModel):
         first = managym.authored_deck_setup(pack_key, hero_deck)
         second = managym.authored_deck_setup(pack_key, villain_deck)
         return cls(
-            content_pack=pack_key if hero_deck == villain_deck else None,
+            content_pack=(
+                pack_key
+                if hero_deck == villain_deck
+                or len(managym.authored_deck_keys(pack_key)) > 2
+                else None
+            ),
             hero=hero,
             villain=villain,
             hero_deck=first.decklist,

@@ -1,0 +1,411 @@
+{
+  "status": "accepted 2026-10-20; implementation evidence in world.md; not balance-tested",
+  "inventory_policy": "Each deck independently uses no more copies than the cube contains, counting its main deck and Lesson pool together. Reuse across decks is allowed. Basic lands are unlimited.",
+  "cube_source": "https://cubecobra.com/cube/download/csv/elemental",
+  "retrieved": "2026-10-20",
+  "decks": [
+    {
+      "key": "GR",
+      "title": "4 power / pump and cheese",
+      "plan": "Six creatures can reach power 4 without a pump spell, enabling Tiger-Dillo. Trample tricks threaten burst damage. Learn supplies follow-up interaction.",
+      "main": {
+        "Tiger-Dillo": 2,
+        "Ostrich-Horse": 2,
+        "Uncle Iroh": 1,
+        "Giant Cindermaw": 1,
+        "Badgermole Cub": 1,
+        "Toph, the Blind Bandit": 1,
+        "Deserter's Disciple": 1,
+        "Wartime Protestors": 1,
+        "Gnarled Professor": 1,
+        "Monastery Swiftspear": 1,
+        "Lightning Strike": 2,
+        "Firebending Lesson": 2,
+        "Fists of Flame": 2,
+        "Enthusiastic Study": 1,
+        "Igneous Inspiration": 1,
+        "Field Trip": 1,
+        "Origin of Metalbending": 1,
+        "Shared Roots": 1,
+        "Forest": 8,
+        "Mountain": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Firebending Lesson": 1,
+        "Combustion Technique": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "GW",
+      "title": "Allies",
+      "plan": "Creature development, Ally entry triggers, and favorable combat. One White Lotus Reinforcements and one South Pole Voyager provide payoffs without stacking many rare bombs.",
+      "main": {
+        "Compassionate Healer": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Invasion Reinforcements": 3,
+        "Water Tribe Rallier": 2,
+        "Earth Kingdom Jailer": 2,
+        "Haru, Hidden Talent": 1,
+        "White Lotus Reinforcements": 1,
+        "Ostrich-Horse": 2,
+        "Professor of Symbology": 1,
+        "South Pole Voyager": 1,
+        "Allies at Last": 2,
+        "Yip Yip!": 1,
+        "Fancy Footwork": 1,
+        "Enter the Avatar State": 1,
+        "Origin of Metalbending": 1,
+        "True Ancestry": 1,
+        "Plains": 8,
+        "Forest": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Origin of Metalbending": 1,
+        "Enter the Avatar State": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "UR",
+      "title": "Spells",
+      "plan": "Cheap spells fuel Cadets and Dragonfly Swarm. Learn and card selection sustain the deck; this is the spells-focused deck rather than a sacrifice engine.",
+      "main": {
+        "Fire Nation Cadets": 4,
+        "Gran-Gran": 1,
+        "Dragonfly Swarm": 2,
+        "Deserter's Disciple": 1,
+        "Monastery Swiftspear": 1,
+        "Firebending Lesson": 3,
+        "Igneous Inspiration": 2,
+        "Pop Quiz": 1,
+        "Divide by Zero": 2,
+        "Accumulate Wisdom": 1,
+        "Abandon Attachments": 2,
+        "Combustion Technique": 1,
+        "Lightning Strike": 1,
+        "Octopus Form": 1,
+        "Mountain": 8,
+        "Island": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Firebending Lesson": 1,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "UB",
+      "title": "Draw-two control",
+      "plan": "Clues, looting, and instant-speed draw enable evasive threats and Spirit tokens. Removal buys time; June and Deadly Dispute supply occasional sacrifice value.",
+      "main": {
+        "Otter-Penguin": 3,
+        "Knowledge Seeker": 2,
+        "Forecasting Fortune Teller": 3,
+        "Foggy Swamp Spirit Keeper": 1,
+        "Gran-Gran": 1,
+        "June, Bounty Hunter": 1,
+        "Eyetwitch": 2,
+        "Pop Quiz": 1,
+        "It'll Quench Ya!": 2,
+        "Abandon Attachments": 1,
+        "Deadly Dispute": 1,
+        "Power Word Kill": 2,
+        "Savor": 1,
+        "Epic Downfall": 1,
+        "Accumulate Wisdom": 1,
+        "Island": 8,
+        "Swamp": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Accumulate Wisdom": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "UW",
+      "title": "Tempo",
+      "plan": "Small evasive threats backed by bounce, countermagic, and Jailer. Learn turns temporary disruption into continuing resources.",
+      "main": {
+        "Spectral Sailor": 1,
+        "Messenger Hawk": 2,
+        "Momo, Friendly Flier": 1,
+        "Forecasting Fortune Teller": 3,
+        "Earth Kingdom Jailer": 2,
+        "Compassionate Healer": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Professor of Symbology": 2,
+        "Divide by Zero": 2,
+        "Boomerang Basics": 2,
+        "Pop Quiz": 1,
+        "It'll Quench Ya!": 2,
+        "Yip Yip!": 1,
+        "Enter the Avatar State": 1,
+        "Plains": 8,
+        "Island": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Fancy Footwork": 1,
+        "Accumulate Wisdom": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "UG",
+      "title": "Temur Lessons",
+      "plan": "A green-blue ramp and fixing base splashes red for Iroh, Grand Lotus and Ran and Shaw, as selected by the user. Learn, Lessons, and graveyard reuse provide the late game.",
+      "main": {
+        "Hermitic Herbalist": 2,
+        "Great Divide Guide": 1,
+        "Iroh, Grand Lotus": 1,
+        "Ran and Shaw": 1,
+        "Gnarled Professor": 1,
+        "Gran-Gran": 1,
+        "Unlucky Cabbage Merchant": 1,
+        "Ostrich-Horse": 2,
+        "Toph, the Blind Bandit": 1,
+        "Field Trip": 1,
+        "Shared Roots": 1,
+        "Cycle of Renewal": 1,
+        "Waterbending Lesson": 1,
+        "Accumulate Wisdom": 1,
+        "Abandon Attachments": 1,
+        "Firebending Lesson": 1,
+        "Combustion Technique": 1,
+        "True Ancestry": 1,
+        "Prophetic Prism": 1,
+        "Zuko's Exile": 1,
+        "Forest": 5,
+        "Island": 5,
+        "Mountain": 3,
+        "Fabled Passage": 3,
+        "Prismatic Vista": 2
+      },
+      "lesson_pool": {
+        "Origin of Metalbending": 1,
+        "Iroh's Demonstration": 1,
+        "Sokka's Haiku": 1
+      }
+    },
+    {
+      "key": "WR",
+      "title": "Go-wide Allies",
+      "plan": "Invasion Reinforcements and Gather the White Lotus build bodies. Wartime Protestors, Jet, and combat tricks convert a wide board into attacks.",
+      "main": {
+        "Compassionate Healer": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Invasion Reinforcements": 3,
+        "Professor of Symbology": 2,
+        "Deserter's Disciple": 1,
+        "Jet, Freedom Fighter": 1,
+        "Wartime Protestors": 1,
+        "Water Tribe Rallier": 1,
+        "Master Piandao": 1,
+        "South Pole Voyager": 1,
+        "Lightning Strike": 3,
+        "Firebending Lesson": 1,
+        "Igneous Inspiration": 1,
+        "Yip Yip!": 1,
+        "Fancy Footwork": 1,
+        "Enthusiastic Study": 1,
+        "Gather the White Lotus": 1,
+        "Plains": 8,
+        "Mountain": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Firebending Lesson": 1,
+        "Enter the Avatar State": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "WB",
+      "title": "Go-wide sacrifice",
+      "plan": "Cheap fodder and token makers feed removal and June. Tolls of War rebuilds the board; Bastion of Remembrance provides reach through deaths.",
+      "main": {
+        "Pretending Poxbearers": 2,
+        "Curious Farm Animals": 1,
+        "Callous Inspector": 1,
+        "Eyetwitch": 2,
+        "Professor of Symbology": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Invasion Reinforcements": 3,
+        "Corrupt Court Official": 2,
+        "June, Bounty Hunter": 1,
+        "Deadly Precision": 2,
+        "Deadly Dispute": 1,
+        "Tolls of War": 1,
+        "Bastion of Remembrance": 1,
+        "Savor": 1,
+        "Power Word Kill": 1,
+        "Yip Yip!": 1,
+        "Plains": 8,
+        "Swamp": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Enter the Avatar State": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "RB",
+      "title": "Sacrifice control",
+      "plan": "Discard creatures and abundant removal trade resources. Weaponize the Monsters and Mayhem Devil turn expendable permanents into control tools; Cat-Gator closes longer games.",
+      "main": {
+        "Callous Inspector": 1,
+        "Corrupt Court Official": 4,
+        "Eyetwitch": 2,
+        "Mayhem Devil": 1,
+        "June, Bounty Hunter": 1,
+        "Deserter's Disciple": 1,
+        "Fire Nation Cadets": 1,
+        "Cat-Gator": 1,
+        "Firebending Lesson": 3,
+        "Lightning Strike": 2,
+        "Igneous Inspiration": 1,
+        "Deadly Precision": 2,
+        "Deadly Dispute": 1,
+        "Weaponize the Monsters": 1,
+        "Savor": 1,
+        "Swamp": 8,
+        "Mountain": 7,
+        "Fabled Passage": 2
+      },
+      "lesson_pool": {
+        "Firebending Lesson": 1,
+        "Combustion Technique": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "key": "BG",
+      "title": "Landfall and sacrifice",
+      "plan": "Fetch lands trigger landfall while sacrificing themselves. Tracker and Provisioner make expendable resources; sacrifice removal and Clues turn those resources into value. Earthbending is supporting material.",
+      "main": {
+        "Sazh's Chocobo": 1,
+        "Tireless Tracker": 1,
+        "Tireless Provisioner": 1,
+        "Lotus Cobra": 1,
+        "Unlucky Cabbage Merchant": 1,
+        "Badgermole Cub": 1,
+        "Toph, the Blind Bandit": 1,
+        "Dai Li Agents": 1,
+        "Corrupt Court Official": 2,
+        "Callous Inspector": 1,
+        "June, Bounty Hunter": 1,
+        "Ostrich-Horse": 2,
+        "Cycle of Renewal": 1,
+        "Field Trip": 1,
+        "True Ancestry": 1,
+        "Origin of Metalbending": 1,
+        "Deadly Precision": 2,
+        "Deadly Dispute": 1,
+        "Savor": 1,
+        "Power Word Kill": 1,
+        "Forest": 6,
+        "Swamp": 6,
+        "Fabled Passage": 3,
+        "Prismatic Vista": 2
+      },
+      "lesson_pool": {
+        "Azula Always Lies": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    }
+  ],
+  "validation": [
+    {
+      "deck": "GR",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 12,
+      "nonlands": 23,
+      "lesson_pool": 4
+    },
+    {
+      "deck": "GW",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 7,
+      "nonlands": 23,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "UR",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 13,
+      "nonlands": 23,
+      "lesson_pool": 4
+    },
+    {
+      "deck": "UB",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 12,
+      "nonlands": 23,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "UW",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 12,
+      "nonlands": 23,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "UG",
+      "main": 40,
+      "lands": 18,
+      "common_nonlands": 9,
+      "nonlands": 22,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "WR",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 10,
+      "nonlands": 23,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "WB",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 12,
+      "nonlands": 23,
+      "lesson_pool": 3
+    },
+    {
+      "deck": "RB",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 16,
+      "nonlands": 23,
+      "lesson_pool": 4
+    },
+    {
+      "deck": "BG",
+      "main": 40,
+      "lands": 17,
+      "common_nonlands": 12,
+      "nonlands": 23,
+      "lesson_pool": 3
+    }
+  ]
+}

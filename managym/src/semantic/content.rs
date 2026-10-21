@@ -75,16 +75,11 @@ static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>>
 fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
     AUTHORED_RUNTIME_CATALOG
         .get_or_init(|| {
-            [
-                SemanticPack::two_deck()?,
-                SemanticPack::jeong_increment()?,
-                SemanticPack::elemental()?,
-                SemanticPack::sacrifice()?,
-                SemanticPack::temur()?,
-            ]
-            .into_iter()
-            .map(AuthoredRuntime::compile)
-            .collect()
+            SemanticPack::catalog()?
+                .iter()
+                .cloned()
+                .map(AuthoredRuntime::compile)
+                .collect()
         })
         .clone()
 }
@@ -755,6 +750,14 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             power: i32::try_from(*power).map_err(|_| malformed(program, "power exceeds i32"))?,
             toughness: i32::try_from(*toughness)
                 .map_err(|_| malformed(program, "toughness exceeds i32"))?,
+        },
+        Step::Discard => Effect::Discard,
+        Step::ExileIfDies { target } => Effect::ExileIfDiesThisTurn {
+            target: target_for(program, target)?,
+        },
+        Step::AddSubtype { target, subtype } => Effect::AddSubtypeToTarget {
+            target: target_for(program, target)?,
+            subtype: subtype.clone(),
         },
         Step::WaterbendOrDiscard { generic } => Effect::WaterbendOrDiscard { generic: *generic },
         Step::UnblockableIf { .. } => {

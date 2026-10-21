@@ -81,8 +81,9 @@ class ObservationEncoder:
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-        # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
-        self.permanent_dim = 27
+        # (printed + until-EOT grants), death-to-exile replacement, definition,
+        # temporary Avatar subtype, validity.
+        self.permanent_dim = 28
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -412,6 +413,7 @@ class ObservationEncoder:
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
+        arr[26] = float("Avatar" in perm.temp_subtypes)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0

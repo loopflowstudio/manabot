@@ -1416,3 +1416,92 @@ fn announced_enter_trigger_keeps_its_controller_when_its_source_changes_control(
     assert_eq!(s.life(1), life);
     assert_eq!(s.life(0), 20);
 }
+
+#[test]
+fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
+    let mut s = setup(&["Enter the Avatar State", "Gnarled Professor"]);
+    let target = s.force_permanent_on_battlefield(0, "Gnarled Professor");
+    settle(&mut s);
+    cast(&mut s, "Enter the Avatar State");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert_choice_contract(&s);
+    s.choose_target(Target::Permanent(target));
+    use managym::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    let driver = ClonePlusUndoDriver::default();
+    let mut branch = driver.fork_exact(s.game());
+    let root = witness(&branch);
+    let mark = driver.mark(&mut branch);
+    for _ in 0..8 {
+        if !branch.state.permanents[target]
+            .as_ref()
+            .unwrap()
+            .temp_subtypes
+            .is_empty()
+        {
+            break;
+        }
+        let index = branch
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::PassPriority { .. }))
+            .unwrap();
+        driver
+            .apply(
+                &mut branch,
+                BenchCommand {
+                    action_index: index,
+                    expected_action_hash: None,
+                    expected_state_hash: None,
+                },
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        branch.state.permanents[target]
+            .as_ref()
+            .unwrap()
+            .temp_subtypes,
+        vec!["Avatar"]
+    );
+    driver.rollback(&mut branch, mark);
+    assert_eq!(witness(&branch), root);
+    settle(&mut s);
+    let permanent = s.game().state.permanents[target].as_ref().unwrap();
+    assert_eq!(permanent.temp_subtypes, vec!["Avatar"]);
+    let keywords = permanent.effective_keywords(&s.game().state.cards[permanent.card]);
+    assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(
+        obs.agent_permanents
+            .iter()
+            .find(|p| p.id == permanent.id.0 as i32)
+            .unwrap()
+            .temp_subtypes,
+        vec!["Avatar"]
+    );
+    let mut branch = s.game().clone();
+    let card_id = branch.state.permanents[target].as_ref().unwrap().card;
+    branch.move_card(card_id, ZoneType::Hand);
+    branch.move_card(card_id, ZoneType::Battlefield);
+    let reentered = branch.state.card_to_permanent[card_id].unwrap();
+    assert!(branch.state.permanents[reentered]
+        .as_ref()
+        .unwrap()
+        .temp_subtypes
+        .is_empty());
+    assert_eq!(
+        s.game().state.permanents[target]
+            .as_ref()
+            .unwrap()
+            .temp_subtypes,
+        vec!["Avatar"]
+    );
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(s.game().state.permanents[target]
+        .as_ref()
+        .unwrap()
+        .temp_subtypes
+        .is_empty());
+}

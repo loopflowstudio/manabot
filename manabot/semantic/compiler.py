@@ -97,6 +97,9 @@ class Opcode(IntEnum):
     CREATE_NONLEGENDARY_COPY = 59
     MODIFY_CONTROLLED = 60
     WATERBEND_OR_DISCARD = 61
+    DISCARD = 62
+    EXILE_IF_DIES = 63
+    ADD_SUBTYPE = 64
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -183,6 +186,9 @@ CONDITION_KINDS = {
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
+    "discard": (set(), set()),
+    "exile_if_dies": ({"target"}, set()),
+    "add_subtype": ({"target", "subtype"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),

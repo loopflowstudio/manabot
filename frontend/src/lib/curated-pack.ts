@@ -1,4 +1,5 @@
 import manifestData from './packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json';
+import elementalData from './packs/elemental-world/v1/manifest.json';
 
 export interface PackDeck {
   deck_id: string;
@@ -22,7 +23,8 @@ export interface PackIdentity {
 }
 
 export interface CuratedPackManifest {
-  schema_version: 1;
+  schema_version: 1 | 2;
+  roster?: PackDeck[];
   setup_schema_version: 1;
   semantic_pack_key: string;
   pack: { id: string; version: string; title: string };
@@ -44,6 +46,7 @@ export interface CuratedPackManifest {
 
 export interface ResolvedTreatment extends PackTreatment {
   source: 'pack' | 'fallback';
+  packId?: string;
   identityKind: 'card' | 'token' | 'unknown';
 }
 
@@ -132,8 +135,8 @@ function validateDeck(value: unknown, path: string): PackDeck {
 
 export function validateCuratedPack(value: unknown): CuratedPackManifest {
   const root = requireRecord(value, 'manifest');
-  if (root.schema_version !== 1) {
-    throw new Error('manifest.schema_version must be 1');
+  if (root.schema_version !== 1 && root.schema_version !== 2) {
+    throw new Error('manifest.schema_version must be 1 or 2');
   }
   if (root.setup_schema_version !== 1) {
     throw new Error('manifest.setup_schema_version must be 1');
@@ -189,6 +192,16 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
     requireString(motif, `manifest.fallback.motifs[${index}]`),
   );
 
+  let roster: PackDeck[] | undefined;
+  if (root.schema_version === 2) {
+    if (!Array.isArray(root.roster) || root.roster.length === 0) throw new Error('manifest.roster must be non-empty');
+    roster = root.roster.map((row, index) => validateDeck(row, `manifest.roster[${index}]`));
+    if (new Set(roster.map((row) => row.deck_id)).size !== roster.length) throw new Error('duplicate roster deck ID');
+    for (const setup of [hero, villain]) {
+      const row = roster.find((row) => row.deck_id === setup.deck_id);
+      if (JSON.stringify(row) !== JSON.stringify(setup)) throw new Error('default matchup differs from roster');
+    }
+  } else if ('roster' in root) throw new Error('roster requires schema_version 2');
   const rawIdentities = requireRecord(root.identities, 'manifest.identities');
   const expectedNames = new Set([
     ...Object.keys(hero.cards),
@@ -196,6 +209,7 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
     ...Object.keys(hero.sideboard),
     ...Object.keys(villain.sideboard),
     ...reachableTokens,
+    ...(roster ?? []).flatMap((row) => [...Object.keys(row.cards), ...Object.keys(row.sideboard)]),
   ]);
   const actualNames = Object.keys(rawIdentities);
   if (
@@ -228,7 +242,7 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
       throw new Error(`manifest.identities.${name}.provenance.rights_ref is unknown`);
     }
     requireString(
-      provenance[kind === 'token' ? 'local_identity' : 'oracle_id'],
+      provenance[kind === 'token' || (root.schema_version === 2 && 'local_identity' in provenance) ? 'local_identity' : 'oracle_id'],
       `manifest.identities.${name}.provenance identity`,
     );
 
@@ -268,7 +282,8 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
   }
 
   return {
-    schema_version: 1,
+    schema_version: root.schema_version,
+    ...(roster ? { roster } : {}),
     setup_schema_version: 1,
     semantic_pack_key: semanticPackKey,
     pack: {
@@ -290,6 +305,7 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
 }
 
 export const CURATED_PACK = validateCuratedPack(manifestData);
+export const ELEMENTAL_WORLD_PACK = validateCuratedPack(elementalData);
 
 export function fnv1a32(value: string): number {
   let hash = 0x811c9dc5;
@@ -301,11 +317,13 @@ export function fnv1a32(value: string): number {
 }
 
 export function resolveTreatment(name: string): ResolvedTreatment {
-  const identity = CURATED_PACK.identities[name];
+  const pack = CURATED_PACK.identities[name] ? CURATED_PACK : ELEMENTAL_WORLD_PACK;
+  const identity = pack.identities[name];
   if (identity) {
     return {
       ...identity.treatment,
       source: 'pack',
+      packId: pack.pack.id,
       identityKind: identity.kind,
     };
   }
