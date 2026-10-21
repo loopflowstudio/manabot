@@ -91,8 +91,22 @@ last-known state.
 The Academy parity receipt fingerprints all Rust sources; later source edits
 invalidate that receipt even if the observed Command tape stays unchanged.
 
-Focused implementation checks and remaining gate ownership are recorded in the
-working design. World admission/monitoring, full learnability, release-browser
-checks and the pinned Linux comparison remain required gate checks. The inherited
-public-commitment tape divergence and frozen RUL-9 parity provenance mismatch
-are unresolved; neither frozen input is rewritten here.
+Gate evidence on 2026-10-21 includes 468 passing debug Rust tests with CI's
+optimization setting, Clippy with denied warnings, and affected Python checks
+covering compiled admission, current-world arena admission/monitoring and
+Academy parity. The opcode compatibility test now pins all 55 assignments;
+assignments 1–50 remain unchanged. The full learnability diagnostic passed
+three capacity seeds and reward-driven PPO (65,536 transitions, evaluation
+accuracy 0.59375 before and 1.0 after, versus 0.640625 without updates).
+This is diagnostic learning evidence, not full-game strength certification.
+
+The release build and 13 browser interaction tests passed locally. The prompt
+matrix's behavior/accessibility checks also passed with snapshots ignored.
+Normal visual comparison failed on the macOS host against the pinned Linux
+reference (952 pixels at the initial priority panel); that result remains
+deferred to the Ubuntu 24.04 CI Visual Reference Gate. No reference was changed,
+and the snapshot-ignored run is not visual certification. Exact commands and
+local log locations are recorded in the working design for delivery.
+
+The inherited public-commitment tape divergence and frozen RUL-9 parity
+provenance mismatch remain unresolved; neither frozen input is rewritten here.

@@ -140,3 +140,59 @@ Ruff lint/format and diff whitespace checks pass. Directed debug sacrifice check
 pass (22 selected, including 21 owned sacrifice cases); authored-match (9),
 Oracle shell (2) and semantic conformance (6) checks pass. Full debug cargo test
 is still running; do not describe it as passed before its final result.
+
+Published ready PR https://github.com/loopflowstudio/manabot/pull/331 at
+`3fc67dd288c881f1f1ef4411a674049d82cafbea`; inspected returned title/body and
+confirmed draft=false and no auto-merge request. Loopflow publication checkpointed
+the related Task Flow definitions and scratch context after the selected code
+commit. Delivery scratch cleanup remains with the following gate/ship steps.
+No Task completion or merge was requested in this publication step.
+
+Full debug cargo remains live in the publication tool session 41552, logging to
+`/tmp/mtg162-publish-all-rust.log`; inspect it before starting duplicate tests.
+It has passed the compact-undo check, all 278 rules tests, and suites through
+prepared possible worlds. It is currently running the deep search-state rollback
+contracts, with no failure recorded. Python final log is
+`/tmp/mtg162-publish-python-final.log` (50 passed); final full diagnostic is
+`.runs/learnability/mtg162-publish-final` (passed, including PPO).
+
+## Gate — 2026-10-21
+
+Reviewed the branch against `origin/main` at `60fc6abe`, including the
+pre-existing uncommitted design notes. Preserved those notes and all frozen
+world evidence. No runtime polish was necessary after reviewing payment,
+sacrifice events, exact source references, private searches and compiled
+lowering. Fixed the compiler compatibility test's stale expected vocabulary:
+all original opcode assignments 1–50 remain pinned, with explicit assignments
+for the five new opcodes 51–55. No product or scope assumption changed.
+
+The previous publication debug process was absent and its log had no final
+result. This gate ran debug tests with CI's `CARGO_PROFILE_DEV_OPT_LEVEL=1`;
+debug assertions and overflow checks remain enabled.
+
+Commands and results (logs under `/tmp/mtg162-gate-*`):
+
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --locked --manifest-path managym/Cargo.toml` → passed: 468 tests across 25 test binaries/doc-tests, including 278 rules tests and all 12 search-state rollback contracts.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` → passed.
+- `cargo fmt --manifest-path managym/Cargo.toml --check` → passed.
+- `uv run ruff check <changed Python files>` and `uv run ruff format --check <changed Python files>` → passed, including the repaired compiler test.
+- `uv run --extra dev --extra notebook --extra artifacts --extra reports --extra play pytest tests/semantic/test_sacrifice.py tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py tests/semantic/test_opcode_alignment.py tests/academy/test_authored_match_parity.py tests/academy/test_ur_lessons_increment.py tests/academy/test_release_prompt_matrix.py tests/model/test_attack_choice.py tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q` → 91 passed, one stale opcode assertion failed; the failure was fixed and `uv run --extra dev pytest tests/semantic/test_compiler.py::test_opcode_numbers_are_an_explicit_compatibility_surface -q` passed (1 test). No broader rerun required for this expected-vocabulary-only fix.
+- `uv run --extra dev python scripts/generate_coverage_gaps.py --check` → passed.
+- `uv run python -m manabot.verify.learnability --out .runs/learnability/mtg162-gate` → passed in 73.0 seconds: three capacity seeds and production PPO (before 0.59375, after 1.0, no-update control 0.640625; 65,536 transitions, 1,541 games). This isolates learnability, not full-game strength.
+- `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-w8-v1` → passed: 10 terminal replays, 1,507 Commands, 15 Phase rows; inherited Phase disagreements/exclusions remain.
+- `npm --prefix frontend ci` → installed locked dependencies; initial browser attempt lacked Vite because dependencies were absent.
+- `npm --prefix frontend run check` → passed: zero errors/warnings.
+- `npm --prefix frontend run test:e2e:release` → release build passed; 13 browser tests passed, including Learn modes/reconnect/demo and combat/navigation; visual matrix failed at the first Linux reference (`prompt-priority.png`, 952 differing pixels on this macOS host). No baseline was changed. Pinned Ubuntu 24.04 / Node 22 comparison is deferred to CI's Visual Reference Gate; a local snapshot-ignored run cannot establish visual certification.
+- `git diff --check` → passed.
+
+The existing CI run for published head `3fc67dd2` has already passed semantic
+conformance and protocol-v1; its Semantic Coverage Gate failed before the local
+opcode-test repair. The subsequent delivery step must publish this repair and
+wait for current-head CI, including the pinned Linux visual result. Gate does
+not land, arm merging, or complete MTG-162.
+
+- `npm --prefix frontend run test:e2e:release -- --ignore-snapshots --grep 'release stack proves'` → passed in 36.0 seconds: both terminal matrix trajectories and their keyboard/accessibility checks, with pixel comparisons explicitly omitted. This diagnostic follow-up addresses the failed normal matrix without replacing Linux certification.
+
+Durable gate outcomes and remaining visual qualification are retained in
+`docs/rules/elemental-sacrifice.md`. Only the compiler test and documentation
+changed during gate; no native source or receipt fingerprint changed.
