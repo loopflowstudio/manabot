@@ -35,11 +35,7 @@ IDENTITY_JSON = json.loads(
 INDEX_JSON = json.loads(
     (FIXTURES / "study-decision-index-curated.json").read_text(encoding="utf-8")
 )
-RECEIPT_JSON = json.loads(
-    (ROOT / "experiments" / "data" / "w2-220-study-decision-index-v1.json").read_text(
-        encoding="utf-8"
-    )
-)
+RECEIPT = ROOT / "experiments/data/w2-220-study-decision-index-v1.json"
 INPUT_SCHEMA = json.loads(
     (PROTOCOL / "study-recorded-decisions-v1.schema.json").read_text(encoding="utf-8")
 )
@@ -311,6 +307,7 @@ def test_generated_five_hundred_decision_input_remains_lossless():
     assert index.landmarks == []
 
 
+@pytest.mark.experiment_data(RECEIPT.relative_to(ROOT).as_posix())
 def test_checked_semantic_receipt_is_deterministic_and_observations_are_separate(
     tmp_path: Path,
 ):
@@ -325,12 +322,7 @@ def test_checked_semantic_receipt_is_deterministic_and_observations_are_separate
                 "--repeats",
                 "1000",
                 "--semantic-receipt",
-                str(
-                    ROOT
-                    / "experiments"
-                    / "data"
-                    / "w2-220-study-decision-index-v1.json"
-                ),
+                str(RECEIPT),
                 "--observations",
                 str(observations),
             ]
@@ -338,12 +330,13 @@ def test_checked_semantic_receipt_is_deterministic_and_observations_are_separate
         == 0
     )
     observation_json = json.loads(observations.read_text(encoding="utf-8"))
+    receipt_json = json.loads(RECEIPT.read_text(encoding="utf-8"))
     assert observation_json["repeats"] == 1000
     assert observation_json["p50_ms"] >= 0
     assert observation_json["p95_ms"] >= observation_json["p50_ms"]
     assert "observed_at" in observation_json
-    assert not {"observed_at", "p50_ms", "p95_ms"} & RECEIPT_JSON.keys()
-    assert RECEIPT_JSON["decision_count"] == 8
-    assert RECEIPT_JSON["landmark_count"] == 5
-    assert RECEIPT_JSON["repeat_artifact_digests"] == 1
-    assert semantic_sha256(INDEX_JSON) == RECEIPT_JSON["artifact_sha256"]
+    assert not {"observed_at", "p50_ms", "p95_ms"} & receipt_json.keys()
+    assert receipt_json["decision_count"] == 8
+    assert receipt_json["landmark_count"] == 5
+    assert receipt_json["repeat_artifact_digests"] == 1
+    assert semantic_sha256(INDEX_JSON) == receipt_json["artifact_sha256"]
