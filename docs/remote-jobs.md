@@ -570,7 +570,25 @@ TrainingRun artifacts into the new allocation. Only manifests cross the schedule
 the worker retrieves and verifies the four versioned objects. Its expiring STS
 policy grants read-only access to those exact inputs, alongside the ordinary
 job-scoped runtime permissions. No issuer/account credentials reach workers.
-A failed, paused or missing predecessor blocks dependent admission.
+An exact-iteration continuation rejects a paused predecessor. For allocations
+whose final update is set by time/money, declare `iteration="last-complete"`.
+That explicitly permits a completed or cleanly paused predecessor, and binds
+its actual final update only after verified final publication and cleanup.
+Failed, incomplete or missing evidence still blocks admission.
+
+A new cohort can take up a job already running as its first entry:
+
+```bash
+uv run --extra artifacts manabot deploy cohort start \
+  --plan cohort.json --state-dir /absolute/private/cohort-state \
+  --adopt-job existing-job-id --source-root /absolute/pinned-worker-source --doppler
+```
+
+The first entry must reproduce the exact existing job, including monitoring and
+checkpoint cadence. Adoption retains its original admission time and lease;
+it never creates a rental. A repeated adoption of the same job is idempotent.
+A different first job is refused. The controller checkout may be newer than the
+retained worker source, as in an ordinary controller upgrade.
 
 Self-play `updates` is the absolute endpoint for these entries. For example,
 26,000 → 63,000 → 100,000 uses two separate allocations; the second cannot start

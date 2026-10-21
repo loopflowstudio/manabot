@@ -77,3 +77,46 @@ training, exports, S3 snapshots and cleanup independently of this conversation.
 Reconnect with uv run --extra artifacts manabot deploy status --job-id
 mtg165-two-seat-002. Existing PR330 is updated with the batching correction and
 frozen recipe/protocol; no merge or Task completion.
+
+## $50 expansion and Mac mini controller (2026-10-21)
+
+Jack Heart raised the two-seat experiment to $50 total, selected the scale ladder
+in Manabot PR #333, authorized necessary Etude changes, and selected the Mac mini
+as controller. This supersedes the earlier no-continuation/$10 restriction.
+The original 002 job remains running on its original lease; a later observation
+confirmed 297 updates and a fresh supervisor heartbeat.
+
+Prepared `.runs/mtg165-two-seat-50/cohort.json`: adopt exact job 002, then chain
+003–007 at 11.9 hours/$7.36 each and 008 at 4.9 hours/$3.10. Including the existing
+$8.35 reservation, prior $1.5312598409473894 and $0.20 controller allowance,
+reservations total $49.98125984094739. Absolute cohort deadline is seven days
+from 002 admission. Keep seed 15902, recipe and source fabb96db2, and 250-update
+exports. Stop on failure/incomplete export/unknown cleanup; no failed-job replay.
+
+Controller source 4ff408601a3ecebabb845e5abce429eaa6775027 adds explicit
+`last-complete` continuation after a clean budget pause and `cohort start
+--adopt-job` for the exact running job. Model/Adam/EMA/absolute counters survive;
+collector/game/RNG streams restart. The first cohort entry cannot change the
+live job's intent, cadence or original deadline. Regression tests for adoption,
+continuation and controller services: 39 passed, 1 skipped. Broader job checks
+passed 42 tests; a pre-existing learning-state assertion assumed fixed row
+quotas. It now asserts actual cumulative learner rows across the three segments;
+all 10 learning-state tests pass with complete-game two-seat batches.
+
+The mini is reachable as jack@mini-heart.local, configured awake on AC, with uv,
+Rust and Doppler installed. Controller deployment paths are
+`~/src/manabot.mtg165-controller` and the retained pinned worker source
+`~/src/manabot.mtg165-worker`. Etude's existing SSH controller was configured
+using isolated local ETUDE_HOME `.runs/mtg165-two-seat-50/etude-client`; its package
+installed successfully on the mini. No Etude source change was needed for SSH
+controller selection. Existing launcher databases and other jobs were untouched.
+
+Activation requires credentials on the mini. Doppler initially reported no
+configured token, and Jack Heart was asked to run `doppler login` there. Added
+nonsecret AWS configuration for `manabot-controller` (the existing Manabot SSO
+account/session settings) and `manabot-issuer` (existing Doppler-backed worker
+issuer selector), preserving all pre-existing profiles. No credential values
+were copied. Jack Heart was also asked to run
+`aws sso login --profile manabot-controller`. Both sign-ins must be verified
+before installing/starting the budget-owning service. The $50 queue is prepared,
+not yet active; the current GPU run continues independently meanwhile.
