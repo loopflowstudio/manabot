@@ -379,6 +379,9 @@ def test_move_learning_consumes_complete_seat_trajectories(
     assert result["optimizer_exposures"] == result["retained"]
     assert result["bootstrapped_tail_fraction"] == 0
     assert trainer.optimizer.state
+    # Adam advances at most once per two native streams, not once per packed row.
+    steps = {int(state["step"]) for state in trainer.optimizer.state.values()}
+    assert max(steps) <= 4
     trainer.experiment.close()
 
 

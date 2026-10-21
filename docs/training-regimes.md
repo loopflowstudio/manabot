@@ -422,8 +422,10 @@ there are no padding rows, stale actions, or pending targets across an update.
 This is a complete-game estimator, unlike the one-seat control's bootstrapped
 partial-game estimator. Collection can take longer than a fixed row window;
 ordinary stage deadlines still fail an over-budget attempt. Ataraxos move learning
-uses each packed row as one timestep minibatch, so its optimizer grouping and cost
-also differ from the rectangular control.
+computes credit on these trajectories, then groups consecutive packed rows into
+minibatches of at most the native stream count. Rectangular controls keep their
+timestep groups; complete-game batches retain their packed order and may end
+with a smaller minibatch.
 
 For an equal-game comparison, set `games_per_stream` to the same positive count
 on **both** controls. It overrides the transition quota and collects that many

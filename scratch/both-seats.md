@@ -32,3 +32,21 @@ AWS renewal: Jack Heart confirmed the default SSO login was refreshed. Original 
 Pilot outcome after AWS renewal: `mtg165-two-seat-001` failed to publish any supervisor record. The guardian proof succeeded, and the training rental was created, but no accepted/running TrainingRun, learner updates, or checkpoints were confirmed. A local DNS outage interrupted submitter status observation; connectivity recovered, and authoritative reads still showed no runtime record well beyond the 900-second setup allowance (training age approximately 4,416 seconds when checked). The exact bootstrap failure was not captured; the pre-supervisor bootstrap log was not published to S3.
 
 Cancellation was persisted first. Because no supervisor existed to consume it, both recorded resource identities were checked against their owned job claims and the remaining training pod was deleted through RunPod. Authoritative job_status confirms provider_state=absent and cleanup. Estimated total guardian plus training cost: $1.5312598409473894; approximately $8.47 remains of Jack Heart's $10 ceiling. No model training result exists. Local receipts: `.runs/mtg165-two-seat-001/cancelled-status.json`, `latest-status.json`, and `resumed-submit.log`. Original deadline 2026-10-21 09:59:54 UTC is superseded operationally by confirmed deletion. Diagnose bootstrap/startup observability before any additional attempt; never reuse the cancelled job ID for training.
+
+## Ladder-matched pilot requested 2026-10-21
+
+Jack Heart authorized one new rented GPU experiment within $10, matching the
+currently running MTG-159 ladder but training both seats. The control was read
+from its owning checkout: seed15902, w6 Allies/Lessons, width64/depth2, 256
+streams, Ataraxos (not the prior PPO pilot), L4 at $0.59/hour. Preserve absolute
+iteration schedules for this matching pilot. Protocol and recipe are frozen in
+experiments/protocols/two-seat-ladder-002.md and its linked regime.
+
+Before admission, corrected Ataraxos batching: credit still uses terminal seat
+trajectories; packed rows now group by native stream count instead of taking one
+optimizer step per row. Both-seat checks:15 passed; Ataraxos regression checks:
+21 passed. The new attempt keeps provider-owned supervision and uses a public
+SSH key to observe bootstrap before a supervisor receipt exists. The standard
+launcher admits11.9 hours ($7.259 plus $0.10 guardian allowance), keeping the
+prior $1.53126 failure and this rental below $10 inclusive. No further rental
+or paid evaluator is authorized. Job ID mtg165-two-seat-002.
