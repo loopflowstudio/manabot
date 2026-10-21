@@ -232,7 +232,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
             for name, value in agent.named_parameters()
         )
         assert all(torch.isfinite(value).all() for value in agent.parameters())
-        trainer.save()
+        # train() saves the final checkpoint before closing the experiment.
         restored, _ = load_checkpoint_agent(str(experiment.runs_dir / "step_32.pt"))
         assert len(restored.world_binding["setups"]) == 10
         validate_agent_setup(
