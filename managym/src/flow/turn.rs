@@ -51,6 +51,7 @@ pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
+    pub spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     /// Cards drawn by each player this turn (for "your Nth card each turn"
     /// triggers). Resets every turn.
     pub cards_drawn_this_turn: [u32; 2],
@@ -71,6 +72,7 @@ impl TurnState {
             active_player,
             turn_number: 1,
             lands_played: 0,
+            spells_cast: [Vec::new(), Vec::new()],
             cards_drawn_this_turn: [0, 0],
             ability_resolutions_this_turn: BTreeMap::new(),
             current_phase: 0,
@@ -131,6 +133,7 @@ impl TurnState {
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
         self.cards_drawn_this_turn = [0, 0];
+        self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.active_player = PlayerId((self.active_player.0 + 1) % 2);
     }

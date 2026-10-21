@@ -98,7 +98,9 @@ impl Game {
             let zero_toughness = self.permanent_is_creature(permanent_id)
                 && self.effective_toughness(permanent_id) <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
-            let destroy = !zero_toughness && self.has_lethal_damage(permanent_id);
+            let destroy = !zero_toughness
+                && self.has_lethal_damage(permanent_id)
+                && !self.effective_keywords(permanent_id).indestructible;
             let legend_loser = legend_losers.contains(&permanent.card);
             if !zero_toughness && !destroy && !legend_loser {
                 continue;

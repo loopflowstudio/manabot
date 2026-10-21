@@ -16,9 +16,10 @@ was dead on arrival in exp-10.)
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
 | **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
+| **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
 
-**Current world: w6.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w5) are **not comparable** to w6; do not reuse their
+**Current development world: w7.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w6) are **not comparable** to w7; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -26,6 +27,40 @@ Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
+
+## w7: Elemental rules and compiled content (not yet frozen)
+
+MTG-161 adds two-color hybrid costs, private basic-land search, printed discard
+counts, noncreature-cast triggers, conditional combat eligibility, and additional
+native Elemental definitions. Hybrid costs retain their pips in native/Python
+observation metadata. Card rows add indestructible at 38 and move validity to
+39; permanent rows add indestructible at 25 and move validity to 26. The outside
+marker remains card index 37. Match-state hash version 4 includes spell mode,
+target clauses, scry ordering, and per-turn cast history as well as counted
+discard continuations. An activated ability's
+independent effects now survive its source leaving the battlefield (CR 113.7a).
+
+All 42 owned cards execute natively and through the `elemental-combat-v1`
+compiled pack. Its two 46-card validation rosters cover the owned pool and five
+basics; four token definitions complete the closure. These rosters do not adopt
+the final ten product decks. Learning schema 3 in
+`content/semantic/w7/learning_schema.json` adds the corresponding typed
+operations, quantities, hybrid pips and nested choices. The frozen learning
+schema and earlier authored sources remain unchanged. Model permanent features
+retain indestructible while excluding only the categorical definition join.
+
+The current rules corpus is
+[semantic-kernel-w7-v1](conformance/semantic-kernel-w7-v1/), including inherited
+matchup cases and compiled Elemental cases in both seat orders. Earlier corpora,
+`erd1` receipts, authored IR and checkpoints retain their identities. Release
+validation and world freeze remain with gate; no new training or strength
+comparison is certified by these checks.
+
+Gate's current limits are recorded in
+[Elemental contracts](docs/rules/elemental-combat.md#gate-evidence-and-remaining-limits--2026-10-20).
+The w7 authored-match authority and replay parity have separate versioned
+receipts; historical public-commitment/RUL-9 checks and pinned Linux visual
+validation remain unresolved. w7 is not frozen.
 
 ## w6: preserve action and object identity
 

@@ -29,6 +29,7 @@ class Config(BaseModel):
     probability: float = 0.9
     invariance_tolerance: float = 0.0001
     timeout_seconds: int = 480
+    ppo_timeout_seconds: int = 300
     ppo: bool = True
 
 

@@ -84,7 +84,7 @@ def _resolved_outcomes(
     for index in candidates[:2]:
         branch = env.clone_env()
         current, _, done, _, _ = branch.step(index)
-        if kind == "target":
+        if kind in {"target", "mode", "ability"}:
             for _ in range(2):
                 passing = next(
                     i
@@ -92,10 +92,11 @@ def _resolved_outcomes(
                     if int(a.action_type) == 2
                 )
                 current, _, done, _, _ = branch.step(passing)
-            target_id = raw.action_space.actions[index].focus[0]
-            assert target_id not in [
-                p.id for p in branch.observation_for_player(0).opponent_permanents
-            ]
+            if kind == "target":
+                target_id = raw.action_space.actions[index].focus[0]
+                assert target_id not in [
+                    p.id for p in branch.observation_for_player(0).opponent_permanents
+                ]
         elif kind == "attack":
             for _ in range(40):
                 if current.turn.turn_number != raw.turn.turn_number or done:
@@ -185,7 +186,16 @@ def decision_case(
         outcomes = []
         for index in range(2):
             branch = env.clone_env()
-            branch.step(index)
+            current, _, _, _, _ = branch.step(index)
+            # Spell modes are announced before payment and priority; their
+            # consequences arrive after both players pass on the stack.
+            for _ in range(2):
+                passing = next(
+                    i
+                    for i, a in enumerate(current.action_space.actions)
+                    if int(a.action_type) == 2
+                )
+                current, _, _, _, _ = branch.step(passing)
             owner = branch.observation_for_player(0)
             outcomes.append(
                 (owner.agent.life, sum(int(c.zone) == 1 for c in owner.agent_cards))

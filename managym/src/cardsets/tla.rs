@@ -316,6 +316,7 @@ impl CardRegistry {
                 predicate: CardPredicate::subtype("Lesson"),
                 then: vec![Effect::PutTopCardsInHand { count: 3 }],
                 otherwise: vec![Effect::LookAndSelect {
+                    reveal: false,
                     look: 3,
                     min_select: 1,
                     max_select: 1,
@@ -337,10 +338,12 @@ impl CardRegistry {
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("5"),
                 sacrifice_source: false,
                 waterbend: true,
                 effect: Effect::LookAndSelect {
+                    reveal: false,
                     look: 4,
                     min_select: 0,
                     max_select: 1,
@@ -432,6 +435,7 @@ impl CardRegistry {
                 }],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("2"),
                 sacrifice_source: false,
                 waterbend: false,
@@ -783,6 +787,7 @@ impl CardRegistry {
             subtypes: vec!["Clue".into()],
             is_token: true,
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("2"),
                 sacrifice_source: true,
                 waterbend: false,
@@ -809,6 +814,7 @@ impl CardRegistry {
                 effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
             }],
             spell_cost_reductions: vec![SpellCostReduction {
+                first_on_own_turn: false,
                 predicate: CardPredicate { not_card_types: vec![CardType::Creature], ..Default::default() },
                 condition: StaticCondition::GraveyardAtLeast { count: 3, predicate: lesson() },
                 generic: 1,

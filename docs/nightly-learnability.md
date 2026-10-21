@@ -133,8 +133,12 @@ Seed 197 trains width 8 against a frozen passing opponent in the existing
 Mountain/Gray Ogre toy world: 64 updates × 8 environments × 128 transitions =
 65,536 learner samples. Each update uses four epochs/four minibatches, learning
 rate .01, clip .2, full sample retention, no KL penalty, and the existing default
-critic/gradient clipping settings. A 150-second collection deadline is nested
-inside the overall watchdog. Ordinary world-bound save/reload precedes scoring.
+critic/gradient clipping settings. The collection deadline is 300 seconds,
+recorded as `Config.ppo_timeout_seconds`, inside the overall 480-second watchdog.
+The w7 CI run exceeded the former 150-second budget after all capacity scores
+passed; this allowance preserves the fixed sample count and held-out thresholds
+on shared CPU runners. The standalone PPO test uses the same budget. Ordinary
+world-bound save/reload precedes scoring.
 
 There are 64 evaluation games before training (deal seed 100197), then 64 each
 for the trained/reloaded and no-update policies on the same held-out seed

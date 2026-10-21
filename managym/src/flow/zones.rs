@@ -17,6 +17,49 @@ use crate::{
 };
 
 impl Game {
+    /// Stable private search candidates, independent of library order.
+    pub(crate) fn basic_land_search_candidates(
+        &self,
+        player: PlayerId,
+        subtype: &Option<String>,
+    ) -> Vec<CardId> {
+        let predicate = CardPredicate {
+            card_type: Some(crate::state::card::CardType::Land),
+            supertype: Some("basic".into()),
+            subtype: subtype.clone(),
+            ..Default::default()
+        };
+        let mut candidates: Vec<CardId> = self
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .iter()
+            .copied()
+            .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+            .collect();
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates
+    }
+
+    /// Reveal before moving; public hand knowledge retains definition counts,
+    /// never the identity of the physical copy.
+    pub(crate) fn reveal_card_to_hand(&mut self, card: CardId, player: PlayerId) {
+        let definition = self.state.cards[card].definition_id;
+        self.emit(GameEvent::CardRevealed {
+            owner: player,
+            definition,
+        });
+        self.move_card(card, ZoneType::Hand);
+        if self.state.zones.contains(card, ZoneType::Hand, player) {
+            let count = self.state.players[player.0]
+                .known_hand
+                .get(&definition)
+                .copied()
+                .unwrap_or(0);
+            self.set_known_hand_count(player, definition, count + 1);
+        }
+    }
+
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones
@@ -207,6 +250,7 @@ impl Game {
                 targets,
                 target_req_indices,
                 kicked,
+                mode: None,
             }));
     }
 

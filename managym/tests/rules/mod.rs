@@ -14,6 +14,7 @@ pub mod cr_603_triggers;
 pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
+pub mod elemental_cards;
 pub mod event_observations;
 pub mod helpers;
 pub mod interaction_spells;

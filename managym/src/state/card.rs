@@ -129,6 +129,7 @@ pub struct Keywords {
     /// CR 702.11 — Can't be the target of spells or abilities opponents
     /// control.
     pub hexproof: bool,
+    pub indestructible: bool,
 }
 
 impl Keywords {
@@ -148,6 +149,7 @@ impl Keywords {
             defender: self.defender || other.defender,
             menace: self.menace || other.menace,
             hexproof: self.hexproof || other.hexproof,
+            indestructible: self.indestructible || other.indestructible,
         }
     }
 }
@@ -155,6 +157,7 @@ impl Keywords {
 /// Characteristic-defining power (CR 604.3): recomputed on every read.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PowerCda {
+    CountersOnLandsYouControl,
     /// "This creature's power is equal to the number of creatures you
     /// control." (Suki, Kyoshi Warrior.)
     CreaturesYouControl,
@@ -209,6 +212,8 @@ pub enum ReplacementEffect {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tap_source: bool,
     pub mana_cost: ManaCost,
     /// Sacrifice the source permanent as an additional activation cost
     /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
@@ -223,6 +228,7 @@ pub struct ActivatedAbilityDefinition {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellCostReduction {
+    pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
     pub condition: StaticCondition,
     pub generic: u8,
@@ -230,6 +236,13 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prevents_life_gain: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub combat_requires_other: Option<CardPredicate>,
+    /// This creature cannot block attackers matching this predicate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocking_restriction: Option<CardPredicate>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub spell_cost_reductions: Vec<SpellCostReduction>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -332,18 +345,39 @@ impl Card {
         self.types.is_instant() || self.keywords.flash
     }
 
-    /// The spell's targeting clauses, in choice order. Explicit `targeting`
-    /// wins; otherwise a single 1-of-1 requirement is derived from the
-    /// first targeted spell effect (the Stage-1 convention).
-    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
+    /// modal effects participate; choices inside resolving abilities do not.
+    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
+        self.spell_effects
+            .iter()
+            .flat_map(|effect| match (effect, mode) {
+                (Effect::Modal { modes }, Some(index)) => {
+                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
+                }
+                _ => std::slice::from_ref(effect),
+            })
+            .cloned()
+            .collect()
+    }
+
+    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
         if !self.targeting.is_empty() {
             return self.targeting.clone();
         }
-        self.spell_effects
-            .iter()
-            .find_map(|effect| effect.target_spec())
-            .map(|spec| vec![TargetRequirement::one(spec.clone())])
-            .unwrap_or_default()
+        crate::state::ability::effect_target_requirements(&self.spell_effects_for_mode(mode))
+    }
+
+    /// Explicit clauses bind distinct targets; repeated effects on "that"
+    /// target share the inferred single clause.
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        self.target_requirements_for_mode(None)
     }
 }
 

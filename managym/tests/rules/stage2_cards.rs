@@ -1023,7 +1023,7 @@ fn crossroads_setup(seed: u64) -> Scenario {
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Crossroads of Destiny");
     s.advance_to_active_step(0, StepKind::Main);
-    cast_and_resolve(&mut s);
+    cast_only(&mut s);
     s
 }
 
@@ -1038,6 +1038,8 @@ fn modal_mode_one_gains_life() {
         .iter()
         .all(|action| action.action_type() == ActionType::ChooseMode));
     s.step_action(0);
+    s.pass_priority();
+    s.pass_priority();
     s.assert_life(0, 23);
 }
 
@@ -1045,8 +1047,10 @@ fn modal_mode_one_gains_life() {
 fn modal_mode_two_draws_a_card() {
     let mut s = crossroads_setup(112);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
-    let hand_before = hand(&s, 0).len();
     s.step_action(1);
+    let hand_before = hand(&s, 0).len();
+    s.pass_priority();
+    s.pass_priority();
     assert_eq!(hand(&s, 0).len(), hand_before + 1);
 }
 

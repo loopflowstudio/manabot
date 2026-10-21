@@ -76,13 +76,13 @@ class ObservationEncoder:
         self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 2
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 2
+        # kicker flag/cost + hexproof + outside + indestructible + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 3
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
-        self.permanent_dim = 26
+        self.permanent_dim = 27
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -210,7 +210,7 @@ class ObservationEncoder:
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
             row = start + offset
             out["agent_cards"][row, 7] = 1.0
-            out["agent_cards"][row, -2] = 1.0
+            out["agent_cards"][row, 37] = 1.0
             out["agent_cards"][row, -1] = 1.0
             self.object_to_index[card.candidate_id] = 2 + row
         for key, perms, is_mine in (
@@ -358,6 +358,7 @@ class ObservationEncoder:
         arr[i] = float(card.kicker_cost) / 10.0
         i += 1
         arr[i] = float(card.keywords.hexproof)
+        arr[38] = float(card.keywords.indestructible)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -406,6 +407,7 @@ class ObservationEncoder:
         arr[21] = float(perm.keywords.menace)
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
+        arr[25] = float(perm.keywords.indestructible)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -440,7 +442,9 @@ class ObservationEncoder:
             ):
                 if selector is not None:
                     if not 0 <= selector <= MAX_ACTION_SELECTOR:
-                        raise ValueError("observation capacity exceeded: action selector")
+                        raise ValueError(
+                            "observation capacity exceeded: action selector"
+                        )
                     arr[idx, column] = selector + 1
 
             if len(action.focus) > self.max_focus_objects:

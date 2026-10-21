@@ -78,11 +78,12 @@ pub struct PermanentId(pub usize);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct PlayerId(pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum Target {
     Player(PlayerId),
     Permanent(PermanentId),
     StackSpell(CardId),
+    GraveyardCard(ObjectRef),
 }
 
 // Typed index wrappers — prevent accidental cross-collection indexing.

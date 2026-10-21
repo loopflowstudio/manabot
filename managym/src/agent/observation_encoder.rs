@@ -6,9 +6,9 @@ use crate::{
 };
 
 pub const PLAYER_DIM: usize = 28;
-pub const CARD_DIM: usize = 39;
+pub const CARD_DIM: usize = 40;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const PERMANENT_DIM: usize = 26;
+pub const PERMANENT_DIM: usize = 27;
 pub const ACTION_TYPE_DIM: usize = 16;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -426,7 +426,7 @@ pub fn encode_into(
         let row = &mut out.agent_cards[index * CARD_DIM..(index + 1) * CARD_DIM];
         row[7] = 1.0;
         row[37] = 1.0; // outside inventory; all seven zone bits remain zero
-        row[38] = 1.0;
+        row[CARD_DIM - 1] = 1.0;
         out.agent_cards_valid[index] = 1.0;
         object_to_index.insert(card.candidate_id, 2 + index as i32);
     }
@@ -587,7 +587,8 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[34] = bool_to_f32(card.kicker_cost > 0);
     out[35] = card.kicker_cost as f32 / 10.0;
     out[36] = bool_to_f32(card.keywords.hexproof);
-    out[38] = 1.0; // validity flag
+    out[38] = bool_to_f32(card.keywords.indestructible);
+    out[CARD_DIM - 1] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -642,6 +643,7 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[21] = bool_to_f32(permanent.keywords.menace);
     out[22] = bool_to_f32(permanent.keywords.hexproof);
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
+    out[25] = bool_to_f32(permanent.keywords.indestructible);
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
     out[PERMANENT_DIM - 1] = 1.0;
 }
@@ -976,6 +978,7 @@ mod tests {
             mana_cost: ManaCost {
                 cost: [0; 7],
                 mana_value,
+                hybrid: Vec::new(),
             },
         }
     }

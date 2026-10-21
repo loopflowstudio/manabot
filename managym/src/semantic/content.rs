@@ -12,12 +12,12 @@ use crate::{
     cardsets::alpha::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
-            Ability, Effect, StaticCondition, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject,
+            Ability, Effect, EffectValue, StaticCondition, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            StaticPtBuff, StaticScope, TriggeredManaAbility,
+            SpellCostReduction, StaticPtBuff, StaticScope, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
@@ -26,8 +26,9 @@ use crate::{
 };
 
 use super::{
-    array_field, i64_field, object_field, opt_bool_field, opt_str_field, str_array_field,
+    array_field, object_field, opt_bool_field, opt_str_field, parse_condition, str_array_field,
     str_field, u64_field, Condition, Definition, IrError, Predicate, Program, SemanticPack, Step,
+    ValueExpression,
 };
 
 #[derive(Clone)]
@@ -74,10 +75,14 @@ static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>>
 fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
     AUTHORED_RUNTIME_CATALOG
         .get_or_init(|| {
-            [SemanticPack::two_deck()?, SemanticPack::jeong_increment()?]
-                .into_iter()
-                .map(AuthoredRuntime::compile)
-                .collect()
+            [
+                SemanticPack::two_deck()?,
+                SemanticPack::jeong_increment()?,
+                SemanticPack::elemental()?,
+            ]
+            .into_iter()
+            .map(AuthoredRuntime::compile)
+            .collect()
         })
         .clone()
 }
@@ -270,7 +275,9 @@ fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, Ir
         .collect::<Result<BTreeSet<_>, _>>()?;
     let keywords = keywords(&optional_string_array(value, "keywords")?)?;
     let colors = optional_string_array(value, "colors")?;
-    let color_override = if colors.is_empty() {
+    let color_override = if value.get("colors").is_none()
+        || (colors.is_empty() && !opt_bool_field(value, "token")?.unwrap_or(false))
+    {
         None
     } else {
         Some(
@@ -326,7 +333,11 @@ fn apply_program(
             }
             definition.kicker = cost.kicker;
             definition.cost_reduction_per = cost.affinity;
-            definition.targeting = targeting;
+            definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
+                None | Some("explicit") => targeting,
+                Some("inferred") => Vec::new(),
+                Some(_) => return unsupported(program, "unknown target binding"),
+            };
             definition.spell_effects = lower_steps(pack, program, &program.steps)?;
         }
         "triggered" => {
@@ -374,6 +385,7 @@ fn apply_program(
             definition
                 .activated_abilities
                 .push(ActivatedAbilityDefinition {
+                    tap_source: cost.tap_source,
                     mana_cost: cost
                         .mana
                         .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
@@ -394,6 +406,7 @@ struct ProgramCost {
     kicker: Option<ManaCost>,
     affinity: Option<CardPredicate>,
     sacrifice_source: bool,
+    tap_source: bool,
     waterbend: bool,
 }
 
@@ -411,6 +424,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
+        tap_source: opt_bool_field(value, "tap_source")?.unwrap_or(false),
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
     })
@@ -419,21 +433,24 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
 fn program_targeting(program: &Program) -> Result<Vec<TargetRequirement>, IrError> {
     array_field(&program.metadata, "targets")?
         .iter()
-        .map(|target| {
-            Ok(TargetRequirement {
-                spec: target_spec(object_field(target, "selector")?)?,
-                min: usize::try_from(u64_field(target, "min")?)
-                    .map_err(|_| malformed(program, "target min exceeds usize"))?,
-                max: usize::try_from(u64_field(target, "max")?)
-                    .map_err(|_| malformed(program, "target max exceeds usize"))?,
-            })
-        })
+        .map(|target| parse_target_requirement(program, target))
         .collect()
 }
 
 fn target_spec(selector: &Value) -> Result<TargetSpec, IrError> {
     let result = match str_field(selector, "kind")? {
         "creature" => TargetSpec::Creature,
+        "player" => TargetSpec::Player,
+        "opponent" => TargetSpec::Opponent,
+        "permanent" => TargetSpec::Permanent {
+            predicate: predicate_value(object_field(selector, "predicate")?)?,
+        },
+        "permanent_you_control" => TargetSpec::PermanentYouControl {
+            predicate: predicate_value(object_field(selector, "predicate")?)?,
+        },
+        "graveyard_card_you_own" => TargetSpec::GraveyardCardYouOwn {
+            predicate: predicate_value(object_field(selector, "predicate")?)?,
+        },
         "creature_or_player" => TargetSpec::CreatureOrPlayer,
         "spell" => TargetSpec::Spell,
         "spell_or_permanent" => TargetSpec::SpellOrPermanent {
@@ -496,6 +513,10 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
         "tapped_for_mana" => TriggerCondition::TappedForMana { subject },
         "becomes_targeted" => TriggerCondition::BecomesTargeted { subject },
         "upkeep_begins" => TriggerCondition::BeginningOfYourUpkeep,
+        "combat_begins" => TriggerCondition::BeginningOfYourCombat,
+        "cast_spell" => TriggerCondition::YouCastSpell {
+            predicate: predicate_value(object_field(trigger, "predicate")?)?,
+        },
         "draw_nth_card" => TriggerCondition::YouDrawNthCardThisTurn {
             n: u32::try_from(u64_field(trigger, "n")?)
                 .map_err(|_| malformed(program, "draw count exceeds u32"))?,
@@ -504,7 +525,7 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
     };
     if let Some(condition) = trigger.get("if") {
         Ok(TriggerCondition::ActiveIf {
-            active_if: static_condition(condition)?,
+            active_if: lower_condition(&parse_condition(condition)?)?,
             condition: Box::new(base),
         })
     } else {
@@ -527,21 +548,45 @@ fn trigger_subject(value: &Value) -> Result<TriggerSubject, IrError> {
     }
 }
 
-fn static_condition(value: &Value) -> Result<StaticCondition, IrError> {
-    match str_field(value, "kind")? {
-        "graveyard_at_least" => Ok(StaticCondition::GraveyardAtLeast {
-            count: usize::try_from(u64_field(value, "count")?)
-                .map_err(|_| IrError::Malformed("condition count exceeds usize".to_owned()))?,
-            predicate: predicate_value(object_field(value, "predicate")?)?,
-        }),
-        other => Err(IrError::Malformed(format!(
-            "unsupported static condition {other:?}"
-        ))),
-    }
-}
-
 fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<(), IrError> {
     match program.steps.as_slice() {
+        [Step::PreventLifeGain] => definition.prevents_life_gain = true,
+        [Step::CombatRequiresOther { predicate }] => {
+            definition.combat_requires_other = Some(predicate_card(predicate)?)
+        }
+        [Step::BlockingRestriction {
+            predicate,
+            direction,
+        }] => match direction.as_str() {
+            "blocking" => definition.blocking_restriction = Some(predicate_card(predicate)?),
+            "blocked_by" => definition.block_restriction = Some(predicate_card(predicate)?),
+            _ => return unsupported(program, "unknown blocking direction"),
+        },
+        [Step::PowerFromLandCounters] => {
+            definition.power_cda = Some(PowerCda::CountersOnLandsYouControl)
+        }
+        [Step::SpellCostReduction {
+            predicate,
+            condition,
+            generic,
+            first_on_own_turn,
+        }] => definition.spell_cost_reductions.push(SpellCostReduction {
+            predicate: predicate_card(predicate)?,
+            condition: lower_condition(condition)?,
+            generic: u8::try_from(*generic)
+                .map_err(|_| malformed(program, "cost reduction exceeds u8"))?,
+            first_on_own_turn: *first_on_own_turn,
+        }),
+        [Step::StaticPt {
+            power,
+            toughness,
+            condition,
+        }] => definition.static_pt_buffs.push(StaticPtBuff {
+            scope: StaticScope::This,
+            condition: Some(lower_condition(condition)?),
+            power: *power,
+            toughness: *toughness,
+        }),
         [Step::SetPowerFromCount {
             zone,
             controller,
@@ -560,7 +605,7 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition.power_cda = Some(PowerCda::GraveyardMatching(predicate_card(predicate)?));
         }
         [Step::Branch {
-            condition: Condition::GraveyardAtLeast { count, predicate },
+            condition: condition @ Condition::GraveyardAtLeast { .. },
             then,
             otherwise,
         }] if otherwise.is_empty() => {
@@ -578,11 +623,7 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             }
             definition.static_pt_buffs.push(StaticPtBuff {
                 scope: StaticScope::This,
-                condition: Some(StaticCondition::GraveyardAtLeast {
-                    count: usize::try_from(*count)
-                        .map_err(|_| malformed(program, "static count exceeds usize"))?,
-                    predicate: predicate_card(predicate)?,
-                }),
+                condition: Some(lower_condition(condition)?),
                 power: i32_value(program, *power, "power")?,
                 toughness: i32_value(program, *toughness, "toughness")?,
             });
@@ -639,12 +680,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count,
             tapped_and_attacking,
         } => Effect::CreateToken {
-            token_name: pack
-                .definitions
-                .get(*definition_index)
-                .ok_or_else(|| malformed(program, "token definition index is out of bounds"))?
-                .registry_name
-                .clone(),
+            token_name: token_name(pack, *definition_index)?,
             count: usize_value(program, *count, "token count")?,
             tapped_and_attacking: *tapped_and_attacking,
         },
@@ -741,12 +777,14 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             cost: ManaCost::parse(cost),
         },
         Step::LookAndSelect {
+            reveal,
             look,
             min_select,
             max_select,
             destination,
             predicate,
         } if destination == "hand" => Effect::LookAndSelect {
+            reveal: *reveal,
             look: usize_value(program, *look, "look count")?,
             min_select: usize_value(program, *min_select, "minimum selection")?,
             max_select: usize_value(program, *max_select, "maximum selection")?,
@@ -809,6 +847,104 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
         },
         Step::DealPowerDamage { .. } => Effect::TargetCreaturesDealPowerDamageToLastTarget,
+        Step::SearchBasicLand { subtype } => Effect::SearchBasicLand {
+            subtype: subtype.clone(),
+        },
+        Step::OptionalDiscardDraw { count } => Effect::OptionalDiscardDraw { count: *count },
+        Step::DiscardTargetPlayer { count, target } => Effect::DiscardTargetPlayer {
+            count: *count,
+            target: target_for(program, target)?,
+        },
+        Step::Destroy { target } => Effect::Destroy {
+            target: target_for(program, target)?,
+        },
+        Step::Exile { target } => Effect::Exile {
+            target: target_for(program, target)?,
+        },
+        Step::BuffTargetValue {
+            power,
+            toughness,
+            target,
+        } => Effect::BuffTargetValue {
+            power: power.lower()?,
+            toughness: *toughness,
+            target: target_for(program, target)?,
+        },
+        Step::ReturnToHandDrawIfControlled { target } => Effect::ReturnToHandDrawIfControlled {
+            target: target_for(program, target)?,
+        },
+        Step::ModifyTriggeringPermanent {
+            counters,
+            keywords: names,
+        } => Effect::ModifyTriggeringPermanent {
+            counters: *counters,
+            keywords: keywords(names)?,
+        },
+        Step::DealDamageValue { amount, target } => Effect::DealDamageValue {
+            amount: amount.lower()?,
+            target: target_for(program, target)?,
+        },
+        Step::PutCountersValue { count, target } => Effect::PutCountersValue {
+            count: count.lower()?,
+            target: target_for(program, target)?,
+        },
+        Step::CreateTokensValue {
+            definition_index,
+            count,
+        } => Effect::CreateTokensValue {
+            token_name: token_name(pack, *definition_index)?,
+            count: count.lower()?,
+        },
+        Step::ExileWithControllerToken {
+            target,
+            definition_index,
+        } => Effect::ExileWithControllerToken {
+            target: target_for(program, target)?,
+            token_name: token_name(pack, *definition_index)?,
+        },
+        Step::DamageOpponentCreatures { amount } => {
+            Effect::DamageOpponentCreatures { amount: *amount }
+        }
+        Step::MillCards { count } => Effect::MillCards { count: *count },
+        Step::MillAndSelect {
+            count,
+            predicate,
+            if_declined,
+        } => Effect::MillAndSelect {
+            count: *count,
+            predicate: predicate_card(predicate)?,
+            if_declined: lower_steps(pack, program, if_declined)?,
+        },
+        Step::DrainLifeValue { amount } => Effect::DrainLifeValue {
+            amount: amount.lower()?,
+        },
+        Step::CounterSpell { target } => Effect::CounterSpell {
+            target: target_for(program, target)?,
+        },
+        Step::CantBeBlockedTarget { target } => Effect::CantBeBlockedTarget {
+            target: target_for(program, target)?,
+        },
+        Step::ReturnGraveyardTarget { target } => Effect::ReturnGraveyardTarget {
+            target: target_for(program, target)?,
+        },
+        Step::Modal { modes } => Effect::Modal {
+            modes: modes
+                .iter()
+                .map(|mode| lower_steps(pack, program, mode))
+                .collect::<Result<_, _>>()?,
+        },
+        Step::TargetClause { role, body } => Effect::TargetClause {
+            requirement: target_requirement(program, role)?,
+            effects: lower_steps(pack, program, body)?,
+        },
+        Step::PreventLifeGain
+        | Step::CombatRequiresOther { .. }
+        | Step::BlockingRestriction { .. }
+        | Step::PowerFromLandCounters
+        | Step::SpellCostReduction { .. }
+        | Step::StaticPt { .. } => {
+            return unsupported(program, "static instruction in effect program")
+        }
         Step::SetPowerFromCount { .. } => {
             return unsupported(
                 program,
@@ -820,34 +956,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
 }
 
 fn predicate_value(value: &Value) -> Result<CardPredicate, IrError> {
-    let parsed = match str_field(value, "kind")? {
-        "any" => Predicate::Any,
-        "all" => Predicate::All(
-            array_field(value, "predicates")?
-                .iter()
-                .map(|item| match str_field(item, "kind")? {
-                    "card_type" => Ok(Predicate::CardType(str_field(item, "value")?.to_owned())),
-                    "subtype" => Ok(Predicate::Subtype(str_field(item, "value")?.to_owned())),
-                    "not_card_types" => {
-                        Ok(Predicate::NotCardTypes(str_array_field(item, "values")?))
-                    }
-                    "power_at_most" => Ok(Predicate::PowerAtMost(i64_field(item, "value")?)),
-                    other => Err(IrError::Malformed(format!(
-                        "unsupported predicate {other:?}"
-                    ))),
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-        "card_type" => Predicate::CardType(str_field(value, "value")?.to_owned()),
-        "subtype" => Predicate::Subtype(str_field(value, "value")?.to_owned()),
-        "not_card_types" => Predicate::NotCardTypes(str_array_field(value, "values")?),
-        "power_at_most" => Predicate::PowerAtMost(i64_field(value, "value")?),
-        other => {
-            return Err(IrError::Malformed(format!(
-                "unsupported predicate {other:?}"
-            )))
-        }
-    };
+    let parsed = super::parse_predicate(value)?;
     predicate_card(&parsed)
 }
 
@@ -859,6 +968,23 @@ fn predicate_card(predicate: &Predicate) -> Result<CardPredicate, IrError> {
 
 fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<(), IrError> {
     match predicate {
+        Predicate::Flying => result.flying = true,
+        Predicate::PowerAtLeast(value) => set_once(
+            &mut result.min_power,
+            i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,
+            "min_power",
+        )?,
+        Predicate::ManaValueAtLeast(value) => {
+            set_once(&mut result.min_mana_value, *value, "min_mana_value")?
+        }
+        Predicate::TypesAny(names) => {
+            result.card_types_any = names
+                .iter()
+                .map(|name| card_type(name))
+                .collect::<Result<_, _>>()?
+        }
+        Predicate::SubtypesAny(names) => result.subtypes_any = names.clone(),
+        Predicate::NotSubtypes(names) => result.not_subtypes = names.clone(),
         Predicate::Any => {}
         Predicate::All(predicates) => {
             for predicate in predicates {
@@ -914,6 +1040,7 @@ fn keywords(names: &[String]) -> Result<Keywords, IrError> {
             "defender" => result.defender = true,
             "menace" => result.menace = true,
             "hexproof" => result.hexproof = true,
+            "indestructible" => result.indestructible = true,
             other => return Err(IrError::Malformed(format!("unsupported keyword {other:?}"))),
         }
     }
@@ -986,4 +1113,68 @@ fn malformed(program: &Program, message: &str) -> IrError {
 
 fn unsupported<T>(program: &Program, message: &str) -> Result<T, IrError> {
     Err(malformed(program, message))
+}
+
+fn target_requirement(program: &Program, role: &str) -> Result<TargetRequirement, IrError> {
+    for target in array_field(&program.metadata, "targets")? {
+        if str_field(target, "role")? == role {
+            return parse_target_requirement(program, target);
+        }
+    }
+    Err(malformed(program, "unknown target clause role"))
+}
+
+fn parse_target_requirement(
+    program: &Program,
+    target: &Value,
+) -> Result<TargetRequirement, IrError> {
+    Ok(TargetRequirement {
+        spec: target_spec(object_field(target, "selector")?)?,
+        min: usize::try_from(u64_field(target, "min")?)
+            .map_err(|_| malformed(program, "target min exceeds usize"))?,
+        max: usize::try_from(u64_field(target, "max")?)
+            .map_err(|_| malformed(program, "target max exceeds usize"))?,
+    })
+}
+
+fn token_name(pack: &SemanticPack, index: usize) -> Result<String, IrError> {
+    let definition = pack
+        .definitions
+        .get(index)
+        .ok_or_else(|| IrError::Malformed("token index out of bounds".into()))?;
+    if !opt_bool_field(&definition.characteristics, "token")?.unwrap_or(false) {
+        return Err(IrError::Malformed("token reference is not a token".into()));
+    }
+    Ok(definition.registry_name.clone())
+}
+
+fn lower_condition(condition: &Condition) -> Result<StaticCondition, IrError> {
+    Ok(match condition {
+        Condition::Always => StaticCondition::Always,
+        Condition::CardsDrawnAtLeast(count) => StaticCondition::CardsDrawnAtLeast { count: *count },
+        Condition::GraveyardAtLeast { count, predicate } => StaticCondition::GraveyardAtLeast {
+            count: usize::try_from(*count)
+                .map_err(|_| IrError::Malformed("count exceeds usize".into()))?,
+            predicate: predicate_card(predicate)?,
+        },
+        _ => return Err(IrError::Malformed("unsupported static condition".into())),
+    })
+}
+
+impl ValueExpression {
+    fn lower(&self) -> Result<EffectValue, IrError> {
+        Ok(match self {
+            Self::CreaturesWithCounters => EffectValue::CreaturesWithCounters,
+            Self::BattlefieldMatching(predicate) => EffectValue::BattlefieldMatching {
+                predicate: predicate_card(predicate)?,
+            },
+            Self::GraveyardMatching { base, predicate } => EffectValue::GraveyardMatching {
+                base: *base,
+                predicate: predicate_card(predicate)?,
+            },
+            Self::CardsDrawnMinus(subtract) => EffectValue::CardsDrawnMinus {
+                subtract: *subtract,
+            },
+        })
+    }
 }

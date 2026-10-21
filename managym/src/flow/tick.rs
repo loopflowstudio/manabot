@@ -372,7 +372,10 @@ impl Game {
                         .size(crate::state::zone::ZoneType::Hand, player)
                         > 7
                 {
-                    self.suspend_rule_decision(crate::flow::decision::Decision::Discard { player });
+                    self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
+                        player,
+                        remaining: 1,
+                    });
                     return self.suspended_decision_action_space();
                 }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.

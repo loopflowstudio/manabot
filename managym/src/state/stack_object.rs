@@ -17,6 +17,7 @@ pub struct SpellOnStack {
     pub target_req_indices: Vec<usize>,
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
+    pub mode: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -44,6 +45,7 @@ pub struct TriggeredAbilityOnStack {
     pub targets: Vec<Target>,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
+    pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Card::abilities[ability_index]`.

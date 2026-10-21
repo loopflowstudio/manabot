@@ -435,7 +435,11 @@ class Agent(nn.Module):
             )
         permanent_features = [
             torch.cat(
-                (obs[key][..., :PERMANENT_DEFINITION_INDEX], obs[key][..., -1:]), dim=-1
+                (
+                    obs[key][..., :PERMANENT_DEFINITION_INDEX],
+                    obs[key][..., PERMANENT_DEFINITION_INDEX + 1 :],
+                ),
+                dim=-1,
             )
             for key in ("agent_permanents", "opponent_permanents")
         ]

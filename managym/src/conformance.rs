@@ -1,4 +1,4 @@
-//! Replayable semantic-kernel conformance evidence for the curated two-deck slice.
+//! Replayable semantic-kernel evidence for authored matchups and the Elemental pool.
 //!
 //! The readable reference path surfaces every singleton action. The optimized
 //! production path collapses those forced actions internally. They deliberately
@@ -79,13 +79,38 @@ struct CoverageFamily {
 pub enum Orientation {
     UrLessonsVsGwAllies,
     GwAlliesVsUrLessons,
+    ElementalLeftVsRight,
+    ElementalRightVsLeft,
 }
 
 impl Orientation {
+    fn source_bytes(self) -> &'static [u8] {
+        match self {
+            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => {
+                include_bytes!("../../content/semantic/v1/elemental.source.json")
+            }
+            _ => MATCHUP_SOURCE_BYTES,
+        }
+    }
+    fn source_digest(self) -> String {
+        blake3::hash(self.source_bytes()).to_hex().to_string()
+    }
+    fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
+        match self {
+            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::new(
+                crate::semantic::SemanticPack::elemental()
+                    .and_then(|pack| pack.compile_content_pack())
+                    .map_err(|error| error.to_string())?,
+            )),
+            _ => Ok(default_content_pack()),
+        }
+    }
     fn seat_keys(self) -> (&'static str, &'static str) {
         match self {
             Self::UrLessonsVsGwAllies => ("ur_lessons", "gw_allies"),
             Self::GwAlliesVsUrLessons => ("gw_allies", "ur_lessons"),
+            Self::ElementalLeftVsRight => ("elemental_left", "elemental_right"),
+            Self::ElementalRightVsLeft => ("elemental_right", "elemental_left"),
         }
     }
 }
@@ -110,6 +135,8 @@ pub struct FuzzSpec {
 pub struct Manifest {
     pub schema_version: u32,
     pub contract_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_version: Option<String>,
     pub cases: Vec<CaseSpec>,
     pub fuzz: FuzzSpec,
 }
@@ -281,11 +308,10 @@ struct ConformancePair {
 impl ConformancePair {
     fn new(orientation: Orientation, game_seed: u64) -> Result<Self, String> {
         let configs = player_configs(orientation)?;
-        // Frozen v1 receipts predate the compiled authored pack and include
-        // the original content allocation in their checkpoint hash. Replay
-        // them against that exact recorded world; ordinary exact-deck matches
-        // select the compiled pack through `Game::new`.
-        let content = default_content_pack();
+        // Inherited matchup cases retain the general native allocation.
+        // Elemental orientations bind their compiled catalog entry explicitly;
+        // each tape records its own source and content fingerprints.
+        let content = orientation.content()?;
         let mut reference =
             Game::new_with_content(configs.clone(), game_seed, false, Arc::clone(&content));
         let optimized = Game::new_with_content(configs, game_seed, true, content);
@@ -414,9 +440,9 @@ fn selected_action(game: &Game, index: usize) -> Result<(String, String, Value),
     ))
 }
 
-fn matchup_source() -> Result<MatchupSource, String> {
+fn matchup_source_for(orientation: Orientation) -> Result<MatchupSource, String> {
     let source: MatchupSource =
-        serde_json::from_slice(MATCHUP_SOURCE_BYTES).map_err(|error| error.to_string())?;
+        serde_json::from_slice(orientation.source_bytes()).map_err(|error| error.to_string())?;
     if source.schema_version != 1 {
         return Err(format!(
             "unsupported matchup source schema {}",
@@ -431,7 +457,7 @@ fn matchup_source_digest() -> String {
 }
 
 fn player_configs(orientation: Orientation) -> Result<Vec<PlayerConfig>, String> {
-    let source = matchup_source()?;
+    let source = matchup_source_for(orientation)?;
     let definitions: BTreeMap<_, _> = source
         .definitions
         .into_iter()
@@ -495,7 +521,7 @@ fn generate_case_internal(
     last_matching_checkpoint: &mut Option<Checkpoint>,
 ) -> Result<ReplayCase, String> {
     validate_spec(spec)?;
-    let source = matchup_source()?;
+    let source = matchup_source_for(spec.orientation)?;
     let mut pair = ConformancePair::new(spec.orientation, spec.game_seed)?;
     let initial_checkpoint = pair.checkpoint()?;
     *last_matching_checkpoint = Some(initial_checkpoint.clone());
@@ -538,8 +564,8 @@ fn generate_case_internal(
         contract_id: CONTRACT_ID.to_string(),
         case_id: spec.id.clone(),
         matchup_pack_key: source.pack_key,
-        matchup_source_digest: matchup_source_digest(),
-        content_digest: default_content_pack().content_digest(),
+        matchup_source_digest: spec.orientation.source_digest(),
+        content_digest: spec.orientation.content()?.content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
         orientation: spec.orientation,
@@ -564,11 +590,14 @@ pub fn replay_case(case: &ReplayCase) -> Result<(), String> {
             case.case_id
         ));
     }
-    if case.matchup_source_digest != matchup_source_digest() {
+    if case.matchup_source_digest != case.orientation.source_digest() {
         return Err(format!("{} matchup source digest drift", case.case_id));
     }
-    if case.content_digest != default_content_pack().content_digest() {
+    if case.content_digest != case.orientation.content()?.content_digest() {
         return Err(format!("{} content digest drift", case.case_id));
+    }
+    if case.matchup_pack_key != matchup_source_for(case.orientation)?.pack_key {
+        return Err("replay content pack key drift".into());
     }
     let mut pair = ConformancePair::new(case.orientation, case.game_seed)?;
     if pair.checkpoint()? != case.initial_checkpoint {
@@ -642,6 +671,13 @@ fn load_manifest(root: &Path) -> Result<Manifest, String> {
     let manifest: Manifest = load_json(&root.join("manifest.json"))?;
     if manifest.schema_version != SCHEMA_VERSION || manifest.contract_id != CONTRACT_ID {
         return Err("unsupported conformance manifest contract".to_string());
+    }
+    if manifest
+        .world_version
+        .as_deref()
+        .is_some_and(|world| world != crate::WORLD_VERSION)
+    {
+        return Err("conformance manifest belongs to a different world".into());
     }
     if manifest.cases.is_empty() {
         return Err("conformance manifest must contain replay cases".to_string());
@@ -942,8 +978,8 @@ fn persist_fuzz_failure(
     let receipt = FailureReceipt {
         schema_version: SCHEMA_VERSION,
         contract_id: CONTRACT_ID.to_string(),
-        matchup_source_digest: matchup_source_digest(),
-        content_digest: default_content_pack().content_digest(),
+        matchup_source_digest: spec.orientation.source_digest(),
+        content_digest: spec.orientation.content()?.content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
         orientation: spec.orientation,
@@ -981,10 +1017,11 @@ pub fn fuzz(
     }
     let mut total_commands = 0;
     for case_index in 0..cases {
-        let orientation = if case_index % 2 == 0 {
-            Orientation::UrLessonsVsGwAllies
-        } else {
-            Orientation::GwAlliesVsUrLessons
+        let orientation = match case_index % 4 {
+            0 => Orientation::UrLessonsVsGwAllies,
+            1 => Orientation::GwAlliesVsUrLessons,
+            2 => Orientation::ElementalLeftVsRight,
+            _ => Orientation::ElementalRightVsLeft,
         };
         let spec = CaseSpec {
             id: format!("fuzz-{case_index:04}"),
@@ -1032,8 +1069,8 @@ fn replay_failure_receipt(path: &Path, receipt: &FailureReceipt) -> Result<Strin
     if receipt.schema_version != SCHEMA_VERSION || receipt.contract_id != CONTRACT_ID {
         return Err("unsupported failure receipt contract".to_string());
     }
-    if receipt.matchup_source_digest != matchup_source_digest()
-        || receipt.content_digest != default_content_pack().content_digest()
+    if receipt.matchup_source_digest != receipt.orientation.source_digest()
+        || receipt.content_digest != receipt.orientation.content()?.content_digest()
         || receipt.reference != REFERENCE_ID
         || receipt.optimized != OPTIMIZED_ID
     {
