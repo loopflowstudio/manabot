@@ -96,7 +96,50 @@ at the same tiers and machine class, training on both seats' decisions, and is
 reported as its own rows. Its recipe, allocation and predictions are committed
 before it launches.
 
-| World | Tier | Iterations | Learner decisions | Hours | vs heuristic (LvA) | vs heuristic (mean) |
+### Result (closed 2026-10-21)
+
+Jack Heart closed v1 at 20:20 UTC on 2026-10-21, after deciding that one-seat
+learning will not be used going forward. The $50 tier was never reached:
+training stopped at update 12,000 (196.6M learner decisions, the last retained
+checkpoint, saved at 20:09 UTC) after $13.34 of pod time. Training ignored
+SIGINT and SIGTERM and was killed, so there is no final paused export. All 64
+run files were copied back byte for byte before the pod was deleted. The second
+prediction (medium tier ≥ small tier + 0.05) is therefore **untested**. The
+log-spaced curve's 16,000 point was never reached.
+
+| World | Tier | Iterations | Learner decisions | Pod hours | vs heuristic (LvA) | vs heuristic (mean) |
 |---|---|---:|---:|---:|---|---|
-| Allies vs Lessons v1 | $10 / 1 day | pending | | | | |
-| Allies vs Lessons v1 | $50 / 7 days | pending | | | | |
+| Allies vs Lessons v1 (one seat) | $10 / 1 day | 9,250 | 151.6M | 16.8 | 0.70 [0.58, 0.82] | 0.69 [0.64, 0.74] |
+| Allies vs Lessons v1 (one seat) | $50 / 7 days | not reached (closed at 12,000) | | | | |
+
+First prediction: **held**. As Lessons against heuristic Allies, the small tier
+scored 0.70, above the predicted 0.40, with a lower bound of 0.58.
+
+Heuristic curve, 200 games per checkpoint, all games complete and terminal
+([data](data/scale-ladder/v1-evaluation.json)):
+
+| Updates | Learner decisions | Mean | LvA | AvL | LvL | AvA |
+|---:|---:|---|---|---|---|---|
+| 0 | 0 | 0.11 [0.07, 0.16] | 0.00 | 0.26 | 0.12 | 0.06 |
+| 250 | 4.1M | 0.47 [0.45, 0.51] | 0.22 | 0.82 | 0.38 | 0.48 |
+| 1,000 | 16.4M | 0.55 [0.50, 0.59] | 0.36 | 0.86 | 0.42 | 0.54 |
+| 4,000 | 65.5M | 0.68 [0.61, 0.73] | 0.60 | 0.96 | 0.52 | 0.62 |
+| 9,250 | 151.6M | 0.69 [0.64, 0.74] | 0.70 | 0.94 | 0.54 | 0.58 |
+
+- The mean flattens between 65M and 152M decisions, while Lessons vs Allies keeps
+  rising (0.60 → 0.70). Allies vs Lessons is saturated against heuristic
+  (0.94–0.96), as MTG-153 found, so the mean understates late progress. The
+  mirror cells have the most headroom left.
+- Against the frozen Mini 12261@10k checkpoint (head-to-head, 400 games, 0 invalid),
+  the small tier scored 0.81 [0.78, 0.84]: 0.74 as Lessons, 0.88 as Allies.
+- Scripted greedy was also played at 9,250 for continuity only; heuristic is the
+  tracking anchor (Jack Heart, 2026-10-21).
+- One seed, so the intervals resample deals, not training runs.
+
+Costs: calibration $0.40, training pod $13.34, evaluation about $2.60, of which
+about $2.25 was wasted. The waste was two EU-SE-1 pods that never accepted SSH,
+then two pods left idle for 4.3 hours because an endpoint-polling loop failed
+unnoticed. The first evaluation attempt also crashed every game, because the
+unit script lacked a `__main__` guard for spawned workers; it was rerun in full
+and its output kept separately. Raw run and evaluation archives remain outside
+the repository in `~/manabot-runs/mtg159/`, with SHA-256 sums in the data file.

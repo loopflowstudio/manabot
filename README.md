@@ -116,15 +116,17 @@ dollars or hours. We add a row when a run sets a new high.
 | `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64×2, 188k params | 13.3M | 512 × 26,000 | 1× L4 |
 | `small-63k`, continued | 2026-10 | 64×2 | 32.3M | 512 × 63,000 | 1× L4 |
 | `small-100k`, continued | 2026-10 | 64×2 | 51.2M | 512 × 100,000 | 1× L4 |
+| scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
 
 The first two rows predate the current world and encoding, so they record
-scale only. The [scale ladder](experiments/scale-ladder.md) is running a single
-64×2 run at 16,384 decisions per iteration. Its $10 and $50 checkpoints should
-be about 160M and 780M decisions.
+scale only. The ladder run's $10 checkpoint (151.6M decisions) scored 0.69
+against the `heuristic` anchor across the four deck matchups, and 0.70 as
+Lessons against Allies. The run was closed before its $50 tier, once
+self-play moved to learning from both seats.
 
 Learning-rate schedules currently count iterations, not decisions. The same
 recipe run at a different batch size therefore decays at a different number
-of decisions: about 18M for `small-100k` versus about 575M for the ladder run.
+of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe.
 
 ## Earlier results
 
