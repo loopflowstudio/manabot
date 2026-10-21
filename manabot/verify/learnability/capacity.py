@@ -171,7 +171,12 @@ def run(out: Path, result: Result) -> None:
         )
         save(out, result)
     if result.config.ppo:
-        ppo = run_positive_control(out / "ppo", deadline=time.perf_counter() + 150)
+        # Bound collection without treating shared-runner speed as a learning
+        # threshold. Sample counts and held-out acceptance remain fixed.
+        ppo = run_positive_control(
+            out / "ppo",
+            deadline=time.perf_counter() + result.config.ppo_timeout_seconds,
+        )
         result.ppo = ppo
         path = out / "ppo" / ppo.checkpoint
         result.artifacts[str(path.relative_to(out))] = hashlib.sha256(

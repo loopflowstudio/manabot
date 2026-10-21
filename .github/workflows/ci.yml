@@ -203,7 +203,7 @@ jobs:
             tests/test_package_boundaries.py \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
-            tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
+            tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
             tests/training/test_mirror_long.py tests/training/test_local_service.py \
             tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \

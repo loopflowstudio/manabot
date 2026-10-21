@@ -109,6 +109,11 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
 
 ## Testing
 
+- After a world or observation-shape change, validate current-world arena
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
+  and run the full diagnostic with
+  `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
+  The `--pr` subset omits reward-driven PPO and cannot verify that path.
 - Remote credential tests require the `artifacts` extra. Validate dependency
   changes in an isolated environment so locally installed extras cannot hide
   missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.

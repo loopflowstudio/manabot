@@ -34,6 +34,7 @@ class StrictModel(BaseModel):
 
 
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
+type ArenaWorld = Literal["w2", "w3", "w4", "w5", "w6", "w7"]
 BASE_ANCHOR_IDS = (
     "random-v1",
     "scripted-greedy-v1",
@@ -44,7 +45,7 @@ BASE_ANCHOR_IDS = (
 
 
 class ArenaKey(StrictModel):
-    world: Literal["w2", "w3", "w4", "w5", "w6"]
+    world: ArenaWorld
     content_suite: str
     viewer_boundary: str
     arena_version: str
@@ -68,7 +69,7 @@ class PlayerRegistration(StrictModel):
     player_spec: dict[str, Any]
     compute_class_id: str
     information_boundary: str
-    world: Literal["w2", "w3", "w4", "w5", "w6"]
+    world: ArenaWorld
     content_suite: str
     observation_abi_sha256: str = Field(pattern=SHA256_PATTERN)
     action_abi_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -666,7 +667,7 @@ class MatchRow(StrictModel):
             ("ur_lessons", "gw_allies") if self.leg < 2 else ("gw_allies", "ur_lessons")
         ):
             raise ValueError("deck assignment and leg mismatch")
-        if self.arena_key.world in {"w3", "w4", "w5", "w6"} and self.seat_decks is None:
+        if self.arena_key.world != "w2" and self.seat_decks is None:
             raise ValueError("selected match must retain its deck assignment")
         if not failed and self.failure is not None:
             raise ValueError("completed match cannot carry a failure")
