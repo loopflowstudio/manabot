@@ -72,12 +72,12 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 2
+        # lessons + until-end-of-combat mana + pooled and Lesson-only colors.
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 14
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + outside + indestructible + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 3
+        # kicker flag/cost + hexproof + outside + indestructible + legendary + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 4
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
@@ -276,6 +276,9 @@ class ObservationEncoder:
         arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
         arr[step_start + self.num_steps + 1] = float(player.combat_mana) / 10.0
 
+        arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
+        arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
+
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
         return arr
@@ -359,6 +362,7 @@ class ObservationEncoder:
         i += 1
         arr[i] = float(card.keywords.hexproof)
         arr[38] = float(card.keywords.indestructible)
+        arr[39] = float(card.is_legendary)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr

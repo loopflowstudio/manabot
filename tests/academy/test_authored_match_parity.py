@@ -15,7 +15,7 @@ def test_checked_authored_match_parity_receipt() -> None:
         "first_divergence": None,
     }
     stale = receipt["stale_object_proof"]
-    assert stale["captured_render_ref"] == {"entity": 107, "incarnation": 2}
+    assert stale["captured_render_ref"] == {"entity": 96, "incarnation": 3}
     assert stale["current_rejection"] == {
         "code": "stale_object",
         "state_witness_unchanged": True,
@@ -28,12 +28,12 @@ def test_checked_authored_match_parity_receipt() -> None:
     }
     assert receipt["surfaces"]["live"]["presentation"] == {
         "0": {
-            "events": 62,
-            "sha256": "ec9c82bc22d2b66701143f94ec77779c510067cbb12c952b213d4a6b05829c3f",
+            "events": 55,
+            "sha256": "398c0b961bf1141b9f84172374a8d5d47f94ec328a85a4406d608eb0905aee15",
         },
         "1": {
-            "events": 62,
-            "sha256": "c9f625d4e8b085910c9a7f1c650a409b629ce857cefb37d2215711553664a080",
+            "events": 55,
+            "sha256": "4ec22fd5da2a6f47b9a7c880e778c7a4079673640a515c6aed3d4c0f8fab6cb6",
         },
     }
 

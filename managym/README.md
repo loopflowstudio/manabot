@@ -71,7 +71,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w8-v1](../conformance/semantic-kernel-w8-v1/).
+[semantic-kernel-w9-v1](../conformance/semantic-kernel-w9-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -111,3 +111,18 @@ deck/sideboard must be one of its authored setups; unknown packs or partial
 bindings fail reset. Omitting it preserves exact-pair automatic selection.
 Python `MatchHypers.authored` carries this binding for same-deck matches so replay
 cannot silently use generic card definitions.
+
+Mana feasibility and production share typed costs and pools. `Mana.lesson`
+retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
+casting context, while resolving costs and activations remain unrestricted
+contexts. Chosen-color mana abilities pay their activation costs before their
+immediate output decision. `activated_abilities_for` derives battlefield grants;
+those granted mana abilities never become activated stack objects. Waterbend
+taps are cost payment, not tapping for mana.
+
+A resolving spell remains on the stack until the zone-move authority commits
+its departure. That authority applies flashback exile replacement and captures
+cast provenance before removing the stack object. Do not remove spells early in
+countering or finalization. Copied tokens detach immutable characteristics from
+the source definition, retain its semantic identity, and expose their actual
+legendary status in observations; canonical hashing includes their copied data.

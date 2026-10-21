@@ -985,6 +985,10 @@ pub struct PyPlayer {
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
     #[pyo3(get, set)]
     pub combat_mana: i32,
+    #[pyo3(get)]
+    pub mana: [i32; 6],
+    #[pyo3(get)]
+    pub lesson_mana: [i32; 6],
 }
 
 #[cfg(feature = "python")]
@@ -1002,6 +1006,8 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
+            mana: value.mana,
+            lesson_mana: value.lesson_mana,
         }
     }
 }
@@ -1026,6 +1032,8 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
+            mana: value.mana,
+            lesson_mana: value.lesson_mana,
         }
     }
 }
@@ -1237,6 +1245,7 @@ impl From<PyManaCost> for ManaCost {
         let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
 
         Self {
+            spend_on_lesson: false,
             cost,
             mana_value,
             hybrid: value
@@ -1280,6 +1289,8 @@ pub struct PyCard {
     #[pyo3(get, set)]
     pub is_token: bool,
     #[pyo3(get, set)]
+    pub is_legendary: bool,
+    #[pyo3(get, set)]
     pub is_ally: bool,
     #[pyo3(get, set)]
     pub is_lesson: bool,
@@ -1308,6 +1319,7 @@ impl From<CardData> for PyCard {
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
+            is_legendary: value.is_legendary,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
             ward_cost: value.ward_cost,
@@ -1332,6 +1344,7 @@ impl From<PyCard> for CardData {
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
+            is_legendary: value.is_legendary,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
             ward_cost: value.ward_cost,
@@ -3390,6 +3403,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         crate::semantic::SemanticPack::jeong_increment(),
         crate::semantic::SemanticPack::elemental(),
         crate::semantic::SemanticPack::sacrifice(),
+        crate::semantic::SemanticPack::temur(),
     ];
     for pack in packs {
         let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;

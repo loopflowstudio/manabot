@@ -88,10 +88,6 @@ impl Game {
                     .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller))
             });
             if !any_legal {
-                if let Some(index) = self.find_spell_on_stack_index(card) {
-                    self.journal_stack();
-                    self.state.stack_objects.remove(index);
-                }
                 self.move_card(card, ZoneType::Graveyard);
                 self.emit(GameEvent::SpellCountered { card, by: None });
                 return;
@@ -115,11 +111,9 @@ impl Game {
     }
 
     pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
-        let Some(index) = self.find_spell_on_stack_index(card) else {
+        let Some(_) = self.find_spell_on_stack_index(card) else {
             return;
         };
-        self.journal_stack();
-        self.state.stack_objects.remove(index);
         self.move_card(card, ZoneType::Graveyard);
         self.emit(GameEvent::SpellCountered { card, by });
     }
@@ -493,6 +487,44 @@ impl Game {
                 self.counter_spell(target_spell, frame.source);
                 None
             }
+            Effect::CreateNonlegendaryCopy => {
+                let source = frame.source?;
+                let original = &self.state.cards[source];
+                let mut copy = original.clone();
+                copy.id = self.state.id_gen.next_id();
+                copy.owner = frame.controller;
+                copy.is_token = true;
+                copy.supertypes
+                    .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary"));
+                let id = CardId(self.state.cards.len());
+                self.state.cards.push(copy);
+                self.state.card_to_permanent.push(None);
+                self.state
+                    .object_incarnations
+                    .push(crate::state::game_object::Incarnation::INITIAL);
+                self.move_card(id, ZoneType::Battlefield);
+                None
+            }
+            Effect::ModifyControlled {
+                predicate,
+                power,
+                toughness,
+            } => {
+                for id in self.battlefield_permanents(frame.controller) {
+                    if self.permanent_matches_predicate(id, predicate) {
+                        self.journal_permanent(id);
+                        let permanent = self.state.permanents[id].as_mut()?;
+                        permanent.temp_power += power;
+                        permanent.temp_toughness += toughness;
+                    }
+                }
+                None
+            }
+            Effect::WaterbendOrDiscard { generic } => Some(Decision::WaterbendOrDiscard {
+                player: frame.controller,
+                remaining: *generic,
+                started: false,
+            }),
             Effect::ModifyUntilEot {
                 power_delta,
                 toughness_delta,

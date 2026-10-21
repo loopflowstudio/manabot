@@ -12,7 +12,7 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: ['release-prompt-matrix.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts'],
   outputDir,
-  snapshotPathTemplate: '{testDir}/visual-references/v6/{arg}{ext}',
+  snapshotPathTemplate: '{testDir}/visual-references/v7/{arg}{ext}',
   timeout: 600_000,
   fullyParallel: false,
   workers: 1,

@@ -230,3 +230,21 @@ fn compiled_sacrifice_closure_matches_all_native_rules() {
         assert_eq!(actual, expected, "compiled sacrifice drift for {name}");
     }
 }
+
+#[test]
+fn compiled_temur_closure_matches_all_native_rules() {
+    let semantic = SemanticPack::temur().unwrap();
+    let compiled = semantic.compile_content_pack().unwrap();
+    let native = ContentPack::default();
+    assert_eq!(semantic.definitions.len(), 9);
+    for definition in &semantic.definitions {
+        let name = &definition.registry_name;
+        let actual = compiled
+            .definition(compiled.definition_id(name).unwrap())
+            .unwrap();
+        let expected = native
+            .definition(native.definition_id(name).unwrap())
+            .unwrap();
+        assert_eq!(actual, expected, "compiled temur drift for {name}");
+    }
+}

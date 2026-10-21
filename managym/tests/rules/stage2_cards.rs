@@ -809,11 +809,8 @@ fn waterbend_pays_entirely_with_creature_taps() {
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }
 
-/// Waterbend taps count as tapping for mana: Badgermole Cub adds {G} for
-/// each creature tapped, and that mana helps pay the remainder — with two
-/// taps and the Cub bonus, only one of three forests is needed.
 #[test]
-fn badgermole_cub_composes_with_waterbend_payment() {
+fn waterbend_taps_do_not_trigger_badgermole_cub() {
     let mut s = Scenario::new(rallier_deck(), deck(&[("Plains", 40)]), 82);
     let rallier = s.force_permanent_on_battlefield(0, "Water Tribe Rallier");
     let cub = s.force_permanent_on_battlefield(0, "Badgermole Cub");
@@ -823,22 +820,22 @@ fn badgermole_cub_composes_with_waterbend_payment() {
 
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
-    // Tap both creatures: pays {2} and the Cub adds {G}{G} to the pool.
+    // Two creature taps pay {2} without producing mana.
     assert!(s.choose_waterbend_tap(rallier));
     assert!(s.choose_waterbend_tap(cub));
     assert_eq!(
         s.game().state.players[0].mana_pool.total(),
-        2,
-        "Cub added {{G}} per creature tapped for mana"
+        0,
+        "waterbend is not tapping for mana"
     );
-    // Pay the remaining {3}: {2} from the pool + one forest.
+    // All three forests are still needed for the remaining {3}.
     assert!(s.take_action_by_type(ActionType::PayCost));
     let untapped_forests = s
         .battlefield_permanents_named(0, "Forest")
         .iter()
         .filter(|id| !permanent(&s, **id).tapped)
         .count();
-    assert_eq!(untapped_forests, 2, "only one forest was needed");
+    assert_eq!(untapped_forests, 0);
     assert_eq!(s.game().state.stack_objects.len(), 1);
 }
 

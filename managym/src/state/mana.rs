@@ -33,6 +33,9 @@ pub type Colors = BTreeSet<Color>;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ManaCost {
+    /// Payment context, set only for a cast Lesson (not its resolving effects).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub spend_on_lesson: bool,
     pub cost: [u8; 7],
     pub mana_value: u8,
     /// Each two-color hybrid pip is paid with exactly one of its colors.
@@ -164,6 +167,13 @@ impl ManaCost {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Mana {
     pub mana: [u8; 6],
+    /// Hermitic Herbalist mana keeps its spending restriction until spent or lost.
+    #[serde(skip_serializing_if = "is_empty_mana")]
+    pub lesson: [u8; 6],
+}
+
+fn is_empty_mana(mana: &[u8; 6]) -> bool {
+    *mana == [0; 6]
 }
 
 impl Mana {
@@ -213,11 +223,16 @@ impl Mana {
     pub fn add(&mut self, other: &Mana) {
         for i in 0..self.mana.len() {
             self.mana[i] = self.mana[i].saturating_add(other.mana[i]);
+            self.lesson[i] = self.lesson[i].saturating_add(other.lesson[i]);
         }
     }
 
     pub fn total(&self) -> u16 {
-        self.mana.iter().map(|x| *x as u16).sum()
+        self.mana
+            .iter()
+            .chain(&self.lesson)
+            .map(|x| *x as u16)
+            .sum()
     }
 
     /// Find a concrete payment, exploring hybrid assignments before spending
@@ -248,6 +263,11 @@ impl Mana {
             (needed == 0).then_some(remaining)
         }
         let mut remaining = self.mana;
+        if cost.spend_on_lesson {
+            for (available, restricted) in remaining.iter_mut().zip(self.lesson) {
+                *available = available.saturating_add(restricted);
+            }
+        }
         for (available, required) in remaining.iter_mut().zip(cost.cost) {
             *available = available.checked_sub(required)?;
         }
@@ -259,12 +279,28 @@ impl Mana {
     }
 
     pub fn pay(&mut self, cost: &ManaCost) {
-        self.mana = self.payment_remainder(cost).expect("insufficient mana");
+        let remaining = self.payment_remainder(cost).expect("insufficient mana");
+        for (slot, left) in remaining.into_iter().enumerate() {
+            let before = self.mana[slot].saturating_add(if cost.spend_on_lesson {
+                self.lesson[slot]
+            } else {
+                0
+            });
+            let spent = before - left;
+            let restricted = if cost.spend_on_lesson {
+                spent.min(self.lesson[slot])
+            } else {
+                0
+            };
+            self.lesson[slot] -= restricted;
+            self.mana[slot] -= spent - restricted;
+        }
     }
 
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
+        self.lesson = [0; 6];
     }
 }
 

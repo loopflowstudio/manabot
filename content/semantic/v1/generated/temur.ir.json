@@ -1,0 +1,810 @@
+{
+  "decks": [
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 8,
+          "definition_index": 0
+        },
+        {
+          "count": 3,
+          "definition_index": 1
+        },
+        {
+          "count": 3,
+          "definition_index": 2
+        },
+        {
+          "count": 3,
+          "definition_index": 3
+        },
+        {
+          "count": 7,
+          "definition_index": 4
+        },
+        {
+          "count": 7,
+          "definition_index": 5
+        },
+        {
+          "count": 3,
+          "definition_index": 6
+        },
+        {
+          "count": 3,
+          "definition_index": 7
+        },
+        {
+          "count": 3,
+          "definition_index": 8
+        }
+      ],
+      "key": "temur_left",
+      "sideboard": []
+    },
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 8,
+          "definition_index": 0
+        },
+        {
+          "count": 3,
+          "definition_index": 1
+        },
+        {
+          "count": 3,
+          "definition_index": 2
+        },
+        {
+          "count": 3,
+          "definition_index": 3
+        },
+        {
+          "count": 7,
+          "definition_index": 4
+        },
+        {
+          "count": 7,
+          "definition_index": 5
+        },
+        {
+          "count": 3,
+          "definition_index": 6
+        },
+        {
+          "count": 3,
+          "definition_index": 7
+        },
+        {
+          "count": 3,
+          "definition_index": 8
+        }
+      ],
+      "key": "temur_right",
+      "sideboard": []
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Forest"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Forest"
+      },
+      "program_indexes": [
+        0
+      ],
+      "semantic_index": 0,
+      "semantic_key": "temur.forest"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{1}{G}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Scout",
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Great Divide Guide"
+      },
+      "program_indexes": [
+        1
+      ],
+      "semantic_index": 1,
+      "semantic_key": "temur.great_divide_guide"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{G}{U}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Druid",
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Hermitic Herbalist"
+      },
+      "program_indexes": [
+        2,
+        3
+      ],
+      "semantic_index": 2,
+      "semantic_key": "temur.hermitic_herbalist"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{3}{G}{U}{R}",
+        "power": 5,
+        "subtypes": [
+          "Human",
+          "Noble",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "token": false,
+        "toughness": 5,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Iroh, Grand Lotus"
+      },
+      "program_indexes": [
+        4,
+        5
+      ],
+      "semantic_index": 3,
+      "semantic_key": "temur.iroh_grand_lotus"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Island"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Island"
+      },
+      "program_indexes": [
+        6
+      ],
+      "semantic_index": 4,
+      "semantic_key": "temur.island"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Mountain"
+      },
+      "program_indexes": [
+        7
+      ],
+      "semantic_index": 5,
+      "semantic_key": "temur.mountain"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{2}",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Prophetic Prism"
+      },
+      "program_indexes": [
+        8,
+        9
+      ],
+      "semantic_index": 6,
+      "semantic_key": "temur.prophetic_prism"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{3}{R}{R}",
+        "power": 4,
+        "subtypes": [
+          "Dragon"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "token": false,
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ran and Shaw"
+      },
+      "program_indexes": [
+        10,
+        11,
+        12
+      ],
+      "semantic_index": 7,
+      "semantic_key": "temur.ran_and_shaw"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{3}{U}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Waterbending Lesson"
+      },
+      "program_indexes": [
+        13
+      ],
+      "semantic_index": 8,
+      "semantic_key": "temur.waterbending_lesson"
+    }
+  ],
+  "ir_hash": "d90b781e8f39c212286316a60682f62381fcf82b3d6060988982125bf2ba4a69",
+  "pack_key": "elemental-temur-v1",
+  "programs": [
+    {
+      "definition_index": 0,
+      "instructions": [
+        {
+          "mana": "G",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 0,
+      "semantic_key": "temur.forest.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 1,
+      "instructions": [
+        {
+          "op_name": "grant_mana",
+          "opcode": 58,
+          "predicates": [
+            {
+              "kind": "card_type",
+              "value": "land"
+            },
+            {
+              "kind": "subtype",
+              "value": "Ally"
+            }
+          ]
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 1,
+      "semantic_key": "temur.great_divide_guide.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 2,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 2,
+      "semantic_key": "temur.hermitic_herbalist.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 2,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "WW",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "WU",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "WB",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "WR",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "WG",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "UU",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "UB",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "UR",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "UG",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "BB",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "BR",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "BG",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "RR",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "RG",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ],
+            [
+              {
+                "mana": "GG",
+                "op_name": "add_lesson_mana",
+                "opcode": 56
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 3,
+      "semantic_key": "temur.hermitic_herbalist.p1",
+      "targets": []
+    },
+    {
+      "definition_index": 3,
+      "instructions": [
+        {
+          "mana": "RR",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 4,
+      "semantic_key": "temur.iroh_grand_lotus.p0",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 3,
+      "instructions": [
+        {
+          "op_name": "grant_flashback",
+          "opcode": 57
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 5,
+      "semantic_key": "temur.iroh_grand_lotus.p1",
+      "targets": []
+    },
+    {
+      "definition_index": 4,
+      "instructions": [
+        {
+          "mana": "U",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 6,
+      "semantic_key": "temur.island.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 5,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 7,
+      "semantic_key": "temur.mountain.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 6,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 8,
+      "semantic_key": "temur.prophetic_prism.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "1",
+        "tap_source": true
+      },
+      "definition_index": 6,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 9,
+      "semantic_key": "temur.prophetic_prism.p1",
+      "targets": []
+    },
+    {
+      "definition_index": 7,
+      "instructions": [
+        {
+          "mana": "RR",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 10,
+      "semantic_key": "temur.ran_and_shaw.p0",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 7,
+      "instructions": [
+        {
+          "condition": {
+            "count": 3,
+            "kind": "graveyard_at_least",
+            "predicate": {
+              "kind": "subtypes_any",
+              "values": [
+                "Dragon",
+                "Lesson"
+              ]
+            }
+          },
+          "op_name": "branch",
+          "opcode": 18,
+          "otherwise": [],
+          "then": [
+            {
+              "op_name": "create_nonlegendary_copy",
+              "opcode": 59
+            }
+          ]
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 11,
+      "semantic_key": "temur.ran_and_shaw.p1",
+      "targets": [],
+      "trigger": {
+        "event": "cast_enters",
+        "if": {
+          "count": 3,
+          "kind": "graveyard_at_least",
+          "predicate": {
+            "kind": "subtypes_any",
+            "values": [
+              "Dragon",
+              "Lesson"
+            ]
+          }
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "3R"
+      },
+      "definition_index": 7,
+      "instructions": [
+        {
+          "op_name": "modify_controlled",
+          "opcode": 60,
+          "power": 2,
+          "predicate": {
+            "kind": "subtype",
+            "value": "Dragon"
+          },
+          "toughness": 0
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 12,
+      "semantic_key": "temur.ran_and_shaw.p2",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "3U"
+      },
+      "definition_index": 8,
+      "instructions": [
+        {
+          "count": 3,
+          "op_name": "draw_cards",
+          "opcode": 2
+        },
+        {
+          "generic": 2,
+          "op_name": "waterbend_or_discard",
+          "opcode": 61
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 13,
+      "semantic_key": "temur.waterbending_lesson.p0",
+      "targets": []
+    }
+  ],
+  "schema_version": 1,
+  "setup_schema_version": 1,
+  "source_hash": "106c2b4bb2043e0cd4478e41c9dec1130b6d5f523d7e997f618162285625bbd5"
+}

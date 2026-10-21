@@ -91,6 +91,12 @@ class Opcode(IntEnum):
     DEAL_DAMAGE_TO_CONTROLLER = 53
     DRAIN_LIFE = 54
     UNBLOCKABLE_IF = 55
+    ADD_LESSON_MANA = 56
+    GRANT_FLASHBACK = 57
+    GRANT_MANA = 58
+    CREATE_NONLEGENDARY_COPY = 59
+    MODIFY_CONTROLLED = 60
+    WATERBEND_OR_DISCARD = 61
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -124,6 +130,7 @@ KEYWORDS = {
     "vigilance",
 }
 TRIGGER_EVENTS = {
+    "cast_enters",
     "sacrificed",
     "attacks",
     "becomes_tapped",
@@ -176,6 +183,12 @@ CONDITION_KINDS = {
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
+    "add_lesson_mana": ({"mana"}, set()),
+    "grant_flashback": (set(), set()),
+    "grant_mana": ({"predicates"}, set()),
+    "create_nonlegendary_copy": (set(), set()),
+    "modify_controlled": ({"predicate", "power", "toughness"}, set()),
+    "waterbend_or_discard": ({"generic"}, set()),
     "search_basic_lands": (
         {"count", "tapped", "untap_if_lands", "bottom_source"},
         set(),
@@ -597,6 +610,9 @@ def _validate_instruction_scalars(
         unknown = set(keywords) - KEYWORDS
         if unknown:
             _fail(context, f"unknown keywords: {', '.join(sorted(unknown))}")
+    if "predicates" in instruction:
+        for predicate in _array(instruction["predicates"], context):
+            _validate_predicate(predicate, context)
     if "predicate" in instruction:
         _validate_predicate(instruction["predicate"], f"{context}.predicate")
 

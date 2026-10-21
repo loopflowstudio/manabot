@@ -127,7 +127,7 @@ assistive-technology automation, or a new performance baseline.
 ## Versioned visual references
 
 The same two terminal trajectories compare 18 committed references under
-[`frontend/e2e/visual-references/v6`](../frontend/e2e/visual-references/v6):
+[`frontend/e2e/visual-references/v7`](../frontend/e2e/visual-references/v7):
 
 - one Actions-panel reference for every one of the ten reachable prompt
   families;
@@ -166,7 +166,7 @@ reconnects to uvicorn and must restore the same authoritative offer.
 Do not use a developer workstation capture as the reviewed baseline. Push the
 intentional visual change to its branch, dispatch the `CI` workflow for that
 branch with `update_visual_references` set to `true`, and download the
-`visual-references-v6` artifact. That job uses the named Linux profile, runs
+`visual-references-v7` artifact. That job uses the named Linux profile, runs
 Playwright with its explicit snapshot-update flag, reruns normal comparison,
 and continues to enforce every non-pixel assertion.
 

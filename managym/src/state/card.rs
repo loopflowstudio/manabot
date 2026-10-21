@@ -260,7 +260,7 @@ pub struct ActivatedAbilityDefinition {
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
-    /// "tapped for mana" (triggered mana abilities compose).
+    /// cost payment rather than a mana ability (CR 702.177).
     pub waterbend: bool,
     pub effect: Effect,
 }
@@ -275,6 +275,12 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    /// During your turn, grant graveyard flashback (Lessons cost {1}).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub grants_flashback: bool,
+    /// Each matching permanent you control gains a chosen-color tap ability.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mana_grant: Vec<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unblockable_if: Option<StaticCondition>,
     #[serde(skip_serializing_if = "Option::is_none")]
