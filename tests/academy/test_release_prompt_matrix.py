@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MATRIX_PATH = ROOT / "frontend" / "e2e" / "release-prompt-matrix.json"
 
 
-def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
+def test_release_prompt_matrix_classifies_and_covers_selected_matchup() -> None:
     matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
     assert matrix["schema_version"] == 2
 
@@ -110,8 +110,8 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         assert set(record["scenario_ids"]) == expected_ids
 
     visual = matrix["visual_references"]
-    assert visual["version"] == 6
-    assert visual["directory"] == "visual-references/v6"
+    assert visual["version"] == 7
+    assert visual["directory"] == "visual-references/v7"
     assert visual["profile"] == {
         "name": "ubuntu-24.04-chromium",
         "operating_system": "Ubuntu 24.04 x86-64",

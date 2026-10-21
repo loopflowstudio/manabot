@@ -74,9 +74,10 @@ Earlier receipts, frozen `erd1` Study evidence, and the `ed2` pre-command addres
 contract retain their meanings. Release browser checks and the pinned Linux
 visual reference remain delivery gates; these engine checks do not establish
 visual certification, deck balance, or playing strength.
-Live reproduction of retained navigation, checkpoint-advice, belief-recommendation
-and public-commitment evidence is not yet reconciled with w9. Current Learn
-browser tests pass; they do not close those broader Academy contracts.
+The retained navigation corpus now has a w9 fixture, verified against native
+offers, projections, and state digests. Checkpoint-advice, belief-recommendation
+and public-commitment evidence remains unreconciled with w9. Current Learn
+browser tests do not close those broader Academy contracts.
 
 Current coverage evidence references `waterbend_taps_do_not_trigger_badgermole_cub`.
 The generated coverage artifact follows that corrected rule; historical

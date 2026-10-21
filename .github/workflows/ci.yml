@@ -475,22 +475,22 @@ jobs:
       - name: Compare committed visual references
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.update_visual_references }}
         run: |
-          uv run --no-sync pytest tests/academy/test_release_prompt_matrix.py -q
+          uv run --no-sync pytest tests/academy/test_release_prompt_matrix.py tests/academy/test_choice_navigation.py -q
           npm --prefix frontend run test:e2e:release
 
       - name: Generate visual reference artifact
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         run: |
           npm --prefix frontend run test:e2e:release -- --update-snapshots
-          uv run --no-sync pytest tests/academy/test_release_prompt_matrix.py -q
+          uv run --no-sync pytest tests/academy/test_release_prompt_matrix.py tests/academy/test_choice_navigation.py -q
           npm --prefix frontend run test:e2e:release
 
       - name: Upload generated visual references
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         uses: actions/upload-artifact@v4
         with:
-          name: visual-references-v6
-          path: frontend/e2e/visual-references/v6
+          name: visual-references-v7
+          path: frontend/e2e/visual-references/v7
           if-no-files-found: error
 
       - name: Upload visual failure evidence
