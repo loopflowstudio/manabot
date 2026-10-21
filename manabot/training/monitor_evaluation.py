@@ -33,6 +33,7 @@ from manabot.arena.match import (
     selected_decks,
     selected_match,
 )
+from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import (
     ArenaKey,
     PlayerRegistration,
@@ -57,6 +58,9 @@ EvaluationPurpose = Literal[
 
 
 class MonitorProtocol(Strict):
+    authored_matchup: AuthoredMatchup | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     purpose: EvaluationPurpose = Field(
         default="monitoring-not-scientific-evaluation",
         exclude_if=lambda v: v == "monitoring-not-scientific-evaluation",
@@ -257,6 +261,10 @@ class MonitorResult(Strict):
     error: str | None = None
     evaluation_identities: dict[str, JsonValue] = {}
 
+    def validate_cohort(self) -> None:
+        """Recompute completeness and paired-deal intervals from retained rows."""
+        _summarize(self)
+
     @model_validator(mode="after")
     def purpose_matches_protocol(self) -> "MonitorResult":
         if self.purpose != self.protocol.result_purpose:
@@ -279,7 +287,11 @@ def _summarize(result: MonitorResult) -> None:
             raise ValueError("unexpected or duplicate monitoring deal/leg")
         seen.add(coordinate)
         if result.protocol.include_mirrors:
-            expected_decks = list(selected_decks(row.leg))
+            expected_decks = list(
+                result.protocol.authored_matchup.decks(row.leg)
+                if result.protocol.authored_matchup
+                else selected_decks(row.leg)
+            )
             extra = row.model_extra or {}
             if (
                 extra.get("seat_decks") != expected_decks
@@ -356,10 +368,13 @@ def _manifest(
         or file_sha256(path) != artifact["sha256"]
     ):
         raise ValueError("checkpoint differs from recorded artifact")
+    matchup = protocol.authored_matchup
+    expected_match = matchup.match() if matchup else selected_match()
+    suite = matchup.content_suite if matchup else SELECTED_SUITE
     if run.identities["matchup_sha256"] != canonical_sha256(
-        selected_match().model_dump()
+        expected_match.model_dump()
     ):
-        raise ValueError("monitoring requires the selected Allies/Lessons setup")
+        raise ValueError("monitoring requires its exact declared authored setup")
     agent, space = load_checkpoint_agent(str(path))
     runtime = runtime_fingerprints(
         run.seed, match_hypers=run.regime.match, observation_space=space
@@ -390,7 +405,7 @@ def _manifest(
     common = dict(
         information_boundary="acting-viewer",
         world=run.regime.world,
-        content_suite=SELECTED_SUITE,
+        content_suite=suite,
         observation_abi_sha256=run.identities["observation_abi_sha256"],
         action_abi_sha256=run.identities["action_abi_sha256"],
         matchup_sha256=run.identities["matchup_sha256"],
@@ -428,7 +443,7 @@ def _manifest(
     )
     key = ArenaKey(
         world=run.regime.world,
-        content_suite=SELECTED_SUITE,
+        content_suite=suite,
         viewer_boundary="acting-viewer",
         arena_version="training-monitor-v1",
         rating_model_version="unrated-monitoring",
@@ -501,6 +516,7 @@ def evaluate_checkpoint(
                 game_seconds=result.protocol.game_seconds,
                 max_commands=result.protocol.max_commands,
                 matchup_mode="all" if result.protocol.include_mirrors else "cross",
+                authored_matchup=result.protocol.authored_matchup,
             )
             atomic_json(directory / "rows.json", rows)
             atomic_json(directory / "trace.json", trace)

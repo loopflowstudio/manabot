@@ -1593,5 +1593,41 @@
     "colors": [
       "U"
     ]
+  },
+  "Glory Seeker": {
+    "name": "Glory Seeker",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "W"
+    ]
+  },
+  "Hill Giant": {
+    "name": "Hill Giant",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Giant",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Savannah Lions": {
+    "name": "Savannah Lions",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Cat",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "W"
+    ]
   }
 }

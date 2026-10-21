@@ -2,6 +2,13 @@
 
 Polish and validate only the current branch scope.
 
+## Required checks for tracking and offline reports
+
+Run `uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`
+when changing tracking or report discovery. The live tiny-comparison test writes
+both TrainingRun exports and Etude tracker declarations named `run.json`; saved
+report fixtures alone do not exercise their coexistence.
+
 ## Required checks for new Python test modules
 
 Use unique test module basenames across unpackaged test directories. Collect new
