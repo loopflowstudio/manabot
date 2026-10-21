@@ -13,6 +13,12 @@ on:
         default: false
         type: boolean
 
+# A newer PR revision replaces its obsolete run. Main and manual runs retain
+# independent groups, so publication does not cancel another main verification.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Pull requests run only the jobs their changed files can affect. Each file
   # is sorted into areas, and each area turns on the jobs that read it:
@@ -145,181 +151,22 @@ jobs:
         working-directory: website
         run: uv run --python 3.12 --extra test pytest -q
 
-  # Two parallel groups per platform: "long" holds the three slowest modules
-  # (about half the suite's runtime), "main" holds everything else.
+  # PRs and pushes require Linux integration; the same suites run on macOS nightly.
   integration:
-    name: Integration (${{ matrix.os }}, ${{ matrix.group }})
+    name: Integration
     needs: [changes]
     if: needs.changes.outputs.manabot == 'true'
-    runs-on: ${{ matrix.os }}
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        group: [main, long]
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/manabot-integration.yml
+    with:
+      runner: ubuntu-latest
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            managym -> target
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.12'
-
-      - name: Cache uv downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'managym/pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
-      - name: Install dependencies
-        run: uv sync --python 3.12 --extra dev --extra play
-
-      - name: Build managym extension
-        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
-
-      - name: Setup Node for offline report tests
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Integration tests
-        if: matrix.group == 'main'
-        run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
-            --ignore=tests/model/test_world.py \
-            tests/test_package_boundaries.py \
-            tests/sim/test_structured_policy.py \
-            tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
-            tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
-            tests/training/test_mirror_long.py tests/training/test_local_service.py \
-            tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
-            tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
-            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
-            tests/training/test_monitoring.py \
-            tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
-            tests/training/test_time_profile.py tests/training/test_time_cohort.py \
-            tests/training/test_active_training.py tests/training/test_active_recovery.py \
-            tests/training/test_producers.py tests/training/test_inference_preparation.py \
-            tests/training/test_basic_profile_study.py tests/training/test_profile_artifacts.py \
-            tests/training/test_gpu_job.py tests/training/test_batching_grid.py \
-            tests/training/test_process_tree_rss.py \
-            tests/training/test_etude_bootstrap_diagnostics.py \
-            tests/training/test_etude_worker_diagnostics.py \
-            tests/training/test_etude_launch_guard.py \
-            tests/training/test_etude_storage_reads.py \
-            tests/training/test_etude_prebuilt_client.py \
-            tests/training/test_grouped_grid.py tests/training/test_grouped_learning.py \
-            tests/training/test_locked_gpu_setup.py \
-            tests/training/test_prepared_source.py \
-            tests/training/test_source_projection.py tests/training/test_batching_evaluation.py \
-            tests/training/test_experiment_data.py \
-            tests/training/test_batching_calibration.py \
-            tests/training/test_parallel_commands.py tests/training/test_parallel_evaluation_probe.py \
-            tests/training/test_learner_witnesses.py \
-            tests/bench/test_native_variants.py tests/bench/test_pipeline_benchmark.py tests/bench/test_worker_scaling.py \
-            tests/training/test_checkpoint_queue.py \
-            tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
-            tests/training/test_technique_screen.py tests/training/test_filter_scope_mini.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
-            tests/training/test_value_models.py \
-            tests/training/test_history_input.py \
-            tests/training/test_history_predecessor.py \
-            tests/belief/test_sampling_report.py \
-            tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
-
-      - name: Long integration tests
-        if: matrix.group == 'long'
-        run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest \
-            tests/training/test_experiment_runner.py \
-            tests/training/test_monitor_evaluation.py \
-            tests/training/test_history_arena.py
-
-      - name: Enum smoke test
-        if: matrix.group == 'main'
-        run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
-
-      - name: Training smoke test
-        if: matrix.group == 'main'
-        run: |
-          uv run --python 3.12 python manabot/model/train.py \
-            --set train.total_timesteps=128 \
-            --set train.num_envs=2 \
-            --set train.num_steps=8 \
-            --set train.update_epochs=1 \
-            --set train.num_minibatches=1 \
-            --set experiment.wandb=false \
-            --set experiment.profiler_enabled=false \
-            --set agent.attention_on=false
-
-  # Tests that exercise Academy on top of manabot: checkpoint villains and
-  # local-update advice. They run on both platforms whenever manabot or
-  # academy changes, so academy-only changes can skip Integration.
   academy-integration:
-    name: Academy Integration (${{ matrix.os }})
+    name: Academy Integration
     needs: [changes]
     if: needs.changes.outputs.academy == 'true'
-    runs-on: ${{ matrix.os }}
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            managym -> target
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.12'
-
-      - name: Cache uv downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'managym/pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
-      - name: Install dependencies
-        run: uv sync --python 3.12 --extra dev --extra play
-
-      - name: Build managym extension
-        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
-
-      - name: Checkpoint world bindings
-        run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
-
-      - name: Elemental roster admission
-        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
-
-      - name: Frozen-policy search fixtures
-        run: |
-          uv run --python 3.12 --extra dev pytest -q \
-            tests/sim/test_local_update_sampling.py \
-            tests/sim/test_local_update_compound.py
+    uses: ./.github/workflows/academy-integration.yml
+    with:
+      runner: ubuntu-latest
 
   protocol-v1:
     name: Protocol v1 Conformance
