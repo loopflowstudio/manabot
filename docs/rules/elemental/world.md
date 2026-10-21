@@ -158,3 +158,35 @@ checks and the pinned Linux visual gate belong to the authored delivery gate.
 No human demo, review or merge-click approval is required by this Task's
 accepted direction. Publication, waited landing and Task completion are later
 Flow steps; this implementation record does not declare them complete.
+
+## Delivery gate evidence — 2026-10-21
+
+At published head `316b9f76`, CI passed debug Rust, Linux integration (both
+groups), Academy integration on Linux, protocol conformance, semantic coverage,
+semantic conformance and the pinned Ubuntu visual reference comparison (14
+browser tests). The full local learnability diagnostic also passed, including
+65,536 production reward-PPO transitions: preference score increased from
+0.59375 to 1.0, versus 0.640625 without updates. These results do not certify
+strength. macOS CI jobs were still queued at gate handoff.
+
+Gate adds release browser coverage for selecting UG/BG, BG/UG and UG/UG through
+the real selectors and backend. All three cases passed, checking all ten menu
+entries, exact visible Lesson pools, hidden opposing hands/pools, pack identity
+and an advancing Command. The existing 13 local release interaction tests also
+passed. Rust formatting, Clippy with warnings denied, Python Ruff lint/format
+and frontend static checks passed.
+
+**Delivery remains blocked.** An additional affected Python run passed 77 tests
+and failed four inherited evidence checks. The belief-recommendation fixture
+still selects the expected actions, but current visit margins are `[14, 48]`
+against frozen `[66, 38]`. Two public-commitment checks fail in live replay at
+`academy/public_commitment_parity.py:376` with `KeyError: 'status'`. The RUL-9
+provenance check rejects its changed landed parity receipt. These failures do
+not authorize replacing frozen evidence; their contract owners need to resolve
+the current-world proof gaps described in the predecessor contracts.
+
+Separately, [Clean-machine Play on this head](https://github.com/loopflowstudio/manabot/actions/runs/39680117834/job/119500174780)
+reaches play and reloads with equal visible state, but its first action after
+reload does not advance `data-update-seq` within 30 seconds (remains 1).
+The cause is unresolved; passing Learn reconnect and visual tests does not
+close this recovery failure. No clean-machine proof receipt was produced.
