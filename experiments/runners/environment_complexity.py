@@ -56,15 +56,14 @@ def regime(
 
     `schedule` maps a short horizon onto the learning-rate/tau curve of a longer
     reference run (MTG-135 protocol017); omitting it keeps historical recipes.
+    Declarations remain readable on later runtimes; execution admits the world.
     """
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
     if device == "cuda":
-        # GPU restart is a fresh corrected-world cohort, not a relabeling of
-        # historical CPU evidence or checkpoints. Pin rather than infer a world.
-        if managym.WORLD_VERSION != "w6":
-            raise ValueError("GPU complexity study requires w6 native runtime")
+        # Freeze the corrected-world GPU cohort independently of the reader's
+        # native runtime, retaining the separate historical CPU recipes.
         recipe.world = "w6"
     recipe.id = f"mtg122-{pool}"
     recipe.agent.semantic_pack = PACK
@@ -97,6 +96,8 @@ def calibrate(*, target: Literal["mini", "gpu"] = "mini") -> None:
         raise ValueError("unknown calibration target")
     if target == "gpu" and not torch.cuda.is_available():
         raise ValueError("GPU calibration requires CUDA; no CPU fallback")
+    if target == "gpu" and managym.WORLD_VERSION != "w6":
+        raise ValueError("GPU complexity study requires w6 native runtime")
     if target == "mini" and not socket.gethostname().startswith("mini-heart"):
         raise ValueError(
             "this admitted calibration is Mini-only; local execution forbidden"

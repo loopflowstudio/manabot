@@ -144,7 +144,16 @@ def validate_regime(
     )
     if require_current_world and regime.world != managym.WORLD_VERSION:
         raise ValueError("regime world differs from native runtime")
-    if regime.world not in {"w2", "w3", "w4", "w5", managym.WORLD_VERSION}:
+    if regime.world not in {
+        "w2",
+        "w3",
+        "w4",
+        "w5",
+        "w6",
+        "w7",
+        "w8",
+        managym.WORLD_VERSION,
+    }:
         raise ValueError("unsupported regime world")
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")

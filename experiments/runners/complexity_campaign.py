@@ -7,7 +7,7 @@ all attempts and stops; it does not select a new seed or retry a learned run.
 Plans are versioned by `schema_version`: 1 is the historical Mini campaign, 2
 the combined CUDA campaign, and 3 (`SplitComplexityPlan`) the current split:
 the GPU job trains and retains checkpoints only, then an operator runs
-`python -m experiments.runners.complexity_campaign evaluate <campaign>` on the
+`uv run python -m experiments.runners.complexity_campaign evaluate <campaign>` on the
 Mini against the fetched outputs. Both halves score the same 36,000 games.
 `--anchor heuristic` later scores the same cohort against the rule-of-thumb
 anchor, a supplementary comparison added after the frozen results.
@@ -55,6 +55,7 @@ from manabot.training.monitor_evaluation import (
     stage_checkpoint,
 )
 from manabot.verify.store import VerifyStore
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 SEEDS = (12251, 12252, 12253)
@@ -550,6 +551,8 @@ def execute(
     if isinstance(plan, GPUComplexityPlan | SplitComplexityPlan):
         if not torch.cuda.is_available():
             raise ValueError("GPU campaign requires CUDA; no CPU fallback")
+        if managym.WORLD_VERSION != "w6":
+            raise ValueError("GPU complexity study requires w6 native runtime")
     elif not socket.gethostname().startswith("mini-heart"):
         raise ValueError("historical campaign requires Mini, not local execution")
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()

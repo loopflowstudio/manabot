@@ -43,7 +43,7 @@ def test_gpu_pool_recipes_share_64_stream_learning_contract() -> None:
         recipe = regime(pool, updates=100, seconds=600, streams=64, device="cuda")
         stage = recipe.stages[0]
         assert recipe.world == "w6"
-        assert validate_regime(recipe) == recipe
+        assert validate_regime(recipe, require_current_world=False) == recipe
         assert stage.streams == 64
         assert stage.transitions == 64
         assert stage.execution.device == "cuda"
@@ -93,6 +93,7 @@ def test_gpu_calibration_selects_declared_recipe_and_retains_failure(
     }.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr("torch.cuda.is_available", lambda: True)
+    monkeypatch.setattr("managym.WORLD_VERSION", "w6")
     executor = Mock(side_effect=RuntimeError("fixture stop before learning"))
     monkeypatch.setattr(
         "experiments.runners.environment_complexity.execute_regime", executor
@@ -112,7 +113,23 @@ def test_gpu_calibration_selects_declared_recipe_and_retains_failure(
     assert os.environ["ETUDE_TRACK_DIR"] == str(tmp_path / "tracking")
 
 
-def test_gpu_recipe_rejects_another_native_world(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gpu_recipe_remains_readable_but_cannot_execute_on_another_world(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("managym.WORLD_VERSION", "w7")
+    recipe = regime("l1", updates=100, seconds=1200, streams=64, device="cuda")
+    assert recipe.world == "w6"
+    assert validate_regime(recipe, require_current_world=False) == recipe
+    with pytest.raises(ValueError, match="world differs"):
+        validate_regime(recipe)
+
+
+def test_gpu_calibration_rejects_another_world_before_creating_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETUDE_RUN", "fixture-only")
+    monkeypatch.setenv("ETUDE_DEADLINE", "2099-01-01T00:00:00+00:00")
+    monkeypatch.setattr("torch.cuda.is_available", lambda: True)
     monkeypatch.setattr("managym.WORLD_VERSION", "w7")
     with pytest.raises(ValueError, match="requires w6"):
-        regime("l1", updates=100, seconds=1200, streams=64, device="cuda")
+        calibrate(target="gpu")

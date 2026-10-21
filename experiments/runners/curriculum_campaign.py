@@ -73,8 +73,8 @@ ANCHORS: tuple[Anchor, ...] = ("heuristic", "scripted_greedy", "random")
 # Disjoint from the complexity (1_225_1xx_xxx) and baseline (1_226_xxx_xxx)
 # namespaces; the boundary milestone has no complexity counterpart.
 BOUNDARY_DEALS = tuple(range(1_227_132_000, 1_227_132_050))
-# Every fit is a corrected-world fit, including CPU test fixtures; `regime`
-# pins this only for CUDA to keep historical CPU recipes unchanged.
+# The scientific cohort stays on its frozen corrected world. CPU fixtures
+# declare the current runtime explicitly without changing historical recipes.
 WORLD = "w6"
 # Continuations require this declaration. Ataraxos move updates read only the
 # absolute iteration, so learning is the complexity recipe's either way.
@@ -91,6 +91,7 @@ class Recipe:
     device: Literal["cpu", "cuda"]
     schedule: IterationSchedule
     seconds_per_fit: float
+    world: str = WORLD
 
     def seconds(self, updates: int) -> float:
         return self.seconds_per_fit * updates / self.updates
@@ -107,7 +108,7 @@ def source_recipe(arm: Arm, recipe: Recipe) -> TrainingRegime:
         schedule=recipe.schedule,
     )
     source.id = f"mtg122-curriculum-{arm}-source"
-    source.world = WORLD
+    source.world = recipe.world
     source.schedule_clock = SCHEDULE_CLOCK
     return TrainingRegime.model_validate(source.model_dump())
 
@@ -129,7 +130,7 @@ def target_recipe(
         schedule=recipe.schedule,
     )
     target.id = f"mtg122-curriculum-{arm}-target"
-    target.world = WORLD
+    target.world = recipe.world
     target.schedule_clock = SCHEDULE_CLOCK
     stage = target.stages[0]
     assert isinstance(stage, TrainSelfPlay)

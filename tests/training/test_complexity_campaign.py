@@ -112,6 +112,16 @@ def test_gpu_campaign_rejects_cpu_before_starting_any_work(
         execute(gpu_plan())
 
 
+def test_gpu_campaign_rejects_another_world_before_allocation_setup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ETUDE_RUN", "fixture-only")
+    monkeypatch.setattr("torch.cuda.is_available", lambda: True)
+    monkeypatch.setattr("managym.WORLD_VERSION", "w7")
+    with pytest.raises(ValueError, match="requires w6"):
+        execute(gpu_plan())
+
+
 def split_plan() -> SplitComplexityPlan:
     return SplitComplexityPlan(
         total_seconds=9 * 1740 + 1800, max_usd_per_hour=0.69, prior_usd=4.55

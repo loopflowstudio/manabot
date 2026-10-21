@@ -39,6 +39,7 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.learning_state import admit_learning_state
 from manabot.training.models import IterationSchedule, TrainingRegime, TrainSelfPlay
 from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
+import managym
 
 TINY = Recipe(
     updates=4,
@@ -47,6 +48,7 @@ TINY = Recipe(
     device="cpu",
     schedule=IterationSchedule(steps=4, reference_steps=64),
     seconds_per_fit=1200,
+    world=managym.WORLD_VERSION,
 )
 SEED = 12271
 
