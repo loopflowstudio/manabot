@@ -19,11 +19,10 @@ Airbender* set.
 
 > **Built with two companion projects from Loopflow Studio:**
 >
-> - **[Loopflow](https://github.com/loopflowstudio/loopflow)** runs the
->   development. Coding agents do most of the implementation here, organized
->   into Waves, Tasks, and Flows. [How we use it ↓](#development-with-loopflow)
-> - **[Etude](https://github.com/loopflowstudio/etude)** launches training
->   runs and tracks what they record. [How we use it ↓](#experiments-with-etude)
+> - **[Loopflow](https://github.com/loopflowstudio/loopflow)** is how
+>   coding agents are coordinated to write the code.
+> - **[Etude](https://github.com/loopflowstudio/etude)** launches training and evaluation
+>   runs and tracks what they record. 
 
 ## Technical approach
 
@@ -94,43 +93,6 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
-## Development with Loopflow
-
-Most of the code in this repository is written by coding agents, and
-[**Loopflow**](https://github.com/loopflowstudio/loopflow) (`lf`) is how that
-work is organized and run:
-
-- **Waves** are standing areas of work, each with a charter, running memory,
-  and numbered working documents under [wave/](wave/README.md): `intelligence`
-  (training, search, evaluation), `rules` (managym), and `game` (Academy).
-  Each wave declares which paths it owns.
-- **Tasks** are the units of work inside a wave, tracked in Linear. Task IDs
-  (`MTG-…`, `INT-…`, `RUL-…`) show up in experiment and report names.
-- **Flows** chain agent steps such as kickoff, implement, review, gate, and
-  land, and can wait on other Tasks before starting
-  ([.lf/flows/](.lf/flows/)). Repo-specific skills and steps live in
-  [.lf/skills/](.lf/skills/) and [.lf/steps/](.lf/steps/).
-- Each agent session works in its own git worktree and lands through a PR.
-  The conventions agents follow are in [AGENTS.md](AGENTS.md).
-
-## Experiments with Etude
-
-[**Etude**](https://github.com/loopflowstudio/etude) launches training runs on
-your own or rented machines and tracks what they record. Manabot is its first
-heavy user:
-
-- **Run tracking.** Training-time reports read Etude's run records directly,
-  from local storage or S3, with `uv run --extra reports manabot
-  training-report` ([experiment metrics](docs/experiment-metrics.md)). The
-  `etude-sdk` client is an optional `reports` extra.
-- **Remote training.** Regimes run on rented GPUs as jobs that survive
-  disconnects, write checkpoint snapshots to S3, enforce a dollar ceiling, and
-  shut themselves down ([remote training](docs/remote-training.md)). The
-  launcher currently lives in manabot (`manabot deploy`, `manabot/remote/`)
-  and targets RunPod.
-- **Records that outlive the run.** Experiment IDs, contracts, and receipts
-  are frozen evidence and are never renamed.
-
 ## Quickstart
 
 You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
@@ -158,13 +120,31 @@ inspecting what a bot does, not a way to play Magic.
 
 ## Scale
 
-Training scale per agent. We add a row when a run sets a new high.
+Training scale per agent, measured in **learner decisions**: the decisions
+the learning policy made and trained on. Decisions with a single legal action
+are played automatically and not counted, and neither are the opponent seat's
+decisions in self-play. This unit does not depend on model size or batching,
+unlike iterations or Adam steps, and does not depend on hardware, unlike
+dollars or hours. We add a row when a run sets a new high.
 
-| Agent | Date | Hardware | Learner transitions | Updates |
-|---|---|---|---:|---:|
-| `small-100k`, 64×2, 64 streams ([capacity](experiments/model-capacity.md)) | 2026-10 | 1× L4 | ~51M | 100,000 iterations (~800k Adam steps) |
+| Agent | Date | Model | Learner decisions | Decisions per iteration × iterations | Hardware |
+|---|---|---|---:|---:|---|
+| first-light PPO ([report](experiments/first-light-run-1.md)) | 2026-03 | width 64 | 262k | 512 × 512 | CPU |
+| matched-cost PPO ([exp-03](experiments/exp-03-distillation.md)) | 2026-07 | 100k params | 5.8M | 2,048 × 2,850 | M4 Max |
+| `small-26k` ([capacity](experiments/model-capacity.md)) | 2026-10 | 64×2, 188k params | 13.3M | 512 × 26,000 | 1× L4 |
+| `small-63k`, continued | 2026-10 | 64×2 | 32.3M | 512 × 63,000 | 1× L4 |
+| `small-100k`, continued | 2026-10 | 64×2 | 51.2M | 512 × 100,000 | 1× L4 |
+| scale ladder v1, one seat ([ladder](experiments/scale-ladder.md)) | 2026-10 | 64×2 | 196.6M | 16,384 × 12,000 | 1× L4, $13.34 |
 
-Learner transitions are agent decisions.
+The first two rows predate the current world and encoding, so they record
+scale only. The ladder run's $10 checkpoint (151.6M decisions) scored 0.69
+against the `heuristic` anchor across the four deck matchups, and 0.70 as
+Lessons against Allies. The run was closed before its $50 tier, once
+self-play moved to learning from both seats.
+
+Learning-rate schedules currently count iterations, not decisions. The same
+recipe run at a different batch size therefore decays at a different number
+of decisions: about 18M for `small-100k` versus about 575M for the ladder recipe.
 
 ## Earlier results
 

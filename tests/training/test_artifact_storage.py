@@ -100,17 +100,26 @@ def test_existing_remote_object_must_match(
         },
         "PutObject",
     )
-    _respond(client, data)
+    checksum = base64.b64encode(bytes.fromhex(reference.sha256)).decode()
+    client.head_object.return_value = {
+        "ContentLength": len(data),
+        "ChecksumSHA256": checksum,
+        "VersionId": "version-1",
+    }
     retried = store.publish(
         source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
     )
     assert retried.sha256 == reference.sha256
     assert retried.version_id == "version-1"
-    _respond(client, b"tampered")
-    with pytest.raises(ValueError, match="differ"):
+    client.head_object.return_value = {
+        "ContentLength": len(data),
+        "ChecksumSHA256": base64.b64encode(hashlib.sha256(b"other").digest()).decode(),
+    }
+    with pytest.raises(ValueError, match="differs"):
         store.publish(
             source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
         )
+    client.get_object.assert_not_called()
 
 
 def test_bad_download_never_installs_cache(

@@ -89,6 +89,9 @@ def test_selected_current_provider_result_has_the_curated_flip() -> None:
     not FLIP_VERSIONED_FIXTURE_PATH.is_file() or not RESULT_PATH.is_file(),
     reason="INT-15 evidence is generated only after RUL-11 lands",
 )
+@pytest.mark.experiment_data(
+    "experiments/data/int-15-belief-recommendation-flip-v1.json"
+)
 def test_checked_result_separates_deterministic_and_measurement_envelopes() -> None:
     artifact = json.loads(RESULT_PATH.read_text(encoding="utf-8"))
     deterministic = artifact["deterministic"]

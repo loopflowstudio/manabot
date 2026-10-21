@@ -51,6 +51,10 @@ def test_contract_rejects_budget_boundary_or_training_drift() -> None:
             rul12.validate_contract(contract)
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-9-played-workloads-v1.json",
+    "experiments/data/rul-9-played-workloads-v1.measurement.json",
+)
 def test_frozen_rul9_inputs_are_byte_and_artifact_bound_without_rerun() -> None:
     contract = rul12.load_contract()
     frozen = rul12.verify_frozen_inputs(contract)
@@ -97,6 +101,12 @@ def test_checked_correctness_projection_keeps_all_semantic_and_privacy_gates() -
             "c14f3a43b17840217113f9edeaf8e03f9c430e9a725a62222b57ed2fa47b1959",
         ),
     ),
+)
+@pytest.mark.experiment_data(
+    "experiments/data/rul-12-release-stack-budget-v1.contended-host-load.json",
+    "experiments/data/rul-12-release-stack-budget-v1.control-recovered-then-contended.json",
+    "experiments/data/rul-9-played-workloads-v1.json",
+    "experiments/data/rul-9-played-workloads-v1.measurement.json",
 )
 def test_contended_run_is_preserved_as_an_honest_structural_miss(
     filename: str, artifact_sha256: str

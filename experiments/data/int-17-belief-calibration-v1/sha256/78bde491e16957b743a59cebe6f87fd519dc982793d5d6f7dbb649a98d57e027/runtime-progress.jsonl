@@ -1,3 +1,0 @@
-{"commitment": {"card": "Island", "kind": "play_land"}, "ordinal": 0, "peak_rss_bytes": 1367212032, "status": "running", "wall_seconds": 2234.917516583111}
-{"commitment": {"kind": "pass_priority"}, "ordinal": 1, "peak_rss_bytes": 1367212032, "status": "running", "wall_seconds": 2705.4323310409673}
-{"commitment": {"card": "Tiger-Seal", "kind": "cast"}, "ordinal": 2, "peak_rss_bytes": 1367212032, "status": "running", "wall_seconds": 2958.6323937501293}

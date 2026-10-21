@@ -30,6 +30,7 @@ FAILURE_DIR = (
 )
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_contract_locks_real_likelihood_selected_trace_and_negative_policy() -> None:
     contract = load_contract(CONTRACT)
 
@@ -58,6 +59,7 @@ def test_contract_locks_real_likelihood_selected_trace_and_negative_policy() -> 
     assert "belief_head_training" in contract["exclusions"]
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_preflight_reconstructs_the_rul11_identity_and_exact_row_cap() -> None:
     contract = load_contract(CONTRACT)
     trace, _ = _load_inputs(contract)
@@ -104,6 +106,7 @@ def test_runner_modes_are_mutually_exclusive() -> None:
         )
 
 
+@pytest.mark.experiment_data("experiments/data/int-17-belief-calibration-v1")
 def test_rul13_requires_a_new_execution_contract_with_identical_science() -> None:
     contract = load_contract(CONTRACT)
     failure = json.loads((FAILURE_DIR / "failure.json").read_text())

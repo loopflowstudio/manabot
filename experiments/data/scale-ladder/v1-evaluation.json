@@ -1,0 +1,374 @@
+{
+ "run": "scale-ladder v1 (one seat), seed 15902, source e6a2aab1, pod cv3p1vz7bor022",
+ "protocol": "experiments/scale-ladder.md at b4a3f1f3; 25 deals 1590100000-1590100024 with mirrors, 8 legs, 200 games per unit; deal-bootstrap 95% intervals (4000 reps, seed 17)",
+ "heuristic": {
+  "initial": {
+   "status": "completed",
+   "games": 200,
+   "all_terminal": true,
+   "updates": 0,
+   "learner_decisions": 0,
+   "environment_decisions": 0,
+   "checkpoint_sha256": "1a7dbd96e0a727fc402f81ecdffed54f1cc8f529dd6e731a30347c62a22a4e26",
+   "mean": {
+    "score": 0.11,
+    "interval": [
+     0.065,
+     0.16
+    ],
+    "games": 200
+   },
+   "LvA": {
+    "score": 0.0,
+    "interval": [
+     0.0,
+     0.0
+    ],
+    "games": 50
+   },
+   "AvL": {
+    "score": 0.26,
+    "interval": [
+     0.16,
+     0.38
+    ],
+    "games": 50
+   },
+   "LvL": {
+    "score": 0.12,
+    "interval": [
+     0.04,
+     0.2
+    ],
+    "games": 50
+   },
+   "AvA": {
+    "score": 0.06,
+    "interval": [
+     0.0,
+     0.14
+    ],
+    "games": 50
+   }
+  },
+  "250": {
+   "status": "completed",
+   "games": 200,
+   "all_terminal": true,
+   "updates": 250,
+   "learner_decisions": 4096000,
+   "environment_decisions": 8304667,
+   "checkpoint_sha256": "a9fe2d23af0d4434365d0850c18bb22d1fc36d3e71ff4299ae0c967c008559dc",
+   "mean": {
+    "score": 0.475,
+    "interval": [
+     0.445,
+     0.505
+    ],
+    "games": 200
+   },
+   "LvA": {
+    "score": 0.22,
+    "interval": [
+     0.12,
+     0.32
+    ],
+    "games": 50
+   },
+   "AvL": {
+    "score": 0.82,
+    "interval": [
+     0.72,
+     0.92
+    ],
+    "games": 50
+   },
+   "LvL": {
+    "score": 0.38,
+    "interval": [
+     0.28,
+     0.48
+    ],
+    "games": 50
+   },
+   "AvA": {
+    "score": 0.48,
+    "interval": [
+     0.4,
+     0.56
+    ],
+    "games": 50
+   }
+  },
+  "1000": {
+   "status": "completed",
+   "games": 200,
+   "all_terminal": true,
+   "updates": 1000,
+   "learner_decisions": 16384000,
+   "environment_decisions": 33337266,
+   "checkpoint_sha256": "6ac0f0b7a1e7f513a1b670b3e15a5a11b7c89ed0ee6a8774aeb9e4dc34d4bc28",
+   "mean": {
+    "score": 0.545,
+    "interval": [
+     0.5,
+     0.59
+    ],
+    "games": 200
+   },
+   "LvA": {
+    "score": 0.36,
+    "interval": [
+     0.24,
+     0.48
+    ],
+    "games": 50
+   },
+   "AvL": {
+    "score": 0.86,
+    "interval": [
+     0.76,
+     0.94
+    ],
+    "games": 50
+   },
+   "LvL": {
+    "score": 0.42,
+    "interval": [
+     0.3,
+     0.54
+    ],
+    "games": 50
+   },
+   "AvA": {
+    "score": 0.54,
+    "interval": [
+     0.44,
+     0.64
+    ],
+    "games": 50
+   }
+  },
+  "4000": {
+   "status": "completed",
+   "games": 200,
+   "all_terminal": true,
+   "updates": 4000,
+   "learner_decisions": 65536000,
+   "environment_decisions": 133610965,
+   "checkpoint_sha256": "c597dc86cd85376f14736a2c0d0e1c78f70b4e7fd42f9d8f86e0d010c3a99f60",
+   "mean": {
+    "score": 0.675,
+    "interval": [
+     0.615,
+     0.73
+    ],
+    "games": 200
+   },
+   "LvA": {
+    "score": 0.6,
+    "interval": [
+     0.46,
+     0.74
+    ],
+    "games": 50
+   },
+   "AvL": {
+    "score": 0.96,
+    "interval": [
+     0.9,
+     1.0
+    ],
+    "games": 50
+   },
+   "LvL": {
+    "score": 0.52,
+    "interval": [
+     0.4,
+     0.64
+    ],
+    "games": 50
+   },
+   "AvA": {
+    "score": 0.62,
+    "interval": [
+     0.52,
+     0.72
+    ],
+    "games": 50
+   }
+  },
+  "9250": {
+   "status": "completed",
+   "games": 200,
+   "all_terminal": true,
+   "updates": 9250,
+   "learner_decisions": 151552000,
+   "environment_decisions": 308858770,
+   "checkpoint_sha256": "ef453b11c7cb8529128bc016951e024c18f04986755069738286e1e8cdc3cd29",
+   "mean": {
+    "score": 0.69,
+    "interval": [
+     0.64,
+     0.735
+    ],
+    "games": 200
+   },
+   "LvA": {
+    "score": 0.7,
+    "interval": [
+     0.58,
+     0.82
+    ],
+    "games": 50
+   },
+   "AvL": {
+    "score": 0.94,
+    "interval": [
+     0.88,
+     1.0
+    ],
+    "games": 50
+   },
+   "LvL": {
+    "score": 0.54,
+    "interval": [
+     0.44,
+     0.64
+    ],
+    "games": 50
+   },
+   "AvA": {
+    "score": 0.58,
+    "interval": [
+     0.48,
+     0.68
+    ],
+    "games": 50
+   }
+  }
+ },
+ "scripted_greedy_9250_continuity_only": {
+  "status": "completed",
+  "games": 200,
+  "all_terminal": true,
+  "updates": 9250,
+  "learner_decisions": 151552000,
+  "environment_decisions": 308858770,
+  "checkpoint_sha256": "ef453b11c7cb8529128bc016951e024c18f04986755069738286e1e8cdc3cd29",
+  "mean": {
+   "score": 0.86,
+   "interval": [
+    0.815,
+    0.905
+   ],
+   "games": 200
+  },
+  "LvA": {
+   "score": 0.76,
+   "interval": [
+    0.64,
+    0.88
+   ],
+   "games": 50
+  },
+  "AvL": {
+   "score": 0.98,
+   "interval": [
+    0.94,
+    1.0
+   ],
+   "games": 50
+  },
+  "LvL": {
+   "score": 0.9,
+   "interval": [
+    0.82,
+    0.98
+   ],
+   "games": 50
+  },
+  "AvA": {
+   "score": 0.8,
+   "interval": [
+    0.7,
+    0.9
+   ],
+   "games": 50
+  }
+ },
+ "archives": {
+  "monitor-results.tgz": "cf4ce4ba98fb199a14039e50790fdef26cab7a3c9870ddf7afb79249d35c71c0",
+  "h2h-results.tgz": "a6916d3796b8f0f86874387f099c9c8236d509960ca52c7b839773df7e8333a3"
+ },
+ "head_to_head_vs_frozen_mini_12261_10k": {
+  "deals": "head-to-head fixed 100 cross-deck deals x 4 legs (400 games)",
+  "ladder_9250_score": 0.81,
+  "interval": [
+   0.775,
+   0.842
+  ],
+  "as_lessons": 0.74,
+  "as_allies": 0.88,
+  "valid_games": 400,
+  "invalid_games": 0
+ },
+ "training": {
+  "pod": "cv3p1vz7bor022 (L4, EU-RO-1, EPYC 9254)",
+  "created": "2026-10-20T21:50:29Z",
+  "stopped": "2026-10-21T20:20Z (operator; SIGKILL after ignored SIGINT/SIGTERM)",
+  "deleted": "2026-10-21T20:27Z",
+  "last_checkpoint": "monitor-00000047, update 12000, 196608000 learner decisions",
+  "pod_dollars": 13.34,
+  "files_verified": 64
+ },
+ "evaluation_pods": {
+  "deadline": 1792625491,
+  "pods": [
+   {
+    "id": "fe6e096lsynwrf",
+    "role": "monitor",
+    "dc": "EUR-IS-1",
+    "rate": 0.24,
+    "created": "2026-10-21T19:31:43Z"
+   },
+   {
+    "id": "76ml27wcbe5efv",
+    "role": "h2h",
+    "dc": "EUR-IS-1",
+    "rate": 0.24,
+    "created": "2026-10-21T19:31:49Z"
+   }
+  ],
+  "deleted": [
+   {
+    "id": "a7kxb7zn1v3jxk",
+    "dc": "EU-SE-1",
+    "created": "2026-10-21T14:49:40Z",
+    "deleted": "2026-10-21T15:10Z",
+    "reason": "no SSH"
+   },
+   {
+    "id": "3m90nf5xr5ofve",
+    "dc": "EU-SE-1",
+    "created": "2026-10-21T14:49:45Z",
+    "deleted": "2026-10-21T15:10Z",
+    "reason": "no SSH"
+   },
+   {
+    "id": "ch23bbhf88jh5i",
+    "dc": "EU-RO-1",
+    "created": "2026-10-21T15:10:09Z",
+    "deleted": "2026-10-21T19:31Z",
+    "reason": "idle: endpoint poll loop failed unnoticed"
+   },
+   {
+    "id": "f12hsdyda8gw3c",
+    "dc": "US-CA-2",
+    "created": "2026-10-21T15:10:10Z",
+    "deleted": "2026-10-21T19:31Z",
+    "reason": "idle: endpoint poll loop failed unnoticed"
+   }
+  ]
+ }
+}
