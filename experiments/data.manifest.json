@@ -78,6 +78,46 @@
    "sha256": "8ab1c6db007ef6e8ed2718ba0996caa6a02fea95b278ab61b43947a5779113e5",
    "bytes": 1969
   },
+  "experiments/data/curriculum/analysis.json": {
+   "sha256": "6983f9e9eaacd2fd9337df5c156b777f39bc717a780cf175dab1a0fbd69abdb5",
+   "bytes": 24010
+  },
+  "experiments/data/curriculum/analyze.py": {
+   "sha256": "d7ed4a9329ebebbe7e70ccf6412306c5217327e7e2843a0bb45c430db053dcf3",
+   "bytes": 5476
+  },
+  "experiments/data/curriculum/cpu-pods.json": {
+   "sha256": "78b2f25e6fadfc8a41ea3442e263336443006596932d3a05460cd1cb56949187",
+   "bytes": 2987
+  },
+  "experiments/data/curriculum/gpu-attempt.json": {
+   "sha256": "51af1bf088f4ab0c0410bd900ecb6b75fe7bba4d2b389cffc2e681fef554988e",
+   "bytes": 203
+  },
+  "experiments/data/curriculum/parity.txt": {
+   "sha256": "f75cd177ea16a54dcba1069222ca29ab198c0e0568b695c9aa132d9a93d92ff5",
+   "bytes": 771
+  },
+  "experiments/data/curriculum/render.py": {
+   "sha256": "fd4b037165391927b8e4ef276c1e2170206542a445c0b7d71cb177a033beff0c",
+   "bytes": 17234
+  },
+  "experiments/data/curriculum/report.html": {
+   "sha256": "08b6639d7857ca928001b0a97339a19101d8db4cc502080cb57c2fcf614f0434",
+   "bytes": 28470
+  },
+  "experiments/data/environment-complexity/comparison.analysis.json": {
+   "sha256": "c8621a66d064e10c0d8c8532dce6193fc37d336cc2ea593766f8a67160ed757d",
+   "bytes": 101333
+  },
+  "experiments/data/environment-complexity/comparison.html": {
+   "sha256": "0d369111a09217d5d0c7a3c9ebecc354aba0b1ea9df3f028b4663ae0a57694e8",
+   "bytes": 1015075
+  },
+  "experiments/data/environment-complexity/comparison.ipynb": {
+   "sha256": "10c783b1f86779b757e3f6f76af62881a023e28641a16a382bbc0d5aee85618d",
+   "bytes": 1472
+  },
   "experiments/data/etu105/analysis.json": {
    "sha256": "8ab016910bbe20158e932672c92e17757a41bf2a8da5b986f36df2fd7441263a",
    "bytes": 14349
