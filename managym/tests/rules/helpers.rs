@@ -357,15 +357,9 @@ impl Scenario {
     }
 
     pub fn choose_target(&mut self, target: managym::state::game_object::Target) -> bool {
-        use managym::state::game_object::Target as GameTarget;
-        let action_target = match target {
-            GameTarget::Player(p) => Target::Player(p),
-            GameTarget::Permanent(p) => Target::Permanent(p),
-            GameTarget::StackSpell(c) => Target::StackSpell(c),
-        };
-        let Some(index) = self.action_space().actions.iter().position(|action| {
-            matches!(action, Action::ChooseTarget { target: t, .. } if *t == action_target)
-        }) else {
+        let Some(index) = self.action_space().actions.iter().position(
+            |action| matches!(action, Action::ChooseTarget { target: t, .. } if *t == target),
+        ) else {
             return false;
         };
         self.step_action(index);

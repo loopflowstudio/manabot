@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import prefix from '../../academy/fixtures/learn-demo.json' with { type: 'json' };
+import prefix from '../../academy/fixtures/learn-demo-w9.json' with { type: 'json' };
 
 test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async ({ page }) => {
   await page.addInitScript((config) => {
@@ -35,6 +35,7 @@ test('Learn modes, previews, Back, reconnect and three ordinary outcomes', async
 
   for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) {
     await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+    await expect.poll(() => page.evaluate(() => (window as any).__learn.frame?.revision)).toBe(0);
     for (const step of prefix.prefix) {
       const button = page.locator(`[data-testid="action-option"][data-offer-id="${step.offer_id}"]`);
       await expect(button).toHaveAttribute('aria-label', step.label);

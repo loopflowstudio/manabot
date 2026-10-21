@@ -43,8 +43,10 @@ class FlatSearchPolicy:
         self.max_steps = max_steps
         self._seed = seed
         self._calls = 0
+        self.last_scores: list[float] = []
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
+        self.last_scores = []
         actions = obs.action_space.actions
         if not actions:
             raise ValueError("No available actions for search policy.")
@@ -59,6 +61,7 @@ class FlatSearchPolicy:
             call_seed,
             self.max_steps,
         )
+        self.last_scores = [float(score) for score in scores]
         best_index = 0
         best_score = float("-inf")
         for index, score in enumerate(scores):

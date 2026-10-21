@@ -108,7 +108,7 @@
       "key": "badgermole_waterbend",
       "runner": "rust",
       "path": "managym/tests/rules/stage2_cards.rs",
-      "identifier": "rules::stage2_cards::badgermole_cub_composes_with_waterbend_payment"
+      "identifier": "rules::stage2_cards::waterbend_taps_do_not_trigger_badgermole_cub"
     },
     {
       "key": "earthbend_animates",

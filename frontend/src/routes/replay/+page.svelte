@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import BotWatch from '$lib/components/BotWatch.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import { recordFetch } from '$lib/records';
   import { page } from '$app/state';
   import Feedback from '$lib/components/Feedback.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
 
   import GameBoard from '$lib/components/GameBoard.svelte';
   import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
@@ -44,9 +46,12 @@
   let activeDecisionAddress = $state<string | null>(null);
   let focusedPlan = $state<StudyPlanKind | null>(null);
 
-  onMount(() => {
-    void loadTraces();
-    void loadAdviceMeta();
+  $effect(() => {
+    if (page.url.searchParams.has('watch')) return;
+    untrack(() => {
+      void loadTraces();
+      void loadAdviceMeta();
+    });
   });
 
   // The shared advice surface remains at the Score while an opened canonical
@@ -168,6 +173,10 @@
         throw new Error(`Failed to load trace ${traceId} (${traceResponse.status})`);
       }
       const payload = (await traceResponse.json()) as Trace;
+      if (payload.config.watch_players) {
+        await goto(`/replay?watch=1&trace=${encodeURIComponent(traceId)}`);
+        return;
+      }
       replayStore.loadTrace(payload);
       if (decisionsResponse.ok) {
         studyStore.loadProjection(
@@ -439,6 +448,9 @@
   }
 </script>
 
+{#if page.url.searchParams.has('watch')}
+  <BotWatch />
+{:else}
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
   <h1 class="sr-only">Replay</h1>
   <a class="mb-4 inline-block underline" href={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}>Back to games</a>
@@ -700,6 +712,7 @@
     </div>
   </div>
 </main>
+{/if}
 
 
 {#if replayStore.trace?.id && replayStore.trace.can_feedback}

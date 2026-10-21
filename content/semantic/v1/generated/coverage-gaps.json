@@ -326,7 +326,7 @@
       "sequence": 25
     }
   ],
-  "artifact_hash": "2577a389c62712105a049a2368f0ee11b44e492785400bb40b67bded614f9805",
+  "artifact_hash": "d0bc2e1fb13625a6c146c861e115ead11689d2e1c06e5149ce3e617e08185905",
   "artifact_schema_version": 1,
   "cards": [
     {
@@ -1146,7 +1146,7 @@
     "untested_cards": []
   },
   "coverage_status": "complete",
-  "evidence_hash": "0243290307fad34d70002416975dfc23c30bbca3d7903b607dab24fb60850e35",
+  "evidence_hash": "fe6b61c726f27e1968233115793f2c1908e49f1755c4cf07f0a35c7b0df45a24",
   "pack_key": "ur-lessons-vs-gw-allies",
   "policy": {
     "max_kernel_change_share": {
@@ -1663,7 +1663,7 @@
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::badgermole_cub_composes_with_waterbend_payment",
+      "identifier": "rules::stage2_cards::waterbend_taps_do_not_trigger_badgermole_cub",
       "key": "badgermole_waterbend",
       "path": "managym/tests/rules/stage2_cards.rs",
       "runner": "rust"

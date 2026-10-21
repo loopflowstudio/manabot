@@ -150,6 +150,24 @@ def test_precommand_study_address_is_independent_of_command_id():
     RUST_VALIDATOR.validate(artifact)
 
 
+@pytest.mark.parametrize("rebind_command_id", [False, True])
+def test_retained_study_address_binds_command_and_digest(
+    rebind_command_id: bool,
+) -> None:
+    artifact = StudyArtifact.model_validate(FIXTURE)
+    landmark = artifact.landmarks[0]
+    address = ReplayDecisionAddress.parse(landmark.decision_id)
+    landmark.played.command_id = "another-command-at-the-same-decision"
+    if rebind_command_id:
+        # Matching the recorded ID still cannot bypass the command-bound digest.
+        landmark.decision_id = address.model_copy(
+            update={"command_id": landmark.played.command_id}
+        ).serialize()
+
+    with pytest.raises(ValidationError, match="replay decision address drifted"):
+        StudyArtifact.model_validate(artifact.model_dump(mode="json"))
+
+
 @pytest.mark.parametrize("field", ["frame_hash", "decision_sha256", "replay_id"])
 def test_precommand_study_rejects_address_drift(field):
     artifact = _precommand_artifact()

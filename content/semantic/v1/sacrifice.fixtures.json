@@ -1,0 +1,53 @@
+{
+  "cases": [
+    {
+      "name": "sacrifice.cycle_of_renewal.p0",
+      "opcode_trace": [
+        "sacrifice",
+        "search_basic_lands"
+      ],
+      "program": "sacrifice.cycle_of_renewal.p0"
+    },
+    {
+      "name": "sacrifice.deadly_dispute.p0",
+      "opcode_trace": [
+        "draw_cards",
+        "create_token"
+      ],
+      "program": "sacrifice.deadly_dispute.p0"
+    },
+    {
+      "name": "sacrifice.deadly_precision.p0",
+      "opcode_trace": [
+        "destroy"
+      ],
+      "program": "sacrifice.deadly_precision.p0"
+    },
+    {
+      "name": "sacrifice.curious_farm_animals.p1",
+      "opcode_trace": [
+        "target_clause",
+        "body:destroy"
+      ],
+      "program": "sacrifice.curious_farm_animals.p1"
+    },
+    {
+      "name": "sacrifice.tireless_provisioner.p0",
+      "opcode_trace": [
+        "modal",
+        "mode:create_token",
+        "mode:create_token"
+      ],
+      "program": "sacrifice.tireless_provisioner.p0"
+    },
+    {
+      "name": "sacrifice.unlucky_cabbage_merchant.p1",
+      "opcode_trace": [
+        "modal",
+        "mode:search_basic_lands"
+      ],
+      "program": "sacrifice.unlucky_cabbage_merchant.p1"
+    }
+  ],
+  "schema_version": 1
+}

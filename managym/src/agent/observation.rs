@@ -38,6 +38,9 @@ pub struct PlayerData {
     pub graveyard_lessons: i32,
     /// Total until-end-of-combat mana in this player's pool (firebending).
     pub combat_mana: i32,
+    /// Public pooled mana by W/U/B/R/G/C; restricted mana remains separate.
+    pub mana: [i32; 6],
+    pub lesson_mana: [i32; 6],
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
@@ -70,6 +73,7 @@ pub struct CardData {
     pub power: i32,
     pub toughness: i32,
     pub is_token: bool,
+    pub is_legendary: bool,
     /// Subtype tags the current pool cares about.
     pub is_ally: bool,
     pub is_lesson: bool,
@@ -108,6 +112,7 @@ pub struct KeywordData {
     pub defender: bool,
     pub menace: bool,
     pub hexproof: bool,
+    pub indestructible: bool,
 }
 
 impl KeywordData {
@@ -126,6 +131,7 @@ impl KeywordData {
             defender: keywords.defender,
             menace: keywords.menace,
             hexproof: keywords.hexproof,
+            indestructible: keywords.indestructible,
         }
     }
 }
@@ -144,6 +150,7 @@ pub enum StackTargetKindData {
     Player = 0,
     Permanent = 1,
     StackObject = 2,
+    Card = 3,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -152,6 +159,7 @@ pub struct StackTargetData {
     pub player_id: Option<i32>,
     pub permanent_id: Option<i32>,
     pub stack_object_id: Option<i32>,
+    pub card_id: Option<i32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -161,6 +169,7 @@ pub struct StackObjectData {
     pub controller_id: i32,
     pub source_card_registry_key: i32,
     pub source_permanent_id: Option<i32>,
+    pub chosen_mode: Option<usize>,
     pub ability_index: Option<i32>,
     pub targets: Vec<StackTargetData>,
 }
@@ -241,6 +250,8 @@ pub struct EventData {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionOption {
+    /// Engine-owned meaning for choices whose index alone is insufficient.
+    pub description: Option<String>,
     pub action_type: ActionType,
     pub focus: Vec<i32>,
     /// Native yes/no declaration, shared by learning and experience consumers.
@@ -336,6 +347,7 @@ impl Observation {
                         .actions
                         .iter()
                         .map(|action| ActionOption {
+                            description: game.action_description(action),
                             action_type: action.action_type(),
                             focus: Self::action_focus(game, action)
                                 .into_iter()
@@ -436,6 +448,12 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
+            mana: std::array::from_fn(|slot| {
+                i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
+            }),
+            lesson_mana: std::array::from_fn(|slot| {
+                i32::from(p.mana_pool.lesson[slot]) + i32::from(p.combat_mana_pool.lesson[slot])
+            }),
             known_hand: p
                 .known_hand
                 .iter()
@@ -463,12 +481,19 @@ impl Observation {
         }
 
         // Library cards revealed to the agent by a pending mid-resolution
-        // decision (scry / look-at-top-N). Only the deciding player sees
-        // them.
+        // decision. Search candidates are derived from the current library;
+        // scry/look choices retain their exact cards. Only the deciding player
+        // sees them.
         if let Some(suspended) = &game.state.suspended_decision {
             if suspended.decision.player() == agent_player {
-                for card in suspended.decision.revealed_cards() {
-                    self.add_card(game, *card, ZoneType::Library);
+                let cards = match &suspended.decision {
+                    crate::flow::decision::Decision::SearchBasicLand {
+                        player, subtype, ..
+                    } => game.basic_land_search_candidates(*player, subtype),
+                    decision => decision.revealed_cards().to_vec(),
+                };
+                for card in cards {
+                    self.add_card(game, card, ZoneType::Library);
                 }
             }
         }
@@ -576,6 +601,10 @@ impl Observation {
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
+            is_legendary: card
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary")),
             is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
@@ -617,9 +646,16 @@ impl Observation {
             },
             controller_id: game.state.players[stack_object.controller().0].id.0 as i32,
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
-            source_permanent_id: stack_object
-                .source_permanent_object_id()
-                .map(|id| id.0 as i32),
+            source_permanent_id: match stack_object {
+                StackObject::ActivatedAbility(ability) => game
+                    .object_event_ref(ability.source_ref)
+                    .map(|object| object.entity.0 as i32),
+                _ => None,
+            },
+            chosen_mode: match stack_object {
+                StackObject::Spell(spell) => spell.mode,
+                _ => None,
+            },
             ability_index: stack_object.ability_index().map(|index| index as i32),
             targets: stack_object
                 .targets()
@@ -636,6 +672,7 @@ impl Observation {
                 player_id: Some(game.state.players[player.0].id.0 as i32),
                 permanent_id: None,
                 stack_object_id: None,
+                card_id: None,
             }),
             Target::Permanent(permanent_id) => {
                 let permanent = game.state.permanents[permanent_id].as_ref()?;
@@ -644,8 +681,16 @@ impl Observation {
                     player_id: None,
                     permanent_id: Some(permanent.id.0 as i32),
                     stack_object_id: None,
+                    card_id: None,
                 })
             }
+            Target::GraveyardCard(object) => Some(StackTargetData {
+                kind: StackTargetKindData::Card,
+                player_id: None,
+                permanent_id: None,
+                stack_object_id: None,
+                card_id: Some(game.state.cards[CardId::from(object.entity)].id.0 as i32),
+            }),
             Target::StackSpell(card_id) => {
                 let stack_object_id = Self::stack_spell_object_id(game, card_id)?.0 as i32;
                 Some(StackTargetData {
@@ -653,6 +698,7 @@ impl Observation {
                     player_id: None,
                     permanent_id: None,
                     stack_object_id: Some(stack_object_id),
+                    card_id: None,
                 })
             }
         }
@@ -684,6 +730,7 @@ impl Observation {
     pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
+            GameEvent::PermanentSacrificed { .. } => Vec::new(),
             GameEvent::CardRevealed { owner, definition } => {
                 let mut data =
                     Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));
@@ -950,6 +997,9 @@ impl Observation {
                     .as_ref()
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
+                crate::state::target::Target::GraveyardCard(object) => {
+                    vec![game.state.cards[CardId::from(object.entity)].id]
+                }
                 crate::state::target::Target::StackSpell(card_id) => {
                     vec![game.state.cards[card_id].id]
                 }
@@ -972,15 +1022,24 @@ impl Observation {
                     .as_ref()
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
-                        Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
+                        Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
+                        | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
                             Some(*card)
                         }
-                        Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
+                            permanent,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
                             game.state.permanents[*permanent]
                                 .as_ref()
                                 .map(|perm| perm.card)
                         }
+                        Some(
+                            crate::flow::game::PendingChoice::SacrificePayment { .. }
+                            | crate::flow::game::PendingChoice::ManaPayment { .. },
+                        ) => None,
                         None => None,
                     });
                 card.map(|card| vec![game.state.cards[card].id])
@@ -1026,7 +1085,7 @@ impl Observation {
 
     pub fn to_json(&self) -> String {
         fn card_json(card: &CardData) -> Value {
-            json!({
+            let mut value = json!({
                 "id": card.id,
                 "registry_key": card.registry_key,
                 "name": card.name,
@@ -1036,6 +1095,7 @@ impl Observation {
                 "power": card.power,
                 "toughness": card.toughness,
                 "is_token": card.is_token,
+                "is_legendary": card.is_legendary,
                 "is_ally": card.is_ally,
                 "is_lesson": card.is_lesson,
                 "ward_cost": card.ward_cost,
@@ -1049,7 +1109,16 @@ impl Observation {
                         .collect::<Vec<_>>(),
                     "mana_value": i32::from(card.mana_cost.mana_value),
                 }
-            })
+            });
+            if !card.mana_cost.hybrid.is_empty() {
+                value["mana_cost"]["hybrid"] = json!(card
+                    .mana_cost
+                    .hybrid
+                    .iter()
+                    .map(|pip| [pip[0] as u8, pip[1] as u8])
+                    .collect::<Vec<_>>());
+            }
+            value
         }
 
         fn stack_target_json(target: &StackTargetData) -> Value {
@@ -1058,6 +1127,7 @@ impl Observation {
                 "player_id": target.player_id,
                 "permanent_id": target.permanent_id,
                 "stack_object_id": target.stack_object_id,
+                "card_id": target.card_id,
             })
         }
 
@@ -1069,6 +1139,7 @@ impl Observation {
                 "source_card_registry_key": stack_object.source_card_registry_key,
                 "source_permanent_id": stack_object.source_permanent_id,
                 "ability_index": stack_object.ability_index,
+                "chosen_mode": stack_object.chosen_mode,
                 "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
             })
         }
@@ -1078,13 +1149,17 @@ impl Observation {
             .actions
             .iter()
             .map(|action| {
-                json!({
+                let mut value = json!({
                     "type": action.action_type as i32,
                     "focus": action.focus,
                     "declared": action.declared,
                     "mode_index": action.mode_index,
                     "ability_index": action.ability_index,
-                })
+                });
+                if let Some(description) = &action.description {
+                    value["description"] = serde_json::Value::String(description.clone());
+                }
+                value
             })
             .collect::<Vec<_>>();
 

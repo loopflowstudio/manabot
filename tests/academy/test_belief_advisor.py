@@ -29,7 +29,7 @@ from academy.advice import (
 )
 from academy.advice_identity import AbiIdentity, CheckpointArtifact
 from academy.server import app
-from academy.testing_house_protocol import ModelInferredBeliefProvenance
+from academy.shared_table_protocol import ModelInferredBeliefProvenance
 from experiments.runners.run_belief_strategy_advisor import (
     AdvisorRuntime,
     build_runtime,

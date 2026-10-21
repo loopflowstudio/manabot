@@ -17,6 +17,8 @@ from typing import Any
 import managym
 from managym.experience_projection import redact_observation
 
+from .bot_decision import BotDecision
+
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
 
@@ -41,6 +43,9 @@ class GameConfig:
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
     opponent: dict[str, str] | None = None
+    # Exact trained-opponent identity: digest, source, world, model shape,
+    # training step, checkpoint path and inference setting.
+    opponent_checkpoint: dict[str, str | int | bool | None] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
@@ -50,6 +55,7 @@ class GameConfig:
     auto_pass: bool = True  # master switch; False = surface every window
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
+    watch_players: list[str] | None = None
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -102,6 +108,9 @@ class TraceEvent:
     # traces omit this field and remain valid because replay treats it as an
     # empty sequence.
     presentation: list[dict[str, Any]] = field(default_factory=list)
+    bot_decision: BotDecision | None = None
+    # Authority-private analysis view; never included in ordinary trace reads.
+    analysis_observation: dict[str, Any] | None = None
 
 
 @dataclass
@@ -208,6 +217,8 @@ def prepare_trace_payload(
     # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
     # access to the mixed-view canonical authority artifact.
     prepared.pop("canonical_replay", None)
+    for event in prepared.get("events", []):
+        event.pop("analysis_observation", None)
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     config.pop("seed", None)
@@ -228,6 +239,7 @@ def prepare_trace_payload(
                 event["actions"] = []
                 event["action"] = -1
                 event["action_description"] = "Opponent decision"
+                event.pop("bot_decision", None)
 
     for observation in observations:
         normalize_observation_to_hero(observation)

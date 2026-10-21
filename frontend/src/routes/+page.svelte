@@ -12,9 +12,9 @@
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
-  import TestingHousePanel from '$lib/components/TestingHousePanel.svelte';
+  import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { gameStore } from '$lib/game.svelte';
+  import { checkpointChoice, gameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
@@ -31,25 +31,28 @@
     sendShareBelief,
     sendTransferPilot,
   } from '$lib/socket.svelte';
-  import type { ActionOption, StopSide } from '$lib/types';
+  import type { ActionOption, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
 
   let learnDemo = $state(false);
 
-  let trainedLabel = $state('Trained opponent unavailable');
-  let trainedAvailable = $state(false);
-  async function loadOpponent(): Promise<void> {
+  let trainedOpponents = $state<TrainedOpponent[]>([]);
+  let catalogError = $state<string | null>(null);
+  async function loadOpponents(): Promise<void> {
     try {
-      const response = await fetch('/api/opponent');
-      if (!response.ok) throw new Error('Opponent availability could not be loaded.');
-      const data = await response.json();
-      trainedAvailable = data.available;
-      if (data.opponent) {
-        trainedLabel = `${data.opponent.name} · ${data.opponent.sha256.slice(0, 10)}`;
-        gameStore.opponentSha256 = data.opponent.sha256;
-        if (!learnDemo && !gameStore.observation) gameStore.setOpponentChoice('checkpoint');
+      const response = await fetch('/api/opponents');
+      if (!response.ok) throw new Error('Trained opponents could not be loaded.');
+      const data: OpponentCatalog = await response.json();
+      trainedOpponents = data.opponents;
+      catalogError = data.catalog_error;
+      // A server-configured candidate is the table's default opponent.
+      const configured = data.opponents.find(
+        (opponent) => opponent.source === 'candidate' && opponent.available,
+      );
+      if (configured && !learnDemo && !gameStore.observation) {
+        gameStore.setOpponentChoice(checkpointChoice(configured.sha256));
       }
     } catch {
-      trainedLabel = 'Trained opponent unavailable';
+      catalogError = 'Trained opponents could not be loaded.';
     }
   }
 
@@ -60,7 +63,7 @@
     if (learnDemo) gameStore.setOpponentChoice('random');
     connect();
     void loadAdviceMeta();
-    void loadOpponent();
+    void loadOpponents();
     return () => {
       disconnect();
     };
@@ -156,7 +159,6 @@
     'search-16': 'Search 16',
     'search-64': 'Search 64',
     'search-256': 'Search 256',
-    checkpoint: 'Checkpoint',
     random: 'Random',
     passive: 'Passive',
   };
@@ -274,7 +276,7 @@
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
   <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
     {#if gameStore.table}
-      <TestingHousePanel
+      <SharedTablePanel
         table={gameStore.table}
         scenarios={adviceMetaState?.scenarios ?? []}
         selectedScenarioId={adviceSelectedScenario}
@@ -322,8 +324,8 @@
         />
         <OpponentSelector
           value={gameStore.opponentChoice}
-          trainedLabel={trainedLabel}
-          trainedAvailable={trainedAvailable}
+          trained={trainedOpponents}
+          {catalogError}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
       {/if}

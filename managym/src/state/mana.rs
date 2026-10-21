@@ -1,3 +1,6 @@
+// mana.rs
+// Mana costs and pools, including exact two-color hybrid payment.
+
 use std::collections::BTreeSet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
@@ -30,8 +33,15 @@ pub type Colors = BTreeSet<Color>;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ManaCost {
+    /// Payment context, set only for a cast Lesson (not its resolving effects).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub spend_on_lesson: bool,
     pub cost: [u8; 7],
     pub mana_value: u8,
+    /// Each two-color hybrid pip is paid with exactly one of its colors.
+    /// Omission keeps frozen ordinary-cost manifests byte-for-byte stable.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hybrid: Vec<[Color; 2]>,
 }
 
 impl ManaCost {
@@ -53,6 +63,34 @@ impl ManaCost {
                 continue;
             }
 
+            if ch == '{' {
+                chars.next();
+                let mut symbol = String::new();
+                for next in chars.by_ref() {
+                    if next == '}' {
+                        break;
+                    }
+                    symbol.push(next);
+                }
+                if let Some((left, right)) = symbol.split_once('/') {
+                    let color = |s: &str| match s {
+                        "W" => Color::White,
+                        "U" => Color::Blue,
+                        "B" => Color::Black,
+                        "R" => Color::Red,
+                        "G" => Color::Green,
+                        _ => panic!("unsupported hybrid mana symbol: {symbol}"),
+                    };
+                    out.hybrid.push([color(left), color(right)]);
+                } else {
+                    let part = Self::parse(&symbol);
+                    for (slot, amount) in out.cost.iter_mut().zip(part.cost) {
+                        *slot = slot.saturating_add(amount);
+                    }
+                }
+                continue;
+            }
+
             let slot = match ch {
                 'W' => Color::White,
                 'U' => Color::Blue,
@@ -66,7 +104,7 @@ impl ManaCost {
             chars.next();
         }
 
-        out.mana_value = out.cost.iter().copied().sum();
+        out.update_mana_value();
         out
     }
 
@@ -76,18 +114,15 @@ impl ManaCost {
         for i in 0..out.cost.len() {
             out.cost[i] = out.cost[i].saturating_add(other.cost[i]);
         }
-        out.mana_value = out.cost.iter().copied().sum();
+        out.hybrid.extend_from_slice(&other.hybrid);
+        out.update_mana_value();
         out
     }
 
     /// Reduce the generic component by `amount`, floored at zero
     /// (affinity-style cost reduction, waterbend payments).
     pub fn reduced_generic(&self, amount: u8) -> ManaCost {
-        let mut out = self.clone();
-        let generic = &mut out.cost[Color::Generic as usize];
-        *generic = generic.saturating_sub(amount);
-        out.mana_value = out.cost.iter().copied().sum();
-        out
+        self.with_generic(self.generic().saturating_sub(amount))
     }
 
     /// The generic component of the cost.
@@ -99,12 +134,21 @@ impl ManaCost {
     pub fn with_generic(&self, generic: u8) -> ManaCost {
         let mut out = self.clone();
         out.cost[Color::Generic as usize] = generic;
-        out.mana_value = out.cost.iter().copied().sum();
+        out.update_mana_value();
         out
     }
 
+    fn update_mana_value(&mut self) {
+        self.mana_value = self
+            .cost
+            .iter()
+            .copied()
+            .sum::<u8>()
+            .saturating_add(self.hybrid.len() as u8);
+    }
+
     pub fn colors(&self) -> Colors {
-        let mut out = Colors::new();
+        let mut out = self.hybrid.iter().flatten().copied().collect::<Colors>();
         for color in [
             Color::White,
             Color::Blue,
@@ -123,6 +167,13 @@ impl ManaCost {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Mana {
     pub mana: [u8; 6],
+    /// Hermitic Herbalist mana keeps its spending restriction until spent or lost.
+    #[serde(skip_serializing_if = "is_empty_mana")]
+    pub lesson: [u8; 6],
+}
+
+fn is_empty_mana(mana: &[u8; 6]) -> bool {
+    *mana == [0; 6]
 }
 
 impl Mana {
@@ -172,84 +223,120 @@ impl Mana {
     pub fn add(&mut self, other: &Mana) {
         for i in 0..self.mana.len() {
             self.mana[i] = self.mana[i].saturating_add(other.mana[i]);
+            self.lesson[i] = self.lesson[i].saturating_add(other.lesson[i]);
         }
     }
 
     pub fn total(&self) -> u16 {
-        self.mana.iter().map(|x| *x as u16).sum()
+        self.mana
+            .iter()
+            .chain(&self.lesson)
+            .map(|x| *x as u16)
+            .sum()
+    }
+
+    /// Find a concrete payment, exploring hybrid assignments before spending
+    /// generic mana. Greedy hybrid payment can consume a later required color.
+    fn payment_remainder(&self, cost: &ManaCost) -> Option<[u8; 6]> {
+        fn assign(remaining: [u8; 6], pips: &[[Color; 2]], generic: u8) -> Option<[u8; 6]> {
+            if let Some((pip, rest)) = pips.split_first() {
+                for color in pip {
+                    let index = *color as usize;
+                    if remaining[index] > 0 {
+                        let mut next = remaining;
+                        next[index] -= 1;
+                        if let Some(paid) = assign(next, rest, generic) {
+                            return Some(paid);
+                        }
+                    }
+                }
+                return None;
+            }
+            let mut remaining = remaining;
+            let mut needed = generic;
+            // Spend colorless first, preserving the existing ordinary policy.
+            for index in [5, 0, 1, 2, 3, 4] {
+                let spent = needed.min(remaining[index]);
+                remaining[index] -= spent;
+                needed -= spent;
+            }
+            (needed == 0).then_some(remaining)
+        }
+        let mut remaining = self.mana;
+        if cost.spend_on_lesson {
+            for (available, restricted) in remaining.iter_mut().zip(self.lesson) {
+                *available = available.saturating_add(restricted);
+            }
+        }
+        for (available, required) in remaining.iter_mut().zip(cost.cost) {
+            *available = available.checked_sub(required)?;
+        }
+        assign(remaining, &cost.hybrid, cost.generic())
     }
 
     pub fn can_pay(&self, cost: &ManaCost) -> bool {
-        // CR 106.1, 106.8 — Mana in pool must satisfy all colored/colorless components.
-        if self.total() < cost.mana_value as u16 {
-            return false;
-        }
-
-        let mut remaining = self.mana;
-        for color in [
-            Color::White,
-            Color::Blue,
-            Color::Black,
-            Color::Red,
-            Color::Green,
-            Color::Colorless,
-        ] {
-            let idx = color as usize;
-            if remaining[idx] < cost.cost[idx] {
-                return false;
-            }
-            remaining[idx] -= cost.cost[idx];
-        }
-
-        let generic_needed = cost.cost[Color::Generic as usize] as u16;
-        let generic_available: u16 = remaining.iter().map(|x| *x as u16).sum();
-        generic_available >= generic_needed
+        self.payment_remainder(cost).is_some()
     }
 
     pub fn pay(&mut self, cost: &ManaCost) {
-        assert!(self.can_pay(cost), "insufficient mana");
-
-        for color in [
-            Color::White,
-            Color::Blue,
-            Color::Black,
-            Color::Red,
-            Color::Green,
-            Color::Colorless,
-        ] {
-            let idx = color as usize;
-            self.mana[idx] -= cost.cost[idx];
-        }
-
-        let mut generic = cost.cost[Color::Generic as usize] as i32;
-        // CR 107.4b, 601.2h — Generic costs can be paid with any mana; spend colorless first.
-        let priority = [
-            Color::Colorless as usize,
-            Color::White as usize,
-            Color::Blue as usize,
-            Color::Black as usize,
-            Color::Red as usize,
-            Color::Green as usize,
-        ];
-        while generic > 0 {
-            for &idx in &priority {
-                while generic > 0 && self.mana[idx] > 0 {
-                    self.mana[idx] -= 1;
-                    generic -= 1;
-                }
-            }
+        let remaining = self.payment_remainder(cost).expect("insufficient mana");
+        for (slot, left) in remaining.into_iter().enumerate() {
+            let before = self.mana[slot].saturating_add(if cost.spend_on_lesson {
+                self.lesson[slot]
+            } else {
+                0
+            });
+            let spent = before - left;
+            let restricted = if cost.spend_on_lesson {
+                spent.min(self.lesson[slot])
+            } else {
+                0
+            };
+            self.lesson[slot] -= restricted;
+            self.mana[slot] -= spent - restricted;
         }
     }
 
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
+        self.lesson = [0; 6];
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Mana, ManaCost};
+
+    #[test]
+    fn hybrid_payment_backtracks_and_preserves_required_colors() {
+        let cost = ManaCost::parse("{1}{U/R}{U/B}{R}");
+        assert_eq!(cost.mana_value, 4);
+        let mut pool = Mana::parse("1URR");
+        assert!(pool.can_pay(&cost));
+        pool.pay(&cost);
+        assert_eq!(pool.total(), 0);
+        assert!(!Mana::parse("1UUU").can_pay(&cost));
+        let cost = ManaCost::parse("{U/R}{U/B}");
+        let mut pool = Mana::parse("UR");
+        pool.pay(&cost);
+        assert_eq!(pool.total(), 0);
+    }
+
+    #[test]
+    fn hybrid_cost_arithmetic_keeps_pips_and_color_identity() {
+        use super::{Color, Colors};
+        let cost = ManaCost::parse("{2}{R/W}{R/W}{R/W}");
+        assert_eq!(cost.mana_value, 5);
+        assert_eq!(cost.colors(), Colors::from([Color::Red, Color::White]));
+        let reduced = cost.reduced_generic(1);
+        assert_eq!(reduced.mana_value, 4);
+        assert!(Mana::parse("1RRW").can_pay(&reduced));
+        let kicked = reduced.plus(&ManaCost::parse("1G"));
+        assert_eq!(kicked.mana_value, 6);
+        assert!(Mana::parse("2RRWG").can_pay(&kicked));
+        assert_eq!(kicked.with_generic(0).mana_value, 4);
+    }
 
     #[test]
     fn parse_and_pay_mana() {

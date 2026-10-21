@@ -65,13 +65,19 @@ from .advice import (
     request_versioned_fixture_advice,
 )
 from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
+from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
 from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
-from .opponent import configured_opponent, opponent_availability
+from .opponent import (
+    Opponent,
+    catalog_opponent,
+    configured_opponent,
+    opponent_catalog,
+)
 from .presentation import PresentationProjector
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -92,20 +98,7 @@ from .replay_index import (
     projection_with_addresses,
     restore_decision,
 )
-from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
-from .study_runtime import (
-    HistoricalStudyEvidenceProvider,
-    HistoricalStudyEvidenceRequest,
-    JoinedStudyEvidence,
-    StudyEvidenceMismatchError,
-    StudyEvidenceUnavailableError,
-    StudyPlanKind,
-    StudyPlanUnavailableError,
-    UnavailableHistoricalStudyEvidenceProvider,
-    join_historical_study_evidence,
-    select_study_plan,
-)
-from .testing_house_protocol import (
+from .shared_table_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
     ROLE_CAPABILITIES,
@@ -131,6 +124,19 @@ from .testing_house_protocol import (
     ViewerAccess,
     ViewerIdentity,
     ViewerRole,
+)
+from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
+from .study_runtime import (
+    HistoricalStudyEvidenceProvider,
+    HistoricalStudyEvidenceRequest,
+    JoinedStudyEvidence,
+    StudyEvidenceMismatchError,
+    StudyEvidenceUnavailableError,
+    StudyPlanKind,
+    StudyPlanUnavailableError,
+    UnavailableHistoricalStudyEvidenceProvider,
+    join_historical_study_evidence,
+    select_study_plan,
 )
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
@@ -617,6 +623,64 @@ def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str
     return deck, "custom"
 
 
+def _select_opponent(sha256: Any) -> Opponent:
+    """Resolve the requested trained opponent by exact digest, verified.
+
+    Without a digest the configured candidate plays (its historical default).
+    A digest names the configured candidate or a catalog checkpoint; catalog
+    refusals carry the mismatch that makes the checkpoint unplayable here.
+    """
+
+    try:
+        configured = configured_opponent()
+    except ValueError:
+        # A broken candidate bundle must not hide catalog checkpoints.
+        if sha256 is None:
+            raise
+        configured = None
+    if sha256 is None:
+        if configured is None:
+            raise ValueError("No trained opponent is configured on this server.")
+        sha256 = configured.sha256
+    if not isinstance(sha256, str):
+        raise ValueError("opponent_sha256 must be a checkpoint digest.")
+    if configured is not None and sha256 == configured.sha256:
+        configured.verify()
+        return configured
+    opponent = catalog_opponent(sha256)
+    if opponent is None:
+        raise ValueError("The selected opponent is no longer available.")
+    return opponent
+
+
+def _deck_label(setup: dict) -> str:
+    for name, deck in NAMED_DECKS.items():
+        if deck == setup.get("deck"):
+            return DECK_DISPLAY_NAMES.get(name, name)
+    return "a custom deck"
+
+
+def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
+    """Refuse a matchup outside the decks a catalog checkpoint was bound to.
+
+    Seats may swap: the binding is the sorted pair of deck/sideboard setups,
+    so the bot plays either of its decks from either seat. Candidate bundles
+    check their decks after reset against the engine manifest instead.
+    """
+
+    if not opponent.setups:
+        return
+
+    def key(setup: dict) -> str:
+        return json.dumps(setup, sort_keys=True)
+
+    if sorted(map(key, setups)) != sorted(map(key, opponent.setups)):
+        trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
+        raise ValueError(
+            f"{opponent.name} was trained on {trained}; choose those decks to play it."
+        )
+
+
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
@@ -650,18 +714,6 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
-
-    villain_checkpoint: str | None = None
-    villain_deterministic = False
-    if villain_type == "checkpoint":
-        opponent = configured_opponent()
-        if opponent is None:
-            raise ValueError("No trained opponent is configured on this server.")
-        if data.get("opponent_sha256", opponent.sha256) != opponent.sha256:
-            raise ValueError("The selected opponent is no longer available.")
-        opponent.verify()
-        villain_checkpoint = str(opponent.checkpoint)
-        villain_deterministic = opponent.deterministic
 
     hero_deck, hero_deck_name = _normalize_deck(
         data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
@@ -697,6 +749,21 @@ def _parse_game_config(config: Any) -> GameConfig:
             raise ValueError(f"{seat}_sideboard must match the named deck setup")
         sideboards[seat] = sideboard
 
+    villain_checkpoint: str | None = None
+    villain_deterministic = False
+    opponent: Opponent | None = None
+    if villain_type == "checkpoint":
+        opponent = _select_opponent(data.get("opponent_sha256"))
+        _check_opponent_decks(
+            opponent,
+            [
+                {"deck": hero_deck, "sideboard": sideboards["hero"]},
+                {"deck": villain_deck, "sideboard": sideboards["villain"]},
+            ],
+        )
+        villain_checkpoint = str(opponent.checkpoint)
+        villain_deterministic = opponent.deterministic
+
     return GameConfig(
         hero_deck=hero_deck,
         villain_deck=villain_deck,
@@ -711,7 +778,8 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
-        opponent=opponent.identity() if villain_type == "checkpoint" else None,
+        opponent=opponent.identity() if opponent is not None else None,
+        opponent_checkpoint=opponent.record() if opponent is not None else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
@@ -729,8 +797,14 @@ class GameSession:
         capture_authority_evidence: bool = False,
         historical_evidence_provider: HistoricalStudyEvidenceProvider | None = None,
         allow_fixture_study_evidence: bool = False,
-    ):
+        watch_mode: bool = False,
+    ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
+        self.watch_mode = watch_mode
+        self.watch_policies: (
+            tuple[villain_module.VillainPolicy, villain_module.VillainPolicy] | None
+        ) = None
+        self._bot_decision: BotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
@@ -846,17 +920,20 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        if config.opponent is not None:
+        # Candidate bundles pin the engine manifest and decks outside the
+        # checkpoint; catalog checkpoints were checked by their world binding.
+        if (
+            config.opponent_checkpoint is not None
+            and config.opponent_checkpoint["source"] == "candidate"
+        ):
             opponent = configured_opponent()
             assert opponent is not None
             if manifest != opponent.content_manifest:
                 raise ValueError(
                     "Trained opponent is incompatible with the current world."
                 )
-            if (
-                config.hero_deck not in opponent.decks.values()
-                or config.villain_deck not in opponent.decks.values()
-            ):
+            decks = (opponent.decks or {}).values()
+            if config.hero_deck not in decks or config.villain_deck not in decks:
                 raise ValueError("Trained opponent does not support these decks.")
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
@@ -878,6 +955,8 @@ class GameSession:
             player_config.get("player_token"),
             player_config.get("player_name"),
         )
+        if self.watch_mode and self.record_players is not None:
+            players = self.record_players
         if (
             not player_config.get("player_token")
             and self.record_players
@@ -1221,6 +1300,14 @@ class GameSession:
             raise RuntimeError("Cannot step without an active game.")
 
         observation = serialize_observation(self.obs)
+        analysis_observation = None
+        if self.watch_mode:
+            analysis_observation = deepcopy(observation)
+            other = serialize_observation(
+                self.env.observation_for_player(1 - int(self.obs.agent.player_index))
+            )
+            analysis_observation["opponent"]["hand"] = other["agent"]["hand"]
+            analysis_observation["opponent"]["hand_hidden_count"] = 0
         before_observation = self.obs
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
@@ -1370,9 +1457,12 @@ class GameSession:
                 action_description=action_description,
                 reward=float(reward),
                 auto=auto,
+                bot_decision=self._bot_decision,
+                analysis_observation=analysis_observation,
             )
         )
         self.obs = next_obs
+        self._bot_decision = None
         self._advance_protocol_revision()
         caused_by = None if command is None else str(command["command_id"])
         presentation_events = self._commit_step_presentation(
@@ -1439,7 +1529,10 @@ class GameSession:
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
-                    action_index = int(self.villain_policy(self.env, self.obs))
+                    self._bot_decision = villain_module.choose_bot(
+                        self.villain_policy, self.env, self.obs
+                    )
+                    action_index = self._bot_decision.action
                 except Exception as exc:
                     raise RuntimeError(
                         "The opponent could not continue this game."
@@ -1472,7 +1565,12 @@ class GameSession:
         over or a hero decision surfaces per the stop rules. Bounded so a
         stuck engine cannot spin the server forever.
         """
-        if self.env is None or self.obs is None or self.trace is None:
+        if (
+            self.watch_mode
+            or self.env is None
+            or self.obs is None
+            or self.trace is None
+        ):
             return
 
         hero_passes = 0
@@ -1913,6 +2011,7 @@ class GameSession:
             asdict(retained),
             finished=finished,
             players=self.record_players,
+            origin="bot_evaluation" if self.watch_mode else None,
         )
         if finished:
             self._study_provider = study_provider
@@ -2012,8 +2111,13 @@ class GameSession:
         )
 
     def fork_study(self, raw_address: str) -> StudyBranch:
-        """Fork one retained player-0 replay decision for ephemeral Study."""
-        return self.study_fork_provider().fork(raw_address, HERO_PLAYER_INDEX)
+        """Fork an authorized acting-player decision for ephemeral Study."""
+        viewer = (
+            int(parse_decision_address(raw_address).viewer)
+            if self.watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        return self.study_fork_provider().fork(raw_address, viewer)
 
     def retry_study(
         self,
@@ -2035,8 +2139,13 @@ class GameSession:
             for attempt in self._study_attempts.values()
         ):
             raise StudyCommandUnavailableError("study_attempt_active")
-        projection = project_replay(replay, HERO_PLAYER_INDEX)
-        restored = restore_decision(replay, raw_address, HERO_PLAYER_INDEX)
+        viewer = (
+            int(parse_decision_address(raw_address).viewer)
+            if self.watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        projection = project_replay(replay, viewer)
+        restored = restore_decision(replay, raw_address, viewer)
         command = Command.model_validate(raw_command)
         prompt = restored.frame.prompt
         if (
@@ -2208,6 +2317,26 @@ class GameSession:
         if canonical_offer is None:
             raise StudyCommandUnavailableError("study_command_offer_missing")
 
+        if self.watch_mode:
+            before = branch.current_observation()
+            projector = PresentationProjector()
+            projector.note_action(
+                before,
+                {
+                    "type": canonical_offer.action_type,
+                    "focus": list(canonical_offer.focus),
+                },
+                actor_index=restored.viewer,
+            )
+            observation = branch.submit_semantic(command)
+            projector.observe(observation)
+            presentation = projector.drain(
+                from_revision=restored.revision,
+                to_revision=restored.revision + 1,
+                caused_by=command.command_id,
+            )
+            return viewer_view(observation, restored.viewer), presentation
+
         try:
             structured = branch.structured_offers()
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
@@ -2284,6 +2413,7 @@ class GameSession:
         self.env = None
         self.obs = None
         self.villain_policy = None
+        self.watch_policies = None
         if self._live_beliefs is not None:
             self._live_beliefs.close()
             self._live_beliefs = None
@@ -2614,7 +2744,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
 }
 
 if set(DISPATCH_CAPABILITIES) | {"join_table", "resume"} != set(REQUEST_TYPES):
-    raise RuntimeError("testing-house request vocabulary and dispatch drifted")
+    raise RuntimeError("shared-table request vocabulary and dispatch drifted")
 
 
 def _parse_table_request(raw: Any) -> Any:
@@ -3027,9 +3157,13 @@ async def play_socket(websocket: WebSocket) -> None:
             await websocket.close()
 
 
-@app.get("/api/opponent")
-async def get_opponent() -> dict[str, Any]:
-    return opponent_availability()
+@app.get("/api/opponents")
+async def get_opponents() -> dict[str, Any]:
+    # Reading checkpoints touches the filesystem and Torch; keep the loop free.
+    catalog = await asyncio.to_thread(opponent_catalog)
+    for entry in catalog["opponents"]:
+        entry["decks"] = [_deck_label(setup) for setup in entry.pop("setups")]
+    return catalog
 
 
 def _record_owners(tokens: str | None) -> set[str]:
@@ -3263,10 +3397,26 @@ async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
 
 
 @app.get("/api/traces/{trace_id}/decisions/{address}")
-async def get_trace_decision(trace_id: str, address: str) -> dict[str, Any]:
+async def get_trace_decision(
+    trace_id: str,
+    address: str,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
+    payload = trace_store.load_trace(trace_id)
+    watch_mode = bool(payload["config"].get("watch_players"))
+    if watch_mode and not (
+        payload["end_reason"] == "game_over"
+        and payload["final_observation"]["game_over"]
+    ):
+        _rest_study_owner(_live_record_for_trace(trace_id), x_etude_participant_token)
     try:
-        restored = restore_decision(replay, address, HERO_PLAYER_INDEX)
+        viewer = (
+            int(parse_decision_address(address).viewer)
+            if watch_mode
+            else HERO_PLAYER_INDEX
+        )
+        restored = restore_decision(replay, address, viewer)
     except InvalidAddressError as exc:
         raise HTTPException(status_code=400, detail="invalid_address") from exc
     except DecisionNotFoundError as exc:
@@ -3406,3 +3556,60 @@ async def post_advice(payload: AdviceRequest) -> dict[str, Any] | Response:
     assert payload.identity is not None
     response = request_advice(payload.address, payload.scenario_id, payload.identity)
     return response.model_dump(mode="json")
+
+
+@app.post("/api/watch")
+def create_bot_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import WatchRequest, create_watch
+
+    try:
+        return create_watch(WatchRequest.model_validate(payload))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/watch/{trace_id}/step")
+async def advance_bot_watch(
+    trace_id: str,
+    payload: dict[str, Any],
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import record_for_watch, step_watch
+
+    revision = payload.get("revision")
+    if type(revision) is not int:
+        raise HTTPException(400, "revision_required")
+    record = record_for_watch(trace_id, x_etude_participant_token)
+    async with record.lock:
+        return await asyncio.to_thread(
+            step_watch, trace_id, x_etude_participant_token, revision
+        )
+
+
+@app.get("/api/watch/{trace_id}/decisions/{ordinal}")
+def inspect_bot_watch(
+    trace_id: str,
+    ordinal: int,
+    reveal: bool = False,
+    x_etude_participant_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    from .watch import inspect_watch
+
+    if ordinal < 0:
+        raise HTTPException(400, "invalid_ordinal")
+    try:
+        return inspect_watch(trace_id, ordinal, x_etude_participant_token, reveal)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "watch_not_found") from exc
+    except ValueError as exc:
+        raise HTTPException(400, "watch_record_invalid") from exc
+
+
+@app.post("/api/watch/import")
+def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
+    from .watch import import_arena
+
+    try:
+        return import_arena(payload)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, "arena_import_invalid") from exc

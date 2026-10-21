@@ -49,7 +49,7 @@ from academy.replay_index import (
     project_replay,
 )
 from academy.server import GameSession
-from academy.testing_house_protocol import (
+from academy.shared_table_protocol import (
     BeliefScenario,
     BeliefSource,
     PersonalAudience,

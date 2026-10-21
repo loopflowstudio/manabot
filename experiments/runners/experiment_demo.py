@@ -23,13 +23,18 @@ def declaration() -> Experiment:
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]
-    base.wall_seconds = 20
+    # Work stays update-bounded; wall allowances include interpreter startup.
+    base.wall_seconds = 60
     for stage in base.stages:
-        stage.execution.wall_seconds = 8
+        stage.execution.wall_seconds = 30
         stage.streams = 2
         stage.transitions = 8
     base.agent.hidden_dim = 8
     base.agent.num_attention_heads = 2
+    # Four real monitoring cohorts include process startup and exact replay.
+    # Use the ordinary hang guards rather than a demo-specific speed threshold.
+    cohort_seconds = MonitoringBudget.model_fields["attempt_seconds"].default
+    monitoring_seconds = 4 * cohort_seconds
     return Experiment(
         name="fixture",
         baseline=Baseline.capture(f"fixture-{base.world}", base),
@@ -37,13 +42,12 @@ def declaration() -> Experiment:
         schedule=ExperimentSchedule(
             seeds=(117, 118),
             hardware="fixture",
-            wall_seconds=750,
-            process_seconds=750,
+            wall_seconds=monitoring_seconds + 300,
+            process_seconds=monitoring_seconds + 300,
             monitoring=MonitoringBudget(
-                seconds=650,
-                attempt_seconds=140,
+                seconds=monitoring_seconds,
                 protocol=MonitorProtocol(
-                    deal_seeds=(1910101000,), game_seconds=30, bootstrap_replicates=20
+                    deal_seeds=(1910101000,), bootstrap_replicates=20
                 ),
             ),
             checkpoint_updates=1000,

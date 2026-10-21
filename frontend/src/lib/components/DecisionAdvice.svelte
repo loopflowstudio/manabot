@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { BotDecision } from '$lib/watch';
   import { onMount } from 'svelte';
 
   import type { AdviceScenarioSummary } from '$lib/advice';
@@ -6,7 +7,9 @@
   import type { ExperienceFrame, InteractionOffer } from '$lib/types';
 
   interface Props {
-    mode: 'live' | 'study';
+    mode: 'live' | 'study' | 'watch';
+    recorded?: BotDecision | null;
+    chosenOffer?: number;
     scenarios: AdviceScenarioSummary[];
     selectedScenarioId: string;
     frame: ExperienceFrame | null;
@@ -23,6 +26,8 @@
 
   let {
     mode,
+    recorded = null,
+    chosenOffer,
     scenarios,
     selectedScenarioId,
     frame,
@@ -80,15 +85,38 @@
   }
 </script>
 
-<details class="min-w-0" data-testid="decision-advice" data-mode={mode} data-reduced-motion={effectiveReducedMotion}>
+<details open={mode === 'watch'} class="min-w-0" data-testid="decision-advice" data-mode={mode} data-reduced-motion={effectiveReducedMotion}>
   <summary class="type-title cursor-pointer select-none py-1 text-display">
     Decision Advice
     <span class="type-label ml-2 rounded-full bg-panel-muted px-2 py-1 text-ink-2">
-      {mode === 'live' ? 'live' : 'study'}
+      {mode}
     </span>
   </summary>
 
   <div class="space-y-4 pt-3">
+    {#if mode === 'watch'}
+      <p class="type-caption">Recorded at the acting bot's decision. Chosen offers are marked ✓.</p>
+      <p>Value: {recorded?.value?.toFixed(4) ?? 'Unavailable'} {recorded?.value_semantic ?? ''}</p>
+      {#if recorded?.unavailable}<p class="type-caption text-ink-2">{recorded.unavailable}</p>{/if}
+      <table class="w-full text-left type-caption">
+        <thead><tr><th>Legal action</th><th>Policy</th><th>Search score</th></tr></thead>
+        <tbody>{#each offers as offer, index}
+          <tr class:bg-panel-muted={offer.id === chosenOffer}>
+            <td class="py-2">{offer.id === chosenOffer ? '✓ ' : ''}{offer.label}</td>
+            <td>{recorded?.probabilities[index] === undefined ? 'Unavailable' : `${(recorded.probabilities[index] * 100).toFixed(2)}%`}</td>
+            <td>{recorded?.search_scores[index]?.toFixed(4) ?? 'Unavailable'}</td>
+          </tr>
+        {/each}</tbody>
+      </table>
+      {#if recorded?.belief}
+        <p class="type-caption">Belief: {recorded.belief.model} · {recorded.belief.sampled_worlds} sampled worlds · condition mass {recorded.belief.condition_mass.toFixed(4)}</p>
+      {/if}
+      {#if recorded?.factors?.length}
+        <details><summary>Recorded compound sequence factors</summary>
+          <ol>{#each recorded.factors as factor, index}<li class="py-2 type-caption">Factor {index + 1}: chose {factor.chosen}; probabilities {factor.probabilities.map(p => `${(p * 100).toFixed(2)}%`).join(', ')}; value {factor.value.toFixed(4)}</li>{/each}</ol>
+        </details>
+      {/if}
+    {:else}
     <!-- Beliefs: the viewer-safe hidden-info scenario selector. -->
     <section data-testid="advice-beliefs" aria-label="Belief scenarios">
       <h3 class="type-rubric mb-1 text-ink-2">Beliefs</h3>
@@ -215,6 +243,7 @@
     <footer data-testid="advice-footer" class="type-caption border-t border-line pt-2 text-ink-3">
       Advisor {advisorId} · compute {computeId} · advisory only — strategy is conditional on the selected belief; submit through the ActionPanel.
     </footer>
+    {/if}
   </div>
 </details>
 

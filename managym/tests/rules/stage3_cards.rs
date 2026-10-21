@@ -1119,7 +1119,7 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
     s.pass_priority();
     s.pass_priority();
 
-    let keywords = permanent(&s, kyoshi).temp_keywords.clone();
+    let keywords = permanent(&s, kyoshi).temp_keywords;
     assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
 
     // All four grants are agent-visible on the permanent entry.

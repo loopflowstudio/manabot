@@ -7,6 +7,16 @@ use super::card::{Card, CardType};
 /// A structural predicate over cards. Every populated field must match.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardPredicate {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flying: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subtypes_any: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub not_subtypes: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supertype: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_power: Option<i32>,
     /// Card must have this card type.
     pub card_type: Option<CardType>,
     /// Card must have at least one of these card types ("artifact,
@@ -54,6 +64,25 @@ impl CardPredicate {
     /// `animated_creature` treats the card as having the creature type in
     /// addition to its printed types (earthbent lands).
     pub fn matches(&self, card: &Card, power: i32, animated_creature: bool) -> bool {
+        if self.flying && !card.keywords.flying {
+            return false;
+        }
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
+            return false;
+        }
+        if self.not_subtypes.iter().any(|s| card.has_subtype(s)) {
+            return false;
+        }
+        if self
+            .supertype
+            .as_ref()
+            .is_some_and(|s| !card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+        {
+            return false;
+        }
+        if self.min_power.is_some_and(|min| power < min) {
+            return false;
+        }
         let has_type = |card_type: CardType| {
             card.types.types.contains(&card_type)
                 || (animated_creature && card_type == CardType::Creature)

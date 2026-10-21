@@ -82,6 +82,9 @@ fn render_mana_cost(cost: &ManaCost) -> String {
             out.push_str(&format!("{{{}}}", color.symbol()));
         }
     }
+    for pip in &cost.hybrid {
+        out.push_str(&format!("{{{}/{}}}", pip[0].symbol(), pip[1].symbol()));
+    }
     out
 }
 

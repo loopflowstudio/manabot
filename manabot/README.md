@@ -90,11 +90,20 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
+`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+state before the policy head, so offer choices that depend on the state stay
+learnable from any start. New runs train it: `new_agent_spec()` is the
+`manabot train` default, and the ordinary baseline recipe is `baseline-v2`.
+Omitted, the field serializes as the historical additive policy, so frozen
+recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
+keep their meaning. The learnability gate trains the same FiLM policy.
+
 An observation/action-shape or rules-meaning change is a world version.
-The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w9** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w5 artifacts with aliased object and mode choices, are not compatible
-with w6. The local
+including w8 artifacts, are not compatible with w9. Elemental combat,
+[sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
+release certification remains unfinished. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
@@ -195,17 +204,10 @@ and [the calibration command](../docs/training-calibration.md#capacity-ladder-so
 
 ## Research program
 
-[RESEARCH.md](RESEARCH.md) is the durable map from runnable manabots to a
-bounded superhuman claim. It records the builder's loop, the world-pinned skill
-rating we are establishing, accepted evidence, and the value-learning,
-teacher/student, belief-modeling, and semantic-transfer frontiers. Live work
+[RESEARCH.md](RESEARCH.md) says what we are doing now, what the experiments
+have shown, what we plan to do later, and how we measure results. Live work
 and ownership remain in Linear; frozen predictions and results remain in
 `experiments/`.
-
-[Understanding Strategic Learning](LEARNING_RESEARCH_GUIDE.md) is a scientific
-guide informed by Ataraxos, covering regularization, training trajectories,
-strategic cycling, simulation efficiency, and policy-guided search. It frames
-research questions and experimental interpretation, not an implementation plan.
 
 ## Style
 
