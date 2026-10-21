@@ -22,20 +22,34 @@ training seed the arena registration requires. Code agents hash the files
 that define their behaviour, and that digest is the registration's source
 identity. Command traces stay under `TRACES/<match key>/`.
 
+Identity files are named relative to the repository root, and commands run
+from it: the launcher's source archive has no `.git`, and Etude names a file
+outside a git checkout by the path it was given. Relative paths give the same
+agent and environment identities, and so the same games, on every machine.
+
 `main` holds the round robin, the benchmark, and prints standings and curves:
 
     uv run --no-sync python -m experiments.etude_tournament round-robin --deals 2
+
+On a rented machine (`experiments/etude_tournament_job.py`), setup runs
+`install-managym` and `fetch-checkpoints`, then `hold-share` plays the share of
+the round robin its `ETUDE_CONFIG` names into the launched eval run.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from functools import cache
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import time
 from typing import Any, Literal
+import urllib.request
+import zipfile
 
 from etude.eval.match import Tables, agent, environment
 from etude.eval.query import connect
@@ -50,8 +64,10 @@ from etude.eval.records import (
 )
 from etude.eval.tournament import curves, hold, standings
 from etude.run.records import ArtifactRef
+from etude.run.storage import Storage, storage_from_uri
 from pydantic import BaseModel, ConfigDict
 
+from experiments.etude_tournament_job import ShareConfig
 from manabot.arena import players
 from manabot.arena.heuristic import heuristic_source_paths
 from manabot.arena.match import SELECTED_SUITE, play_cell, selected_match
@@ -113,12 +129,19 @@ KEY = ArenaKey(
 # -----------------------------------------------------------------------------
 
 
+def _relative(paths: Sequence[Path]) -> list[Path]:
+    """Paths below the repository root, for identities alike with or without `.git`."""
+    if Path.cwd().resolve() != REPO_ROOT:
+        raise RuntimeError(f"run from the repository root, {REPO_ROOT}")
+    return [path.resolve().relative_to(REPO_ROOT) for path in paths]
+
+
 def code_agent(kind: Literal["heuristic", "scripted_greedy"]) -> Agent:
     """A code player, identified by the files that define its behaviour."""
     files = (
         heuristic_source_paths() if kind == "heuristic" else [Path(players.__file__)]
     )
-    return agent(kind, code=files, config=PlayerConfig(player=kind))
+    return agent(kind, code=_relative(files), config=PlayerConfig(player=kind))
 
 
 def checkpoint_ref(file: str) -> ArtifactRef:
@@ -138,13 +161,15 @@ def world() -> Environment:
     """w6 Allies/Lessons: the engine, its content and the arena's leg layout."""
     return environment(
         SELECTED_SUITE,
-        files=[
-            REPO_ROOT / "managym" / "src",
-            REPO_ROOT / "managym" / "Cargo.lock",
-            REPO_ROOT / "content" / "semantic",
-            REPO_ROOT / "manabot" / "arena" / "match.py",
-            REPO_ROOT / "manabot" / "arena" / "replay.py",
-        ],
+        files=_relative(
+            [
+                REPO_ROOT / "managym" / "src",
+                REPO_ROOT / "managym" / "Cargo.lock",
+                REPO_ROOT / "content" / "semantic",
+                REPO_ROOT / "manabot" / "arena" / "match.py",
+                REPO_ROOT / "manabot" / "arena" / "replay.py",
+            ]
+        ),
         config={"world": WORLD_VERSION},
     )
 
@@ -319,24 +344,40 @@ def _workers() -> int:
     return os.cpu_count() or 1
 
 
-def _round_robin(deals: int, workers: int) -> None:
-    league = RoundRobin(
+def _league(deals: int) -> RoundRobin:
+    return RoundRobin(
         name=f"w6-finals-{deals}",
         environment=world(),
         conditions=DEALS[:deals],
         games=LEGS,
     )
-    entrants = [
+
+
+def _entrants() -> list[Agent]:
+    return [
         checkpoint_agent("gpu-12261", "gpu-14353d64c8d3-final.pt"),
         checkpoint_agent("gpu-12262", "gpu-cb14c42a3338-final.pt"),
         code_agent("heuristic"),
         code_agent("scripted_greedy"),
     ]
+
+
+def _round_robin(deals: int, workers: int) -> None:
+    league = _league(deals)
     started = time.monotonic()
-    run = hold(league, enter=entrants, play=play, workers=workers, directory=ETUDE)
+    run = hold(league, enter=_entrants(), play=play, workers=workers, directory=ETUDE)
     print(f"{run.name}: played {run.played}, skipped {run.skipped}, "
           f"{time.monotonic() - started:.0f} s")  # fmt: skip
-    table = standings(connect(ETUDE), league.name, table="plays", value="score")
+    print_standings(ETUDE, league.name)
+
+
+def print_standings(source: Path | Storage, name: str) -> None:
+    db = connect(source)
+    held = db.sql(
+        "select run from runs where tournament = ? order by run", params=[name]
+    ).fetchall()
+    print(f"{name}: eval runs {[run for (run,) in held]}")
+    table = standings(db, name, table="plays", value="score")
     print(f"held {table.held}/{table.scheduled}")
     names = {entry.agent: entry.name for entry in table.entries}
     for entry in table.entries:
@@ -385,16 +426,96 @@ def _benchmark(deals: int, workers: int) -> None:
                   f"{point.value:.3f}", point.interval, point.matches)  # fmt: skip
 
 
+# -----------------------------------------------------------------------------
+# On a launched machine
+# -----------------------------------------------------------------------------
+
+
+def _share_config() -> ShareConfig:
+    return ShareConfig.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_text())
+
+
+def _install_managym() -> None:
+    """Place the native module from the wheel setup built beside the package."""
+    wheels = sorted((REPO_ROOT / "managym" / "target" / "wheels").glob("*.whl"))
+    if len(wheels) != 1:
+        raise RuntimeError(f"expected one managym wheel, found {wheels}")
+    with zipfile.ZipFile(wheels[0]) as wheel:
+        (native,) = [n for n in wheel.namelist() if "/_managym." in n]
+        with (
+            wheel.open(native) as source,
+            open(REPO_ROOT / "managym" / Path(native).name, "wb") as target,
+        ):
+            shutil.copyfileobj(source, target)
+
+
+def _fetch_checkpoints() -> None:
+    """Download each checkpoint the config names and write the index; refuse a wrong digest."""
+    CHECKPOINTS.mkdir(parents=True, exist_ok=True)
+    index: dict[str, _Indexed] = {}
+    for sha, download in _share_config().checkpoints.items():
+        path = CHECKPOINTS / download.file
+        partial = path.with_name(path.name + ".partial")
+        with (
+            urllib.request.urlopen(download.url) as response,
+            partial.open("wb") as out,
+        ):
+            shutil.copyfileobj(response, out)
+        found = hashlib.sha256(partial.read_bytes()).hexdigest()
+        if found != sha:
+            raise ValueError(f"{download.file}: digest {found}, expected {sha}")
+        partial.replace(path)
+        index[sha] = _Indexed(file=download.file, training_seed=download.training_seed)
+    (CHECKPOINTS / "index.json").write_text(
+        json.dumps({sha: entry.model_dump() for sha, entry in index.items()})
+    )
+
+
+def _hold_share() -> None:
+    """Play this run's share; under `etude launch` the eval run is the launched run."""
+    config = _share_config()
+    started = time.monotonic()
+    run = hold(
+        _league(config.deals),
+        enter=_entrants(),
+        play=play,
+        workers=_workers(),
+        share=config.share,
+    )
+    print(f"{run.name}: share {config.share}, played {run.played}, "
+          f"{_workers()} workers, {time.monotonic() - started:.0f} s")  # fmt: skip
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=("round-robin", "benchmark"))
+    parser.add_argument(
+        "command",
+        choices=(
+            "round-robin",
+            "benchmark",
+            "standings",
+            "install-managym",
+            "fetch-checkpoints",
+            "hold-share",
+        ),
+    )
     parser.add_argument("--deals", type=int, default=2)
     parser.add_argument("--workers", type=int, default=_workers())
+    # standings: a directory or s3://BUCKET/PREFIX holding the eval runs.
+    parser.add_argument("--source", default=str(ETUDE))
     args = parser.parse_args()
     if args.command == "round-robin":
         _round_robin(args.deals, args.workers)
-    else:
+    elif args.command == "benchmark":
         _benchmark(args.deals, args.workers)
+    elif args.command == "standings":
+        print_standings(storage_from_uri(args.source), f"w6-finals-{args.deals}")
+    elif args.command == "install-managym":
+        _install_managym()
+    elif args.command == "fetch-checkpoints":
+        _fetch_checkpoints()
+    else:
+        _hold_share()
 
 
 if __name__ == "__main__":
