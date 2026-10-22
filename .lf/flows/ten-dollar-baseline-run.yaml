@@ -1,0 +1,10 @@
+- cmd: sync
+- default
+- xor:
+    router: xor-route
+    paths:
+      done:
+        description: "Verify the accepted single actual training run, admitted checkpoint, immutable source/world/recipe and cumulative cost receipts, bounded comparison report and budget compliance all exist. Inspect live paid-job state and safe termination/export. Complete only the achieved outcome. A recipe, smoke test, queued job or missing paid result is insufficient. Never start another paid run in this router."
+        flow: ten-dollar-baseline-complete
+      blocked:
+        description: "Retain incomplete outcome or concrete blocker and stop without Task completion or another paid attempt. Preserve all costs, failed attempts and receipts. Report through this Task's existing records."

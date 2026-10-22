@@ -1,0 +1,10 @@
+- research
+- cmd: task wait MTG-164 --until terminal
+- xor:
+    router: xor-route
+    paths:
+      run:
+        description: "Read MTG-164 status fresh and verify completed accepted delivery. Read scratch/elemental-ten-dollar.md and preflight notes. Proceed only with an executable compatible ten-deck source, retained baseline evidence or honestly bounded comparison, a frozen simple uniform recipe, no competing live job, and enforceable cumulative $10/one-day limits. No new curriculum arm, baseline retraining or top-up. Research/preflight is local only; paid work is allowed only within the explicitly accepted single-run cap."
+        flow: ten-dollar-baseline-run
+      blocked:
+        description: "Record the concrete missing dependency, capability, compatible source, budget enforcement or consequential decision and exit without paid work or completion. Do not waive the dependency, change the accepted protocol, launch competing work or create another Task."

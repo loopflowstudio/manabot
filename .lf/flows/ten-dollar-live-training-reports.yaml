@@ -1,0 +1,9 @@
+- elemental-training-reports
+- xor:
+    router: xor-route
+    paths:
+      run:
+        description: Verify Etude native training report graphs actual linked eval runs at exact training checkpoints/updates, successful actual evaluation and durable owner, and repaired interrupted-launch/cadence behavior. Then continue only the original scientific run with fresh admission and re-frozen source/protocol; no second run, no duplicate live work.
+        flow: ten-dollar-experiment-execute
+      blocked:
+        description: Retain the exact external blocker and evidence without launching paid training, dropping the clarified training-report requirement or claiming completion. Routine implementation/runtime defects remain authorized work.

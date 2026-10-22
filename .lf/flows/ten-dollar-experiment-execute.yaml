@@ -1,0 +1,9 @@
+- elemental-experiment
+- xor:
+    router: xor-route
+    paths:
+      done:
+        description: "Verify one actual training run, admitted checkpoint, immutable source/world/recipe, actual cumulative inclusive cost and safe-stop receipts, bounded reproducible evaluation and published scientific report against retained baseline exist and satisfy the accepted Task. A recipe, smoke test, queued/running job or status report is insufficient. Never start another paid run here."
+        flow: ten-dollar-baseline-complete
+      blocked:
+        description: "Preserve the actual remaining blocker, partial work and every cost without completing the Task or claiming a published actual-result report. No top-up, duplicate run or guard bypass."

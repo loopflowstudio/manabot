@@ -1,0 +1,332 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mana payment · implementation review</title>
+<style>
+:root{color-scheme:light;--ink:#202722;--muted:#58625b;--rule:#d7ded8;--paper:#fcfcf8}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:18px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:55px 32px 90px}h1{font-size:42px;line-height:1.12;font-weight:550;margin:14px 0 22px;letter-spacing:-1px}h2{font-size:27px;font-weight:550;line-height:1.25;margin:55px 0 14px}p{max-width:820px;margin:12px 0}.quiet,figcaption{color:var(--muted);font-size:13px}nav{display:flex;flex-wrap:wrap;gap:10px 24px;border-bottom:1px solid var(--rule);padding:0 0 18px}a{color:#275e47;text-underline-offset:4px}a:focus-visible,summary:focus-visible{outline:3px solid #d0a23d;outline-offset:4px}figure{margin:22px 0 30px}figcaption{overflow-wrap:anywhere;margin-bottom:8px}pre{margin:0;padding:22px;background:#eef1ed;border:1px solid var(--rule);overflow-x:auto;font:14px/1.5 ui-monospace,monospace;tab-size:4}pre code{font:inherit}pre span{display:inline-block;min-width:100%}.plus{background:#dfeddf;color:#194c28}.minus{background:#f2e2df;color:#74392c}.trace{border-left:3px solid #49755c;padding-left:20px;margin:24px 0}details{border-top:1px solid var(--rule);padding:15px 0}summary{cursor:pointer}section{scroll-margin-top:25px}@media(max-width:600px){main{padding:28px 18px 60px}body{font-size:16px}h1{font-size:32px}h2{font-size:24px}pre{padding:14px;font-size:12px}}@media print{body{background:white}main{max-width:none;padding:0}nav{display:none}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:9px}figure{break-inside:avoid}h2{break-after:avoid}}
+</style><main><nav aria-label="Review sections"><a href="#model">One payment model</a><a href="#activation">Nested activation</a><a href="#choices">Visible choices</a><a href="#proof">Proof and recovery</a></nav>
+<p class="quiet">MTG-174 · local branch comparison · review artifact</p><h1>A payable action must have an executable payment.</h1>
+<p>Activating Prophetic Prism with a Treasure and an empty pool used to be offered, then fail with <code>illegal mana activation</code>. The repair makes affordability and execution use the same resource model while keeping mana colors as player decisions.</p>
+<p class="quiet">Pinned base 0d981499554bfb93d20ea77f5275410999a8967a; head 2e35cd94f54c3a4a31e067726065b40cff141cec. Source excerpts are embedded for offline reading. The head is local until publication is verified. Scientific training is stopped; these are rules and integration checks.</p>
+<div class="trace"><strong>Representative tested interaction</strong><br>Activate Prism → activate Treasure to fund its upfront cost → choose Treasure color → pay Prism’s cost → choose Prism color → return to the spell payment or priority.</div>
+<section id="model"><h2>1. Feasibility returns a witness, not a separate promise.</h2><p>The old grouped boolean search and fixed-only activation planner could disagree. The new model owns source identities, exact pool remainders, life, and ordered obligations. A witness includes automatic steps and visible actions; finding a color in a witness does not choose that color for the player.</p><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/mana.rs">managym/src/flow/mana.rs · Obligation, resource identities, witness steps and PaymentModel (new) · 2e35cd94f54c · lines 22–114</a> · local-only head</figcaption><pre><code>enum Obligation {
+    Pay {
+        cost: ManaCost,
+        waterbend: bool,
+    },
+    Output {
+        choices: Vec&lt;Mana&gt;,
+        life_cost: u32,
+        source: PermanentId,
+    },
+}
+
+#[derive(Clone)]
+struct ManaSource {
+    permanent: PermanentId,
+    fixed: Option&lt;Mana&gt;,
+    abilities: Vec&lt;ManaActivation&gt;,
+    waterbend: bool,
+}
+
+#[derive(Clone)]
+struct ManaActivation {
+    tap_source: bool,
+    sacrifice_source: bool,
+    ability_index: usize,
+    cost: ManaCost,
+    outputs: Vec&lt;Mana&gt;,
+    life_cost: u32,
+}
+
+/// Reserve incompatible uses, not the whole object. A tapped mana creature
+/// can still be sacrificed later, but an announced tap cannot be spent twice.
+#[derive(Clone, Copy)]
+struct SourceReservation {
+    permanent: PermanentId,
+    tap: bool,
+    sacrifice: bool,
+}
+
+#[derive(Clone, Debug)]
+enum PaymentStep {
+    Fixed(PermanentId),
+    Activate(PermanentId, usize),
+    Spend(Mana),
+    Output(usize),
+    Waterbend(PermanentId),
+}
+
+impl PaymentStep {
+    fn action(&amp;self, player: PlayerId) -&gt; Option&lt;crate::agent::action::Action&gt; {
+        use crate::agent::action::Action;
+        match self {
+            Self::Activate(permanent, ability_index) =&gt; Some(Action::ActivateAbility {
+                player,
+                permanent: *permanent,
+                ability_index: *ability_index,
+            }),
+            Self::Output(mode) =&gt; Some(Action::ChooseMode {
+                player,
+                mode: *mode,
+            }),
+            Self::Waterbend(permanent) =&gt; Some(Action::WaterbendTap {
+                player,
+                permanent: *permanent,
+            }),
+            Self::Fixed(_) | Self::Spend(_) =&gt; None,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct PaymentSearchState {
+    available: Vec&lt;bool&gt;,
+    pool: Mana,
+    life: u32,
+    obligations: Vec&lt;Obligation&gt;,
+    /// Fixed-source budget until the first Spend; later obligations are unrestricted.
+    prefix: Option&lt;usize&gt;,
+}
+
+/// Which transitions may be automatic at the caller&#x27;s current boundary.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SourcePolicy {
+    All,
+    FixedOnly,
+    AutomaticPrefix,
+}
+
+struct PaymentModel {
+    sources: Vec&lt;ManaSource&gt;,
+    life: u32,
+}
+</code></pre></figure></section><section id="activation"><h2>2. Announcing a filter opens its own payment.</h2><p>The same activation witness is consulted for the offer and execution. The ability’s source is reserved for incompatible uses before searching its upfront payment; its output comes after that payment. The original payment stays in the obligation chain.</p><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/mana.rs">managym/src/flow/mana.rs · Game::activation_witness (new) · 2e35cd94f54c · lines 700–737</a> · local-only head</figcaption><pre><code>    fn activation_witness(
+        &amp;self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -&gt; Option&lt;Vec&lt;PaymentStep&gt;&gt; {
+        let mut model = self.payment_model(player, None);
+        let source = model
+            .sources
+            .iter()
+            .find(|source| source.permanent == permanent)?;
+        let ability = source
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_index == ability_index)
+            .cloned()?;
+        model.reserve(SourceReservation {
+            permanent,
+            tap: ability.tap_source,
+            sacrifice: ability.tap_source || ability.sacrifice_source,
+        });
+        let mut obligations = vec![
+            Obligation::Pay {
+                cost: ability.cost,
+                waterbend: false,
+            },
+            Obligation::Output {
+                choices: ability.outputs,
+                life_cost: ability.life_cost,
+                source: permanent,
+            },
+        ];
+        obligations.extend(self.payment_obligations(player));
+        let mut path = model.plan(self.pooled_mana(player), obligations, SourcePolicy::All)?;
+        path.insert(0, PaymentStep::Activate(permanent, ability_index));
+        Some(path)
+    }
+</code></pre></figure><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/mana.rs">managym/src/flow/mana.rs · Game::activate_mana_ability · 2e35cd94f54c · lines 845–866</a> · local-only head</figcaption><pre><code>    pub(crate) fn activate_mana_ability(
+        &amp;mut self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -&gt; Result&lt;(), AgentError&gt; {
+        if !self.can_activate_mana_ability(player, permanent, ability_index) {
+            return Err(AgentError(&quot;illegal mana activation&quot;.into()));
+        }
+        let old = self.state.suspended_decision.take();
+        self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {
+            player,
+            permanent,
+            ability_index,
+            resume: old.as_ref().map(|s| Box::new(s.decision.clone())),
+        });
+        if let Some(old) = old {
+            self.state.suspended_decision.as_mut().unwrap().frame = old.frame;
+        }
+        self.advance_mana_upfront()
+    }
+</code></pre></figure></section><section id="choices"><h2>3. Nesting preserves the original decision.</h2><p><code>ManaUpfront</code> carries an explicit continuation in the existing effect frame. Automatic prefixes commit exact spending; color selection remains an offered action. After selecting a nested color, execution resumes the enclosing payment rather than losing its target, payer, or effect.</p><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/decision.rs">managym/src/flow/decision.rs · Decision payment variants · base 0d981499554b lines 132–138 → head 2e35cd94f54c lines 132–145</a> · local-only head</figcaption><pre><code><span class="">--- 0d981499554b:managym/src/flow/decision.rs</span>
+<span class="">+++ 2e35cd94f54c:managym/src/flow/decision.rs</span>
+<span class="">@@ -1,7 +1,14 @@</span>
+<span class=""> pub enum Decision {</span>
+<span class="">     Payment(PaymentProgress),</span>
+<span class="plus">+    /// A mana ability&#x27;s printed upfront cost, before its output exists.</span>
+<span class="plus">+    ManaUpfront {</span>
+<span class="plus">+        player: PlayerId,</span>
+<span class="plus">+        permanent: crate::state::game_object::PermanentId,</span>
+<span class="plus">+        ability_index: usize,</span>
+<span class="plus">+        resume: Option&lt;Box&lt;Decision&gt;&gt;,</span>
+<span class="plus">+    },</span>
+<span class="">     ManaChoice {</span>
+<span class="">         player: PlayerId,</span>
+<span class="">         choices: Vec&lt;crate::state::mana::Mana&gt;,</span>
+<span class="">         resume: Option&lt;Box&lt;Decision&gt;&gt;,</span>
+<span class="">     },</span></code></pre></figure><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/mana.rs">managym/src/flow/mana.rs · Game::advance_mana_upfront · 2e35cd94f54c · lines 869–932</a> · local-only head</figcaption><pre><code>    pub(crate) fn advance_mana_upfront(&amp;mut self) -&gt; Result&lt;(), AgentError&gt; {
+        use crate::flow::decision::Decision;
+        let Some(suspended) = &amp;self.state.suspended_decision else {
+            return Ok(());
+        };
+        let Decision::ManaUpfront {
+            player,
+            permanent,
+            ability_index,
+            ..
+        } = suspended.decision
+        else {
+            return Ok(());
+        };
+        let obligations = self.payment_obligations(player);
+        // Only the prefix through the first Spend must be automatic; later
+        // obligations may still require visible mana activations and outputs.
+        let model = self.payment_model(player, None);
+        let Some(path) = model.plan(
+            self.pooled_mana(player),
+            obligations,
+            SourcePolicy::AutomaticPrefix,
+        ) else {
+            return Ok(());
+        };
+        if path
+            .iter()
+            .take_while(|step| !matches!(step, PaymentStep::Spend(_)))
+            .any(|step| step.action(player).is_some())
+        {
+            return Ok(());
+        }
+        for step in path {
+            match step {
+                PaymentStep::Fixed(source) =&gt; self.tap_fixed_mana_source(player, source),
+                PaymentStep::Spend(remainder) =&gt; {
+                    self.spend_mana_to_remainder(player, remainder);
+                    break;
+                }
+                _ =&gt; unreachable!(&quot;validated automatic prefix&quot;),
+            }
+        }
+        let ability = self.activated_abilities_for(permanent)[ability_index].clone();
+        if ability.tap_source {
+            self.tap_permanent(permanent, true);
+        }
+        if ability.life_cost &gt; 0 {
+            self.change_life(player, -(ability.life_cost as i32));
+        }
+        if ability.sacrifice_source {
+            self.sacrifice_permanent(permanent);
+        }
+        let suspended = self.state.suspended_decision.as_mut().unwrap();
+        let Decision::ManaUpfront { resume, .. } = &amp;mut suspended.decision else {
+            unreachable!()
+        };
+        suspended.decision = Decision::ManaChoice {
+            player,
+            choices: ability.mana_choices().unwrap(),
+            resume: resume.take(),
+        };
+        Ok(())
+    }
+</code></pre></figure><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/flow/decision.rs">managym/src/flow/decision.rs · Game::execute_decision_action · validation and continuation recovery · base 0d981499554b lines 557–635 → head 2e35cd94f54c lines 561–649</a> · local-only head</figcaption><pre><code><span class="">--- 0d981499554b:managym/src/flow/decision.rs</span>
+<span class="">+++ 2e35cd94f54c:managym/src/flow/decision.rs</span>
+<span class="">@@ -1,17 +1,33 @@</span>
+<span class="">     pub(crate) fn execute_decision_action(&amp;mut self, action: &amp;Action) -&gt; Result&lt;(), AgentError&gt; {</span>
+<span class="minus">-        let Some(mut suspended) = self.state.suspended_decision.take() else {</span>
+<span class="plus">+        let Some(suspended) = &amp;self.state.suspended_decision else {</span>
+<span class="">             return Err(AgentError(&quot;no pending decision&quot;.to_string()));</span>
+<span class="">         };</span>
+<span class=""> </span>
+<span class="">         if let Some(player) = action_player(action) {</span>
+<span class="">             if player != suspended.decision.player() {</span>
+<span class="minus">-                self.state.suspended_decision = Some(suspended);</span>
+<span class="">                 return Err(AgentError(&quot;wrong player for pending decision&quot;.to_string()));</span>
+<span class="">             }</span>
+<span class="">         }</span>
+<span class=""> </span>
+<span class="plus">+        // Validate while the full continuation is still attached, so the</span>
+<span class="plus">+        // payment model sees every reserved source and remaining obligation.</span>
+<span class="plus">+        if let (</span>
+<span class="plus">+            Decision::ManaChoice {</span>
+<span class="plus">+                player, choices, ..</span>
+<span class="plus">+            },</span>
+<span class="plus">+            Action::ChooseMode { mode, .. },</span>
+<span class="plus">+        ) = (&amp;suspended.decision, action)</span>
+<span class="plus">+        {</span>
+<span class="plus">+            let mana = choices</span>
+<span class="plus">+                .get(*mode)</span>
+<span class="plus">+                .ok_or_else(|| AgentError(&quot;illegal mana color&quot;.into()))?;</span>
+<span class="plus">+            if !self.mana_choice_completes_payment(*player, mana) {</span>
+<span class="plus">+                return Err(AgentError(&quot;mana color cannot complete the payment&quot;.into()));</span>
+<span class="plus">+            }</span>
+<span class="plus">+        }</span>
+<span class="plus">+        let mut suspended = self.state.suspended_decision.take().unwrap();</span>
+<span class="">         match (&amp;mut suspended.decision, action) {</span>
+<span class="">             (</span>
+<span class="">                 Decision::Payment(PaymentProgress {</span>
+<span class="">                     player,</span>
+<span class="">                     remaining: PaymentCost::Waterbend { generic },</span>
+<span class="">@@ -55,23 +71,17 @@</span>
+<span class="">                     choices,</span>
+<span class="">                     resume,</span>
+<span class="">                 },</span>
+<span class="">                 Action::ChooseMode { mode, .. },</span>
+<span class="">             ) =&gt; {</span>
+<span class="minus">-                let Some(mana) = choices.get(*mode) else {</span>
+<span class="minus">-                    self.state.suspended_decision = Some(suspended);</span>
+<span class="minus">-                    return Err(AgentError(&quot;illegal mana color&quot;.into()));</span>
+<span class="minus">-                };</span>
+<span class="minus">-                if !self.mana_choice_completes_payment(*player, mana) {</span>
+<span class="minus">-                    self.state.suspended_decision = Some(suspended);</span>
+<span class="minus">-                    return Err(AgentError(&quot;mana color cannot complete the payment&quot;.into()));</span>
+<span class="minus">-                }</span>
+<span class="plus">+                let mana = &amp;choices[*mode];</span>
+<span class="">                 self.journal_player(*player);</span>
+<span class="">                 self.state.players[player.0].mana_pool.add(mana);</span>
+<span class="">                 if let Some(resume) = resume.take() {</span>
+<span class="">                     suspended.decision = *resume;</span>
+<span class="">                     self.state.suspended_decision = Some(suspended);</span>
+<span class="plus">+                    self.advance_mana_upfront()?;</span>
+<span class="">                 } else {</span>
+<span class="">                     // An activated mana ability retains its payer&#x27;s priority;</span>
+<span class="">                     // its empty rule frame is not a resolving stack object.</span>
+<span class="">                     self.state.priority.on_non_pass_action(*player);</span>
+<span class="">                 }</span></code></pre></figure></section><section id="proof"><h2>4. The regression and its recovery boundaries.</h2><p>The original counterexample now reaches both color decisions. Other directed cases check seedless filter cycles, restricted mana, tap versus sacrifice reservations, waterbend bonuses, life costs, and optional continuations. Tiny decision trees execute every offered branch, replay their action prefixes, and roll back exact state.</p><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/tests/rules/temur_cards.rs">managym/tests/rules/temur_cards.rs · Prism/Treasure regression · 2e35cd94f54c · lines 581–596</a> · local-only head</figcaption><pre><code>fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
+    let mut s = setup(&amp;[&quot;Prophetic Prism&quot;, &quot;Tireless Provisioner&quot;]);
+    enter(&amp;mut s, &quot;Prophetic Prism&quot;);
+    s.game_mut().create_token(&quot;Treasure&quot;, PlayerId(0), false);
+    s.set_player_mana_pool(0, &quot;0&quot;);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let prism = permanent(&amp;s, &quot;Prophetic Prism&quot;);
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == prism))
+        .expect(&quot;Prism is offered when Treasure can fund its upfront cost&quot;);
+    s.step_action(index);
+}
+</code></pre></figure><figure><figcaption><a href="/Users/jack/src/manabot.elemental-ten-dollar/managym/src/agent/env.rs">managym/src/agent/env.rs · Env::vector_failure_context (new) · 2e35cd94f54c · lines 255–269</a> · local-only head</figcaption><pre><code>    pub(crate) fn vector_failure_context(&amp;self, action: i64) -&gt; String {
+        serde_json::json!({
+            &quot;schema&quot;: &quot;managym-native-failure-v1&quot;,
+            &quot;world&quot;: crate::WORLD_VERSION,
+            &quot;match_state_hash_version&quot;: crate::MATCH_STATE_HASH_VERSION,
+            &quot;seed&quot;: self.seed,
+            &quot;skip_trivial&quot;: self.skip_trivial,
+            &quot;trace&quot;: self.action_trace,
+            &quot;failed_action_index&quot;: action,
+            &quot;post_error_state&quot;: self.game.as_ref().map(|game| game.state.deterministic_hash_value()),
+            &quot;post_error_pending_choice&quot;: self.game.as_ref().map(|game| &amp;game.pending_choice),
+            &quot;post_error_offers&quot;: self.game.as_ref().and_then(|game| game.action_space()),
+        }).to_string()
+    }
+</code></pre></figure><p>Vector failures now retain private reset inputs, seed, successful action prefix, and attempted action. The snapshot can reflect partial mutation, so recovery reconstructs the pre-action root from those inputs; the snapshot alone is not an undo guarantee.</p>
+<details open><summary>Evidence and limits</summary><p>Final post-sync checks: 33 debug Temur tests passed in 1.28 seconds; 73 focused Python tests passed in 65.75 seconds, including precision demos, reconnect, collector recovery, arena admission and monitoring. One historical-owner suite is explicitly skipped on released Etude 0.2.0, whose report APIs differ; all six owner tests passed separately in its retained exact SDK. The canonical rebuilt native module is manabot.managym._managym (SHA256 0aeccce9deefc0dfbe806c8b18b13f9984332cc9ed603c9063138d4d3f54fa5d).</p><p>The full credential-free learnability diagnostic passed in 40.9 seconds, including three capacity seeds and the production PPO control (65,536 transitions). This is local diagnostic evidence, not the paid ten-deck strength experiment. Earlier broader repair evidence includes 423 native checks, all 100 pairings/mirrors and 14 conformance tapes; the integration restoration separately passed 187 Python tests. Those historical checks are not relabeled as final post-sync results.</p><p>Review found and corrected upstream Academy and CI reversions. The final server, presentation, frontend and profiler code match main; CI’s intentional change selects the new payment corpus. This branch also retains the uniform sampler, failed baseline report/receipts and isolated historical report owner; it does not establish that owner’s readiness on released SDK 0.2.0.</p><p>Representative tiny-board coverage is not all-rules certification or large-board performance certification. Current registered chosen-output mana modes consume a tap; additional reusable source patterns require extending the resource model. The failed GPU run lacked a retained scalar root, so this repair does not establish that run’s exact cause. No paid training restart or full-game strength improvement is implied.</p><p>HTML navigation and escaped source are checked structurally. Browser policy blocked rendering the local file, so desktop/narrow visual inspection is unverified.</p></details>
+<p class="quiet">Accepted direction: one payment model shared by offers and execution. Implementation choices: identity-preserving finite search, explicit continuations, automatic fixed-source payment. Whole-rules audit: MTG-177.</p></section></main></html>
