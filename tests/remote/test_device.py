@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from experiments.recipes import direct_self_play
+from experiments.direct_self_play import direct_self_play
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime

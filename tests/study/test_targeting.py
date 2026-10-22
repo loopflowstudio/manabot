@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from managym.enums import ActionEnum, ActionSpaceEnum
-from experiments.runners.greedy_targeting import audit
+from manabot.study.allies_lessons.targeting_audit import audit
 from manabot.study.record import Decision, GameRecord, read_games, write_games
 from manabot.study.targeting import (
     TargetChoice,
@@ -19,6 +18,7 @@ from manabot.study.targeting import (
     inspect_target,
     target_counts,
 )
+from managym.enums import ActionEnum, ActionSpaceEnum
 
 if TYPE_CHECKING:
     from managym import Observation

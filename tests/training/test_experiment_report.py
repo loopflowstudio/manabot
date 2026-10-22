@@ -23,7 +23,7 @@ from manabot.training.experiment_report import (
     write_dashboard,
 )
 
-DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
 
 def test_tracker_declarations_are_sources_without_extra_trajectories(

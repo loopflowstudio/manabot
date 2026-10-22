@@ -21,8 +21,6 @@ on:
       - 'content/**'
       - 'tests/model/**'
       - 'tests/verify/**'
-      - 'experiments/runners/learnability_search.py'
-      - 'experiments/runners/learnability_input_audit.py'
       - 'tests/training/test_exploiter_positive_control.py'
       - 'tests/training/test_baseline_recipe.py'
       - '.github/workflows/learnability.yml'

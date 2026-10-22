@@ -501,7 +501,6 @@ def _source_manifest() -> dict[str, Any]:
         "tests/belief/test_tracker.py",
         "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
-        "tests/sim/test_exact_range_runner.py",
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())} for path in paths

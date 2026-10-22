@@ -165,7 +165,7 @@ Use the existing arena's bounded instrument command on the authored Allies
 versus Lessons setup, including both sideboards:
 
 ```bash
-uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
+uv run python -m manabot.arena.evaluate \
   --out-dir .runs/allies-lessons-arena-1 --deal-seeds 83001
 ```
 

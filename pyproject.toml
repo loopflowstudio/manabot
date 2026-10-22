@@ -160,5 +160,5 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-known-first-party = ["academy", "manabot"]
+known-first-party = ["academy", "experiments", "manabot"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

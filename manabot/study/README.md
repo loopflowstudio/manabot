@@ -43,7 +43,7 @@ enough for win rates and keeps a large sweep small.
 
 ```bash
 uv sync --extra dev --extra notebook
-uv run jupyter lab experiments/study/allies-lessons-play-study.ipynb
+uv run jupyter lab manabot/study/allies_lessons/play-study.ipynb
 ```
 
 The notebook reads the same `study.json` and record, shows the measures as

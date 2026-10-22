@@ -6,7 +6,6 @@ import json
 
 import pytest
 
-from experiments.runners.run_int7_value_target_comparison import manifest_digest
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.search_runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
@@ -70,7 +69,6 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     import manabot.sim.search_runtime as runtime
 
     manifest = json.loads(runtime.INT7_VALUE_TARGET_MANIFEST.read_text())
-    assert retained_int7_manifest_digest(manifest) == manifest_digest(manifest)
     assert retained_int7_manifest_digest(manifest) == INT7_VALUE_TARGET_MANIFEST_SHA256
 
     manifest["evidence_class"] = "tampered-but-self-consistent"

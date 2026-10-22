@@ -1,13 +1,11 @@
-"""Offline analysis of retained training and arena evidence."""
+"""Offline analysis and reports of retained regime-study and selection evidence."""
 
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from experiments.runners.training_protocol import EvaluationProtocol
 from manabot.arena.models import file_sha256
-from manabot.training import capacity_analysis
 from manabot.training.models import CollectSelection, TrainingRun
 from manabot.training.selection_analysis import (
     analyze_selection,
@@ -160,13 +158,7 @@ def report(out: Path | str) -> None:
     verify_saved_inputs(out, study)
     rows = study["measurements"]
     comparison = (
-        cost_comparison(
-            rows,
-            "scripted-greedy-fixed-anchor"
-            if study["study"]
-            in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
-            else "random-smoke-anchor",
-        )
+        cost_comparison(rows)
         if study["status"] == "completed"
         else {"status": "unavailable", "reason": "study cohort incomplete"}
     )
@@ -199,7 +191,7 @@ def report(out: Path | str) -> None:
         "",
         f"Status: {study['status']}. {study['limits']}",
         "",
-        "Playing score is measured against the named opponent. Cost curves use the declared anchor (scripted for screening, random otherwise); paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
+        "Playing score is measured against the named opponent. Cost curves use the random anchor; paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
         "",
         "| Recipe | Seed | Variant | Phase | Cutoff | Opponent | Training seconds | Decisions | Complete games | Score |",
         "| --- | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
@@ -209,42 +201,6 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
-    if study["study"] in {
-        "value-models",
-        "value-token-screen",
-        "pooling-filter",
-        "history-input",
-        "depth-screen",
-    }:
-        lines += [
-            "",
-            "Value-model disposition: exploratory evidence only; no automatic promotion. The token "
-            "changes the shared policy representation; one CPU thread is not equal inference cost.",
-            "",
-            "Resolved configurations: [recipes](recipes.json), [protocol](protocol.json), "
-            "[allocation](resolved-plan.json). Every run and failed attempt remains in study.json.",
-            "",
-            "| Recipe | Stage | Status | Learner transitions | Native steps | Optimizer exposures | Collection s | Learning s | Export s |",
-            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-        ]
-        for entry in study["runs"]:
-            if not Path(entry["path"]).exists():
-                lines.append(f"Run export unavailable: {entry['path']}")
-                continue
-            run = TrainingRun.model_validate_json(Path(entry["path"]).read_text())
-            for stage in run.stages:
-                lines.append(
-                    f"| {run.regime.id} | {stage.id} | {stage.status} | "
-                    f"{stage.learner_transitions} | {stage.environment_decisions} | "
-                    f"{stage.optimizer_exposures} | {stage.collection_seconds:.3f} | "
-                    f"{stage.learning_seconds:.3f} | {stage.export_seconds:.3f} |"
-                )
-        lines += [
-            "",
-            "Per-player inference latency is retained in each arena game row. "
-            "Parameter counts are in the arena registrations; host RSS/CPU observations "
-            "are in run exports. These do not correct concurrent host contention.",
-        ]
     if study["study"] == "compound-decisions":
         lines += [
             "",
@@ -322,14 +278,6 @@ def report(out: Path | str) -> None:
                 else item["reason"] + "."
             ),
         ]
-    if (
-        study.get("study") == "omitted-controls"
-        or protocol.get("study") == "omitted-controls"
-    ):
-        lines += [
-            "",
-            "Technique disposition: unresolved. Raw/EMA are correlated outputs of each training seed; they never add training replicates.",
-        ]
     selection_rows = []
     for entry in study["runs"]:
         if not Path(entry["path"]).exists():
@@ -394,23 +342,8 @@ def report(out: Path | str) -> None:
             )
     (out / "report.md").write_text("\n".join(lines) + "\n")
     atomic_json(out / "metrics.json", rows)
-    if study["study"] == "model-capacity":
-        recipes = json.loads((out / "recipes.json").read_text())
-        with (out / "report.md").open("a") as stream:
-            stream.write(
-                f"\nTotal retained study seconds (including evaluation): {study.get('seconds', 'unavailable')}.\n"
-            )
-        capacity_analysis.write_capacity_report(
-            out,
-            [capacity_analysis.Measurement.model_validate(r) for r in rows],
-            EvaluationProtocol.model_validate(protocol),
-            tuple(r["id"] for r in recipes),
-            study["status"] == "completed",
-        )
-
     notebook = nbformat.read(
-        Path(__file__).resolve().parents[2]
-        / "experiments/study/training-regimes.ipynb",
+        Path(__file__).with_name("regime_study.ipynb"),
         as_version=4,
     )
     notebook.cells.insert(

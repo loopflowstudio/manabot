@@ -38,9 +38,7 @@ def test_profile_roots_are_canonical_and_shared() -> None:
 
 def test_random_player_has_isolated_matched_root_cost(tmp_path: Path) -> None:
     contract = ArenaContract.model_validate(
-        json.loads(
-            (ROOT / "experiments/contracts/int-6-skill-arena-v1.json").read_text()
-        )
+        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
     )
     _, trace, _ = play_cell(
         key=contract.key,
@@ -50,9 +48,7 @@ def test_random_player_has_isolated_matched_root_cost(tmp_path: Path) -> None:
         out_dir=tmp_path,
     )
     candidate = PlayerRegistration.model_validate(
-        json.loads(
-            (ROOT / "experiments/candidates/int-6-dpuct-32-w4-v1.json").read_text()
-        )
+        json.loads((ROOT / "tests/fixtures/int-6-dpuct-32-w4-v1.json").read_text())
     )
     profile = profile_players(
         [contract.anchors[0], candidate],

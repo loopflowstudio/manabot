@@ -47,7 +47,7 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
 ) -> None:
     matrix = roster()
     contract = ArenaContract.model_validate_json(
-        (ROOT / "experiments/contracts/int-6-skill-arena-v1.json").read_text()
+        (ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text()
     )
     key = contract.key.model_copy(
         update={"world": WORLD_VERSION, "content_suite": matrix.content_suite}
