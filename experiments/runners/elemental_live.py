@@ -205,7 +205,12 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
         return
     while time.time() < config.deadline and not ledger.settled:
         try:
-            observation = _remote(config)
+            final_observation = config.directory / "remote-final.json"
+            observation = (
+                json.loads(final_observation.read_bytes())
+                if final_observation.exists()
+                else _remote(config)
+            )
             observed = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
             (config.directory / f"remote-{observed}.json").write_text(
                 json.dumps(observation)
@@ -230,6 +235,11 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
                 and record["phase"]
                 in ("completed", "paused", "failed", "cancelled", "deadline")
             )
+            if terminal and ledger.cleanup_confirmed and not final_observation.exists():
+                # After verified provider absence, final scoring needs only the
+                # retained immutable generation, not renewable cloud credentials.
+                with final_observation.open("x") as output:
+                    json.dump(observation, output)
             additions = [
                 _point(config, c, "monitor")
                 for c in available
