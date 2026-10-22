@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 from urllib.parse import unquote, urlparse
 
 from etude.eval.match import Tables, agent, environment
@@ -96,6 +95,7 @@ def launch_evaluation(
     conditions: tuple[dict[str, str | int | bool], ...],
     revision: str,
     pool: str = "local",
+    run_id: str | None = None,
 ) -> str:
     def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
@@ -141,9 +141,12 @@ def launch_evaluation(
         max_usd=Decimal("0.01"),
         max_attempts=1,
         runtime=Runtime(
-            python=sys.executable,
+            python=str(root / ".runs/mtg174-eval-worker/bin/python"),
             python_version="3.12",
             packages={"etude-sdk": "0.1.2"},
         ),
     )
-    return launch(job, pool=pool)
+    run = job.runs(17402)[0]
+    if run_id is not None:
+        run = run.model_copy(update={"id": run_id})
+    return launch(run, pool=pool)
