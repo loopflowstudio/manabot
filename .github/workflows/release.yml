@@ -47,24 +47,7 @@ jobs:
       - name: Check release tooling
         run: uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
 
-  python:
-    needs: preflight
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: '3.12'
-      - run: uv run --no-project python scripts/release/prepare.py staging
-      - run: uv build --no-sources staging/manabot --out-dir dist
-      - run: uv run --no-project --with twine twine check --strict dist/*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: manabot-dist
-          path: dist/*
-          if-no-files-found: error
-
-  native:
+  package:
     needs: preflight
     strategy:
       fail-fast: false
@@ -81,27 +64,27 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv run --no-project python scripts/release/prepare.py staging
-      - name: Build portable wheel from the native sdist
+      - name: Build Manabot wheel with bundled engine from the sdist
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: '2_28'
-          args: --release --sdist --locked -m staging/managym/managym/Cargo.toml -i python3.12 --out dist
+          args: --release --sdist --locked -m staging/managym/Cargo.toml -i python3.12 --out dist
       - run: uv run --no-project --with twine twine check --strict dist/*
       - uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.target }}
+          name: manabot-${{ matrix.target }}
           path: dist/*.whl
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: matrix.target == 'x86_64'
         with:
-          name: native-sdist
+          name: manabot-sdist
           path: dist/*.tar.gz
           if-no-files-found: error
 
   install:
-    needs: [python, native]
+    needs: package
     strategy:
       fail-fast: false
       matrix:
@@ -118,17 +101,13 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: manabot-dist
+          name: manabot-${{ matrix.target }}
           path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: native-${{ matrix.target }}
-          path: dist
-      - name: Install wheels and exercise CPU training outside the checkout
+      - name: Install wheel and exercise CPU training outside the checkout
         shell: bash
         run: |
           uv venv --python 3.12 "$RUNNER_TEMP/release-venv"
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu --find-links dist dist/manabot-*.whl
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/manabot-*.whl
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
           cd "$RUNNER_TEMP"
@@ -139,14 +118,14 @@ jobs:
         shell: bash
         run: |
           wheel=$(echo "$GITHUB_WORKSPACE"/dist/manabot-*.whl)
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu --find-links dist "${wheel}[academy,reports,artifacts,evaluation]"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation]"
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.training.experiment_report; import manabot.training.time_sources'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
 
   artifacts:
-    needs: [install]
+    needs: install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -155,11 +134,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: manabot-dist
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: native-*
+          pattern: manabot-*
           merge-multiple: true
           path: dist
       - run: uv run --no-project python scripts/release/validate.py dist --complete
@@ -167,7 +142,7 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [artifacts]
+    needs: artifacts
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -177,12 +152,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: manabot-dist
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: native-*
+          pattern: manabot-*
           merge-multiple: true
           path: dist
-      - name: Publish the validated pair with PyPI attestations
+      - name: Publish Manabot with PyPI attestations
         uses: pypa/gh-action-pypi-publish@release/v1

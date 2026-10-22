@@ -67,7 +67,7 @@ def provider_runtime() -> dict[str, Any]:
         [
             Path(__file__).resolve(),
             REPO_ROOT / "managym/Cargo.toml",
-            REPO_ROOT / "managym/__init__.pyi",
+            REPO_ROOT / "manabot/managym/__init__.pyi",
             REPO_ROOT / "managym/tests/prepared_possible_worlds_tests.rs",
             REPO_ROOT / "tests/belief/test_prepared_likelihood.py",
             REPO_ROOT / "tests/experiments/test_rul13_prepared_materializer.py",

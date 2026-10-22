@@ -34,8 +34,8 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
 EXPERIMENT = "int-9-exact-range-v1"
 INT9_SOURCE_PATHS = (
-    REPO_ROOT / "managym" / "decision.py",
-    REPO_ROOT / "managym" / "possible_worlds.py",
+    REPO_ROOT / "manabot" / "managym" / "decision.py",
+    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
     REPO_ROOT / "manabot" / "belief" / "audit.py",
     REPO_ROOT / "manabot" / "belief" / "likelihood.py",
     REPO_ROOT / "manabot" / "belief" / "player.py",

@@ -10,8 +10,8 @@ import zipfile
 def validate(directory: Path, complete: bool) -> None:
     wheels = sorted(directory.glob("*.whl"))
     archives = sorted(directory.glob("*.tar.gz"))
-    if len(archives) != 2 or not wheels:
-        raise ValueError("expected both source archives and platform wheels")
+    if len(archives) != 1 or not wheels:
+        raise ValueError("expected one Manabot source archive and platform wheels")
     versions: set[str] = set()
     names: set[str] = set()
     for wheel in wheels:
@@ -27,26 +27,27 @@ def validate(directory: Path, complete: bool) -> None:
             names.add(name)
             if name == "manabot":
                 requirements = metadata.get_all("Requires-Dist", [])
-                if (
-                    f"managym=={version}" not in requirements
-                    or "torch==2.10.0" not in requirements
+                if "torch==2.10.0" not in requirements or any(
+                    requirement.startswith("managym") for requirement in requirements
                 ):
-                    raise ValueError("Manabot runtime dependencies are incomplete")
+                    raise ValueError("Manabot must declare Torch and bundle managym")
+                if not any(
+                    path.startswith("manabot/managym/_managym.")
+                    and path.endswith(".so")
+                    for path in files
+                ):
+                    raise ValueError(
+                        "Manabot wheel is missing its bundled native extension"
+                    )
                 if (
                     "content/semantic/w11/generated/elemental_world.ir.json"
                     not in files
                 ):
                     raise ValueError("Manabot wheel is missing semantic runtime data")
-            elif name == "managym":
-                if not any(
-                    path.startswith("managym/_managym.") and path.endswith(".so")
-                    for path in files
-                ):
-                    raise ValueError("managym wheel is missing its native extension")
             else:
                 raise ValueError(f"unexpected wheel {wheel.name}")
-    if names != {"manabot", "managym"} or len(versions) != 1:
-        raise ValueError("expected a matching Manabot/managym version pair")
+    if names != {"manabot"} or len(versions) != 1:
+        raise ValueError("expected a single Manabot distribution")
     (version,) = versions
     expected_sources = {f"{name}-{version}.tar.gz" for name in names}
     if {path.name for path in archives} != expected_sources:
@@ -61,12 +62,12 @@ def validate(directory: Path, complete: bool) -> None:
             ):
                 raise ValueError(f"missing content in {source.name}")
     if complete:
-        if len(wheels) != 3:
-            raise ValueError("expected one Python wheel and two native wheels")
+        if len(wheels) != 2:
+            raise ValueError("expected two Manabot platform wheels")
         for target in ("manylinux_2_28_x86_64", "macosx_11_0_arm64"):
             if not any(f"cp312-cp312-{target}" in path.name for path in wheels):
                 raise ValueError(f"missing CPython 3.12 wheel for {target}")
-    print(f"validated {len(wheels)} wheels and both source archives for {version}")
+    print(f"validated {len(wheels)} wheels and one source archive for {version}")
 
 
 if __name__ == "__main__":

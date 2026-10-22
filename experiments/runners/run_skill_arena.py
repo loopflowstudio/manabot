@@ -2029,8 +2029,8 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
                 str(path.relative_to(REPO_ROOT))
                 for path in (REPO_ROOT / "manabot").rglob("*.py")
             ],
-            "managym/experience.py",
-            "managym/experience_projection.py",
+            "manabot/managym/experience.py",
+            "manabot/managym/experience_projection.py",
             "experiments/runners/run_skill_arena.py",
             "uv.lock",
         }

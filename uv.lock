@@ -940,7 +940,6 @@ source = { editable = "." }
 dependencies = [
     { name = "etude-sdk" },
     { name = "gymnasium" },
-    { name = "managym" },
     { name = "nbformat" },
     { name = "numpy" },
     { name = "pandas" },
@@ -1012,7 +1011,6 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.0" },
-    { name = "managym", editable = "managym" },
     { name = "matplotlib", marker = "extra == 'evaluation'", specifier = ">=3.9" },
     { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.9" },
     { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.9" },
@@ -1048,21 +1046,6 @@ play-runtime = [
 training-runtime = [
     { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.10.0", index = "https://pypi.org/simple", conflict = { package = "manabot", group = "training-runtime" } },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.10.0+cu128", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "manabot", group = "training-runtime" } },
-]
-
-[[package]]
-name = "managym"
-version = "0.2.0"
-source = { editable = "managym" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=1.24.0" },
-    { name = "pydantic", specifier = ">=2.12.0" },
 ]
 
 [[package]]

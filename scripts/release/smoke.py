@@ -1,6 +1,6 @@
 """Exercise installed release artifacts from a directory outside the checkout."""
 
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 import subprocess
 import sys
@@ -8,12 +8,20 @@ import sys
 import torch
 
 import manabot
+from manabot import managym
 from manabot.semantic.policy_catalog import bind_policy_catalog
-import managym
+import managym as legacy_managym
 
 
 def main() -> None:
-    assert version("manabot") == version("managym")
+    try:
+        version("managym")
+    except PackageNotFoundError:
+        pass
+    else:
+        raise AssertionError("managym must not be installed as a separate distribution")
+    assert legacy_managym is managym
+    assert "/manabot/managym/" in managym._managym.__file__
     # The runner copies this script into a temporary directory and unsets PYTHONPATH.
     assert Path(manabot.__file__).is_relative_to(Path(sys.prefix))
     assert Path(managym.__file__).is_relative_to(Path(sys.prefix))

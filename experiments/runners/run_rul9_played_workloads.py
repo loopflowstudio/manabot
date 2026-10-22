@@ -62,8 +62,8 @@ SOURCE_SINGLETONS = (
     "academy/authored_match_parity.py",
     "academy/authored_match_receipt.py",
     "academy/curated_pack.py",
-    "managym/experience.py",
-    "managym/experience_projection.py",
+    "manabot/managym/experience.py",
+    "manabot/managym/experience_projection.py",
     "academy/presentation.py",
     "academy/replay_index.py",
     "academy/semantic_boundary.py",
@@ -78,7 +78,7 @@ SOURCE_SINGLETONS = (
     "manabot/verify/util.py",
     "managym/Cargo.lock",
     "managym/Cargo.toml",
-    "managym/decision.py",
+    "manabot/managym/decision.py",
     "scripts/verify-rul9-played-workloads",
 )
 SOURCE_DIRECTORIES = ("managym/src",)

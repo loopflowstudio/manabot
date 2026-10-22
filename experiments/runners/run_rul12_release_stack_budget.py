@@ -27,7 +27,7 @@ SOURCE_SINGLETONS = set(rul9.SOURCE_SINGLETONS) | {
     "experiments/runners/run_rul12_release_stack_budget.py",
     "manabot/belief/likelihood.py",
     "manabot/belief/tracker.py",
-    "managym/possible_worlds.py",
+    "manabot/managym/possible_worlds.py",
     "scripts/verify-rul12-release-stack-budget",
 }
 WEBSOCKET_PACKAGES = (

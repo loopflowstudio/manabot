@@ -40,8 +40,10 @@ identifiers stay unchanged.
 The shared Etude experiment services retain their names. "Sepia Etude" remains
 the name of the visual language.
 
-Package dependencies flow academy → manabot → managym: manabot never imports
-academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+Code dependencies flow Academy → manabot → the engine in `manabot.managym`.
+PyPI distributes them in one `manabot` package; `import managym` is a compatibility
+alias, not a separate distribution. manabot never imports
+Academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
 
 ## Academy's shared decision surface
 
@@ -119,7 +121,7 @@ checkpoints or experiment evidence.
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
-  `managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
+  `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,

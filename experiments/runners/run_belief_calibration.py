@@ -57,8 +57,8 @@ SOURCE_PATHS = (
     REPO_ROOT / "manabot" / "belief" / "likelihood.py",
     REPO_ROOT / "manabot" / "belief" / "range.py",
     REPO_ROOT / "manabot" / "belief" / "tracker.py",
-    REPO_ROOT / "managym" / "decision.py",
-    REPO_ROOT / "managym" / "possible_worlds.py",
+    REPO_ROOT / "manabot" / "managym" / "decision.py",
+    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
 )
 
 

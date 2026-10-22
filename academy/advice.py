@@ -1073,8 +1073,8 @@ ADVISOR_SOURCE_PATHS = (
     REPO_ROOT / "manabot" / "sim" / "mcts.py",
     REPO_ROOT / "manabot" / "sim" / "search_branch.py",
     REPO_ROOT / "manabot" / "sim" / "search_runtime.py",
-    REPO_ROOT / "managym" / "decision.py",
-    REPO_ROOT / "managym" / "possible_worlds.py",
+    REPO_ROOT / "manabot" / "managym" / "decision.py",
+    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
 )
 
 
@@ -1094,12 +1094,12 @@ def runtime_advisor_abis() -> tuple[AbiIdentity, AbiIdentity, AbiIdentity]:
         AbiIdentity(
             name="semantic_decision_frame",
             version=str(SEMANTIC_DECISION_VERSION),
-            sha256=_file_sha256(REPO_ROOT / "managym" / "decision.py"),
+            sha256=_file_sha256(REPO_ROOT / "manabot" / "managym" / "decision.py"),
         ),
         AbiIdentity(
             name="possible_world_space",
             version=str(POSSIBLE_WORLD_SPACE_VERSION),
-            sha256=_file_sha256(REPO_ROOT / "managym" / "possible_worlds.py"),
+            sha256=_file_sha256(REPO_ROOT / "manabot" / "managym" / "possible_worlds.py"),
         ),
     )
 

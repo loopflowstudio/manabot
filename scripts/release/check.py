@@ -13,19 +13,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def check(tag: str | None, unpublished: bool) -> None:
     bot = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
-    native = tomllib.loads((ROOT / "managym/pyproject.toml").read_text())["project"]
     cargo = tomllib.loads((ROOT / "managym/Cargo.toml").read_text())["package"]
     version = bot["version"]
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("release versions must be X.Y.Z")
-    if native["version"] != version or cargo["version"] != version:
-        raise ValueError("Manabot, managym and Cargo versions must match")
-    if f"managym=={version}" not in bot["dependencies"]:
-        raise ValueError("Manabot must pin the matching managym release")
+    if cargo["version"] != version:
+        raise ValueError("Manabot and its bundled Rust crate versions must match")
+    if any(dependency.split("=")[0] == "managym" for dependency in bot["dependencies"]):
+        raise ValueError("managym must be bundled, not a separate dependency")
     if tag is not None and tag != f"v{version}":
         raise ValueError(f"expected tag v{version}, got {tag}")
     if unpublished:
-        for name in ("manabot", "managym"):
+        for name in ("manabot",):
             try:
                 with urlopen(
                     f"https://pypi.org/pypi/{name}/json", timeout=30

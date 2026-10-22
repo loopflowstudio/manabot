@@ -1,106 +1,106 @@
 # Versioned Python releases
 
-Manabot and managym ship together as `X.Y.Z`, tagged `vX.Y.Z`. Manabot pins
-`managym==X.Y.Z`; Python metadata and the Rust crate use the same version.
-The first planned public release is **0.2.0**, including Etude SDK 0.2.0
-(the migration landed in #349). Package versions do not replace native world,
-content, observation, or checkpoint compatibility identities. No old checkpoint
-is made compatible by a package upgrade. These are research releases, not
-certification of playing strength or full Magic rules coverage.
+Manabot ships as one PyPI distribution, **`manabot`**, containing both the Python
+training library and the native engine at **`manabot.managym`**. There is no
+separate managym distribution, dependency, publisher or upload. `import managym`
+remains a compatibility alias to the same module and native/protocol types.
+New code can use `from manabot import managym`.
+
+Releases use `X.Y.Z`, tagged `vX.Y.Z`; Python metadata and the bundled Rust crate
+use the same version. The first planned release is **0.2.0**, including Etude SDK
+0.2.0 from [#349](https://github.com/loopflowstudio/manabot/pull/349). Package
+versions do not replace native world, content, observation or checkpoint
+identities. An upgrade does not make old checkpoints compatible. These are
+research releases, not certification of playing strength or full rules coverage.
 
 ## Install a pinned release
 
-After 0.2.0 is published, outside a checkout:
+After publication, outside a checkout:
 
 ```bash
 uv venv --python 3.12
-# CPU; backend selection applies to Torch, not to the rest of PyPI.
 uv pip install --python .venv/bin/python --torch-backend cpu 'manabot==0.2.0'
 uv run --no-project manabot --help
 uv run --no-project manabot train
+uv run --no-project python -c 'from manabot import managym; print(managym.WORLD_VERSION)'
 ```
 
 For Linux NVIDIA training, replace `--torch-backend cpu` with
-`--torch-backend cu128`. The package requires Torch `==2.10.0`; its `+cpu` and
-`+cu128` builds both satisfy that public version. A plain PyPI install uses
-PyTorch's platform default, so select the backend explicitly to avoid a large
-unintended CUDA installation. CUDA needs a compatible NVIDIA GPU and driver;
-release CI checks CPU execution and dependency installation, not GPU execution.
+`--torch-backend cu128`. Torch `==2.10.0` allows its `+cpu` and `+cu128` builds.
+A plain PyPI install uses PyTorch's platform default; select the backend
+explicitly to avoid an unintended CUDA installation. CUDA needs a compatible
+GPU and driver. CI validates CPU execution, not GPU execution.
 See [PyTorch installation](https://pytorch.org/get-started/locally/).
-
-Supported binary release targets:
 
 | Component | Supported targets |
 |---|---|
-| Python | CPython 3.12 only (`>=3.12,<3.13`), no free-threaded ABI |
+| Python | CPython 3.12 (`>=3.12,<3.13`), no free-threaded ABI |
 | Linux | x86-64, glibc 2.28+; CPU or CUDA 12.8 Torch |
 | macOS | Apple Silicon, macOS 14+ for the training stack; CPU Torch |
-| Other platforms | Windows, Intel Mac, Linux ARM and musl are not release-tested or supplied as wheels |
+| Other targets | Windows, Intel Mac, Linux ARM and musl are not supplied or release-tested |
 
-managym contains the compiled engine, its Python decision/protocol models, and
-NumPy/Pydantic requirements. It needs no Rust toolchain when a matching wheel
-exists. Its sdist includes Rust sources and the sibling semantic content tree;
-building it requires Rust and a C linker. Source builds on other targets are
-unsupported. Use `--only-binary :all:` to fail instead of attempting a native
-build on an unsupported machine.
+Every Manabot wheel contains the compiled engine, so installation needs no Rust
+toolchain. There is one wheel per supported platform and one source archive.
+Building the sdist requires Rust and a C linker; it retains Rust sources and
+semantic content in their original relative layout. Other source-build targets
+are unsupported. Use `--only-binary :all:` to fail rather than attempt a native
+build when no matching wheel exists.
 
-`manabot` contains the training/evaluation Python modules, runtime templates,
-semantic schemas/IR/source data, and Academy's Python API, fixtures and curated
-pack metadata. Optional extras:
+The distribution includes training/evaluation modules, engine decision/protocol
+models, runtime templates, semantic schemas/IR/source data, and Academy's Python
+API, fixtures and curated pack metadata. Optional extras:
 
-- `manabot[academy]`: FastAPI/Uvicorn for the Academy backend. The browser
-  frontend, Node build, card art and hosted services are not distributed on PyPI;
-  use the repository's `./scripts/play` for the complete browser experience.
+- `manabot[academy]`: FastAPI/Uvicorn for the backend. The browser frontend,
+  Node build, card art and hosted services are not distributed; use the
+  repository's `./scripts/play` for the complete browser experience.
 - `manabot[evaluation]`: Matplotlib for evaluation visualizations. Ordinary
-  checkpoint evaluation is included in the base package.
+  checkpoint evaluation is included in the base distribution.
 - `manabot[reports]`: Matplotlib and Etude's S3 support for reports.
-- `manabot[artifacts]`: boto3 for artifact storage. Credentials are configured
-  separately; installing the extra allocates no compute or storage.
+- `manabot[artifacts]`: boto3 for artifact storage; credentials are separate.
 - `manabot[notebook]`: interactive notebook tooling.
 
-Core library calls, `manabot train` with built-in presets, `manabot sim`, and
-JSON `--regime` inputs are package interfaces. `--regime-name` loads
-`experiments/recipes.py` and therefore requires a source checkout. Preregistered
-experiment runners, source-bundle remote submission, research receipt generation,
-and repository/data-ledger utilities also require their source tree and retained
-artifacts; they are not portable wheel-only workflows. Never update a running
-experiment's pinned checkout or controller to install a release.
+Core library calls, built-in training presets, simulation and JSON `--regime`
+inputs are package interfaces. `--regime-name` loads `experiments/recipes.py`
+and requires a source checkout. Experiment drivers, source-bundle remote
+submission, research receipt generation and repository/data-ledger utilities
+also require their source tree and retained artifacts. Never change a running
+experiment's pinned source or controller to install a release.
 
 ## Build and verify
 
-Run from a clean checkout with uv, CPython 3.12 and Rust:
+From a clean checkout with uv, CPython 3.12 and Rust:
 
 ```bash
 uv run --no-project python scripts/release/check.py
 uv run --no-project python scripts/release/prepare.py .runs/release/staging
-uv build --no-sources .runs/release/staging/manabot --out-dir dist
-uv build --no-sources .runs/release/staging/managym --out-dir dist
+uv build --no-sources .runs/release/staging --out-dir dist
 uv run --no-project python scripts/release/validate.py dist
 uv run --no-project --with twine twine check --strict dist/*
 uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
 ```
 
 Use a fresh staging path and empty output directory for each candidate. Staging
-refuses to overwrite an earlier build. It copies tracked files with their current
-bytes, so commit and review changes before tagging. It excludes experiments,
-build products and frontend dependencies. Native source archives retain the
-`managym/` + `content/` relationship required by Rust `include_str!` and
-`include_bytes!`. Both `uv build` and CI's `maturin build --sdist` build wheels
-from their source archives, rather than accidentally reading the checkout.
+refuses to overwrite an earlier build and copies tracked files with their
+current bytes; commit and review before tagging. It excludes experiment drivers,
+build products and frontend dependencies. Both `uv build` and CI's
+`uv run maturin build --sdist` build wheels from the source archive, so checkout files
+cannot conceal missing content.
 
-The root project is also the development environment: its uv groups select
-separate Torch CPU and CUDA indexes. `prepare.py` adds the public Torch runtime
-requirement from `[tool.manabot.release]` to the staged Manabot metadata. Release
-artifacts must use this preparation step; direct root builds are development
-artifacts. The resulting published sdist has the complete runtime requirements
-and can be rebuilt directly with a standard Python build frontend.
+The root project is also the development environment. Its uv groups select
+separate Torch CPU/CUDA indexes. Staging adds the public runtime requirement
+from `[tool.manabot.release]` to the release metadata; published artifacts must
+use this preparation step. The resulting sdist has complete runtime requirements
+and can be rebuilt directly with a standard Python build frontend. `uv sync`
+builds the bundled extension for development; existing explicit
+`uv run --extra play maturin develop --manifest-path managym/Cargo.toml` commands also use the root
+Manabot project and produce the nested extension.
 
-For a clean install smoke (use absolute paths to the artifacts and script):
+Clean-install proof, with absolute paths:
 
 ```bash
 uv venv --python 3.12 /tmp/manabot-release-venv
 uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
-  --torch-backend cpu --find-links "$PWD/dist" "$PWD"/dist/manabot-*.whl
+  --torch-backend cpu "$PWD"/dist/manabot-*.whl
 cp scripts/release/smoke.py /tmp/manabot-release-smoke.py
 cd /tmp
 export PATH="/tmp/manabot-release-venv/bin:$PATH"
@@ -108,51 +108,49 @@ unset PYTHONPATH
 uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-release-smoke.py
 ```
 
-This admits compiled semantic catalogs, checks Torch gradients, starts the CLI,
-and completes a tiny CPU training update outside the repository. CI repeats it
-on Linux and macOS, then installs the Academy, reports, artifacts and evaluation
-extras and imports their entry points. It does not contact experiment services.
+This verifies that no separate managym distribution is installed, both import
+paths share the same engine, semantic catalogs bind, Torch gradients work,
+and the CLI completes a tiny CPU training update outside the checkout. CI
+repeats this on Linux/macOS, then installs Academy/reports/artifacts/evaluation
+extras and imports their entry points. It contacts no experiment services.
 
 ## Publish
 
-`.github/workflows/release.yml` builds and validates on relevant PRs, manual
-runs, and version tags. PR/manual runs do not upload to PyPI. Tag builds reject
-inconsistent versions, tags whose commit is not on `main`, already published
-versions, and registry/network failures. All platform installs must pass before
-publication. The publishing job alone receives OIDC `id-token: write`; no PyPI
-API token is stored. PyPI's action produces attestations for the uploaded files.
+`.github/workflows/release.yml` builds and validates relevant PRs, manual runs
+and version tags. Only tags publish. Tag builds reject inconsistent versions,
+a commit not on main, existing release versions and registry/network failures.
+Both platform installations and the artifact inventory must pass. The publishing
+job alone receives OIDC `id-token: write`; no PyPI API token is stored, and
+PyPI's action produces attestations for uploaded files.
 
-One-time setup by the repository/PyPI owner, before the first tag:
+Configure one trusted publisher for `manabot`:
 
-1. Confirm control of both `manabot` and `managym` on PyPI. On 2026-10-21,
-   both public JSON endpoints returned HTTP 404 (no published projects/releases).
-   This does **not** establish ownership or guarantee the names are available.
-2. Register a pending trusted publisher for **each** name (or an existing
-   project's publisher if it has since been created): owner `loopflowstudio`,
-   repository `manabot`, workflow `release.yml`, environment `pypi`.
-3. Create the GitHub `pypi` environment with required reviewers and version-tag
-   deployment restrictions. Confirm both publisher records and reviewer policy
-   before approving the first publishing job. No secrets or running services
-   need to change.
+| PyPI field | Value |
+|---|---|
+| Project name | `manabot` |
+| Owner | `loopflowstudio` |
+| Repository name | `manabot` |
+| Workflow name | `release.yml` |
+| Environment name | `pypi` |
 
-See PyPI's [pending publisher setup](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
-and [existing project setup](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
-Public registry reads cannot confirm an account's publisher configuration.
-The GitHub environment API also returned 404 for `pypi` during preparation;
-the environment setup is not yet verified.
+Jack Heart reported submitting the pending publisher on 2026-10-21. Before tagging,
+verify the publisher record and configure the GitHub `pypi` environment with
+required reviewers and version-tag deployment restrictions. The public PyPI
+JSON endpoint returned 404 during preparation; that does not establish account
+ownership or publisher configuration. The environment API also returned 404;
+its protection setup remains unverified.
+See [pending publisher setup](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
-For each release, update both Python versions, Cargo.toml/Cargo.lock and Manabot's
-exact managym dependency; update `uv.lock`, installation examples and release notes.
-Review and merge the release PR, confirm the complete release workflow is green,
-and create/push the matching `vX.Y.Z` tag at that reviewed main commit. Review
-the pending `pypi` job's artifacts and approve it through the repository release
-procedure. A PR publication alone does not authorize a tag or PyPI upload.
+For each release, update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`,
+examples and release notes. Review and merge the release PR, confirm the complete
+workflow is green, then create/push `vX.Y.Z` at that reviewed main commit.
+Review the `pypi` job's artifacts and approve it through the repository release
+procedure. PR publication alone does not authorize a tag or PyPI upload.
 
-Uploads are not transactional across projects. Failed builds/smokes upload
-nothing. A partial PyPI upload fails visibly; `skip-existing` is deliberately
-not enabled. Do not rerun publishing blindly, delete a release, or move a used
-tag. Inspect which files exist, retain the workflow artifacts and digests, and
-prepare a new patch version of the pair if necessary. If no files reached PyPI,
-resolve publisher configuration and rerun the reviewed tag workflow. After an
-upload, test installation from PyPI without `--find-links` on both targets,
-confirm both versions and attestations, and record the release URL and checks.
+Failed builds/smokes upload nothing. An interrupted upload fails visibly;
+`skip-existing` is deliberately disabled. Inspect which files reached PyPI,
+retain artifacts/digests and prepare a new patch version if necessary. Do not
+blindly retry publication, delete a release or move a used tag. If no files
+reached PyPI, resolve the cause and rerun the reviewed tag workflow. After
+upload, install from PyPI without local artifacts on both targets, confirm the
+version and attestations, and retain the release URL and check results.
