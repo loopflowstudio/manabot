@@ -185,7 +185,7 @@ row-retention benefits from the other changes.
 ## Live Etude monitoring
 
 The Mac mini now runs a separate serial Etude Eval observer, pinned to Manabot
-`a40f801e4`, alongside the existing budget controller. Its local-network report
+`33054b347`, alongside the existing budget controller. Its local-network report
 is [mini-heart.local:8766](http://mini-heart.local:8766/). The page and JSON exports
 refresh every 30 seconds during evaluation and retain timestamps, coverage,
 failures, checkpoint digests and the last observed training updates.
@@ -206,3 +206,12 @@ cannot rent, extend or restart training. The read-only report server serves only
 public report files. Detailed evidence stays under
 `/Users/jack/.manabot/mtg165-two-seat-50/evaluation/` on the Mini. The training
 worker and cohort controller keep their frozen source identities and lease.
+
+
+Activation retained two interrupted evaluation attempts: the first exposed an
+empty-score-table reporting bug, now covered by a regression test; the second
+was stopped to remove macOS Background scheduling, while preserving its completed
+Etude matches. An explicit resume reads those completed records rather than
+replaying them. Training and paid rental deadlines were unaffected. At the latest
+activation check, the original GPU job was running at 831 updates with a fresh
+controller heartbeat. The complete 200-game Etude result was still pending.

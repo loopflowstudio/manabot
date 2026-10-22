@@ -670,3 +670,10 @@ Mini for a live page; checkpoint inputs, credentials and command traces stay
 outside that served directory. The observer exits after terminal cohort discovery
 and draining its exported checkpoint queue, or one hour beyond the cohort's
 absolute deadline. It holds a filesystem owner lock independently of training.
+
+For a launchd CPU evaluator, leave `ProcessType` at its normal default and set
+`OMP_NUM_THREADS=1` and `MKL_NUM_THREADS=1`. macOS Background scheduling can
+severely slow native games. An explicit `--retry-checkpoint SHA256` retires a
+retained failed/interrupted observer attempt and resumes Etude's completed deal
+records; it never silently retries by default. Use that flag only for the intended
+recovery invocation, then remove it from the saved service arguments.

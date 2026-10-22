@@ -118,3 +118,13 @@ def test_failed_deal_retains_evidence_and_etude_failure(
     # score table exists. Rendering that state must not stop the observer.
     report(tmp_path, Ledger(cohort_sha256="a" * 64, observed_at=1))
     assert (tmp_path / "public/status.json").is_file()
+
+
+def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
+    tmp_path: Path,
+) -> None:
+    manifest = _admission(tmp_path)
+    Path(manifest.artifact["path"]).write_bytes(b"different weights")
+    with pytest.raises(ValueError, match="artifact bytes differ"):
+        evaluation.evaluate(manifest, tmp_path / "evaluations/one")
+    assert not (tmp_path / "track").exists()

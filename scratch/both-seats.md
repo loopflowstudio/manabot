@@ -237,3 +237,70 @@ report-service bootstrap LaunchAgent and the finished evaluation LaunchAgent;
 main scheduler and projection remain running. Goal remains active for the final
 budget-limited endpoint/report. Do not restart a stopped or failed job or add
 paid evaluation work merely to obtain a more favorable result.
+
+## Live Etude evaluations requested 2026-10-21/22
+
+Jack Heart explicitly requested live reports with regular evaluations through
+Etude Eval and authorized necessary Manabot/Etude PRs. Added the `evaluation`
+extra, pinned public Etude source 1ee96ffb0a077cc83953b2806e99d8c8fb92b4e3 plus
+DuckDB; separate/conflicting with legacy `reports` (0.1.1), whose imports were
+verified in an isolated environment. No Etude repository changes were made:
+its local `jack/live-eval-reports` branch already has other uncommitted report
+work, preserved untouched.
+
+Manabot `manabot.training.etude_evaluation` holds a real Etude Benchmark: each
+match is one fixed development deal, eight arena legs, heuristic, legal/terminal
+replay admission. Etude writes match records and Parquet and resamples whole
+deals (its default 2000 draws/seed0). Original 250-update monitor evidence remains
+separate (4000 draws/seed17). `manabot.remote.live_evaluation` discovers digest-
+verified 250-update raw exports from pinned S3 manifests, serializes CPU evals
+with a one-hour child allowance, saves per-digest attempts, and never rents or
+mutates training. Each checkpoint gets an admission JSON and arena evidence.
+Interrupted/failed attempts are not automatically replayed; explicit
+`--retry-checkpoint SHA` retires that observer attempt and resumes completed
+Etude matches. Live old PID fences replacement. Shared absolute deadline is
+cohort.deadline+1h. Reporting exceptions cannot stop a valid evaluator.
+
+Separate deployment `/Users/jack/src/manabot.mtg165-evaluation` on Mini, pinned
+33054b347bed7f486d8de36214f9bc7baafe5e7f, separate uv environment with artifacts+
+evaluation and copied matching controller native .so. Running controller and
+worker source checkouts were untouched. LaunchAgents:
+- manabot.mtg165.etude-evaluation (no KeepAlive; explicit restart/reconcile)
+- manabot.mtg165.eval-report (KeepAlive HTTP server, serves ONLY public/)
+Runtime/evidence: `/Users/jack/.manabot/mtg165-two-seat-50/evaluation`.
+Live local-network URL: http://mini-heart.local:8766/ ; index, eval.html,
+curves.json, status.json. Public page refreshes30seconds during evaluation;
+last observed training coordinates and timestamp distinguish stale observations.
+AWS_PROFILE manabot-controller; no Doppler token/key copying required for reads.
+Persistent service configurations retained locally under
+`.runs/mtg165-two-seat-50/live-evaluation/` and on Mini ~/Library/LaunchAgents.
+
+Activation history: first callback had an Etude declaration but no plays table;
+report curves query raised and interrupted it. Empty table handling and report
+exception isolation fixed, with a real failed-match/no-score regression. First
+attempt retained in original digest directory; ledger retired key suffix has
+started_at1792628818.586645, PID88075 now absent. Explicit second attempt started
+1792628989.676289 PID88471. It retained two complete Etude matches (16 games),
+all terminal/replayed; first deal1590100010 scores/decision counts match the
+original monitor. Background launchd ProcessType made each deal~118seconds versus
+~16original. Explicitly suspended observer88410, SIGINTed evaluator88471 (arena
+finally kills/reaps its native child), booted out ONLY this evaluation observer.
+Confirmed88471 exited. Changed saved evaluator plist to normal ProcessType default
+and OMP_NUM_THREADS/MKL_NUM_THREADS=1; resumed explicitly again, retaining old
+attempt and existing Etude matches. Remove-once retry flag was copied for the
+bootstrap then immediately replaced on disk with normal no-retry plist. Do not
+boot out the training controller or projection service. All paid work unaffected.
+
+Latest fresh training check: cohort running, original002 at831updates, heartbeat
+9.29seconds old. Final $50 endpoint still pending. Live Etude callback run name:
+checkpoint-2bd07fa24a524536471c3e4d0a03e9b5a42fc19201f007db6d1bb6b490126897.
+Full250 Etude result still pending; 500 and750 exports should queue next. Fetch
+curves.json/status.json and exact retained result records before reporting a
+completed evaluation. No need to rerun original200-game monitor. Unit and
+focused changed suites passed23checks (4long checkpoint checks excluded),
+isolated evaluation+continuation19passed; package boundaries2passed. Added
+explicit CI step for eval extra (legacy suites still use reports extra), optional
+module collection skips cleanly without eval extra. New tampered-byte admission
+check passed (4 Etude adapter checks total). PR330 has source commits adc10393,
+a40f801e and33054b34; final PR copy/report notes still need publication after
+this activation verification. Keep goal active for final experiment report.
