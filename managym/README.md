@@ -71,11 +71,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-<<<<<<< HEAD
-[semantic-kernel-w10-v1](../conformance/semantic-kernel-w10-v1/).
-=======
-[semantic-kernel-w11-v1](../conformance/semantic-kernel-w11-v1/).
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
+[semantic-kernel-w11-payment-v1](../conformance/semantic-kernel-w11-payment-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -130,10 +126,24 @@ cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
-<<<<<<< HEAD
-=======
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/rules/optional-payments.md)
 covers both ordinary mana and waterbend without a card-specific decision.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
+
+Mana offers, waterbend affordability and automatic production use executable
+witnesses from `flow/mana.rs`. A mana source is reserved while its printed
+upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
+and frame. Only after that obligation finishes do its tap/life/sacrifice costs
+commit and its output become a visible color decision. Mana abilities do not
+create stack objects. Fixed production keeps source order; a nested automatic
+prefix considers concrete pool remainders and the parent's completion.
+
+Every registered chosen-output mana mode consumes a tap (sometimes also a
+sacrifice), so each source has one use during a payment. The registry contract
+requires a model extension before introducing separate tap/sacrifice mana uses,
+repeatable free sources, or additional mana-ability cost methods.
+Search retains identities rather than grouping equal outputs. Its total and
+spend-purpose bounds only reject impossible branches; every accepted payment
+still requires a complete witness. This is finite search, without a general
+large-board performance guarantee.

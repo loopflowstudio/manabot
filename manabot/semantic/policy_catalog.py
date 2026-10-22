@@ -42,14 +42,11 @@ _CATALOGS = {
         ("temur_left", "temur_right"),
         "../w9/learning_schema.json",
     ),
-<<<<<<< HEAD
-=======
     "elemental-world-v2": PolicyCatalogSpec(
         "../../w11/generated/elemental_world.ir.json",
         ("elemental_bg", "elemental_gr"),
         "../w11/learning_schema.json",
     ),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     "elemental-world-v1": PolicyCatalogSpec(
         "elemental_world.ir.json",
         ("elemental_bg", "elemental_gr"),

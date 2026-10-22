@@ -962,11 +962,7 @@ impl Observation {
         }
     }
 
-<<<<<<< HEAD
-    fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
-=======
     pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         match action {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]

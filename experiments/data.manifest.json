@@ -1814,7 +1814,6 @@
    "sha256": "fa11d7b0e98f67e2929ec74227541c07ee4cca5da3b91f92c5415cb457e5c5b2",
    "bytes": 147775
   },
-<<<<<<< HEAD
   "experiments/data/mtg174/admission-native-legality-v1/attempted-elemental-eval.py": {
    "sha256": "d44659a290522d02d467b95c50da385467e622e7674bb26bd5e6458e7c7ad2af",
    "bytes": 4724
@@ -1858,6 +1857,86 @@
   "experiments/data/mtg174/admission-native-legality-v1/upstream-receipt.json": {
    "sha256": "37d2398dcf7e934b1ec4329587c07e940b9c1382aa84e9fcebb581b70aae68df",
    "bytes": 815
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/build.log": {
+   "sha256": "54f915255cbf98f8fa02c3264ed4bfb0c12070c1b37af16526334b45331b8dc8",
+   "bytes": 768
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/clippy.log": {
+   "sha256": "9d4f32abbcd0fba38fedfa417057b4ef19febd5e5d93a923e8a6810d9598e4df",
+   "bytes": 156
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/conformance-record.log": {
+   "sha256": "1ab37ff3e257349220a2e9c94997a54303e494ffa8ff35c04151dcc14a71056e",
+   "bytes": 245
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/debug.log": {
+   "sha256": "54b990b915680219ed729f0f11b2f32d6a4f66242a9c59c1d88c2277af4b287e",
+   "bytes": 39221
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/historical-integrity.json": {
+   "sha256": "70592d8c5c77a679128b5080d169690f65f9ae32fcb7fbee822ddfaffec155ad",
+   "bytes": 2099
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-adversarial-v4.log": {
+   "sha256": "294d5d4c974c1eadd282fe7209f574b33a0ca17059827313a9e2959db764f93d",
+   "bytes": 3612
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-clippy-complete.log": {
+   "sha256": "4ac177afa403bbe33248cb6cf76aa824639a085d81d2cfc57aea920adc2a8fc0",
+   "bytes": 156
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-conformance-record-v2.log": {
+   "sha256": "53390feebef495555e8469edbae996fb7b215c1792050613117470a3d79abcaa",
+   "bytes": 186
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-conformance-record-v3.log": {
+   "sha256": "53390feebef495555e8469edbae996fb7b215c1792050613117470a3d79abcaa",
+   "bytes": 186
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-conformance-record-v4.log": {
+   "sha256": "1ab37ff3e257349220a2e9c94997a54303e494ffa8ff35c04151dcc14a71056e",
+   "bytes": 245
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-conformance-record.log": {
+   "sha256": "53390feebef495555e8469edbae996fb7b215c1792050613117470a3d79abcaa",
+   "bytes": 186
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-debug-affected-v2.log": {
+   "sha256": "3413a172fc0bc801255512b1369eff847b0505301b70dc98eeae19461155faef",
+   "bytes": 33685
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-recovery-debug.log": {
+   "sha256": "1ab85c97c2af36a82ee8636f9a411a984a81b03cc8be27f18fcf489f2c4ef332",
+   "bytes": 28157
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/mtg174-model-source-contract.log": {
+   "sha256": "458c13a6bf6f5ed826680e8718d143d187f86b6c58da33992f28634e5bf8a733",
+   "bytes": 440
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/passing.json": {
+   "sha256": "9d4281ab3eac98e561f6e24c02d847540f0ffd39b286b690adbc11c862714565",
+   "bytes": 8548
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/prototype-conformance.sample": {
+   "sha256": "24f9dc97c0dba473221a42d5ad06ae991c43b8b88a61cf6e53aabbee81af247a",
+   "bytes": 1224104
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/python.log": {
+   "sha256": "a0337b15453d402e8a44c73d9284c6f9d931c82109b96aabd5714d5e605c83ad",
+   "bytes": 100
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/repair.patch": {
+   "sha256": "cdf3e77f2f16a2ba0a9266150577e0cd8f48f89cd2c2a5cb83f8f2d318b4b4bf",
+   "bytes": 143108
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/ruff.log": {
+   "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+   "bytes": 19
+  },
+  "experiments/data/mtg174/mana-model-repair-v2/task-boundary.json": {
+   "sha256": "74a9bcf0130335aa05546109eb70d73a2a3bea2b72418e3d982fdfb4a1d97c65",
+   "bytes": 330
   },
   "experiments/data/mtg174/mana-repair-v1/before-pool-review/build.log": {
    "sha256": "d307e7cdfc4f989778f938c67c6d1c81cfb2f58ca4471a46cc64728aae60676d",
@@ -2499,8 +2578,6 @@
    "sha256": "1552dd5ad43bf9bfa3fc96042ac3b639e9bb71470a8a86103f97651570de91a7",
    "bytes": 673
   },
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310

@@ -16,10 +16,6 @@ import socket
 import numpy as np
 from pydantic import Field, model_validator
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import sustained_baseline_source
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.sustained_baseline_result import (
     FinalReceipt,
     finalize,
@@ -140,16 +136,12 @@ def hardware() -> HardwareInventory:
 
 def recipe(milestones: tuple[int, ...], allowance: float) -> TrainingRegime:
     """Keep the candidate's architecture, estimator and absolute iteration schedules."""
-<<<<<<< HEAD
     base = TrainingRegime.model_validate_json(
         (
             Path(__file__).resolve().parents[1]
             / "regimes/current-baseline-mini-source.json"
         ).read_text()
     )
-=======
-    base = sustained_baseline_source()
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     base.id = "current-baseline-masked-mean"
     base.agent.value_aggregation = "masked_mean"
     base.recovery = RecoveryPolicy(checkpoint_updates=128)

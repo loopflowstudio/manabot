@@ -7,11 +7,7 @@ complement is the opponent library multiset; library order and other hidden
 state are outside this domain.
 
 ```bash
-<<<<<<< HEAD
 uv run manabot train --regime experiments/regimes/belief-sampler.json --seed 421 --out .runs/belief-pilot
-=======
-uv run manabot train --regime-name belief-sampler --seed 421 --out .runs/belief-pilot
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ```
 
 This bounded three-game, small-deck pilot demonstrates the dependency chain.

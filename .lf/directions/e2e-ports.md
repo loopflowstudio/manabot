@@ -1,10 +1,6 @@
 # Isolate Playwright ports across worktrees
 
-<<<<<<< HEAD
 `frontend/playwright.config.ts` sets `reuseExistingServer: true`. Before treating
-=======
-`academy/ui/playwright.config.ts` sets `reuseExistingServer: true`. Before treating
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 browser results as evidence, check whether the default ports belong to this
 worktree. A sibling service on 8011 can satisfy the readiness URL while serving
 different code.
@@ -13,11 +9,7 @@ Use explicit unused ports for task validation, for example:
 
 ```bash
 ACADEMY_API_PORT=8123 ACADEMY_FRONTEND_PORT=5293 \
-<<<<<<< HEAD
   npm --prefix frontend run test:e2e -- testing-house.spec.ts
-=======
-  npm --prefix academy/ui run test:e2e -- testing-house.spec.ts
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ```
 
 Do not terminate a sibling worktree's server merely to reclaim the defaults.

@@ -8,10 +8,6 @@ import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import VISIT_COUNT_KEY, load_shards
@@ -46,13 +42,9 @@ from tests.sim.test_search_supervised import _dataset
 
 
 def _recipe() -> TrainingRegime:
-<<<<<<< HEAD
     value = TrainingRegime.model_validate_json(
         Path("experiments/regimes/direct-self-play.json").read_text()
     )
-=======
-    value = regime("direct-self-play")
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]

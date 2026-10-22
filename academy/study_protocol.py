@@ -118,15 +118,7 @@ class RecordedDecisionInput(ProtocolModel):
             or decision.played.offer_id != decision.offer.id
         ):
             raise ValueError(f"{context}: played command identity drifted")
-<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
-=======
-        if (
-            frame.projection.opponent.hand
-            or frame.projection.opponent.sideboard
-            or frame.projection.opponent.inspected
-        ):
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
@@ -236,15 +228,7 @@ class StudyDecisionIndex(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
-<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
-=======
-        if (
-            frame.projection.opponent.hand
-            or frame.projection.opponent.sideboard
-            or frame.projection.opponent.inspected
-        ):
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
@@ -370,15 +354,7 @@ class StudyArtifact(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
-<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
-=======
-        if (
-            frame.projection.opponent.hand
-            or frame.projection.opponent.sideboard
-            or frame.projection.opponent.inspected
-        ):
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )

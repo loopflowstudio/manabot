@@ -6,10 +6,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.belief.likelihood import RulesProviderGap
 from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.sim.distill import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
@@ -152,13 +148,9 @@ def test_exact_history_gap_retains_failed_attempt(tmp_path: Path) -> None:
 
 
 def test_learned_regime_requires_same_frozen_policy_and_sampler() -> None:
-<<<<<<< HEAD
     recipe = json.loads(
         Path("experiments/regimes/learned-belief-local-search.json").read_text()
     )
-=======
-    recipe = regime("learned-belief-local-search").model_dump()
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     TrainingRegime.model_validate(recipe)
     recipe["stages"][3]["sampler"] = "histories"
     with pytest.raises(ValueError, match="train_belief"):
@@ -176,13 +168,9 @@ def test_learned_pipeline_never_enumerates(
         raise AssertionError("learned pipeline attempted exact support enumeration")
 
     monkeypatch.setattr(PossibleWorldSpace, "from_engine", reject_enumeration)
-<<<<<<< HEAD
     recipe = TrainingRegime.model_validate_json(
         Path("experiments/regimes/learned-belief-local-search.json").read_text()
     )
-=======
-    recipe = regime("learned-belief-local-search")
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     with VerifyStore(tmp_path / "learned.sqlite") as store:
         run = execute_regime(recipe, 718, tmp_path / "learned", store)
     assert run.status == "completed"

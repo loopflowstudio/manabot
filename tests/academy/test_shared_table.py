@@ -4,20 +4,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
-<<<<<<< HEAD
 
 from fastapi.testclient import TestClient
 
 from academy import server, trace as trace_store
 from academy.authored_match_receipt import play_fixed_authored_match
-=======
-from pathlib import Path
-
-from fastapi.testclient import TestClient
-import pytest
-
-from academy import server, trace as trace_store
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from academy.server import app
 
 CONFIG = {
@@ -84,26 +75,9 @@ def _canonical_bytes(value: object) -> bytes:
 
 
 def test_live_decision_summaries_match_full_replay_without_reconstruction(
-<<<<<<< HEAD
     monkeypatch,
 ):
     game, _ = play_fixed_authored_match()
-=======
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    # A small complete two-seat recording exercises summary identity independently
-    # of historical authored receipts and their execution presets.
-    game = server.GameSession(tmp_path)
-    frame = game.new_game(CONFIG)["frame"]
-    for ordinal in range(400):
-        if frame["status"] == "game_over":
-            break
-        outcome = game.hero_command(_command(frame, f"summary.{ordinal}"))
-        assert outcome["status"] == "accepted"
-        frame = outcome["update"]["frame"]
-    else:
-        pytest.fail("summary source match did not terminate")
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     record = server.SessionRecord(
         session_id="summary-characterization",
         resume_token="summary-characterization-token",

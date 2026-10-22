@@ -11,11 +11,7 @@ models live here, below both packages.
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-<<<<<<< HEAD
-from pydantic import BaseModel, ConfigDict, Field
-=======
 from pydantic import BaseModel, ConfigDict, Field, model_validator
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 PROTOCOL_VERSION: Literal[1] = 1
 # Frames whose content predates versioned content identity carry this content
@@ -170,9 +166,6 @@ ChoiceStep: TypeAlias = Annotated[
 ]
 
 
-<<<<<<< HEAD
-class InteractionOffer(ProtocolModel):
-=======
 class DecisionObjectView(ProtocolModel):
     entity_id: UInt32
     subject: SubjectRef
@@ -206,7 +199,6 @@ class InteractionOffer(ProtocolModel):
     subjects: list[OfferSubjectView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     id: UInt32
     actor: UInt8
     verb: OfferVerb
@@ -308,13 +300,10 @@ class LegacyCardView(ProtocolModel):
 
 
 class LegacyPermanentView(ProtocolModel):
-<<<<<<< HEAD
-=======
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     is_token: bool | None = Field(default=None, exclude_if=lambda value: value is None)
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     temp_subtypes: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -344,8 +333,6 @@ class SideboardCardView(ProtocolModel):
 
 
 class LegacyPlayerView(ProtocolModel):
-<<<<<<< HEAD
-=======
     mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -358,7 +345,6 @@ class LegacyPlayerView(ProtocolModel):
     inspected: list[LegacyCardView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     player_index: UInt8
     id: UInt32
     is_active: bool
@@ -397,9 +383,6 @@ class LegacyTurnView(ProtocolModel):
     agent_player_id: UInt32
 
 
-<<<<<<< HEAD
-class LegacyHeroObservation(ProtocolModel):
-=======
 class StackEntryView(ProtocolModel):
     id: UInt64
     kind: str
@@ -423,7 +406,6 @@ class LegacyHeroObservation(ProtocolModel):
     decision_context: DecisionContextView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     definition_names: dict[str, str] = Field(
         default_factory=dict, exclude_if=lambda value: not value
     )
@@ -433,8 +415,6 @@ class LegacyHeroObservation(ProtocolModel):
     agent: LegacyPlayerView
     opponent: LegacyPlayerView
 
-<<<<<<< HEAD
-=======
     @model_validator(mode="after")
     def validate_context_owner(self) -> "LegacyHeroObservation":
         if (
@@ -451,7 +431,6 @@ class LegacyHeroObservation(ProtocolModel):
             raise ValueError("decision context is not oriented to its acting viewer")
         return self
 
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 class StopsConfig(ProtocolModel):
     my: list[str]

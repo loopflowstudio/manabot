@@ -20,13 +20,7 @@ import time
 
 
 def _read(command: list[str]) -> str:
-<<<<<<< HEAD
     result = subprocess.run(command, capture_output=True, text=True, timeout=3)
-=======
-    # No time limit: these are local reads, and a cold `git diff` on a loaded
-    # runner has taken longer than three seconds.
-    result = subprocess.run(command, capture_output=True, text=True)
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     if result.returncode:
         return f"unavailable (exit {result.returncode})"
     return result.stdout.strip()

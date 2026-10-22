@@ -6,10 +6,6 @@ from etude.track.read import read_all
 import pytest
 import torch
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
@@ -20,13 +16,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _recipe(name: str = "ataraxos-move") -> TrainingRegime:
-<<<<<<< HEAD
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes" / f"{name}.json").read_text()
     )
-=======
-    recipe = regime(name)
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     return recipe

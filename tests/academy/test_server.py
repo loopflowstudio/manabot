@@ -39,14 +39,7 @@ def _recorded_traces(directory):
 
 
 def _pick_action(actions: list[dict]) -> int:
-<<<<<<< HEAD
     preferred_action_types = {*experience_projection.ACTION_LABELS, "PRIORITY_PASS_PRIORITY"}
-=======
-    preferred_action_types = {
-        *experience_projection.ACTION_LABELS,
-        "PRIORITY_PASS_PRIORITY",
-    }
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     for action in actions:
         if action["type"] in preferred_action_types:
             return int(action["index"])
@@ -75,15 +68,6 @@ def _offer(frame: dict, *, action_type: str, label: str | None = None) -> dict:
 
 
 def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
-<<<<<<< HEAD
-=======
-    native_env = server.managym.Env
-
-    def historical_env(*, seed: int, skip_trivial: bool) -> server.managym.Env:
-        return native_env(seed=seed, skip_trivial=True)
-
-    monkeypatch.setattr(server.managym, "Env", historical_env)
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     config = {
@@ -124,30 +108,7 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         "action_space",
                         "stops",
                     ):
-<<<<<<< HEAD
                         assert frame[key] == fixture_frame[key]
-=======
-                        if key == "prompt":
-                            assert {
-                                k: frame[key][k] for k in ("id", "actor", "kind")
-                            } == {
-                                k: fixture_frame[key][k]
-                                for k in ("id", "actor", "kind")
-                            }
-                            assert (
-                                frame[key]["instruction"]
-                                == frame["projection"]["decision_context"][
-                                    "instruction"
-                                ]
-                            )
-                        elif key == "offers":
-                            assert [
-                                {k: v for k, v in offer.items() if k != "subjects"}
-                                for offer in frame[key]
-                            ] == fixture_frame[key]
-                        else:
-                            assert frame[key] == fixture_frame[key]
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                     # The retained fixture pins historical assets; the live
                     # custom match uses the installed presentation catalog.
                     assert frame["asset_manifest_hash"] == server.ASSET_MANIFEST_HASH
@@ -231,15 +192,9 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
             old_frame = websocket.receive_json()["frame"]
-<<<<<<< HEAD
             land_command = _command(
                 old_frame,
                 _offer(old_frame, action_type="PRIORITY_PLAY_LAND"),
-=======
-            first_command = _command(
-                old_frame,
-                _offer(old_frame, action_type="PRIORITY_PASS_PRIORITY"),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 "same-command",
             )
             stale_command = _command(
@@ -248,32 +203,18 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
                 "stale-command",
             )
 
-<<<<<<< HEAD
             websocket.send_json({"type": "command", "command": land_command})
-=======
-            websocket.send_json({"type": "command", "command": first_command})
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             accepted = websocket.receive_json()
             assert accepted["status"] == "accepted"
             receipt = accepted["update"]["receipt"]
             current_frame = accepted["update"]["frame"]
 
-<<<<<<< HEAD
             websocket.send_json({"type": "command", "command": land_command})
-=======
-            websocket.send_json({"type": "command", "command": first_command})
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             duplicate = websocket.receive_json()
             assert duplicate["status"] == "duplicate"
             assert duplicate["receipt"] == receipt
             assert duplicate["recovery"]["reason"] == "duplicate_command"
-<<<<<<< HEAD
             assert duplicate["recovery"]["frame"]["revision"] == 1
-=======
-            assert (
-                duplicate["recovery"]["frame"]["revision"] == current_frame["revision"]
-            )
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
             stale_prompt_command = _command(
                 current_frame,
@@ -285,33 +226,17 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             stale_prompt = websocket.receive_json()
             assert stale_prompt["status"] == "rejected"
             assert stale_prompt["rejection"]["code"] == "stale_prompt"
-<<<<<<< HEAD
             assert stale_prompt["recovery"]["frame"]["revision"] == 1
-=======
-            assert (
-                stale_prompt["recovery"]["frame"]["revision"]
-                == current_frame["revision"]
-            )
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
             websocket.send_json({"type": "command", "command": stale_command})
             rejected = websocket.receive_json()
             assert rejected["status"] == "rejected"
             assert rejected["rejection"]["code"] == "stale_revision"
             assert rejected["recovery"]["reason"] == "stale_command"
-<<<<<<< HEAD
             assert rejected["recovery"]["frame"]["revision"] == 1
 
     record = next(iter(server.SESSION_REGISTRY.values()))
     assert len(record.game.trace.events) == 1
-=======
-            assert (
-                rejected["recovery"]["frame"]["revision"] == current_frame["revision"]
-            )
-
-    record = next(iter(server.SESSION_REGISTRY.values()))
-    assert len(record.game.trace.events) == current_frame["revision"]
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
@@ -443,11 +368,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
             frame = initial["recovery"]["frame"]
             command = _command(
                 frame,
-<<<<<<< HEAD
                 _offer(frame, action_type="PRIORITY_PLAY_LAND"),
-=======
-                _offer(frame, action_type="PRIORITY_PASS_PRIORITY"),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 "lost-response-command",
             )
             cursor = initial["recovery"]["presentation_cursor"]
@@ -481,11 +402,7 @@ def test_disconnect_after_acceptance_recovers_without_replaying_command(
             assert duplicate["status"] == "duplicate"
             assert duplicate["receipt"] == accepted_receipt
 
-<<<<<<< HEAD
         assert record.game.revision == 1
-=======
-        assert record.game.revision == accepted["update"]["frame"]["revision"]
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         assert len(record.game.trace.events) == trace_length
 
 

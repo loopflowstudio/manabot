@@ -122,8 +122,6 @@ pub enum EffectValue {
     CardsDrawnMinus { subtract: u32 },
 }
 
-<<<<<<< HEAD
-=======
 /// A resolving obligation, distinct from the effects chosen by its outcome.
 /// Waterbend pays only generic mana; taps never count as mana production.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -141,7 +139,6 @@ impl PaymentCost {
     }
 }
 
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     /// Copy the source's copiable characteristics, removing legendary.
@@ -151,15 +148,10 @@ pub enum Effect {
         power: i32,
         toughness: i32,
     },
-<<<<<<< HEAD
-    WaterbendOrDiscard {
-        generic: u8,
-=======
     OptionalPayment {
         cost: PaymentCost,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     },
     Sacrifice {
         predicate: CardPredicate,
@@ -564,16 +556,12 @@ impl Effect {
             Effect::UntapTarget { target } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
-<<<<<<< HEAD
-            Effect::IfKicked { then, otherwise }
-=======
             Effect::OptionalPayment {
                 if_paid: then,
                 if_declined: otherwise,
                 ..
             }
             | Effect::IfKicked { then, otherwise }
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             | Effect::IfGraveyardAtLeast {
                 then, otherwise, ..
             } => then
@@ -585,10 +573,6 @@ impl Effect {
             }
             Effect::CreateNonlegendaryCopy
             | Effect::ModifyControlled { .. }
-<<<<<<< HEAD
-            | Effect::WaterbendOrDiscard { .. }
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }

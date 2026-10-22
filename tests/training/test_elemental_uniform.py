@@ -21,7 +21,7 @@ from manabot.training.self_play import deck_identity
 from manabot.verify.store import VerifyStore
 import managym
 
-PACK = "elemental-world-v1"
+PACK = "elemental-world-v2"
 
 
 def _match() -> Match:

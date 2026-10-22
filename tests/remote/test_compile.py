@@ -5,10 +5,6 @@ from pathlib import Path
 
 import pytest
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.remote.plan import DeploymentPlan, JobSpec, Source, compile_plan
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,11 +48,7 @@ def test_cost_and_watchdog_admission() -> None:
 def test_cuda_rejects_recovery_and_mixed_device_continuation() -> None:
     from manabot.training.models import TrainingRegime
 
-<<<<<<< HEAD
     data = json.loads((ROOT / "experiments/regimes/direct-self-play.json").read_text())
-=======
-    data = regime("direct-self-play").model_dump()
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     data["stages"][0]["execution"]["device"] = "cuda"
     with pytest.raises(ValueError, match="continuation"):
         TrainingRegime.model_validate(data)

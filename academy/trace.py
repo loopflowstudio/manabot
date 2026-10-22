@@ -6,11 +6,7 @@ Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 from __future__ import annotations
 
 from copy import deepcopy
-<<<<<<< HEAD
 from dataclasses import dataclass, field
-=======
-from dataclasses import asdict, dataclass, field, fields
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from datetime import datetime, timezone
 import json
 import os
@@ -113,14 +109,8 @@ class TraceEvent:
     # replay, and the decision-inspector seam consume these same persisted
     # objects; no consumer reconstructs them from observation differences.
     # True when the server auto-passed this priority window (stops system /
-<<<<<<< HEAD
     # F6), False for decisions the human actually clicked. Competency metrics
     # must not credit auto-passes as deliberate passes.
-=======
-    # F6), False for explicit Commands, including declared validation prefixes.
-    # Competency metrics must also use record origin; False alone is not human
-    # provenance and auto-passes are never deliberate passes.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     auto: bool = False
     # Ordered semantic facts committed by the same authority transition. Old
     # traces omit this field and remain valid because replay treats it as an
@@ -144,30 +134,6 @@ class Trace:
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
 
-<<<<<<< HEAD
-=======
-    def to_record(self) -> dict[str, Any]:
-        """Borrow JSON payloads for immediate, read-only persistence.
-
-        Copying every observation and canonical frame before JSON encoding
-        makes each live save pay for the entire history twice. Only dataclass
-        boundaries need conversion; the store serializes before gameplay resumes.
-        Callers must not mutate this record or retain it across a game step.
-        """
-        record = {item.name: getattr(self, item.name) for item in fields(self)}
-        record["config"] = asdict(self.config)
-        record["events"] = [
-            {
-                **{item.name: getattr(event, item.name) for item in fields(event)},
-                "bot_decision": (
-                    None if event.bot_decision is None else asdict(event.bot_decision)
-                ),
-            }
-            for event in self.events
-        ]
-        return record
-
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

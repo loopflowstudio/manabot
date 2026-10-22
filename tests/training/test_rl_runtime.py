@@ -1,6 +1,5 @@
 """Bounded native self-play, persisted costs and ordinary raw/EMA reload."""
 
-<<<<<<< HEAD
 from pathlib import Path
 
 import pytest
@@ -9,28 +8,16 @@ import torch
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime
-=======
-import pytest
-import torch
-
-from experiments.recipes import regime
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.training.execution import execute_regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.verify.store import VerifyStore
 import managym
 
 
 def bounded_regime():
-<<<<<<< HEAD
     path = (
         Path(__file__).resolve().parents[2]
         / "experiments/regimes/direct-self-play.json"
     )
     recipe = TrainingRegime.model_validate_json(path.read_text())
-=======
-    recipe = regime("direct-self-play")
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.agent.hidden_dim = 8

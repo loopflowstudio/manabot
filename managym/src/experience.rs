@@ -210,11 +210,8 @@ pub enum ChoiceStep {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InteractionOffer {
-<<<<<<< HEAD
-=======
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subjects: Vec<OfferSubjectView>,
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,
@@ -318,13 +315,10 @@ pub struct LegacyCardView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
-<<<<<<< HEAD
-=======
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub types: Option<LegacyCardTypesView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_token: Option<bool>,
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -363,8 +357,6 @@ pub struct SideboardCardView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
-<<<<<<< HEAD
-=======
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -373,7 +365,6 @@ pub struct LegacyPlayerView {
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inspected: Vec<LegacyCardView>,
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub player_index: u8,
     pub id: u32,
     pub is_active: bool,
@@ -410,9 +401,6 @@ pub struct LegacyTurnView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
-<<<<<<< HEAD
-pub struct LegacyHeroObservation {
-=======
 pub struct OfferSubjectView {
     pub role: String,
     pub object: DecisionObjectView,
@@ -476,7 +464,6 @@ pub struct LegacyHeroObservation {
     pub stack_objects: Option<Vec<StackEntryView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decision_context: Option<DecisionContextView>,
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub definition_names: BTreeMap<String, String>,
     pub game_over: bool,
@@ -486,8 +473,6 @@ pub struct LegacyHeroObservation {
     pub opponent: LegacyPlayerView,
 }
 
-<<<<<<< HEAD
-=======
 impl LegacyHeroObservation {
     /// Cross-viewer explanations may contain public ownership and kind, but
     /// never the other player's private continuation or selected objects.
@@ -503,7 +488,6 @@ impl LegacyHeroObservation {
     }
 }
 
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StopsConfig {

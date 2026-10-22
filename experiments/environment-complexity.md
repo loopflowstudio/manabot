@@ -258,11 +258,7 @@ update 1,200. Pool order rotates across seeds. Cross-balanced current-policy
 self-play uses four streams, 64 transitions per stream per update. All arms use
 the same full research semantic catalog, width64/two-layer/four-head encoder,
 scalar masked-mean value and the same Ataraxos-move learning recipe. The source
-<<<<<<< HEAD
 recipe is `experiments/regimes/early-learning-rate-mini-source.json`; no LR-screen
-=======
-recipe is `ataraxos_mini()` in `experiments/recipes.py`; no LR-screen
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 variant is selected. Exact resolved Experiment receipts are exported before work.
 
 - L1: Mountain9/Plains8; swift has Savannah Lions8/Glory Seeker8/Hill Giant7,

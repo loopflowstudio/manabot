@@ -9,10 +9,6 @@ import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import regime
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.training import execution
 from manabot.training.models import (
     AtaraxosMoveLearning,
@@ -45,13 +41,9 @@ def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> 
 
 
 def recipe() -> TrainingRegime:
-<<<<<<< HEAD
     value = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/direct-self-play.json").read_text()
     )
-=======
-    value = regime("direct-self-play")
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]

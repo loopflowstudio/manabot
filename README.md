@@ -108,15 +108,9 @@ uv run manabot train          # small CPU training run, under a minute, no W&B
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to
-<<<<<<< HEAD
 `.runs/local/`. Training recipes are JSON *regimes* under
 [experiments/regimes/](experiments/regimes/). The current GPU baseline is
 `uv run manabot train --regime experiments/regimes/batched-baseline.json`.
-=======
-`.runs/local/`. Training recipes are typed *regimes* composed in Python in
-[experiments/recipes.py](experiments/recipes.py). The current GPU baseline is
-`uv run manabot train --regime-name batched-baseline --out .runs/batched/run`.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 [manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
 simulation, and evaluation.
 
@@ -194,11 +188,7 @@ not comparable with today's checkpoints:
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |
-<<<<<<< HEAD
 | `academy/`, `frontend/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
-=======
-| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 | `wave/`, `.lf/` | Loopflow Waves, Flows, and skills that organize agent work |
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
@@ -223,11 +213,7 @@ guides are in each package README.
 
 - **manabot**: the bot and the Python library. You train *a* manabot.
 - **managym**: the rules environment the bot lives in.
-<<<<<<< HEAD
 - **Academy**: the local bot-testing UI (`academy/`, `frontend/`).
-=======
-- **Academy**: the local bot-testing UI (`academy/`, `academy/ui/`).
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 - **Etude**: the separate system that launches and records experiments
   ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
   documents also use *Etude* and *Fantasia* for this project.

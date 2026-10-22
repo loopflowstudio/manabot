@@ -16,12 +16,7 @@ from nbclient import NotebookClient
 import nbformat
 import torch
 
-<<<<<<< HEAD
 from manabot.arena.models import file_sha256
-=======
-from experiments.recipes import mirror_screen_baseline
-from manabot.arena.models import canonical_sha256, file_sha256
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.execution import atomic_json, execute_regime
@@ -41,23 +36,11 @@ from manabot.verify.store import VerifyStore
 ROOT = Path(__file__).resolve().parents[2]
 SEEDS = (12551, 12552, 12553)
 ARMS = ("cross-balanced", "mirrors-balanced")
-<<<<<<< HEAD
 BASE = ROOT / "experiments/regimes/mirror-screen-baseline.json"
 
 
 def recipe(arm: str, updates: int, allowance: float) -> TrainingRegime:
     value = TrainingRegime.model_validate_json(BASE.read_text())
-=======
-
-
-def _baseline_digest() -> str:
-    """Canonical JSON digest of the base regime this source commit defines."""
-    return canonical_sha256(mirror_screen_baseline().model_dump(mode="json"))
-
-
-def recipe(arm: str, updates: int, allowance: float) -> TrainingRegime:
-    value = mirror_screen_baseline()
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     value.id = arm
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
@@ -158,11 +141,7 @@ def calibrate(out: Path) -> None:
             "updates": 20,
             "seconds": timings,
             "source": file_sha256(Path(__file__)),
-<<<<<<< HEAD
             "baseline": file_sha256(BASE),
-=======
-            "baseline": _baseline_digest(),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         },
     )
 
@@ -214,11 +193,7 @@ def freeze(out: Path) -> None:
         "wall_seconds": remaining,
         "created_unix": time.time(),
         "calibration_sha256": file_sha256(out / "calibration.json"),
-<<<<<<< HEAD
         "baseline_sha256": file_sha256(BASE),
-=======
-        "baseline_sha256": _baseline_digest(),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "source_sha256": file_sha256(Path(__file__)),
         "greedy_games_per_cell": greedy_count,
         "random_games_per_cell": random_count,

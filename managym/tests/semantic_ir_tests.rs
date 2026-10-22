@@ -225,8 +225,6 @@ fn executable_ir_has_no_card_name_dispatch_or_unresolved_definition_refs() {
         }
     }
 }
-<<<<<<< HEAD
-=======
 
 #[test]
 fn authored_optional_payment_lowers_both_methods_and_continuations() {
@@ -275,4 +273,3 @@ fn authored_optional_payment_lowers_both_methods_and_continuations() {
         );
     }
 }
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

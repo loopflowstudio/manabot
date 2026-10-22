@@ -8,11 +8,7 @@ __pycache__/
 *.pyc
 
 # Keep the remote-build context small: the play image needs pyproject/uv.lock,
-<<<<<<< HEAD
 # academy/, manabot/, managym/ (Rust sources), frontend/, deploy/play/.
-=======
-# academy/, manabot/, managym/ (Rust sources), academy/ui/, deploy/play/.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 **/.venv
 **/node_modules
 **/.pytest_cache
@@ -20,17 +16,10 @@ managym/target
 # Locally fetched Scryfall art stays out of the context: the play image
 # fetches it in a layer keyed on script+manifest, so builds are
 # deterministic regardless of which machine deploys.
-<<<<<<< HEAD
 frontend/src/lib/card-art
 frontend/test-results
 frontend/playwright-report
 frontend/e2e
-=======
-academy/ui/src/lib/card-art
-academy/ui/test-results
-academy/ui/playwright-report
-academy/ui/e2e
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 website
 scratch
 paper

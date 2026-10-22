@@ -42,17 +42,25 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             initial = websocket.receive_json()
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             prism_cast = False
-            # A fixed legal setup prefix through the real server; no state injection.
+            land_plays = 0
+            # Keep enough lands for both optional outcomes after the filter.
+            # Otherwise skip_trivial can legitimately collapse the sole decline.
+            # The setup uses the real server, without state injection.
             for ordinal in range(160):
                 if frame.action_space == "WATERBEND" and any(
-                    offer.label == "Activate ability: Prophetic Prism" for offer in frame.offers
+                    offer.label == "Activate ability: Prophetic Prism"
+                    for offer in frame.offers
                 ):
                     break
                 labels = [
                     "Play Island",
-                    "Cast Waterbending Lesson"
-                    if prism_cast
-                    else "Cast Prophetic Prism",
+                    *(
+                        ["Cast Waterbending Lesson"]
+                        if prism_cast and land_plays >= 6
+                        else ["Cast Prophetic Prism"]
+                        if not prism_cast
+                        else []
+                    ),
                     "Pass priority",
                 ]
                 offer = next(
@@ -72,6 +80,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     ),
                 )
                 prism_cast |= offer.label == "Cast Prophetic Prism"
+                land_plays += int(offer.label == "Play Island")
                 websocket.send_json(
                     {
                         "type": "command",
@@ -130,10 +139,12 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             assert frame.action_space == "WATERBEND"
             assert sum(record.game.obs.agent.mana) == 1
             decline = next(offer for offer in frame.offers if offer.label == "Decline")
-            resumed.send_json({
-                "type": "command",
-                "command": _command(frame, decline, "optional-decline"),
-            })
+            resumed.send_json(
+                {
+                    "type": "command",
+                    "command": _command(frame, decline, "optional-decline"),
+                }
+            )
             outcome = resumed.receive_json()
             assert outcome["status"] == "accepted"
             assert outcome["update"]["frame"]["action_space"] == "DISCARD"

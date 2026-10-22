@@ -34,13 +34,8 @@ command -v cargo >/dev/null 2>&1 || \
 
 [ -f uv.lock ] || error lock.python "uv.lock is missing"
 [ -f managym/Cargo.lock ] || error lock.cargo "managym/Cargo.lock is missing"
-<<<<<<< HEAD
 [ -f frontend/package-lock.json ] || \
   error lock.frontend "frontend/package-lock.json is missing"
-=======
-[ -f academy/ui/package-lock.json ] || \
-  error lock.frontend "academy/ui/package-lock.json is missing"
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 runtime_closure=$(uv export --locked --only-group play-runtime \
   --no-hashes --no-header 2>&1) || \
@@ -54,15 +49,9 @@ if ! printf '%s\n' "$runtime_closure" | \
   error lock.python "the Academy play runtime has no locked Linux CPU Torch wheel"
 fi
 
-<<<<<<< HEAD
 [ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json ] || \
   error pack.missing "the installed curated-pack manifest is missing"
 [ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/NOTICE.md ] || \
-=======
-[ -f academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json ] || \
-  error pack.missing "the installed curated-pack manifest is missing"
-[ -f academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/NOTICE.md ] || \
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   error pack.notice "the installed curated-pack notice is missing"
 
 marker=$(mktemp "${TMPDIR:-/tmp}/academy-play-error.XXXXXX") || \

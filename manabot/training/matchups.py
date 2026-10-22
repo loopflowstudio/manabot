@@ -3,10 +3,7 @@
 Each stream contributes the same learner transitions per update. Fixed strata
 therefore balance transition exposure, not completed games or wall time. Native
 auto-reset retains the stream's setup; recovery replays the same assignment.
-<<<<<<< HEAD
 Elemental uniform sampling instead belongs to native game roots, not stream strata.
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 """
 
 import json
@@ -14,7 +11,6 @@ from typing import Literal
 
 from manabot.env import Match
 from manabot.infra.hypers import MatchHypers
-<<<<<<< HEAD
 import managym
 
 Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"]
@@ -23,13 +19,6 @@ Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced", "elemental-u
 def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[Match]:
     if curriculum == "elemental-uniform":
         raise ValueError("elemental-uniform requires native per-game sampling")
-=======
-
-Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced"]
-
-
-def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[Match]:
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     if curriculum == "fixed":
         return [match] * streams
     width = 12 if curriculum == "mirrors-balanced" else 4
@@ -65,12 +54,11 @@ def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[M
     second.villain_deck = dict(second.hero_deck)
     second.villain_sideboard = dict(second.hero_sideboard)
     return ([Match(first)] * 4 + [Match(second)] * 4 + cross) * (streams // width)
-<<<<<<< HEAD
 
 
 def elemental_roster(match: Match) -> list[managym.PlayerConfig]:
     """Admit a complete native Elemental roster and an exact representative pair."""
-    pack = "elemental-world-v1"
+    pack = "elemental-world-v2"
     roster = [
         managym.authored_deck_setup(pack, key)
         for key in managym.authored_deck_keys(pack)
@@ -86,5 +74,3 @@ def elemental_roster(match: Match) -> list[managym.PlayerConfig]:
     ):
         raise ValueError("elemental-uniform requires an exact Elemental authored match")
     return roster
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

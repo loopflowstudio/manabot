@@ -296,36 +296,21 @@ Host load was high and changed during the smoke; do not extrapolate this rate
 as uncontended Mini throughput. No large-model mirror timing or full-tournament
 result is claimed.
 
-<<<<<<< HEAD
 ## Tournament files (MTG-134, 2026-10-10)
 
 Jack Heart approved Mini head-to-head evaluation of the size × advantage-floor
 grid because scripted-greedy scores compress above about 0.65. The initial
 [grid tournament](tournaments/size-floor-grid.json) pins greedy and three final raw
-=======
-## Named tournaments (MTG-134, 2026-10-10)
-
-Jack Heart approved Mini head-to-head evaluation of the size × advantage-floor
-grid because scripted-greedy scores compress above about 0.65. The initial
-grid tournament (`size_floor_grid()` in the runner) pins greedy and three final raw
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 26,000-update, seed-10351 checkpoints in a full round robin. It declares floor
 at width 64 and width at floor 0.01 contrasts, with `w64-floor010` as reference.
 These are checkpoint comparisons, not independent-seed method estimates.
 
 ```bash
 uv run python -m experiments.runners.head_to_head smoke .runs/grid-smoke \
-<<<<<<< HEAD
   --models /path/to/models --tournament experiments/tournaments/size-floor-grid.json
 # Operator-owned Mini evaluation; use a separate directory from the smoke.
 uv run python -m experiments.runners.head_to_head run .runs/grid-cross \
   --models /path/to/models --tournament experiments/tournaments/size-floor-grid.json
-=======
-  --models /path/to/models --tournament size-floor-grid
-# Operator-owned Mini evaluation; use a separate directory from the smoke.
-uv run python -m experiments.runners.head_to_head run .runs/grid-cross \
-  --models /path/to/models --tournament size-floor-grid
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 uv run python -m experiments.runners.head_to_head report .runs/grid-cross
 ```
 
@@ -334,12 +319,7 @@ Custom smoke uses the entire selected schedule on two deals; it does not
 automatically launch the full evaluation. No flag preserves the original
 built-in schedule, arena versions and historical report format.
 
-<<<<<<< HEAD
 The strict JSON model is `Tournament` in the runner. Required fields are
-=======
-`--tournament` names a function in the runner's `TOURNAMENTS`; each returns a
-strict `Tournament`. Required fields are
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 `entrants`, `core`, `extra`, `contrasts`, `reference` and
 `training_caveat`. Checkpoint entrants require `id`, `label`, `origin`,
 `file`, `sha256`, `bytes`, `training_seed` and `updates`. Files are basenames
@@ -358,14 +338,8 @@ the reported subtraction. Greedy remains the rating zero, distinct from the
 named reference opponent.
 
 The run saves the actual specification in `design.json`; reporting needs no
-<<<<<<< HEAD
 tournament file. To append the remaining grid cells when their final bytes exist,
 append entrants and core IDs (or extra meetings), then rerun the same command.
-=======
-tournament definition. To append the remaining grid cells when their final bytes
-exist, append entrants and core IDs (or extra meetings) to `size_floor_grid()`,
-then rerun the same command.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 Existing oriented pairs, entrant fields, reference, caveat, contrasts,
 deal seeds, runtime registrations and game bounds must remain unchanged.
 New contrasts may be appended. Changing pair orientation is not an extension:

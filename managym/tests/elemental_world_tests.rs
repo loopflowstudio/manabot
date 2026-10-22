@@ -2,30 +2,6 @@
 use managym::{cardsets::alpha::ContentPack, semantic::SemanticPack, Game};
 
 #[test]
-<<<<<<< HEAD
-fn selected_world_compiles_every_card_without_reduced_native_rules() {
-    let semantic = SemanticPack::elemental_world().unwrap();
-    assert_eq!(semantic.definitions.len(), 100);
-    assert_eq!(semantic.decks.len(), 10);
-    let compiled = semantic.compile_content_pack().unwrap();
-    let native = ContentPack::default();
-    for definition in &semantic.definitions {
-        let name = &definition.registry_name;
-        let mut actual = compiled
-            .definition(compiled.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        let mut expected = native
-            .definition(native.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        if expected.targeting.is_empty() {
-            actual.targeting.clear();
-        }
-        actual.abilities.sort_by_key(|a| format!("{a:?}"));
-        expected.abilities.sort_by_key(|a| format!("{a:?}"));
-        assert_eq!(actual, expected, "compiled rules drift for {name}");
-=======
 fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     // Native failure retained by MTG-175: one Forest, off-color lands and
     // Prophetic Prism can pay 2GG, provided Prism preserves the Forest.
@@ -82,17 +58,12 @@ fn selected_world_compiles_every_card_without_reduced_native_rules() {
             expected.abilities.sort_by_key(|a| format!("{a:?}"));
             assert_eq!(actual, expected, "compiled rules drift for {name}");
         }
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     }
 }
 
 #[test]
 fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
-<<<<<<< HEAD
-    let semantic = SemanticPack::elemental_world().unwrap();
-=======
     let semantic = SemanticPack::optional_payments().unwrap();
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     for (left, first) in semantic.decks.iter().enumerate() {
         for (right, second) in semantic.decks.iter().enumerate() {
             let mut configs = vec![

@@ -9,10 +9,6 @@ import json
 from pathlib import Path
 import shutil
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import value_model_baseline
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.run_training_regimes import run_study
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import file_sha256
@@ -27,11 +23,7 @@ from manabot.training.experiments import (
     Model,
     ResolvedExperiment,
 )
-<<<<<<< HEAD
 from manabot.training.models import TrainingRegime, TrainingRun
-=======
-from manabot.training.models import TrainingRun
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -91,7 +83,6 @@ def recover_evaluation(source: Path, out: Path) -> None:
     run_study("value-models", out, plan, resume=True)
 
 
-<<<<<<< HEAD
 def smoke_baseline() -> TrainingRegime:
     """Frozen ETU-106 settings; future defaults cannot alter the registered cross."""
     return Baseline(
@@ -100,17 +91,11 @@ def smoke_baseline() -> TrainingRegime:
     ).regime()
 
 
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 def experiment() -> Experiment:
     """Declare pooling/depth cases crossed independently with value output."""
     return Experiment(
         name="value",
-<<<<<<< HEAD
         baseline=Baseline.capture("value-model-baseline-v1", smoke_baseline()),
-=======
-        baseline=Baseline.capture("value-model-baseline", value_model_baseline()),
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         cases=(
             Case("historical-mean-1", label="Historical mean"),
             Case(

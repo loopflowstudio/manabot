@@ -1544,8 +1544,6 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
-<<<<<<< HEAD
-=======
     "DecisionContextView": {
       "additionalProperties": false,
       "properties": {
@@ -1636,7 +1634,6 @@
       "title": "DecisionContextView",
       "type": "object"
     },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     "DecisionEvidence": {
       "additionalProperties": false,
       "properties": {
@@ -1690,8 +1687,6 @@
       "title": "DecisionEvidence",
       "type": "object"
     },
-<<<<<<< HEAD
-=======
     "DecisionObjectView": {
       "additionalProperties": false,
       "properties": {
@@ -1763,7 +1758,6 @@
       "title": "DecisionTargetView",
       "type": "object"
     },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     "DeckNames": {
       "additionalProperties": false,
       "properties": {
@@ -2064,8 +2058,6 @@
           ],
           "title": "Source"
         },
-<<<<<<< HEAD
-=======
         "subjects": {
           "items": {
             "$ref": "#/$defs/OfferSubjectView"
@@ -2073,7 +2065,6 @@
           "title": "Subjects",
           "type": "array"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "verb": {
           "$ref": "#/$defs/OfferVerb"
         }
@@ -2213,8 +2204,6 @@
         "agent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
-<<<<<<< HEAD
-=======
         "decision_context": {
           "anyOf": [
             {
@@ -2226,7 +2215,6 @@
           ],
           "default": null
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "definition_names": {
           "additionalProperties": {
             "type": "string"
@@ -2241,8 +2229,6 @@
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
-<<<<<<< HEAD
-=======
         "stack_objects": {
           "anyOf": [
             {
@@ -2258,7 +2244,6 @@
           "default": null,
           "title": "Stack Objects"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
         },
@@ -2329,8 +2314,6 @@
           "title": "Id",
           "type": "integer"
         },
-<<<<<<< HEAD
-=======
         "is_token": {
           "anyOf": [
             {
@@ -2343,7 +2326,6 @@
           "default": null,
           "title": "Is Token"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "name": {
           "anyOf": [
             {
@@ -2382,8 +2364,6 @@
           "title": "Tapped",
           "type": "boolean"
         },
-<<<<<<< HEAD
-=======
         "temp_subtypes": {
           "items": {
             "type": "string"
@@ -2391,7 +2371,6 @@
           "title": "Temp Subtypes",
           "type": "array"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "text_box": {
           "default": "",
           "title": "Text Box",
@@ -2409,8 +2388,6 @@
             }
           ],
           "title": "Toughness"
-<<<<<<< HEAD
-=======
         },
         "types": {
           "anyOf": [
@@ -2422,7 +2399,6 @@
             }
           ],
           "default": null
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         }
       },
       "required": [
@@ -2451,8 +2427,6 @@
           "title": "Battlefield",
           "type": "array"
         },
-<<<<<<< HEAD
-=======
         "combat_mana": {
           "anyOf": [
             {
@@ -2467,7 +2441,6 @@
           "default": null,
           "title": "Combat Mana"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "exile": {
           "items": {
             "$ref": "#/$defs/LegacyCardView"
@@ -2509,8 +2482,6 @@
           "title": "Id",
           "type": "integer"
         },
-<<<<<<< HEAD
-=======
         "inspected": {
           "items": {
             "$ref": "#/$defs/LegacyCardView"
@@ -2518,7 +2489,6 @@
           "title": "Inspected",
           "type": "array"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "is_active": {
           "title": "Is Active",
           "type": "boolean"
@@ -2536,8 +2506,6 @@
           "title": "Known Hand",
           "type": "object"
         },
-<<<<<<< HEAD
-=======
         "lesson_mana": {
           "anyOf": [
             {
@@ -2584,7 +2552,6 @@
           "default": null,
           "title": "Lesson Mana"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "library_count": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2597,8 +2564,6 @@
           "title": "Life",
           "type": "integer"
         },
-<<<<<<< HEAD
-=======
         "mana": {
           "anyOf": [
             {
@@ -2645,7 +2610,6 @@
           "default": null,
           "title": "Mana"
         },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         "player_index": {
           "maximum": 255,
           "minimum": 0,
@@ -2892,8 +2856,6 @@
       "title": "ObjectSubject",
       "type": "object"
     },
-<<<<<<< HEAD
-=======
     "OfferSubjectView": {
       "additionalProperties": false,
       "properties": {
@@ -2912,7 +2874,6 @@
       "title": "OfferSubjectView",
       "type": "object"
     },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     "OfferVerb": {
       "enum": [
         "cast",
@@ -3294,8 +3255,6 @@
       "title": "SideboardCardView",
       "type": "object"
     },
-<<<<<<< HEAD
-=======
     "StackEntryView": {
       "additionalProperties": false,
       "properties": {
@@ -3371,7 +3330,6 @@
       "title": "StackEntryView",
       "type": "object"
     },
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     "StackSubject": {
       "additionalProperties": false,
       "properties": {

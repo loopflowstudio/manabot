@@ -21,10 +21,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 import torch
 
-<<<<<<< HEAD
-=======
-from experiments.recipes import gpu_training_profile
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.inference_preparation import (
     checkpoint_witnesses,
     collection_witnesses,
@@ -210,13 +206,9 @@ def study(
             "source_commit": source_commit(),
         },
     )
-<<<<<<< HEAD
     (out / "baseline.json").write_bytes(
         Path("experiments/regimes/gpu-training-profile.json").read_bytes()
     )
-=======
-    (out / "baseline.json").write_text(gpu_training_profile().model_dump_json(indent=2))
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     trials = cases(group)
     deadline = time.monotonic() + budget
     statuses: list[dict[str, str | int | float | None]] = []

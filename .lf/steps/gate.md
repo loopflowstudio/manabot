@@ -18,14 +18,10 @@ modules together with the existing tests in their CI invocation using
 ## Required checks for play layout changes
 
 Run `combat-presentation.spec.ts` for board/sidebar geometry and narration controls.
-<<<<<<< HEAD
 Run the release visual gate on its pinned Linux profile for layout changes,
 including sidebar-only content changes: grid stretching can change board bounds
 without changing any cards. Keep visual references unchanged for layout bugs;
 local macOS geometry checks do not certify the Linux screenshot corpus.
-=======
-Run the focused release browser suite with `npm --prefix academy/ui run test:e2e:release`.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 Settle JavaScript narration through `finishBoardNarration` before terminal as
 well as decision-board captures. Reduced motion and disabled CSS animations do
 not stop semantic beat timers; retain terminal focus and consequence history.
@@ -71,7 +67,6 @@ training infrastructure changes. The PPO smoke must reload the final checkpoint
 written by `Trainer.train()`, which closes its experiment before returning.
 
 Run the complete debug Rust suite, including checked conformance receipts, and
-<<<<<<< HEAD
 the release prompt matrix contract and browser scenario. Also run
 `uv run pytest tests/academy/test_choice_navigation.py -q`: live browser coverage replays
 only two of its five retained positions, so browser passes alone miss stale
@@ -86,18 +81,6 @@ Classify a new prompt family as excluded only after the browser scenarios show
 it is unreached; a new turn-based rule can reach it in either seeded game. A
 world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
 checked Learn demo fixture pins the content manifest and state digests.
-=======
-focused browser interactions. Also run
-`uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
-replays only two of its retained positions, so it cannot certify other digests.
-Bind refreshed positions to a new world file and retain prior evidence.
-A world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
-checked Learn demo fixture pins the content manifest and state digests.
-Run `uv run --extra dev pytest tests/model/ -q` after a world-version change
-to exercise checkpoint loading and historical-world rejection. Tests that
-construct a current checkpoint should use the runtime world version; retain
-explicit historical versions for incompatible checkpoints.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 ## Required checks for Rust managym work
 
@@ -128,14 +111,8 @@ Record local timing separately from production coverage. Preserve failures in
 frozen advice evidence as explicit gate blockers; do not regenerate fixtures
 or relax historical checkpoint validation to make the suite green.
 
-<<<<<<< HEAD
 When history permissions or replay projections change, run the release prompt
 matrix too. Match terminal traces by the live table's `attempt_id`; replay
 responses omit the deal seed even for participants.
 On macOS, `--ignore-snapshots` can verify gameplay and trace lookup, but only
 the pinned Linux profile certifies committed visual references.
-=======
-When history permissions or replay projections change, exercise the relevant
-history, replay and shared-table browser cases. Match terminal traces by the
-live table's `attempt_id`; replay responses omit the deal seed even for participants.
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

@@ -34,11 +34,7 @@ class StrictModel(BaseModel):
 
 
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
-<<<<<<< HEAD
-type ArenaWorld = Literal["w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10"]
-=======
 type ArenaWorld = Literal["w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11"]
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 BASE_ANCHOR_IDS = (
     "random-v1",
     "scripted-greedy-v1",

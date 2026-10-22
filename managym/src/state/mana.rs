@@ -31,7 +31,7 @@ impl Color {
 
 pub type Colors = BTreeSet<Color>;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ManaCost {
     /// Payment context, set only for a cast Lesson (not its resolving effects).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -164,7 +164,7 @@ impl ManaCost {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Mana {
     pub mana: [u8; 6],
     /// Hermitic Herbalist mana keeps its spending restriction until spent or lost.
@@ -235,7 +235,19 @@ impl Mana {
             .sum()
     }
 
-<<<<<<< HEAD
+    /// Total usable for one spend purpose, without promising a color assignment.
+    pub(crate) fn usable_total(&self, cost: &ManaCost) -> u16 {
+        self.mana
+            .iter()
+            .map(|amount| u16::from(*amount))
+            .sum::<u16>()
+            + if cost.spend_on_lesson {
+                self.lesson.iter().map(|amount| u16::from(*amount)).sum()
+            } else {
+                0
+            }
+    }
+
     /// Enumerate concrete remainders after colored, hybrid, then generic
     /// payment. Ordinary spending stops at the first result; activation search
     /// considers alternatives so generic costs cannot consume a parent's pip.
@@ -283,19 +295,12 @@ impl Mana {
             results: &mut Vec<[u8; 6]>,
             all: bool,
         ) -> bool {
-=======
-    /// Find a concrete payment, exploring hybrid assignments before spending
-    /// generic mana. Greedy hybrid payment can consume a later required color.
-    fn payment_remainder(&self, cost: &ManaCost) -> Option<[u8; 6]> {
-        fn assign(remaining: [u8; 6], pips: &[[Color; 2]], generic: u8) -> Option<[u8; 6]> {
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             if let Some((pip, rest)) = pips.split_first() {
                 for color in pip {
                     let index = *color as usize;
                     if remaining[index] > 0 {
                         let mut next = remaining;
                         next[index] -= 1;
-<<<<<<< HEAD
                         if assign(next, rest, needed, results, all) {
                             return true;
                         }
@@ -305,24 +310,6 @@ impl Mana {
             } else {
                 generic(remaining, 0, needed, results, all)
             }
-=======
-                        if let Some(paid) = assign(next, rest, generic) {
-                            return Some(paid);
-                        }
-                    }
-                }
-                return None;
-            }
-            let mut remaining = remaining;
-            let mut needed = generic;
-            // Spend colorless first, preserving the existing ordinary policy.
-            for index in [5, 0, 1, 2, 3, 4] {
-                let spent = needed.min(remaining[index]);
-                remaining[index] -= spent;
-                needed -= spent;
-            }
-            (needed == 0).then_some(remaining)
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         }
         let mut remaining = self.mana;
         if cost.spend_on_lesson {
@@ -331,7 +318,6 @@ impl Mana {
             }
         }
         for (available, required) in remaining.iter_mut().zip(cost.cost) {
-<<<<<<< HEAD
             let Some(left) = available.checked_sub(required) else {
                 return Vec::new();
             };
@@ -369,88 +355,6 @@ impl Mana {
     }
 
     fn apply_payment_remainder(&mut self, cost: &ManaCost, remaining: [u8; 6]) {
-=======
-            *available = available.checked_sub(required)?;
-        }
-        assign(remaining, &cost.hybrid, cost.generic())
-    }
-
-    pub fn can_pay(&self, cost: &ManaCost) -> bool {
-        self.payment_remainder(cost).is_some()
-    }
-
-    /// Legal remainders for an intermediate payment, where a later cost may
-    /// need a color that the ordinary greedy generic payment would consume.
-    /// Restricted mana is still spent first within each eligible color.
-    pub(crate) fn payment_options(&self, cost: &ManaCost) -> Vec<Self> {
-        // Fixed-color costs have one remainder. Most source activations are
-        // free, so avoid the allocation search on the ordinary land path.
-        if cost.generic() == 0 && cost.hybrid.is_empty() {
-            if !self.can_pay(cost) {
-                return Vec::new();
-            }
-            let mut remaining = self.clone();
-            remaining.pay(cost);
-            return vec![remaining];
-        }
-        fn spend(pool: &Mana, slot: usize, amount: u8, lesson: bool) -> Option<Mana> {
-            let mut next = pool.clone();
-            let restricted = if lesson {
-                amount.min(next.lesson[slot])
-            } else {
-                0
-            };
-            next.lesson[slot] -= restricted;
-            next.mana[slot] = next.mana[slot].checked_sub(amount - restricted)?;
-            Some(next)
-        }
-        fn generic(pool: Mana, cost: &ManaCost, slot: usize, needed: u8, out: &mut Vec<Mana>) {
-            if needed == 0 {
-                if !out.contains(&pool) {
-                    out.push(pool);
-                }
-                return;
-            }
-            let Some(&color) = [5, 0, 1, 2, 3, 4].get(slot) else {
-                return;
-            };
-            let available = pool.mana[color].saturating_add(if cost.spend_on_lesson {
-                pool.lesson[color]
-            } else {
-                0
-            });
-            for amount in (0..=needed.min(available)).rev() {
-                if let Some(next) = spend(&pool, color, amount, cost.spend_on_lesson) {
-                    generic(next, cost, slot + 1, needed - amount, out);
-                }
-            }
-        }
-        fn hybrid(pool: Mana, cost: &ManaCost, pip: usize, out: &mut Vec<Mana>) {
-            let Some(colors) = cost.hybrid.get(pip) else {
-                generic(pool, cost, 0, cost.generic(), out);
-                return;
-            };
-            for color in colors {
-                if let Some(next) = spend(&pool, *color as usize, 1, cost.spend_on_lesson) {
-                    hybrid(next, cost, pip + 1, out);
-                }
-            }
-        }
-        let mut pool = self.clone();
-        for slot in 0..6 {
-            let Some(next) = spend(&pool, slot, cost.cost[slot], cost.spend_on_lesson) else {
-                return Vec::new();
-            };
-            pool = next;
-        }
-        let mut options = Vec::new();
-        hybrid(pool, cost, 0, &mut options);
-        options
-    }
-
-    pub fn pay(&mut self, cost: &ManaCost) {
-        let remaining = self.payment_remainder(cost).expect("insufficient mana");
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         for (slot, left) in remaining.into_iter().enumerate() {
             let before = self.mana[slot].saturating_add(if cost.spend_on_lesson {
                 self.lesson[slot]
@@ -510,7 +414,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
     fn activation_payment_options_preserve_colors_and_restrictions() {
         let mut pool = Mana::parse("WU");
         pool.lesson[4] = 2;
@@ -536,8 +439,6 @@ mod tests {
     }
 
     #[test]
-=======
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     fn parse_and_pay_mana() {
         let mut mana = Mana::parse("2RG");
         let cost = ManaCost::parse("1RG");
@@ -575,28 +476,4 @@ mod tests {
         assert_eq!(mana.mana[Color::Colorless as usize], 0);
         assert_eq!(mana.mana[Color::Red as usize], 1);
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn intermediate_payment_keeps_all_legal_generic_and_hybrid_remainders() {
-        let pool = Mana::parse("UG");
-        let options = pool.payment_options(&ManaCost::parse("1"));
-        assert_eq!(options, vec![Mana::parse("G"), Mana::parse("U")]);
-        assert_eq!(pool.payment_options(&ManaCost::parse("{U/G}")), options);
-        assert!(pool.payment_options(&ManaCost::parse("3")).is_empty());
-        let restricted = Mana {
-            lesson: Mana::parse("G").mana,
-            ..pool
-        };
-        let mut lesson = ManaCost::parse("G");
-        lesson.spend_on_lesson = true;
-        let remaining = restricted.payment_options(&lesson);
-        assert_eq!(remaining, vec![Mana::parse("UG")]);
-        assert_eq!(
-            restricted.payment_options(&ManaCost::parse("G"))[0].lesson[4],
-            1
-        );
-    }
->>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 }
