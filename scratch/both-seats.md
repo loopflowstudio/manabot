@@ -409,3 +409,22 @@ retryneededclearing settled_jobs cursor; fixed in901c7752. Idle queueconfirmed
 updatedto901c7752. Policy/tablecode remains9467dd9, so correctedEtudebenchmark
 identitiesstaystable. Sourceworkerfabb/controller4ffandcohortPID76098 untouched.
 Goalstillactive; final$50 endpoint/cleanup/costreportnotachieved.
+
+## Direct head-to-head requested
+
+You requested two-seat1000 vs one-seat1000 directly, 200 games across four deck
+combos, then the same roughly every1000 until the result is clear. New scoped
+work after the broad report goal was paused; no goal resumption implied.
+Implementing `manabot.training.head_to_head`: Etude matches are25 whole deals,
+eight deck/seat legs,50 games per candidate-relative deckpairing. Equal-update
+controls1000–12000 are all retained in MTG159 main/pull/out/run. Verified source
+run identities and copied exact12 raw files to Mini head-to-head/controls;
+checkpoint_manifest admitted all12 against current engine/content/input ABI.
+Control run copy omits huge historical diagnostics arrays, retained original
+608MB run evidence stays untouched. Controls retain actual cumulative clocks.
+Independent follower consumes completed standard observer admissions, owns
+flock, digest-bound intent and one-hour child process limit, no implicitretry,
+no rental or training mutation. Public report head-to-head.html/JSON uses
+4000 whole-deal bootstrap draws seed0, W/D/L and cost/data coordinates.
+Repeated exploratory monitoring and one training seed, no method superiority
+or formal adaptive stopping claim. Deployment/first execution pending.

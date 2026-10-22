@@ -287,3 +287,25 @@ observations during evaluations and shows their age separately from page time.
 A fresh observation confirmed the same original GPU job running at 908 updates,
 with no cohort or evaluation error. The experiment's final budget-limited
 endpoint, cleanup and final cost report remain pending.
+
+### Direct checkpoint matches
+
+At your request, an additional Mini CPU observer compares two-seat and retained
+one-seat raw checkpoints at equal update counts: 1,000, 2,000, …, 12,000,
+where the one-seat ladder has retained exports. Each comparison uses Etude Eval
+and the replay-checked arena: the same 25 development deals, eight deck/seat
+legs per deal, 200 games total. From the two-seat model's perspective, Lessons–
+Allies, Allies–Lessons, Lessons mirrors and Allies mirrors each receive 50
+games, balanced on play/draw. The opponent is the saved one-seat checkpoint,
+not the heuristic. Both run the same CPU stochastic policy inference budget.
+
+[Live direct comparisons](http://mini-heart.local:8766/head-to-head.html) show
+win/draw/loss counts, scores and 95% whole-deal bootstrap intervals (4,000
+resamples, seed 0), plus each checkpoint's training time and learner decisions.
+These are exploratory repeated looks from one training seed, with unequal
+training costs/data. An apparently clear same-update advantage does not prove
+better learning per dollar or a general advantage of the method. No numerical
+stopping threshold is predeclared; the observer runs within the existing
+cohort deadline, without rentals or training changes. Failed attempts remain
+visible and require explicit reconciliation before retry. The larger experiment
+report remains interim.
