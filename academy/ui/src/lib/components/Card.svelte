@@ -16,6 +16,7 @@
     dimmed?: boolean;
     damage?: number;
     counters?: number;
+    temporarySubtypes?: string[];
     spent?: boolean;
     size?: 'small' | 'normal';
     onSelect?: () => void;
@@ -34,6 +35,7 @@
     dimmed = false,
     damage = 0,
     counters = 0,
+    temporarySubtypes = [],
     spent = false,
     size = 'small',
     onSelect = undefined,
@@ -57,6 +59,7 @@
   const stateNotes = $derived(
     [
       copyDescription || null,
+      ...temporarySubtypes.map((subtype) => `${subtype} until end of turn`),
       tapped ? 'tapped' : null,
       dimmed ? 'summoning sick' : null,
       damage > 0 ? `${damage} damage` : null,
@@ -118,6 +121,12 @@
     >
       {power}/{toughness}
     </div>
+  {/if}
+
+  {#if temporarySubtypes.length > 0}
+    <span class="pointer-events-none absolute bottom-6 left-1 rounded bg-paper px-1 text-[9px] text-ink">
+      {temporarySubtypes.join(', ')}
+    </span>
   {/if}
 
   {#if tallies > 0}

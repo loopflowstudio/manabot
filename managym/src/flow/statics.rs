@@ -207,6 +207,22 @@ impl Game {
         }
         let mut predicate = predicate.clone();
         predicate.flying = false;
+        let has_subtype = |name: &str| {
+            card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
+        };
+        if predicate
+            .subtype
+            .as_deref()
+            .is_some_and(|s| !has_subtype(s))
+            || (!predicate.subtypes_any.is_empty()
+                && !predicate.subtypes_any.iter().any(|s| has_subtype(s)))
+            || predicate.not_subtypes.iter().any(|s| has_subtype(s))
+        {
+            return false;
+        }
+        predicate.subtype = None;
+        predicate.subtypes_any.clear();
+        predicate.not_subtypes.clear();
         predicate.matches(card, self.effective_power(permanent_id), permanent.animated)
     }
 }

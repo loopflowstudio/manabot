@@ -570,6 +570,20 @@ impl Game {
                     frame,
                 )
             }
+            Effect::AddSubtypeToTarget { target, subtype } => {
+                let chosen = frame.primary_target()?;
+                if !self.target_is_legal(chosen, target, frame.controller) {
+                    return None;
+                }
+                if let Target::Permanent(id) = chosen {
+                    self.journal_permanent(id);
+                    let permanent = self.state.permanents[id].as_mut()?;
+                    if !permanent.temp_subtypes.contains(subtype) {
+                        permanent.temp_subtypes.push(subtype.clone());
+                    }
+                }
+                None
+            }
             Effect::ExileIfDiesThisTurn { target } => {
                 let chosen = frame.primary_target()?;
                 if self.target_is_legal(chosen, target, frame.controller) {

@@ -117,9 +117,9 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version not in {2, 3, 4, 5}:
+        if version not in {2, 3, 4, 5, 6}:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 2, 3, 4 or 5, got {version}"
+                f"learning_schema.schema_version: expected 2, 3, 4, 5 or 6, got {version}"
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -174,15 +174,12 @@ class LearningSchema:
             )
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
+        # Frozen schemas admit only the opcode prefix available at publication.
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
-            if (
-                version == 5
-                or (version == 4 and int(opcode) <= 55)
-                or (version == 3 and int(opcode) <= 50)
-                or int(opcode) <= 23
-            )
+            if int(opcode) <= max_opcode
         }
         if opcodes != expected_opcodes:
             raise SemanticProjectionError(
@@ -919,6 +916,11 @@ class BoundSemanticPack:
                     default_schema = ROOT / "content/semantic/w7/learning_schema.json"
                     default_ir = (
                         ROOT / "content/semantic/v1/generated/elemental.ir.json"
+                    )
+                case "elemental-world-v1":
+                    default_schema = ROOT / "content/semantic/w10/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/elemental_world.ir.json"
                     )
                 case "elemental-temur-v1":
                     default_schema = ROOT / "content/semantic/w9/learning_schema.json"

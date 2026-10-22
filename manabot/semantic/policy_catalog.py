@@ -32,6 +32,21 @@ _CATALOGS = {
         ("elemental_left", "elemental_right"),
         "../w7/learning_schema.json",
     ),
+    "elemental-sacrifice-v1": PolicyCatalogSpec(
+        "sacrifice.ir.json",
+        ("sacrifice_left", "sacrifice_right"),
+        "../w8/learning_schema.json",
+    ),
+    "elemental-temur-v1": PolicyCatalogSpec(
+        "temur.ir.json",
+        ("temur_left", "temur_right"),
+        "../w9/learning_schema.json",
+    ),
+    "elemental-world-v1": PolicyCatalogSpec(
+        "elemental_world.ir.json",
+        ("elemental_bg", "elemental_gr"),
+        "../w10/learning_schema.json",
+    ),
     "mtg122-complexity-v1": PolicyCatalogSpec(
         "complexity.ir.json",
         ("l1_swift", "l1_heavy"),

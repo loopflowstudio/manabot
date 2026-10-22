@@ -31,6 +31,7 @@ export interface CardState {
 export interface PermanentState {
   types?: CardTypes;
   is_token?: boolean;
+  temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   text_box?: string;
   id: number;

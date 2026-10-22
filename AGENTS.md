@@ -127,6 +127,12 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+- Experiment results under `experiments/data/` live in the artifact store. Before
+  committing new results or merging a branch that tracked them, publish their
+  bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
+  commit `experiments/data.manifest.json`, and remove git tracking while retaining
+  the local files. Verify with
+  `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
   admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
   and run the full diagnostic with

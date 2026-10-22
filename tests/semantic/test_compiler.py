@@ -205,6 +205,9 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "CREATE_NONLEGENDARY_COPY": 59,
         "MODIFY_CONTROLLED": 60,
         "WATERBEND_OR_DISCARD": 61,
+        "DISCARD": 62,
+        "EXILE_IF_DIES": 63,
+        "ADD_SUBTYPE": 64,
     }
 
 
