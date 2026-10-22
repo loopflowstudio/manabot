@@ -11,6 +11,7 @@ npm --prefix academy/ui run check
 npm --prefix academy/ui test
 npm --prefix academy/ui run build
 npm --prefix academy/ui run test:e2e
+npm --prefix academy/ui run test:e2e:release
 npm --prefix academy/ui run fetch:card-art
 ```
 

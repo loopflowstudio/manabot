@@ -116,7 +116,7 @@ def test_retained_choice_position(
 @pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
 def test_current_explicit_choice_position(tmp_path: Path, family: str) -> None:
     current = NavigationFixture.model_validate_json(
-        FIXTURE.with_name("choice-navigation-explicit-w10.json").read_text()
+        FIXTURE.with_name("choice-navigation-explicit-w11.json").read_text()
     ).positions[family]
     session = GameSession(tmp_path)
     try:

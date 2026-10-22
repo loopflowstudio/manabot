@@ -11,7 +11,6 @@ const uvicorn = process.env.ACADEMY_UVICORN ?? 'uv run --active --no-sync uvicor
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['release-prompt-matrix.spec.ts'],
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,

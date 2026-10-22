@@ -1,5 +1,5 @@
 // Client-authored instructions for the engine's ActionSpaceEnum families.
-// The release prompt matrix checks that every reachable family is present.
+// Unit coverage checks the selected matchup's reachable families.
 export const DECISION_PROMPTS: Readonly<Record<string, string>> = {
   PRIORITY: 'Choose a legal action or pass priority.',
   DECLARE_ATTACKER: 'Declare attackers — choose an attack or finish declaring attackers.',

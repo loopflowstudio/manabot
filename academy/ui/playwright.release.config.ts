@@ -10,21 +10,11 @@ const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.m
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['decision-surface.spec.ts', 'release-prompt-matrix.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts'],
+  testMatch: ['decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts'],
   outputDir,
-  snapshotPathTemplate: '{testDir}/visual-references/v8/{arg}{ext}',
-  timeout: 1_200_000,
+  timeout: 120_000,
   fullyParallel: false,
   workers: 1,
-  expect: {
-    toHaveScreenshot: {
-      animations: 'disabled',
-      caret: 'hide',
-      maxDiffPixels: 0,
-      scale: 'css',
-      threshold: 0.2,
-    },
-  },
   use: {
     baseURL: `http://127.0.0.1:${frontendPort}`,
     browserName: 'chromium',

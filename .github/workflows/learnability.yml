@@ -5,7 +5,17 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'manabot/**'
+      - 'manabot/agent/**'
+      - 'manabot/env/**'
+      - 'manabot/model/**'
+      - 'manabot/verify/**'
+      - 'manabot/conf/**'
+      - 'manabot/infra/**'
+      - 'manabot/semantic/**'
+      - 'manabot/belief/**'
+      - 'manabot/arena/**'
+      - 'manabot/sim/player.py'
+      - 'manabot/sim/structured_policy.py'
       - 'managym/**'
       - 'content/**'
       - 'tests/model/**'

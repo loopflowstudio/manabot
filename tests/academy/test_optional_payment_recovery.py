@@ -43,8 +43,10 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             prism_cast = False
             # A fixed legal setup prefix through the real server; no state injection.
-            for ordinal in range(80):
-                if frame.action_space == "WATERBEND":
+            for ordinal in range(160):
+                if frame.action_space == "WATERBEND" and any(
+                    offer.label == "Activate ability: Prophetic Prism" for offer in frame.offers
+                ):
                     break
                 labels = [
                     "Play Island",
@@ -122,8 +124,17 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             outcome = resumed.receive_json()
             assert outcome["status"] == "accepted"
             frame = ExperienceFrame.model_validate(outcome["update"]["frame"])
-            # Prism's only remaining Island paid the activation. Its output is
-            # retained, while the existing forced-action path declines {2} and
-            # reaches mandatory discard without offering a second activation.
-            assert frame.action_space == "DISCARD"
+            # The activation fee committed and Prism produced one mana. The
+            # original optional {2} decision is restored, including its explicit
+            # decline offer; reconnect must not silently select that branch.
+            assert frame.action_space == "WATERBEND"
+            assert sum(record.game.obs.agent.mana) == 1
+            decline = next(offer for offer in frame.offers if offer.label == "Decline")
+            resumed.send_json({
+                "type": "command",
+                "command": _command(frame, decline, "optional-decline"),
+            })
+            outcome = resumed.receive_json()
+            assert outcome["status"] == "accepted"
+            assert outcome["update"]["frame"]["action_space"] == "DISCARD"
             assert sum(record.game.obs.agent.mana) == 1

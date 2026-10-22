@@ -386,10 +386,9 @@ impl Game {
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
-                Decision::PayOrNot { .. } => ("resolution_payment", "Choose whether to pay the resolving effect's cost."),
+                Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
                 Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
-                Decision::WaterbendOrDiscard { .. } => ("resolution_payment", "Choose a legal payment for the resolving effect. Submitted costs remain committed."),
                 Decision::SelectMilled { .. } => ("select_milled", "Choose from the milled cards, or decline when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
             };
