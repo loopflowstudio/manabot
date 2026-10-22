@@ -2,6 +2,36 @@
 use managym::{cardsets::alpha::ContentPack, semantic::SemanticPack, Game};
 
 #[test]
+fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
+    // Native failure retained by MTG-175: one Forest, off-color lands and
+    // Prophetic Prism can pay 2GG, provided Prism preserves the Forest.
+    let pack = SemanticPack::elemental_world().unwrap();
+    let mut configs = vec![
+        pack.player_config("arena-seat-0", "elemental_wb").unwrap(),
+        pack.player_config("arena-seat-1", "elemental_ug").unwrap(),
+    ];
+    for config in &mut configs {
+        config.content_pack = Some(pack.pack_key.clone());
+    }
+    let mut env = managym::agent::env::Env::new(2165384, true, false, false);
+    env.reset(configs).unwrap();
+    let prefix = [
+        2, 2, 0, 0, 4, 3, 3, 5, 2, 0, 2, 2, 2, 6, 2, 3, 1, 2, 1, 0, 4, 0, 0, 8, 0, 0, 1, 4, 6, 2,
+        2, 5, 1, 1,
+    ];
+    for (step, action) in prefix.into_iter().enumerate() {
+        env.step(action)
+            .unwrap_or_else(|error| panic!("prefix {step}: {error:?}"));
+    }
+    env.step(4).expect("offered Professor cast enters payment");
+    assert!(env
+        .random_playout(2165384, 30_000)
+        .expect("payment and subsequent offered actions execute")
+        .is_some());
+    assert!(env.is_game_over());
+}
+
+#[test]
 fn selected_world_compiles_every_card_without_reduced_native_rules() {
     for semantic in [
         SemanticPack::elemental_world().unwrap(),

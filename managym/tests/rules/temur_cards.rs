@@ -102,6 +102,63 @@ fn prism_consumes_generic_before_adding_chosen_color() {
 }
 
 #[test]
+fn prism_payment_preserves_the_spells_required_green_mana() {
+    for lands in [
+        ["Forest", "Island", "Island", "Mountain"],
+        ["Island", "Island", "Mountain", "Forest"],
+    ] {
+        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        for land in lands {
+            enter(&mut s, land);
+        }
+        enter(&mut s, "Prophetic Prism");
+        s.set_player_mana_pool(0, "0");
+        cast(&mut s, "Gnarled Professor");
+        activate(&mut s, "Prophetic Prism", 0);
+        assert!(
+            !s.game().state.permanents[permanent(&s, "Forest")]
+                .as_ref()
+                .unwrap()
+                .tapped
+        );
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        // Green is the only output that leaves the announced GG spell payable.
+        assert_eq!(s.action_space().actions.len(), 1);
+        choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        assert!(s.game().state.stack_objects.iter().any(|object| matches!(
+            object,
+            managym::state::stack_object::StackObject::Spell(spell)
+                if s.game().state.cards[spell.card].name == "Gnarled Professor"
+        )));
+    }
+}
+
+#[test]
+fn prism_payment_preserves_required_blue_already_in_the_pool() {
+    let mut s = setup(&["Prophetic Prism", "Gnarled Professor", "Counterspell"]);
+    enter(&mut s, "Forest");
+    enter(&mut s, "Prophetic Prism");
+    let professor = cast(&mut s, "Gnarled Professor");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    s.set_player_mana_pool(0, "U");
+    cast(&mut s, "Counterspell");
+    choose(&mut s, |a| {
+        matches!(a, Action::ChooseTarget {
+        target: managym::state::game_object::Target::StackSpell(id), ..
+    } if *id == professor)
+    });
+    activate(&mut s, "Prophetic Prism", 0);
+    // Spend the Forest's G on Prism, retaining the pooled U for Counterspell.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+}
+
+#[test]
 fn guide_grants_tap_mana_with_sickness_and_removes_it_on_departure() {
     let mut s = setup(&["Great Divide Guide", "Hermitic Herbalist"]);
     let guide = enter(&mut s, "Great Divide Guide");
