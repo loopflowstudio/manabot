@@ -235,6 +235,13 @@ Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
 receipts remain unchanged; w10 checkpoints are rejected. See
 [optional payments](docs/rules/optional-payments.md) for ownership and authoring.
 
+The shared-payment repair uses executable witnesses for offers and nested mana
+costs within development w11. Its source-bound corpus is
+`conformance/semantic-kernel-w11-payment-v1`; earlier conformance and scientific
+receipts remain unchanged. This correction changes legal transitions and payment
+event ordering, without changing tensor dimensions or the authored w11 pack.
+A later scientific owner must bind the actual repaired source and runtime.
+
 ## w12: permanent-wide targeting restrictions
 
 CR 702.11b now applies to every permanent target specification, including

@@ -25,7 +25,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 import time
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 import numpy as np
 import torch
@@ -51,7 +51,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
-from manabot.training.matchups import Curriculum, stream_matches
+from manabot.training.matchups import Curriculum, elemental_roster, stream_matches
 from manabot.training.self_play import SelfPlayCounter, deck_identity
 import managym
 
@@ -102,6 +102,23 @@ class RolloutBatch:
     outcome_probabilities: np.ndarray | None = None
 
 
+ExposureKind = Literal[
+    "game_roots",
+    "environment_decisions",
+    "learner_transitions",
+    "terminal_games",
+    "truncated_games",
+]
+
+
+class ExposureCounts(TypedDict):
+    game_roots: int
+    environment_decisions: int
+    learner_transitions: int
+    terminal_games: int
+    truncated_games: int
+
+
 @dataclass
 class CollectorStats:
     """Cumulative accounting, including the opponent fingerprint."""
@@ -117,6 +134,8 @@ class CollectorStats:
     opponent_action_types: dict[str, int] = field(default_factory=dict)
     learner_action_types: dict[str, int] = field(default_factory=dict)
     games_by_stream: dict[int, int] = field(default_factory=dict)
+    # Ordered deck identities plus learning seats; counts are realized, not quotas.
+    exposure: dict[str, ExposureCounts] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -132,6 +151,7 @@ class CollectorStats:
             "opponent_action_types": dict(self.opponent_action_types),
             "learner_action_types": dict(self.learner_action_types),
             "games_by_stream": dict(self.games_by_stream),
+            "exposure": deepcopy(self.exposure),
         }
 
 
@@ -189,6 +209,15 @@ class SeatRoutedCollector:
         matchup_curriculum: Curriculum = "fixed",
         workers: int = 1,
     ) -> None:
+        self._uniform_roster = (
+            elemental_roster(match) if matchup_curriculum == "elemental-uniform" else []
+        )
+        if self._uniform_roster and (
+            workers != 1 or root is not None or opponent_mode != "self"
+        ):
+            raise ValueError(
+                "elemental-uniform requires current-self, one producer and ordinary roots"
+            )
         if workers not in (1, 2, 4) or workers > num_envs:
             raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
         if workers != 1 and root is not None:
@@ -257,21 +286,21 @@ class SeatRoutedCollector:
         try:
             self._buffers = _allocate_buffers(observation_space, num_envs)
             self._env.set_buffers(self._buffers)
-            self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
-            if matchup_curriculum == "fixed":
+            self.stream_matches = (
+                []
+                if self._uniform_roster
+                else stream_matches(match, num_envs, matchup_curriculum)
+            )
+            if self._uniform_roster:
+                self._env.set_uniform_roster(self._uniform_roster)
+            if matchup_curriculum in ("fixed", "elemental-uniform"):
                 self._env.reset_all_into_buffers(match.to_rust())
             else:
                 self._env.reset_each_into_buffers(
                     [m.to_rust() for m in self.stream_matches]
                 )
 
-            self._self_play_decks = [
-                (
-                    deck_identity(m.hero_deck, m.hero_sideboard),
-                    deck_identity(m.villain_deck, m.villain_sideboard),
-                )
-                for m in self.stream_matches
-            ]
+            self._self_play_decks = self._current_decks()
 
             #: Learner seat per stream: stream s seats the learner at s % 2, so
             #: half the streams have the learner on the play — seat-balanced.
@@ -293,6 +322,8 @@ class SeatRoutedCollector:
 
             self._win_reward = float(reward.hypers.win_reward)
             self._lose_reward = float(reward.hypers.lose_reward)
+            for row in range(num_envs):
+                self._expose(row, "game_roots")
         except BaseException:
             self.close()
             raise
@@ -370,9 +401,52 @@ class SeatRoutedCollector:
         self._journal = deepcopy(state.journal)
         self._self_rng.set_state(state.sampling_rng)
         self.stats = deepcopy(state.stats)
+        self._self_play_decks = self._current_decks()
         # Pre-instrumentation snapshots have no outcome counters to recover.
+        if not hasattr(self.stats, "exposure"):
+            self.stats.exposure = {}
         if not hasattr(self.stats, "self_play"):
             self.stats.self_play = SelfPlayCounter()
+
+    def _current_decks(self) -> list[tuple[str, str]]:
+        if self._uniform_roster:
+            identities = [
+                deck_identity(p.decklist, p.sideboard) for p in self._uniform_roster
+            ]
+            return [
+                (identities[a], identities[b])
+                for a, b in self._env.current_matchup_indices()
+            ]
+        matches = self.stream_matches
+        return [
+            (
+                deck_identity(m.hero_deck, m.hero_sideboard),
+                deck_identity(m.villain_deck, m.villain_sideboard),
+            )
+            for m in matches
+        ]
+
+    def _expose(self, row: int, kind: ExposureKind) -> None:
+        if not self._uniform_roster:
+            return
+        a, b = self._self_play_decks[row]
+        seat = (
+            "both"
+            if self.learning_seats == "both"
+            else str(int(self.learner_seat[row]))
+        )
+        key = f"{a}/{b}/learner-{seat}"
+        counts = self.stats.exposure.setdefault(
+            key,
+            ExposureCounts(
+                game_roots=0,
+                environment_decisions=0,
+                learner_transitions=0,
+                terminal_games=0,
+                truncated_games=0,
+            ),
+        )
+        counts[kind] += 1
 
     # -- opponent routing -----------------------------------------------------
 
@@ -576,6 +650,8 @@ class SeatRoutedCollector:
                 if self.stats.micro_steps + int(active.sum()) > self._recovery_limit:
                     raise RuntimeError("collector recovery journal limit exceeded")
                 self._journal.append((actions.tolist(), active.tolist()))
+            for row in np.flatnonzero(active):
+                self._expose(int(row), "environment_decisions")
             with self.profiler.track("Environment step and encoding"):
                 env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
@@ -600,6 +676,7 @@ class SeatRoutedCollector:
                     )
                     if buffers["truncated"][row]:
                         self.stats.truncations += 1
+                        self._expose(int(row), "truncated_games")
                         raise RuntimeError(
                             "collector game truncated; no terminal target available"
                         )
@@ -614,6 +691,7 @@ class SeatRoutedCollector:
                         reward = self._win_reward
                     else:
                         reward = self._lose_reward
+                    self._expose(int(row), "terminal_games")
                     if both:
                         for seat in (0, 1):
                             slot = 2 * int(row) + seat
@@ -639,6 +717,9 @@ class SeatRoutedCollector:
                             else sum(len(self._streams[slot]) for slot in slots)
                             >= num_steps
                         )
+                self._self_play_decks = self._current_decks()
+                for row in np.flatnonzero(done):
+                    self._expose(int(row), "game_roots")
 
         with self.profiler.track("Batch assembly"):
             if complete_games:
@@ -727,6 +808,8 @@ class SeatRoutedCollector:
         self._streams[row].append(_Transition(pending, reward, done))
         self._pending[row] = None
         self.stats.learner_transitions += 1
+        stream = row // 2 if self.learning_seats == "both" else row
+        self._expose(stream, "learner_transitions")
 
     def _build_complete_batch(self, slots: list[int]) -> RolloutBatch:
         streams = [[transition for slot in slots for transition in self._streams[slot]]]

@@ -894,9 +894,8 @@ impl Game {
             .mana_cost
             .with_generic(remaining_generic);
         let max = legal_taps.len().min(usize::from(remaining_generic));
-        let available = self.available_mana(player);
         let min = (0..=max)
-            .find(|count| available.can_pay(&cost.reduced_generic(*count as u8)))
+            .find(|count| self.can_pay_mana_cost(player, &cost.reduced_generic(*count as u8)))
             .ok_or_else(|| {
                 StructuredOfferError::Invariant("waterbend has no payable completion".into())
             })?;

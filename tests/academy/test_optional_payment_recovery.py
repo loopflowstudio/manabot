@@ -3,10 +3,10 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from managym.experience import ExperienceFrame, InteractionOffer
 import pytest
 
 from academy import server, trace as trace_store
-from managym.experience import ExperienceFrame, InteractionOffer
 
 
 def _command(
@@ -42,19 +42,22 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             initial = websocket.receive_json()
             frame = ExperienceFrame.model_validate(initial["recovery"]["frame"])
             prism_cast = False
-            # A fixed legal setup prefix through the real server; no state injection.
+            land_plays = 0
+            # Keep enough lands for both optional outcomes after the filter.
+            # The filter fee must leave the four-mana payment available.
+            # The setup uses the real server, without state injection.
             for ordinal in range(160):
                 if frame.action_space == "WATERBEND" and any(
-                    offer.label == "Activate ability: Prophetic Prism" for offer in frame.offers
+                    offer.label == "Activate ability: Prophetic Prism"
+                    for offer in frame.offers
                 ):
                     break
-                labels = [
-                    "Play Island",
-                    "Cast Waterbending Lesson"
-                    if prism_cast
-                    else "Cast Prophetic Prism",
-                    "Pass priority",
-                ]
+                labels = ["Play Island"]
+                if not prism_cast:
+                    labels.append("Cast Prophetic Prism")
+                elif land_plays >= 6:
+                    labels.append("Cast Waterbending Lesson")
+                labels.append("Pass priority")
                 offer = next(
                     (
                         offer
@@ -72,6 +75,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     ),
                 )
                 prism_cast |= offer.label == "Cast Prophetic Prism"
+                land_plays += int(offer.label == "Play Island")
                 websocket.send_json(
                     {
                         "type": "command",
@@ -130,10 +134,12 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             assert frame.action_space == "WATERBEND"
             assert sum(record.game.obs.agent.mana) == 1
             decline = next(offer for offer in frame.offers if offer.label == "Decline")
-            resumed.send_json({
-                "type": "command",
-                "command": _command(frame, decline, "optional-decline"),
-            })
+            resumed.send_json(
+                {
+                    "type": "command",
+                    "command": _command(frame, decline, "optional-decline"),
+                }
+            )
             outcome = resumed.receive_json()
             assert outcome["status"] == "accepted"
             assert outcome["update"]["frame"]["action_space"] == "DISCARD"
