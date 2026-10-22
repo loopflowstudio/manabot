@@ -1236,6 +1236,8 @@ def _execute_regime(
                         if stage.behavior == "random"
                         else "self",
                         opponent_agent=opponent_agent,
+                        learning_seats=stage.learning_seats,
+                        games_per_stream=stage.games_per_stream,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
                         recovery_max_game_microsteps=regime.recovery.max_game_microsteps
                         if regime.recovery
@@ -1419,7 +1421,7 @@ def _execute_regime(
                             )
                             if stage.trainable == "policy_value"
                             else {
-                                "rows": stage.streams * stage.transitions,
+                                "rows": batch.actions.size,
                                 "optimizer_exposures": 0,
                                 "retained": 0,
                                 "numerical": {"optimizer_steps": 0},

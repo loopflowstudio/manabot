@@ -36,6 +36,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
+    "etude-sdk[eval]==0.2.0",
     "matplotlib>=3.9",
 ]
 play = [

@@ -76,7 +76,8 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
         6,
     ]
     assert all(
-        c.coordinates.learner_transitions == c.coordinates.updates * 32
+        c.coordinates.learner_transitions
+        == sum(d["rows"] for d in run.stages[0].diagnostics[: c.coordinates.updates])
         for c in checkpoints(run)
     )
 
@@ -210,7 +211,9 @@ def test_empty_filter_still_advances_steps_without_optimizer_calls(
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 2
-    assert run.stages[0].learner_transitions == 64
+    assert run.stages[0].learner_transitions == sum(
+        d["rows"] for d in run.stages[0].diagnostics
+    )
     assert run.stages[0].optimizer_exposures == run.optimizer_updates_through() == 0
     assert [c.coordinates.updates for c in checkpoints(run)] == [1, 2]
     assert all(c.coordinates.optimizer_updates == 0 for c in checkpoints(run))

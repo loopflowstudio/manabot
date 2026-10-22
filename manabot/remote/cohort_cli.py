@@ -11,6 +11,7 @@ from .cohort import (
     Cohort,
     CohortInsertion,
     CohortState,
+    CohortSupervisor,
     cancel_cohort,
     insert_cohort,
     load_cohort,
@@ -22,7 +23,8 @@ from .cohort_projection import (
     project_before,
     project_once,
 )
-from .cohort_service import install_service, supervise_cohort
+from .cohort_service import install_service, owner_lock, supervise_cohort
+from .job_client import load_job
 from .job_store import S3JobStore, cancellation_requested
 
 app = typer.Typer(help="Run frozen Experiment jobs under an independent host service")
@@ -55,6 +57,9 @@ def start_command(
         [], help="Retained exact worker source checkout"
     ),
     replace_service: bool = False,
+    adopt_job: str | None = typer.Option(
+        None, help="Take up the first entry's live job"
+    ),
 ) -> None:
     """Persist the cohort and install its service on this selected controller host."""
     cohort = Cohort.model_validate_json(plan.read_bytes())
@@ -62,6 +67,10 @@ def start_command(
     if wandb_project is not None:
         reports = True
     prepare_cohort(cohort)
+    if adopt_job is not None:
+        with owner_lock(state_dir) as owner:
+            supervisor = CohortSupervisor(cohort, owner, state_dir / "cache")
+            supervisor.adopt(load_job(adopt_job))
     label = install_service(
         cohort,
         state_dir,
