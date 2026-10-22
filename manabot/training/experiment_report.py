@@ -624,6 +624,19 @@ def write_dashboard(
         )
     if notes:
         parts.append(f"<p>{escape(notes)}</p>")
+    for run in evidence.runs:
+        if run.game_errors is not None:
+            errors = run.game_errors
+            parts.append(
+                f"<p>Run {escape(run.id)}: {errors.attempted} settled game attempts, "
+                f"{errors.completed} completed, {errors.crashed} crashed; "
+                f"{errors.discarded_samples} samples discarded, "
+                f"{errors.replacement_samples} replacement samples. "
+                f"Game error rate {errors.error_rate:.1%} over the last "
+                f"{len(errors.window)} settled attempts; "
+                f"stop reason: {escape(errors.stop_reason or run.status)}. "
+                "Recovery does not establish that the rules defect was repaired.</p>"
+            )
     parts.append(
         "<p>Pipeline and exact-replay smoke tests demonstrate software execution, "
         "not a positive control showing learned behavior improves. Positive-control "

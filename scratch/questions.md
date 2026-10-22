@@ -61,3 +61,38 @@
   Scratch remains over the context target: preserving the supplied uncommitted
   historical evidence and leaving unrelated notes intact takes precedence over
   curating other sessions' scratch during this engine repair.
+# Material assumptions
+
+- MTG-176 supplies the implementation brief; scratch initially had no design.
+- Window/warmup 100/100 are prospective engineering defaults, not numbers chosen
+  by Jack Heart. Game error tolerance is opt-in; complete-game buffering is used
+  even for its one-seat control, avoiding claims of historical unlearning.
+- Native setup/reset failures and buffer/configuration failures fail closed;
+  only settled gameplay errors/truncations are eligible for regather. External
+  run/allocation deadlines remain hard stops, not replacement-game allowances.
+- The supplied Task names MTG-175's seed but does not include its 34-action
+  prefix. The combined regression uses a seeded native Mountain/Gray Ogre setup and
+  a narrow fixture payment arithmetic defect/repair shared across capture, replay
+  and restart. It does not reproduce or fix that original game.
+- Automatic evidence is independent of opt-in tolerance. Strict paths retain
+  exceptions and recipe identities; no recovery is implicitly enabled. Standalone
+  consumers without an owning output scope write private `.runs/game-failures/`
+  files and attach the path to the exception. This is the simpler local default,
+  not a new storage service or public replay surface.
+- A strict vector exception leaves other active rows' execution outcomes unknown.
+  Retain their pre-call inputs for replay without inventing completed/crashed counts.
+  Positional/pool hard aborts or hangs still need external process supervision.
+
+
+## MTG-176 sync recovery — 2026-10-22
+
+- The active Task directive and its accepted implementation/publication steer
+  supply this implementation's scope. The Academy skill header is an additional
+  runtime constraint, not a replacement for MTG-176's recovery outcome.
+- Restored code, tests and design from stash
+  `d815bbfc94e03881681ca30283be0a4b3ccfea8d` after Loopflow sync reset the checkout
+  to `95ca2059e`. Its untracked `scratch/questions.md` collided with main's tracked
+  notes; both sets of notes are retained. The original stash is unchanged.
+- The stash's proposed Wave memory remains there; implementation does not select
+  a memory-maintenance step. New integration uses the delivered native uniform
+  sampler for replacement games and records actual sampled setups.

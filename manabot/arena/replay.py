@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import asdict, dataclass
 import gzip
 import json
+import math
+import os
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 from typing import Any
+
+from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
@@ -19,24 +27,24 @@ from manabot.sim.teacher1_evidence import (
 from manabot.verify.competency import SCENARIOS, build_scenario_env
 from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.util import INTERACTIVE_DECK
-from managym.experience import UNVERSIONED_CONTENT_HASH, Command
+import managym
 
 from .models import canonical_json, canonical_sha256, file_sha256
 
 
 @dataclass(frozen=True)
 class ArenaReplayReceipt:
-    games: int
-    decisions: int
-    frame_mismatches: int
-    offer_mismatches: int
-    command_mismatches: int
-    state_mismatches: int
-    outcome_mismatches: int
-    actor_mismatches: int
-    missing_decisions: int
-    trace_mismatches: int
-    private_exposures: int
+    games: int = 0
+    decisions: int = 0
+    frame_mismatches: int = 0
+    offer_mismatches: int = 0
+    command_mismatches: int = 0
+    state_mismatches: int = 0
+    outcome_mismatches: int = 0
+    actor_mismatches: int = 0
+    missing_decisions: int = 0
+    trace_mismatches: int = 0
+    private_exposures: int = 0
 
     @property
     def passed(self) -> bool:
@@ -61,7 +69,16 @@ class ArenaReplayReceipt:
 def write_trace(path: Path, games: list[dict[str, Any]]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = b"".join(canonical_json(game) + b"\n" for game in games)
-    path.write_bytes(gzip.compress(payload, compresslevel=9, mtime=0))
+    # Replace atomically: a later failed game must not tear earlier evidence.
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(gzip.compress(payload, compresslevel=9, mtime=0))
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
     return {"path": str(path), "sha256": file_sha256(path), "games": len(games)}
 
 
@@ -140,91 +157,261 @@ def replay_games(
     A passing prefix receipt proves only the retained trajectory, never game
     completion. Arena callers retain the complete-game requirement by default.
     """
-    counts = {
-        "decisions": 0,
-        "frame_mismatches": 0,
-        "offer_mismatches": 0,
-        "command_mismatches": 0,
-        "state_mismatches": 0,
-        "outcome_mismatches": 0,
-        "actor_mismatches": 0,
-        "missing_decisions": 0,
-        "trace_mismatches": 0,
-        "private_exposures": 0,
-    }
+    counts = asdict(ArenaReplayReceipt())
     for game in games:
-        unsigned_game = dict(game)
-        stored_trace_sha256 = unsigned_game.pop("game_trace_sha256", None)
-        if stored_trace_sha256 != canonical_sha256(unsigned_game):
-            counts["trace_mismatches"] += 1
         env, _ = replay_environment(game)
-        initial_digest = env._engine.state_digest()
-        if game.get("initial_state_digest", initial_digest) != initial_digest:
-            counts["state_mismatches"] += 1
+        try:
+            receipt = _replay_game(game, env, require_terminal=require_terminal)
+            for name, count in asdict(receipt).items():
+                counts[name] += count
+        finally:
             env.close()
-            continue
-        done = False
-        for revision, expected in enumerate(game["decisions"]):
-            if done:
-                counts["command_mismatches"] += 1
-                break
-            frame = build_viewer_frame(
-                env.last_raw_obs,
-                match_id=str(game["match_id"]),
-                revision=revision,
-                content_hash=UNVERSIONED_CONTENT_HASH,
-                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
-            )
-            if canonical_sha256(frame) != expected["frame_sha256"]:
-                counts["frame_mismatches"] += 1
-            if frame["projection"]["opponent"].get("hand"):
-                counts["private_exposures"] += 1
-            actor = int(env.last_raw_obs.agent.player_index)
-            if (
-                actor != int(expected["actor"])
-                or game["seat_players"][actor] != expected["player_id"]
-            ):
-                counts["actor_mismatches"] += 1
-            if env._engine.state_digest() != expected["pre_state_digest"]:
-                counts["state_mismatches"] += 1
-            command = Command.model_validate(expected["command"])
-            if canonical_sha256(expected["command"]) != expected.get("command_sha256"):
-                counts["command_mismatches"] += 1
-            offer_ids = {int(offer["id"]) for offer in frame["offers"]}
-            if (
-                command.match_id != frame["match_id"]
-                or command.expected_revision != revision
-                or command.prompt_id != frame["prompt"]["id"]
-                or command.offer_id not in offer_ids
-            ):
-                counts["command_mismatches"] += 1
-                break
-            rebuilt_command = build_command(frame, int(command.offer_id))
-            if rebuilt_command != expected["command"]:
-                counts["command_mismatches"] += 1
-            selected_offer = next(
-                (offer for offer in frame["offers"] if offer["id"] == command.offer_id),
-                None,
-            )
-            if (
-                selected_offer is None
-                or selected_offer != expected.get("chosen_offer")
-                or frame["action_space"] != expected.get("action_space_kind")
-            ):
-                counts["offer_mismatches"] += 1
-            _, _, terminated, truncated, _ = env.step(int(command.offer_id))
-            done = bool(terminated or truncated)
-            if env._engine.state_digest() != expected["post_state_digest"]:
-                counts["state_mismatches"] += 1
-            counts["decisions"] += 1
-        failed = game.get("failure") is not None
-        if require_terminal and not done and not failed:
-            counts["missing_decisions"] += 1
-        winner = env._engine.winner_index() if done else None
-        if not failed and (
-            winner != game["winner"]
-            or bool(game.get("terminated")) != bool(done and not game.get("truncated"))
+    return ArenaReplayReceipt(**counts)
+
+
+def _replay_game(
+    game: dict[str, Any], env: Env, *, require_terminal: bool
+) -> ArenaReplayReceipt:
+    """Validate once in the caller's environment, leaving it at the prefix end.
+
+    Failure replay can then attempt the pending Command on this same checked
+    state. The caller owns closing the environment, including on native errors.
+    """
+    counts = asdict(ArenaReplayReceipt(games=1))
+    unsigned_game = dict(game)
+    stored_trace_sha256 = unsigned_game.pop("game_trace_sha256", None)
+    if stored_trace_sha256 != canonical_sha256(unsigned_game):
+        counts["trace_mismatches"] += 1
+    initial_digest = env._engine.state_digest()
+    if game.get("initial_state_digest", initial_digest) != initial_digest:
+        counts["state_mismatches"] += 1
+        return ArenaReplayReceipt(**counts)
+    done = False
+    for revision, expected in enumerate(game["decisions"]):
+        if done:
+            counts["command_mismatches"] += 1
+            break
+        frame = build_viewer_frame(
+            env.last_raw_obs,
+            match_id=str(game["match_id"]),
+            revision=revision,
+            content_hash=UNVERSIONED_CONTENT_HASH,
+            asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+        )
+        if canonical_sha256(frame) != expected["frame_sha256"]:
+            counts["frame_mismatches"] += 1
+        if frame["projection"]["opponent"].get("hand"):
+            counts["private_exposures"] += 1
+        actor = int(env.last_raw_obs.agent.player_index)
+        if (
+            actor != int(expected["actor"])
+            or game["seat_players"][actor] != expected["player_id"]
         ):
-            counts["outcome_mismatches"] += 1
-        env.close()
-    return ArenaReplayReceipt(games=len(games), **counts)
+            counts["actor_mismatches"] += 1
+        if env._engine.state_digest() != expected["pre_state_digest"]:
+            counts["state_mismatches"] += 1
+        command = Command.model_validate(expected["command"])
+        if canonical_sha256(expected["command"]) != expected.get("command_sha256"):
+            counts["command_mismatches"] += 1
+        offer_ids = {int(offer["id"]) for offer in frame["offers"]}
+        if (
+            command.match_id != frame["match_id"]
+            or command.expected_revision != revision
+            or command.prompt_id != frame["prompt"]["id"]
+            or command.offer_id not in offer_ids
+        ):
+            counts["command_mismatches"] += 1
+            break
+        rebuilt_command = build_command(frame, int(command.offer_id))
+        if rebuilt_command != expected["command"]:
+            counts["command_mismatches"] += 1
+        selected_offer = next(
+            (offer for offer in frame["offers"] if offer["id"] == command.offer_id),
+            None,
+        )
+        if (
+            selected_offer is None
+            or selected_offer != expected.get("chosen_offer")
+            or frame["action_space"] != expected.get("action_space_kind")
+        ):
+            counts["offer_mismatches"] += 1
+        _, _, terminated, truncated, _ = env.step(int(command.offer_id))
+        done = bool(terminated or truncated)
+        if env._engine.state_digest() != expected["post_state_digest"]:
+            counts["state_mismatches"] += 1
+        counts["decisions"] += 1
+    failed = game.get("failure") is not None
+    if require_terminal and not done and not failed:
+        counts["missing_decisions"] += 1
+    winner = env._engine.winner_index() if done else None
+    if not failed and (
+        winner != game["winner"]
+        or bool(game.get("terminated")) != bool(done and not game.get("truncated"))
+    ):
+        counts["outcome_mismatches"] += 1
+    return ArenaReplayReceipt(**counts)
+
+
+def apply_game_event(
+    game: dict[str, Any] | None, kind: str, value: Any
+) -> dict[str, Any]:
+    """Project worker events identically in the live parent and journal reader.
+
+    Event payloads are private wire data. Pending decisions become completed
+    only on a decision event; phase events carry no game-state mutation.
+    """
+    if kind in {"game", "result", "settled"}:
+        return value
+    if game is None:
+        raise ValueError("journal event precedes game setup")
+    if kind == "decision":
+        game.pop("pending_decision", None)
+        game["decisions"].append(value)
+    elif kind == "initial":
+        game["initial_state_digest"] = value
+    elif kind == "identities":
+        game["runtime_identities"] = value
+    elif kind == "observation":
+        game["observation_hypers"] = value
+    elif kind == "pending":
+        game["pending_decision"] = value
+    return game
+
+
+def read_game_journal(path: Path) -> dict[str, Any]:
+    """Recover acknowledged inputs even when the parent never published a trace.
+
+    Torn JSON fails closed. An unobserved outcome is explicitly unknown, never a
+    successful evaluation or a claim that the pending Command actually failed.
+    """
+    game: dict[str, Any] | None = None
+    with path.open() as stream:
+        for line in stream:
+            kind, value = json.loads(line)
+            game = apply_game_event(game, kind, value)
+    if game is None:
+        raise ValueError("journal has no game setup")
+    if game.get("pending_decision") is not None and game.get("failure") is None:
+        game.update(failure="execution_outcome_unknown", winner=None, terminated=False)
+    game["game_trace_sha256"] = canonical_sha256(game)
+    return game
+
+
+def replay_failure(game: dict[str, Any]) -> dict[str, Any]:
+    """Replay a rejected offered Command without a policy or outcome credit.
+
+    Run through the CLI for a process wall-time bound. The original trace remains
+    immutable; passing the retained action after repair is diagnostic advancement.
+    """
+    pending = game.get("pending_decision")
+    if pending is None or game.get("failure") is None:
+        raise ValueError("game has no retained failed Command")
+    env: Env | None = None
+    try:
+        try:
+            env, _ = replay_environment(game)
+            if not _replay_game(game, env, require_terminal=False).passed:
+                return {"status": "prefix_mismatch"}
+        except BaseException as error:
+            if (
+                not isinstance(error, managym.AgentError)
+                and type(error).__name__ != "PanicException"
+            ):
+                raise
+            return {"status": "prefix_failed", "error": str(error)}
+        frame = build_viewer_frame(
+            env.last_raw_obs,
+            match_id=game["match_id"],
+            revision=len(game["decisions"]),
+            content_hash=UNVERSIONED_CONTENT_HASH,
+            asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+        )
+        action = int(pending["command"]["offer_id"])
+        offer = next((o for o in frame["offers"] if int(o["id"]) == action), None)
+        if (
+            canonical_sha256(frame) != pending["frame_sha256"]
+            or env._engine.state_digest() != pending["pre_state_digest"]
+            or offer != pending["chosen_offer"]
+            or offer is None
+            or build_command(frame, action) != pending["command"]
+            or canonical_sha256(pending["command"]) != pending["command_sha256"]
+        ):
+            return {"status": "pending_mismatch"}
+        try:
+            _, _, terminated, truncated, _ = env.step(action)
+        except BaseException as error:
+            if (
+                not isinstance(error, managym.AgentError)
+                and type(error).__name__ != "PanicException"
+            ):
+                raise
+            return {
+                "status": "failed",
+                "action_index": len(game["decisions"]),
+                "error_class": type(error).__name__,
+                "error": str(error),
+                "matches_retained_error": game["failure"]
+                == f"{type(error).__name__}: {error}",
+            }
+        return {
+            "status": "completed"
+            if terminated
+            else "truncated"
+            if truncated
+            else "advanced"
+        }
+    finally:
+        if env is not None:
+            env.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Bounded policy-free arena failure replay"
+    )
+    parser.add_argument("trace", type=Path)
+    parser.add_argument("--game", type=int, required=True, help="One-based game index")
+    parser.add_argument("--seconds", type=float, default=30)
+    parser.add_argument("--allow-changed-runtime", action="store_true")
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if args.game < 1 or not math.isfinite(args.seconds) or not 0 < args.seconds <= 300:
+        parser.error("game must be positive and seconds in (0, 300]")
+    if not args.worker:
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "manabot.arena.replay",
+                    *sys.argv[1:],
+                    "--worker",
+                ],
+                timeout=args.seconds,
+            )
+        except subprocess.TimeoutExpired:
+            print(json.dumps({"status": "replay_timeout", "seconds": args.seconds}))
+            raise SystemExit(2)
+        raise SystemExit(result.returncode)
+    games = (
+        [read_game_journal(args.trace)]
+        if args.trace.suffix == ".jsonl"
+        else read_trace(args.trace)
+    )
+    if args.game > len(games):
+        parser.error("game is beyond the end of the trace")
+    game = games[args.game - 1]
+    identities = game["runtime_identities"]
+    if identities["world"] != managym.WORLD_VERSION:
+        parser.error("world differs from retained failure")
+    if (
+        identities["engine_extension_sha256"]
+        != file_sha256(Path(managym._managym.__file__))
+        and not args.allow_changed_runtime
+    ):
+        parser.error("native bytes differ; explicit --allow-changed-runtime required")
+    print(json.dumps(replay_failure(game)))
+
+
+if __name__ == "__main__":
+    main()

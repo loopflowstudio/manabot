@@ -29,6 +29,7 @@ from manabot.belief.sampling_fit import (
     save_belief_sampler,
 )
 from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
 from manabot.infra.profiler import Profiler
@@ -51,6 +52,7 @@ import managym
 from .admission import admit_policy
 from .clock import boot_identity, watchdog_seconds
 from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
+from .game_errors import GameAttempt, GameErrorLedger, GameErrorLimit, GameErrorState
 from .incidents import save_incident
 from .learning_state import admit_learning_state, validate_adam
 from .models import (
@@ -77,6 +79,7 @@ from .objectives import update_ema, update_iteration
 from .recovery import (
     TrainingPaused,
     UpdateSnapshot,
+    admit_recovery_identities,
     attempt_lock,
     load_update,
     restore_learning,
@@ -214,6 +217,7 @@ def execute_regime(
     store: "VerifyStore",
     *,
     resume_from: str | None = None,
+    source_repair_reason: str | None = None,
     checkpoint_seconds: float | None = None,
     checkpoint_updates: int | tuple[int, ...] | None = None,
     initial_admission: Path | None = None,
@@ -223,6 +227,17 @@ def execute_regime(
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
+    if source_repair_reason is not None and (
+        not resume_from
+        or not source_repair_reason.strip()
+        or not any(
+            isinstance(s, TrainSelfPlay) and s.game_errors is not None
+            for s in regime.stages
+        )
+    ):
+        raise ValueError(
+            "source repair requires a reason, parent and complete-game error policy"
+        )
     # Explicit milestones retain the historical multi-stage/hourly contract;
     # an integer is the prospective, single-stage absolute-update cadence.
     checkpoint_milestones = (
@@ -292,10 +307,17 @@ def execute_regime(
             ):
                 raise ValueError("recovery checkpoint cadence differs from parent")
             snapshot = load_update(parent, store)
-            if parent.identities != _runtime_identities(
-                seed, regime, ObservationSpace(regime.observation)
+            admit_recovery_identities(
+                parent.identities,
+                _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
+                source_repair_reason,
+            )
+            if parent.allocation_deadline is not None and (
+                allocation is None or allocation.deadline != parent.allocation_deadline
             ):
-                raise ValueError("recovery runtime/source identity mismatch")
+                raise ValueError(
+                    "recovery must preserve the original allocation deadline"
+                )
             settled = settle_orphan(parent)
             if settled != parent:
                 # Preserve the old run.json and snapshots. The canonical record
@@ -306,6 +328,13 @@ def execute_regime(
                 raise ValueError(
                     "recovery requires a stopped failed, interrupted or paused attempt"
                 )
+            if (
+                source_repair_reason is None
+                and snapshot.identities != parent.identities
+            ):
+                # A setup failure can retain the pre-repair snapshot. Carry its
+                # existing admission forward after checking the current runtime.
+                source_repair_reason = parent.source_repair_reason
         return _execute_regime(
             regime,
             seed,
@@ -313,6 +342,7 @@ def execute_regime(
             store,
             parent=parent,
             snapshot=snapshot,
+            source_repair_reason=source_repair_reason,
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             checkpoint_milestones=checkpoint_milestones,
@@ -331,6 +361,7 @@ def _execute_regime(
     *,
     parent: TrainingRun | None,
     snapshot: UpdateSnapshot | None,
+    source_repair_reason: str | None = None,
     checkpoint_seconds: float | None = None,
     checkpoint_updates: int | None = None,
     checkpoint_milestones: tuple[int, ...] = (),
@@ -387,6 +418,8 @@ def _execute_regime(
         last_recorded_active_seconds=time.monotonic(),
         recovery_boot_identity=boot_identity() if regime.recovery else None,
         parent_run_id=parent.id if parent is not None else None,
+        source_repair_reason=source_repair_reason,
+        game_error_ledgers=list(parent.game_error_ledgers) if parent else [],
         prior_seconds=parent.prior_seconds + parent.seconds
         if parent is not None
         else 0,
@@ -415,6 +448,19 @@ def _execute_regime(
                 != receipt.artifact["bytes"]
             ):
                 raise ValueError("recovery monitoring artifact differs")
+    game_ledger: GameErrorLedger | None = None
+    for error_stage in regime.stages:
+        if (
+            isinstance(error_stage, TrainSelfPlay)
+            and error_stage.game_errors is not None
+        ):
+            game_ledger = GameErrorLedger(
+                out / "game-attempts.jsonl",
+                error_stage.game_errors,
+                parents=run.game_error_ledgers,
+            )
+            run.game_error_ledgers.append(str(game_ledger.path))
+            run.game_errors = game_ledger.state
     if parent is None:
         store.save_training_run(run)
     else:
@@ -447,6 +493,10 @@ def _execute_regime(
         run.last_recorded_active_seconds = time.monotonic()
         run.calendar_seconds = max(0.0, run.last_recorded_wall_seconds - calendar_start)
         run.downtime_seconds = max(0.0, run.calendar_seconds - run.seconds)
+        if game_ledger is not None and run.stages:
+            run.stages[-1].rejected_artifacts["game-attempts"] = artifact(
+                game_ledger.path
+            )
         store.save_training_run(run)
         began = time.monotonic()
         if progress and began - last_export < export_wait:
@@ -599,10 +649,25 @@ def _execute_regime(
         space = ObservationSpace(regime.observation)
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
-        if snapshot is not None and identities != snapshot.identities:
-            raise ValueError("recovery runtime/source identity mismatch")
+        if snapshot is not None:
+            admit_recovery_identities(
+                snapshot.identities, identities, source_repair_reason
+            )
         run.setup_seconds = time.perf_counter() - start
         persist()
+        failures = CaptureScope(
+            out / "failures",
+            lambda: {
+                "run": run.id,
+                "stage": run.stages[-1].id if run.stages else None,
+                "identities": run.identities,
+                "coordinates": coordinates(),
+                "recovery_artifact": run.recovery_artifact,
+                "allocation_deadline": run.allocation_deadline,
+                "parent_run_id": run.parent_run_id,
+            },
+        )
+        resources.enter_context(capture_scope(failures))
         for stage_index, stage in enumerate(regime.stages):
             if any(item.id == stage.id for item in run.stages):
                 continue
@@ -1235,6 +1300,11 @@ def _execute_regime(
                             ):
                                 raise ValueError("initial evaluation admission differs")
                     producers.close()
+
+                    def record_game_attempt(attempt: GameAttempt) -> GameErrorState:
+                        assert game_ledger is not None
+                        return game_ledger.record(attempt, failures.context())
+
                     collector = SeatRoutedCollector(
                         space,
                         Match(regime.match),
@@ -1250,6 +1320,10 @@ def _execute_regime(
                         learning_seats=stage.learning_seats,
                         games_per_stream=stage.games_per_stream,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
+                        game_errors=stage.game_errors,
+                        record_attempt=record_game_attempt
+                        if stage.game_errors
+                        else None,
                         recovery_max_game_microsteps=regime.recovery.max_game_microsteps
                         if regime.recovery
                         else None,
@@ -1339,6 +1413,13 @@ def _execute_regime(
                     self_play_session = (trainer, ema, iteration)
                     snapshot = None
                     continue
+
+                if game_ledger is not None:
+                    # The ledger includes attempts after the last committed
+                    # optimizer snapshot. Restoring learning cannot erase them.
+                    trainer.collector.game_error_state = game_ledger.state
+                    if game_ledger.state.stop_reason:
+                        raise GameErrorLimit(game_ledger.state.stop_reason)
 
                 def checkpoint(label: str) -> None:
                     nonlocal phase
@@ -1715,6 +1796,10 @@ def _execute_regime(
             record.status = run.status
             record.error = run.error
             record.seconds = time.perf_counter() - stage_start
+            for failure in (out / "failures").glob("*.jsonl"):
+                record.rejected_artifacts[f"failures/{failure.name}"] = artifact(
+                    failure
+                )
             retained_paths = {item["path"] for item in record.artifacts.values()}
             for journal in out.glob(f"{record.id}-*.receipts.jsonl"):
                 if str(journal) not in retained_paths:

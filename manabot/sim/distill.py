@@ -27,6 +27,7 @@ from pathlib import Path
 import time
 from typing import Any
 
+from managym.decision import Command, DecisionFrame
 import numpy as np
 import torch
 
@@ -45,7 +46,6 @@ from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_receipt
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
-from managym.decision import Command, DecisionFrame
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
@@ -181,6 +181,7 @@ def generate_selfplay_shard(
     wall_start = time.perf_counter()
     for i in range(num_games):
         game_index = game_offset + i
+        env.failure_context.update(game_index=game_index, producer="distill")
         obs, _ = env.reset(seed=seed + game_index)
         for seat, player in enumerate(players):
             if hasattr(player, "start_game"):
@@ -193,6 +194,12 @@ def generate_selfplay_shard(
         info: dict[str, Any] = {}
         game_decisions: list[int] = []
         while not done and steps < max_steps_per_game:
+            env.failure_context.update(
+                step=steps,
+                decisions=len(actions),
+                deadline_monotonic=deadline_monotonic,
+                output=str(out_path) if out_path else None,
+            )
             if (
                 deadline_monotonic is not None
                 and time.perf_counter() >= deadline_monotonic

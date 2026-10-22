@@ -31,9 +31,10 @@ import numpy as np
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.failures import CapturedVector
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
 from manabot.infra import Experiment
-from manabot.infra.hypers import TrainHypers
+from manabot.infra.hypers import MatchHypers, TrainHypers
 from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.inference import PolicyInference
@@ -51,9 +52,15 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
+from manabot.training.game_errors import (
+    GameAttempt,
+    GameErrorLimit,
+    GameErrorPolicy,
+    GameErrorState,
+    GameOutcome,
+)
 from manabot.training.matchups import Curriculum, elemental_roster, stream_matches
 from manabot.training.self_play import SelfPlayCounter, deck_identity
-import managym
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -208,6 +215,8 @@ class SeatRoutedCollector:
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
         workers: int = 1,
+        game_errors: GameErrorPolicy | None = None,
+        record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
         self._uniform_roster = (
             elemental_roster(match) if matchup_curriculum == "elemental-uniform" else []
@@ -249,6 +258,18 @@ class SeatRoutedCollector:
         self.opponent_agent = opponent_agent
         self.device = torch.device(device)
         self.stats = CollectorStats()
+        if game_errors is not None and (
+            record_attempt is None
+            or root is not None
+            or recovery_max_microsteps is not None
+        ):
+            raise ValueError(
+                "game error recovery needs durable receipts, native games and current-game snapshots"
+            )
+        self.game_errors = game_errors
+        self.game_error_state = GameErrorState()
+        self._record_attempt = record_attempt
+        self._game_started = [time.perf_counter()] * num_envs
         # The calling training stage owns enablement and resets this timer.
         # Only the collector thread records host intervals; workers never share it.
         self.profiler = Profiler(enabled=False)
@@ -266,7 +287,7 @@ class SeatRoutedCollector:
             self._env = (
                 ShardedVectorEnv(num_envs, seed, workers)
                 if workers > 1
-                else managym.VectorEnv(
+                else CapturedVector(
                     num_envs=num_envs,
                     seed=seed,
                     skip_trivial=True,
@@ -300,7 +321,7 @@ class SeatRoutedCollector:
                     [m.to_rust() for m in self.stream_matches]
                 )
 
-            self._self_play_decks = self._current_decks()
+            self._refresh_roots()
 
             #: Learner seat per stream: stream s seats the learner at s % 2, so
             #: half the streams have the learner on the play — seat-balanced.
@@ -309,6 +330,7 @@ class SeatRoutedCollector:
             slots = num_envs * (2 if learning_seats == "both" else 1)
             self._streams: list[list[_Transition]] = [[] for _ in range(slots)]
             self._pending: list[_Pending | None] = [None] * slots
+            self._game_start_rows = [0] * slots
 
             if opponent_mode == "random":
                 self._opponent: Any = RandomBatchController(seed=seed + 1)
@@ -401,32 +423,41 @@ class SeatRoutedCollector:
         self._journal = deepcopy(state.journal)
         self._self_rng.set_state(state.sampling_rng)
         self.stats = deepcopy(state.stats)
-        self._self_play_decks = self._current_decks()
+        self._refresh_roots()
         # Pre-instrumentation snapshots have no outcome counters to recover.
         if not hasattr(self.stats, "exposure"):
             self.stats.exposure = {}
         if not hasattr(self.stats, "self_play"):
             self.stats.self_play = SelfPlayCounter()
 
-    def _current_decks(self) -> list[tuple[str, str]]:
+    def _refresh_roots(self) -> None:
+        """Read native sampling after resets, before counting the next game's rows."""
         if self._uniform_roster:
-            identities = [
-                deck_identity(p.decklist, p.sideboard) for p in self._uniform_roster
-            ]
-            return [
-                (identities[a], identities[b])
-                for a, b in self._env.current_matchup_indices()
-            ]
-        matches = self.stream_matches
-        return [
+            self.stream_matches = []
+            for a, b in self._env.current_matchup_indices():
+                first, second = self._uniform_roster[a], self._uniform_roster[b]
+                self.stream_matches.append(
+                    Match(
+                        MatchHypers(
+                            hero=first.name,
+                            villain=second.name,
+                            hero_deck=first.decklist,
+                            villain_deck=second.decklist,
+                            hero_sideboard=first.sideboard,
+                            villain_sideboard=second.sideboard,
+                            content_pack=first.content_pack,
+                        )
+                    )
+                )
+        self._self_play_decks = [
             (
                 deck_identity(m.hero_deck, m.hero_sideboard),
                 deck_identity(m.villain_deck, m.villain_sideboard),
             )
-            for m in matches
+            for m in self.stream_matches
         ]
 
-    def _expose(self, row: int, kind: ExposureKind) -> None:
+    def _expose(self, row: int, kind: ExposureKind, count: int = 1) -> None:
         if not self._uniform_roster:
             return
         a, b = self._self_play_decks[row]
@@ -446,7 +477,7 @@ class SeatRoutedCollector:
                 truncated_games=0,
             ),
         )
-        counts[kind] += 1
+        counts[kind] += count
 
     # -- opponent routing -----------------------------------------------------
 
@@ -585,19 +616,41 @@ class SeatRoutedCollector:
         num_envs = self.num_envs
 
         both = self.learning_seats == "both"
-        complete_games = both or self.games_per_stream is not None
+        complete_games = (
+            both or self.games_per_stream is not None or self.game_errors is not None
+        )
+        if self.game_error_state.stop_reason:
+            raise GameErrorLimit(self.game_error_state.stop_reason)
         completed = np.zeros(num_envs, dtype=bool)
         games = np.zeros(num_envs, dtype=np.int64)
         if num_steps < 1:
             raise ValueError("num_steps must be positive")
         while True:
-            if check is not None:
-                check()
-            if (
-                deadline_monotonic is not None
-                and time.perf_counter() >= deadline_monotonic
-            ):
-                raise TimeoutError("collector exceeded training deadline")
+            try:
+                if check is not None:
+                    check()
+                if (
+                    deadline_monotonic is not None
+                    and time.perf_counter() >= deadline_monotonic
+                ):
+                    raise TimeoutError("collector exceeded training deadline")
+            except TimeoutError as error:
+                if not self.game_errors and hasattr(env, "capture_failure"):
+                    env.capture_failure(error)
+                if self.game_errors:
+                    seeds = env.current_game_seeds()
+                    seats = env.current_agent_indices()
+                    for row, prefix in enumerate(self._game_actions):
+                        if prefix:
+                            self._settle_attempt(
+                                row,
+                                seeds[row],
+                                seats[row],
+                                "deadline",
+                                error_class="TimeoutError",
+                                error=str(error),
+                            )
+                raise
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
             for row in range(num_envs):
                 slot = 2 * row + int(acting[row]) if both else row
@@ -652,12 +705,50 @@ class SeatRoutedCollector:
                 self._journal.append((actions.tolist(), active.tolist()))
             for row in np.flatnonzero(active):
                 self._expose(int(row), "environment_decisions")
+            seeds = env.current_game_seeds() if self.game_errors else []
             with self.profiler.track("Environment step and encoding"):
-                env.step_into_buffers(actions.tolist(), active.tolist())
+                if self.game_errors:
+                    env.step_isolated_into_buffers(actions.tolist(), active.tolist())
+                else:
+                    env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
 
             done = (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
-            if self._game_recovery_limit is not None:
+            infos = env.get_last_info() if self.game_errors or done.any() else []
+            replace = np.zeros(num_envs, dtype=bool)
+            failed = np.zeros(num_envs, dtype=bool)
+            if self.game_errors:
+                for row in np.flatnonzero(active):
+                    self._game_actions[row].append(int(actions[row]))
+                    outcome: GameOutcome
+                    if "game_error" in infos[row]:
+                        outcome = "engine_error"
+                    elif buffers["truncated"][row]:
+                        outcome = "truncated"
+                    elif (
+                        not done[row]
+                        and len(self._game_actions[row])
+                        >= self.game_errors.max_game_actions
+                    ):
+                        outcome = "action_limit"
+                    else:
+                        continue
+                    self.stats.truncations += int(outcome == "truncated")
+                    self._settle_attempt(
+                        int(row),
+                        seeds[row],
+                        int(acting[row]),
+                        outcome,
+                        error_class=infos[row].get("game_error_class", outcome),
+                        error=infos[row].get("game_error", outcome),
+                        frame_json=infos[row].get("game_error_frame"),
+                        native_trace=infos[row].get("game_error_trace"),
+                    )
+                    failed[row] = True
+                    done[row] = False
+                    # Native truncation already reset this stream.
+                    replace[row] = not bool(buffers["truncated"][row])
+            elif self._game_recovery_limit is not None:
                 for row in np.flatnonzero(active):
                     if done[row]:
                         self._game_actions[row].clear()
@@ -666,7 +757,6 @@ class SeatRoutedCollector:
                 if sum(map(len, self._game_actions)) > self._game_recovery_limit:
                     raise RuntimeError("current-game recovery journal limit exceeded")
             if done.any():
-                infos = env.get_last_info()
                 for row in np.flatnonzero(done):
                     winner = infos[row].get("winner_index")
                     winner = int(winner) if winner is not None else None
@@ -706,19 +796,29 @@ class SeatRoutedCollector:
                                 self._finalize(slot, reward=seat_reward, done=True)
                     elif self._pending[row] is not None:
                         self._finalize(int(row), reward=reward, done=True)
+                    if self.game_errors:
+                        self._settle_attempt(
+                            int(row), seeds[row], int(acting[row]), "completed"
+                        )
                     if complete_games:
                         games[row] += 1
-                        slots = (
-                            (2 * int(row), 2 * int(row) + 1) if both else (int(row),)
-                        )
                         completed[row] = (
                             games[row] >= self.games_per_stream
                             if self.games_per_stream is not None
-                            else sum(len(self._streams[slot]) for slot in slots)
+                            else sum(
+                                len(self._streams[slot])
+                                for slot in self._game_slots(int(row))
+                            )
                             >= num_steps
                         )
-                self._self_play_decks = self._current_decks()
-                for row in np.flatnonzero(done):
+
+            if self.game_error_state.stop_reason:
+                raise GameErrorLimit(self.game_error_state.stop_reason)
+            if replace.any():
+                env.replace_failed_into_buffers(replace.tolist())
+            if (done | failed).any():
+                self._refresh_roots()
+                for row in np.flatnonzero(done | failed):
                     self._expose(int(row), "game_roots")
 
         with self.profiler.track("Batch assembly"):
@@ -742,7 +842,64 @@ class SeatRoutedCollector:
             else:
                 batch = self._build_batch(num_steps)
         self.stats.seconds += time.perf_counter() - start
+        self._game_start_rows = [0] * len(self._streams)
         return batch
+
+    def _game_slots(self, row: int) -> range:
+        seats = 2 if self.learning_seats == "both" else 1
+        return range(seats * row, seats * (row + 1))
+
+    def _settle_attempt(
+        self,
+        row: int,
+        seed: int,
+        seat: int,
+        outcome: GameOutcome,
+        *,
+        error_class: str | None = None,
+        error: str | None = None,
+        frame_json: str | None = None,
+        native_trace: str | None = None,
+    ) -> None:
+        """Settle this game's rows and persist its receipt before clearing replay inputs.
+
+        Failed games lose only their suffix and pending decisions; complete
+        earlier games stay valid. The ledger owns allowance across snapshots.
+        """
+        assert self._record_attempt is not None
+        completed = outcome == "completed"
+        valid = 0
+        discarded = 0
+        for slot in self._game_slots(row):
+            count = len(self._streams[slot]) - self._game_start_rows[slot]
+            if completed:
+                valid += count
+            else:
+                discarded += count + int(self._pending[slot] is not None)
+                self.stats.learner_transitions -= count
+                self._expose(row, "learner_transitions", -count)
+                del self._streams[slot][self._game_start_rows[slot] :]
+                self._pending[slot] = None
+            self._game_start_rows[slot] = len(self._streams[slot])
+        self.game_error_state = self._record_attempt(
+            GameAttempt(
+                stream=row,
+                seed=seed,
+                seat=seat,
+                matchup=self.stream_matches[row].hypers,
+                outcome=outcome,
+                actions=[] if completed else list(self._game_actions[row]),
+                error_class=error_class,
+                error=error,
+                frame_json=frame_json,
+                native_trace=native_trace,
+                discarded_samples=discarded,
+                valid_samples=valid,
+                seconds=time.perf_counter() - self._game_started[row],
+            )
+        )
+        self._game_actions[row].clear()
+        self._game_started[row] = time.perf_counter()
 
     def _sample_learning_rows(
         self,

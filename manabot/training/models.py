@@ -13,6 +13,7 @@ from pydantic import (
 
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.sim.local_update import LocalSearchConfig
+from manabot.training.game_errors import GameErrorPolicy, GameErrorState
 
 
 class ArtifactReference(TypedDict):
@@ -367,6 +368,9 @@ class LearningStateOrigin(Strict):
 
 
 class TrainSelfPlay(Stage):
+    game_errors: GameErrorPolicy | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     operation: Literal["train_self_play"]
     trainer: Literal["net_opponent"] = "net_opponent"
     optimizer: Literal["adam"] = "adam"
@@ -415,6 +419,12 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.game_errors is not None and (
+            self.root is not None or self.initial is not None
+        ):
+            raise ValueError(
+                "game error recovery requires native fresh-stage collection"
+            )
         if self.learning_seats == "both" and self.behavior not in (
             "current-self",
             "ema-self",
@@ -648,6 +658,16 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        tolerant = any(
+            isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
+            for stage in self.stages
+        )
+        if tolerant and (
+            len(self.stages) != 1 or self.recovery_max_microsteps is not None
+        ):
+            raise ValueError(
+                "game error recovery requires one stage and current-game recovery snapshots"
+            )
         if any(
             isinstance(stage, TrainSelfPlay) and stage.learning_state is not None
             for stage in self.stages
@@ -980,6 +1000,15 @@ class FixedValidationCohort(Strict):
 
 
 class TrainingRun(Strict):
+    game_error_ledgers: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    game_errors: GameErrorState | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source_repair_reason: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     schema_version: Literal[1] = 1
     id: str
     regime_digest: str

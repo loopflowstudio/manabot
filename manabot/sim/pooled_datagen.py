@@ -57,6 +57,9 @@ class _GameStream:
         self.actions_full: np.ndarray | None = None
 
     def start_game(self, game_index: int, seed: int) -> None:
+        self.env.failure_context.update(
+            game_index=game_index, producer="pooled_datagen"
+        )
         self.obs, _ = self.env.reset(seed=seed)
         self.game_index = game_index
         self.steps = 0
@@ -154,7 +157,8 @@ def generate_selfplay_shard_pooled(
         call_seed = (seed * 1_000_003 + decision_count * 31 + stream.game_index) & (
             0xFFFFFFFFFFFFFFFF
         )
-        pool = stream.env._engine.rollout_pool(worlds, rollouts, call_seed, max_steps)
+        stream.env.failure_context.update(step=stream.steps, decisions=decision_count)
+        pool = stream.env.rollout_pool(worlds, rollouts, call_seed, max_steps)
         capacity = pool.num_slots
         if stream.pool_buffers is None or stream.pool_capacity < capacity:
             stream.pool_buffers = _allocate_buffers(obs_space, capacity)

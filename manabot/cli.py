@@ -96,6 +96,9 @@ def train_command(
     resume_from: Optional[str] = typer.Option(
         None, help="Stopped TrainingRun ID in the same store"
     ),
+    source_repair_reason: str | None = typer.Option(
+        None, help="Explicit compatible source repair on complete-game recovery"
+    ),
     checkpoint_updates: int | None = typer.Option(
         None, min=1, help="Raw monitoring export every N absolute self-play iterations"
     ),
@@ -124,6 +127,7 @@ def train_command(
                     regime,
                     regime_name,
                     resume_from,
+                    source_repair_reason,
                     checkpoint_updates,
                     checkpoint_seconds,
                     initial_admission,
@@ -173,6 +177,7 @@ def train_command(
                 out,
                 store,
                 resume_from=resume_from,
+                source_repair_reason=source_repair_reason,
                 allocation=Allocation.model_validate_json(Path(allocation).read_text())
                 if allocation
                 else None,
@@ -187,6 +192,7 @@ def train_command(
             out is not None
             or seed is not None
             or resume_from is not None
+            or source_repair_reason is not None
             or checkpoint_seconds is not None
             or checkpoint_updates is not None
             or initial_admission is not None

@@ -86,6 +86,16 @@ learning models can use `PairedLearners` to update both independent optimizers
 from their own seat trajectories. See [both-seat learning](../docs/training-regimes.md#learning-from-both-seats)
 for collection boundaries, accounting and measurement limits.
 
+Single-stage self-play can opt into bounded [game crash recovery](../docs/game-crash-recovery.md).
+It retains private replay inputs, discards both seats' uncommitted experience from
+failed games and regathers under the same policy. A persisted rolling error rate
+strictly above the declared threshold stops training; evaluation remains strict.
+Strict scalar/vector training and data-generation paths automatically retain
+private native failure inputs before propagating errors. Compound/selection and
+arena retain pending Commands before execution. The same bounded replay command
+handles strict failures without enabling tolerance or process recovery; see the
+linked capture audit for boundaries and supervision limits.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from

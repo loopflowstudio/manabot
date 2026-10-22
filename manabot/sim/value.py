@@ -378,9 +378,7 @@ class _ValueLeafScorer:
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
         start = time.perf_counter()
 
-        pool = env._engine.rollout_pool(
-            self.worlds, self.rollouts, call_seed, self.max_steps
-        )
+        pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
         num_slots = pool.num_slots
         buffers = self._ensure_buffers(num_slots)
         pool.set_buffers(buffers, self._capacity)
@@ -608,10 +606,12 @@ def collect_value_assessment(
     gt_call = 0
 
     for game_index in range(num_games):
+        env.failure_context.update(game_index=game_index, producer="value")
         obs, _ = env.reset(seed=seed + game_index)
         done = False
         info: dict[str, Any] = {}
         while not done:
+            env.failure_context.update(sampled_states=len(rows), search_calls=gt_call)
             acting = int(env.last_raw_obs.agent.player_index)
             num_valid = int(np.sum(obs["actions_valid"] > 0))
             sampled = (
@@ -628,7 +628,7 @@ def collect_value_assessment(
                     for key in OBS_KEYS
                 }
                 v = float(scorer.score(batch, np.array([0]))[0])
-                scores, _, _ = env._engine.flat_mc_scores(
+                scores, _, _ = env.flat_mc_scores(
                     gt_worlds,
                     gt_rollouts,
                     (seed * 7919 + gt_call) & 0xFFFFFFFFFFFFFFFF,

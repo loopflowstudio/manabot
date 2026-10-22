@@ -51,6 +51,9 @@ def recipe() -> TrainingRegime:
     stage.updates = 3
     stage.transitions = 32
     stage.streams = 2
+    # This fixture exercises exact-quota tails across updates; whole-game
+    # both-seat recovery has its own collector and game-error coverage.
+    stage.learning_seats = "one"
     stage.learning.epochs = 1
     stage.learning.ema = 0.9
     value.agent.hidden_dim = 8

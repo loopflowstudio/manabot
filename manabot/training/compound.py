@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
 import math
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -20,6 +21,7 @@ import torch
 from torch import Tensor
 
 from manabot.env import Match
+from manabot.env.failures import ScalarCapture
 from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
 from manabot.sim.compound import CompoundDecision, sample_compound
@@ -75,13 +77,10 @@ class CompoundStatistics:
             self.prompt_kinds[kind] = self.prompt_kinds.get(kind, 0) + 1
             self.factors += len(decision.output.tokens)
             self.forced_factors += sum(
-                int((probs > 0).sum()) == 1
-                for probs in decision.output.probabilities
+                int((probs > 0).sum()) == 1 for probs in decision.output.probabilities
             )
             self.decision_seconds += decision.seconds
-            self.max_decision_seconds = max(
-                self.max_decision_seconds, decision.seconds
-            )
+            self.max_decision_seconds = max(self.max_decision_seconds, decision.seconds)
 
 
 def collect_game(
@@ -101,10 +100,17 @@ def collect_game(
     training audit data. It must not be served as viewer-facing Study evidence.
     """
     env = managym.Env(seed=seed, skip_trivial=skip_trivial)
-    raw, _ = env.reset(match.to_rust())
+    capture = ScalarCapture(seed, skip_trivial)
+    raw, _ = capture.reset(env, match.to_rust())
     decisions: list[EpisodeDecision] = []
     count = 0
-    with path.open("x") as output:
+    capture.context["receipt_path"] = str(path)
+    with (
+        capture.guard(),
+        os.fdopen(
+            os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
+        ) as output,
+    ):
         output.write(
             json.dumps(
                 {
@@ -129,7 +135,7 @@ def collect_game(
                     raise RuntimeError(
                         "compound game command cap reached; no terminal target"
                     )
-                result = env.execute_semantic_command_json(command.to_json())
+                result = capture.command(env, command.to_json())
                 output.write(
                     json.dumps(
                         {
