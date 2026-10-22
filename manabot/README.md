@@ -102,7 +102,7 @@ Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
 content manifest and input schema. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. BC and value
+weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -117,8 +117,8 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 
 `ModelConfig(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
-learnable from any start. New runs train it: `new_agent_spec()` is the
-`manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
+learnable from any start. The local and baseline recipes enable it; the
+ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.
@@ -134,8 +134,8 @@ challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
 
-`train_bc` and `train_search_supervised` take the `observation_hypers` the
-shards were encoded with and reject a dataset of any other shape.
+`train_search_supervised` takes the `observation_config` the
+shards were encoded with and rejects a dataset of any other shape.
 
 ## Architecture
 
@@ -353,6 +353,6 @@ Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 owns per-run seeding and tracking; `training/experiments.py::Experiment` describes
 experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
 The regime’s search-supervised fitting and evaluation live in
-`training/supervised.py`; search-data generation remains in `sim`. Older BC and
-value-only fitting helpers still live in `sim` and remain a layout review item. Historical checkpoint dictionary keys remain unchanged,
+`training/supervised.py`; search-data generation remains in `sim`. The standalone exp-10 BC/value fitting loops and launcher are retired; replaying
+that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.

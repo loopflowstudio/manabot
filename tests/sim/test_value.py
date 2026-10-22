@@ -1,31 +1,24 @@
-"""Tests for the value head, V-greedy, and value-at-leaf search (exp-10).
+"""Frozen value inference, leaf perspective and value-guided player legality."""
 
-Covers outcome-label construction, value training (loss decreases, policy
-head untouched, checkpoint roundtrip), the Spearman helper, hero-perspective
-leaf scoring against the RolloutPool bindings, and both players' action
-validity.
-"""
+from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import OBS_KEYS
-from manabot.sim.flat_mc import load_checkpoint_agent, make_player, spec_name
+from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint
+from manabot.sim.flat_mc import make_player, spec_name
 from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.value import (
     ValueScorer,
     ValueSearchPlayer,
     VGreedyPlayer,
-    outcome_labels,
-    save_value_checkpoint,
     spearman,
-    train_value,
 )
 from manabot.verify.util import INTERACTIVE_DECK
+import managym
 
 
 def make_env(seed: int = 3) -> tuple[Env, dict]:
@@ -43,48 +36,6 @@ def make_env(seed: int = 3) -> tuple[Env, dict]:
     return env, obs
 
 
-def tiny_dataset(num_rows: int = 96, seed: int = 0) -> dict[str, np.ndarray]:
-    """Real encoded observations + synthetic winner/seat columns."""
-
-    env, obs = make_env(seed=seed)
-    rng = np.random.default_rng(seed)
-    rows: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
-    while len(rows["actions_valid"]) < num_rows:
-        for key in OBS_KEYS:
-            rows[key].append(np.asarray(obs[key], dtype=np.float32))
-        valid = np.flatnonzero(obs["actions_valid"] > 0)
-        obs, _, terminated, truncated, _ = env.step(int(rng.choice(valid)))
-        if terminated or truncated:
-            obs, _ = env.reset(seed=seed + len(rows["actions_valid"]))
-    dataset = {key: np.stack(values) for key, values in rows.items()}
-    n = num_rows
-    dataset["game_index"] = (np.arange(n) // 12).astype(np.int32)
-    dataset["seat"] = (np.arange(n) % 2).astype(np.int8)
-    winner_per_game = rng.integers(0, 2, size=n // 12 + 1)
-    dataset["winner"] = winner_per_game[dataset["game_index"]].astype(np.int8)
-    dataset["winner"][:5] = -1  # a few no-winner rows
-    dataset["num_valid"] = np.full(n, 2, dtype=np.int16)
-    dataset["action"] = np.zeros(n, dtype=np.int16)
-    return dataset
-
-
-class TestOutcomeLabels:
-    def test_labels_follow_winner_and_seat(self):
-        dataset = tiny_dataset()
-        usable, labels = outcome_labels(dataset)
-        assert (dataset["winner"][usable] >= 0).all()
-        expect = (
-            dataset["winner"][usable].astype(int) == dataset["seat"][usable].astype(int)
-        ).astype(np.float32)
-        assert np.array_equal(labels, expect)
-
-    def test_no_winner_rows_dropped(self):
-        dataset = tiny_dataset()
-        usable, _ = outcome_labels(dataset)
-        assert 0 not in usable[:0].tolist()
-        assert len(usable) == int((dataset["winner"] >= 0).sum())
-
-
 class TestSpearman:
     def test_perfect_and_inverse(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
@@ -99,48 +50,6 @@ class TestSpearman:
     def test_known_value(self):
         # One transposition among four: rho = 1 - 6*2/(4*15) = 0.8
         assert abs(spearman(np.arange(4.0), np.array([0.0, 2, 1, 3])) - 0.8) < 1e-12
-
-
-class TestTrainValue:
-    def test_loss_decreases_and_policy_head_untouched(self):
-        dataset = tiny_dataset()
-        init = ActorCritic(ObservationSpace(), ModelConfig())
-        init_state = {k: v.clone() for k, v in init.state_dict().items()}
-        agent, _, history = train_value(
-            dataset, init_state=init_state, epochs=3, lr=1e-3, batch_size=32
-        )
-        assert history[-1].train_loss < history[0].train_loss
-        for name, param in agent.named_parameters():
-            if name.startswith("policy_head"):
-                assert torch.equal(param.detach().cpu(), init_state[name])
-
-    def test_freeze_encoder_only_moves_value_head(self):
-        dataset = tiny_dataset()
-        init = ActorCritic(ObservationSpace(), ModelConfig())
-        init_state = {k: v.clone() for k, v in init.state_dict().items()}
-        agent, _, _ = train_value(
-            dataset,
-            init_state=init_state,
-            freeze_encoder=True,
-            epochs=2,
-            batch_size=32,
-        )
-        for name, param in agent.named_parameters():
-            same = torch.equal(param.detach().cpu(), init_state[name])
-            assert same != name.startswith("value_head"), name
-
-    def test_checkpoint_roundtrip(self, tmp_path, interactive_player_configs):
-        dataset = tiny_dataset()
-        agent, obs_space, _ = train_value(dataset, epochs=1, batch_size=32)
-        path = tmp_path / "value.pt"
-        save_value_checkpoint(
-            agent, obs_space, path, player_configs=interactive_player_configs
-        )
-        loaded, _ = load_checkpoint_agent(str(path))
-        for (name, a), (_, b) in zip(
-            agent.state_dict().items(), loaded.state_dict().items()
-        ):
-            assert torch.equal(a.cpu(), b.cpu()), name
 
 
 class TestValueScorer:
@@ -183,12 +92,18 @@ class TestPoolPerspective:
 
 class TestPlayers:
     @pytest.fixture
-    def value_checkpoint(self, tmp_path, interactive_player_configs) -> str:
+    def value_checkpoint(
+        self, tmp_path: Path, interactive_player_configs: list[managym.PlayerConfig]
+    ) -> str:
         obs_space = ObservationSpace()
         agent = ActorCritic(obs_space, ModelConfig())
         path = tmp_path / "value.pt"
-        save_value_checkpoint(
-            agent, obs_space, path, player_configs=interactive_player_configs
+        save_bc_checkpoint(
+            agent,
+            obs_space,
+            path,
+            player_configs=interactive_player_configs,
+            extra={"value": {}},
         )
         return str(path)
 

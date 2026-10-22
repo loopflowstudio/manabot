@@ -1,35 +1,18 @@
-"""Value head training, V-greedy play, and value-at-leaf search (exp-10).
+"""Value-guided players and evaluation of frozen policy checkpoints.
 
-Wave/search goal 4 — the pre-registered gate. Exp-07 refuted the policy-
-ROLLOUT crank on economics (a policy playout costs ~160x a random playout);
-the escape route is a VALUE at the leaves: one forward pass replacing an
-entire playout. This module provides the three pieces the gate needs:
+ValueScorer interprets a scalar value head as an acting-player win logit.
+VGreedyPlayer scores one-step successors; ValueSearchPlayer uses batched value
+estimates at the leaves of determinized rollouts. Terminal rollouts contribute
+their true outcome; unfinished leaves use the frozen model. Callers convert
+acting-player probabilities to the root player's perspective.
 
-- ``train_value`` / ``save_value_checkpoint``: fit the ActorCritic's existing
-  scalar value head (shared encoder, hero-perspective win-prob via sigmoid)
-  to terminal game outcomes recorded in distillation shards (BCE, split by
-  game). Type-error caveat (wave/beliefs): scalar V(observation) is rung-1 —
-  the same observation has different values under different opponent ranges;
-  it is expected to work at current opponent strength, not in general.
-- ``VGreedyPlayer``: argmax over legal actions of the one-step value —
-  each root action applied on one determinized clone, V evaluated at the
-  resulting state from the deciding player's perspective.
-- ``ValueSearchPlayer``: flat determinized MC where the playout is replaced
-  (or depth-truncated) by V at the leaves: W worlds x R clones per root
-  action, ``depth`` uniformly-random plies after the root action, then one
-  batched V evaluation over every still-live leaf. depth=0 is
-  "N determinized worlds x 1-step-then-V".
-
-Scoring matches flat_mc/RolloutPool conventions: win 1 / loss 0 / draw-or-
-cap 0.5 from the deciding player's perspective; slots that terminate before
-the leaf contribute their true outcome (accumulated engine-side by the
-pool), so V only ever fills in for genuinely unfinished simulations.
+The assessment helpers compare retained predictions with rollout outcomes.
+This module performs inference and assessment, not parameter fitting.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import time
 from typing import Any
 
@@ -37,10 +20,9 @@ import numpy as np
 import torch
 
 from manabot.env import Env, ObservationSpace
-from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
-from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint, split_by_game
+from manabot.sim.distill import OBS_KEYS
 from manabot.sim.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     SearchStats,
@@ -79,190 +61,6 @@ class ValueScorer:
         self.forward_calls += 1
         self.obs_scored += len(rows)
         return probs.float().cpu().numpy()
-
-
-# -----------------------------------------------------------------------------
-# Training: value head on terminal outcomes
-# -----------------------------------------------------------------------------
-
-
-@dataclass
-class ValueEpochStats:
-    epoch: int
-    train_loss: float
-    val_loss: float
-    val_brier: float
-    val_accuracy: float
-
-
-def outcome_labels(dataset: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-    """(usable row indices, win label per usable row) from winner/seat columns.
-
-    Label is 1.0 when the decision-maker (seat) won the source game. Rows
-    from games with no recorded winner (draws, caps, unfinished) are dropped.
-    """
-
-    winner = dataset["winner"].astype(np.int64)
-    seat = dataset["seat"].astype(np.int64)
-    usable = np.flatnonzero(winner >= 0)
-    labels = (winner[usable] == seat[usable]).astype(np.float32)
-    return usable, labels
-
-
-@torch.no_grad()
-def _evaluate_value(
-    agent: ActorCritic,
-    dataset: dict[str, np.ndarray],
-    indices: np.ndarray,
-    labels: np.ndarray,
-    *,
-    batch_size: int,
-    device: torch.device,
-) -> tuple[float, float, float]:
-    """(mean BCE, Brier score, accuracy) of sigmoid(V) against labels."""
-
-    agent.eval()
-    total_bce = 0.0
-    total_brier = 0.0
-    correct = 0
-    for start in range(0, len(indices), batch_size):
-        batch = indices[start : start + batch_size]
-        target = torch.as_tensor(
-            labels[start : start + batch_size], dtype=torch.float32, device=device
-        )
-        obs = {
-            key: torch.as_tensor(
-                dataset[key][batch], dtype=torch.float32, device=device
-            )
-            for key in OBS_KEYS
-        }
-        _, value = agent.forward(obs)
-        total_bce += float(
-            torch.nn.functional.binary_cross_entropy_with_logits(
-                value, target, reduction="sum"
-            ).item()
-        )
-        probs = torch.sigmoid(value)
-        total_brier += float(((probs - target) ** 2).sum().item())
-        correct += int(((probs > 0.5) == (target > 0.5)).sum().item())
-    n = max(1, len(indices))
-    return total_bce / n, total_brier / n, correct / n
-
-
-def train_value(
-    dataset: dict[str, np.ndarray],
-    *,
-    init_state: dict[str, Any] | None = None,
-    freeze_encoder: bool = False,
-    lr: float = 1e-3,
-    epochs: int = 10,
-    batch_size: int = 512,
-    val_fraction: float = 0.1,
-    seed: int = 0,
-    device: str = "cpu",
-    agent_config: ModelConfig | None = None,
-    log: bool = False,
-) -> tuple[ActorCritic, ObservationSpace, list[ValueEpochStats]]:
-    """Fit the ActorCritic's value head to terminal outcomes (BCE, split by game).
-
-    ``init_state`` warm-starts from an existing checkpoint (e.g. the BC
-    student, so the encoder starts from policy-distillation features).
-    ``freeze_encoder`` trains only the value head, leaving every shared
-    weight — and therefore the checkpoint's policy behavior — untouched.
-    The value loss never reaches the policy head either way (no gradient
-    path), so policy weights are only ever moved through the shared encoder.
-    """
-
-    torch.manual_seed(seed)
-    dev = torch.device(device)
-    obs_space = ObservationSpace()
-    agent = ActorCritic(obs_space, agent_config or ModelConfig()).to(dev)
-    if init_state is not None:
-        agent.load_state_dict(init_state)
-    if freeze_encoder:
-        for name, param in agent.named_parameters():
-            param.requires_grad = name.startswith("value_head")
-    params = [p for p in agent.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(params, lr=lr)
-
-    usable, labels = outcome_labels(dataset)
-    if len(usable) == 0:
-        raise ValueError("dataset has no rows with a recorded winner")
-    train_idx, val_idx = split_by_game(dataset, val_fraction=val_fraction, seed=seed)
-    usable_set = np.zeros(len(dataset["winner"]), dtype=bool)
-    usable_set[usable] = True
-    label_by_row = np.full(len(dataset["winner"]), -1.0, dtype=np.float32)
-    label_by_row[usable] = labels
-    train_idx = train_idx[usable_set[train_idx]]
-    val_idx = val_idx[usable_set[val_idx]]
-
-    rng = np.random.default_rng(seed)
-    history: list[ValueEpochStats] = []
-    for epoch in range(epochs):
-        agent.train()
-        order = train_idx.copy()
-        rng.shuffle(order)
-        total_loss = 0.0
-        for start in range(0, len(order), batch_size):
-            batch = order[start : start + batch_size]
-            obs = {
-                key: torch.as_tensor(
-                    dataset[key][batch], dtype=torch.float32, device=dev
-                )
-                for key in OBS_KEYS
-            }
-            target = torch.as_tensor(
-                label_by_row[batch], dtype=torch.float32, device=dev
-            )
-            _, value = agent.forward(obs)
-            loss = torch.nn.functional.binary_cross_entropy_with_logits(value, target)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            total_loss += float(loss.item()) * len(batch)
-        val_bce, val_brier, val_acc = _evaluate_value(
-            agent,
-            dataset,
-            val_idx,
-            label_by_row[val_idx],
-            batch_size=batch_size,
-            device=dev,
-        )
-        stats = ValueEpochStats(
-            epoch=epoch,
-            train_loss=total_loss / max(1, len(order)),
-            val_loss=val_bce,
-            val_brier=val_brier,
-            val_accuracy=val_acc,
-        )
-        history.append(stats)
-        if log:
-            print(
-                f"  epoch {epoch}: train_bce {stats.train_loss:.4f} "
-                f"val_bce {stats.val_loss:.4f} val_brier {stats.val_brier:.4f} "
-                f"val_acc {stats.val_accuracy:.4f}",
-                flush=True,
-            )
-    return agent, obs_space, history
-
-
-def save_value_checkpoint(
-    agent: ActorCritic,
-    obs_space: ObservationSpace,
-    path: str | Path,
-    *,
-    player_configs,
-    extra: dict[str, Any] | None = None,
-) -> None:
-    """Persist in the trainer checkpoint format (load_checkpoint_agent)."""
-
-    save_bc_checkpoint(
-        agent,
-        obs_space,
-        path,
-        player_configs=player_configs,
-        extra={"value": extra or {}},
-    )
 
 
 # -----------------------------------------------------------------------------

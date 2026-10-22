@@ -1,21 +1,16 @@
-"""Tests for search-as-teacher distillation (exp-03 / wave C4)."""
+"""Search-generated datasets retain seat ownership and whole-game partitions."""
 
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from manabot.sim.distill import (
     META_KEYS,
     OBS_KEYS,
-    evaluate_bc,
     generate_selfplay_shard,
     load_shards,
-    save_bc_checkpoint,
     split_by_game,
-    train_bc,
 )
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def _tiny_dataset(tmp_path: Path, num_games: int = 3) -> dict[str, np.ndarray]:
@@ -68,45 +63,3 @@ def test_split_by_game_has_no_leakage(tmp_path):
     val_games = set(dataset["game_index"][val_idx].tolist())
     assert train_games and val_games
     assert train_games.isdisjoint(val_games)
-
-
-def test_train_bc_learns_and_checkpoint_roundtrips(
-    tmp_path, interactive_player_configs
-):
-    dataset = _tiny_dataset(tmp_path, num_games=4)
-    agent, obs_space, history = train_bc(
-        dataset,
-        lr=1e-3,
-        epochs=2,
-        batch_size=64,
-        val_fraction=0.25,
-        seed=0,
-    )
-    assert len(history) == 2
-    assert history[-1].train_loss < history[0].train_loss * 1.5  # not diverging
-    assert 0.0 <= history[-1].val_accuracy <= 1.0
-
-    path = tmp_path / "bc_policy.pt"
-    save_bc_checkpoint(
-        agent,
-        obs_space,
-        path,
-        player_configs=interactive_player_configs,
-        extra={"lr": 1e-3},
-    )
-    loaded, loaded_space = load_checkpoint_agent(str(path))
-    assert loaded_space == obs_space
-    # Loaded policy reproduces the trained policy's logits exactly.
-    idx = np.arange(min(8, len(dataset["action"])))
-    obs = {
-        key: torch.as_tensor(dataset[key][idx], dtype=torch.float32) for key in OBS_KEYS
-    }
-    with torch.no_grad():
-        original_logits, _ = agent.forward(obs)
-        loaded_logits, _ = loaded.forward(obs)
-    assert torch.allclose(original_logits, loaded_logits)
-
-    loss, acc, acc_nontrivial = evaluate_bc(agent, dataset, idx)
-    assert loss > 0.0
-    assert 0.0 <= acc <= 1.0
-    assert 0.0 <= acc_nontrivial <= 1.0

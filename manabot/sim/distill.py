@@ -1,4 +1,4 @@
-"""Search-as-teacher dataset generation and supervised distillation support.
+"""Search-generated datasets, target helpers and portable policy exports.
 
 Legacy datasets use flat determinized-MC scores and terminal outcomes. Tree
 teachers add root visit counts and root values while retaining the same
@@ -20,7 +20,6 @@ teacher decision and both seats' decisions are recorded.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -38,7 +37,6 @@ from manabot.belief.encoding import (
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import (
     MatchConfig,
-    ModelConfig,
     ObservationConfig,
     RewardConfig,
 )
@@ -67,7 +65,7 @@ DECISION_KIND_KEY = "decision_kind"
 
 
 # -----------------------------------------------------------------------------
-# Task 1 — dataset generation (teacher self-play)
+# Teacher self-play generation
 # -----------------------------------------------------------------------------
 
 
@@ -427,7 +425,7 @@ def generate_selfplay_shard(
 
 
 # -----------------------------------------------------------------------------
-# Task 2 — behavior cloning
+# Dataset loading and target preparation
 # -----------------------------------------------------------------------------
 
 
@@ -511,35 +509,6 @@ def split_by_game(
     return np.flatnonzero(~is_val), np.flatnonzero(is_val)
 
 
-@dataclass
-class BCEpochStats:
-    epoch: int
-    train_loss: float
-    val_loss: float
-    val_accuracy: float
-    val_accuracy_nontrivial: float
-    # Staleness diagnostic (exp-07): validation loss on the freshest round's
-    # decisions only, vs the aggregate val_loss above. Only populated when
-    # the training data spans multiple rounds; divergence between the two
-    # curves is the pre-registered trigger for replay-window tuning.
-    val_loss_fresh: float | None = None
-
-
-def _batch_tensors(
-    dataset: dict[str, np.ndarray],
-    indices: np.ndarray,
-    device: torch.device,
-) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
-    obs = {
-        key: torch.as_tensor(dataset[key][indices], dtype=torch.float32, device=device)
-        for key in OBS_KEYS
-    }
-    target = torch.as_tensor(
-        dataset["action"][indices], dtype=torch.long, device=device
-    )
-    return obs, target
-
-
 def soft_targets_from_scores(scores: torch.Tensor, temperature: float) -> torch.Tensor:
     """Distribution over actions from raw flat-MC scores.
 
@@ -556,44 +525,6 @@ def soft_targets_from_scores(scores: torch.Tensor, temperature: float) -> torch.
     return torch.softmax(logits, dim=-1)
 
 
-@torch.no_grad()
-def evaluate_bc(
-    agent: ActorCritic,
-    dataset: dict[str, np.ndarray],
-    indices: np.ndarray,
-    *,
-    batch_size: int = 512,
-    device: torch.device | None = None,
-) -> tuple[float, float, float]:
-    """Return (mean CE loss, accuracy, accuracy on non-trivial decisions)."""
-
-    device = device or torch.device("cpu")
-    agent.eval()
-    total_loss = 0.0
-    correct = 0
-    nontrivial_correct = 0
-    nontrivial_total = 0
-    nontrivial_mask = dataset["num_valid"][indices] > 1
-    for start in range(0, len(indices), batch_size):
-        batch = indices[start : start + batch_size]
-        obs, target = _batch_tensors(dataset, batch, device)
-        logits, _ = agent.forward(obs)
-        loss = torch.nn.functional.cross_entropy(logits, target, reduction="sum")
-        total_loss += float(loss.item())
-        pred = logits.argmax(dim=-1)
-        hits = (pred == target).cpu().numpy()
-        correct += int(hits.sum())
-        batch_nontrivial = nontrivial_mask[start : start + batch_size]
-        nontrivial_correct += int(hits[batch_nontrivial].sum())
-        nontrivial_total += int(batch_nontrivial.sum())
-    n = max(1, len(indices))
-    return (
-        total_loss / n,
-        correct / n,
-        nontrivial_correct / max(1, nontrivial_total),
-    )
-
-
 def dataset_observation_space(
     dataset: dict[str, np.ndarray],
     observation_config: ObservationConfig | None,
@@ -606,112 +537,6 @@ def dataset_observation_space(
                 f"Dataset {key} shape differs from observation configuration"
             )
     return obs_space
-
-
-def train_bc(
-    dataset: dict[str, np.ndarray],
-    *,
-    lr: float = 1e-3,
-    epochs: int = 10,
-    batch_size: int = 512,
-    val_fraction: float = 0.1,
-    seed: int = 0,
-    device: str = "cpu",
-    agent_config: ModelConfig | None = None,
-    observation_config: ObservationConfig | None = None,
-    soft_temperature: float | None = None,
-    initial_agent_state: dict[str, Any] | None = None,
-    log: bool = False,
-) -> tuple[ActorCritic, ObservationSpace, list[BCEpochStats]]:
-    """Behavior-clone a fresh ActorCritic on (observation, search action) pairs.
-
-    Cross-entropy on the ActorCritic's masked logits (invalid actions are already
-    filled with -1e8 inside ActorCritic.forward, so the distribution is over valid
-    actions only). With ``soft_temperature`` set (requires the dataset's
-    "scores" column), the target is the softened flat-MC score distribution
-    instead of the one-hot argmax. Validation metrics are always measured
-    against the teacher argmax so runs stay comparable across temperatures.
-    The train/val split is by game. ``initial_agent_state`` warm-starts the
-    student (fine-tuning) instead of a fresh init.
-    """
-
-    if soft_temperature is not None and SCORE_KEY not in dataset:
-        raise ValueError("soft_temperature requires a dataset with scores")
-
-    torch.manual_seed(seed)
-    dev = torch.device(device)
-    obs_space = dataset_observation_space(dataset, observation_config)
-    agent = ActorCritic(obs_space, agent_config or ModelConfig()).to(dev)
-    if initial_agent_state is not None:
-        agent.load_state_dict(initial_agent_state)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
-
-    train_idx, val_idx = split_by_game(dataset, val_fraction=val_fraction, seed=seed)
-    rng = np.random.default_rng(seed)
-    history: list[BCEpochStats] = []
-
-    # Staleness diagnostic: freshest-round-only val subset, when the data
-    # spans rounds (expert-iteration aggregation).
-    fresh_val_idx: np.ndarray | None = None
-    if "round" in dataset and len(np.unique(dataset["round"])) > 1:
-        fresh_round = int(dataset["round"].max())
-        fresh_val_idx = val_idx[dataset["round"][val_idx] == fresh_round]
-        if len(fresh_val_idx) == 0:
-            fresh_val_idx = None
-
-    for epoch in range(epochs):
-        agent.train()
-        order = train_idx.copy()
-        rng.shuffle(order)
-        total_loss = 0.0
-        for start in range(0, len(order), batch_size):
-            batch = order[start : start + batch_size]
-            obs, target = _batch_tensors(dataset, batch, dev)
-            logits, _ = agent.forward(obs)
-            if soft_temperature is not None:
-                scores = torch.as_tensor(
-                    dataset[SCORE_KEY][batch], dtype=torch.float32, device=dev
-                )
-                soft = soft_targets_from_scores(scores, soft_temperature)
-                loss = torch.nn.functional.cross_entropy(logits, soft)
-            else:
-                loss = torch.nn.functional.cross_entropy(logits, target)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            total_loss += float(loss.item()) * len(batch)
-        val_loss, val_acc, val_acc_nontrivial = evaluate_bc(
-            agent, dataset, val_idx, batch_size=batch_size, device=dev
-        )
-        val_loss_fresh = None
-        if fresh_val_idx is not None:
-            val_loss_fresh, _, _ = evaluate_bc(
-                agent, dataset, fresh_val_idx, batch_size=batch_size, device=dev
-            )
-        stats = BCEpochStats(
-            epoch=epoch,
-            train_loss=total_loss / max(1, len(order)),
-            val_loss=val_loss,
-            val_accuracy=val_acc,
-            val_accuracy_nontrivial=val_acc_nontrivial,
-            val_loss_fresh=val_loss_fresh,
-        )
-        history.append(stats)
-        if log:
-            fresh_part = (
-                f" val_loss_fresh {stats.val_loss_fresh:.4f}"
-                if stats.val_loss_fresh is not None
-                else ""
-            )
-            print(
-                f"  epoch {epoch}: train_loss {stats.train_loss:.4f} "
-                f"val_loss {stats.val_loss:.4f}{fresh_part} "
-                f"val_acc {stats.val_accuracy:.4f} "
-                f"val_acc_nontrivial {stats.val_accuracy_nontrivial:.4f}",
-                flush=True,
-            )
-
-    return agent, obs_space, history
 
 
 def save_bc_checkpoint(
