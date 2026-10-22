@@ -217,6 +217,10 @@ pub enum Effect {
         count: EffectValue,
         target: TargetSpec,
     },
+    AddSubtypeToTarget {
+        target: TargetSpec,
+        subtype: String,
+    },
     ExileIfDiesThisTurn {
         target: TargetSpec,
     },
@@ -519,7 +523,8 @@ impl Effect {
             | Effect::ModifyTriggeringPermanent { .. } => None,
             Effect::DealDamageValue { target, .. }
             | Effect::PutCountersValue { target, .. }
-            | Effect::ExileIfDiesThisTurn { target } => Some(target),
+            | Effect::ExileIfDiesThisTurn { target }
+            | Effect::AddSubtypeToTarget { target, .. } => Some(target),
             Effect::IfCondition { effects, .. } => effects.iter().find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),

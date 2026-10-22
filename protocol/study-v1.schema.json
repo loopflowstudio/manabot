@@ -1219,6 +1219,12 @@
         "tapped": {
           "type": "boolean"
         },
+        "temp_subtypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "text_box": {
           "type": "string"
         },

@@ -61,6 +61,11 @@ extension imports and mocked service startup alone cannot prove cold ordering.
 
 ## Required checks for authored rules and setup changes
 
+Run `uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q`
+for Elemental roster or training admission changes, including after syncing
+training infrastructure changes. The PPO smoke must reload the final checkpoint
+written by `Trainer.train()`, which closes its experiment before returning.
+
 Run the complete debug Rust suite, including checked conformance receipts, and
 the release prompt matrix contract and browser scenario. Also run
 `uv run pytest tests/academy/test_choice_navigation.py -q`: live browser coverage replays

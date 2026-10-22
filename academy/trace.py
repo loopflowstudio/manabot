@@ -71,18 +71,26 @@ class GameConfig:
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
+        configs: list[managym.PlayerConfig] = []
         if pack is not None:
             if self.asset_pack != pack.reference:
                 raise ValueError("Recorded asset pack differs from the installed setup")
-            for name, deck, sideboard in (
-                (self.hero_deck_name, self.hero_deck, self.hero_sideboard),
-                (self.villain_deck_name, self.villain_deck, self.villain_sideboard),
+            for seat, name, deck, sideboard in (
+                ("Hero", self.hero_deck_name, self.hero_deck, self.hero_sideboard),
+                (
+                    "Villain",
+                    self.villain_deck_name,
+                    self.villain_deck,
+                    self.villain_sideboard,
+                ),
             ):
-                expected = pack.player_config(name, name)
+                expected = pack.player_config(name, seat)
                 if deck != expected.decklist or sideboard != expected.sideboard:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
+                configs.append(expected)
+            return configs
         return [
             managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
             managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),

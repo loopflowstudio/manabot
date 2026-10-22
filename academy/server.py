@@ -70,6 +70,8 @@ from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
 from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
+    CURATED_PACK_CATALOG,
+    ELEMENTAL_WORLD_PACK,
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
@@ -168,6 +170,10 @@ NAMED_DECKS: dict[str, dict[str, int]] = {
     CURATED_PACK.hero_deck_id: UR_LESSONS_DECK,
     CURATED_PACK.villain_deck_id: GW_ALLIES_DECK,
     JEONG_INCREMENT_PACK.hero_deck_id: GW_ALLIES_JEONG_DECK,
+    **{
+        key: dict(ELEMENTAL_WORLD_PACK.player_config(key, key).decklist)
+        for key in ELEMENTAL_WORLD_PACK.deck_ids
+    },
 }
 DECK_DISPLAY_NAMES = {
     "interactive": "Interactive",
@@ -175,6 +181,10 @@ DECK_DISPLAY_NAMES = {
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
+    **{
+        row["deck_id"]: row["display_name"]
+        for row in ELEMENTAL_WORLD_PACK.manifest["roster"]
+    },
 }
 # Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
 DEFAULT_HERO_DECK_NAME = CURATED_PACK.hero_deck_id
@@ -684,7 +694,15 @@ def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
     def key(setup: dict) -> str:
         return json.dumps(setup, sort_keys=True)
 
-    if sorted(map(key, setups)) != sorted(map(key, opponent.setups)):
+    admitted = set(map(key, opponent.setups))
+    roster_match = (
+        len(opponent.setups) > 2
+        and len(setups) == 2
+        and all(key(setup) in admitted for setup in setups)
+    )
+    if not roster_match and sorted(map(key, setups)) != sorted(
+        map(key, opponent.setups)
+    ):
         trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
         raise ValueError(
             f"{opponent.name} was trained on {trained}; choose those decks to play it."
@@ -733,6 +751,11 @@ def _parse_game_config(config: Any) -> GameConfig:
     )
 
     selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
+    if selected_pack is None and any(
+        name in ELEMENTAL_WORLD_PACK.deck_ids
+        for name in (hero_deck_name, villain_deck_name)
+    ):
+        raise ValueError("Elemental decks require two setups from the Elemental roster")
 
     sideboards = {}
     for seat, deck_name in (("hero", hero_deck_name), ("villain", villain_deck_name)):
@@ -741,8 +764,8 @@ def _parse_game_config(config: Any) -> GameConfig:
             pack = next(
                 (
                     candidate
-                    for candidate in (CURATED_PACK, JEONG_INCREMENT_PACK)
-                    if deck_name in (candidate.hero_deck_id, candidate.villain_deck_id)
+                    for candidate in CURATED_PACK_CATALOG
+                    if deck_name in candidate.deck_ids
                 ),
                 None,
             )

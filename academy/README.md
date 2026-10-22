@@ -187,3 +187,23 @@ have the ordinary table-session lifetime; saved completed inspection remains
 available after the session expires, while a fresh Study fork requires retained
 roots. Existing structured Study receipts and frozen `erd1` evidence keep their
 original command bindings.
+
+
+## Elemental roster
+
+Both deck selectors include all ten exact Elemental setups from the additive
+`elemental-world-v1` pack, including mirrors and either seat order. Their
+40-card main lists, Lesson pools, local treatments and retained card-identity
+provenance are in the schema-2 roster manifest at
+`frontend/src/lib/packs/elemental-world/v1/manifest.json`. Native compiled setups
+validate every row. A roster manifest chooses a default pair from those rows;
+it does not define a second setup authority. Earlier schema-1 pair packs remain
+separate. Mixing an Elemental name with a setup outside its roster is rejected.
+
+A recorded Elemental game carries explicit compiled pack and asset identity
+when rebuilding roots. The ordinary checkpoint catalog exposes its ten exact
+setups, and loaded policies retain that roster for cross-pair and mirror
+admission. Temporary Avatar grants reach both player projections, the shared
+protocol and the card's visible/accessibility label. These changes add no
+human-only choice or extra information. See the
+[Elemental world contract](../docs/rules/elemental/world.md) for evidence limits.

@@ -66,3 +66,24 @@ describe('curated matchup pack', () => {
     expect(() => validateCuratedPack(invalid)).toThrow(/must be a positive integer/);
   });
 });
+
+describe('Elemental roster', () => {
+  it('contains all ten 40-card choices with complete local identities', async () => {
+    const { ELEMENTAL_WORLD_PACK } = await import('./curated-pack');
+    const { DECK_CHOICES, sanitizeDeckSelection } = await import('./decks');
+    expect(ELEMENTAL_WORLD_PACK.roster).toHaveLength(10);
+    expect(Object.keys(ELEMENTAL_WORLD_PACK.identities)).toHaveLength(100);
+    for (const deck of ELEMENTAL_WORLD_PACK.roster ?? []) {
+      expect(Object.values(deck.cards).reduce((a, b) => a + b, 0)).toBe(40);
+      expect(DECK_CHOICES.some((row) => row.key === deck.deck_id)).toBe(true);
+      expect(sanitizeDeckSelection({ hero: deck.deck_id, villain: deck.deck_id })).not.toBeNull();
+      for (const name of [...Object.keys(deck.cards), ...Object.keys(deck.sideboard)]) {
+        expect(ELEMENTAL_WORLD_PACK.identities[name]).toBeDefined();
+        expect(resolveTreatment(name).source).toBe('pack');
+      }
+    }
+    const invalid = structuredClone(ELEMENTAL_WORLD_PACK);
+    invalid.roster!.push(invalid.roster![0]);
+    expect(() => validateCuratedPack(invalid)).toThrow('duplicate roster');
+  });
+});
