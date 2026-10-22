@@ -301,3 +301,59 @@ changes or broader acceptance checks have passed. Continue the already authorize
 bounded validation and reviewable PR publication. The existing no-paid-execution
 and no-merge-arming boundaries remain unchanged. At this read, the live pursue
 Flow had reached `pr-publish`; leave that process in control.
+
+## CI repair — ordinary allocation continuation
+
+PR #355 head `280147fc8` failed main integration at
+`tests/training/test_allocation.py::test_pause_export_and_resume_preserve_target_and_learning`.
+Reproduced locally. The new original-deadline guard incorrectly covered ordinary
+paused CPU recipes, whose documented contract permits a new explicit allocation.
+Commit `90c551388` scopes that guard to opted-in game-error recovery, preserves
+the ordinary continuation contract, strengthens its deadline/parent assertions,
+and adds allocation coverage to the recovery gate. No auto-merge was enabled.
+
+Finalized-source verification: allocation, recovery and combined game-error
+recovery suites passed 29 tests; Ruff and whitespace checks passed. An earlier
+verification pass was invalidated by formatting source during identity-sensitive
+recovery tests; the clean rerun above is authoritative. Published head verified
+on GitHub as `90c551388a1aea3421b976cccc8937f29e00d53e`; CI is running.
+
+## Delivery direction — Jack Heart, 2026-10-22
+
+Jack Heart now requests “automerge and ship”, superseding the earlier
+no-merge-arming boundary. Run the ship gate, land PR #355 with waited auto-merge,
+and complete MTG-176 after authoritative merge and outcome verification.
+No paid execution or campaign restart is authorized. The latest repair is
+`90c551388`; its 29 focused tests and checks are recorded above. Preserve the
+actual evidence limits in PR copy before scratch cleanup.
+
+## Ship gate — 2026-10-22
+
+Gate reviewed `95ca2059e..90c551388` and the existing uncommitted delivery notes.
+No further implementation gap was found. The final allocation guard preserves
+ordinary paused continuation while retaining opted-in recovery's original deadline.
+Reuse the 485 passing Python checks (2 skipped), full debug Rust suite, changed-file
+Ruff and Cargo formatting from publication, and the finalized-source 29-test
+allocation/recovery rerun above. No source changed during this gate.
+
+Missing required checks completed on `90c551388`:
+
+- `uv run cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` — passed; bare Cargo initially selected unsupported system Python 3.14, so the successful check used the pinned uv environment.
+- `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q` — 20 passed in 95.29 seconds, including live report discovery.
+- `uv run --python 3.12 --extra dev --extra artifacts --extra notebook --extra reports pytest tests/semantic/test_elemental_world.py -q` — 20 passed in 1.41 seconds, including final-checkpoint reload.
+- `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest --collect-only tests/env/ tests/agent/ tests/model/ tests/remote/ tests/training/ tests/test_package_boundaries.py -q` — 977 collected; no new module-name collision. Collection is not execution evidence.
+- `git diff --check` — passed.
+
+Current-head CI has passed Rust, Python unit, long integration, Academy integration,
+protocol/semantic conformance, clean-machine Play, package/install and diagnostic
+checks. Main integration and Academy UI remain running, with no observed failure;
+their results remain owned by CI and the following waited land operation. No
+frontend interaction or world contract changed here, and no full local matrix
+was repeated.
+
+The published PR and `docs/game-crash-recovery.md` retain the consequential limits:
+controlled payment fixture rather than the original missing Gnarled Professor
+prefix; no production rules-repair or learning-strength claim; fake remote effects;
+no CUDA/Etude process-recovery proof; hashes are not source/binary archives; native
+aborts/hangs still need supervision. Gate passes for the authorized land step,
+subject to its CI completion boundary. This gate does not merge or settle MTG-176.
