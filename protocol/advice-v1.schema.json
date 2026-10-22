@@ -2364,6 +2364,13 @@
           "title": "Tapped",
           "type": "boolean"
         },
+        "temp_subtypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Temp Subtypes",
+          "type": "array"
+        },
         "text_box": {
           "default": "",
           "title": "Text Box",

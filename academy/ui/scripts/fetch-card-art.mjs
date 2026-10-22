@@ -84,11 +84,10 @@ function artCropUri(card) {
   return card?.image_uris?.art_crop ?? card?.card_faces?.[0]?.image_uris?.art_crop ?? null;
 }
 
-const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-const identities = Object.entries(manifest.identities).map(([name, identity]) => ({
-  name,
-  kind: identity.kind,
-}));
+const manifests = await Promise.all([manifestPath, path.join(here, '../src/lib/packs/elemental-world/v1/manifest.json')]
+  .map(async filename => JSON.parse(await readFile(filename, 'utf8'))));
+const identities = [...new Map(manifests.flatMap(manifest => Object.entries(manifest.identities)) )]
+  .map(([name, identity]) => ({ name, kind: identity.kind }));
 // Directed demos use ordinary cards outside the curated two-deck pack.
 const fixtureDir = path.join(here, '../../fixtures');
 const known = new Set(identities.map(identity => identity.name));

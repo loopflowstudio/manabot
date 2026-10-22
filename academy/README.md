@@ -195,7 +195,7 @@ Both deck selectors include all ten exact Elemental setups from the additive
 `elemental-world-v1` pack, including mirrors and either seat order. Their
 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at
-`frontend/src/lib/packs/elemental-world/v1/manifest.json`. Native compiled setups
+`academy/ui/src/lib/packs/elemental-world/v1/manifest.json`. Native compiled setups
 validate every row. A roster manifest chooses a default pair from those rows;
 it does not define a second setup authority. Earlier schema-1 pair packs remain
 separate. Mixing an Elemental name with a setup outside its roster is rejected.

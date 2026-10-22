@@ -10,6 +10,7 @@
     describeSubject?: (object: DecisionObjectView) => string;
     instruction?: string;
     readOnly?: boolean;
+    gameOver?: boolean;
     totalOffers?: number;
     chosenOffer?: number | null;
     previewNames?: Record<number, string>;
@@ -31,6 +32,7 @@
     describeSubject = object => object.label,
     instruction = '',
     readOnly = false,
+    gameOver = false,
     totalOffers = offers.length,
     chosenOffer = null,
     previewNames = {},
@@ -108,7 +110,9 @@
   <div class="mb-2 flex flex-wrap items-baseline justify-between gap-3">
     <div class="flex min-w-0 flex-wrap items-baseline gap-2.5">
       <h2 id="action-panel-heading" class="type-title text-display">Your choices</h2>
-      {#if readOnly}
+      {#if gameOver}
+        <span role="status" class="type-label text-ink-2">Game over</span>
+      {:else if readOnly}
         <span class="type-label text-ink-2">Recorded decision</span>
       {:else if disabled}
         <span role="status" aria-live="polite" aria-atomic="true" class="type-label rounded-full bg-swamp/20 px-2 py-1 text-ink-2">Actions unavailable</span>
