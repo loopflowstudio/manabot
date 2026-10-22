@@ -10,7 +10,7 @@ receives gradients. This is bounded adversarial evaluation, not exact exploitabi
 Freeze the JSON plan before executing:
 
 ```bash
-uv run python -m experiments.runners.run_attack_plan --plan attack.json --out .runs/attack-001
+uv run python -m manabot.training.attack_execution --plan attack.json --out .runs/attack-001
 ```
 
 Use a fresh output directory. `AttackPlan` lives in

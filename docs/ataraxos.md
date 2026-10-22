@@ -17,11 +17,11 @@ The retrieved supplement SHA-256 is
 
 ```bash
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run manabot train \
-  --regime-name ataraxos-move \
+  --regime-name ataraxos_move \
   --seed 601 --out .runs/etu92-move
 ```
 
-Use `--regime-name ataraxos-move-scalar` in a fresh output directory for the representation
+Use `--regime-name ataraxos_move:ataraxos_move_scalar` in a fresh output directory for the representation
 ablation. These are two-stage, one-thread, 180-second bounded recipes, not
 scientific allocations. The normal executor retains the resolved recipe, seed
 streams, source/runtime/setup identities, costs and all failed attempts in

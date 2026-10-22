@@ -5,8 +5,6 @@ from collections.abc import Iterator
 import pytest
 import torch
 
-from experiments.runners.learnability_input_audit import Mutation, _fingerprints
-from experiments.runners.learnability_search import ARMS, Arm, _spec
 from manabot.env import ObservationSpace
 from manabot.model import Agent
 from manabot.verify.action_cases import (
@@ -15,6 +13,8 @@ from manabot.verify.action_cases import (
     encode,
     initial,
 )
+from manabot.verify.learnability.input_audit import Mutation, _fingerprints
+from manabot.verify.learnability.search import ARMS, Arm, _spec
 
 
 @pytest.fixture(autouse=True)

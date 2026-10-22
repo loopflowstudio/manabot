@@ -13,7 +13,7 @@ from manabot.training.time_cohort import native_cohort, write_cohort_report
 from manabot.training.time_sources import load_time_sources
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMO = ROOT / "experiments/study/experiment-demo"
+DEMO = ROOT / "tests/fixtures/experiment-demo"
 JS = ROOT / "manabot/training/time_cohort.js"
 
 
