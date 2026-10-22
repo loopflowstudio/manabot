@@ -246,6 +246,10 @@ jobs:
             tests/training/test_monitor_evaluation.py \
             tests/training/test_history_arena.py
 
+      - name: Etude evaluation integration
+        if: matrix.group == 'main'
+        run: uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest tests/training/test_etude_evaluation.py -q
+
       - name: Enum smoke test
         if: matrix.group == 'main'
         run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"

@@ -180,3 +180,29 @@ row-retention benefits from the other changes.
   evaluate the selected tier checkpoints against heuristic, report Lessons versus
   Allies first and the full matchup matrix with deal uncertainty, then update
   this report without implying that an interrupted run reached $50.
+
+
+## Live Etude monitoring
+
+The Mac mini now runs a separate serial Etude Eval observer, pinned to Manabot
+`a40f801e4`, alongside the existing budget controller. Its local-network report
+is [mini-heart.local:8766](http://mini-heart.local:8766/). The page and JSON exports
+refresh every 30 seconds during evaluation and retain timestamps, coverage,
+failures, checkpoint digests and the last observed training updates.
+
+Each exported absolute 250-update raw checkpoint gets the same 25 development
+deals × eight deck/seat legs against the heuristic. The arena retains command
+traces and verifies terminal replay; an invalid deal fails its Etude match.
+Etude holds the benchmark, writes match records and Parquet tables, and resamples
+whole deals for its score intervals. These remain repeatedly inspected development
+monitors. Its default bootstrap is 2,000 draws/seed 0, so interval endpoints may
+differ from the earlier monitor's 4,000 draws/seed 17; the original evidence above
+remains unchanged.
+
+LaunchAgent `manabot.mtg165.etude-evaluation` uses an isolated evaluation checkout
+and environment on the Mini. Each checkpoint has a one-hour process allowance;
+failed or interrupted attempts are retained without automatic replay. The observer
+cannot rent, extend or restart training. The read-only report server serves only
+public report files. Detailed evidence stays under
+`/Users/jack/.manabot/mtg165-two-seat-50/evaluation/` on the Mini. The training
+worker and cohort controller keep their frozen source identities and lease.

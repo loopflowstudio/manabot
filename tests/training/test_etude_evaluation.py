@@ -3,10 +3,13 @@
 from pathlib import Path
 from typing import Any
 
-from etude.eval.query import connect
-from etude.eval.tournament import curves
 import pytest
 from test_monitor_evaluation import _manifest, _rows
+
+pytest.importorskip("etude.eval.match")
+
+from etude.eval.query import connect  # noqa: E402
+from etude.eval.tournament import curves  # noqa: E402
 
 from manabot.arena.models import file_sha256
 from manabot.remote.live_evaluation import Ledger, report
@@ -110,3 +113,8 @@ def test_failed_deal_retains_evidence_and_etude_failure(
     assert list((tmp_path / "track").rglob("*.failed.json"))
     assert list((tmp_path / "evaluations/one/arena").rglob("rows.json"))
     assert not (tmp_path / "evaluations/one/result.json").exists()
+
+    # A live run can have its declaration and failed match records before any
+    # score table exists. Rendering that state must not stop the observer.
+    report(tmp_path, Ledger(cohort_sha256="a" * 64, observed_at=1))
+    assert (tmp_path / "public/status.json").is_file()

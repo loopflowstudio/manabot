@@ -74,9 +74,11 @@ def report(directory: Path, ledger: Ledger) -> None:
                     )
                 )
                 temporary.replace(public / "eval.html")
-                summaries = curves(
-                    db, "two-seat-ladder-heuristic", table="plays", value="score"
-                )
+                tables = {row[0] for row in db.execute("show tables").fetchall()}
+                if "plays" in tables:
+                    summaries = curves(
+                        db, "two-seat-ladder-heuristic", table="plays", value="score"
+                    )
         finally:
             db.close()
     atomic_json(public / "status.json", ledger.model_dump(mode="json"))
@@ -117,6 +119,18 @@ def report(directory: Path, ledger: Ledger) -> None:
     temporary = public / "index.html.tmp"
     temporary.write_text(page)
     temporary.replace(public / "index.html")
+
+
+def _refresh(directory: Path, ledger: Ledger) -> None:
+    # Reporting failure cannot terminate a valid evaluator or its child games.
+    try:
+        report(directory, ledger)
+    except Exception as error:
+        ledger.error = f"report unavailable: {type(error).__name__}: {error}"
+        atomic_json(directory / "ledger.json", ledger.model_dump(mode="json"))
+        public = directory / "public"
+        public.mkdir(exist_ok=True)
+        atomic_json(public / "status.json", ledger.model_dump(mode="json"))
 
 
 def evaluate_exports(
@@ -182,7 +196,12 @@ def evaluate_exports(
                     bootstrap_replicates=4000,
                 ),
             )
-            target = directory / "evaluations" / artifact["sha256"]
+            ordinal = 1 + sum(
+                item.digest == artifact["sha256"] for item in ledger.attempts.values()
+            )
+            target = (
+                directory / "evaluations" / f"{artifact['sha256']}-attempt-{ordinal}"
+            )
             target.mkdir(parents=True, exist_ok=True)
             atomic_json(target / "admission.json", admission.model_dump(mode="json"))
             item = Attempt(
@@ -217,7 +236,7 @@ def evaluate_exports(
                     )
                     while child.poll() is None and time.monotonic() < deadline:
                         ledger.observed_at = time.time()
-                        report(directory, ledger)
+                        _refresh(directory, ledger)
                         try:
                             child.wait(timeout=30)
                         except subprocess.TimeoutExpired:
@@ -238,10 +257,12 @@ def evaluate_exports(
                     atomic_json(
                         directory / "ledger.json", ledger.model_dump(mode="json")
                     )
-            report(directory, ledger)
+            _refresh(directory, ledger)
 
 
-def follow(cohort_id: str, directory: Path) -> None:
+def follow(
+    cohort_id: str, directory: Path, *, retry_checkpoints: tuple[str, ...] = ()
+) -> None:
     """Follow until cohort terminal, at most one hour beyond its absolute deadline."""
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -269,6 +290,16 @@ def follow(cohort_id: str, directory: Path) -> None:
                         )
                 attempt.phase = "interrupted"
                 attempt.error = "observer restarted; retained attempt not replayed"
+        for digest in retry_checkpoints:
+            previous = ledger.attempts.get(digest)
+            if previous is None or previous.phase not in {"failed", "interrupted"}:
+                raise ValueError(
+                    "explicit retry requires a retained failed or interrupted checkpoint"
+                )
+            ledger.attempts[f"{digest}-retired-{previous.started_at:.6f}"] = (
+                ledger.attempts.pop(digest)
+            )
+        atomic_json(path, ledger.model_dump(mode="json"))
         observer_deadline = cohort.deadline + 3600
         while time.time() < observer_deadline:
             terminal = False
@@ -287,7 +318,7 @@ def follow(cohort_id: str, directory: Path) -> None:
                 ledger.error = f"{type(error).__name__}: {error}"
             ledger.observed_at = time.time()
             atomic_json(path, ledger.model_dump(mode="json"))
-            report(directory, ledger)
+            _refresh(directory, ledger)
             if terminal:
                 break
             time.sleep(60)
@@ -299,5 +330,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cohort", required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--retry-checkpoint", action="append", default=[])
     args = parser.parse_args()
-    follow(args.cohort, args.directory)
+    follow(args.cohort, args.directory, retry_checkpoints=tuple(args.retry_checkpoint))

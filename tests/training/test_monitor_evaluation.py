@@ -187,7 +187,7 @@ def test_block_failure_retains_prior_rows_and_costs(
 ) -> None:
     manifest = _manifest()
     monkeypatch.setattr(
-        monitor, "_manifest", lambda *args: manifest.model_copy(deep=True)
+        monitor, "checkpoint_manifest", lambda *args: manifest.model_copy(deep=True)
     )
 
     def play(
