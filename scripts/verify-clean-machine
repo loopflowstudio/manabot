@@ -42,9 +42,10 @@ start_ms=$(uv run --no-project --python 3.12 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
   proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
 
-# Keep the 90-second gate without starting a new uv and Python process on every
-# readiness poll and competing with the cold Cargo/npm build.
-sleep 90 &
+# A hang guard, not the 90-second budget: a cold Cargo/npm build's duration
+# depends on the hosted runner, so the browser proof records the budget in its
+# receipt. A timer process avoids starting uv and Python on every poll.
+sleep 600 &
 readiness_timer_pid=$!
 ./scripts/play --port "$api_port" --frontend-port "$frontend_port" >"$log" 2>&1 &
 launcher_pid=$!
@@ -92,7 +93,7 @@ while ! grep -q '^ACADEMY_PLAY_READY ' "$log" 2>/dev/null; do
   fi
   if ! kill -0 "$readiness_timer_pid" 2>/dev/null; then
     cat "$log" >&2
-    proof_error proof.timeout "./scripts/play did not become ready within 90 seconds"
+    proof_error proof.timeout "./scripts/play did not become ready within 600 seconds"
   fi
   # npm's locked install completes independently of the native build. Prepare
   # Chromium now; the browser scenario waits for the launcher's ready record.

@@ -329,6 +329,14 @@ jobs:
       - name: Prove clean launch and offline reload
         run: ./scripts/verify-clean-machine
 
+      - name: Report time to playable against the 90-second budget
+        run: |
+          jq -r '.launch | "Time to playable: \(.elapsed_to_playable_ms) ms of a \(.budget_ms) ms budget"' \
+            .cache/clean-machine/proof.json | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .launch.within_budget .cache/clean-machine/proof.json)" != true ]; then
+            echo "::warning title=Clean-machine budget::playable after the 90-second budget on this runner"
+          fi
+
       - name: Upload clean-machine receipt
         if: always()
         uses: actions/upload-artifact@v4
