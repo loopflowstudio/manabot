@@ -217,7 +217,7 @@ def update_move_iteration(
     *,
     bootstrap_agent: Agent | None = None,
 ) -> UpdateDiagnostics:
-    """One fresh, timestep-grouped epoch with frozen collection targets.
+    """One fresh epoch grouped by native stream count, with frozen targets.
 
     EMA remains owned by execute_regime and advances once even on an empty
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
@@ -286,13 +286,26 @@ def update_move_iteration(
     diagnostics["critic_exposures"] = 0
     for group in trainer.optimizer.param_groups:
         group["lr"] = rate
+    # Compute credit on the original seat trajectories before regrouping rows.
+    # Rectangular rollouts retain one timestep per minibatch. Complete-game
+    # rollouts are packed into one column; use the same native stream count
+    # rather than accidentally taking one optimizer step per recorded decision.
+    width = trainer.collector.num_envs
+    observations = {key: value.flatten(0, 1) for key, value in observations.items()}
+    actions = actions.flatten(0, 1)
+    behavior_logs = behavior_logs.flatten(0, 1)
+    valid = valid.flatten(0, 1)
+    targets = MoveTargets(
+        targets.advantages.flatten(0, 1),
+        targets.values.flatten(0, 1),
+        targets.selected.flatten(0, 1),
+    )
     if not targets.selected.any() and learning.filter_scope == "actor_critic":
         diagnostics["skipped"] = "empty advantage filter"
-        health["skipped_steps"] = len(targets.selected)
+        health["skipped_steps"] = (actions.numel() + width - 1) // width
         return diagnostics
-    # Each learner timestep is one minibatch, preserving the paper's grouping
-    # in MTG learner-decision units rather than Stratego simulator plies.
-    for step, actor_selected in enumerate(targets.selected):
+    for start in range(0, actions.numel(), width):
+        actor_selected = targets.selected[start : start + width]
         selected = (
             actor_selected
             if learning.filter_scope == "actor_critic"
@@ -301,16 +314,17 @@ def update_move_iteration(
         if not selected.any():
             health["skipped_steps"] += 1
             continue
-        obs = {key: value[step, selected] for key, value in observations.items()}
+        indexes = torch.arange(start, start + len(selected), device=device)[selected]
+        obs = {key: value[indexes] for key, value in observations.items()}
         logits, value_logits = trainer.agent.forward_distribution(obs)
         reference = reference_distribution(obs, learning.reference)
         policy_loss = damped_policy_loss(
             logits,
-            actions[step, selected],
-            targets.advantages[step, selected],
-            behavior_logs[step, selected],
+            actions[indexes],
+            targets.advantages[indexes],
+            behavior_logs[indexes],
             reference,
-            valid[step, selected],
+            valid[indexes],
             clip=learning.clip,
             collection_kl=learning.collection_kl,
             tau=tau,
@@ -319,16 +333,12 @@ def update_move_iteration(
         policy_loss = selected_mean(policy_loss, actor_mask)
         if trainer.agent.hypers.value_kind == "categorical_wdl":
             value_loss = (
-                -(targets.values[step, selected] * value_logits.log_softmax(-1))
-                .sum(-1)
-                .mean()
+                -(targets.values[indexes] * value_logits.log_softmax(-1)).sum(-1).mean()
             )
         else:
             # Representation ablation, not the paper's outcome objective.
             value_loss = (
-                (value_logits.squeeze(-1) - targets.values[step, selected])
-                .square()
-                .mean()
+                (value_logits.squeeze(-1) - targets.values[indexes]).square().mean()
             )
         loss = policy_loss + value_loss
         try:
@@ -338,15 +348,14 @@ def update_move_iteration(
                 {
                     "logits": logits.detach(),
                     "value_logits": value_logits.detach(),
-                    "valid": valid[step, selected],
-                    "actions": actions[step, selected],
-                    "behavior_logs": behavior_logs[step, selected],
+                    "valid": valid[indexes],
+                    "actions": actions[indexes],
+                    "behavior_logs": behavior_logs[indexes],
                     "reference": reference,
-                    "advantages": targets.advantages[step, selected],
-                    "value_targets": targets.values[step, selected],
+                    "advantages": targets.advantages[indexes],
+                    "value_targets": targets.values[indexes],
                     "actor_selected": actor_mask,
-                    "minibatch_indexes": step * actions.shape[1]
-                    + selected.nonzero().flatten(),
+                    "minibatch_indexes": indexes,
                     **{
                         f"minibatch_observation/{key}": value
                         for key, value in obs.items()
@@ -358,28 +367,24 @@ def update_move_iteration(
         diagnostics["actor_exposures"] += int(actor_mask.sum())
         diagnostics["critic_exposures"] += int(selected.sum())
         with torch.no_grad():
-            logs = policy_logs(logits, valid[step, selected])
+            logs = policy_logs(logits, valid[indexes])
             probabilities = logs.exp()
             diagnostics["entropy"] = float(
-                -(probabilities * logs.masked_fill(~valid[step, selected], 0))
-                .sum(-1)
-                .mean()
+                -(probabilities * logs.masked_fill(~valid[indexes], 0)).sum(-1).mean()
             )
             diagnostics["collection_kl"] = float(
-                reverse_kl(
-                    logs, behavior_logs[step, selected], valid[step, selected]
-                ).mean()
+                reverse_kl(logs, behavior_logs[indexes], valid[indexes]).mean()
             )
             diagnostics["reference_kl"] = float(
                 reverse_kl(
                     logs,
-                    reference.masked_fill(~valid[step, selected], 1).log(),
-                    valid[step, selected],
+                    reference.masked_fill(~valid[indexes], 1).log(),
+                    valid[indexes],
                 ).mean()
             )
             ratio_logs = (
-                (logs - behavior_logs[step, selected])
-                .gather(-1, actions[step, selected, None])
+                (logs - behavior_logs[indexes])
+                .gather(-1, actions[indexes, None])
                 .squeeze(-1)
             )
             health["clip_fraction"] = float(

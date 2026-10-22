@@ -55,10 +55,21 @@ def scale_ladder() -> TrainingRegime:
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = 100_000
     stage.streams = 256
+    stage.learning_seats = "one"
     stage.learning = move_learning()
     stage.execution = Execution(
         device="cuda", wall_seconds=400_000, memory_bytes=40 * GIB
     )
     regime.wall_seconds = 400_000
     regime.schedule_clock = "iteration_fraction"
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
+def scale_ladder_both() -> TrainingRegime:
+    """Current-world two-seat treatment; frozen w6 attempts retain their own recipe."""
+    regime = scale_ladder()
+    regime.id = "scale-ladder-allies-lessons-both-v2"
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning_seats = "both"
     return TrainingRegime.model_validate(regime.model_dump())

@@ -570,7 +570,25 @@ TrainingRun artifacts into the new allocation. Only manifests cross the schedule
 the worker retrieves and verifies the four versioned objects. Its expiring STS
 policy grants read-only access to those exact inputs, alongside the ordinary
 job-scoped runtime permissions. No issuer/account credentials reach workers.
-A failed, paused or missing predecessor blocks dependent admission.
+An exact-iteration continuation rejects a paused predecessor. For allocations
+whose final update is set by time/money, declare `iteration="last-complete"`.
+That explicitly permits a completed or cleanly paused predecessor, and binds
+its actual final update only after verified final publication and cleanup.
+Failed, incomplete or missing evidence still blocks admission.
+
+A new cohort can take up a job already running as its first entry:
+
+```bash
+uv run --extra artifacts manabot deploy cohort start \
+  --plan cohort.json --state-dir /absolute/private/cohort-state \
+  --adopt-job existing-job-id --source-root /absolute/pinned-worker-source --doppler
+```
+
+The first entry must reproduce the exact existing job, including monitoring and
+checkpoint cadence. Adoption retains its original admission time and lease;
+it never creates a rental. A repeated adoption of the same job is idempotent.
+A different first job is refused. The controller checkout may be newer than the
+retained worker source, as in an ordinary controller upgrade.
 
 Self-play `updates` is the absolute endpoint for these entries. For example,
 26,000 → 63,000 → 100,000 uses two separate allocations; the second cannot start
@@ -619,3 +637,58 @@ write leaves services stopped for journal reconciliation. This was a one-off
 operational repair, not a general repricing/retry API. Original scientific learning
 contracts and completed attempts remain unchanged; the operational cohort identity
 changes. See the [capacity record](../experiments/model-capacity.md#queued-price-admission-recovery-2026-10-08).
+
+### Live Etude evaluation on an owned controller
+
+Install the `evaluation` and `artifacts` extras in a separate controller runtime
+(Python 3.12). Both `evaluation` and `reports` use the released Etude 0.2.0 API;
+the evaluation extra adds its optional Eval dependencies.
+The native engine and checkpoint admission must match the frozen training world.
+
+```sh
+uv run --extra evaluation --extra artifacts -m manabot.remote.live_evaluation \
+  --cohort mtg165-two-seat-50 --directory /Users/jack/.manabot/mtg165-two-seat-50/evaluation
+```
+
+This observer reads verified raw exports every minute and holds an Etude benchmark
+for each new absolute 250-update checkpoint, serially on the controller CPU. It
+cannot rent, extend or restart training. Each checkpoint has a one-hour evaluation
+limit, a durable intent, console output, arena traces/replay receipts and Etude
+match/Parquet records. Failures and interruptions stay visible without automatic
+replay; a still-live old evaluator PID blocks a replacement observer.
+
+The benchmark repeats deals 1590100000–1590100024, all eight deck/seat legs against
+the heuristic, retaining one complete deal as Etude's scheduling/resampling unit.
+These are development monitors, not held-out evidence. Etude's intervals use its
+own default bootstrap (2,000 draws, seed 0), distinct from the earlier monitor
+report's 4,000 draws/seed 17. Scores use the same games and original arena seed
+derivation. Native on-play seats are distinct from Etude's candidate/anchor seats.
+
+`public/index.html`, `eval.html`, `curves.json` and `status.json` refresh from saved
+Etude results every 30 seconds during evaluation. Serve only `public/` from the
+Mini for a live page; checkpoint inputs, credentials and command traces stay
+outside that served directory. The observer exits after terminal cohort discovery
+and draining its exported checkpoint queue, or one hour beyond the cohort's
+absolute deadline. It holds a filesystem owner lock independently of training.
+
+For a launchd CPU evaluator, leave `ProcessType` at its normal default and set
+`OMP_NUM_THREADS=1` and `MKL_NUM_THREADS=1`. macOS Background scheduling can
+severely slow native games. An explicit `--retry-checkpoint SHA256` retires a
+retained failed/interrupted observer attempt and resumes Etude's completed deal
+records; it never silently retries by default. Use that flag only for the intended
+recovery invocation, then remove it from the saved service arguments.
+
+The evaluator also admits final raw exports from paused/completed self-play
+stages, including endpoints between 250-update milestones. Identical artifact
+digests are evaluated once. Terminal manifests are inspected once per distinct
+run receipt, and failed/running stage artifacts are not treated as endpoints.
+During an evaluation, small supervisor observations refresh training progress;
+the page shows their age separately from the report generation time.
+
+Deck-specific tables use the actual participant seat: the candidate plays Lessons
+against Allies in legs 0/3 and Allies against Lessons in 1/2. Each participant's
+row names its own deck assignment. The corrected benchmark is
+`two-seat-ladder-heuristic-deck-seats`; its predecessor's cross-deck labels were
+incorrect, while its aggregate scores and retained native arena evidence remain
+valid. Corrections project verified retained arena rows through the same table
+function and explicitly record provenance; they do not rerun inference.

@@ -37,8 +37,8 @@ from manabot.verify.learning_regression import report_baseline
 import managym
 
 BASELINE_STEPS = 128
-# v2 trains the FiLM policy; baseline-v1 (the qualification receipt) was additive.
-BASELINE_VERSION = "baseline-v2"
+# v3 combines the FiLM policy with learning from both seats by default.
+BASELINE_VERSION = "baseline-v3"
 # Separate from the existing scientific and monitoring cohorts. Repeated nightly
 # use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))

@@ -34,7 +34,7 @@ def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
     assert Hypers().agent.policy_film
     assert load_train_config("local").agent.policy_film
     recipe = baseline(1)
-    assert recipe.version == "baseline-v2" and recipe.regime.agent.policy_film
+    assert recipe.version == "baseline-v3" and recipe.regime.agent.policy_film
     assert not AgentSpec.model_validate({"hidden_dim": 64}).policy_film
     assert not Hypers.model_validate({"agent": {}}).agent.policy_film
 
