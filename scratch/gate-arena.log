@@ -1,7 +1,0 @@
-...........                                                              [100%]
-============================= slowest 5 durations ==============================
-8.37s call     tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[all]
-5.19s call     tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[mirrors]
-
-(3 durations < 0.005s hidden.  Use -vv to show these durations.)
-11 passed in 13.78s

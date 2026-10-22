@@ -1,9 +1,0 @@
-============================= test session starts ==============================
-platform darwin -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/jack/src/manabot.rules-audit/.venv/bin/python
-cachedir: .pytest_cache
-rootdir: /Users/jack/src/manabot.rules-audit
-configfile: pyproject.toml
-plugins: anyio-4.12.1
-collecting ... collected 7 items
-
-tests/academy/test_study_branch.py::test_historical_address_forks_executes_structured_command_and_returns 

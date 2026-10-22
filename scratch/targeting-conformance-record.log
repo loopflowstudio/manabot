@@ -1,5 +1,0 @@
-    Blocking waiting for file lock on build directory
-   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 6m 16s
-     Running `managym/target/debug/semantic_conformance record --root conformance/semantic-kernel-w12-v1`
-recorded 14 replay cases / 3491 commands and 15 Phase rows
