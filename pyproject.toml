@@ -4,10 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "manabot"
-version = "0.1.0"
+version = "0.2.0"
 description = "The trainable Magic: The Gathering agent for Manabot"
-requires-python = ">=3.12"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "managym==0.2.0",
     "numpy>=1.24.0",
     "pandas>=2.0.0",
     "nbformat>=5.10.0",
@@ -16,8 +18,6 @@ dependencies = [
     "typer>=0.12.5",
     "wandb>=0.18.7",
     "psutil>=5.9.0",
-    "fastapi>=0.116.0",
-    "uvicorn[standard]>=0.34.0",
     "etude-sdk==0.2.0",
 ]
 
@@ -32,10 +32,19 @@ reports = [
 artifacts = [
     "boto3>=1.35.0",
 ]
+academy = [
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.34.0",
+]
+evaluation = [
+    "matplotlib>=3.9",
+]
 play = [
     "maturin>=1.5,<2.0",
 ]
 dev = [
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.34.0",
     "pytest>=7.0.0",
     "httpx>=0.28.0",
     "jsonschema>=4.23.0",
@@ -92,17 +101,35 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
+managym = { path = "managym", editable = true }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
     { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
 
+[project.urls]
+Homepage = "https://manabot.gg"
+Repository = "https://github.com/loopflowstudio/manabot"
+
+[tool.manabot.release]
+# Published wheels need Torch; source uv groups select CPU/CUDA separately.
+runtime-dependencies = ["torch==2.10.0"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/manabot", "/academy", "/content/semantic", "/docs/experiment-metrics.md", "/README.md", "/pyproject.toml"]
+exclude = ["/academy/ui"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
+
 [tool.hatch.build.targets.wheel]
 packages = ["manabot", "academy"]
 exclude = ["academy/ui/**"]
 
 [tool.hatch.build.targets.wheel.force-include]
+"content/semantic" = "content/semantic"
+"docs/experiment-metrics.md" = "docs/experiment-metrics.md"
 "academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
 
 [tool.pytest.ini_options]
