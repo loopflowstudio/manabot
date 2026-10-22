@@ -1922,6 +1922,298 @@
    "sha256": "b158af3d173f1982531609780b72b4f62dfa2597ad5f933159dea4dc594bf002",
    "bytes": 1359
   },
+  "experiments/data/mtg174/training-report-v1/arena/3c7cfc600f7d/arena/d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383/replay.json": {
+   "sha256": "07fbb5cdeb0f31836a891cb7f8a55dc842a34d91528e16c0f4fb2dac600e082e",
+   "bytes": 318
+  },
+  "experiments/data/mtg174/training-report-v1/arena/3c7cfc600f7d/arena/d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383/rows.json": {
+   "sha256": "081c4616b3ddb25d2f17adcd43698c940a1564b6b4b2e1d384c1a53a3a7c53a2",
+   "bytes": 10435
+  },
+  "experiments/data/mtg174/training-report-v1/arena/3c7cfc600f7d/arena/d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383/trace.json": {
+   "sha256": "0bc2a74ac9003ef9d837c8508c3d153ecad73d610446c242651436a36bc6ed9f",
+   "bytes": 448
+  },
+  "experiments/data/mtg174/training-report-v1/arena/3c7cfc600f7d/arena/d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383/traces/elemental-player-0__elemental-player-1.commands.jsonl.gz": {
+   "sha256": "24e52f143e672a6b6770d87c4d7933b4871656656f2cdba7a1efb6f977aa8574",
+   "bytes": 173633
+  },
+  "experiments/data/mtg174/training-report-v1/arena/eab1199efe7b/arena/10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c/replay.json": {
+   "sha256": "da4d0a946c06d70ec0215f3bd6c1190d759b69bfe2296e6ec138f899d7cd7fb5",
+   "bytes": 319
+  },
+  "experiments/data/mtg174/training-report-v1/arena/eab1199efe7b/arena/10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c/rows.json": {
+   "sha256": "c4a24eb7b6f937e33bdbb3ae8d4f2322d0feecce6a6c74b73cd0784133f9a72f",
+   "bytes": 10365
+  },
+  "experiments/data/mtg174/training-report-v1/arena/eab1199efe7b/arena/10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c/trace.json": {
+   "sha256": "b4b9aa747bd792c38466504bd8a1a403fb12310f3fc10294bcd517291640ded1",
+   "bytes": 448
+  },
+  "experiments/data/mtg174/training-report-v1/arena/eab1199efe7b/arena/10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c/traces/elemental-player-0__elemental-player-1.commands.jsonl.gz": {
+   "sha256": "2def3e0d22b278c61129445a0a7d0178c6edc3d39f165a2602ad5ab0b6e2594b",
+   "bytes": 195423
+  },
+  "experiments/data/mtg174/training-report-v1/etude_sdk-0.1.2-py3-none-any.whl": {
+   "sha256": "3b46aca22eb1b62fbb3b21e6de24d2313375f8ceb1f74de030932fb24b2228c0",
+   "bytes": 342555
+  },
+  "experiments/data/mtg174/training-report-v1/mtg174-engineering-training.html": {
+   "sha256": "83196bbce5086e762a06d4b9482e6a72a3353bdc37a720866077a9b81a5d0095",
+   "bytes": 75761
+  },
+  "experiments/data/mtg174/training-report-v1/owner-config.json": {
+   "sha256": "9b54f8a4e0248f71fb63fcc036d9814df4650b81adcac47249a33d579c2837d9",
+   "bytes": 351
+  },
+  "experiments/data/mtg174/training-report-v1/owner.plist": {
+   "sha256": "ce98b9f517381b4370878d8c968de9686b8d3fc0c10de392cb41d410c1f18b0b",
+   "bytes": 1395
+  },
+  "experiments/data/mtg174/training-report-v1/policy-0-initial-raw.pt": {
+   "sha256": "5e1bb95b493470560186b17a3a55d23119f50474e2ecda4cebdf1e0539ef8ef6",
+   "bytes": 1070769
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/118e59e21094-logs.json": {
+   "sha256": "4d7074776e084065c6c6c98eb3f6b3e6a0791f7165c725b961506fab38dd0541",
+   "bytes": 4679
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/118e59e21094-record.json": {
+   "sha256": "271981bac2cfd54217a9407143408d2ff4bef26c9d982f625c69deab7ff0834a",
+   "bytes": 2588
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/118e59e21094-status.json": {
+   "sha256": "774ccb6858c4cc0425eab55636407e045b9ec576af3e908912a4b389ecc8ee16",
+   "bytes": 257
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000002-logs.json": {
+   "sha256": "8bb0543c8349a0a0f788fbcec1e6bbb81953a000898f51c21a0c3a952c6e780d",
+   "bytes": 9859
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000002-record.json": {
+   "sha256": "a4c9f40b30144b841c52d56aa4f438b818fbffb9a081847a7a4e8e57463995da",
+   "bytes": 2586
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000002-status.json": {
+   "sha256": "db2ea9864d792151a6fae2dd118d1f63ecefc963a13fc1a16815b042bdebd949",
+   "bytes": 257
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000003-logs.json": {
+   "sha256": "7fe62298fd70ca5f7ed2f4fc1c31d476acd741adecd64a9deb766fc3ab2f5832",
+   "bytes": 5006
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000003-record.json": {
+   "sha256": "0d22714e93aaddd943a6d72ffbcca212b8fdb4210bf60ae2e21c86334fbbd54d",
+   "bytes": 2584
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000003-status.json": {
+   "sha256": "ef85b0448eaeb559ca843f9b99e7f74d9c433d6e8b673d36def1c9c7be292496",
+   "bytes": 260
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000006-logs.json": {
+   "sha256": "cf09b007f34e775bfaf7778599425019f3044c9c7f70f04e9e1527f45e1ff92f",
+   "bytes": 5012
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000006-record.json": {
+   "sha256": "618efcf821443b986a21c3678850e640995ba5fbe739a2e382405d0045744e3c",
+   "bytes": 2561
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/174000000006-status.json": {
+   "sha256": "6698f5d7462489d6b8d1b81bfb59e114b06c5d18b3d66ecd99d554014a0e8ee1",
+   "bytes": 260
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/admit_credentials.py": {
+   "sha256": "7c140053b1b0d08296c4765b95bb903125e18c8a1cb94f79cfe24ca1d2693394",
+   "bytes": 2485
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/check_ui.cjs": {
+   "sha256": "fd751c4fe94d22b0d9b834d5f51483b74b4d5ef988777fc0f679d4f8e6908678",
+   "bytes": 2219
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/client-freeze.txt": {
+   "sha256": "bf3b0a85c54162720adc671543aa95566ec853fe26ac6d2abfc4c5858904c4d6",
+   "bytes": 443
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/credential-admission-iam-read.json": {
+   "sha256": "8cc4dc8373dd6287f5357d2f758a88a5ce22ca221efb7d92ab866dac26825bc1",
+   "bytes": 438
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/credential-admission-initial.json": {
+   "sha256": "1f832a3b44e1da955e2ec5deee65899969bab5ad3ef49c7775721c8e19e90092",
+   "bytes": 441
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/credential-admission.json": {
+   "sha256": "83685d7dc905667a21cb398383f7dcad16e29f719e1421ebaa828f090aef4e0f",
+   "bytes": 594
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/etude-full-suite-final.log": {
+   "sha256": "60da3f3a3076943c107412b9e82bbe0488d2c9f7c67f1ca06e445c4b08425c78",
+   "bytes": 3366
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/etude-full-suite-initial.log": {
+   "sha256": "a3722a294141c30606cda7e336ab1924c4f3d159e47f9299e246c3dd8973db3a",
+   "bytes": 5284
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/etude-runtime-source.tar.gz": {
+   "sha256": "fb8c6d1f009660fd61d5352a776d7fd533fb0a62ce5820e989b0cac8dd43c11f",
+   "bytes": 459706
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/fixture-page.json": {
+   "sha256": "eaa721331e98ca37187141a165087c6bcc3080a0de5aff30247cc3c91159e734",
+   "bytes": 12379
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/fixture.html": {
+   "sha256": "874224c8b0ca9777263199d16d631f3babdb889d0a2316f19f00d57c3cdcaa8e",
+   "bytes": 77903
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/manabot-pr-body.md": {
+   "sha256": "ebafb32e14cea989e8957b0a7a1573ee739533702f6ce9f9456da70bd2e2e6c4",
+   "bytes": 2407
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/manabot-pr-source.json": {
+   "sha256": "c9c2b762ff43a1f742f9b51d80f42ba403e1df9d5701fcfae0766657eec2e367",
+   "bytes": 641
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/manabot-supplemental.patch": {
+   "sha256": "35aad7785d380e83ed9c7126e177c15ac312a8f8dabfaddd98db04dd9dec0878",
+   "bytes": 38577
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/owner-after-restart.json": {
+   "sha256": "b8fe88be26cf86cd3f04ad603689c0812cf6f2a7a071fc3c04396f759d63f8ff",
+   "bytes": 950
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/owner-before-restart.json": {
+   "sha256": "bc9c8973251f97d048d7b3f640869f4d9440cf6bebd566b99d83633c3db970a3",
+   "bytes": 916
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/owner-restart-proof.json": {
+   "sha256": "72e55f4c1e4b070ecb7007e4862d9cb62b5e4813a7373fc9062da7d3eba720da",
+   "bytes": 248
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/owner-tests.log": {
+   "sha256": "ae5fba65d921fdac1d07df2d4c0621785efbaf2180961712ad6328bf7b56e222",
+   "bytes": 98
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/partial-page.json": {
+   "sha256": "124f3c5393da163237292a18862e6d8a396018fe51d91eb97975c53c2bdb90db",
+   "bytes": 5930
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/prospective-link-fixture.json": {
+   "sha256": "4dc32d67c691e4a4edd7cdd42f3e53149e4a46c57abce3617bb57d3ab6afb5a2",
+   "bytes": 1930
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/readiness.json": {
+   "sha256": "95e35d62113874aa28396b7b522e1c0b88ac7bf98c1c9ae3f8c42997bd4d3a55",
+   "bytes": 2547
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/successful-evaluation.json": {
+   "sha256": "cbf3999a0ff4c862b28c8c61ea7fbc6b3948aa87df4755d6c59715c7d57f4da4",
+   "bytes": 497
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/successful-page.json": {
+   "sha256": "43ed821d810fbd18cdb667f1bf72aea3efde6a83fd7a83a7b6fccc2affe36982",
+   "bytes": 8664
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/training-sdk-compatibility.log": {
+   "sha256": "a76880568a1b729fa071cd564adc5ed9377d2890150f66b0b296e06963cc5bab",
+   "bytes": 98
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/ui-proof.json": {
+   "sha256": "b19928c104485d575c467aad5837530d309b4f2961d749f73f5c969237ac0f21",
+   "bytes": 2399
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/watch_report.py": {
+   "sha256": "8d65575faadae8c02dd6166837fb5172b68c0273635445e7f7444dae4b4aad68",
+   "bytes": 1667
+  },
+  "experiments/data/mtg174/training-report-v1/receipts/worker-freeze.txt": {
+   "sha256": "64aadd1596c1e48e5b8e1ef301d463e749a4b8a8ae673fff599a1dfa2f613375",
+   "bytes": 382
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000002/environment.json": {
+   "sha256": "fd236b4f9e7d24c2df299540c5271b0b4f9dad2562117f2194b072a53f04ed8f",
+   "bytes": 129
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000002/matches/288b2857a85bfaebaa9f878a00c186140e3fc7e01d4351e388310ff5c13317a5.failed.json": {
+   "sha256": "6e5b4d18ed9fcafa681ca7796c2798a084c736f506cfa4dd03947706c5f7f495",
+   "bytes": 1076
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000002/run.json": {
+   "sha256": "a1575099f3511d31b35192b2a1ca626b24fbf1d9909e99ca4a6bdfae59b77fda",
+   "bytes": 353
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000002/state.json": {
+   "sha256": "0d15c9e61e7210f01333ee06074d629ee6516d0e25f106e8f3969cb72b1a1cf1",
+   "bytes": 82
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000002/tournament.json": {
+   "sha256": "6cc9e6d9d64f91cde2a3c33b41af15707ec8689a501b33b7de316cc5bc152487",
+   "bytes": 961
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/environment.json": {
+   "sha256": "fd236b4f9e7d24c2df299540c5271b0b4f9dad2562117f2194b072a53f04ed8f",
+   "bytes": 129
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/matches/d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383.json": {
+   "sha256": "542492e2a4e91f85edd142f137486769875b0f9e71866c66e1e52a537e906bcf",
+   "bytes": 1016
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/run.json": {
+   "sha256": "1e7586c268771f275600d750ab26daa3528aec5c09366a841a531ea7e0beb18e",
+   "bytes": 352
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/state.json": {
+   "sha256": "7c761852e3d7c8c0c1e00c434bb92fc10f8b2290f83f8c3de03a3ceb137cb75e",
+   "bytes": 84
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/tables/plays.01792632627431176000.d4f61f5f1b08539aba08591a482a11067113940ccc117c902a98f39be59f9383.parquet": {
+   "sha256": "fb312f54af1aee79ac18182dc88df4cf4fb05be9612d474b274857876cd47c0b",
+   "bytes": 2318
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000003/tournament.json": {
+   "sha256": "ed152a9c8df36cd58c04be372cd57f9109461f4cb4d8395ce723b33bbe038134",
+   "bytes": 959
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/environment.json": {
+   "sha256": "fd236b4f9e7d24c2df299540c5271b0b4f9dad2562117f2194b072a53f04ed8f",
+   "bytes": 129
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/matches/10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c.json": {
+   "sha256": "02328fd32005acb261ad65bf4ea3f51c705606bd91941a7176630ec80d5d66c1",
+   "bytes": 1015
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/run.json": {
+   "sha256": "7e6893311265aba90e4a4c4ac87fb337386c01395ec09bb6e2e956386d37fdbb",
+   "bytes": 351
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/state.json": {
+   "sha256": "16f9c9ebe6265ae8ee0dcd78bd60adb952ea403d2b8bba342f7a3c5c955f2685",
+   "bytes": 84
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/tables/plays.01792633966955490000.10c8257caa1edb0dbff8e9e5a3ed1d707fbe5554c68731bd756c71921212859c.parquet": {
+   "sha256": "26354bee4c654912afc6f833aad154acce9f4696fda14595054b8b599ab5b025",
+   "bytes": 2328
+  },
+  "experiments/data/mtg174/training-report-v1/track/174000000006/tournament.json": {
+   "sha256": "1992a62f0a7d940282e0535c92f72346fbc426bf3fb00fde767a79a088c93dd1",
+   "bytes": 957
+  },
+  "experiments/data/mtg174/training-report-v1/track/8cc9fa4c7e8244009323d55957a85691/checkpoints/updates-0.json": {
+   "sha256": "e8073631a9908dc5990c0680e9b7865b575a05772c12b83d63a5c5c1bb474d8a",
+   "bytes": 384
+  },
+  "experiments/data/mtg174/training-report-v1/track/8cc9fa4c7e8244009323d55957a85691/evaluations/174000000003.json": {
+   "sha256": "7a64ebb65f38067e82d7c1ce46cce5197541474ed840e491823903ea8513aa54",
+   "bytes": 709
+  },
+  "experiments/data/mtg174/training-report-v1/track/8cc9fa4c7e8244009323d55957a85691/evaluations/174000000006.json": {
+   "sha256": "c3da88241fac9bb9e62dbab5ac5d4fed86638153097e8faa1337350ea44a39b8",
+   "bytes": 707
+  },
+  "experiments/data/mtg174/training-report-v1/track/8cc9fa4c7e8244009323d55957a85691/run.json": {
+   "sha256": "1552dd5ad43bf9bfa3fc96042ac3b639e9bb71470a8a86103f97651570de91a7",
+   "bytes": 673
+  },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
