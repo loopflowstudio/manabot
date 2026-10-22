@@ -161,20 +161,31 @@ class _Capture:
         self.identities = runtime_identities().copy()
         self.context: dict[str, object] = {}
 
-    def _location(self) -> tuple[Path, CaptureScope | None]:
+    def _retain(self, evidence: FailureEvidence) -> Path:
+        """Create and register private evidence only after its bytes are durable."""
         scope = _scope.get() or self.scope
         directory = scope.directory if scope else Path(".runs/game-failures")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        return directory / f"{uuid4().hex}.jsonl", scope
+        path = directory / f"{uuid4().hex}.jsonl"
+        _append(path, evidence.model_dump(mode="json", by_alias=True), create=True)
+        if scope:
+            scope.paths.append(path)
+        return path
+
+    def _coordinates(self) -> dict[str, object]:
+        """Read live owner coordinates equally for failures and pending Commands."""
+        scope = _scope.get() or self.scope
+        return {
+            "context": {**(scope.context() if scope else {}), **self.context},
+            "seconds": time.perf_counter() - self.started,
+        }
 
     def _evidence(self, **fields: object) -> FailureEvidence:
-        scope = _scope.get() or self.scope
         return FailureEvidence.model_validate(
             {
                 **fields,
                 "identities": self.identities,
-                "context": {**(scope.context() if scope else {}), **self.context},
-                "seconds": time.perf_counter() - self.started,
+                **self._coordinates(),
             }
         )
 
@@ -201,10 +212,7 @@ class _Capture:
             retained.error_class = type(error).__name__
             retained.error = str(error)
             retained.traceback = "".join(traceback.format_exception(error))
-            path, scope = self._location()
-            _append(path, retained.model_dump(mode="json", by_alias=True), create=True)
-            if scope:
-                scope.paths.append(path)
+            path = self._retain(retained)
             error.add_note(f"Private native failure evidence: {path}")
         except Exception as capture_error:
             error.add_note(f"Failure evidence could not be retained: {capture_error}")
@@ -258,23 +266,14 @@ class ScalarCapture(_Capture):
         self.inputs.actor = env.current_agent_index()
         self.inputs.frame = env.semantic_decision_frame_json()
         if self.journal is None:
-            self.journal, scope = self._location()
-            _append(
-                self.journal,
-                self.evidence().model_dump(mode="json", by_alias=True),
-                create=True,
-            )
-            if scope:
-                scope.paths.append(self.journal)
-        scope = _scope.get() or self.scope
+            self.journal = self._retain(self.evidence())
         _append(
             self.journal,
             {
                 "pending": command,
                 "frame": self.inputs.frame,
                 "actor": self.inputs.actor,
-                "context": {**(scope.context() if scope else {}), **self.context},
-                "seconds": time.perf_counter() - self.started,
+                **self._coordinates(),
             },
         )
         self.inputs.actions.append(command)
@@ -508,102 +507,3 @@ def read_failure(path: Path) -> FailureEvidence:
                 evidence.error = row["error"]
                 evidence.traceback = row["traceback"]
     return evidence
-
-
-def replay_failure_inputs(evidence: FailureEvidence) -> list[dict[str, object]]:
-    """Replay only retained inputs. The CLI supplies the process wall-time bound."""
-    results: list[dict[str, object]] = []
-    for game in evidence.games:
-        # A reset/search failure has a different boundary from a rejected game
-        # input. Compare both phase and index, including empty prefixes (-1).
-        if evidence.operation == "reset":
-            retained_phase, retained_index = "reset", -1
-        elif evidence.search is not None:
-            retained_phase = "search"
-            retained_index = len(evidence.search.operations) - 1
-        else:
-            retained_phase, retained_index = "prefix", len(game.actions) - 1
-        env = (
-            managym.VectorEnv(
-                num_envs=1,
-                seed=game.seed,
-                seed_stride=evidence.seed_stride,
-                skip_trivial=evidence.skip_trivial,
-                opponent_policy=evidence.opponent_policy,
-            )
-            if evidence.mode == "vector"
-            else managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)
-        )
-        index = -1
-        phase = "reset"
-        try:
-            if evidence.mode == "vector":
-                env.reset_all([p.native() for p in game.players])
-            else:
-                env.reset([p.native() for p in game.players])
-            phase = "prefix"
-            for index, action in enumerate(game.actions):
-                if (
-                    index == len(game.actions) - 1
-                    and game.frame is not None
-                    and evidence.mode != "search"
-                ):
-                    frame = (
-                        env.semantic_decision_frames_json()[0]
-                        if evidence.mode == "vector"
-                        else env.semantic_decision_frame_json()
-                    )
-                    if frame != game.frame:
-                        raise ValueError("retained pre-command frame differs")
-                if evidence.mode == "vector":
-                    env.step([action])
-                elif isinstance(action, str):
-                    env.execute_semantic_command_json(action)
-                else:
-                    env.step(action)
-            if evidence.search is not None:
-                if env.semantic_decision_frame_json() != game.frame:
-                    raise ValueError("retained search root frame differs")
-                search = evidence.search
-                phase = "search"
-                index = -1
-                pool = getattr(env, search.method)(*search.arguments)
-                if search.method == "rollout_pool" and search.buffers:
-                    buffers = {
-                        key: np.zeros(spec.shape, dtype=spec.dtype)
-                        for key, spec in search.buffers.items()
-                    }
-                    pool.set_buffers(buffers, search.capacity)
-                    pool.encode_active()
-                    for index, operation in enumerate(search.operations):
-                        if operation == "finish_random":
-                            pool.finish_random()
-                        else:
-                            pool.step_active(operation)
-        except BaseException as error:
-            if isinstance(error, (KeyboardInterrupt, SystemExit)):
-                raise
-            results.append(
-                {
-                    "stream": game.stream,
-                    "status": "failed",
-                    "action_index": index,
-                    "error_class": type(error).__name__,
-                    "error": str(error),
-                    "phase": phase,
-                    "at_retained_failure": (
-                        phase == retained_phase and index == retained_index
-                    ),
-                    "matches_error": type(error).__name__ == evidence.error_class
-                    and str(error) == evidence.error,
-                }
-            )
-        else:
-            results.append(
-                {
-                    "stream": game.stream,
-                    "status": "advanced",
-                    "actions": len(game.actions),
-                }
-            )
-    return results

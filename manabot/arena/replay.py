@@ -6,17 +6,20 @@ import argparse
 from dataclasses import asdict, dataclass
 import gzip
 import json
-import math
 import os
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 from typing import Any
 
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 
 from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.replay import (
+    ReplayAgreement,
+    matches_retained_error,
+    require_replay_runtime,
+    run_bounded_replay,
+)
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
 from manabot.model.world import checkpoint_world
 from manabot.sim.teacher1_evidence import (
@@ -306,19 +309,18 @@ def replay_failure(game: dict[str, Any]) -> dict[str, Any]:
     pending = game.get("pending_decision")
     if pending is None or game.get("failure") is None:
         raise ValueError("game has no retained failed Command")
+    agreement = ReplayAgreement(game["failure"])
+    # Arena's historical error field combines class and message. Worker loss,
+    # timeout and unknown journal outcomes supply no comparable native error.
+    error_class, separator, message = game["failure"].partition(": ")
+    retained_class = error_class if separator else None
+    retained_message = message if separator else None
     env: Env | None = None
     try:
-        try:
-            env, _ = replay_environment(game)
-            if not _replay_game(game, env, require_terminal=False).passed:
-                return {"status": "prefix_mismatch"}
-        except BaseException as error:
-            if (
-                not isinstance(error, managym.AgentError)
-                and type(error).__name__ != "PanicException"
-            ):
-                raise
-            return {"status": "prefix_failed", "error": str(error)}
+        env, _ = replay_environment(game)
+        if not _replay_game(game, env, require_terminal=False).passed:
+            agreement.matches_binding = False
+            return {**asdict(agreement), "status": "prefix_mismatch"}
         frame = build_viewer_frame(
             env.last_raw_obs,
             match_id=game["match_id"],
@@ -328,38 +330,54 @@ def replay_failure(game: dict[str, Any]) -> dict[str, Any]:
         )
         action = int(pending["command"]["offer_id"])
         offer = next((o for o in frame["offers"] if int(o["id"]) == action), None)
-        if (
-            canonical_sha256(frame) != pending["frame_sha256"]
-            or env._engine.state_digest() != pending["pre_state_digest"]
-            or offer != pending["chosen_offer"]
-            or offer is None
-            or build_command(frame, action) != pending["command"]
-            or canonical_sha256(pending["command"]) != pending["command_sha256"]
+        if offer is None:
+            agreement.matches_binding = False
+            return {**asdict(agreement), "status": "pending_mismatch"}
+        bindings = {
+            "frame_sha256": canonical_sha256(frame),
+            "pre_state_digest": env._engine.state_digest(),
+            "chosen_offer": offer,
+            "command": build_command(frame, action),
+            "command_sha256": canonical_sha256(pending["command"]),
+        }
+        if any(
+            pending[key] != value
+            for key, value in bindings.items()
+            if pending.get(key) is not None
         ):
-            return {"status": "pending_mismatch"}
-        try:
-            _, _, terminated, truncated, _ = env.step(action)
-        except BaseException as error:
-            if (
-                not isinstance(error, managym.AgentError)
-                and type(error).__name__ != "PanicException"
-            ):
-                raise
-            return {
-                "status": "failed",
-                "action_index": len(game["decisions"]),
-                "error_class": type(error).__name__,
-                "error": str(error),
-                "matches_retained_error": game["failure"]
-                == f"{type(error).__name__}: {error}",
-            }
+            agreement.matches_binding = False
+            return {**asdict(agreement), "status": "pending_mismatch"}
+        if all(pending.get(key) is not None for key in bindings):
+            agreement.matches_binding = True
+        agreement.at_retained_failure = True
+        _, _, terminated, truncated, _ = env.step(action)
         return {
+            **asdict(agreement),
             "status": "completed"
             if terminated
             else "truncated"
             if truncated
-            else "advanced"
+            else "advanced",
         }
+    except BaseException as error:
+        if (
+            not isinstance(error, managym.AgentError)
+            and type(error).__name__ != "PanicException"
+        ):
+            raise
+        agreement.matches_error = matches_retained_error(
+            error, retained_class, retained_message
+        )
+        # The boundary flag records native execution, so a prefix rejection
+        # cannot acquire pending-command status through shared error handling.
+        result = {**asdict(agreement), "status": "prefix_failed", "error": str(error)}
+        if agreement.at_retained_failure:
+            result.update(
+                status="failed",
+                action_index=len(game["decisions"]),
+                error_class=type(error).__name__,
+            )
+        return result
     finally:
         if env is not None:
             env.close()
@@ -375,24 +393,10 @@ def main() -> None:
     parser.add_argument("--allow-changed-runtime", action="store_true")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.game < 1 or not math.isfinite(args.seconds) or not 0 < args.seconds <= 300:
+    if args.game < 1 or not 0 < args.seconds <= 300:
         parser.error("game must be positive and seconds in (0, 300]")
     if not args.worker:
-        try:
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "manabot.arena.replay",
-                    *sys.argv[1:],
-                    "--worker",
-                ],
-                timeout=args.seconds,
-            )
-        except subprocess.TimeoutExpired:
-            print(json.dumps({"status": "replay_timeout", "seconds": args.seconds}))
-            raise SystemExit(2)
-        raise SystemExit(result.returncode)
+        run_bounded_replay("manabot.arena.replay", args.seconds)
     games = (
         [read_game_journal(args.trace)]
         if args.trace.suffix == ".jsonl"
@@ -401,15 +405,12 @@ def main() -> None:
     if args.game > len(games):
         parser.error("game is beyond the end of the trace")
     game = games[args.game - 1]
-    identities = game["runtime_identities"]
-    if identities["world"] != managym.WORLD_VERSION:
-        parser.error("world differs from retained failure")
-    if (
-        identities["engine_extension_sha256"]
-        != file_sha256(Path(managym._managym.__file__))
-        and not args.allow_changed_runtime
-    ):
-        parser.error("native bytes differ; explicit --allow-changed-runtime required")
+    try:
+        require_replay_runtime(
+            game["runtime_identities"], allow_changed_runtime=args.allow_changed_runtime
+        )
+    except ValueError as error:
+        parser.error(str(error))
     print(json.dumps(replay_failure(game)))
 
 

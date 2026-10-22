@@ -1,6 +1,11 @@
 # Game crash recovery — MTG-176
 
-Status: automatic capture implemented and focused checks passed, 2026-10-22; gate acceptance remains. The accepted outcome is
+Status: reconciled, 2026-10-22. Replay now separates binding, retained boundary
+and error agreement across training, automatic capture and arena. Remote
+accounting integration is implemented and reconciled; broader validation and
+acceptance remain with gate. The supplied index-only/frame-classification feedback
+is resolved by the current implementation and focused regressions; it no longer
+identifies remaining implementation work. The accepted outcome is
 durable, reproducible engine-failure evidence for training/evaluation, bounded
 training quarantine/regather, and controlled continuation from committed learning
 state after compatible repair. Capture, replay, repaired restart and honest
@@ -48,9 +53,9 @@ External deadlines end collection rather than grant replacement time.
   source/native byte changes while retaining world/content/input/runtime checks.
   Setup failures carry the inherited snapshot's admission forward. Game-level
   regather alone does not enable process recovery, especially on CUDA.
-- Run summaries expose counts, samples, measured window and stop reason. Realign
-  repaired a privacy leak: summaries now use the retained threshold reason or
-  typed run status, never raw `run.error`; exception text stays private.
+- Run summaries expose counts, samples, measured window and stop reason using
+  the retained threshold reason or typed run status, never raw `run.error`;
+  exception text stays private.
 
 ## Related work and evidence limits
 
@@ -59,8 +64,11 @@ MTG-174 shared payment repair plus native Elemental uniform sampler (PR #353).
 MTG-172's planned policy identity, drift and KL-stop work remains separate.
 The sync failure retained the entire prior implementation in stash
 `d815bbfc94e03881681ca30283be0a4b3ccfea8d`. Code, tests and design were restored
-onto this base; the stash remains intact. The proposed Wave memory patch remains
-in that stash, outside this implementation's write authority.
+onto this base; the stash remains intact. The local `origin/main` reference still
+points to this base at reconciliation; no newer upstream delivery was observed.
+Intelligence's objective remains reproducible training and full-game improvement
+at declared cost. Its memory now records recovery lessons, without treating the
+local fixture as strength evidence. No child Wave memories exist in this checkout.
 
 Integration resolves both conflicts: native isolated completion/replacement uses
 the same roster/seed reset authority as strict stepping; Python capture and
@@ -97,26 +105,18 @@ MTG-175 reproduction or MTG-174 native rules repair.
   admission/world rejection, continuation through the same fixture collector,
   three optimizer updates, unchanged earlier diagnostics/snapshot/ledger,
   inherited failure allowance, cumulative elapsed/watchdog time, a nonempty
-  original absolute deadline and honest exported counts. It does not exercise
-  provider reservations or submission-attempt reconciliation. Arena uses the same fixture and covers
+  original absolute deadline and honest exported counts. The same fixture now
+  binds its allocation to the existing remote owners as described below. Arena
+  uses the same fixture and covers
   death/hang after acknowledgement, repaired advancement and unchanged evidence.
 - Live arena events and journal recovery share `apply_game_event`, so pending and
   completed decisions have one projection. Failure replay validates the prefix
   once in `_replay_game` and attempts the pending Command in that same environment;
   callers close it even when replay raises. Receipt fields own counter defaults.
-  The payment fixture shares native shadow setup and parses its ledger once.
-
-## Superseded mechanisms
-
-- Removed evaluation's success-only decision construction; pending evidence now
-  precedes native execution, with post-state added only after success.
-- Replaced `InjectedCollector` (invalid action per collection) in the combined
-  restart proof with the shared offered-cast payment fixture. The separate native
-  invalid-action replay test remains because it checks the actual native isolation
-  API, not the payment class.
-- Removed the duplicate live/journal event reducers and failure replay's second,
-  unchecked reconstruction of the successful prefix. `replay_prefix` remains for
-  its independent profiling caller.
+  `tests/training/game_error_fixtures.py` owns the shared payment adapter and
+  bounded subprocess replay; it imports no remote test owners. The combined
+  proof lives in `test_game_error_recovery.py`, with one typed job-bound training
+  entry point and one evaluator configuration across owner restarts.
 
 ## Automatic strict capture
 
@@ -143,32 +143,161 @@ MTG-175 reproduction or MTG-174 native rules repair.
   previous prefix and frame while keeping its setup. Replay compares an explicit
   retained phase/index instead of nested conditional expressions.
 
-## Delete — do not maintain
+Replay CLI timeout/runtime checks and automatic-input reconstruction now live in
+`manabot.env.replay`; `env.failures` owns capture and evidence decoding. `_retain`
+owns create/fsync/register ordering for scalar journals and failures; shared
+capture coordinates bind both pending Commands and failures to the live owner. Automatic
+records check source and native bytes; historical arena/tolerance replay checks
+native bytes and world, not their differently named source digests. This is
+distinct from restart's stricter world/content/input/runtime admission.
 
-- Removed direct strict native calls from the audited scalar/vector and native
-  pool/flat-MC consumers; the instrumented boundary is their sole live path.
-- Replaced success-only semantic execution in compound/selection with pre-command
-  capture while preserving their complete-log replay and learner data contracts.
-- Removed `producers._NativeVector` and its cast: shards now own the concrete
-  `CapturedVector` boundary. No exclusive fixtures remain. Removed Trainer's
-  `_capture_update` mirror; capture reads the loop coordinate directly. Tolerant
-  receipts reuse the strict capture scope's live run context instead of maintaining
-  a second dictionary of update/cost/deadline fields.
-- No recipe flag, second recovery counter, scheduler, payment solver or retry
-  path replaces these calls. Existing tolerance and arena journals retain their
-  separate accounting and process-supervision responsibilities.
+## Remote accounting integration
+
+The repaired-restart fixture now passes a persisted `Job.allocation` into every
+training attempt. Existing `remote.cohort` / `remote.job_client` run against the
+shared SQLite control-store and fake provider. A lost create response reconciles
+one permanent claim; owner restarts retain the full unsettled reservation, source
+intent, resource receipt and absolute deadline. Completion and failed-finalization
+cases settle provider/storage cost exactly once, including prior/controller dollars,
+and neither starts another rental. VerifyStore rejects a second recovery child;
+training rejects renewal of the original allocation deadline. These preserve the
+existing attempt boundaries: one permanent provider claim and one recovery child
+per stopped attempt, not a new numeric process-retry policy.
+
+The same runs export update checkpoints to the existing `CheckpointQueue`. Losing
+the fake evaluator/owner charges its full reservation. Parent, setup-failed and
+repaired run exports (including duplicate source paths) retain one identity per
+checkpoint/protocol. Interrupted and failed evaluation attempts are not retried;
+exhausting the cumulative allowance leaves the final checkpoint pending across
+another owner restart. Original evaluation job bytes, training evidence, snapshots
+and provider receipts remain unchanged. No evaluation score is fabricated.
+
+Fixture boundary: only provider effects, evaluator processes and CPU placement
+are fake. The plan freezes the actual recovery recipe, but the fixture substitutes
+CPU placement for RunPod's CUDA resolver, whose process-recovery rejection remains
+unchanged. This connects existing accounting owners to local repaired continuation;
+it does not establish remote worker recovery, CUDA portability, provider service
+behavior or an Etude SDK recovery path. No production linkage repair or new
+orchestration was necessary. The previous feedback's remote integration gap is
+covered by `tests/training/test_game_error_recovery.py`; the proof moved out of
+`test_game_errors.py` when the shared payment fixture was extracted.
 
 ## Remaining acceptance work
 
-Gate owns broader affected-suite validation and acceptance review, including
-full native debug checks, scientific cost/evaluation accounting and evidence
-limits. No production rules repair, original MTG-175 reproduction, source archive,
-provider reconciliation or portable CUDA restart is claimed. The missing original
-prefix remains a historical limit. No paid execution or publication occurred.
-Wave memory is unchanged; the prior proposed patch remains in the retained stash.
+Concept-review outcome, 2026-10-22: nothing to change and no open product
+choice. The current model expresses Jack Heart's accepted experience without
+another recovery lifecycle. The operator interaction is:
 
-Check: `uv run --extra dev pytest tests/training/test_automatic_game_capture.py tests/training/test_game_errors.py tests/training/test_elemental_uniform.py -q` — 41 passed; `cargo test --manifest-path managym/Cargo.toml agent::vector_env --lib` — 12 passed; focused dependency-blocked play plus Study protocol/runtime checks — 20 passed. Broader acceptance remains with gate.
-Changed-file Ruff, Rust formatting and `git diff --check` pass. The release wheel
-was rebuilt from the pinned root environment and its cp312 extension installed
-atomically. The first post-sync Python run exposed the vector diagnostic suffix
-and correctly rejected mid-run source changes; the passing run held source stable.
+| Operator action / event | Concept and state-changing authority |
+| --- | --- |
+| Start an opted-in training recipe; games finish normally | `GameErrorPolicy` declares tolerance; `GameErrorLedger.record` settles attempts before the existing learner updates on complete valid games. |
+| An isolated game fails during collection | The collector quarantines that game's two seats, records the attempt, and regathers under the unchanged policy; the ledger owns the rolling allowance. |
+| Inspect the private receipt with the bounded replay command | Replay reconstructs retained inputs and returns `ReplayAgreement`; it changes no attempt, learning or evaluation state. |
+| After compatible repair, explicitly resume the stopped run | `--resume-from` and `--source-repair-reason` enter existing restart admission; the child restores committed learning while ancestor ledgers and allocation/evaluation owners retain their independent accounting. |
+
+The consequential counterexample remains advancement after repair: it cannot
+turn the original failure or unknown execution outcome into a completed game,
+reset the threshold, or produce a score. Likewise, matching error text at an
+earlier action cannot establish reproduction, and a strict vector batch failure
+cannot establish each stream's original outcome. The current diagnostic model
+preserves these distinctions. Merging replay with attempt settlement or treating
+restart as a fresh allowance would violate the accepted contract; no such
+simplification is proposed. Existing usage docs already make these interactions
+explicit, so no usage or skill rewrite is needed.
+
+This review records a design conclusion, not additional execution evidence.
+The next proof remains the bounded gate validation below; no implementation
+iteration or new product decision follows from this review.
+
+Gate owns broader affected-suite validation and acceptance review, including
+full native debug checks and scientific evaluation accounting. No production
+rules repair, original MTG-175 reproduction, source archive or portable CUDA
+restart is claimed. The missing original prefix remains a historical limit.
+Wave memory reflects the bounded remote integration proof and its limits.
+No new product decision is required for the local recovery contract. Jack Heart's
+2026-10-22 steer authorizes reviewable publication after bounded validation,
+without merge arming; publication remains separate from this reconciliation.
+
+Prior implementation checks and full design detail are retained at
+`7d34af117212e733c5d73048531d47b9a5c5bc43:scratch/game-crash-recovery.md`.
+The native extension was rebuilt and atomically installed there. The subsequent
+replay diagnostics and focused regressions are reconciled below. This
+reconciliation changes only the plan, diagnostic documentation and shared memory;
+it reuses the recorded focused test result without rerunning unchanged code.
+
+Check: `uv run --extra dev --extra artifacts pytest tests/training/test_game_errors.py tests/training/test_automatic_game_capture.py -q --tb=short` — 55 passed (recorded before reconciliation, reused); broader validation and acceptance: gate.
+
+## What replay establishes
+
+Jack Heart's accepted requirement is reproducible original failure evidence with
+honest reporting after repair. Concept review's engineering clarification is
+implemented; it introduces no new product choice. Three owners remain independent:
+
+- `GameErrorLedger` settles attempts and owns quarantine/regather allowance.
+- Bounded replay reconstructs immutable inputs and emits diagnostics only.
+- Explicit TrainingRun restart restores committed learning while ancestor ledgers
+  and existing allocation/evaluation owners preserve costs, deadlines and limits.
+
+`ReplayAgreement` in `manabot.env.replay` defines binding agreement, execution at
+the retained phase/index, error agreement and original outcome. Their operator
+contract is documented in `docs/game-crash-recovery.md`. Missing metadata or
+unreached binding/error checks stay null; the boundary flag stays false until
+execution there is attempted. A wrong frame is binding divergence; the same error
+before the retained boundary is a prefix failure; another error at the same index
+is a new failure. Repaired advancement cannot revise the original outcome,
+restore allowance or supply an evaluation score. Vector streams keep unknown
+original outcomes even when the batch's failure is known.
+
+Error comparison strips the vector diagnostic suffix and recognizes Rust/PyO3
+exception aliases without changing evidence or observed error text. Automatic
+replay reconstructs each stream in `_replay_game_inputs` and assembles agreement
+fields once. Arena uses the boundary flag to distinguish prefix from pending
+native errors in one handler, with environment cleanup in `finally`. This removes
+repeated result assembly and exception handling without merging evidence formats.
+
+Training's index-only interpretation and automatic replay's classification of
+frame divergence as a native failure are gone. Arena exposes the shared
+`matches_error` field, with one comparator across replay paths. Capture formats,
+evidence payloads, runtime admission, allowance and accounting owners are unchanged;
+no migration or frozen protocol change is needed.
+
+Bounded regressions cover wrong frames, different errors/classes at the same
+index, matching errors before the retained boundary, vector diagnostic suffixes,
+older missing metadata, interrupted journals and repaired advancement. They compare
+retained bytes and inherited allowance, including the existing combined restart
+fixture. Broader validation and acceptance remain with gate.
+
+## Publication verification — 2026-10-22
+
+Reviewed the complete range from `95ca2059ea443351cabd4e8c322991c36c0d8212`,
+including the uncommitted replay simplification and combined accounting fixture.
+The remote main reference still matches that base. No additional implementation
+gap was found at this publication boundary.
+
+Fresh checks:
+
+- `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_game_errors.py tests/training/test_automatic_game_capture.py tests/training/test_game_error_recovery.py tests/training/test_elemental_uniform.py tests/training/test_recovery.py tests/training/test_experiment_report.py tests/arena/ tests/remote/ tests/test_package_boundaries.py -q --tb=short` — 339 passed, 2 skipped.
+- `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/env/ tests/sim/test_net_opponent.py tests/training/test_two_seat_learning.py tests/training/test_monitoring.py tests/training/test_checkpoint_queue.py -q --tb=short` — 146 passed.
+- `cargo test --manifest-path managym/Cargo.toml` — full debug suite passed.
+- Ruff checks for every changed/new Python file, Cargo formatting and
+  `git diff --check` passed.
+
+The first combined Python invocation stopped during collection because arena
+and env both contain an unqualified `test_match.py`; the separate invocations
+above cover both suites successfully. No code change was needed for that collision.
+
+Publication remains reviewable delivery only. These checks do not establish
+the unavailable original Gnarled Professor reproduction, a production rules
+repair, CUDA/Etude recovery, provider service behavior or learning strength.
+No paid execution, merge arming or Task completion is selected.
+
+## Conversation review — Jack Heart, 2026-10-22
+
+Jack Heart reviewed `scratch/pr-review.html` and replied “seems ok to me”.
+This accepts the walkthrough's presented behavior and implementation choices;
+the reviewed snapshot was base `95ca2059e`, HEAD `7d34af117` plus unpublished
+working edits captured at 2026-10-22T19:04:33Z. It is not a claim that later
+changes or broader acceptance checks have passed. Continue the already authorized
+bounded validation and reviewable PR publication. The existing no-paid-execution
+and no-merge-arming boundaries remain unchanged. At this read, the live pursue
+Flow had reached `pr-publish`; leave that process in control.

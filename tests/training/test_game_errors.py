@@ -1,8 +1,6 @@
 """Deterministic failures through the ordinary collector and update boundary."""
 
-from collections.abc import Mapping
 from copy import deepcopy
-import inspect
 import json
 import multiprocessing.connection
 import os
@@ -23,7 +21,7 @@ from manabot.arena.models import (
     canonical_sha256,
     file_sha256,
 )
-from manabot.arena.replay import read_game_journal, replay_failure, write_trace
+from manabot.arena.replay import read_game_journal, write_trace
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra import Experiment
 from manabot.infra.hypers import (
@@ -34,13 +32,11 @@ from manabot.infra.hypers import (
     TrainHypers,
 )
 from manabot.model.agent import Agent
-from manabot.remote.plan import Allocation, JobSpec, Machine
 from manabot.sim.net_opponent import (
     NetOpponentTrainer,
     SeatRoutedCollector,
     transition_gae,
 )
-from manabot.training import execution
 from manabot.training.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -51,14 +47,14 @@ from manabot.training.game_errors import (
 )
 from manabot.training.models import (
     Learning,
-    RecoveryPolicy,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
 )
 from manabot.training.objectives import update_iteration
-from manabot.verify.store import VerifyStore
 import managym
+from tests.training.game_error_fixtures import (
+    PaymentMismatchEnv,
+    _bounded_fixture_replay,
+    _payment_match,
+)
 
 
 class ScriptedFailures:
@@ -151,6 +147,21 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
     )
 
 
+def _tolerant_collector(
+    model: Agent, ledger: GameErrorLedger, *, seats: Literal["one", "both"] = "both"
+) -> SeatRoutedCollector:
+    return SeatRoutedCollector(
+        model.observation_space,
+        Match(),
+        Reward(RewardHypers()),
+        num_envs=2,
+        opponent_mode="self",
+        learning_seats=seats,
+        game_errors=ledger.policy,
+        record_attempt=lambda row: ledger.record(row, {}),
+    )
+
+
 def test_strict_threshold_window_and_restart(tmp_path: Path) -> None:
     policy = GameErrorPolicy()
     ledger = GameErrorLedger(tmp_path / "first.jsonl", policy)
@@ -193,16 +204,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     model = agent()
     policy = GameErrorPolicy()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        learning_seats=seats,
-        game_errors=policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger, seats=seats)
     scripted = ScriptedFailures(collector._buffers)
     collector._env = scripted
     batch = collector.collect(model, 1)
@@ -246,15 +248,7 @@ def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> 
     model = agent()
     policy = GameErrorPolicy(window=4, warmup=4)
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        game_errors=policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers, always=True)
     collector._env = scripted
     with pytest.raises(GameErrorLimit):
@@ -296,11 +290,13 @@ def _assert_native_failure_replay(collector: SeatRoutedCollector) -> None:
         matchup=MatchHypers(),
         outcome="engine_error",
         actions=[-1],
+        error_class=infos[1]["game_error_class"],
         error=infos[1]["game_error"],
         frame_json=infos[1]["game_error_frame"],
     )
     replay = replay_attempt(row)
     assert replay["status"] == "failed" and replay["at_retained_failure"]
+    assert replay["matches_binding"] and replay["matches_error"]
     # Vector execution retains additional post-error native diagnostics. Scalar
     # replay must reproduce the rejection and frame without discarding that evidence.
     assert row.error is not None
@@ -321,11 +317,44 @@ def _assert_native_failure_replay(collector: SeatRoutedCollector) -> None:
         )
 
 
-def test_original_failure_is_immutable_and_cli_replays(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "matching",
+        "wrong_frame",
+        "different_error",
+        "different_class",
+        "suffix",
+        "missing",
+        "prefix",
+    ],
+)
+def test_original_failure_is_immutable_and_cli_replays(
+    tmp_path: Path, variant: str
+) -> None:
     policy = GameErrorPolicy()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     row = attempt(True)
     row.actions = [-1]
+    env = managym.Env(seed=row.seed, skip_trivial=True)
+    env.reset(Match(row.matchup).to_rust())
+    row.frame_json = env.semantic_decision_frame_json()
+    with pytest.raises(managym.AgentError) as failure:
+        env.step(-1)
+    row.error_class = type(failure.value).__name__
+    row.error = str(failure.value)
+    if variant == "wrong_frame":
+        row.frame_json = "{}"
+    elif variant == "different_error":
+        row.error = "another rejection"
+    elif variant == "different_class":
+        row.error_class = "PanicException"
+    elif variant == "suffix":
+        row.error += '; native_failure={"post_error_state":"retained"}'
+    elif variant == "missing":
+        row.frame_json = row.error_class = row.error = None
+    elif variant == "prefix":
+        row.actions.append(0)
     ledger.record(
         row,
         {
@@ -336,6 +365,7 @@ def test_original_failure_is_immutable_and_cli_replays(tmp_path: Path) -> None:
         },
     )
     original = ledger.path.read_bytes()
+    allowance = ledger.state.model_dump()
     result = subprocess.run(
         [
             sys.executable,
@@ -352,411 +382,32 @@ def test_original_failure_is_immutable_and_cli_replays(tmp_path: Path) -> None:
         timeout=40,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["at_retained_failure"]
+    replay = json.loads(result.stdout)
+    assert replay["original_outcome"] == row.outcome
+    assert replay["status"] == (
+        "binding_mismatch" if variant == "wrong_frame" else "failed"
+    )
+    assert replay["at_retained_failure"] == (variant not in {"wrong_frame", "prefix"})
+    assert replay["matches_binding"] is (
+        None if variant in {"missing", "prefix"} else variant != "wrong_frame"
+    )
+    assert replay["matches_error"] is (
+        None
+        if variant in {"missing", "wrong_frame"}
+        else variant not in {"different_error", "different_class"}
+    )
     assert ledger.path.read_bytes() == original
-
-
-# This fixture deliberately models a payment validator disagreeing with native
-# offers. It is deterministic from setup/seed/actions and shared by scalar replay
-# and vector collection. It is not a reproduction or repair of MTG-175.
-_NATIVE_ENV = managym.Env
-
-
-def _payment_match() -> MatchHypers:
-    # A narrow native fixture: every mana source is Mountain, every spell is 2R.
-    return MatchHypers(
-        hero_deck={"Mountain": 24, "Gray Ogre": 36},
-        villain_deck={"Mountain": 24, "Gray Ogre": 36},
+    assert ledger.state.model_dump() == allowance
+    inherited = GameErrorLedger(
+        tmp_path / "child.jsonl", policy, parents=[str(ledger.path)]
     )
-
-
-def _broken_payment(red: int) -> bool:
-    # Fault: consume every available R when satisfying the one colored symbol,
-    # leaving nothing for the two generic mana. Native offers remain correct.
-    return red >= 1 and red - red >= 2
-
-
-def _repaired_payment(red: int) -> bool:
-    # Spend just one R; the remainder can pay generic mana.
-    return red >= 1 and red - 1 >= 2
-
-
-class PaymentMismatchEnv:
-    payment = staticmethod(_broken_payment)
-
-    def __init__(self, seed: int = 0, **kwargs: Any) -> None:
-        self.seed = seed
-        self.native = _NATIVE_ENV(seed=seed, **kwargs)
-
-    def __getattr__(self, name: str) -> Any:
-        # Test adapter forwards the native extension's untyped interface.
-        return getattr(self.native, name)
-
-    def set_seed(self, seed: int) -> None:
-        self.seed = seed
-        self.native.set_seed(seed)
-
-    def step(self, action: int) -> tuple[Any, float, bool, bool, dict[str, Any]]:
-        frame = json.loads(self.native.semantic_decision_frame_json())
-        offer = frame["offers"][action]
-        if (
-            self.seed % 4 == 0
-            and offer.get("public_commitment", {}).get("card") == "Gray Ogre"
-            and offer["verb"] == "cast"
-        ):
-            raw = self.native.observation_for_player(frame["actor"])
-            mountains = {
-                card.registry_key for card in raw.agent_cards if card.name == "Mountain"
-            }
-            red = sum(raw.agent.mana) + sum(
-                not permanent.tapped and permanent.registry_key in mountains
-                for permanent in raw.agent_permanents
-            )
-            assert _repaired_payment(red), (
-                "fixture must select an actually payable offer"
-            )
-            if not self.payment(red):
-                raise managym.AgentError(
-                    f"fixture payment mismatch: not enough producible mana (R={red}; cost=2R)"
-                )
-        return self.native.step(action)
-
-
-class PaymentMismatchVector:
-    def __init__(self, collector: SeatRoutedCollector) -> None:
-        self.native = collector._env
-        self.configs = [match.to_rust() for match in collector.stream_matches]
-        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
-        self.infos: list[dict[str, Any]] = []
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.native, name)
-
-    def _new_shadow(self, row: int) -> PaymentMismatchEnv:
-        shadow = PaymentMismatchEnv(
-            seed=self.native.current_game_seeds()[row], skip_trivial=True
-        )
-        shadow.reset(self.configs[row])
-        return shadow
-
-    def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
-        self.native.reset_seeds_into_buffers(seeds)
-        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
-
-    def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
-        self.native.step_into_buffers(actions, active)
-        for row, enabled in enumerate(active):
-            if enabled:
-                self.shadows[row].step(actions[row])
-
-    def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
-    ) -> None:
-        enabled = list(active)
-        failures: dict[int, dict[str, Any]] = {}
-        done_rows: list[int] = []
-        for row, shadow in enumerate(self.shadows):
-            if not active[row]:
-                continue
-            frame = shadow.semantic_decision_frame_json()
-            try:
-                _, _, done, truncated, _ = shadow.step(actions[row])
-                if done or truncated:
-                    done_rows.append(row)
-            except managym.AgentError as error:
-                enabled[row] = False
-                failures[row] = {
-                    "game_error": str(error),
-                    "game_error_class": type(error).__name__,
-                    "game_error_frame": frame,
-                    "game_error_trace": "deterministic offered-cast payment fixture",
-                }
-        self.native.step_isolated_into_buffers(actions, enabled)
-        self.infos = self.native.get_last_info()
-        for row, failure in failures.items():
-            self.infos[row] = failure
-        for row in done_rows:
-            self.shadows[row] = self._new_shadow(row)
-
-    def get_last_info(self) -> list[dict[str, Any]]:
-        return self.infos
-
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
-        self.native.replace_failed_into_buffers(failed)
-        for row, replace in enumerate(failed):
-            if replace:
-                self.shadows[row] = self._new_shadow(row)
-
-
-class PaymentMismatchCollector(SeatRoutedCollector):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._env = PaymentMismatchVector(self)
-
-
-def _bounded_fixture_replay(
-    module: str, path: Path, selector: str, index: int
-) -> dict[str, Any]:
-    script = """
-import importlib, runpy, sys
-import managym
-fixture = runpy.run_path(sys.argv[1])
-managym.Env = fixture['PaymentMismatchEnv']
-main = importlib.import_module(sys.argv[2]).main
-sys.argv = ['replay', sys.argv[3], sys.argv[4], sys.argv[5], '--worker']
-main()
-"""
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            script,
-            __file__,
-            module,
-            str(path),
-            selector,
-            str(index),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    return json.loads(result.stdout)
-
-
-def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    model = agent()
-    recipe = TrainingRegime(
-        id="game-recovery",
-        world=managym.WORLD_VERSION,
-        match=_payment_match(),
-        agent=model.hypers,
-        schedule_clock="iteration_fraction",
-        wall_seconds=120,
-        recovery=RecoveryPolicy(checkpoint_updates=1),
-        stages=[
-            TrainSelfPlay(
-                id="train",
-                operation="train_self_play",
-                updates=3,
-                streams=2,
-                transitions=1,
-                game_errors=GameErrorPolicy(),
-                learning=Learning(epochs=1, minibatches=1, retained_fraction=1),
-            )
-        ],
-    )
-    # A local receipt fixture exercises an unchanged absolute deadline. No
-    # provider, launcher or paid execution is invoked by constructing these data.
-    allocation = Allocation(
-        spec=JobSpec(
-            machine=Machine(
-                gpu_types=("fixture",),
-                vcpus=1,
-                memory_gb=1,
-                image="fixture@sha256:" + "0" * 64,
-                hourly_ceiling=0.1,
-            ),
-            lifetime_hours=1,
-            spending_limit=1,
-        ),
-        admitted_at=time.time(),
-    )
-    original_fingerprints = execution._runtime_identities
-
-    def fixture_identities(
-        seed: int, regime: TrainingRegime, space: ObservationSpace
-    ) -> dict[str, object]:
-        identities = original_fingerprints(seed, regime, space)
-        return {
-            **identities,
-            "fixture_source_sha256": file_sha256(Path(__file__)),
-            "training_source_sha256": canonical_sha256(
-                {
-                    "training": identities["training_source_sha256"],
-                    "fixture_payment_source": inspect.getsource(
-                        PaymentMismatchEnv.payment
-                    ),
-                }
-            ),
-        }
-
-    monkeypatch.setattr(execution, "_runtime_identities", fixture_identities)
-    record = GameErrorLedger.record
-
-    def interrupt_after_second_crash(
-        self: GameErrorLedger, row: GameAttempt, context: Mapping[str, object]
-    ) -> GameErrorState:
-        record(self, row, context)
-        if self.state.crashed == 2:
-            raise KeyboardInterrupt("after durable failure, before next update")
-        return self.state
-
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
-            patch.setattr(GameErrorLedger, "record", interrupt_after_second_crash)
-            with pytest.raises(KeyboardInterrupt):
-                execution.execute_regime(
-                    recipe, 197, tmp_path / "first", store, allocation=allocation
-                )
-        parent_id = store.con.execute(
-            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
-        ).fetchone()[0]
-        parent = store.training_run(parent_id)
-        assert 1 <= len(parent.stages[0].diagnostics) < 3
-        assert parent.game_errors is not None and parent.game_errors.crashed == 2
-        original = Path(parent.game_error_ledgers[0]).read_bytes()
-        entries = [json.loads(line) for line in original.splitlines()]
-        line_index, failed_entry = next(
-            (index, entry)
-            for index, entry in reversed(list(enumerate(entries, 1)))
-            if entry["attempt"]["outcome"] == "engine_error"
-        )
-        retained = GameAttempt.model_validate(failed_entry["attempt"])
-        assert retained.frame_json is not None
-        offer = json.loads(retained.frame_json)["offers"][retained.actions[-1]]
-        assert offer["verb"] == "cast"
-        assert offer["public_commitment"]["card"] == "Gray Ogre"
-        assert retained.discarded_samples > 0
-        with monkeypatch.context() as patch:
-            patch.setattr(managym, "Env", PaymentMismatchEnv)
-            replay = replay_attempt(retained)
-        assert replay["status"] == "failed" and replay["at_retained_failure"]
-        assert replay["error"] == retained.error
-        assert replay["frame"] == retained.frame_json
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                PaymentMismatchEnv, "payment", staticmethod(_repaired_payment)
-            )
-            patch.setattr(managym, "Env", PaymentMismatchEnv)
-            assert replay_attempt(retained)["status"] == "advanced"
-        bounded = _bounded_fixture_replay(
-            "manabot.training.game_errors",
-            Path(parent.game_error_ledgers[0]),
-            "--attempt",
-            line_index,
-        )
-        assert bounded["at_retained_failure"] and bounded["error"] == retained.error
-        assert failed_entry["context"]["coordinates"]["updates"] == len(
-            parent.stages[0].diagnostics
-        )
-        assert parent.recovery_artifact is not None
-        frozen_snapshot = Path(parent.recovery_artifact["path"]).read_bytes()
-        monkeypatch.setattr(
-            PaymentMismatchEnv, "payment", staticmethod(_repaired_payment)
-        )
-        assert (
-            fixture_identities(197, recipe, model.observation_space)[
-                "training_source_sha256"
-            ]
-            != parent.identities["training_source_sha256"]
-        )
-        with pytest.raises(ValueError, match="identity mismatch"):
-            execution.execute_regime(
-                recipe,
-                197,
-                tmp_path / "unapproved",
-                store,
-                allocation=allocation,
-                resume_from=parent.id,
-            )
-
-        with monkeypatch.context() as patch:
-            patch.setattr(
-                execution,
-                "_runtime_identities",
-                lambda *args: {**fixture_identities(*args), "world": "incompatible"},
-            )
-            with pytest.raises(ValueError, match="identity mismatch"):
-                execution.execute_regime(
-                    recipe,
-                    197,
-                    tmp_path / "wrong-world",
-                    store,
-                    allocation=allocation,
-                    resume_from=parent.id,
-                    source_repair_reason="A source repair cannot admit another world",
-                )
-
-        def unavailable(*args: object, **kwargs: object) -> SeatRoutedCollector:
-            raise RuntimeError("repair attempt failed during collector setup")
-
-        with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", unavailable)
-            with pytest.raises(RuntimeError, match="collector setup"):
-                execution.execute_regime(
-                    recipe,
-                    197,
-                    tmp_path / "setup-failed",
-                    store,
-                    allocation=allocation,
-                    resume_from=parent.id,
-                    source_repair_reason="Deterministic payment fixture repaired; unchanged world and inputs",
-                )
-        failed = store.training_run(
-            store.con.execute(
-                "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
-            ).fetchone()[0]
-        )
-        assert failed.recovery_artifact == parent.recovery_artifact
-        monkeypatch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
-        child = execution.execute_regime(
-            recipe,
-            197,
-            tmp_path / "second",
-            store,
-            allocation=allocation,
-            resume_from=failed.id,
-        )
-        assert child.status == "completed"
-        assert child.game_errors is not None and child.game_errors.crashed == 2
-        assert child.game_errors.attempted > parent.game_errors.attempted
-        assert len(child.stages[0].diagnostics) == 3
-        assert child.prior_seconds == failed.prior_seconds + failed.seconds
-        assert (
-            child.prior_watchdog_seconds
-            == failed.prior_watchdog_seconds + failed.watchdog_seconds
-        )
-        assert child.regime.wall_seconds == parent.regime.wall_seconds
-        assert child.parent_run_id == failed.id and child.source_repair_reason
-        assert Path(parent.game_error_ledgers[0]).read_bytes() == original
-        assert (
-            child.stages[0].diagnostics[: len(parent.stages[0].diagnostics)]
-            == parent.stages[0].diagnostics
-        )
-        assert Path(parent.recovery_artifact["path"]).read_bytes() == frozen_snapshot
-        assert child.allocation_deadline == parent.allocation_deadline
-        assert child.allocation_deadline == allocation.deadline
-        assert child.optimizer_updates_through() == 3
-        exported = TrainingRun.model_validate_json(
-            (tmp_path / "second/run.json").read_text()
-        )
-        assert exported.status == "completed"
-        assert exported.game_errors == child.game_errors
-        assert exported.game_errors.attempted == exported.game_errors.completed + 2
-        assert exported.game_errors.discarded_samples > 0
-        assert exported.game_errors.replacement_samples > 0
-        assert store.training_run(parent.id) == parent
+    assert inherited.state.model_dump() == allowance
 
 
 def test_later_crash_preserves_previous_complete_games(tmp_path: Path) -> None:
     model = agent()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        game_errors=ledger.policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger)
     collector._env = ScriptedFailures(collector._buffers, failure_generation=1)
     batch = collector.collect(model, 7)
     markers = set(batch.obs["agent_player"][:, 0, 0, 0])
@@ -772,15 +423,7 @@ def test_later_crash_preserves_previous_complete_games(tmp_path: Path) -> None:
 def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> None:
     model = agent()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        game_errors=ledger.policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers)
     collector._env = scripted
     checks = 0
@@ -804,15 +447,7 @@ def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:
     model = agent()
     policy = GameErrorPolicy(window=2, warmup=2, max_game_actions=2)
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        game_errors=policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger)
     collector._env = ScriptedFailures(collector._buffers)
     with pytest.raises(GameErrorLimit):
         collector.collect(model, 1)
@@ -837,15 +472,7 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
 
     model = agent()
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
-    collector = SeatRoutedCollector(
-        model.observation_space,
-        Match(),
-        Reward(RewardHypers()),
-        num_envs=2,
-        opponent_mode="self",
-        game_errors=ledger.policy,
-        record_attempt=lambda row: ledger.record(row, {}),
-    )
+    collector = _tolerant_collector(model, ledger)
     scripted = TruncatedGames(collector._buffers)
     collector._env = scripted
     batch = collector.collect(model, 1)
@@ -937,7 +564,56 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     # Install the same deterministic payment fixture in a fresh interpreter;
     # --worker runs the CLI's worker body under this outer hard process bound.
     reproduced = _bounded_fixture_replay("manabot.arena.replay", trace, "--game", 1)
-    assert reproduced["matches_retained_error"]
+    assert reproduced["matches_binding"] and reproduced["matches_error"]
+    assert reproduced["at_retained_failure"]
+    assert reproduced["original_outcome"] == failed["failure"]
+    for variant in ("different_error", "missing", "interrupted", "prefix"):
+        diagnostic = tmp_path / f"{variant}.jsonl.gz"
+        modified = deepcopy(failed)
+        if variant == "different_error":
+            modified["failure"] = "AgentError: another rejection"
+        elif variant == "missing":
+            del modified["pending_decision"]["frame_sha256"]
+            modified["failure"] = "worker exited without a result"
+            modified.pop("error_class", None)
+        elif variant == "prefix":
+            # The same native rejection now occurs before the retained boundary.
+            modified["decisions"].append(deepcopy(modified["pending_decision"]))
+        else:
+            diagnostic = tmp_path / "interrupted.jsonl"
+            diagnostic.write_text(
+                "\n".join(
+                    line
+                    for line in journal.read_text().splitlines()
+                    if json.loads(line)[0] not in {"result", "settled"}
+                )
+                + "\n"
+            )
+        if variant != "interrupted":
+            modified.pop("game_trace_sha256")
+            modified["game_trace_sha256"] = canonical_sha256(modified)
+            write_trace(diagnostic, [modified])
+        before = diagnostic.read_bytes()
+        replay = _bounded_fixture_replay(
+            "manabot.arena.replay", diagnostic, "--game", 1
+        )
+        assert replay["status"] == (
+            "prefix_failed" if variant == "prefix" else "failed"
+        )
+        assert replay["at_retained_failure"] == (variant != "prefix")
+        assert replay["matches_binding"] is (
+            None if variant in {"missing", "prefix"} else True
+        )
+        assert replay["matches_error"] is (
+            False
+            if variant == "different_error"
+            else True
+            if variant == "prefix"
+            else None
+        )
+        if variant == "interrupted":
+            assert replay["original_outcome"] == "execution_outcome_unknown"
+        assert diagnostic.read_bytes() == before
     timeout = subprocess.run(
         [
             sys.executable,
@@ -957,10 +633,13 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     assert timeout.returncode == 2, timeout.stderr
     assert json.loads(timeout.stdout)["status"] == "replay_timeout"
     # Keep the same fixture execution path and repair its payment arithmetic.
-    with monkeypatch.context() as patch:
-        patch.setattr(PaymentMismatchEnv, "payment", staticmethod(_repaired_payment))
-        patch.setattr(managym, "Env", PaymentMismatchEnv)
-        assert replay_failure(failed)["status"] == "advanced"
+    repaired = _bounded_fixture_replay(
+        "manabot.arena.replay", trace, "--game", 1, repaired=True
+    )
+    assert repaired["status"] == "advanced"
+    assert repaired["matches_binding"] and repaired["at_retained_failure"]
+    assert repaired["matches_error"] is None
+    assert repaired["original_outcome"] == failed["failure"]
     assert (trace.read_bytes(), journal.read_bytes()) == original
     assert trace.stat().st_mode & 0o077 == 0
     assert journal.stat().st_mode & 0o077 == 0
@@ -969,7 +648,14 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     tampered["game_trace_sha256"] = canonical_sha256(
         {k: v for k, v in tampered.items() if k != "game_trace_sha256"}
     )
-    assert replay_failure(tampered)["status"] == "pending_mismatch"
+    write_trace(tmp_path / "tampered.jsonl.gz", [tampered])
+    mismatch = _bounded_fixture_replay(
+        "manabot.arena.replay", tmp_path / "tampered.jsonl.gz", "--game", 1
+    )
+    assert mismatch["status"] == "pending_mismatch"
+    assert mismatch["matches_binding"] is False
+    assert mismatch["at_retained_failure"] is False
+    assert mismatch["matches_error"] is None
 
 
 @pytest.mark.parametrize("hang", [False, True])
@@ -994,4 +680,9 @@ def test_arena_lost_worker_retains_acknowledged_command(
     )
     unknown = read_game_journal(unobserved)
     assert unknown["failure"] == "execution_outcome_unknown"
-    assert replay_failure(unknown)["status"] == "advanced"
+    original = unobserved.read_bytes()
+    replay = _bounded_fixture_replay("manabot.arena.replay", unobserved, "--game", 1)
+    assert replay["status"] == "advanced"
+    assert replay["original_outcome"] == "execution_outcome_unknown"
+    assert replay["matches_error"] is None
+    assert unobserved.read_bytes() == original

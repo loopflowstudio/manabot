@@ -17,7 +17,9 @@ from manabot.env.failures import (
     CaptureScope,
     capture_scope,
     read_failure,
+    runtime_identities,
 )
+from manabot.env.replay import require_replay_runtime
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim import distill, rollout
@@ -32,7 +34,7 @@ from manabot.training.models import (
 )
 from manabot.verify.store import VerifyStore
 import managym
-from tests.training.test_game_errors import (
+from tests.training.game_error_fixtures import (
     PaymentMismatchEnv,
     _bounded_fixture_replay,
     _payment_match,
@@ -77,6 +79,39 @@ def _bounded(path: Path) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
+@pytest.mark.parametrize("field", ["world", "engine_extension_sha256", "source_sha256"])
+@pytest.mark.parametrize("allow_changed_runtime", [False, True])
+def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> None:
+    identities = {**runtime_identities(), field: "changed"}
+    if field == "world" or not allow_changed_runtime:
+        with pytest.raises(ValueError, match="differs|bytes differ"):
+            require_replay_runtime(
+                identities,
+                allow_changed_runtime=allow_changed_runtime,
+                require_source=True,
+            )
+    else:
+        assert (
+            require_replay_runtime(
+                identities, allow_changed_runtime=True, require_source=True
+            )
+            == runtime_identities()["engine_extension_sha256"]
+        )
+
+
+def test_replay_requires_source_only_for_automatic_records() -> None:
+    identities = runtime_identities().copy()
+    del identities["source_sha256"]
+    assert (
+        require_replay_runtime(identities, allow_changed_runtime=False)
+        == identities["engine_extension_sha256"]
+    )
+    with pytest.raises(KeyError, match="source_sha256"):
+        require_replay_runtime(
+            identities, allow_changed_runtime=False, require_source=True
+        )
+
+
 def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path, lambda: {"update": 7, "allocation_deadline": 123.0})
     with capture_scope(scope):
@@ -100,6 +135,60 @@ def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
         env._capture.reset(env._engine, [])
     assert read_failure(scope.paths[-1]).operation == "reset"
     assert _bounded(scope.paths[-1])["results"][0]["matches_error"]
+
+
+@pytest.mark.parametrize("mode", ["scalar", "vector", "search"])
+@pytest.mark.parametrize("variant", ["wrong_frame", "different_error", "missing"])
+def test_bounded_replay_separates_binding_and_error_agreement(
+    tmp_path: Path, mode: str, variant: str
+) -> None:
+    scope = CaptureScope(tmp_path / "original")
+    with capture_scope(scope):
+        if mode == "vector":
+            vector = VectorEnv(
+                1, Match(), ObservationSpace(), Reward(RewardHypers()), "cpu", seed=24
+            )
+            vector.reset()
+            with pytest.raises(managym.AgentError):
+                vector.step(torch.tensor([-1]))
+        else:
+            env = _env()
+            env.reset()
+            if mode == "search":
+                pool = env.rollout_pool(1, 1, 197, 100)
+                buffers = rollout._allocate_buffers(ObservationSpace(), pool.num_slots)
+                pool.set_buffers(buffers, pool.num_slots)
+                pool.encode_active()
+                with pytest.raises(managym.AgentError):
+                    pool.step_active([-1] * pool.num_slots)
+            else:
+                with pytest.raises(managym.AgentError):
+                    env.step(-1)
+    original = scope.paths[0].read_bytes()
+    evidence = read_failure(scope.paths[0])
+    if variant == "wrong_frame":
+        evidence.games[0].frame = "{}"
+    elif variant == "different_error":
+        evidence.error = "another rejection"
+    else:
+        evidence.games[0].frame = evidence.error_class = evidence.error = None
+    diagnostic = tmp_path / "diagnostic.jsonl"
+    diagnostic.touch(mode=0o600)
+    diagnostic.write_text(evidence.model_dump_json(by_alias=True) + "\n")
+    result = _bounded(diagnostic)["results"][0]
+    assert result["status"] == (
+        "binding_mismatch" if variant == "wrong_frame" else "failed"
+    )
+    assert result["matches_binding"] is (
+        None if variant == "missing" else variant != "wrong_frame"
+    )
+    assert result["at_retained_failure"] == (variant != "wrong_frame")
+    assert result["matches_error"] is (False if variant == "different_error" else None)
+    assert evidence.execution_outcome == "failed"
+    assert result["original_outcome"] == (
+        "execution_outcome_unknown" if mode == "vector" else "failed"
+    )
+    assert scope.paths[0].read_bytes() == original
 
 
 @pytest.mark.parametrize("policy", ["none", "random", "passive"])
@@ -133,9 +222,12 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
     assert evidence.seed_stride == 2
     assert all(game.frame for game in evidence.games)
     assert evidence.identities["input_buffers"]
-    result = _bounded(scope.paths[0])["results"]
+    replay = _bounded(scope.paths[0])
+    assert replay["original_outcome"] == "failed"
+    result = replay["results"]
     assert result[0]["matches_error"] and result[0]["at_retained_failure"]
     assert result[1]["status"] == "advanced"  # not counted as another crash
+    assert all(row["original_outcome"] == "execution_outcome_unknown" for row in result)
 
 
 @pytest.mark.parametrize("workers", [1, 2])
@@ -289,6 +381,16 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
     rows = [json.loads(line) for line in scope.paths[0].read_text().splitlines()]
     assert "pending" in rows[1] and "error" in rows[2]
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
+    interrupted = tmp_path / "interrupted.jsonl"
+    interrupted.touch(mode=0o600)
+    interrupted.write_text("\n".join(json.dumps(row) for row in rows[:2]) + "\n")
+    replay = _bounded(interrupted)
+    assert replay["original_outcome"] == "execution_outcome_unknown"
+    result = replay["results"][0]
+    assert result["status"] == "failed"
+    assert result["matches_binding"] and result["at_retained_failure"]
+    assert result["matches_error"] is None
+    assert result["original_outcome"] == "execution_outcome_unknown"
 
 
 def test_distillation_failure_uses_scalar_capture(
@@ -324,6 +426,15 @@ def test_distillation_failure_uses_scalar_capture(
         "manabot.training.game_errors", scope.paths[0], "--attempt", 1
     )
     assert result["results"][0]["matches_error"]
+    original = scope.paths[0].read_bytes()
+    repaired = _bounded_fixture_replay(
+        "manabot.training.game_errors", scope.paths[0], "--attempt", 1, repaired=True
+    )["results"][0]
+    assert repaired["status"] == "advanced"
+    assert repaired["matches_binding"] and repaired["at_retained_failure"]
+    assert repaired["matches_error"] is None
+    assert repaired["original_outcome"] == "failed"
+    assert scope.paths[0].read_bytes() == original
 
 
 def test_pooled_stream_and_search_slot_failures_replay(tmp_path: Path) -> None:

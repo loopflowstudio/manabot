@@ -60,10 +60,36 @@ uv run python -m manabot.training.game_errors .runs/example/game-attempts.jsonl 
 ```
 
 This launches a bounded local replay subprocess, without training or a rental.
-It reports the action index, pre-command frame and native exception; an earlier
-divergence is distinguished from failure at the retained action. A successful
-replay after a repair reports advancement/completion and does not rewrite the
-original evidence. `--allow-changed-runtime` explicitly permits different native
+Replay reports whether the retained input binding matches, whether execution
+reaches the retained failure boundary, and whether the observed error matches.
+A changed offer frame is a diagnostic mismatch. A different error at the same
+action is a new failure. Advancement after repair describes only this replay;
+the original failure or unknown outcome remains unchanged. Older evidence lacking
+a frame or comparable error reports the corresponding check as unavailable.
+
+Training, automatic capture and arena replay use the same diagnostic fields:
+
+| Field | Meaning |
+| --- | --- |
+| `matches_binding` | `true` when the retained pre-command frame agrees; arena also checks the saved prefix, selected offer, Command and state bindings. `false` identifies divergence. `null` means required metadata was absent or the check was not reached. |
+| `at_retained_failure` | Whether replay attempted execution at the retained boundary (phase and action index). It stays `false` until that attempt, including on earlier binding divergence. It can be `true` for rejection or advancement after repair; it alone establishes neither binding nor error agreement. |
+| `matches_error` | Whether the observed exception class and message agree. `null` means comparable original metadata or an observed exception is unavailable. Vector `; native_failure=` diagnostic suffixes are excluded only from comparison; evidence and returned error text keep the full payload. |
+| `original_outcome` | The retained outcome or arena failure label, independent of this replay's `status`. Interrupted journals remain `execution_outcome_unknown`, even when replay now rejects the Command. |
+
+An available frame is checked before the retained action executes. Training and
+automatic replay report `binding_mismatch` on divergence; arena reports
+`prefix_mismatch` or `pending_mismatch`. These results do not report a native
+execution failure. `status=failed` describes an observed replay exception; only
+agreement on binding, boundary and error supports reproduction of a known original
+failure. A successful replay after repair reports advancement/completion. Replay
+never rewrites evidence or restores failure allowance.
+A matching native error earlier in arena's saved prefix remains `prefix_failed`,
+with `at_retained_failure=false`; error agreement alone is not reproduction.
+Error comparison recognizes isolated Rust `AgentError` / `NativePanic` as the
+same classes PyO3 exposes as `PyAgentError` / `PanicException`; retained class
+names stay unchanged.
+
+`--allow-changed-runtime` explicitly permits different native
 bytes for this diagnostic; world changes remain rejected. Keep the original
 source/archive and native build available—the identity hashes are not a source
 or binary archive. The deterministic regression uses native Mountain/Gray Ogre games plus a narrow
@@ -146,8 +172,8 @@ uv run python -m manabot.arena.replay .runs/arena/failures/CELL.SEED.LEG.jsonl -
 
 The subprocess bound includes prefix reconstruction and the pending native step.
 Replay validates the saved prefix, Command/offer/frame bindings and pre-state
-before attempting the pending action. It reports prefix divergence, a repeated
-failure (including whether the error matches), or advancement after repair.
+before attempting the pending action. It reports prefix divergence, an observed
+failure with separate binding/boundary/error agreement, or advancement after repair.
 `--allow-changed-runtime` permits changed native bytes for diagnostic replay;
 a different world is still refused. Successful prefix receipts continue to prove
 only retained successful Commands. They do not validate a failed game's outcome.
@@ -162,8 +188,10 @@ not reset a failed stream, retry collection, or enable process recovery. Existin
 frozen recipes keep their serialized identities. The tolerance ledger remains the
 only owner of settled-attempt counts and recovery allowance.
 
-`manabot.env.failures` owns automatic capture. A strict run writes `failures/`
-under its output directory and registers those files as rejected artifacts.
+`manabot.env.failures` owns automatic capture; `manabot.env.replay` owns
+input reconstruction and the shared CLI deadline/runtime checks. A strict run
+writes `failures/` under its output directory and registers those files as rejected
+artifacts.
 Ordinary Trainer uses its experiment directory. Standalone environment/data
 consumers use `.runs/game-failures/` and attach the private path to the exception.
 Files are create-only, mode 0600, fsynced with their directory entry. A storage
@@ -189,6 +217,8 @@ Capture does not create reservations, reconcile submissions, or change budgets.
 A strict vector exception does not say which other rows advanced before it was
 raised. Capture retains every active row's pre-call inputs and labels no extra row
 as a crashed or completed game. Bounded replay reports each row separately.
+Its top-level `original_outcome` describes the batch; each row's original outcome
+remains unknown, including rows whose replay now advances or rejects an input.
 For built-in opponents, the frame binds the surfaced input; the retained native
 seed and opponent policy reproduce automatic opponent decisions inside that call.
 
