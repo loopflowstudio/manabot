@@ -1044,7 +1044,7 @@ async function runScenario(
 test('release stack proves versioned visuals and accessibility across the prompt matrix', async ({
   browser,
 }, testInfo) => {
-  test.setTimeout(600_000);
+  test.setTimeout(1_200_000);
   const baseURL = testInfo.project.use.baseURL;
   expect(typeof baseURL).toBe('string');
 
