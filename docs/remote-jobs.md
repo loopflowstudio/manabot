@@ -677,3 +677,18 @@ severely slow native games. An explicit `--retry-checkpoint SHA256` retires a
 retained failed/interrupted observer attempt and resumes Etude's completed deal
 records; it never silently retries by default. Use that flag only for the intended
 recovery invocation, then remove it from the saved service arguments.
+
+The evaluator also admits final raw exports from paused/completed self-play
+stages, including endpoints between 250-update milestones. Identical artifact
+digests are evaluated once. Terminal manifests are inspected once per distinct
+run receipt, and failed/running stage artifacts are not treated as endpoints.
+During an evaluation, small supervisor observations refresh training progress;
+the page shows their age separately from the report generation time.
+
+Deck-specific tables use the actual participant seat: the candidate plays Lessons
+against Allies in legs 0/3 and Allies against Lessons in 1/2. Each participant's
+row names its own deck assignment. The corrected benchmark is
+`two-seat-ladder-heuristic-deck-seats`; its predecessor's cross-deck labels were
+incorrect, while its aggregate scores and retained native arena evidence remain
+valid. Corrections project verified retained arena rows through the same table
+function and explicitly record provenance; they do not rerun inference.

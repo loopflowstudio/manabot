@@ -26,15 +26,22 @@ from manabot.infra.artifacts import verify_file
 from manabot.remote.cohort import Cohort, CohortState, load_cohort
 from manabot.remote.job_client import fetch_job_file, job_manifest
 from manabot.remote.job_store import S3JobStore
-from manabot.remote.jobs import JobRecord
+from manabot.remote.jobs import Job, JobRecord
 from manabot.remote.supervisor import stop_process
+from manabot.training.etude_evaluation import BENCHMARK
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRun
-from manabot.training.monitor_evaluation import MonitorProtocol, checkpoint_manifest
+from manabot.training.monitor_evaluation import (
+    Checkpoint,
+    MonitorProtocol,
+    checkpoint_manifest,
+    stage_checkpoint,
+)
 
 
 class Attempt(BaseModel):
     digest: str
+    projection: Literal["native", "retained-arena"] = "native"
     job: str
     updates: int
     learner_decisions: int
@@ -54,6 +61,8 @@ class Ledger(BaseModel):
     observed_at: float = 0
     cohort_phase: str = "unknown"
     training_updates: dict[str, int] = {}
+    training_heartbeats: dict[str, float] = {}
+    settled_jobs: dict[str, str] = {}
 
 
 def report(directory: Path, ledger: Ledger) -> None:
@@ -76,9 +85,7 @@ def report(directory: Path, ledger: Ledger) -> None:
                 temporary.replace(public / "eval.html")
                 tables = {row[0] for row in db.execute("show tables").fetchall()}
                 if "plays" in tables:
-                    summaries = curves(
-                        db, "two-seat-ladder-heuristic", table="plays", value="score"
-                    )
+                    summaries = curves(db, BENCHMARK, table="plays", value="score")
         finally:
             db.close()
     atomic_json(public / "status.json", ledger.model_dump(mode="json"))
@@ -102,8 +109,17 @@ def report(directory: Path, ledger: Ledger) -> None:
         + "</table>"
     )
     rows = "".join(
-        f"<tr><td>{a.updates}</td><td>{escape(a.phase)}</td><td>{a.learner_decisions:,}</td><td>{a.training_seconds / 3600:.2f}</td><td>{a.digest[:12]}</td><td>{escape(a.error or '')}</td></tr>"
+        f"<tr><td>{a.updates}</td><td>{escape(a.phase)}</td><td>{escape(a.projection)}</td><td>{a.learner_decisions:,}</td><td>{a.training_seconds / 3600:.2f}</td><td>{a.digest[:12]}</td><td>{escape(a.error or '')}</td></tr>"
         for a in sorted(ledger.attempts.values(), key=lambda a: a.updates)
+    )
+    training = "; ".join(
+        f"{escape(job)}: {updates:,} updates"
+        + (
+            f" (snapshot heartbeat {max(0, time.time() - ledger.training_heartbeats[job]) / 60:.1f} minutes ago)"
+            if job in ledger.training_heartbeats
+            else " (snapshot time unavailable)"
+        )
+        for job, updates in ledger.training_updates.items()
     )
     page = (
         '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="30">'
@@ -111,9 +127,9 @@ def report(directory: Path, ledger: Ledger) -> None:
         "<style>body{font:16px system-ui;margin:2rem;background:#fbf8f3;color:#2b2520}td,th{padding:.5rem;text-align:left}iframe{width:100%;height:1000px;border:0}</style>"
         "<h1>Two-seat ladder: live development report</h1>"
         f"<p>Updated {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(ledger.observed_at))}. "
-        "Etude evaluates each exported 250-update checkpoint: 25 fixed deals × eight deck/seat legs, heuristic, one CPU worker on the Mac mini. No evaluation rentals.</p>"
+        "Etude evaluates each exported 250-update checkpoint and final paused/completed raw export: 25 fixed deals × eight deck/seat legs, heuristic, one CPU worker on the Mac mini. No evaluation rentals.</p>"
         "<p>Repeated development monitoring, one training seed, unmatched one-seat training cost. Intervals resample whole deals; partial checkpoints are labeled running. Training updates, learner decisions and wall time are different clocks.</p>"
-        f"<p>Cohort: {escape(ledger.cohort_phase)}. Latest observed training updates by job: {escape(str(ledger.training_updates))}.</p>{score_table}<p>{escape(ledger.error or '')}</p><table><tr><th>Updates</th><th>Evaluation</th><th>Learner decisions</th><th>Training hours</th><th>Checkpoint SHA</th><th>Error</th></tr>{rows}</table>"
+        f"<p>Cohort: {escape(ledger.cohort_phase)}. Latest training snapshot: {training}.</p>{score_table}<p>{escape(ledger.error or '')}</p><table><tr><th>Updates</th><th>Evaluation</th><th>Evidence</th><th>Learner decisions</th><th>Training hours</th><th>Checkpoint SHA</th><th>Error</th></tr>{rows}</table>"
         '<p><a href="eval.html">Etude evaluation report</a> · <a href="curves.json">Curves JSON</a> · <a href="status.json">Status JSON</a></p><iframe src="eval.html"></iframe>'
     )
     temporary = public / "index.html.tmp"
@@ -133,23 +149,59 @@ def _refresh(directory: Path, ledger: Ledger) -> None:
         atomic_json(public / "status.json", ledger.model_dump(mode="json"))
 
 
+def _checkpoints(run: TrainingRun) -> list[Checkpoint]:
+    """Milestones and actual budget endpoints; identical artifacts are scored once."""
+    found = {
+        item.artifact["sha256"]: Checkpoint(artifact=item.artifact, coordinates=item)
+        for item in run.monitoring_checkpoints
+        if item.artifact is not None and item.updates > 0 and item.updates % 250 == 0
+    }
+    trained = {
+        stage.id for stage in run.regime.stages if stage.operation == "train_self_play"
+    }
+    for stage in run.stages:
+        if stage.id in trained:
+            final = stage_checkpoint(run, stage.id)
+            if final is not None and final.coordinates.updates > 0:
+                found.setdefault(final.artifact["sha256"], final)
+    return sorted(found.values(), key=lambda item: item.coordinates.updates)
+
+
+def _observe(spec: Job, ledger: Ledger) -> JobRecord | None:
+    """Refresh small supervisor metadata without changing a pinned evaluation input."""
+    raw = S3JobStore(spec.prefix).read("runtime/record.json")
+    if raw is None:
+        return None
+    record = JobRecord.model_validate_json(raw.data)
+    if record.spec_sha256 != spec.identity:
+        raise ValueError("training observation differs from cohort job")
+    ledger.training_updates[spec.job_id] = record.updates
+    ledger.training_heartbeats[spec.job_id] = record.heartbeat_at
+    return record
+
+
 def evaluate_exports(
     cohort: Cohort, state: CohortState, directory: Path, ledger: Ledger
 ) -> None:
     """Discover raw checkpoints from a single pinned generation per job."""
     for attempt in state.attempts:
         spec = attempt.spec
-        raw = S3JobStore(spec.prefix).read("runtime/record.json")
-        if raw is None:
+        record = _observe(spec, ledger)
+        if record is None:
             continue
-        record = JobRecord.model_validate_json(raw.data)
-        ledger.training_updates[spec.job_id] = record.updates
         if record.manifest is None:
             continue
         cache = directory / "cache"
         manifest = job_manifest(spec, record, cache)
         entries = {entry.relative_path: entry for entry in manifest.bundle.files}
-        if not any(
+        run_entry = entries.get("run/run.json")
+        unseen_final = (
+            record.terminal
+            and record.artifacts_complete
+            and run_entry is not None
+            and ledger.settled_jobs.get(spec.job_id) != run_entry.sha256
+        )
+        if not unseen_final and not any(
             Path(name).name.startswith("monitor-")
             and name.endswith(".pt")
             and entry.sha256 not in ledger.attempts
@@ -160,16 +212,12 @@ def evaluate_exports(
         if run_path is None:
             continue
         run = TrainingRun.model_validate_json(run_path.read_bytes())
-        for checkpoint in run.monitoring_checkpoints:
+        for exported in _checkpoints(run):
+            checkpoint = exported.coordinates
             if time.time() >= cohort.deadline + 3600:
                 return
-            artifact = checkpoint.artifact
-            if (
-                checkpoint.updates <= 0
-                or checkpoint.updates % 250
-                or artifact is None
-                or artifact["sha256"] in ledger.attempts
-            ):
+            artifact = exported.artifact
+            if artifact["sha256"] in ledger.attempts:
                 continue
             name = "run/" + Path(artifact["path"]).name
             entry = entries.get(name)
@@ -235,10 +283,16 @@ def evaluate_exports(
                         3600, max(0, cohort.deadline + 3600 - time.time())
                     )
                     while child.poll() is None and time.monotonic() < deadline:
+                        try:
+                            _observe(spec, ledger)
+                        except Exception as error:
+                            ledger.error = f"training status unavailable: {type(error).__name__}: {error}"
                         ledger.observed_at = time.time()
                         _refresh(directory, ledger)
                         try:
-                            child.wait(timeout=30)
+                            child.wait(
+                                timeout=min(30, max(0, deadline - time.monotonic()))
+                            )
                         except subprocess.TimeoutExpired:
                             pass
                     if child.poll() is None:
@@ -258,6 +312,8 @@ def evaluate_exports(
                         directory / "ledger.json", ledger.model_dump(mode="json")
                     )
             _refresh(directory, ledger)
+        if unseen_final and run_entry is not None:
+            ledger.settled_jobs[spec.job_id] = run_entry.sha256
 
 
 def follow(

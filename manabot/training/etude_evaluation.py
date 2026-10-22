@@ -8,23 +8,24 @@ repeatedly inspected deals are development monitoring, not a held-out study.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import os
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from etude.eval.match import Tables, agent
+from etude.eval.match import Row, Tables, agent
 from etude.eval.records import Benchmark, Environment, Match, Matchup, Model
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.arena.match import play_cell
+from manabot.arena.match import play_cell, selected_decks
 from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.infra.artifacts import verify_file
 from manabot.training.execution import atomic_json
 from manabot.training.monitor_evaluation import ArenaRow, MonitorResult
 
-BENCHMARK = "two-seat-ladder-heuristic"
+BENCHMARK = "two-seat-ladder-heuristic-deck-seats"
 
 
 class Conditions(BaseModel):
@@ -116,7 +117,7 @@ def play(match: Match) -> Tables:
             "artifact_id": f"monitor/{checkpoint.artifact}",
         }
     )
-    verify_file(path, checkpoint.artifact, candidate.checkpoint_bytes)
+    verify_file(path, checkpoint.artifact, path.stat().st_size)
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
@@ -135,29 +136,55 @@ def play(match: Match) -> Tables:
     atomic_json(out / "rows.json", rows)
     atomic_json(out / "trace.json", trace)
     atomic_json(out / "replay.json", replay)
-    checked = [ArenaRow.model_validate(row) for row in rows]
+    return arena_tables([ArenaRow.model_validate(row) for row in rows])
+
+
+def arena_tables(rows: Sequence[ArenaRow]) -> Tables:
+    """Project one replay-checked deal using each player's actual authored deck.
+
+    Cross-deck opponents exchange seats inside a pair of legs: the candidate
+    plays Lessons in legs 0 and 3, Allies in 1 and 2. Leg pairs alone name the
+    authored setup, not which deck the candidate controls.
+    """
     if (
-        {row.leg for row in checked} != set(range(8))
-        or len(checked) != 8
-        or not all(row.valid for row in checked)
+        {row.leg for row in rows} != set(range(8))
+        or len(rows) != 8
+        or not all(row.valid for row in rows)
     ):
         raise ValueError("arena deal incomplete or failed integrity; evidence retained")
-    # Etude player is tournament seat, not native on-play seat. Both players get
-    # a score, while curves use only seat 0 and resample the entire deal.
-    return {
-        "plays": [
-            {
-                "player": seat,
-                "game": row.leg,
-                "score": row.score_a if seat == 0 else 1.0 - row.score_a,
-                "matchup": ("LvA", "AvL", "LvL", "AvA")[row.leg // 2],
-                "on_play": row.leg % 2 == seat,
-                "valid": True,
-            }
-            for row in checked
-            for seat in (0, 1)
-        ]
+    labels = {
+        ("ur_lessons", "gw_allies"): "LvA",
+        ("gw_allies", "ur_lessons"): "AvL",
+        ("ur_lessons", "ur_lessons"): "LvL",
+        ("gw_allies", "gw_allies"): "AvA",
     }
+    plays: list[Row] = []
+    for row in rows:
+        decks = selected_decks(row.leg)
+        extra = row.model_extra or {}
+        if (
+            extra.get("seat_decks") != list(decks)
+            or extra.get("player_a_seat") != row.leg % 2
+        ):
+            raise ValueError("arena row differs from authored deck/seat assignment")
+        score = row.score_a
+        if score is None:
+            raise ValueError("valid arena row requires a score")
+        # Etude's player is a tournament participant, not the native on-play
+        # seat. Deck labels and on-play flags describe that row's participant.
+        for player in (0, 1):
+            native_seat = (row.leg + player) % 2
+            plays.append(
+                {
+                    "player": player,
+                    "game": row.leg,
+                    "score": score if player == 0 else 1.0 - score,
+                    "matchup": labels[(decks[native_seat], decks[1 - native_seat])],
+                    "on_play": native_seat == 0,
+                    "valid": True,
+                }
+            )
+    return {"plays": plays}
 
 
 def evaluate(manifest: MonitorResult, directory: Path) -> None:

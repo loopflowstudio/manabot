@@ -11,10 +11,19 @@ pytest.importorskip("etude.eval.match")
 from etude.eval.query import connect  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
+from manabot.arena.match import selected_decks, selected_match
 from manabot.arena.models import file_sha256
-from manabot.remote.live_evaluation import Ledger, report
+from manabot.remote.live_evaluation import Ledger, _checkpoints, report
 from manabot.training import etude_evaluation as evaluation
+from manabot.training.models import (
+    MonitoringCheckpoint,
+    StageRecord,
+    TrainingRegime,
+    TrainingRun,
+    TrainSelfPlay,
+)
 from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
+import managym
 
 
 def _admission(tmp_path: Path) -> MonitorResult:
@@ -41,7 +50,13 @@ def _admission(tmp_path: Path) -> MonitorResult:
 def _play_rows(manifest: MonitorResult, deal: int, out: Path) -> list[dict[str, Any]]:
     rows = _rows(manifest, (deal,))
     return [
-        dict(row, leg=leg, score_a=float(deal == 102))
+        dict(
+            row,
+            leg=leg,
+            score_a=float(deal == 102),
+            seat_decks=list(selected_decks(leg)),
+            player_a_seat=leg % 2,
+        )
         for leg, row in enumerate(rows * 2)
     ]
 
@@ -128,3 +143,90 @@ def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
     with pytest.raises(ValueError, match="artifact bytes differ"):
         evaluation.evaluate(manifest, tmp_path / "evaluations/one")
     assert not (tmp_path / "track").exists()
+
+
+@pytest.mark.parametrize(
+    "status", ["paused", "completed", "running", "failed", "interrupted"]
+)
+def test_budget_endpoint_between_milestones_is_selected_only_after_export(
+    status: str,
+) -> None:
+    regime = TrainingRegime(
+        id="endpoint",
+        world=managym.WORLD_VERSION,
+        match=selected_match(),
+        stages=[
+            TrainSelfPlay(
+                id="self",
+                operation="train_self_play",
+                updates=1000,
+                streams=2,
+                transitions=8,
+            )
+        ],
+    )
+    milestone = MonitoringCheckpoint(
+        stage_id="self",
+        ordinal=0,
+        updates=250,
+        training_seconds=90,
+        artifact={"path": "monitor.pt", "sha256": "a" * 64, "bytes": 1},
+    )
+    stage = StageRecord.model_validate(
+        {
+            "id": "self",
+            "status": status,
+            "cumulative_seconds": 100,
+            "optimizer_updates": 253,
+            "diagnostics": [{} for _ in range(253)],
+            "artifacts": {"raw": {"path": "final.pt", "sha256": "b" * 64, "bytes": 2}},
+        }
+    )
+    run = TrainingRun(
+        id="endpoint",
+        regime_digest="c" * 64,
+        regime=regime,
+        seed=1,
+        seed_streams={},
+        identities={},
+        stages=[stage],
+        monitoring_checkpoints=[milestone],
+    )
+    selected = _checkpoints(run)
+    assert [item.coordinates.updates for item in selected] == (
+        [250, 253] if status in {"paused", "completed"} else [250]
+    )
+    if status in {"paused", "completed"}:
+        assert selected[-1].artifact["sha256"] == "b" * 64
+        assert selected[-1].coordinates.training_seconds == 100
+        stage.artifacts["raw"] = milestone.artifact
+        assert len(_checkpoints(run)) == 1
+
+
+def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
+    tmp_path: Path,
+) -> None:
+    manifest = _admission(tmp_path)
+    rows = [
+        evaluation.ArenaRow.model_validate(row)
+        for row in _play_rows(manifest, 101, tmp_path)
+    ]
+    projected = evaluation.arena_tables(rows)["plays"]
+    expected = {"LvA": {0, 3}, "AvL": {1, 2}, "LvL": {4, 5}, "AvA": {6, 7}}
+    for matchup, legs in expected.items():
+        assert {
+            row["game"]
+            for row in projected
+            if row["player"] == 0 and row["matchup"] == matchup
+        } == legs
+    assert [row["matchup"] for row in projected if row["player"] == 1][:4] == [
+        "AvL",
+        "LvA",
+        "LvA",
+        "AvL",
+    ]
+    corrupted = rows[0].model_dump(mode="json")
+    corrupted["player_a_seat"] = 1
+    rows[0] = evaluation.ArenaRow.model_validate(corrupted)
+    with pytest.raises(ValueError, match="deck/seat assignment"):
+        evaluation.arena_tables(rows)
