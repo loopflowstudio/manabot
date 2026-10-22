@@ -23,7 +23,7 @@ from etude.reports import Evaluation
 from etude.train.report import pages, write
 from pydantic import BaseModel, ConfigDict, Field
 
-from experiments.runners.elemental_eval import launch_evaluation
+from experiments.runners.elemental_eval import launch_evaluation, prepare_evaluation
 
 
 class Config(BaseModel):
@@ -310,8 +310,33 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
                     )
                 )
             known = {p.key for p in ledger.points}
-            ledger.points.extend(p for p in additions if p.key not in known)
+            fresh = [p for p in additions if p.key not in known]
+            ledger.points.extend(fresh)
             _save(path, ledger)
+            for point in ledger.points:
+                binding = (
+                    Path(os.environ["ETUDE_HOME"])
+                    / "track"
+                    / point.training_run
+                    / "evaluations"
+                    / f"{point.eval_id}.json"
+                )
+                if binding.exists():
+                    continue
+                prepare_evaluation(
+                    config.root,
+                    point.checkpoint,
+                    point.opponent,
+                    name=f"mtg174-{point.cohort}-updates-{point.update}",
+                    conditions=config.monitoring
+                    if point.cohort == "monitor"
+                    else config.scoring,
+                    revision=config.revision,
+                    run_id=point.eval_id,
+                    training_run=point.training_run,
+                    update=point.update,
+                    cohort=point.cohort,
+                )
             active = next((p for p in ledger.points if p.phase not in ("done",)), None)
             if active is not None:
                 _ensure_launched(config, active, ledger, path)
