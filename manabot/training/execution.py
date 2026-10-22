@@ -227,13 +227,12 @@ def execute_regime(
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
+    game_error_recovery = any(
+        isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
+        for stage in regime.stages
+    )
     if source_repair_reason is not None and (
-        not resume_from
-        or not source_repair_reason.strip()
-        or not any(
-            isinstance(s, TrainSelfPlay) and s.game_errors is not None
-            for s in regime.stages
-        )
+        not resume_from or not source_repair_reason.strip() or not game_error_recovery
     ):
         raise ValueError(
             "source repair requires a reason, parent and complete-game error policy"
@@ -312,8 +311,15 @@ def execute_regime(
                 _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
                 source_repair_reason,
             )
-            if parent.allocation_deadline is not None and (
-                allocation is None or allocation.deadline != parent.allocation_deadline
+            # Game-error recovery cannot renew its original allowance. Ordinary
+            # paused CPU runs retain explicit continuation under a new allocation.
+            if (
+                game_error_recovery
+                and parent.allocation_deadline is not None
+                and (
+                    allocation is None
+                    or allocation.deadline != parent.allocation_deadline
+                )
             ):
                 raise ValueError(
                     "recovery must preserve the original allocation deadline"

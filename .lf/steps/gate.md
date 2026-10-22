@@ -2,6 +2,14 @@
 
 Polish and validate only the current branch scope.
 
+## Required checks for training recovery and allocation admission
+
+Run `uv run --extra dev --extra artifacts pytest tests/training/test_allocation.py tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`
+when changing resume admission, allocation deadlines or game-error recovery.
+Validate both ordinary paused CPU continuation under a new explicit allocation
+and opted-in game-error recovery retaining its original deadline; testing only
+the new recovery fixture misses regressions in the existing allocation contract.
+
 ## Required checks for tracking and offline reports
 
 Run `uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`

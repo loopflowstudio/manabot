@@ -130,6 +130,10 @@ unchanged. Prior costs, stage/run allowances and any original absolute allocatio
 deadline carry forward. No launcher, reservation, evaluation retry or attempt-limit
 policy is introduced.
 
+The original-deadline requirement applies to recipes opting into `game_errors`.
+Ordinary paused CPU recipes without that policy retain their existing explicit
+continuation under a separately admitted new allocation.
+
 After a compatible source repair, the operator must supply a reason:
 
 ```sh
