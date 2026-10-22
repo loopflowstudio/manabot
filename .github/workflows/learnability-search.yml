@@ -54,7 +54,7 @@ jobs:
         run: |
           extra=()
           if [ "$SEARCH_PAIRING" = closest ]; then extra+=(--closest); fi
-          timeout --signal=TERM 1830s uv run --no-sync experiments/runners/learnability_search.py --out .runs/learnability-search --seconds "$SEARCH_SECONDS" --arms $SEARCH_ARMS "${extra[@]}"
+          timeout --signal=TERM 1830s uv run --no-sync python -m manabot.verify.learnability.search --out .runs/learnability-search --seconds "$SEARCH_SECONDS" --arms $SEARCH_ARMS "${extra[@]}"
       - name: Summary
         if: always()
         run: |

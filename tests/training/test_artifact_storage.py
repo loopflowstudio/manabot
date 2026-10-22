@@ -152,7 +152,7 @@ def test_run_publication_preserves_export_and_all_roles(
 ) -> None:
     store, client = storage
     # Retained schema fixture; no trainer, optimizer, or game execution.
-    fixture = Path("experiments/study/experiment-demo/training")
+    fixture = Path("tests/fixtures/experiment-demo/training")
     paths = list(fixture.glob("**/run.json"))
     assert paths
     payload = json.loads(paths[0].read_text())
@@ -212,9 +212,7 @@ def test_run_publication_preserves_export_and_all_roles(
 def test_monitor_publishes_only_references_bound_to_exact_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = next(
-        Path("experiments/study/experiment-demo/training").glob("**/run.json")
-    )
+    source = next(Path("tests/fixtures/experiment-demo/training").glob("**/run.json"))
     payload = source.read_bytes()
     manifest = ArtifactManifest(
         training_run_id=json.loads(payload)["id"],

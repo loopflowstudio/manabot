@@ -1,6 +1,9 @@
 """CLI entrypoints for training and simulation."""
 
+import importlib
+import inspect
 from pathlib import Path
+import pkgutil
 from typing import Optional, Sequence
 
 import typer
@@ -11,11 +14,54 @@ from manabot.model.train import run_training
 from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
 from manabot.training.baseline import BASELINE_STEPS, run_baseline
+from manabot.training.models import TrainingRegime
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
 app.add_typer(deploy_app, name="deploy")
+
+# Named regimes are repository experiment code outside the installed package,
+# found by module name: experiments/<experiment>.py, one experiment per file.
+EXPERIMENTS = "experiments"
+
+
+def regime_names() -> list[str]:
+    """Every `--regime-name`, in file order.
+
+    A recipe is a public zero-argument function returning a TrainingRegime.
+    `<experiment>` names the module's canonical recipe, the function named like
+    the module; `<experiment>:<variant>` names any other recipe in it.
+    """
+    names: list[str] = []
+    package = importlib.import_module(EXPERIMENTS)
+    for file in sorted(info.name for info in pkgutil.iter_modules(package.__path__)):
+        module = importlib.import_module(f"{EXPERIMENTS}.{file}")
+        for name, value in vars(module).items():
+            if name.startswith("_") or not inspect.isfunction(value):
+                continue
+            signature = inspect.signature(value)
+            if (
+                value.__module__ == module.__name__
+                and not signature.parameters
+                and signature.return_annotation is TrainingRegime
+            ):
+                names.append(file if name == file else f"{file}:{name}")
+    return names
+
+
+def named_regime(name: str) -> TrainingRegime:
+    """Build a fresh copy of the named recipe; reject an unknown name."""
+    if name not in regime_names():
+        raise typer.BadParameter(
+            f"unknown regime {name!r}; available: {', '.join(regime_names())}"
+        )
+    file, _, function = name.partition(":")
+    module = importlib.import_module(f"{EXPERIMENTS}.{file}")
+    recipe = getattr(module, function or file)
+    regime = recipe()
+    assert isinstance(regime, TrainingRegime)
+    return regime
 
 
 def _run_train(preset: str, set_values: list[str]) -> None:
@@ -42,7 +88,8 @@ def train_command(
     ),
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
     regime_name: str | None = typer.Option(
-        None, help="Named regime from experiments/recipes.py"
+        None,
+        help="Recipe in experiments/: <experiment> or <experiment>:<variant>",
     ),
     seed: Optional[int] = typer.Option(None, help="Regime or recipe training seed"),
     out: Optional[str] = typer.Option(None, help="New run directory"),
@@ -113,13 +160,9 @@ def train_command(
             raise typer.BadParameter("--regime requires --out")
         from manabot.remote.plan import Allocation
         from manabot.training.execution import execute_regime
-        from manabot.training.models import TrainingRegime
         from manabot.verify.store import VerifyStore
 
         if regime_name:
-            # Named regimes are repository experiment code, outside the package.
-            from experiments.recipes import regime as named_regime
-
             regime_spec = named_regime(regime_name)
         elif regime:
             regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())

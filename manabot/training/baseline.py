@@ -14,6 +14,7 @@ from pydantic import Field
 
 from manabot.arena.match import selected_match
 from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
+from manabot.training.builders import PACK
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.experiment_execution import (
     ExperimentRun,
@@ -41,7 +42,6 @@ BASELINE_VERSION = "baseline-v2"
 # Separate from the existing scientific and monitoring cohorts. Repeated nightly
 # use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
-PACK = "ur-lessons-vs-gw-allies"
 
 
 class TrainingRecipe(Strict):

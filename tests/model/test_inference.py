@@ -1,20 +1,33 @@
 """Serving preparation preserves policy meaning across collection and learning."""
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 import torch
 
-from experiments.runners.pipeline_benchmark import _batch_tensors
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import RewardHypers
 from manabot.model.agent import Agent
 from manabot.model.inference import PolicyInference
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from tests.training.test_recovery import recipe
+
+
+def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
+    result: dict[str, torch.Tensor] = {}
+    for field in fields(batch):
+        value = getattr(batch, field.name)
+        if isinstance(value, np.ndarray):
+            result[field.name] = torch.from_numpy(value)
+        elif isinstance(value, dict):
+            for key, array in value.items():
+                result[f"{field.name}/{key}"] = torch.from_numpy(array)
+        elif value is not None:
+            raise TypeError(f"unexpected rollout field {field.name}")
+    return result
 
 
 @dataclass

@@ -5,9 +5,16 @@ import json
 
 import pytest
 
-from experiments.runners.training_protocol import EvaluationProtocol
+from experiments.direct_self_play import ARMS as LEARNING_SPEED
 from manabot.arena.models import canonical_sha256
+from manabot.training import regime_study
 from manabot.training.analysis import cost_comparison, verify_saved_inputs
+from manabot.training.regime_study import (
+    EvaluationProtocol,
+    calibration_plan,
+    scientific_plan,
+    smoke_recipe,
+)
 
 
 def point(name, seconds, score):
@@ -259,10 +266,7 @@ def test_uncertainty_clusters_training_seeds_and_four_leg_deals():
 
 
 def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeypatch):
-    from experiments.runners.run_training_regimes import calibration_plan
-    from experiments.runners.training_plan import scientific_plan
-
-    plan = calibration_plan("learning-speed")
+    plan = calibration_plan("learning-speed", LEARNING_SPEED)
     entries = []
     for recipe in plan.recipes:
         stages = []
@@ -330,7 +334,7 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
 
     with monkeypatch.context() as patch:
         patch.setattr(
-            "experiments.runners.training_plan.shutil.disk_usage",
+            "manabot.training.regime_study.shutil.disk_usage",
             lambda _: SimpleNamespace(free=0),
         )
         with pytest.raises(ValueError, match="storage infeasible"):
@@ -348,9 +352,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
 ):
     import torch
 
-    from experiments.runners import run_training_regimes as runner
-    from manabot.sim import teacher1_evidence
     from manabot.training.models import StageRecord, TrainingRun
+
+    runner = regime_study
 
     identities = {
         k: "a" * 64
@@ -365,9 +369,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         )
     }
     monkeypatch.setattr(
-        teacher1_evidence, "runtime_fingerprints", lambda *a, **kw: identities.copy()
+        runner, "runtime_fingerprints", lambda *a, **kw: identities.copy()
     )
-    monkeypatch.setattr(teacher1_evidence, "source_bundle_sha256", lambda *a: "a" * 64)
+    monkeypatch.setattr(runner, "source_bundle_sha256", lambda *a: "a" * 64)
     monkeypatch.setattr(
         runner, "execute_regime", lambda *a: pytest.fail("resume must not retrain")
     )
@@ -395,7 +399,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         )
 
     monkeypatch.setattr(runner, "play_cell", play_cell)
-    recipes = [runner.smoke_recipe(n) for n in runner.STUDIES["learning-speed"]]
+    recipes = [smoke_recipe(build()) for build in LEARNING_SPEED]
     protocol = EvaluationProtocol(
         study="learning-speed",
         regime_digests=tuple(
@@ -461,7 +465,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         json.dumps([r.model_dump(mode="json") for r in recipes])
     )
     with pytest.raises(RuntimeError, match="incomplete arena cohort"):
-        runner.run_study("learning-speed", tmp_path, resume=True)
+        runner.run_study("learning-speed", LEARNING_SPEED, tmp_path, resume=True)
     saved = json.loads((tmp_path / "study.json").read_text())
     assert len(calls) == 5
     assert len(saved["comparisons"]) == 6

@@ -33,7 +33,6 @@ SOURCE_PATHS = (
     "manabot/sim/mcts.py",
     "manabot/sim/search_branch.py",
     "manabot/sim/selected_branchdriver_teacher.py",
-    "experiments/runners/run_selected_branchdriver_teacher.py",
 )
 
 

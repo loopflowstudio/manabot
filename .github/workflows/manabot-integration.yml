@@ -63,7 +63,7 @@ jobs:
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
-            tests/training/test_mirror_long.py tests/training/test_local_service.py \
+            tests/training/test_local_service.py \
             tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
@@ -71,35 +71,19 @@ jobs:
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
             tests/training/test_active_training.py tests/training/test_active_recovery.py \
-            tests/training/test_producers.py tests/training/test_inference_preparation.py \
-            tests/training/test_basic_profile_study.py tests/training/test_profile_artifacts.py \
-            tests/training/test_gpu_job.py tests/training/test_batching_grid.py \
             tests/training/test_process_tree_rss.py \
-            tests/training/test_grouped_grid.py tests/training/test_grouped_learning.py \
-            tests/training/test_locked_gpu_setup.py \
-            tests/training/test_prepared_source.py \
-            tests/training/test_source_projection.py tests/training/test_batching_evaluation.py \
             tests/training/test_experiment_data.py \
-            tests/training/test_batching_calibration.py \
-            tests/training/test_parallel_commands.py tests/training/test_parallel_evaluation_probe.py \
-            tests/training/test_learner_witnesses.py \
-            tests/bench/test_native_variants.py tests/bench/test_pipeline_benchmark.py tests/bench/test_worker_scaling.py \
             tests/training/test_checkpoint_queue.py \
-            tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
-            tests/training/test_technique_screen.py tests/training/test_filter_scope_mini.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
-            tests/training/test_value_models.py \
-            tests/training/test_history_input.py \
-            tests/training/test_history_predecessor.py \
+            tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \
             tests/belief/test_sampling_report.py \
-            tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
+            tests/bench/test_structured_policy_benchmark.py
 
       - name: Long integration tests
         if: matrix.group == 'long'
         run: |
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest \
             tests/training/test_experiment_runner.py \
-            tests/training/test_monitor_evaluation.py \
-            tests/training/test_history_arena.py
+            tests/training/test_monitor_evaluation.py
 
       - name: Enum smoke test
         if: matrix.group == 'main'

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from experiments.recipes import regime
+from experiments.direct_self_play import direct_self_play
 import manabot.remote.bundle as bundles
 from manabot.remote.bundle import Bundle, BundleFile, make_bundle
 from manabot.remote.plan import digest
@@ -78,7 +78,7 @@ def test_duplicate_manifest_paths_fail_before_download(field: str) -> None:
 def test_verified_bundle_must_match_run_artifact_receipts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str | None
 ) -> None:
-    recipe = regime("direct-self-play")
+    recipe = direct_self_play()
     policy = tmp_path / "raw.pt"
     policy.write_bytes(b"policy-loader-fixture")
     artifact = {

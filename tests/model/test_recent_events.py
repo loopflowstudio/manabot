@@ -19,9 +19,9 @@ from manabot.model.architecture import architecture_receipt
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent, make_player
 from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.builders import with_recent_events
 from manabot.training.experiments import Case, Environment, Experiment, Model
 from manabot.training.presets import ataraxos_mtg_v1
-from manabot.training.recipes import with_recent_events
 
 PACK = "ur-lessons-vs-gw-allies"
 

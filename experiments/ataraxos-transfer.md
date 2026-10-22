@@ -343,7 +343,7 @@ The following is a **plan-only illustration** using the repository's tiny
 mechanism recipe, not a selected-matchup study or authorization to execute it:
 
 ```python
-from experiments.recipes import learned_belief_local_search
+from experiments.belief_sampler import learned_belief_local_search
 from manabot.training.experiments import Baseline, Experiment, Pipeline
 from manabot.training.models import TrainSupervised
 

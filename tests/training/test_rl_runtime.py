@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from experiments.recipes import regime
+from experiments.direct_self_play import direct_self_play
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.verify.store import VerifyStore
@@ -11,7 +11,7 @@ import managym
 
 
 def bounded_regime():
-    recipe = regime("direct-self-play")
+    recipe = direct_self_play()
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.agent.hidden_dim = 8

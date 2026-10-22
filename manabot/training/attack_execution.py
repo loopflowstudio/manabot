@@ -6,6 +6,7 @@ Failures stop the cohort and remain in its manifest; they are never dropped from
 an aggregate. These are bounded attacks, not exploitability certificates.
 """
 
+import argparse
 from dataclasses import asdict
 from pathlib import Path
 import signal
@@ -300,3 +301,16 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
         signal.signal(signal.SIGALRM, previous_handler)
         torch.set_num_threads(previous_threads)
         save()
+
+
+def main() -> None:
+    """`python -m manabot.training.attack_execution --plan PLAN --out DIR`."""
+    parser = argparse.ArgumentParser(description="Execute a frozen-policy attack plan.")
+    parser.add_argument("--plan", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+    execute_attack_plan(AttackPlan.model_validate_json(args.plan.read_text()), args.out)
+
+
+if __name__ == "__main__":
+    main()

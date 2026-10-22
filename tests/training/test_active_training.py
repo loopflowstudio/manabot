@@ -9,6 +9,7 @@ from typing import ParamSpec, TypeVar
 
 import pytest
 
+from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.training import execution
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitor_evaluation import stage_checkpoint
@@ -39,7 +40,7 @@ class Clock:
 
 
 def recipe(updates: int = 10) -> TrainingRegime:
-    result = _recipe("ataraxos-move-scalar")
+    result = _recipe(ataraxos_move_scalar)
     result.stages = result.stages[:1]
     result.agent.hidden_dim = 8
     stage = result.stages[0]
@@ -103,7 +104,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
 
 
 def test_old_recipe_bytes_and_invalid_endpoint() -> None:
-    old = _recipe("ataraxos-move-scalar")
+    old = _recipe(ataraxos_move_scalar)
     assert all("active_seconds" not in stage for stage in old.model_dump()["stages"])
     payload = recipe().model_dump()
     payload["stages"][0]["active_seconds"] = 900

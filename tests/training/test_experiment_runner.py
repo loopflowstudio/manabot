@@ -9,12 +9,7 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
-from experiments.runners import depth_screen, history_input
-from experiments.runners.experiment_demo import declaration as demo_declaration
-from experiments.runners.experiment_depth import declaration as depth_declaration
-from experiments.runners.experiment_history import declaration as history_declaration
-from experiments.runners.experiment_screen import admit_screen
-from experiments.runners.run_history_input import history_plan
+from manabot.infra.hypers import AgentSpec
 from manabot.training.checkpoint_queue import Attempt, MonitoringBudget
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.experiment_execution import (
@@ -24,9 +19,11 @@ from manabot.training.experiment_execution import (
     HardwareInventory,
 )
 from manabot.training.experiment_runner import run_experiment
+from manabot.training.experiments import Baseline, Case, Experiment, Model
 from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
+from manabot.training.presets import ataraxos_mtg_v1
 from manabot.verify.store import VerifyStore
-from tests.training.test_history_input import calibration
+import managym
 from tests.training.test_monitor_evaluation import failure_summary
 
 
@@ -34,6 +31,44 @@ from tests.training.test_monitor_evaluation import failure_summary
 def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Fixtures must not acquire a real experiment's host/evaluator leases."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "test-account")
+
+
+def demo_declaration() -> Experiment:
+    """Four short training runs and four milestones: a workflow fixture."""
+    base = ataraxos_mtg_v1().regime()
+    base.world = managym.WORLD_VERSION
+    base.id = f"fixture-{base.world}"
+    base.stages = base.stages[:1]
+    # Work stays update-bounded; wall allowances include interpreter startup.
+    base.wall_seconds = 60
+    for stage in base.stages:
+        stage.execution.wall_seconds = 30
+        stage.streams = 2
+        stage.transitions = 8
+    base.agent.hidden_dim = 8
+    base.agent.num_attention_heads = 2
+    # Four real monitoring cohorts include process startup and exact replay.
+    cohort_seconds = MonitoringBudget.model_fields["attempt_seconds"].default
+    monitoring_seconds = 4 * cohort_seconds
+    return Experiment(
+        name="fixture",
+        baseline=Baseline.capture(f"fixture-{base.world}", base),
+        cases=(Case("small"), Case("wide", (Model(AgentSpec(hidden_dim=16)),))),
+        schedule=ExperimentSchedule(
+            seeds=(117, 118),
+            hardware="fixture",
+            wall_seconds=monitoring_seconds + 300,
+            process_seconds=monitoring_seconds + 300,
+            monitoring=MonitoringBudget(
+                seconds=monitoring_seconds,
+                protocol=MonitorProtocol(
+                    deal_seeds=(1910101000,), bootstrap_replicates=20
+                ),
+            ),
+            checkpoint_updates=1000,
+            disk_reserve_bytes=0,
+        ),
+    )
 
 
 def hardware() -> HardwareInventory:
@@ -66,31 +101,6 @@ def _experiment_failures(record: ExperimentRun, monitoring: Path) -> str:
             )
             lines += [f"  {line}" for line in summary.splitlines()]
     return "\n".join(lines)
-
-
-def test_screen_declarations_preserve_frozen_recipes_and_cohorts() -> None:
-    for spec, factory in (
-        (history_input, history_declaration),
-        (depth_screen, depth_declaration),
-    ):
-        plan = history_plan(calibration(spec=spec), spec=spec)
-        schedule = ExperimentSchedule(
-            seeds=spec.SEEDS,
-            order=spec.ORDER,
-            scientific_deal_seeds=spec.DEALS,
-            hardware="fixture",
-            wall_seconds=spec.TRAINING_SECONDS,
-            process_seconds=spec.TRAINING_SECONDS,
-            monitoring=MonitoringBudget(seconds=600, attempt_seconds=60),
-        )
-        experiment = factory(plan, schedule)
-        admit_screen(plan, experiment)
-        assert experiment.resolve().digests == plan.protocol.regime_digests
-        with pytest.raises(ValueError, match="seed/order"):
-            admit_screen(
-                plan,
-                replace(experiment, schedule=schedule.model_copy(update={"order": ()})),
-            )
 
 
 def test_configured_hardware_and_budget_admission(tmp_path: Path) -> None:
