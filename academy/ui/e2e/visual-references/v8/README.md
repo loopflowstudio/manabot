@@ -11,3 +11,6 @@ workflow's `update_visual_references` input. Local macOS screenshots certify
 interaction and geometry only, not these Linux reference bytes. The offline CI
 corpus uses procedural card treatments; cached Scryfall images are tested through
 the local cache path and carry separate artist/source credits.
+
+The combined explicit walkthrough has a 20-minute browser budget; its complete
+145/566 Command sequences and accessibility assertions remain exact.
