@@ -1284,3 +1284,4 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
             );
         }
     }
+}

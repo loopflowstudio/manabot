@@ -234,3 +234,153 @@ jobs:
 
       - name: Run bounded valid-action fuzzing
         run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w12-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+
+      - name: Preserve exact fuzz replay seeds
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-conformance-failures
+          path: target/semantic-conformance/failures/*.json
+          if-no-files-found: ignore
+
+  frontend:
+    name: Academy UI
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: academy/ui/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv --python 3.12
+          uv export --quiet --frozen --extra dev --no-emit-project \
+            --prune torch --prune pandas --prune typer --prune psutil \
+            --prune httpx --prune jsonschema --prune ruff \
+            --output-file /tmp/visual-requirements.txt
+          uv pip install --python .venv/bin/python \
+            --requirements /tmp/visual-requirements.txt maturin==1.11.5
+          uv pip install --python .venv/bin/python \
+            --default-index https://download.pytorch.org/whl/cpu torch==2.10.0
+
+      - name: Build Python extension
+        run: uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+
+      - name: Install frontend and Chromium
+        working-directory: academy/ui
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Focused UI checks and browser interactions
+        working-directory: academy/ui
+        run: |
+          npm test
+          npm run check
+          npm run test:e2e:release
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: academy-browser-failure
+          path: academy/ui/test-results/release
+          if-no-files-found: warn
+
+  clean-machine-play:
+    name: Clean-machine Play
+    needs: [changes]
+    if: needs.changes.outputs.clean_machine_play == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv and CPython 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.9.22'
+          python-version: '3.12'
+          enable-cache: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Provision proof Chromium
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      - name: Prove clean launch and offline reload
+        run: ./scripts/verify-clean-machine
+
+      - name: Report time to playable against the 90-second budget
+        run: |
+          jq -r '.launch | "Time to playable: \(.elapsed_to_playable_ms) ms of a \(.budget_ms) ms budget"' \
+            .cache/clean-machine/proof.json | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .launch.within_budget .cache/clean-machine/proof.json)" != true ]; then
+            echo "::warning title=Clean-machine budget::playable after the 90-second budget on this runner"
+          fi
+
+      - name: Upload clean-machine receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-machine-play
+          path: |
+            .cache/clean-machine/proof.json
+            .cache/clean-machine/launch.log
+          if-no-files-found: warn
+
+  result:
+    name: Tests Result
+    runs-on: ubuntu-latest
+    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-coverage, semantic-conformance, frontend, clean-machine-play]
+    if: always()
+    steps:
+      - name: Check all jobs
+        shell: bash
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SELECTED: ${{ toJSON(needs.changes.outputs) }}
+          RESULTS: >-
+            rust=${{ needs.rust.result }}
+            python-unit=${{ needs.python-unit.result }}
+            integration=${{ needs.integration.result }}
+            academy-integration=${{ needs.academy-integration.result }}
+            protocol-v1=${{ needs.protocol-v1.result }}
+            semantic-coverage=${{ needs.semantic-coverage.result }}
+            semantic-conformance=${{ needs.semantic-conformance.result }}
+            frontend=${{ needs.frontend.result }}
+            clean-machine-play=${{ needs.clean-machine-play.result }}
+        run: |
+          [ "$CHANGES" = success ] || exit 1
+          failed=0
+          for entry in $RESULTS; do
+            job="${entry%%=*}"
+            result="${entry#*=}"
+            key="${job//-/_}"
+            selected=$(jq -er --arg key "$key" '.[$key] | select(. == "true" or . == "false")' <<< "$SELECTED") || exit 1
+            echo "$job: $result (selected=$selected)"
+            if [ "$selected" = true ]; then
+              [ "$result" = success ] || failed=1
+            else
+              [ "$result" = skipped ] || [ "$result" = success ] || failed=1
+            fi
+          done
+          exit "$failed"

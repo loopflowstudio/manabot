@@ -74,3 +74,93 @@ checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
 [semantic-kernel-w12-v1](../conformance/semantic-kernel-w12-v1/).
+
+After changing Rust, rebuild the Python extension into the uv-managed venv:
+
+```bash
+uv run --python 3.12 --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+```
+
+The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+inventories every numbered entry, with explicit unknowns and scoped evidence.
+Card-shell checks and replay agreement do not independently prove rules
+correctness. Prefer directed tests with independently specified outcomes and
+small bounded combinations before adding longer random-game cohorts.
+
+Check the committed inventory offline from the repository root with
+`uv run python scripts/audit_rules.py`. Supplying `--source <downloaded-txt>`
+also checks the pinned byte digest and exact source inventory. Do not upgrade
+child rules merely because their family has a test or a matching citation.
+The explicitly ignored Prism/Treasure audit probe records an unresolved
+payment defect; it is not passing conformance evidence. See the audit's
+[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+before using its historical Task attribution.
+
+## Style
+
+```rust
+// filename.rs
+// One-line purpose of file
+
+use crate::flow::game::Game;
+use crate::state::player::PlayerId;
+```
+
+Prefer explicit types and focused modules. Keep game behavior in enums +
+`match` expressions instead of inheritance-like abstractions.
+
+Bounded observation encoders reserve card rows after the owner's visible cards
+for outside candidates. Their seven zone bits stay zero and the explicit outside
+bit is set; action focus uses the same padded object table as the model. The
+current default has 64 action rows. Card, permanent, action and focus capacity
+excesses raise encoding errors; they must not be treated as a random-policy
+fallback. Complete outside program bindings and public known-hand definition
+counts still require the semantic input path during the Learn migration.
+
+The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
+derived suffix updated at the native event append. Observation reads share it;
+clone/undo and diagnostic injection must preserve its documented lifecycle.
+
+`PlayerConfig.content_pack` can explicitly select the compiled authored runtime
+for repeated-deck matches. Both seats must name the same pack and each complete
+deck/sideboard must be one of its authored setups; unknown packs or partial
+bindings fail reset. Omitting it preserves exact-pair automatic selection.
+Python `MatchHypers.authored` carries this binding for same-deck matches so replay
+cannot silently use generic card definitions.
+
+Mana feasibility and production share typed costs and pools. `Mana.lesson`
+retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
+casting context, while resolving costs and activations remain unrestricted
+contexts. Chosen-color mana abilities pay their activation costs before their
+immediate output decision. `activated_abilities_for` derives battlefield grants;
+those granted mana abilities never become activated stack objects. Waterbend
+taps are cost payment, not tapping for mana.
+
+A resolving spell remains on the stack until the zone-move authority commits
+its departure. That authority applies flashback exile replacement and captures
+cast provenance before removing the stack object. Do not remove spells early in
+countering or finalization. Copied tokens detach immutable characteristics from
+the source definition, retain its semantic identity, and expose their actual
+legendary status in observations; canonical hashing includes their copied data.
+
+Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
+Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+covers both ordinary mana and waterbend without a card-specific decision.
+
+Mana offers, waterbend affordability and automatic production use executable
+witnesses from `flow/mana.rs`. A mana source is reserved while its printed
+upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
+and frame. Only after that obligation finishes do its tap/life/sacrifice costs
+commit and its output become a visible color decision. Mana abilities do not
+create stack objects. Fixed production keeps source order; a nested automatic
+prefix considers concrete pool remainders and the parent's completion.
+
+Every registered chosen-output mana mode consumes a tap (sometimes also a
+sacrifice), so each source has one use during a payment. The registry contract
+requires a model extension before introducing separate tap/sacrifice mana uses,
+repeatable free sources, or additional mana-ability cost methods.
+Search retains identities rather than grouping equal outputs. Its total and
+spend-purpose bounds only reject impossible branches; every accepted payment
+still requires a complete witness. This is finite search, without a general
+large-board performance guarantee.
