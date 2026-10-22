@@ -1814,6 +1814,50 @@
    "sha256": "fa11d7b0e98f67e2929ec74227541c07ee4cca5da3b91f92c5415cb457e5c5b2",
    "bytes": 147775
   },
+  "experiments/data/mtg174/admission-native-legality-v1/attempted-elemental-eval.py": {
+   "sha256": "d44659a290522d02d467b95c50da385467e622e7674bb26bd5e6458e7c7ad2af",
+   "bytes": 4724
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/attempted-elemental-games.py": {
+   "sha256": "41cd4a668641e44003d51b594b20cbb8f58009540f489de70a3f888e7ffcee96",
+   "bytes": 4751
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/etude-engineering-logs.txt": {
+   "sha256": "15952160330174e3f335e36339fa2e713bc4ec659df6a994323bead8113aee8b",
+   "bytes": 3858
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/etude-engineering-status.txt": {
+   "sha256": "b1de33882dd1d7284df6c938c5beb7c3aecbb9a0e7e5025b9822ee846e5280d9",
+   "bytes": 20
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/etude-finished.json": {
+   "sha256": "dabe9b6b7e6032b8a145ff3090e546316e24cbccd44aa153c7faed24be6b4225",
+   "bytes": 134
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/etude-runtime-failure.txt": {
+   "sha256": "32f1b450604f690e299f3e926c527868a6c8cf0f26a63fcc842de47a94d28179",
+   "bytes": 115
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/frame.json": {
+   "sha256": "f8736cd241fb369cbacbc2e4cca27bff6e98fe9d7d9aa93da32737097b15e25b",
+   "bytes": 2563
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/isolated.json": {
+   "sha256": "2fd006c251f3064018303bd5c124e9bb00fb82b6c4261a790ebbbc033f16a4e1",
+   "bytes": 2213
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/reproduce.py": {
+   "sha256": "89fd8efdb06017697403de5c37336d3416ab25f6aaf2eb2394a9256a1af454f6",
+   "bytes": 2187
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/reproduction.json": {
+   "sha256": "12cf759d421f7b689044d1064e495eb8d0a4c4e1c289abd1d4a0bee082596358",
+   "bytes": 834
+  },
+  "experiments/data/mtg174/admission-native-legality-v1/upstream-receipt.json": {
+   "sha256": "37d2398dcf7e934b1ec4329587c07e940b9c1382aa84e9fcebb581b70aae68df",
+   "bytes": 815
+  },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
