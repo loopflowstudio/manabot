@@ -3,6 +3,7 @@
 Each stream contributes the same learner transitions per update. Fixed strata
 therefore balance transition exposure, not completed games or wall time. Native
 auto-reset retains the stream's setup; recovery replays the same assignment.
+Elemental uniform sampling instead belongs to native game roots, not stream strata.
 """
 
 import json
@@ -10,11 +11,14 @@ from typing import Literal
 
 from manabot.env import Match
 from manabot.infra.hypers import MatchHypers
+import managym
 
-Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced"]
+Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"]
 
 
 def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[Match]:
+    if curriculum == "elemental-uniform":
+        raise ValueError("elemental-uniform requires native per-game sampling")
     if curriculum == "fixed":
         return [match] * streams
     width = 12 if curriculum == "mirrors-balanced" else 4
@@ -50,3 +54,23 @@ def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[M
     second.villain_deck = dict(second.hero_deck)
     second.villain_sideboard = dict(second.hero_sideboard)
     return ([Match(first)] * 4 + [Match(second)] * 4 + cross) * (streams // width)
+
+
+def elemental_roster(match: Match) -> list[managym.PlayerConfig]:
+    """Admit a complete native Elemental roster and an exact representative pair."""
+    pack = "elemental-world-v1"
+    roster = [
+        managym.authored_deck_setup(pack, key)
+        for key in managym.authored_deck_keys(pack)
+    ]
+    if len(roster) != 10 or any(
+        not any(
+            actual.decklist == setup.decklist
+            and actual.sideboard == setup.sideboard
+            and actual.content_pack == setup.content_pack
+            for setup in roster
+        )
+        for actual in match.to_rust()
+    ):
+        raise ValueError("elemental-uniform requires an exact Elemental authored match")
+    return roster

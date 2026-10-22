@@ -1,0 +1,222 @@
+"""Native game-root uniform sampling, exact recovery and real CPU learning."""
+
+from copy import deepcopy
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+from manabot.env import Match, ObservationSpace, Reward
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
+from manabot.model.agent import Agent
+from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.execution import execute_regime, validate_regime
+from manabot.training.matchups import elemental_roster
+from manabot.training.models import TrainingRegime, TrainSelfPlay
+from manabot.training.self_play import deck_identity
+from manabot.verify.store import VerifyStore
+import managym
+
+PACK = "elemental-world-v1"
+
+
+def _match() -> Match:
+    return Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
+
+
+def _collector(recovery: str, streams: int = 4) -> SeatRoutedCollector:
+    return SeatRoutedCollector(
+        ObservationSpace(),
+        _match(),
+        Reward(RewardHypers()),
+        num_envs=streams,
+        seed=17402,
+        opponent_mode="self",
+        matchup_curriculum="elemental-uniform",
+        recovery_max_microsteps=200000 if recovery == "exact" else None,
+        recovery_max_game_microsteps=200000 if recovery == "current" else None,
+    )
+
+
+@pytest.mark.parametrize("recovery", ["exact", "current"])
+def test_uniform_collector_recovers_changed_terminal_roots(recovery: str) -> None:
+    torch.set_num_threads(1)
+    agent = Agent(
+        ObservationSpace(),
+        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+    )
+    first = _collector(recovery)
+    initial_pairs = first._env.current_matchup_indices()
+    first.collect(agent, 128)
+    assert first.stats.games > 0
+    assert first._env.current_matchup_indices() != initial_pairs
+    exposure = first.stats.exposure
+    assert sum(c["learner_transitions"] for c in exposure.values()) == 4 * 128
+    assert sum(c["terminal_games"] for c in exposure.values()) == first.stats.games
+    assert sum(c["game_roots"] for c in exposure.values()) == first.stats.games + 4
+    assert (
+        sum(c["environment_decisions"] for c in exposure.values())
+        == first.stats.micro_steps
+    )
+    assert (
+        sum(c.wins + c.losses + c.draws for c in first.stats.self_play.counts.values())
+        == first.stats.games * 2
+    )
+    if recovery == "exact":
+        # Independent action-journal audit: count decisions against the actual
+        # native pair BEFORE auto-reset, not the pair in the returned observation.
+        replay = _collector(recovery)
+        expected: dict[str, dict[str, int]] = {}
+        identities = [
+            deck_identity(p.decklist, p.sideboard) for p in elemental_roster(_match())
+        ]
+
+        def key(row: int, pair: tuple[int, int]) -> str:
+            return f"{identities[pair[0]]}/{identities[pair[1]]}/learner-{row % 2}"
+
+        def count(identity: str, kind: str) -> None:
+            counts = expected.setdefault(
+                identity,
+                dict(
+                    game_roots=0,
+                    environment_decisions=0,
+                    learner_transitions=0,
+                    terminal_games=0,
+                    truncated_games=0,
+                ),
+            )
+            counts[kind] += 1
+
+        for row, pair in enumerate(replay._env.current_matchup_indices()):
+            count(key(row, pair), "game_roots")
+        for actions, active in first.snapshot().journal:
+            pairs = replay._env.current_matchup_indices()
+            acting = replay._env.current_agent_indices()
+            replay._env.step_into_buffers(actions, active)
+            for row, enabled in enumerate(active):
+                if not enabled:
+                    continue
+                identity = key(row, pairs[row])
+                count(identity, "environment_decisions")
+                if acting[row] == row % 2:
+                    count(identity, "learner_transitions")
+                if replay._buffers["terminated"][row]:
+                    count(identity, "terminal_games")
+                    count(
+                        key(row, replay._env.current_matchup_indices()[row]),
+                        "game_roots",
+                    )
+        assert expected == first.stats.exposure
+    restored = _collector(recovery)
+    restored.restore(first.snapshot(), lambda: None)
+    assert first._self_play_decks == restored._self_play_decks
+    left, right = first.collect(agent, 64), restored.collect(agent, 64)
+    for key in left.obs:
+        np.testing.assert_array_equal(left.obs[key], right.obs[key])
+    np.testing.assert_array_equal(left.actions, right.actions)
+    np.testing.assert_array_equal(left.rewards, right.rewards)
+    assert first.stats.exposure == restored.stats.exposure
+    assert first.stats.self_play == restored.stats.self_play
+    assert first._env.current_game_seeds() == restored._env.current_game_seeds()
+
+
+def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
+    collector = _collector("current", 256)
+    np.testing.assert_array_equal(collector.learner_seat, np.arange(256) % 2)
+    assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 256
+    agent = Agent(
+        ObservationSpace(),
+        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+    )
+    agent.world_binding = checkpoint_world(_match().to_rust(), ObservationSpace())
+    assert len(agent.world_binding["setups"]) == 10
+    roster = elemental_roster(_match())
+    for a in roster:
+        for b in roster:
+            validate_agent_setup(agent, [a, b])
+    with pytest.raises(ValueError, match="exact Elemental"):
+        elemental_roster(Match())
+    bad = _match().hypers.model_copy(deep=True)
+    bad.hero_sideboard = {}
+    with pytest.raises(ValueError, match="exact Elemental"):
+        elemental_roster(Match(bad))
+    for workers, mode, root in [
+        (2, "self", None),
+        (1, "random", None),
+        (1, "self", "lethal-target-v1"),
+    ]:
+        with pytest.raises(ValueError, match="one producer"):
+            SeatRoutedCollector(
+                ObservationSpace(),
+                _match(),
+                Reward(RewardHypers()),
+                num_envs=4,
+                matchup_curriculum="elemental-uniform",
+                workers=workers,
+                opponent_mode=mode,
+                root=root,
+            )
+    native = managym.VectorEnv(num_envs=1, seed=174, opponent_policy="none")
+    with pytest.raises(RuntimeError, match="every exact Elemental"):
+        native.set_uniform_roster(roster[:-1])
+    with pytest.raises(RuntimeError, match="every exact Elemental"):
+        native.set_uniform_roster([roster[0]] * 10)
+
+
+def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
+    torch.set_num_threads(1)
+    value = json.loads(
+        Path("experiments/regimes/ataraxos-move-scalar.json").read_text()
+    )
+    value.update(
+        world=managym.WORLD_VERSION,
+        id="uniform-cpu-proof",
+        match=_match().hypers.model_dump(),
+    )
+    value["agent"].update(hidden_dim=8, semantic_pack=PACK, policy_film=False)
+    value["stages"] = value["stages"][:1]
+    stage = value["stages"][0]
+    stage.update(
+        streams=4, transitions=64, updates=2, matchup_curriculum="elemental-uniform"
+    )
+    stage["execution"]["wall_seconds"] = 180
+    stage["learning"].update(min_advantage=0, advantage_quantile=0)
+    bad_input = deepcopy(value)
+    bad_input["agent"]["semantic_pack"] = "ur-lessons-vs-gw-allies"
+    with pytest.raises(ValueError, match="complete Elemental policy input"):
+        validate_regime(bad_input)
+    recipe = validate_regime(value)
+    stage_model = recipe.stages[0]
+    assert isinstance(stage_model, TrainSelfPlay)
+    baseline = deepcopy(value)
+    baseline["stages"][0].update(streams=256, transitions=64)
+    assert validate_regime(baseline).stages[0].streams == 256
+    for invalid in (2, 4):
+        bad = deepcopy(value)
+        bad["stages"][0]["execution"]["workers"] = invalid
+        with pytest.raises(ValueError, match="one producer"):
+            TrainingRegime.model_validate(bad)
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        run = execute_regime(recipe, 17402, tmp_path / "run", store)
+    assert run.status == "completed"
+    result = run.stages[0]
+    assert result.learner_transitions == 4 * 64 * 2
+    assert result.optimizer_exposures > 0
+    assert len(result.diagnostics) == 2
+    exposure = result.diagnostics[-1]["cumulative_matchup_exposure"]
+    assert sum(c["learner_transitions"] for c in exposure.values()) == 512
+    assert sum(c["terminal_games"] for c in exposure.values()) == result.games
+    raw, _ = load_checkpoint_agent(result.artifacts["raw"]["path"])
+    ema, _ = load_checkpoint_agent(result.artifacts["ema"]["path"])
+    initial, _ = load_checkpoint_agent(result.artifacts["initial_raw"]["path"])
+    assert any(
+        not torch.equal(a, b)
+        for a, b in zip(raw.parameters(), initial.parameters(), strict=True)
+    )
+    assert len(raw.world_binding["setups"]) == 10
+    assert len(ema.world_binding["setups"]) == 10
+    assert all(torch.isfinite(p).all() for p in raw.parameters())
