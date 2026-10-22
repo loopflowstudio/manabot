@@ -20,10 +20,11 @@ from manabot.training.experiment_execution import PlannedRun
 from manabot.training.experiments import Baseline, Case, Experiment, Pipeline
 
 SEEDS = (64001, 64002, 64003, 64004)
-# Complete random-policy games run ~180 environment decisions and trained ones
-# ~108, so 256 streams yield 27k-46k learner decisions per update: 2,400 updates
-# passes 64M in both arms. Matched comparisons interpolate between exports.
-UPDATES = 2_400
+# L4 calibration (seed 64000, 60 updates): about 27k learner decisions per
+# update in both arms, falling as games shorten. 2,700 updates passes 64M; at
+# 6.0M learner decisions/hour one-seat reaches its rental deadline near 64M
+# first and pauses there. Matched comparisons interpolate between exports.
+UPDATES = 2_700
 CHECKPOINT_UPDATES = 20
 L4 = Machine(
     gpu_types=("NVIDIA L4",),

@@ -35,8 +35,8 @@ streams, 4 updates): 23,456 vs 22,786 learner decisions, 28.3 vs 27.8 optimizer
 steps per thousand, 25.0% retained rows in both arms. Recorded counters verify
 these at full scale; divergence in learner decisions per update is reported.
 
-Seeds 64001–64004; 2,400 updates (about 65M–110M learner decisions depending on
-game length); raw exports every 20 updates. One L4 job per arm and seed, each
+Seeds 64001–64004; up to 2,700 updates (about 70M learner decisions at the
+calibrated rate); raw exports every 20 updates. One L4 job per arm and seed, each
 an independent single-job cohort, 11.9-hour lifetime and $7.27 limit. A run
 that pauses at its deadline before 64M continues as a new segment; collector
 and RNG streams restart there, identically for both arms.
@@ -56,6 +56,19 @@ environment decisions, collection, learning and wall time, and cost per arm.
 
 ## Calibration
 
-Before the main runs, one short L4 job per arm (seed 64000, 60 updates) measures
-learner decisions per update, collection and learning seconds, and verifies
-export upload. Its cost counts against the ceiling.
+One short L4 job per arm (seed 64000, 60 updates), completed and deleted
+2026-10-22 for $0.21 and $0.17:
+
+| | One-seat | Two-seat |
+|---|---:|---:|
+| Learner decisions | 1,611,504 | 1,619,566 |
+| Environment decisions | 3,226,042 | 1,619,566 |
+| Optimizer steps per thousand learner decisions | 3.9 | 3.9 |
+| Retained rows | 25.0% | 25.0% |
+| Learner decisions per hour: collection / learning / overall | 10.6M / 13.8M / 6.0M | 19.7M / 13.9M / 8.2M |
+
+At these rates one-seat reaches about 64M within its 11.9-hour rental and
+pauses at the deadline; two-seat reaches the 2,700-update cap in about nine
+hours. A first two-seat submission returned RunPod HTTP 500 and remains an
+unresolved ambiguous creation with no pod in the provider inventory; its $0.93
+reservation counts against the ceiling.
