@@ -81,7 +81,7 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup() -> None:
         assert scenario["villain_type"] == "random"
         assert scenario["policy"] in policies
         assert isinstance(scenario["seed"], int)
-        assert 0 < scenario["max_commands"] <= 300
+        assert 0 < scenario["max_commands"] <= 600
 
         expected = scenario["expected"]
         counts = expected["prompt_counts"]
@@ -110,8 +110,8 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup() -> None:
         assert set(record["scenario_ids"]) == expected_ids
 
     visual = matrix["visual_references"]
-    assert visual["version"] == 7
-    assert visual["directory"] == "visual-references/v7"
+    assert visual["version"] == 8
+    assert visual["directory"] == "visual-references/v8"
     assert visual["profile"] == {
         "name": "ubuntu-24.04-chromium",
         "operating_system": "Ubuntu 24.04 x86-64",

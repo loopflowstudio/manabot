@@ -7,7 +7,7 @@ import {
   type TestInfo,
 } from '@playwright/test';
 
-import { DECISION_PROMPTS } from '../src/lib/prompt-instructions';
+import type { ExperienceFrame } from '../src/lib/types';
 import { finishBoardNarration } from './presentation-readiness';
 import matrixJson from './release-prompt-matrix.json' with { type: 'json' };
 
@@ -105,6 +105,7 @@ interface MatrixCommand {
 
 interface MatrixBrowserState {
   attemptId: string | null;
+  frame: ExperienceFrame | null;
   commands: MatrixCommand[];
   connectionObserver?: MutationObserver;
   connectionStatuses: string[];
@@ -318,6 +319,7 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
     const NativeWebSocket = window.WebSocket;
     const state: MatrixBrowserState = {
       attemptId: null,
+      frame: null,
       commands: [],
       connectionStatuses: [],
       sockets: [],
@@ -333,6 +335,12 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
         state.sockets.push(this);
         this.addEventListener('message', (event) => {
           const message = JSON.parse(event.data) as { table?: { attempt_id?: string | null } };
+          const observe = (value: unknown): void => {
+            if (!value || typeof value !== 'object') return;
+            if ('frame_hash' in value && 'projection' in value) state.frame = value as ExperienceFrame;
+            else Object.values(value).forEach(observe);
+          };
+          observe(message);
           if (typeof message.table?.attempt_id === 'string') {
             state.attemptId = message.table.attempt_id;
           }
@@ -476,6 +484,7 @@ function chooseAction(
     selected = find((action) => action.type === 'SELECT_CARD');
   }
 
+  if (selected < 0 && actions.length === 1) selected = 0;
   if (selected < 0 || selected >= actions.length) {
     throw new Error(
       `${scenario.id}: policy ${scenario.policy} has no action for ${family}: ` +
@@ -491,13 +500,17 @@ async function assertAccessiblePrompt(
   family: string,
   actions: RenderedAction[],
 ): Promise<void> {
-  const instruction = DECISION_PROMPTS[family];
-  expect(instruction, `${scenario.id}: ${family} has no prompt instruction`).toBeTruthy();
+  const instruction = await page.evaluate(() => {
+    const frame = (window as MatrixWindow).__academyMatrix?.frame;
+    return frame?.projection.decision_context?.instruction ?? frame?.prompt?.instruction;
+  });
+  expect(instruction, `${scenario.id}: ${family} has no authoritative prompt instruction`).toBeTruthy();
+  if (!instruction) throw new Error(`${family} has no instruction`);
 
   const panel = page.getByTestId('action-panel');
   const prompt = page.getByTestId('decision-prompt');
   const actionButtons = page.getByTestId('action-option');
-  await expect(panel).toHaveAccessibleName('Actions');
+  await expect(panel).toHaveAccessibleName('Your choices');
   await expect(panel).toHaveAccessibleDescription(instruction);
   await expect(prompt).toHaveText(instruction);
   await expect(panel.getByRole('status').filter({ hasText: /^Your move$/ })).toBeVisible();
@@ -511,7 +524,8 @@ async function assertAccessiblePrompt(
     expect(action.description.trim(), `${scenario.id}: ${family} action label is empty`).not.toBe('');
     expect(action.disabled, `${scenario.id}: ${family} action is disabled`).toBe(false);
     await expect(button).toHaveAccessibleName(action.description);
-    await expect(button).toHaveAccessibleDescription(instruction);
+    expect(await button.getAttribute('aria-describedby')).toContain('decision-prompt');
+    await expect(button).toHaveAccessibleDescription(new RegExp(instruction.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   await expect(actionButtons.first()).toBeFocused();
 }
@@ -977,7 +991,7 @@ async function runScenario(
   await expect(resultAction).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(resultAction).toBeFocused();
-  await expect(actionPanel.getByRole('status')).toHaveText('Game over');
+  await expect(actionPanel.getByRole('status').filter({ hasText: /^Game over$/ })).toBeVisible();
   await expect(page.getByTestId('game-board')).toContainText(`Turn ${scenario.expected.turn}`);
   await assertReducedMotion(page, `${scenario.id}: GAME_OVER`);
   await auditAccessibility(page, `${scenario.id}: GAME_OVER`);

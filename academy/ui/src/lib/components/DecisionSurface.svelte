@@ -37,7 +37,7 @@
 <section aria-label="Decision surface" data-testid="decision-surface" data-revision={frame.revision} class="min-w-0 space-y-3">
   <ActionPanel {offers} describeSubject={object => subjectLabel(frame.projection, object)} {previewNames} actionSpaceKind={frame.action_space}
     instruction={context?.instruction ?? frame.prompt?.instruction ?? ''}
-    totalOffers={frame.offers.length} {chosenOffer} {selectedTargetId}
+    totalOffers={frame.offers.length} gameOver={frame.status === 'game_over'} {chosenOffer} {selectedTargetId}
     {disabled} {readOnly} {fastForwarding} {canPassTurn} {highlightedOfferIds}
     focusKey={`${frame.match_id}:${frame.revision}:${frame.prompt?.id}:${navigationKey}:${selectedTargetId ?? 'all'}`}
     {onHoverAction} {onSelectAction} {onClearSelection} {onPassTurn} />

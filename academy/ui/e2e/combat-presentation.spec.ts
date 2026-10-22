@@ -321,6 +321,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
     await page.clock.pauseAt(100);
     await page.getByRole('button', { name: 'New Game' }).first().click();
     const history = page.getByTestId('presentation-history');
+    await history.locator('summary').click();
     const stage = page.getByTestId('presentation-stage');
     await expect(history.getByRole('listitem')).toHaveCount(6);
     await expect(history).toContainText('Otter-Penguin deals 2 damage to Badgermole Cub.');
@@ -374,6 +375,8 @@ test('terminal capture finishes JavaScript narration and retains consequences', 
   await expect(stage).toBeHidden();
   await expect(resultAction).toBeFocused();
   const history = page.getByTestId('presentation-history');
+    // Inspect the retained disclosure without moving focus out of the terminal dialog.
+  await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
   await expect(history.getByRole('listitem')).toHaveCount(6);
   await expect(history).toContainText('Otter-Penguin, Badgermole Cub die.');
   const settled = await board.screenshot({ animations: 'disabled' });

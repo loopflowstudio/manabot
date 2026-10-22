@@ -22,7 +22,7 @@ RUN npm ci --no-audit --no-fund
 # per pack change (paced, identified User-Agent), not once per deploy.
 COPY academy/ui/scripts/fetch-card-art.mjs scripts/fetch-card-art.mjs
 COPY academy/ui/src/lib/packs/ src/lib/packs/
-COPY academy/fixtures/*demo*w9.json /build/academy/fixtures/
+COPY academy/fixtures/*demo*.json /build/academy/fixtures/
 RUN node scripts/fetch-card-art.mjs
 COPY academy/ui/ ./
 RUN ACADEMY_STATIC_BUILD=1 npm run build
