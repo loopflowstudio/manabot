@@ -148,6 +148,7 @@ def source_paths() -> list[Path]:
     for relative, suffixes in (
         ("academy", {".py"}),
         ("managym/src", {".rs"}),
+        ("manabot/managym", {".py", ".pyi"}),
         ("content/semantic/v1", {".json"}),
     ):
         paths.update(
