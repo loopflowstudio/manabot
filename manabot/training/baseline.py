@@ -9,6 +9,7 @@ training. `run_baseline` uses the existing isolated experiment coordinator.
 from datetime import datetime, timezone
 from pathlib import Path
 import socket
+from typing import Literal
 
 from pydantic import Field
 
@@ -25,7 +26,7 @@ from manabot.training.experiment_execution import (
 from manabot.training.experiment_runner import run_experiment
 from manabot.training.experiments import Baseline, Experiment
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Execution,
     IterationSchedule,
     Strict,
@@ -80,7 +81,10 @@ class TrainingRecipe(Strict):
 
 
 def baseline(
-    steps: int = BASELINE_STEPS, *, seconds: float | None = None
+    steps: int = BASELINE_STEPS,
+    *,
+    seconds: float | None = None,
+    learning_seats: Literal["one", "both"] = "both",
 ) -> TrainingRecipe:
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
@@ -122,8 +126,9 @@ def baseline(
                     streams=4,
                     transitions=64,
                     behavior="current-self",
-                    learning=AtaraxosMoveLearning(
-                        gradient="ataraxos_move", iteration_schedule=schedule
+                    learning_seats=learning_seats,
+                    learning=DampedPolicyLearning(
+                        gradient="damped_policy", iteration_schedule=schedule
                     ),
                     execution=Execution(wall_seconds=allowance * 0.85, threads=1),
                 )
@@ -140,9 +145,10 @@ def run_baseline(
     seed: int = 197,
     out: Path | None = None,
     seconds: float | None = None,
+    learning_seats: Literal["one", "both"] = "both",
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
-    plan = baseline(steps, seconds=seconds)
+    plan = baseline(steps, seconds=seconds, learning_seats=learning_seats)
     destination = out or Path(".runs") / (
         "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     )

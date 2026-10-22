@@ -147,7 +147,13 @@ class VectorEnv:
                 self._reward_tensor, self.reward.hypers.lose_reward
             )
             terminal_shaped = torch.where(
-                self._reward_tensor > 0, win_reward, lose_reward
+                self._reward_tensor > 0,
+                win_reward,
+                torch.where(
+                    self._reward_tensor < 0,
+                    lose_reward,
+                    torch.zeros_like(self._reward_tensor),
+                ),
             )
             self._reward_tensor.copy_(
                 torch.where(done, terminal_shaped, self._reward_tensor)

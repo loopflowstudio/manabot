@@ -13,19 +13,18 @@ import torch
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum
-from manabot.infra import Experiment
+from manabot.infra.experiment import seed_random
 from manabot.infra.hypers import (
     AgentSpec,
-    ExperimentHypers,
     MatchHypers,
     RewardHypers,
-    TrainHypers,
 )
 from manabot.model.agent import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
+from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.sim.rollout import BatchedSampler, run_vector_games
+from manabot.training.learner import Learner
 from manabot.training.models import Learning, Schedule
 from manabot.training.objectives import update_iteration
 from manabot.verify.learnability.schema import PPOResult
@@ -86,8 +85,8 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
         )
         opponent, _ = load_checkpoint_agent(str(path))
         torch.manual_seed(197)
-        learner = _pass_biased_agent(space, 4)
-        before = _score(learner, opponent, 100_197)
+        agent = _pass_biased_agent(space, 4)
+        before = _score(agent, opponent, 100_197)
         collector = SeatRoutedCollector(
             space,
             match,
@@ -97,22 +96,11 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
             opponent_mode="frozen",
             opponent_agent=opponent,
         )
-        with_experiment = Experiment(
-            ExperimentHypers(
-                wandb=False,
-                seed=197,
-                runs_dir=tmp_path,
-                exp_name="positive-control",
-                log_level="WARNING",
-            )
-        )
         try:
-            trainer = NetOpponentTrainer(
-                learner,
-                with_experiment,
-                collector,
-                TrainHypers(num_envs=8, num_steps=128),
-            )
+            # The baseline score consumes policy RNG. Keep the historical
+            # training boundary independent of evaluation and tracking setup.
+            seed_random(197)
+            learner = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
             learning = Learning(
                 policy_lambda=1,
                 retained_fraction=1,
@@ -127,13 +115,11 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
             rng = np.random.default_rng(197)
             train_started = time.perf_counter()
             for _ in range(64):
-                batch = collector.collect(learner, 128, deadline_monotonic=deadline)
-                update_iteration(trainer, batch, learning, 0, rng)
+                batch = collector.collect(agent, 128, deadline_monotonic=deadline)
+                update_iteration(learner, batch, learning, 0, rng)
             training_seconds = time.perf_counter() - train_started
             checkpoint = tmp_path / "ppo-policy.pt"
-            save_bc_checkpoint(
-                learner, space, checkpoint, player_configs=match.to_rust()
-            )
+            save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
             restored, _ = load_checkpoint_agent(str(checkpoint))
             after = _score(restored, opponent, 200_197)
             no_update = _score(_pass_biased_agent(space, 4), opponent, 200_197)
@@ -149,6 +135,6 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
                 passed=after >= max(before, no_update) + 0.2 and after >= 0.8,
             )
         finally:
-            with_experiment.close()
+            collector.close()
     finally:
         torch.set_num_threads(previous_threads)

@@ -25,8 +25,8 @@ from manabot.training.experiments import (
     SettingProvenance,
 )
 from manabot.training.models import (
-    AtaraxosMoveLearning,
     CollectSearch,
+    DampedPolicyLearning,
     Execution,
     Learning,
 )
@@ -61,7 +61,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
                 ),
                 Resources(execution=Execution(threads=2), wall_seconds=200),
                 LearningRule(
-                    AtaraxosMoveLearning(gradient="ataraxos_move", policy_lambda=0.3)
+                    DampedPolicyLearning(gradient="damped_policy", policy_lambda=0.3)
                 ),
                 Environment(
                     observation=ObservationSpaceHypers(max_actions=128),
@@ -266,7 +266,7 @@ def test_compatibility_is_checked_after_independent_components_compose() -> None
     token = Model(AgentSpec(value_aggregation="value_token"))
     with pytest.raises(ValidationError, match="require attention"):
         Experiment("invalid", _baseline(), overrides=(no_attention, token)).resolve()
-    with pytest.raises(ValidationError, match="requires ataraxos_move"):
+    with pytest.raises(ValidationError, match="requires damped_policy"):
         Experiment(
             "invalid", ataraxos_mtg_v1(), overrides=(LearningRule(Learning()),)
         ).resolve()

@@ -7,11 +7,11 @@ import pytest
 from typer.testing import CliRunner
 
 from manabot import cli
-from manabot.config.presets import DEFAULT_TRAIN_PRESET
 from manabot.training.baseline import baseline
 from manabot.training.comparison_notebook import write_comparison_notebook
+from manabot.training.local import LOCAL_SECONDS, LOCAL_STEPS, local_smoke
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     IterationSchedule,
     TrainSelfPlay,
 )
@@ -26,11 +26,11 @@ def test_baseline_horizon_preserves_recipe_and_rate_endpoints() -> None:
     short, long = baseline(101), baseline(1001)
     a, b = short.regime.stages[0], long.regime.stages[0]
     assert isinstance(a, TrainSelfPlay) and isinstance(b, TrainSelfPlay)
-    assert isinstance(a.learning, AtaraxosMoveLearning)
-    assert isinstance(b.learning, AtaraxosMoveLearning)
+    assert isinstance(a.learning, DampedPolicyLearning)
+    assert isinstance(b.learning, DampedPolicyLearning)
     for i, j in ((1, 1), (26, 251), (51, 501), (101, 1001)):
         assert a.learning.rates(i) == pytest.approx(b.learning.rates(j))
-    legacy = AtaraxosMoveLearning(gradient="ataraxos_move")
+    legacy = DampedPolicyLearning(gradient="damped_policy")
     assert a.learning.rates(1) == legacy.rates(1)
     assert a.learning.rates(101) == legacy.rates(10_000)
     assert "iteration_schedule" not in legacy.model_dump()
@@ -60,37 +60,70 @@ def test_schedule_boundaries_and_invalid_lengths() -> None:
         IterationSchedule(steps=10).at(0)
 
 
-def test_cli_smoke_and_named_recipe_are_separate(
+def test_cli_smoke_and_named_recipe(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[object] = []
+    calls: list[dict[str, object]] = []
 
-    def smoke(preset: str, overrides: list[str]) -> None:
-        calls.append((preset, overrides))
+    def run(**kwargs: object) -> SimpleNamespace:
+        calls.append(kwargs)
+        return SimpleNamespace(
+            status="completed",
+            id="smoke",
+            notebook="baseline.ipynb",
+            stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
+        )
 
-    def train(
-        *, steps: int, seed: int, out: Path | None, seconds: float | None
-    ) -> SimpleNamespace:
-        calls.append((steps, seed, out, seconds))
-        return SimpleNamespace(status="completed", notebook="baseline.ipynb")
-
-    monkeypatch.setattr(cli, "_run_train", smoke)
-    monkeypatch.setattr(cli, "run_baseline", train)
+    monkeypatch.setattr(cli, "run_local", run)
+    monkeypatch.setattr(cli, "run_baseline", run)
     runner = CliRunner()
-    assert runner.invoke(cli.app, ["train"]).exit_code == 0
-    assert calls == [(DEFAULT_TRAIN_PRESET, [])]
+    result = runner.invoke(cli.app, ["train"])
+    assert result.exit_code == 0, result.output
+    assert "checkpoint: policy.pt" in result.output
+    assert calls == [
+        dict(
+            steps=LOCAL_STEPS,
+            seed=197,
+            out=None,
+            seconds=LOCAL_SECONDS,
+            learning_seats="both",
+        )
+    ]
     result = runner.invoke(
         cli.app,
         ["train", "--recipe", "baseline", "--steps", "123", "--out", str(tmp_path)],
     )
     assert result.exit_code == 0, result.output
-    assert calls[-1] == (123, 197, tmp_path, None)
+    assert calls[-1] == dict(
+        steps=123, seed=197, out=tmp_path, seconds=None, learning_seats="both"
+    )
+    result = runner.invoke(
+        cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
+    )
+    assert result.exit_code == 0, result.output
+    assert calls[-1]["learning_seats"] == "one"
     for args in (
         ["--recipe", "nope"],
-        ["--steps", "2"],
+        ["--preset", "local"],
         ["--recipe", "baseline", "--preset", "simple"],
         ["--recipe", "baseline", "--regime", "x"],
         ["--recipe", "baseline", "--set", "agent.hidden_dim=8"],
+        ["--regime", "", "--out", str(tmp_path)],
+        ["--resume-from", "policy.pt"],
+        ["--learning-seats", "three"],
     ):
         assert runner.invoke(cli.app, ["train", *args]).exit_code != 0
-    assert len(calls) == 2
+    assert len(calls) == 3
+
+
+def test_local_recipe_is_bounded_and_preserves_seat_controls() -> None:
+    for seats in ("one", "both"):
+        plan = local_smoke(learning_seats=seats)
+        stage = plan.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        assert stage.learning_seats == seats
+        assert stage.updates == 2 and stage.streams == 2 and stage.transitions == 16
+        assert stage.execution.device == "cpu" and plan.wall_seconds == 120
+        assert isinstance(stage.learning, DampedPolicyLearning)
+        assert stage.learning.iteration_schedule.steps == 2
+        assert plan.agent.policy_film

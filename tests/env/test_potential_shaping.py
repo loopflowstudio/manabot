@@ -16,11 +16,11 @@ from types import SimpleNamespace
 
 import torch
 
-import managym
 from manabot.env import Reward, VectorEnv
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import RewardHypers
+import managym
 
 BATTLEFIELD = int(managym.ZoneEnum.BATTLEFIELD)
 HAND = int(managym.ZoneEnum.HAND)
@@ -49,9 +49,7 @@ def first_valid_actions(obs: dict[str, torch.Tensor]) -> torch.Tensor:
 class TestVectorEnvPotential:
     def _blank_tensors(self, env: VectorEnv):
         encoder = env.observation_space.encoder
-        cards = torch.zeros(
-            (env.num_envs, encoder.cards_per_player, encoder.card_dim)
-        )
+        cards = torch.zeros((env.num_envs, encoder.cards_per_player, encoder.card_dim))
         players = torch.zeros((env.num_envs, 1, encoder.player_dim))
         return cards, players
 
@@ -90,18 +88,12 @@ class TestVectorEnvPotential:
         # Equal life (20/20 encoded as 1.0), empty boards -> Phi = 0.
         agent_player[:, 0, 0] = 1.0
         opponent_player[:, 0, 0] = 1.0
-        phi = env._potential(
-            agent_cards, opponent_cards, agent_player, opponent_player
-        )
+        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
         assert torch.allclose(phi, torch.zeros_like(phi))
 
         # Hero battlefield land -> +land_weight.
-        self._add_card(
-            agent_cards, 0, 0, zone=BATTLEFIELD, is_land=True, env_ref=env
-        )
-        phi = env._potential(
-            agent_cards, opponent_cards, agent_player, opponent_player
-        )
+        self._add_card(agent_cards, 0, 0, zone=BATTLEFIELD, is_land=True, env_ref=env)
+        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
         assert abs(phi[0].item() - 0.03) < 1e-6
         assert phi[1].item() == 0.0
 
@@ -109,15 +101,11 @@ class TestVectorEnvPotential:
         self._add_card(
             opponent_cards, 0, 0, zone=BATTLEFIELD, is_creature=True, env_ref=env
         )
-        phi = env._potential(
-            agent_cards, opponent_cards, agent_player, opponent_player
-        )
+        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
         assert abs(phi[0].item() - (0.03 - 0.06)) < 1e-6
 
         # Cards outside the battlefield do not count.
-        self._add_card(
-            agent_cards, 1, 1, zone=HAND, is_creature=True, env_ref=env
-        )
+        self._add_card(agent_cards, 1, 1, zone=HAND, is_creature=True, env_ref=env)
         phi_after = env._potential(
             agent_cards, opponent_cards, agent_player, opponent_player
         )
@@ -126,9 +114,7 @@ class TestVectorEnvPotential:
         # Hero life advantage -> positive life term: hero 20, villain 10
         # gives potential_life_weight * (20 - 10)/20 = 0.2 * 0.5 = 0.1.
         opponent_player[1, 0, 0] = 0.5
-        phi = env._potential(
-            agent_cards, opponent_cards, agent_player, opponent_player
-        )
+        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
         assert abs(phi[1].item() - 0.1) < 1e-6
 
     def test_disabled_by_default(self):
@@ -214,13 +200,10 @@ class TestVectorEnvPotential:
                 shaping = env._compute_potential_shaping()
                 for i in range(env.num_envs):
                     if done[i]:
-                        assert abs(
-                            float(shaping[i]) - (-float(prev_phi[i]))
-                        ) < 1e-6
+                        assert abs(float(shaping[i]) - (-float(prev_phi[i]))) < 1e-6
                         # Terminal reward is win/lose plus that correction.
                         assert (
-                            abs(abs(float(reward[i]) + float(prev_phi[i])) - 1.0)
-                            < 1e-6
+                            abs(abs(float(reward[i]) + float(prev_phi[i])) - 1.0) < 1e-6
                         )
                 env.close()
                 return
@@ -271,9 +254,7 @@ class TestSingleEnvRewardPotential:
         symmetric = _stub_obs()
         assert reward._potential(symmetric) == 0.0
 
-        hero_land = _stub_obs(
-            agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)]
-        )
+        hero_land = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         assert abs(reward._potential(hero_land) - 0.03) < 1e-9
 
         villain_board = _stub_obs(
@@ -339,3 +320,27 @@ class TestSingleEnvRewardPotential:
         s0 = _stub_obs()
         s1 = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         assert reward.compute(0.0, s0, s1) == 0.0
+
+
+def test_terminal_draw_remains_neutral_before_potential_correction() -> None:
+    env = make_vector_env(
+        RewardHypers(
+            win_reward=7,
+            lose_reward=-3,
+            potential_enabled=True,
+            potential_land_weight=0,
+            potential_creature_weight=0,
+            potential_life_weight=1,
+        )
+    )
+    obs, _ = env.reset()
+    env._prev_obs = {key: value.clone() for key, value in obs.items()}
+    env._prev_obs["agent_player"][:, 0, 0] = 1
+    env._prev_obs["opponent_player"][:, 0, 0] = 0.5
+    env._reward_tensor[:] = torch.tensor([0.0, 1.0])
+    env._terminated_tensor.fill_(True)
+    env._truncated_tensor.fill_(False)
+    env._apply_reward_policy()
+    # Draw=0, win=7, each with -Phi(s)=-.5; reset Phi never enters.
+    torch.testing.assert_close(env._reward_tensor, torch.tensor([-0.5, 6.5]))
+    env.close()

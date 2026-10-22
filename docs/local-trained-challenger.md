@@ -5,7 +5,7 @@ Allies/Lessons world: the authored decks with their sideboards, so every Learn
 decision offers Take a Lesson, Discard and draw, and Decline. Exp-03 supports
 distillation over early PPO in its historical world; it does **not** rank this
 small new candidate as the strongest current bot. The generic
-`manabot train --preset local` uses a different deck and is a training smoke,
+`manabot train` is a bounded production-path training smoke,
 not this matchup's challenger recipe.
 
 No cloud account is needed. The fixed local workflow follows the

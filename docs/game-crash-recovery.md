@@ -193,11 +193,11 @@ frozen recipes keep their serialized identities. The tolerance ledger remains th
 only owner of settled-attempt counts and recovery allowance.
 
 `manabot.env.failures` owns automatic capture; `manabot.env.replay` owns
-input reconstruction and the shared CLI deadline/runtime checks. A strict run
-writes `failures/` under its output directory and registers those files as rejected
-artifacts.
-Ordinary Trainer uses its experiment directory. Standalone environment/data
-consumers use `.runs/game-failures/` and attach the private path to the exception.
+input reconstruction and the shared CLI deadline/runtime checks. Strict training
+through `execute_regime` writes private `failures/` under the TrainingRun output
+directory and registers those files as the failed stage's rejected artifacts.
+Standalone environment/data consumers without an owning capture scope use
+`.runs/game-failures/` and attach the private path to the exception.
 Files are create-only, mode 0600, fsynced with their directory entry. A storage
 failure is attached to the original exception rather than replacing it or
 pretending evidence was retained. These files must not become public replays.
@@ -206,14 +206,14 @@ Each record retains setup (including sideboards/content pack), game seed,
 stream/actor, explicit input prefix and pre-call native offers, source/native/world
 identities, available input/content identities, exception/traceback and elapsed
 time. Regime scopes add run/stage, update/cost coordinates, parent attempt,
-committed snapshot and original allocation deadline; Trainer adds its update and
-transition count. Data generators retain available game/sample/decision indices.
+committed snapshot and original allocation deadline. Data generators retain
+available game/sample/decision indices.
 Capture does not create reservations, reconcile submissions, or change budgets.
 
 | Execution boundary | Retained evidence |
 | --- | --- |
 | Strict self-play, including multistage and sharded producers | Current native game seeds, per-stream prefixes and active pre-call frames. Masked rows are excluded. Native auto-reset strides and per-stream setups survive replay. |
-| Ordinary Trainer/preset and `sim.rollout` | The same strict vector capture, including deterministic built-in random/passive opponents. A failed batch produces no completed evaluation result. |
+| Standalone `sim.rollout` and vector environments | The same strict vector capture, including deterministic built-in random/passive opponents. A failed batch produces no completed evaluation result. |
 | Distillation/value/pooled generation | Scalar live-game inputs; native flat-MC and rollout-pool calls additionally retain their exact root, search seed/parameters and sampled slot actions. Pool replay needs no model or policy sampling. |
 | Compound and selection training | Fsynced pre-execution Command/offer journals, followed by success or failure. Complete-game logs remain separate and incomplete games cannot pass their existing replay admission. |
 | Tolerant self-play and arena | Their existing settled-attempt ledger and pre-command arena journal remain authoritative, as described above. |

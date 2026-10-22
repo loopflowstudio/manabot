@@ -38,7 +38,10 @@ human games, strength, or equilibrium.
 
 ## Objective and data ownership
 
-`manabot/training/ataraxos.py` owns the move objective and targets. For each
+`manabot/training/damped_policy.py` owns the damped policy objective and targets. Reusable APIs use
+`DampedPolicyLearning(gradient="damped_policy")`; Ataraxos names identify method
+provenance and experiments. Historical `ataraxos_move` inputs decode at the
+compatibility boundary and retain their serialized tag/digest. For each
 retained observation the policy loss is the negative clipped-ratio advantage
 surrogate plus `collection_kl * KL(current || behavior)` and
 `tau * KL(current || magnet)`. All legal offers enter both KL terms. Actual
@@ -54,8 +57,10 @@ estimates and targets are detached. Shared encoder weights receive both losses.
 The scalar ablation uses squared-error lambda-return supervision instead; equal
 means do not imply equal categorical targets.
 
-Collection freezes learner weights within each batch. Games may span updates,
-so this is close-to-on-policy continuation, not immutable-policy full episodes.
+Collection freezes learner weights within each batch. Default both-seat
+self-play and explicit `games_per_stream` controls finish games before updating.
+The one-seat exact-quota control may span updates, so that path is
+close-to-on-policy continuation, not immutable-policy full episodes.
 One epoch still changes parameters between timestep minibatches: its per-action
 ratios remain necessary. No replay buffer, trajectory product of ratios, or
 importance correction for changing historical state occupancy is implemented
@@ -64,8 +69,10 @@ source. No normalization rescales advantages after filtering.
 
 The collector records only acting-viewer observation tensors, chosen actions,
 behavior probabilities and outcome estimates. Terminal truth supplies reward
-labels, never policy inputs. Each stream pauses at the exact next learner
-observation; end markers stop propagation across resets. Truncation fails
+labels, never policy inputs. One-seat quota streams pause at the exact next learner
+observation. Complete-game batches pack separate same-seat trajectories into
+one column with end markers between seats and games; no padded trajectory rows
+enter selection or either loss. End markers stop propagation across resets. Truncation fails
 rather than becoming a draw. MTG opponent actions are traversed between learner
 decisions, not assigned learner policy gradients.
 

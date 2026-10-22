@@ -27,9 +27,10 @@ from manabot.model.agent import Agent
 from manabot.sim.net_opponent import (
     CollectorSnapshot,
     CollectorStats,
-    NetOpponentTrainer,
+    SeatRoutedCollector,
 )
 from manabot.training.clock import boot_identity
+from manabot.training.learner import Learner
 from manabot.training.models import StageRecord, TrainingRun
 
 if TYPE_CHECKING:
@@ -74,7 +75,8 @@ class UpdateSnapshot:
 
 def save_update(
     path: Path,
-    trainer: NetOpponentTrainer,
+    learner: Learner,
+    collector: SeatRoutedCollector,
     ema: Agent | None,
     rng: np.random.Generator,
     iteration: int,
@@ -96,14 +98,14 @@ def save_update(
         completed_stages=compact[:-1],
         collector_before=deepcopy(collector_before),
         record=compact[-1],
-        learner=deepcopy(trainer.agent.state_dict()),
+        learner=deepcopy(learner.agent.state_dict()),
         ema=deepcopy(ema.state_dict()) if ema is not None else None,
-        optimizer=deepcopy(trainer.optimizer.state_dict()),
+        optimizer=deepcopy(learner.optimizer.state_dict()),
         minibatch_rng=deepcopy(rng.bit_generator.state),
         python_rng=random.getstate(),
         numpy_rng=np.random.get_state(),
         torch_rng=torch.get_rng_state(),
-        collector=trainer.collector.snapshot(),
+        collector=collector.snapshot(),
         regime_digest=run.regime_digest,
         seed=run.seed,
         identities=deepcopy(run.identities),
@@ -214,13 +216,13 @@ def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
 
 def restore_learning(
     state: UpdateSnapshot,
-    trainer: NetOpponentTrainer,
+    learner: Learner,
     ema: Agent | None,
     rng: np.random.Generator,
 ) -> None:
     """Restore RNG last: construction and replay must not perturb training."""
-    trainer.agent.load_state_dict(state.learner)
-    trainer.optimizer.load_state_dict(state.optimizer)
+    learner.agent.load_state_dict(state.learner)
+    learner.optimizer.load_state_dict(state.optimizer)
     if (ema is None) != (state.ema is None):
         raise ValueError("recovery EMA contract mismatch")
     if ema is not None:

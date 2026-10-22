@@ -13,6 +13,7 @@ from pydantic import (
 
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.sim.local_update import LocalSearchConfig
+from manabot.training.compatibility import LearningInput
 from manabot.training.game_errors import GameErrorPolicy, GameErrorState
 
 
@@ -80,19 +81,14 @@ class CheckpointCadence(Strict):
         return values
 
     def admit_regime(self, regime: "TrainingRegime") -> None:
+        stage = regime.stages[0]
         if self.checkpoint_updates is not None and (
             len(regime.stages) != 1
+            or not isinstance(stage, TrainSelfPlay)
+            or stage.active_seconds is not None
             or (
                 regime.schedule_clock != "iteration_fraction"
-                and any(
-                    not isinstance(stage, TrainSelfPlay)
-                    or stage.learning.gradient != "ataraxos_move"
-                    for stage in regime.stages
-                )
-            )
-            or any(
-                not isinstance(stage, TrainSelfPlay) or stage.active_seconds is not None
-                for stage in regime.stages
+                and stage.learning.gradient != "damped_policy"
             )
         ):
             raise ValueError(
@@ -153,14 +149,14 @@ class IterationSchedule(Strict):
         return 1 + progress * (self.reference_steps - 1)
 
 
-class AtaraxosMoveLearning(Strict):
-    """Supplement S3.4 move update; MTG reference and batch sizes are adaptations.
+class DampedPolicyLearning(LearningInput, Strict):
+    """Unnormalized clipped policy update with reverse-KL regularization.
 
     Iteration schedules, one epoch and no advantage normalization belong to
     this method, rather than inheriting the PPO control's elapsed-time recipe.
     """
 
-    gradient: Literal["ataraxos_move"]
+    gradient: Literal["damped_policy"]
     policy_lambda: float = Field(default=0.5, ge=0, le=1)
     value_lambda: float = Field(default=0.8, ge=0, le=1)
     filter_kind: Literal["quantile", "top_count"] = "quantile"
@@ -183,7 +179,7 @@ class AtaraxosMoveLearning(Strict):
     )
 
     @model_validator(mode="after")
-    def valid_learning_rate_bounds(self) -> "AtaraxosMoveLearning":
+    def valid_learning_rate_bounds(self) -> "DampedPolicyLearning":
         if self.learning_rate_min > self.learning_rate_max:
             raise ValueError("learning rate minimum exceeds maximum")
         return self
@@ -191,7 +187,7 @@ class AtaraxosMoveLearning(Strict):
     def rates(self, iteration: int) -> tuple[float, float]:
         """One-based completed collection/update iteration, including skips."""
         if iteration < 1:
-            raise ValueError("Ataraxos iteration must be positive")
+            raise ValueError("Damped policy iteration must be positive")
         position = (
             self.iteration_schedule.at(iteration)
             if self.iteration_schedule is not None
@@ -404,7 +400,7 @@ class TrainSelfPlay(Stage):
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = Field(default="fixed", exclude_if=lambda value: value == "fixed")
-    learning: Learning | AtaraxosMoveLearning = Learning()
+    learning: Learning | DampedPolicyLearning = Learning()
 
     @model_validator(mode="before")
     @classmethod
@@ -458,18 +454,18 @@ class TrainSelfPlay(Stage):
         if self.learning_state is not None and (
             self.initial is not None
             or self.active_seconds is not None
-            or not isinstance(self.learning, AtaraxosMoveLearning)
+            or not isinstance(self.learning, DampedPolicyLearning)
             or self.learning.ema is None
         ):
             raise ValueError(
-                "learning-state continuation requires absolute-step Ataraxos with EMA"
+                "learning-state continuation requires absolute-step damped policy with EMA"
             )
         if self.active_seconds is not None:
             if self.active_seconds >= self.execution.wall_seconds:
                 raise ValueError("active endpoint requires additional watchdog reserve")
-            if not isinstance(self.learning, AtaraxosMoveLearning):
+            if not isinstance(self.learning, DampedPolicyLearning):
                 raise ValueError(
-                    "active endpoint currently requires iteration-based Ataraxos learning"
+                    "active endpoint currently requires iteration-based damped policy learning"
                 )
         if self.behavior == "ema-self" and self.learning.ema is None:
             raise ValueError("ema-self behavior requires an EMA rate")
@@ -505,7 +501,7 @@ class CollectSelection(Stage):
     weights: Literal["raw", "ema"] = "raw"
     population: tuple[SelectionGameSpec, ...] = Field(min_length=4)
     max_steps: int = Field(default=2000, ge=1)
-    learning: Learning | AtaraxosMoveLearning = Learning()
+    learning: Learning | DampedPolicyLearning = Learning()
     bootstrap_samples: int = Field(default=500, ge=100, le=10000)
     bootstrap_seed: int = Field(default=93, ge=0)
 
@@ -723,12 +719,12 @@ class TrainingRegime(Strict):
             or (
                 self.schedule_clock != "iteration_fraction"
                 and any(
-                    stage.learning.gradient != "ataraxos_move" for stage in self.stages
+                    stage.learning.gradient != "damped_policy" for stage in self.stages
                 )
             )
         ):
             raise ValueError(
-                "recovery requires self-play with iteration_fraction or absolute Ataraxos move schedules"
+                "recovery requires self-play with iteration_fraction or absolute damped policy schedules"
             )
         if self.recoverable and any(stage.root is not None for stage in self.stages):
             raise ValueError("diagnostic roots do not support recovery")
@@ -882,9 +878,9 @@ class TrainingRegime(Strict):
                 or isinstance(stage, TrainSupervised)
                 and not stage.target.startswith("local_")
                 or isinstance(stage, TrainSelfPlay)
-                and not isinstance(stage.learning, AtaraxosMoveLearning)
+                and not isinstance(stage.learning, DampedPolicyLearning)
             ):
-                raise ValueError("categorical outcome training requires ataraxos_move")
+                raise ValueError("categorical outcome training requires damped_policy")
             previous[stage.id] = stage
             if isinstance(stage, TrainSelfPlay):
                 latest_self_play = stage

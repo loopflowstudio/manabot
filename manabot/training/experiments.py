@@ -22,7 +22,7 @@ from manabot.remote.plan import DeploymentPlan, Source, compile_plan
 from manabot.training.execution import validate_regime
 from manabot.training.experiment_execution import ExperimentSchedule, PlannedRun
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Execution,
     Learning,
     Operation,
@@ -131,7 +131,7 @@ class Environment:
 class LearningRule:
     """Replace the complete rule on all self-play stages, including its defaults."""
 
-    settings: Learning | AtaraxosMoveLearning
+    settings: Learning | DampedPolicyLearning
 
 
 @dataclass(frozen=True)

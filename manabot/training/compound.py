@@ -24,8 +24,8 @@ from manabot.env import Match
 from manabot.env.failures import ScalarCapture
 from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
+from manabot.model.returns import transition_gae
 from manabot.sim.compound import CompoundDecision, sample_compound
-from manabot.sim.net_opponent import transition_gae
 import managym
 
 from .models import Learning

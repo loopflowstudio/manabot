@@ -106,7 +106,6 @@ def test_deadline_retains_failed_attempt(tmp_path):
 
 
 def test_named_treatments_execute_real_optimizer_batches():
-    from types import SimpleNamespace
 
     from manabot.env import ObservationSpace
     from manabot.infra.hypers import AgentSpec
@@ -142,15 +141,10 @@ def test_named_treatments_execute_real_optimizer_batches():
         .log_softmax(-1)
         .numpy()[:, None],
     )
-    from manabot.sim.net_opponent import NetOpponentTrainer
+    from manabot.training.learner import Learner
 
-    trainer = SimpleNamespace(
-        agent=agent,
-        collector=SimpleNamespace(num_envs=1),
-        experiment=SimpleNamespace(device="cpu"),
-        optimizer=torch.optim.Adam(agent.parameters()),
-        _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
-    )
+    trainer = Learner(agent, "cpu", minibatch_rows=1)
+
     for name in regime_names():
         stage = named_regime(name).stages[0]
         if stage.operation != "train_self_play":
@@ -202,7 +196,7 @@ def test_modified_models_are_revalidated_before_execution():
         validate_regime(value)
 
 
-def test_cli_rejects_ambiguous_regimes_and_keeps_presets(monkeypatch):
+def test_cli_rejects_retired_training_overrides() -> None:
     from typer.testing import CliRunner
 
     from manabot import cli
@@ -213,14 +207,7 @@ def test_cli_rejects_ambiguous_regimes_and_keeps_presets(monkeypatch):
             cli.app, ["train", "--regime", "unused.json", "--out", "unused", *flags]
         )
         assert result.exit_code != 0
-        assert "cannot be combined" in result.output
-    assert runner.invoke(cli.app, ["train", "--seed", "2"]).exit_code != 0
-    calls = []
-    monkeypatch.setattr(
-        cli, "_run_train", lambda preset, overrides: calls.append((preset, overrides))
-    )
-    assert runner.invoke(cli.app, ["train"]).exit_code == 0
-    assert calls == [(cli.DEFAULT_TRAIN_PRESET, [])]
+        assert "retired" in result.output
 
 
 def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch):

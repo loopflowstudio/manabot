@@ -190,7 +190,7 @@ def new_agent_spec() -> AgentSpec:
 
 
 class TrainHypers(BaseHypersModel):
-    """Training-related hyperparameters."""
+    """Historical PPO configuration for saved evidence, not an execution route."""
 
     total_timesteps: int = 20_000_000
     learning_rate: float = 2.5e-4
@@ -250,7 +250,11 @@ class RewardHypers(BaseHypersModel):
 
 
 class Hypers(BaseHypersModel):
-    """Top-level training configuration."""
+    """Legacy configuration bundle used by evidence readers and diagnostics.
+
+    Executable training recipes are TrainingRegime; this serialized shape keeps
+    historical hyperparameters readable without translating their semantics.
+    """
 
     observation: ObservationSpaceHypers = Field(default_factory=ObservationSpaceHypers)
     match: MatchHypers = Field(default_factory=MatchHypers)

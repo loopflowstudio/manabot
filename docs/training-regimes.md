@@ -153,7 +153,7 @@ owns final RL acceptance and ETU-91 owns final replayed study/notebook evidence.
 ETU-75 remains open for its unmet empirical evidence; shared delivery does not
 close those claims. No scientific experiment ran in this infrastructure pass.
 
-The separate `ataraxos_move` gradient selector follows the final supplement's
+The separate `damped_policy` gradient selector follows the final supplement's
 move recipe, including categorical outcome targets and iteration schedules.
 See [its source fidelity table and bounded commands](ataraxos.md). Existing PPO
 recipes remain controls; the new recipe does not alter a frozen study.
@@ -457,9 +457,9 @@ schedule clocks retain their meanings; no decisions-clock ladder is implied.
 Two distinct live models use `manabot.training.paired.PairedLearners`. Construct
 one `SeatRoutedCollector` with `opponent_mode="learning"`,
 `learning_seats="both"` and `opponent_agent=second_agent`; build two
-`NetOpponentTrainer`s with that collector and independent agents/optimizers.
-Wrap each trainer with `LearningPlayer(trainer, learning, rng)` and pass both to
-`PairedLearners`. `step(transitions, progress=...)` freezes both behavior policies,
+`Learner`s with independent agents/optimizers and `minibatch_rows=collector.num_envs`.
+Pass the collector explicitly to `PairedLearners(collector, first, second)`.
+Wrap each learner with `LearningPlayer(learner, learning, rng)`. `step(transitions, progress=...)` freezes both behavior policies,
 collects complete games, and updates **both** models with only their own rows.
 The first model occupies `stream % 2`; the second occupies the other seat.
 Returned `PairedUpdate.first` and `.second` report each model's trained rows and

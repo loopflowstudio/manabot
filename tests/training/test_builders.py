@@ -77,7 +77,7 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
         assert isinstance(stage, TrainSelfPlay)
         stage.learning = Learning()
     before = base.model_dump()
-    with pytest.raises(ValidationError, match="requires ataraxos_move"):
+    with pytest.raises(ValidationError, match="requires damped_policy"):
         value_outputs((base,), ("scalar", "categorical_wdl"))
     assert base.model_dump() == before
     with pytest.raises(ValueError, match="nonempty"):

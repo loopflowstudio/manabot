@@ -15,16 +15,14 @@ import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
-from manabot.env import Env, Match, ObservationSpace, Reward, VectorEnv
+from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ObservationEncoder
-from manabot.infra import Experiment, ExperimentHypers, TrainHypers
 from manabot.infra.hypers import (
     AgentSpec,
     MatchHypers,
     ObservationSpaceHypers,
     RewardHypers,
 )
-from manabot.model import Trainer
 from manabot.model.agent import Agent
 from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
@@ -36,6 +34,9 @@ from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.training.execution import execute_regime
+from manabot.training.models import Learning, TrainingRegime, TrainSelfPlay
+from manabot.verify.store import VerifyStore
 import managym
 
 PACK = "elemental-world-v2"
@@ -189,59 +190,40 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
     tmp_path: Path,
 ) -> None:
 
-    torch.set_num_threads(1)
-    space = ObservationSpace()
-    match = Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
-    experiment = Experiment(
-        ExperimentHypers(
-            exp_name="elemental-smoke",
-            seed=164,
-            wandb=False,
-            device="cpu",
-            runs_dir=tmp_path,
-        )
+    recipe = TrainingRegime(
+        id="elemental-ppo-smoke",
+        world=managym.WORLD_VERSION,
+        match=MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"),
+        agent=AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True),
+        stages=[
+            TrainSelfPlay(
+                id="self-play",
+                operation="train_self_play",
+                updates=2,
+                streams=2,
+                transitions=8,
+                learning_seats="one",
+                learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
+            )
+        ],
     )
-    env = VectorEnv(
-        num_envs=2,
-        match=match,
-        observation_space=space,
-        reward=Reward(RewardHypers()),
-        device="cpu",
-        opponent_policy="passive",
+    with VerifyStore(tmp_path / "runs.sqlite") as store:
+        run = execute_regime(recipe, 164, tmp_path / "run", store)
+    assert run.status == "completed", run.error
+    stage = run.stages[0]
+    assert stage.learner_transitions == 32
+    initial, _ = load_checkpoint_agent(stage.artifacts["initial_raw"]["path"])
+    restored, _ = load_checkpoint_agent(stage.artifacts["raw"]["path"])
+    assert any(
+        not torch.equal(a, b)
+        for a, b in zip(initial.parameters(), restored.parameters())
     )
-    agent = Agent(space, AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True))
-    before = {name: value.detach().clone() for name, value in agent.named_parameters()}
-    trainer = Trainer(
-        agent,
-        experiment,
-        env,
-        TrainHypers(
-            num_envs=2,
-            num_steps=8,
-            num_minibatches=2,
-            update_epochs=1,
-            total_timesteps=32,
-            opponent_policy="passive",
-        ),
+    assert all(torch.isfinite(value).all() for value in restored.parameters())
+    assert len(restored.world_binding["setups"]) == 10
+    validate_agent_setup(
+        restored,
+        Match(MatchHypers.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
     )
-    try:
-        trainer.train()
-        assert trainer.global_step == 32
-        assert any(
-            not torch.equal(before[name], value)
-            for name, value in agent.named_parameters()
-        )
-        assert all(torch.isfinite(value).all() for value in agent.parameters())
-        # train() saves the final checkpoint before closing the experiment.
-        restored, _ = load_checkpoint_agent(str(experiment.runs_dir / "step_32.pt"))
-        assert len(restored.world_binding["setups"]) == 10
-        validate_agent_setup(
-            restored,
-            Match(MatchHypers.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
-        )
-    finally:
-        env.close()
-        experiment.close()
 
 
 def test_avatar_grant_reaches_native_python_and_academy_views() -> None:

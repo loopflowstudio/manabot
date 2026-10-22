@@ -16,10 +16,12 @@ from manabot.model.policy_distribution import (
     require,
     reverse_kl,
 )
-from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
-from manabot.training.ataraxos import update_move_iteration
+from manabot.model.returns import transition_gae
+from manabot.sim.net_opponent import RolloutBatch
+from manabot.training.damped_policy import update_damped_iteration
 from manabot.training.health import OptimizerHealth, batch_health
-from manabot.training.models import AtaraxosMoveLearning, Learning
+from manabot.training.learner import Learner, observation_tensors
+from manabot.training.models import DampedPolicyLearning, Learning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
     UpdateDiagnostics,
@@ -48,29 +50,29 @@ def update_ema(
 
 
 def update_iteration(
-    trainer: NetOpponentTrainer,
+    learner: Learner,
     batch: RolloutBatch,
-    learning: Learning | AtaraxosMoveLearning,
+    learning: Learning | DampedPolicyLearning,
     progress: float,
     rng: np.random.Generator,
     *,
     iteration: int = 1,
     bootstrap_agent: Agent | None = None,
 ) -> UpdateDiagnostics:
-    """Optimize one fresh collector batch on the existing trainer and Adam owner."""
-    if isinstance(learning, AtaraxosMoveLearning):
-        return update_move_iteration(
-            trainer, batch, learning, iteration, bootstrap_agent=bootstrap_agent
+    """Optimize one fresh collector batch on the shared learner and Adam owner."""
+    if isinstance(learning, DampedPolicyLearning):
+        return update_damped_iteration(
+            learner, batch, learning, iteration, bootstrap_agent=bootstrap_agent
         )
 
-    dev = trainer.experiment.device
-    obs = trainer._obs_to_tensors(batch.obs, dev)
+    dev = learner.device
+    obs = observation_tensors(batch.obs, dev)
     values = torch.as_tensor(batch.values, device=dev)
     rewards = torch.as_tensor(batch.rewards, device=dev)
     ends = torch.as_tensor(batch.dones, device=dev)
     with torch.no_grad():
-        next_value = (bootstrap_agent or trainer.agent).get_value(
-            trainer._obs_to_tensors(batch.next_obs, dev)
+        next_value = (bootstrap_agent or learner.agent).get_value(
+            observation_tensors(batch.next_obs, dev)
         )
         advantages, _ = transition_gae(
             rewards, values, ends, next_value, learning.gamma, learning.policy_lambda
@@ -145,7 +147,7 @@ def update_iteration(
         actor_only=learning.filter_scope == "actor",
     )
     diagnostics["numerical"] = health
-    observer = OptimizerHealth(trainer.agent, trainer.optimizer, health, iteration)
+    observer = OptimizerHealth(learner.agent, learner.optimizer, health, iteration)
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0
     if not len(training_rows):
@@ -156,7 +158,7 @@ def update_iteration(
         advantages = (advantages - advantages[selected].mean()) / advantages[
             selected
         ].std(unbiased=False).clamp_min(1e-8)
-    for group in trainer.optimizer.param_groups:
+    for group in learner.optimizer.param_groups:
         group["lr"] = diagnostics["learning_rate"]
     reference = reference_distribution(obs, learning.reference)
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
@@ -165,7 +167,7 @@ def update_iteration(
             torch.as_tensor(rng.permutation(len(training_rows)), device=dev)
         ]
         for indices in order.split(size):
-            logits, value = trainer.agent({k: v[indices] for k, v in obs.items()})
+            logits, value = learner.agent({k: v[indices] for k, v in obs.items()})
             logs = policy_logs(logits, valid[indices])
             log_ratio = (
                 logs.gather(-1, actions[indices, None]).squeeze(-1) - old_logs[indices]

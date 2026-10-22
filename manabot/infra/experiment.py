@@ -26,6 +26,18 @@ from manabot.infra.profiler import Profiler
 from .hypers import ExperimentHypers, Hypers
 
 
+def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
+    """Reset training RNGs without constructing a tracking run.
+
+    Call at the declared sampling boundary: evaluation and checkpoint admission
+    can consume RNG state before collection begins.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = torch_deterministic
+
+
 def flatten_config(
     cfg: Mapping[str, object], parent_key: str = "", sep: str = "/"
 ) -> dict[str, object]:
@@ -68,7 +80,7 @@ class Experiment:
         level = getattr(logging, config.log_level.upper(), logging.INFO)
         manabot.infra.log.setGlobalLogLevel(level)
         self.logger = manabot.infra.log.getLogger(__name__)
-        self._setup_random()
+        seed_random(self.seed, torch_deterministic=self.torch_deterministic)
         self.run: Run = track(
             experiment=self.exp_name,
             clocks=[
@@ -134,12 +146,6 @@ class Experiment:
         return self.run.checkpoint(
             path, updates=self._updates, learner_transitions=transitions
         )
-
-    def _setup_random(self) -> None:
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-        torch.backends.cudnn.deterministic = self.torch_deterministic
 
     def close(self, state: Literal["finished", "failed"] = "finished") -> None:
         """Flush tracking once; callers must mark failed training explicitly."""

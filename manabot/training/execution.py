@@ -31,7 +31,7 @@ from manabot.belief.sampling_fit import (
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import Experiment
-from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
+from manabot.infra.hypers import ExperimentHypers, RewardHypers
 from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_identity
@@ -40,12 +40,13 @@ from manabot.model.world import validate_agent_setup
 from manabot.remote.plan import Allocation
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
+from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.sim.search_supervised import (
     SearchSupervisedEpochStats,
     train_search_supervised,
 )
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
+from manabot.training.learner import Learner
 from manabot.training.matchups import elemental_roster
 import managym
 
@@ -737,7 +738,7 @@ def _execute_regime(
                 deadline = (
                     time.perf_counter() + allocation.checkpoint_deadline - time.time()
                 )
-            incident_trainer = None
+            incident_learner = None
             batch = None
             paused = False
             collection_interrupted = False
@@ -1244,7 +1245,7 @@ def _execute_regime(
                         opponent_agent.requires_grad_(False)
                 if stage.initial and snapshot is None:
                     # Validation permits only the latest live collector to continue.
-                    trainer, ema, iteration = self_play_session
+                    learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = Agent(space, regime.agent).to(stage.execution.device)
@@ -1376,29 +1377,24 @@ def _execute_regime(
                             transitions=int(point["learner_transitions"]),
                         )
                         record.export_seconds += time.perf_counter() - tick
-                    trainer = NetOpponentTrainer(
-                        agent,
-                        experiment,
-                        collector,
-                        TrainHypers(
-                            num_envs=stage.streams, num_steps=stage.transitions
-                        ),
+                    learner = Learner(
+                        agent, experiment.device, minibatch_rows=stage.streams
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
                     if imported is not None:
-                        trainer.optimizer.load_state_dict(imported.optimizer)
-                        validate_adam(trainer.optimizer)
+                        learner.optimizer.load_state_dict(imported.optimizer)
+                        validate_adam(learner.optimizer)
                         assert ema is not None
                         ema.load_state_dict(imported.ema.state_dict())
                         iteration = imported.origin.iteration
                         imported = None
                 if not restoring_completed:
-                    record.actual_device = str(next(trainer.agent.parameters()).device)
-                trainer.collector.profiler = Profiler(
+                    record.actual_device = str(next(learner.agent.parameters()).device)
+                collector.profiler = Profiler(
                     enabled=stage.execution.profile_collection
                 )
-                before = deepcopy(trainer.collector.stats)
+                before = deepcopy(collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
                 if record.learning_state_origin is not None:
@@ -1406,8 +1402,8 @@ def _execute_regime(
                 if snapshot is not None:
                     tick = time.perf_counter()
                     try:
-                        trainer.collector.restore(snapshot.collector, check)
-                        restore_learning(snapshot, trainer, ema, rng)
+                        collector.restore(snapshot.collector, check)
+                        restore_learning(snapshot, learner, ema, rng)
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
                     iteration = snapshot.iteration
@@ -1416,14 +1412,14 @@ def _execute_regime(
                     # remains in the parent attempt and its cost stays charged.
                     before = snapshot.collector_before
                 if restoring_completed:
-                    self_play_session = (trainer, ema, iteration)
+                    self_play_session = (learner, ema, iteration)
                     snapshot = None
                     continue
 
                 if game_ledger is not None:
                     # The ledger includes attempts after the last committed
                     # optimizer snapshot. Restoring learning cannot erase them.
-                    trainer.collector.game_error_state = game_ledger.state
+                    collector.game_error_state = game_ledger.state
                     if game_ledger.state.stop_reason:
                         raise GameErrorLimit(game_ledger.state.stop_reason)
 
@@ -1438,7 +1434,15 @@ def _execute_regime(
                     suffix = ".pt.gz" if regime.recovery else ".pt"
                     target = out / f"{stage.id}-{label}{suffix}"
                     save_update(
-                        target, trainer, ema, rng, iteration, record, run, before
+                        target,
+                        learner,
+                        collector,
+                        ema,
+                        rng,
+                        iteration,
+                        record,
+                        run,
+                        before,
                     )
                     run.recovery_artifact = artifact(target)
                     record.export_seconds += time.perf_counter() - tick
@@ -1447,7 +1451,7 @@ def _execute_regime(
                     checkpoint("start")
                     persist()
                 snapshot = None
-                incident_trainer = trainer
+                incident_learner = learner
                 for update_index in range(first_update, stage.updates):
                     # Stop only at an exact collector/update boundary. The saved
                     # snapshot includes Adam, EMA, RNGs and paused native streams.
@@ -1462,12 +1466,12 @@ def _execute_regime(
                     check()
                     tick = time.perf_counter()
                     behavior_agent = (
-                        ema if stage.behavior == "ema-self" else trainer.agent
+                        ema if stage.behavior == "ema-self" else learner.agent
                     )
                     assert behavior_agent is not None
                     batch = None
                     try:
-                        batch = trainer.collector.collect(
+                        batch = collector.collect(
                             behavior_agent,
                             stage.transitions,
                             deadline_monotonic=min(
@@ -1494,7 +1498,7 @@ def _execute_regime(
                                     seconds=stats["total_time"],
                                     calls=int(stats["count"]),
                                 )
-                                for path, stats in trainer.collector.profiler.get_stats().items()
+                                for path, stats in collector.profiler.get_stats().items()
                                 if path.startswith("Collection/")
                             }
                     check()
@@ -1502,7 +1506,7 @@ def _execute_regime(
                     try:
                         diagnostic = (
                             update_iteration(
-                                trainer,
+                                learner,
                                 batch,
                                 stage.learning,
                                 update_index / stage.updates
@@ -1529,26 +1533,26 @@ def _execute_regime(
                             diagnostic["matchup_curriculum"] = stage.matchup_curriculum
                             if stage.matchup_curriculum == "elemental-uniform":
                                 diagnostic["cumulative_matchup_exposure"] = deepcopy(
-                                    trainer.collector.stats.exposure
+                                    collector.stats.exposure
                                 )
                             diagnostic["cumulative_games_by_stream"] = {
                                 str(k): v
-                                for k, v in trainer.collector.stats.games_by_stream.items()
+                                for k, v in collector.stats.games_by_stream.items()
                             }
                         diagnostic["behavior"] = stage.behavior
                         diagnostic["behavior_iteration"] = iteration
-                        if stage.learning.gradient != "ataraxos_move":
+                        if stage.learning.gradient != "damped_policy":
                             diagnostic["schedule_clock"] = regime.schedule_clock
                         iteration += 1
                         diagnostic["iteration"] = iteration
                         if ema is not None:
-                            update_ema(ema, trainer.agent, stage.learning.ema)
+                            update_ema(ema, learner.agent, stage.learning.ema)
                     finally:
                         synchronize()
                         record.learning_seconds += time.perf_counter() - tick
-                    if trainer.collector.opponent_mode == "self":
+                    if collector.opponent_mode == "self":
                         diagnostic["self_play_outcomes"] = (
-                            trainer.collector.stats.self_play.drain()
+                            collector.stats.self_play.drain()
                         )
                     record.diagnostics.append(diagnostic)
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
@@ -1556,16 +1560,15 @@ def _execute_regime(
                         record.optimizer_updates += diagnostic["numerical"][
                             "optimizer_steps"
                         ]
-                    record.games = trainer.collector.stats.games - before.games
+                    record.games = collector.stats.games - before.games
                     record.environment_decisions = (
-                        trainer.collector.stats.micro_steps - before.micro_steps
+                        collector.stats.micro_steps - before.micro_steps
                     )
                     record.learner_transitions = (
-                        trainer.collector.stats.learner_transitions
-                        - before.learner_transitions
+                        collector.stats.learner_transitions - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
-                    trainer.experiment.log_update(
+                    experiment.log_update(
                         diagnostic,
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
@@ -1576,7 +1579,7 @@ def _execute_regime(
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds
                     ):
-                        monitor_checkpoint(trainer.agent, trainer.experiment)
+                        monitor_checkpoint(learner.agent, experiment)
                     pausing = pause_path is not None and pause_path.exists()
                     cadence = (
                         regime.recovery.checkpoint_updates
@@ -1607,9 +1610,9 @@ def _execute_regime(
                     raise RuntimeError(
                         "update safety ceiling reached before active training endpoint"
                     )
-                self_play_session = (trainer, ema, iteration)
-                agent = trainer.agent
-                optimizer_state = trainer.optimizer.state_dict()
+                self_play_session = (learner, ema, iteration)
+                agent = learner.agent
+                optimizer_state = learner.optimizer.state_dict()
             else:
                 dataset = load_shards(
                     [p for ref in stage.datasets for p in outputs[ref]],
@@ -1739,7 +1742,7 @@ def _execute_regime(
                     if isinstance(stage, TrainSelfPlay) and name == "raw":
                         # The SDK retains admitted policy bytes, not a promise of
                         # collector/RNG recovery. Charge its copy as export cost.
-                        trainer.experiment.checkpoint(
+                        experiment.checkpoint(
                             target,
                             transitions=int(coordinates()["learner_transitions"]),
                         )
@@ -1823,7 +1826,7 @@ def _execute_regime(
             # Unmeasured setup, persistence and waits are never active training.
             # Self-play operation timers settle in finally, including failed work.
             record.diagnostic_seconds += unaccounted
-            if isinstance(error, NumericalError) and incident_trainer is not None:
+            if isinstance(error, NumericalError) and incident_learner is not None:
                 record.numerical_failure = NumericalFailure(
                     invariant=error.invariant,
                     iteration=iteration + 1,
@@ -1840,7 +1843,8 @@ def _execute_regime(
                     paths = save_incident(
                         out / f"{record.id}-numerical-incident",
                         error,
-                        incident_trainer,
+                        incident_learner,
+                        collector,
                         batch,
                         run,
                         iteration + 1,

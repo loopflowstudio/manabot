@@ -99,12 +99,4 @@ jobs:
       - name: Training smoke test
         if: matrix.group == 'main'
         run: |
-          uv run --python 3.12 python manabot/model/train.py \
-            --set train.total_timesteps=128 \
-            --set train.num_envs=2 \
-            --set train.num_steps=8 \
-            --set train.update_epochs=1 \
-            --set train.num_minibatches=1 \
-            --set experiment.wandb=false \
-            --set experiment.profiler_enabled=false \
-            --set agent.attention_on=false
+          uv run --python 3.12 manabot train --out .runs/ci-local-smoke

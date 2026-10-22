@@ -1,5 +1,56 @@
 # intelligence wave memory
 
+## Training consolidation and credit (MTG-179, 2026-10-22)
+
+Jack Heart accepted one maintained RL execution path: TrainingRegime,
+execute_regime, SeatRoutedCollector and Learner. Learner owns train-mode policy
+admission and Adam; the executor owns collection, clocks, EMA, exports and
+recovery. Bounded diagnostics reuse these primitives. Supervised/search/belief
+stages retain distinct contracts. Legacy standalone trainer loops and shaped
+training launchers are retired; historical reports remain readable and their
+executions require pinned source. Their reward/schedule semantics are not
+silently translated into the new local smoke recipe.
+
+Jack Heart also required descriptive trainer concepts. DampedPolicyLearning
+and damped_policy name the reusable method; Ataraxos names remain legitimate
+experiment/builder provenance. Historical ataraxos_move tags decode at the input
+boundary but retain their serialized identity, independently of schema-1's
+historical one-seat default. Both compatibility contracts are necessary for
+frozen recipe digests; neither authorizes rewriting old inputs or results.
+
+Returns follow retained decisions of the same player, with terminal flags on
+the reward's own row. Interleaved native A/B/A observations cannot form one
+trajectory merely by changing reward signs. Terminal draws remain zero before
+potential correction. Checkpoint loaders return eval mode; optimizer ownership
+must explicitly restore train mode, including recurrent CUDA forwards. The
+audit's CPU warm-start proof does not certify a CUDA execution.
+
+One-seat exact quotas and both-seat complete-game floors have different row
+counts. Exact recovery compares uninterrupted/resumed state under each declared
+mode, not a shared expected count. Opt-in game-error recovery also finishes
+one-seat games, as described below. Minibatch width remains the native stream
+count after complete-game packing into one column. Removing tracking setup must
+not remove its RNG reset: the PPO diagnostic seeds after baseline evaluation,
+which consumes policy randomness. Adam epsilon, initial rate, empty-filter
+iteration/EMA advancement and separate learner/native/optimizer clocks survived
+the consolidation unchanged.
+
+Independent asymmetric credit/gradient counterexamples found legacy GAE,
+train-mode admission, mixed-player admission and shaped-draw defects; the
+tested seat-routed ownership boundaries had no such defect. Full CPU
+learnability at source 95ca2059e used w11, including 65,536 PPO transitions and
+1,541 games. After sync to 8625df97e, the full w13 CPU diagnostic passed in
+66.8 seconds with the same PPO counts and scores .59375 before / 1.0 after /
+.640625 no-update (`.runs/learnability/training-consolidation-w13/report.md`).
+The retained integration log records 118 passes; the caller also reported 31
+current-world admission/monitoring passes. These are separate current-world
+receipts; the w11 evidence remains bound to its original source/world.
+The frozen w6 study at
+fabb96db2bb88f98891aba66cc9d12e65d700545 bypasses the defective paths and explicitly
+enables training mode; this is source applicability, not an exact CUDA replay.
+Neither those tests nor reported throughput gains establish equal learning
+value or full-game strength. Generic time-limit bootstrap remains unsupported.
+
 ## Training failure recovery (MTG-176, 2026-10-22)
 
 Jack Heart accepted automatic quarantine/regather for isolated training game

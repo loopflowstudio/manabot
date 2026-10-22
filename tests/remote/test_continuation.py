@@ -12,7 +12,7 @@ from manabot.remote.continuation import Continuation, bind_continuation
 from manabot.remote.job_store import worker_policy
 from manabot.remote.plan import compile_plan
 from manabot.remote.snapshots import JobManifest
-from manabot.training.models import AtaraxosMoveLearning
+from manabot.training.models import DampedPolicyLearning
 from tests.remote.test_cohort import Harness
 
 
@@ -22,7 +22,7 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Harness:
     entries = []
     for entry in h.cohort.entries:
         regime = entry.plan.regime.model_copy(deep=True)
-        regime.stages[0].learning = AtaraxosMoveLearning(gradient="ataraxos_move")
+        regime.stages[0].learning = DampedPolicyLearning(gradient="damped_policy")
         plan = compile_plan(
             regime.model_dump_json(),
             entry.plan.spec,

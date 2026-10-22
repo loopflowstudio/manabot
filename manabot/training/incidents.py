@@ -16,9 +16,10 @@ import torch
 from torch import Tensor
 
 from manabot.model.policy_distribution import NumericalError
+from manabot.training.learner import Learner
 
 if TYPE_CHECKING:
-    from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch
+    from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
     from manabot.training.models import TrainingRun
 
 EVIDENCE_BYTES = 32 * 1024**2
@@ -39,7 +40,8 @@ def _tensor_bytes(value: object) -> int:
 def save_incident(
     directory: Path,
     error: NumericalError,
-    trainer: "NetOpponentTrainer",
+    learner: "Learner",
+    collector: "SeatRoutedCollector",
     batch: "RolloutBatch | None",
     run: "TrainingRun",
     iteration: int,
@@ -131,20 +133,20 @@ def save_incident(
     # torch optimizer/RNG state is a heterogeneous library boundary. Nothing
     # from process locals, credentials or arbitrary objects enters this payload.
     state: dict[str, Any] = {
-        "model": trainer.agent.state_dict(),
+        "model": learner.agent.state_dict(),
         "gradients": {
             name: p.grad
-            for name, p in trainer.agent.named_parameters()
+            for name, p in learner.agent.named_parameters()
             if p.grad is not None
         },
-        "optimizer": trainer.optimizer.state_dict(),
+        "optimizer": learner.optimizer.state_dict(),
         "ema": ema.state_dict() if ema is not None else None,
         "torch_rng": torch.get_rng_state(),
         "cuda_rng": {
             str(device): torch.cuda.get_rng_state(device)
-            for device in {p.device for p in trainer.agent.parameters() if p.is_cuda}
+            for device in {p.device for p in learner.agent.parameters() if p.is_cuda}
         },
-        "collector_rng": trainer.collector._self_rng.get_state(),
+        "collector_rng": collector._self_rng.get_state(),
         "numpy_rng": rng.bit_generator.state,
         "python_rng": random.getstate(),
     }
@@ -173,7 +175,7 @@ def save_incident(
             for name, value in batch_tensors.items()
         ),
         "sampling_contract": "masked-log-softmax-v1",
-        "attempted_collection": trainer.collector.stats.to_dict(),
+        "attempted_collection": collector.stats.to_dict(),
         "last_valid_exports": [stage.artifacts for stage in run.stages],
         "monitoring_exports": [c.artifact for c in run.monitoring_checkpoints],
         "recovery": "diagnostic only; no engine journal or collection-time RNG",

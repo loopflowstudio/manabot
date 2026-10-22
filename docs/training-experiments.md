@@ -46,7 +46,7 @@ are presentation, never substitutes for configuration or checkpoint identity.
 | --- | --- |
 | `Model(AgentSpec(...))` | `agent.*`; patch only explicitly supplied fields. |
 | `Environment(world=..., match=MatchHypers(...), observation=ObservationSpaceHypers(...))` | World, matchup and input capacity; explicit fields only. A supplied deck/sideboard map replaces that entire map. |
-| `LearningRule(Learning(...) or AtaraxosMoveLearning(...))` | Replace the complete learning rule on every self-play stage, including the selected rule's defaults. |
+| `LearningRule(Learning(...) or DampedPolicyLearning(...))` | Replace the complete learning rule on every self-play stage, including the selected rule's defaults. |
 | `Resources(execution=Execution(...), wall_seconds=...)` | Explicit execution fields on every stage plus the total run deadline. |
 | `Pipeline(stages=(...))` | Replace the complete ordered stage list, including stage-local learning/resources. Use existing typed operation models for heterogeneous stages. |
 | `RunControl(schedule_clock=..., recovery_max_microsteps=..., selection=...)` | Replace these three run controls together. New authoring defaults to `iteration_fraction`; `None` explicitly disables recovery. |

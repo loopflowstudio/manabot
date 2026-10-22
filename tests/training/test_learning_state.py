@@ -16,7 +16,7 @@ from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.learning_state import admit_learning_state
 from manabot.training.models import (
     ArtifactReference,
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Execution,
     LearningStateImport,
     TrainingRegime,
@@ -61,8 +61,8 @@ def producer(tmp_path: Path) -> TrainingRun:
                 ),
                 streams=2,
                 transitions=16,
-                learning=AtaraxosMoveLearning(
-                    gradient="ataraxos_move",
+                learning=DampedPolicyLearning(
+                    gradient="damped_policy",
                     ema=0.9,
                     min_advantage=0,
                     advantage_quantile=0,

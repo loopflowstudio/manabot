@@ -15,8 +15,7 @@ own policy, critic and distribution generated its rows. Frozen and random
 opponent decisions remain excluded. Terminal reward is computed per seat from
 ``winner_index``; the native reward stream is ignored.
 
-``NetOpponentTrainer`` reuses the stock optimizer, evaluation and checkpoint
-machinery with transition-end GAE. Collection never updates model weights.
+Collection never updates model weights; the regime executor owns learning.
 """
 
 from __future__ import annotations
@@ -33,8 +32,7 @@ import torch
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CapturedVector
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
-from manabot.infra import Experiment
-from manabot.infra.hypers import MatchHypers, TrainHypers
+from manabot.infra.hypers import MatchHypers
 from manabot.infra.profiler import Profiler
 from manabot.model.agent import Agent
 from manabot.model.inference import PolicyInference
@@ -44,7 +42,6 @@ from manabot.model.policy_distribution import (
     policy_logs,
     require,
 )
-from manabot.model.train import Trainer
 from manabot.sim.producers import ShardedVectorEnv
 from manabot.sim.rollout import (
     OBS_KEYS,
@@ -1047,185 +1044,3 @@ class SeatRoutedCollector:
             log_probabilities=log_probabilities,
             outcome_probabilities=outcome_probabilities,
         )
-
-
-# -----------------------------------------------------------------------------
-# Trainer: stock PPO update machinery, seat-routed collection
-# -----------------------------------------------------------------------------
-
-
-def transition_gae(
-    rewards: torch.Tensor,
-    values: torch.Tensor,
-    ends: torch.Tensor,
-    next_value: torch.Tensor,
-    gamma: float,
-    lam: float,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """GAE for transition-end flags; terminal rewards credit their own episode."""
-    advantages = torch.zeros_like(rewards)
-    tail = torch.zeros_like(rewards[0])
-    following = next_value.reshape(-1)
-    for step in reversed(range(len(rewards))):
-        live = (~ends[step].bool()).to(rewards.dtype)
-        delta = rewards[step] + gamma * live * following - values[step]
-        tail = delta + gamma * lam * live * tail
-        advantages[step] = tail
-        following = values[step]
-    return advantages, advantages + values
-
-
-class _CollectorEnvShim:
-    """Just enough env surface for Trainer.__init__ / periodic eval."""
-
-    def __init__(
-        self, observation_space: ObservationSpace, reward: Reward, match: Match
-    ) -> None:
-        self.observation_space = observation_space
-        self.reward = reward
-        self.match = match
-        self._player_configs = match.to_rust()
-
-    def close(self) -> None:
-        return None
-
-
-class NetOpponentTrainer(Trainer):
-    """PPO trainer whose rollouts come from a SeatRoutedCollector.
-
-    Reuses the stock Trainer's flatten, minibatch plan, optimize step,
-    periodic eval (vs the scripted ``hypers.opponent_policy``, so learning
-    curves stay comparable across arms) and checkpointing.
-    """
-
-    def __init__(
-        self,
-        agent: Agent,
-        experiment: Experiment,
-        collector: SeatRoutedCollector,
-        hypers: TrainHypers | None = None,
-    ) -> None:
-        shim = _CollectorEnvShim(
-            collector.observation_space, collector.reward, collector.match
-        )
-        super().__init__(agent, experiment, shim, hypers)  # type: ignore[arg-type]
-        self.collector = collector
-
-    def train(self) -> None:
-        with self.experiment:
-            hypers = self.hypers
-            device = self.experiment.device
-            batch_size = hypers.num_envs * hypers.num_steps
-            num_updates = hypers.total_timesteps // batch_size
-            self.start_time = time.time()
-
-            self.save()
-            for update in range(1, num_updates + 1):
-                if hypers.anneal_lr:
-                    frac = 1.0 - (update - 1) / num_updates
-                    for param_group in self.optimizer.param_groups:
-                        param_group["lr"] = frac * hypers.learning_rate
-
-                batch = self.collector.collect(self.agent, hypers.num_steps)
-                obs_buf = self._obs_to_tensors(batch.obs, device)
-                actions_buf = torch.as_tensor(batch.actions, device=device)
-                logprobs_buf = torch.as_tensor(batch.logprobs, device=device)
-                rewards_buf = torch.as_tensor(batch.rewards, device=device)
-                dones_buf = torch.as_tensor(batch.dones, device=device)
-                values_buf = torch.as_tensor(batch.values, device=device)
-                next_obs = self._obs_to_tensors(batch.next_obs, device)
-
-                self.global_step += batch.actions.size
-
-                with torch.no_grad():
-                    next_value = self.agent.get_value(next_obs)
-                advantages, returns = transition_gae(
-                    rewards_buf,
-                    values_buf,
-                    dones_buf,
-                    next_value,
-                    hypers.gamma,
-                    hypers.gae_lambda,
-                )
-                obs, logprobs, actions, advantages, returns, values = (
-                    self._flatten_rollout(
-                        obs_buf,
-                        actions_buf,
-                        logprobs_buf,
-                        advantages,
-                        returns,
-                        values_buf,
-                    )
-                )
-
-                minibatch_plan = self._build_minibatch_plan(logprobs.shape[0])
-                if minibatch_plan is None:
-                    continue
-                inds, minibatch_size = minibatch_plan
-
-                approx_kl = 0.0
-                for epoch in range(hypers.update_epochs):
-                    np.random.shuffle(inds)
-                    for start in range(0, len(inds), minibatch_size):
-                        mb_inds = inds[start : start + minibatch_size]
-                        mb_obs = {k: v[mb_inds] for k, v in obs.items()}
-                        mb_advantages = self._maybe_normalize_advantages(
-                            advantages[mb_inds]
-                        )
-                        approx_kl, _ = self._optimize_step(
-                            mb_obs,
-                            logprobs[mb_inds],
-                            actions[mb_inds],
-                            mb_advantages,
-                            returns[mb_inds],
-                            values[mb_inds],
-                            log_gradients=False,
-                        )
-                        if (
-                            hypers.target_kl != float("inf")
-                            and approx_kl > hypers.target_kl
-                        ):
-                            break
-
-                with torch.no_grad():
-                    y_pred, y_true = values.cpu().numpy(), returns.cpu().numpy()
-                var_y = np.var(y_true)
-                explained_var = (
-                    np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-                )
-                self.last_explained_variance = float(explained_var)
-
-                elapsed = time.time() - self.start_time
-                sps = int(self.global_step / elapsed) if elapsed > 0 else 0
-                self.logger.info(
-                    f"Update {update}/{num_updates} | SPS: {sps} | "
-                    f"rollout win_rate: {self.collector.stats.learner_wins}/"
-                    f"{self.collector.stats.games} | "
-                    f"explained_var: {explained_var:.3f}"
-                )
-
-                self.experiment.log_update(
-                    {}, updates=update, transitions=self.global_step
-                )
-
-                if hypers.eval_interval > 0 and update % hypers.eval_interval == 0:
-                    self._run_periodic_eval(update)
-
-                if update % 100 == 0:
-                    self.save()
-
-            self.save()
-            self.experiment.close()
-            self.logger.info("Training completed.")
-
-    @staticmethod
-    def _obs_to_tensors(
-        obs: dict[str, np.ndarray], device: torch.device | str
-    ) -> dict[str, torch.Tensor]:
-        tensors = {}
-        for key, value in obs.items():
-            tensor = torch.as_tensor(value, device=device)
-            if key == "action_focus":
-                tensor = tensor.float()
-            tensors[key] = tensor
-        return tensors

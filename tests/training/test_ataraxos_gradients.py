@@ -11,7 +11,7 @@ from collections.abc import Iterator
 import pytest
 import torch
 
-from manabot.training.ataraxos import (
+from manabot.training.damped_policy import (
     categorical_lambda_returns,
     damped_policy_loss,
 )

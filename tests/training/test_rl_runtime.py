@@ -1,16 +1,20 @@
 """Bounded native self-play, persisted costs and ordinary raw/EMA reload."""
 
+from pathlib import Path
+from typing import Literal
+
 import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
+from manabot.training.models import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 import managym
 
 
-def bounded_regime():
+def bounded_regime() -> TrainingRegime:
     recipe = direct_self_play()
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
@@ -18,6 +22,7 @@ def bounded_regime():
     recipe.agent.num_attention_heads = 2
     recipe.stages = recipe.stages[:2]
     for stage in recipe.stages:
+        assert isinstance(stage, TrainSelfPlay)
         stage.updates = 1
         stage.streams = 4
         stage.transitions = 128
@@ -30,20 +35,14 @@ def bounded_regime():
 
 
 @pytest.mark.parametrize("empty_second", [False, True])
+@pytest.mark.parametrize("learning_seats", ["one", "both"])
 def test_self_play_records_costs_and_reloads_distinct_raw_ema(
-    tmp_path, monkeypatch, empty_second
-):
-    from manabot.sim.net_opponent import NetOpponentTrainer
-
-    initialize = NetOpponentTrainer.__init__
-
-    def checked_initialize(self, *args, **kwargs):
-        initialize(self, *args, **kwargs)
-        assert self.env.match is self.collector.match
-        assert self.env.match.hypers == bounded_regime().match
-
-    monkeypatch.setattr(NetOpponentTrainer, "__init__", checked_initialize)
+    tmp_path: Path, empty_second: bool, learning_seats: Literal["one", "both"]
+) -> None:
     recipe = bounded_regime()
+    for stage in recipe.stages:
+        assert isinstance(stage, TrainSelfPlay)
+        stage.learning_seats = learning_seats
     if empty_second:
         recipe.stages[1].learning.min_advantage = 100
     with VerifyStore(tmp_path / "runs.sqlite") as store:
@@ -59,7 +58,11 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         )
         assert sum(r["wins"] for r in outcomes) == sum(r["losses"] for r in outcomes)
         assert {r["position"] for r in outcomes} == {"play", "draw"}
-        assert stage.learner_transitions == 512
+        if learning_seats == "one":
+            assert stage.learner_transitions == 512
+        else:
+            assert stage.learner_transitions >= 512
+            assert stage.learner_transitions == stage.environment_decisions
         assert stage.collection_seconds > 0
         assert stage.learning_seconds > 0
         assert stage.export_seconds > 0

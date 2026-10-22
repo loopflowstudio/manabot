@@ -177,7 +177,7 @@ for each assertion or change the frozen qualification receipts.
 
 `manabot.verify.learning_control` is the single implementation formerly embedded
 in `tests/training/test_exploiter_positive_control.py`; that test calls it too.
-It uses the existing `SeatRoutedCollector`, `NetOpponentTrainer` and
+It uses the existing `SeatRoutedCollector`, `Learner` and
 `update_iteration`, with terminal game rewards and no alternative PPO loss.
 
 Seed 197 trains width 8 against a frozen passing opponent in the existing

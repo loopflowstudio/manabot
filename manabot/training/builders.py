@@ -13,7 +13,7 @@ from typing import Literal
 
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Execution,
     IterationSchedule,
     Learning,
@@ -35,11 +35,9 @@ ValueAggregation = Literal["historical_mean", "masked_mean", "value_token"]
 # ---------------------------------------------------------------------------
 
 
-def move_learning(schedule: IterationSchedule | None = None) -> AtaraxosMoveLearning:
+def move_learning(schedule: IterationSchedule | None = None) -> DampedPolicyLearning:
     """Ataraxos move learning; a schedule pins its curves to a reference horizon."""
-    if schedule is None:
-        return AtaraxosMoveLearning(gradient="ataraxos_move")
-    return AtaraxosMoveLearning(gradient="ataraxos_move", iteration_schedule=schedule)
+    return DampedPolicyLearning(gradient="damped_policy", iteration_schedule=schedule)
 
 
 def move_stage(

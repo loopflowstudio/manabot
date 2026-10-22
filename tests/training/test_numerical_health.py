@@ -8,8 +8,6 @@ from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import numpy as np
 import pytest
@@ -27,12 +25,13 @@ from manabot.model.policy_distribution import (
     legal_mask,
     policy_logs,
 )
-from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
+from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training import execution
-from manabot.training.ataraxos import damped_policy_loss, update_move_iteration
+from manabot.training.damped_policy import damped_policy_loss, update_damped_iteration
 from manabot.training.health import NumericalHealth, OptimizerHealth
+from manabot.training.learner import Learner
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     TrainingRun,
     TrainSelfPlay,
 )
@@ -299,20 +298,12 @@ def test_extreme_real_collector_to_learner() -> None:
     )
     batch = collector.collect(agent, 4)
     assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
-    trainer = cast(
-        NetOpponentTrainer,
-        SimpleNamespace(
-            agent=agent,
-            collector=collector,
-            optimizer=torch.optim.Adam(agent.parameters()),
-            experiment=SimpleNamespace(device=DEVICE),
-            _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
-        ),
+    trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
+
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", advantage_quantile=0, min_advantage=0
     )
-    learning = AtaraxosMoveLearning(
-        gradient="ataraxos_move", advantage_quantile=0, min_advantage=0
-    )
-    result = update_move_iteration(trainer, batch, learning, 1)
+    result = update_damped_iteration(trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
     assert (
         result["numerical"]["optimizer_steps"]

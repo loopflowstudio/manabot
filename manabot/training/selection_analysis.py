@@ -15,8 +15,8 @@ from pydantic import Field
 import torch
 
 from manabot.arena.models import canonical_sha256
-from manabot.sim.net_opponent import transition_gae
-from manabot.training.models import AtaraxosMoveLearning, CollectSelection, Strict
+from manabot.model.returns import transition_gae
+from manabot.training.models import CollectSelection, DampedPolicyLearning, Strict
 from manabot.training.selection import (
     SelectionGroup,
     selection_diagnostics,
@@ -124,10 +124,10 @@ def analyze_selection(
     if tuple(g.spec for g in dataset.games) != stage.population:
         raise ValueError("analysis population differs from frozen recipe")
     learning = stage.learning
-    gamma = 1.0 if isinstance(learning, AtaraxosMoveLearning) else learning.gamma
+    gamma = 1.0 if isinstance(learning, DampedPolicyLearning) else learning.gamma
     fraction = (
         1 - learning.advantage_quantile
-        if isinstance(learning, AtaraxosMoveLearning)
+        if isinstance(learning, DampedPolicyLearning)
         else learning.retained_fraction
     )
     rows: list[AnalyzedDecision] = []

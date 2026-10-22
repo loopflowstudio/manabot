@@ -311,7 +311,11 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     evidence = read_failure(paths[0])
     assert evidence.error == str(failed.value)
     assert evidence.context["stage"] == f"stage-{stages - 1}"
-    assert evidence.context["coordinates"]
+    assert evidence.context["coordinates"]["updates"] == stages - 1
+    assert evidence.context["coordinates"]["learner_transitions"] == sum(
+        stage.learner_transitions for stage in run.stages[:-1]
+    )
+    assert run.stages[-1].learner_transitions == 0
     assert evidence.context["run"] == run.id
     assert any(
         item["path"] == str(paths[0])
@@ -531,39 +535,6 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
             InvalidController(), InvalidController(), num_games=2, num_streams=2
         )
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
-
-
-def test_trainer_keeps_update_coordinates_and_original_error(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from manabot.infra import Experiment
-    from manabot.infra.hypers import ExperimentHypers, Hypers, TrainHypers
-    from manabot.model.train import Trainer
-
-    hypers = Hypers(
-        experiment=ExperimentHypers(wandb=False, runs_dir=str(tmp_path)),
-        train=TrainHypers(num_envs=2, num_steps=2, total_timesteps=4),
-    )
-    experiment = Experiment(hypers.experiment, hypers)
-    env = VectorEnv(2, Match(), ObservationSpace(), Reward(RewardHypers()), "cpu")
-    trainer = Trainer(_model(), experiment, env, hypers.train)
-    original_step = env.step
-
-    def rejected(actions: torch.Tensor) -> Any:
-        return original_step(torch.full_like(actions, -1))
-
-    monkeypatch.setattr(env, "step", rejected)
-    with pytest.raises(managym.AgentError):
-        trainer.train()
-    paths = list(experiment.runs_dir.joinpath("failures").glob("*.jsonl"))
-    assert len(paths) == 1
-    evidence = read_failure(paths[0])
-    assert evidence.context["update"] == 1
-    assert evidence.context["transitions"] == 0
-    assert evidence.context["elapsed_seconds"] >= 0
-    assert trainer.global_step == 0
-    assert _bounded(paths[0])["results"][0]["matches_error"]
 
 
 def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:

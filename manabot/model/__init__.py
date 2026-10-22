@@ -1,8 +1,7 @@
 # Local imports
-from manabot.infra import AgentSpec, TrainHypers
+from manabot.infra import AgentSpec
 
 # Local directory imports
 from .agent import Agent
-from .train import Trainer
 
-__all__ = ["Agent", "Trainer", "TrainHypers", "AgentSpec"]
+__all__ = ["Agent", "AgentSpec"]

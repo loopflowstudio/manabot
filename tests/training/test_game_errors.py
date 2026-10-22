@@ -23,19 +23,15 @@ from manabot.arena.models import (
 )
 from manabot.arena.replay import read_game_journal, write_trace
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra import Experiment
 from manabot.infra.hypers import (
     AgentSpec,
-    ExperimentHypers,
     MatchHypers,
     RewardHypers,
-    TrainHypers,
 )
 from manabot.model.agent import Agent
+from manabot.model.returns import transition_gae
 from manabot.sim.net_opponent import (
-    NetOpponentTrainer,
     SeatRoutedCollector,
-    transition_gae,
 )
 from manabot.training.game_errors import (
     GameAttempt,
@@ -45,6 +41,7 @@ from manabot.training.game_errors import (
     GameErrorState,
     replay_attempt,
 )
+from manabot.training.learner import Learner
 from manabot.training.models import (
     Learning,
 )
@@ -225,14 +222,9 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     )
     assert set(returns.flatten().tolist()) <= {-1, 1}
     assert not any(collector._pending) and not any(collector._streams)
-    experiment = Experiment(
-        ExperimentHypers(wandb=False, device="cpu", runs_dir=tmp_path / "train")
-    )
-    trainer = NetOpponentTrainer(
-        model, experiment, collector, TrainHypers(num_envs=2, num_steps=1)
-    )
+    learner = Learner(model, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
-        trainer,
+        learner,
         batch,
         Learning(epochs=1, minibatches=1),
         0,
@@ -240,8 +232,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
         iteration=1,
     )
     assert result["rows"] == batch.actions.size
-    assert trainer.optimizer.state
-    experiment.close()
+    assert learner.optimizer.state
 
 
 def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> None:

@@ -6,22 +6,22 @@ training, and verification. You train *a* manabot; this package is how.
 ## Quickstart
 
 ```bash
-uv run manabot train              # --preset local: bounded laptop run
+uv run manabot train              # bounded CPU production-path smoke
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
-uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
+uv run manabot train --learning-seats one  # explicit exact-quota control
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local` preset is the bounded laptop training path. Ordinary
-Trainer metrics and exported checkpoints now record through the public
-Etude SDK without a W&B account. Standalone tracking lives under
-`<runs_dir>/<experiment>/etude/`; under `etude launch`, the SDK supplies
-`ETUDE_RUN` and `ETUDE_TRACK_DIR`. The `simple` and `attention` presets still
-expect CUDA. Historical W&B model readers and frozen recipe fields remain
-readable; those fields no longer select the live Trainer tracker.
+The default `local-smoke-v1` recipe runs two CPU collection/update iterations
+through the production regime executor: two streams, 16 decisions per stream as
+a floor, both seats and complete games, with a 120-second failure deadline.
+It uses the baseline model and horizon-scaled damped policy objective, records
+actual counts through Etude and exports admitted checkpoints. `--steps`,
+`--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
+explicit. This is a software smoke, not playing-strength evidence.
 
 Self-play TrainingRegime execution logs cumulative update/transition clocks and
 retains admitted initialization, exact monitoring milestones, and raw stage
@@ -31,8 +31,9 @@ been replaced by Etude jobs. This is a partial migration, not end-to-end experim
 admission. SDK artifact retention alone does not establish portable collector/RNG
 recovery. Remote storage, rentals and scientific runs require explicit allocation.
 
-Override any hyperparameter with `--set dotted.path=value`; presets live in
-`manabot/config/presets.py`.
+Training `--preset` and `--set` routes are retired. Their old reward and
+optimizer contracts are not translated. Use a recipe or an explicit
+`TrainingRegime` JSON. Simulation retains its presets and `--set` overrides.
 
 `--recipe baseline` selects a complete ordinary training run above the regime
 layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
@@ -42,8 +43,7 @@ each, finishing current games before updating), not optimizer
 calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
-`--seconds` sets a failure deadline without changing the step schedule. Historical
-`--regime` and `--preset` routes retain their meanings and cannot be combined with
+`--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
 For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
@@ -57,8 +57,8 @@ horizon. The regime is that study's exact tested recipe; it requires CUDA.
 For an identified Allies/Lessons opponent, use the bounded
 [train/export/play workflow](../docs/local-trained-challenger.md). It uses the
 existing search-distillation trainer and a server-pinned candidate; players see
-the bot's identity in the ordinary table. The `local` PPO preset above remains
-a separate default-deck training smoke.
+the bot's identity in the ordinary table. The local smoke above trains the same authored matchup but does not run
+that challenger workflow.
 
 Build named curated matches with `MatchHypers.authored(pack_key, hero_deck,
 villain_deck)` so both main decks and sideboards come from managym's compiled
@@ -146,8 +146,8 @@ world. The cross-package contracts and convergence status are in
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
-2. **`manabot.model`**: trainable policy and value models (`Agent`, PPO
-   `Trainer`)
+2. **`manabot.model`**: trainable policy and value models (`Agent`);
+   `manabot.training` owns the regime executor and `Learner`
 3. **`manabot.sim`**: search, teacher data generation, and game simulation
    (`Player`, `Sim`, determinized PUCT, Teacher-1 evidence)
 4. **`manabot.semantic`**: semantic-program encoders and structural

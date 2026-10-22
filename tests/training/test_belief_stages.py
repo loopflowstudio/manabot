@@ -12,8 +12,8 @@ from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
-    AtaraxosMoveLearning,
     CollectBelief,
+    DampedPolicyLearning,
     Execution,
     Learning,
     TrainBelief,
@@ -87,14 +87,14 @@ def test_belief_dependencies_reject_forward_and_wrong_artifacts() -> None:
     "gradient,weights",
     [
         ("ppo", "raw"),
-        ("ataraxos_move", "raw"),
-        ("ataraxos_move", "ema"),
+        ("damped_policy", "raw"),
+        ("damped_policy", "ema"),
         ("compound", "raw"),
     ],
 )
 def test_frozen_belief_stages_run_and_reload(
     tmp_path: Path,
-    gradient: Literal["ppo", "ataraxos_move", "compound"],
+    gradient: Literal["ppo", "damped_policy", "compound"],
     weights: Literal["raw", "ema"],
 ) -> None:
     recipe = belief_recipe()
@@ -102,10 +102,10 @@ def test_frozen_belief_stages_run_and_reload(
     collection_stage = recipe.stages[1]
     assert isinstance(policy_stage, TrainSelfPlay)
     assert isinstance(collection_stage, CollectBelief)
-    if gradient == "ataraxos_move":
+    if gradient == "damped_policy":
         recipe.agent.value_kind = "categorical_wdl"
-        policy_stage.learning = AtaraxosMoveLearning(
-            gradient="ataraxos_move", min_advantage=0, advantage_quantile=0
+        policy_stage.learning = DampedPolicyLearning(
+            gradient="damped_policy", min_advantage=0, advantage_quantile=0
         )
     collection_stage.weights = weights
     if gradient == "compound":

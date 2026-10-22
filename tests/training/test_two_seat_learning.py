@@ -9,25 +9,23 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra import Experiment
 from manabot.infra.hypers import (
     AgentSpec,
-    ExperimentHypers,
     MatchHypers,
     RewardHypers,
-    TrainHypers,
 )
 from manabot.model.agent import Agent
+from manabot.model.returns import transition_gae
+from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import (
-    NetOpponentTrainer,
     RolloutBatch,
     SeatRoutedCollector,
-    transition_gae,
 )
 from manabot.training.execution import execute_regime
+from manabot.training.learner import Learner, observation_tensors
 from manabot.training.models import (
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Learning,
     Schedule,
     TrainingRegime,
@@ -111,7 +109,7 @@ def _collector(
 
 
 def _behavior_matches(batch: RolloutBatch, agent: Agent) -> None:
-    obs = NetOpponentTrainer._obs_to_tensors(
+    obs = observation_tensors(
         {
             key: value.reshape((-1,) + value.shape[2:])
             for key, value in batch.obs.items()
@@ -185,15 +183,6 @@ def test_matched_games_control_keeps_only_designated_seats() -> None:
     assert both.stats.opponent_decisions == 0
 
 
-def _trainer(
-    agent: Agent, collector: SeatRoutedCollector, out: Path
-) -> NetOpponentTrainer:
-    experiment = Experiment(ExperimentHypers(wandb=False, device="cpu", runs_dir=out))
-    return NetOpponentTrainer(
-        agent, experiment, collector, TrainHypers(num_envs=2, num_steps=1)
-    )
-
-
 def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> None:
     first, second = _agent(), _agent()
     with torch.no_grad():
@@ -213,13 +202,14 @@ def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> Non
         tau=Schedule(initial=0),
     )
     learners = PairedLearners(
+        collector,
         LearningPlayer(
-            _trainer(first, collector, tmp_path / "a"),
+            Learner(first, "cpu", minibatch_rows=collector.num_envs),
             learning,
             np.random.default_rng(1),
         ),
         LearningPlayer(
-            _trainer(second, collector, tmp_path / "b"),
+            Learner(second, "cpu", minibatch_rows=collector.num_envs),
             learning,
             np.random.default_rng(2),
         ),
@@ -233,20 +223,20 @@ def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> Non
     for player, old in zip((learners.first, learners.second), before):
         assert any(
             not torch.equal(old[k], v)
-            for k, v in player.trainer.agent.state_dict().items()
+            for k, v in player.learner.agent.state_dict().items()
         )
-        assert player.trainer.optimizer.state
-        player.trainer.save()
-        loaded, _ = load_checkpoint_agent(
-            str(
-                player.trainer.experiment.runs_dir
-                / f"step_{player.trainer.global_step}.pt"
-            )
+        assert player.learner.optimizer.state
+        path = tmp_path / f"player-{player.transitions}.pt"
+        save_bc_checkpoint(
+            player.learner.agent,
+            collector.observation_space,
+            path,
+            player_configs=collector.match.to_rust(),
         )
+        loaded, _ = load_checkpoint_agent(str(path))
         for name, value in loaded.state_dict().items():
-            torch.testing.assert_close(value, player.trainer.agent.state_dict()[name])
-        player.trainer.experiment.close()
-    assert learners.first.trainer.optimizer is not learners.second.trainer.optimizer
+            torch.testing.assert_close(value, player.learner.agent.state_dict()[name])
+    assert learners.first.learner.optimizer is not learners.second.learner.optimizer
     assert not any(collector._streams) and not any(collector._pending)
 
 
@@ -359,17 +349,17 @@ def test_live_continuation_cannot_silently_change_seat_recipe() -> None:
 
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
 def test_move_learning_consumes_complete_seat_trajectories(
-    kind: Literal["scalar", "categorical_wdl"], tmp_path: Path
+    kind: Literal["scalar", "categorical_wdl"],
 ) -> None:
     agent = _agent(kind)
     collector = _collector(agent)
     batch = collector.collect(agent, 1)
-    trainer = _trainer(agent, collector, tmp_path)
+    trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
         trainer,
         batch,
-        AtaraxosMoveLearning(
-            gradient="ataraxos_move", advantage_quantile=0, min_advantage=0
+        DampedPolicyLearning(
+            gradient="damped_policy", advantage_quantile=0, min_advantage=0
         ),
         0,
         np.random.default_rng(1),
@@ -382,7 +372,6 @@ def test_move_learning_consumes_complete_seat_trajectories(
     # Adam advances at most once per two native streams, not once per packed row.
     steps = {int(state["step"]) for state in trainer.optimizer.state.values()}
     assert max(steps) <= 4
-    trainer.experiment.close()
 
 
 def test_schema_one_evidence_keeps_one_seat_and_its_original_bytes() -> None:

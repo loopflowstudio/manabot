@@ -1,4 +1,4 @@
-"""Ataraxos move learning (Nature supplement S3.4, equations 5–6).
+"""Damped policy updates with scalar or categorical lambda-return targets.
 
 The damped update is a clipped likelihood-ratio surrogate with two reverse
 KL penalties, not a novel replacement for that surrogate. Targets, behavior
@@ -26,9 +26,11 @@ from manabot.model.policy_distribution import (
     require,
     reverse_kl,
 )
-from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
+from manabot.model.returns import transition_gae
+from manabot.sim.net_opponent import RolloutBatch
 from manabot.training.health import OptimizerHealth, batch_health
-from manabot.training.models import AtaraxosMoveLearning
+from manabot.training.learner import Learner, observation_tensors
+from manabot.training.models import DampedPolicyLearning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
     UpdateDiagnostics,
@@ -148,7 +150,7 @@ def categorical_lambda_returns(
 
 
 @dataclass(frozen=True)
-class MoveTargets:
+class DampedTargets:
     advantages: Tensor
     values: Tensor
     selected: Tensor
@@ -156,21 +158,21 @@ class MoveTargets:
 
 @torch.no_grad()
 def _targets(
-    trainer: NetOpponentTrainer,
+    learner: Learner,
     batch: RolloutBatch,
-    learning: AtaraxosMoveLearning,
+    learning: DampedPolicyLearning,
     bootstrap_agent: Agent | None = None,
-) -> MoveTargets:
-    device = trainer.experiment.device
+) -> DampedTargets:
+    device = learner.device
     rewards = torch.as_tensor(batch.rewards, device=device)
     ends = torch.as_tensor(batch.dones, device=device)
     values = torch.as_tensor(batch.values, device=device)
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
-    next_obs = trainer._obs_to_tensors(batch.next_obs, device)
-    _, next_raw = (bootstrap_agent or trainer.agent).forward_distribution(next_obs)
+    next_obs = observation_tensors(batch.next_obs, device)
+    _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
-    if trainer.agent.hypers.value_kind == "categorical_wdl":
+    if learner.agent.hypers.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
             raise ValueError(
                 "categorical update requires collection outcome probabilities"
@@ -206,13 +208,13 @@ def _targets(
         1 - learning.advantage_quantile,
         learning.min_advantage,
     )
-    return MoveTargets(advantages, value_targets, selected)
+    return DampedTargets(advantages, value_targets, selected)
 
 
-def update_move_iteration(
-    trainer: NetOpponentTrainer,
+def update_damped_iteration(
+    learner: Learner,
     batch: RolloutBatch,
-    learning: AtaraxosMoveLearning,
+    learning: DampedPolicyLearning,
     iteration: int,
     *,
     bootstrap_agent: Agent | None = None,
@@ -223,19 +225,19 @@ def update_move_iteration(
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
     Scalar value is an explicit MSE ablation; categorical uses equation (5).
     """
-    device = trainer.experiment.device
-    observations = trainer._obs_to_tensors(batch.obs, device)
+    device = learner.device
+    observations = observation_tensors(batch.obs, device)
     actions = torch.as_tensor(batch.actions, device=device)
     behavior = torch.as_tensor(batch.probabilities, device=device)
     old_logs = torch.as_tensor(batch.logprobs, device=device)
     behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
     valid = legal_mask(observations["actions_valid"])
     check_behavior(behavior_logs, behavior, actions, old_logs, valid)
-    targets = _targets(trainer, batch, learning, bootstrap_agent)
+    targets = _targets(learner, batch, learning, bootstrap_agent)
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
-        "value_kind": trainer.agent.hypers.value_kind,
+        "value_kind": learner.agent.hypers.value_kind,
         "rows": actions.numel(),
         "retained": int(targets.selected.sum()),
         "optimizer_exposures": 0,
@@ -258,10 +260,10 @@ def update_move_iteration(
         actor_only=learning.filter_scope == "actor",
     )
     diagnostics["numerical"] = health
-    observer = OptimizerHealth(trainer.agent, trainer.optimizer, health, iteration)
+    observer = OptimizerHealth(learner.agent, learner.optimizer, health, iteration)
     expected_targets = (
         targets.values[..., 2] - targets.values[..., 0]
-        if trainer.agent.hypers.value_kind == "categorical_wdl"
+        if learner.agent.hypers.value_kind == "categorical_wdl"
         else targets.values
     )
     chosen_types = (
@@ -284,18 +286,18 @@ def update_move_iteration(
     )
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0
-    for group in trainer.optimizer.param_groups:
+    for group in learner.optimizer.param_groups:
         group["lr"] = rate
     # Compute credit on the original seat trajectories before regrouping rows.
     # Rectangular rollouts retain one timestep per minibatch. Complete-game
     # rollouts are packed into one column; use the same native stream count
     # rather than accidentally taking one optimizer step per recorded decision.
-    width = trainer.collector.num_envs
+    width = learner.minibatch_rows
     observations = {key: value.flatten(0, 1) for key, value in observations.items()}
     actions = actions.flatten(0, 1)
     behavior_logs = behavior_logs.flatten(0, 1)
     valid = valid.flatten(0, 1)
-    targets = MoveTargets(
+    targets = DampedTargets(
         targets.advantages.flatten(0, 1),
         targets.values.flatten(0, 1),
         targets.selected.flatten(0, 1),
@@ -316,7 +318,7 @@ def update_move_iteration(
             continue
         indexes = torch.arange(start, start + len(selected), device=device)[selected]
         obs = {key: value[indexes] for key, value in observations.items()}
-        logits, value_logits = trainer.agent.forward_distribution(obs)
+        logits, value_logits = learner.agent.forward_distribution(obs)
         reference = reference_distribution(obs, learning.reference)
         policy_loss = damped_policy_loss(
             logits,
@@ -331,7 +333,7 @@ def update_move_iteration(
         )
         actor_mask = actor_selected[selected]
         policy_loss = selected_mean(policy_loss, actor_mask)
-        if trainer.agent.hypers.value_kind == "categorical_wdl":
+        if learner.agent.hypers.value_kind == "categorical_wdl":
             value_loss = (
                 -(targets.values[indexes] * value_logits.log_softmax(-1)).sum(-1).mean()
             )

@@ -26,7 +26,7 @@ retrieval logits distinguish all three UR Lessons, gradients reach the program
 encoder, public knowledge affects inference, and hidden-world substitutions
 preserve the new viewer inputs. This is not a transfer or strength experiment.
 
-`Trainer.save`, BC/value writers, the ordinary loader, W&B loading and live
+Regime policy exports, BC/value writers, the ordinary loader, W&B loading and live
 checkpoint play share `manabot/model/world.py`. Binding includes native world,
 full paired main/sideboard setups, content manifest, rules versions and input
 schema. Compiled matchup checkpoints require the complete program encoder.

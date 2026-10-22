@@ -4,14 +4,11 @@ import ast
 from copy import deepcopy
 from typing import Any, Iterable
 
-from manabot.infra import ExperimentHypers, Hypers, SimulationHypers
+from manabot.infra import ExperimentHypers, SimulationHypers
 
 from .presets import (
     DEFAULT_SIM_PRESET,
-    DEFAULT_TRAIN_PRESET,
     get_sim_preset,
-    get_training_base,
-    get_training_preset,
 )
 
 
@@ -90,18 +87,6 @@ def apply_set_overrides(
             current = current[part]
         current[path[-1]] = value
     return out
-
-
-def load_train_config(
-    preset: str = DEFAULT_TRAIN_PRESET,
-    set_overrides: Iterable[str] | None = None,
-) -> Hypers:
-    """Load and validate a training config from preset + overrides."""
-
-    config = deep_merge(get_training_base(), get_training_preset(preset))
-    if set_overrides:
-        config = apply_set_overrides(config, set_overrides)
-    return Hypers.model_validate(config)
 
 
 def load_sim_config(
