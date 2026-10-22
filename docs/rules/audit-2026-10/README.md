@@ -5,6 +5,53 @@ adjudicate them against the pinned MTG rules, and share the faithful authority.
 It preserves the original committed inventory and draft; it does not repeat
 the whole-inventory audit or claim full MTG conformance.
 
+Start with the [coverage map](coverage-map.md) for strengths and gaps by kind
+of rule. The concept review below explains the desired experience and next proof.
+
+## Concept review: one rule authority, checks at the right time
+
+Jack Heart's accepted direction is to adjudicate competing implementations
+against MTG and align around the faithful authority. The product consequence
+is that human and bot choices come from the same native rules model; neither
+consumer needs to learn which internal target branch or payment path was used.
+The existing Academy usage contract already expresses this and needs no rewrite.
+
+**Proposed usage for the hexproof correction:** choose a target from the legal
+offers, then commit its bound Command. An opponent's hexproof permanent cannot
+be offered merely because the instruction says “spell or permanent.” Your own
+hexproof permanent remains targetable when otherwise legal. If the target gains
+hexproof in response, resolution rechecks the new state. Reconnecting restores
+the actual pending decision; it neither retargets automatically nor refunds
+committed costs. These are intended outcomes, not verified repaired behavior.
+
+| Your action | Shared concept | Authority/API responsibility |
+|---|---|---|
+| Inspect and choose a target | Legal offer in the current decision | Native `legal_targets_for_spec` enumerates through `target_is_legal`; Academy projects viewer-safe choices. |
+| Commit the offer | Command bound to its frame | `hero_command` / `_apply_bound_command` validate binding and apply through native authority. |
+| Respond, then resolve | Chosen target in the new game state | Resolution calls `target_is_legal` again; changed legality is an MTG recheck, not a conflicting definition. |
+| Recover after disconnect | Same committed state and actual pending decision | Existing recovery/frame machinery retains identity and choices; the browser does not reconstruct rules. |
+
+The most consequential mismatch is priority within this draft: the completed
+consolidation removes equivalent logic, while the demonstrated hexproof
+disagreement remains unrepaired. The next design direction is to centralize
+permanent-wide targeting restrictions so target-spec branches cannot bypass
+them. Keep spell/permanent distinctions and resolution-time checks; a single
+boolean cached at offer time would be wrong after a response.
+
+No new public targeting concept or competing UI workflow is needed. Preserve
+exact object references, Command binding, persisted choices and historical
+world identities. Behavioral repair must have a newly identified world and
+fresh admission evidence rather than relabeling old receipts. The existing
+draft-work instructions already require rule adjudication and recovery proofs;
+no skill change is needed to express this direction.
+
+**Next proof:** the same permanent under different target wordings, both
+controllers, gaining hexproof in response, and leave/reenter identity; then
+stale Command rejection, reconnect, replay/fork and required admission checks.
+Trigger ordering follows as a separate missing shared choice. No unresolved
+product choice is identified here: faithful choices and recovery were already
+accepted. This design direction does not launch implementation.
+
 ## Concrete change
 
 Stack-target offers independently enforced minimum mana value while acceptance
