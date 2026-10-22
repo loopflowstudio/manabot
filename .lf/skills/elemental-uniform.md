@@ -1,9 +1,0 @@
-Implement the missing uniform ten-deck sampler for this Task.
-
-The active Task is MTG-174 (formerly f72151). Read scratch/elemental-uniform-schedule.md as the exact design, plus scratch/elemental-ten-dollar.md and elemental-baseline-preflight.md for the accepted experiment. These are the assigned work, not historical notes. The repository's generic implement override contains Academy advice/Study checks from other work; they do not define this step's scope. Do not run unrelated Academy checks or decide this implementation is already done because Academy has no defect.
-
-Implement an executable per-game uniform sampler across all100 ordered Elemental pairings and mirrors through the existing collector/vector environment. Preserve256 streams,64 learner transitions/update and one learner seat per stream. Reuse native exact authored setups and Lesson pools. Preserve existing fixed/cross/mirror behavior, exact recovery and frozen worlds. Record actual pair/seat exposure. Read the full design before choosing a small implementation.
-
-Make real source changes, and verify actual changed reset setups, complete-roster admission, uniform eligibility, native/debug tests, collector snapshot/current-game recovery, CPU learning and checkpoint reload. Rebuild Rust changes through uv from repository root per AGENTS.md. Do not create an alternative training executor or general adaptive curriculum framework. Tests and source audit, not registration or a mock, must prove the missing capability is repaired.
-
-This step is local implementation only: no rental or paid work, no Task completion and no PR/merge prerequisite. Preserve all existing work. Leave source/tests and a concise implementation/validation handoff in scratch/elemental-uniform-schedule.md for the execution step, including remaining real blockers. Scientific protocol/source freezing and actual paid training/report publication follow only after this capability is verified.
