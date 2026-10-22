@@ -355,6 +355,9 @@ def follow(
             ledger.attempts[f"{digest}-retired-{previous.started_at:.6f}"] = (
                 ledger.attempts.pop(digest)
             )
+            # A final raw export is discovered through the settled run cursor,
+            # rather than a monitor filename. Explicit retry must revisit it.
+            ledger.settled_jobs.pop(previous.job, None)
         atomic_json(path, ledger.model_dump(mode="json"))
         observer_deadline = cohort.deadline + 3600
         while time.time() < observer_deadline:

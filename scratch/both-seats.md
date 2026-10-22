@@ -330,3 +330,73 @@ receipt/report publication follows. Latestfreshtraining860updates, heartbeat4.87
 cohortrunning. Keepgoalactiveforfinal$50report; live250cadence+CPUserver now work
 withoutthisconversation/laptop. Futurecheckpoint evidence remains onMini; publish
 verifiedreceipt/report snapshots at meaningfulmilestones, retainingfailures.
+
+## Goal continuation: updates500/750 and corrected Etude deck labels
+
+Previous goal turn was progress: live Etude activation, verified250 and automatic
+500 handoff published. Fresh current-turn checks confirmed original002 live at864
+updates, providerpresent, controllerPID76098, evaluation500PID90603live. No restart
+on observation timeouts. Subsequent500and750evaluations completed200games each,
+zero native integrity/replay failures; preserved all evidence locally and S3.
+Aggregates250=.515[.485,.545],500=.52[.475,.565],750=.55[.51,.59]. Paired750minus250
++0.035[-.02,.095],2000whole-deal bootstrapseed0, descriptive within-run only.
+
+Found and fixed a real scientific labeling bug before publishing500/750 details:
+Etude adapter used leg//2 to name candidate crossmatchups. ActualcandidateLessons
+legs0/3, Allies1/2. Aggregates/nativegames/oldmonitor250comparisonwerecorrect;
+Etude's cross-deck subgrouplabelswerewrong. New publicpurearena_tables function
+validatesauthoredseat/decks and labels eachparticipant'sownactualdeck. Replaced
+faultyprojection, addedregressioncheckingall8legs/opponents andrejectingcorrupted
+seats. Benchmarkname now two-seat-ladder-heuristic-deck-seats tokeepcorrected
+records distinct; old implementation isdeleted, frozenrecords retained.
+
+Alsoaddedfinalstage raw checkpointselection toliveobserver foractualpaused/completed
+budgetendpoints between250milestones, digestdedup andterminalmanifestcursor. Tests
+coverpaused/completed vsrunning/failed/interrupted andidenticaldigestdedup. Small
+supervisorobservations nowrefreshduringeval; sourceheartbeatage displayed separately
+fromreporttime. Existingtraining/controller code andworkersourceunchanged.
+
+Codecommit9467dd9d0889622309cf43e0d6f433a6dc69ec68. FocusedEtudetests10passed;
+earlierendpoint+batch14passedbeforenewdeckregression, Ruff/diffpass. Native750
+completedbeforecontrolledobserverstop; ledgerhadno runningeval, thenONLYevaluation
+LaunchAgentbootedout. No live evaluator ortraining interrupted fordeployment.
+PushedcodeandupdatedMini~/src/manabot.mtg165-evaluationtothat exactcommit.
+
+Used `.runs/mtg165-two-seat-50/live-evaluation/correct-labels.py` toverifyalloriginal
+native rowregistrationbindings andtracehashes, thenholdcorrectedEtudebenchmark
+usingarena_tablesoverretainedrows:25matches/checkpoint, no newgames orfreshreplay.
+RunIDs deck-seat-projection-SHA. Config explicitlyrecords nativeproducer33054b34,
+projection9467dd9, source-rowandtracehashes. Corrected-trackincludes250/500/750.
+OnMini movedoriginaltracktoevaluation/retired-cross-deck-labels, preservedoriginal
+ledgerasledger-before-deck-correction.json, installedcorrectedtrackasactive track.
+Completedledgerentries nowprojection=retained-arena; interruptionhistoryretained.
+Restartednormal no-retry evalservice, PID92528live atverification, noerror. Original
+cohortcontrollerPID76098unchanged. Header nowshowsfreshtraining908updates, source
+heartbeat~12secondsold; owncontrollerobservation907slightlyearlier, consistent.
+1000checkpointpending; observeridleandpollingnormally. Next1000 usesnewnative
+correctlabeladapterandshouldjoincorrectedbenchmark withoutprojection.
+
+Evidence receipts, all fullbyte-readbackverified:
+- 250originalnativec18e4cef… remainsretained, unchangedarchive.
+- 500native1d12faa7c924508fc71ab8e0f78bda6493b49129420ceae173386f66bcf668c0,
+  4,413,111bytes, S3versionCQxJlQ1jOGg9_b3xbDo9ezIhj5I..BPP.
+- 750nativec33af3bc1368cef2dab05f4646e6038a3548863774b191ecb7241442789743d2,
+  4,549,072bytes, versionBdeRis.6p9XvmIn4s_QT4LYzqFVcQ4IM.
+- CorrectedEtudetableprojectionc4b36f41df77885534f04847b12b163758635777d254be4cbca272213b9aefe7,
+  31,950bytes, version33UHlzlwGpJHOY.EaXFa.I3kqdLCTgI5.
+Allunder s3://etudefantasia/manabot/cohorts/mtg165-two-seat-50/evaluations/sha256/.
+
+Public250receiptupdatedwithexplicit table_projection+supersession provenance;
+originalnativearchive/fileinventoryremains. New500/750JSONreceiptsincludecorrected
+queries, intervals, pairedchanges, coordinates, nativeattempts andper-fileevidence.
+Correctedmatchups250/500/750:LvA.24/.30/.34;AvL.74/.80/.86;LvL.60/.46/.54;
+AvA.48/.52/.46. Do notuseunadjustedoriginalEtude subgroupParquet labels.
+Reportappendsexplicitcorrection andthree-pointcurve, neverclaimsfinal$50complete.
+Finalendpoint/cleanup/coststillpending, goalactive. Publishcurrentreport/data next.
+
+Genericpublisherignoredscriptnowrequires --updates N --source EXACT_EVALUATOR_COMMIT;
+future1000nativeon9467dd9usescurrentBenchmarkfromresult.experiment, no projection
+needed. Inputlayout retained-N/{track,evaluations,ledger.json}; datareceiptarchive
+hashreadbackusualS3ArtifactStore. `publish-correction.py` isone-offforfirstthree
+points; donotrerunfuturevalidnativepointsthroughlegacybenchmark. `correct-labels.py`
+isretainedreproducibleprojectionproof, notnewtrainingorinference.

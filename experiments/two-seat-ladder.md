@@ -233,3 +233,56 @@ existing private S3 cohort prefix, SHA-256
 publication included a full byte-verified readback. This closes evaluation
 activation, while final budget-limited training and later checkpoint results
 remain pending.
+
+
+## Continuing Etude curve: updates 500 and 750
+
+Each point below has **25 complete deals / 200 unique valid terminal, replayed
+games**. All native trace shard hashes were verified after transfer. Etude
+intervals resample whole eight-leg deals (2,000 draws, seed 0).
+
+| Updates | Learner/environment decisions | Training wall hours | Heuristic score | 95% deal interval |
+|---|---:|---:|---:|---:|
+| 250 | 7,595,063 | 1.451 | 51.5% | [48.5%, 54.5%] |
+| 500 | 14,913,525 | 2.828 | 52.0% | [47.5%, 56.5%] |
+| 750 | 22,212,754 | 4.202 | 55.0% | [51.0%, 59.0%] |
+
+The paired change from 250 to 750 is **+3.5 percentage points [−2.0, +9.5]**.
+This is descriptive within-run monitoring on repeatedly inspected deals, with
+one training seed; it does not establish a method-level improvement. The retained one-seat comparison set contains no completed 500/750-update
+evaluations, so no such control values are interpolated.
+
+| Candidate matchup | Update 250 | Update 500 | Update 750 |
+|---|---:|---:|---:|
+| LvA | 24% | 30% | 34% |
+| AvL | 74% | 80% | 86% |
+| LvL | 60% | 46% | 54% |
+| AvA | 48% | 52% | 46% |
+
+Lessons versus Allies remains the weaker cross-deck assignment. The aggregate
+curve combines these cross-deck games with mirrors; it should not hide that
+imbalance. [Update 500](data/two-seat-ladder/500-update-etude.json) and
+[update 750](data/two-seat-ladder/750-update-etude.json) retain full Etude points,
+matchup intervals, paired changes, training coordinates and evidence receipts.
+
+**Deck-label correction:** the first Etude adapter grouped cross-deck legs by
+pair number instead of the participant's actual deck. Aggregate scores, native
+arena rows, checkpoint bindings and replay results were unaffected. That label
+projection has been replaced and regression-tested: candidate Lessons-versus-
+Allies uses legs 0/3, Allies-versus-Lessons uses 1/2. The original native records
+and archives remain retained. The corrected
+`two-seat-ladder-heuristic-deck-seats` benchmark projects those same verified
+native rows without new games or fresh replay; its run declarations and the JSON
+receipts explicitly record that provenance. The projection archive is retained
+with byte-verified readback at SHA-256
+`c4b36f41df77885534f04847b12b163758635777d254be4cbca272213b9aefe7`.
+The prior Etude cross-deck subgroup labels are superseded; the original monitor
+comparison earlier in this report used the correct deck assignments.
+
+The Mini observer is now pinned to `9467dd9d0`. Besides regular milestones, it
+queues committed final raw exports from paused/completed training stages,
+including budget endpoints between milestones. It refreshes small training
+observations during evaluations and shows their age separately from page time.
+A fresh observation confirmed the same original GPU job running at 908 updates,
+with no cohort or evaluation error. The experiment's final budget-limited
+endpoint, cleanup and final cost report remain pending.
