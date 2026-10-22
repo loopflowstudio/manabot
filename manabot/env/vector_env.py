@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 
+from manabot.env.failures import CapturedVector
 import managym
 
 from .match import Match, Reward
@@ -59,8 +60,8 @@ class VectorEnv:
                 "opponent_player",
             )
 
-    def _build_rust_env(self, seed: int) -> "managym.VectorEnv":
-        return managym.VectorEnv(
+    def _build_rust_env(self, seed: int) -> CapturedVector:
+        return CapturedVector(
             num_envs=self.num_envs,
             seed=seed,
             skip_trivial=self._skip_trivial,

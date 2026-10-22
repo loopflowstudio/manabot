@@ -235,6 +235,41 @@ impl PyVectorEnv {
         self.inner.current_game_seeds()
     }
 
+    #[pyo3(signature = (active=None))]
+    fn semantic_decision_frames_json(
+        &self,
+        active: Option<Vec<bool>>,
+    ) -> PyResult<Vec<Option<String>>> {
+        self.inner
+            .semantic_decision_frames_json(active.as_deref())
+            .map_err(map_agent_err)
+    }
+
+    fn step_isolated_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+        active: Vec<bool>,
+    ) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            // Never leave a preceding terminal flag on a failed/inactive row.
+            for index in 0..inner.len() {
+                buffers.write_step_state(index, 0.0, false, false)?;
+            }
+            inner.step_isolated_into(&actions, &active, |index, obs, reward, done, truncated| {
+                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+            })
+        })
+    }
+
+    fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
+                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+            })
+        })
+    }
+
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {

@@ -11,42 +11,22 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Protocol, cast
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from manabot.env.failures import CapturedVector
 import managym
 
 Array = NDArray[np.generic]
-
-
-class _NativeVector(Protocol):
-    """Narrow the untyped PyO3 boundary used by the collector.
-
-    Native info dictionaries contain heterogeneous diagnostic values; only the
-    collector interprets their winner field. Tensor buffers remain NumPy-owned.
-    """
-
-    def set_buffers(self, buffers: dict[str, Array]) -> None: ...
-    def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None: ...
-    def reset_each_into_buffers(
-        self, players: list[list[managym.PlayerConfig]]
-    ) -> None: ...
-    def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
-    def step_into_buffers(
-        self, actions: list[int], active: list[bool] | None = None
-    ) -> None: ...
-    def current_agent_indices(self) -> list[int]: ...
-    def current_game_seeds(self) -> list[int]: ...
-    def get_last_info(self) -> list[dict[str, Any]]: ...
 
 
 @dataclass(frozen=True)
 class _Shard:
     start: int
     stop: int
-    native: _NativeVector
+    native: CapturedVector
 
 
 class ShardedVectorEnv:
@@ -73,16 +53,14 @@ class ShardedVectorEnv:
             _Shard(
                 start=index * num_envs // workers,
                 stop=(index + 1) * num_envs // workers,
-                native=cast(
-                    _NativeVector,
-                    managym.VectorEnv(
-                        num_envs=(index + 1) * num_envs // workers
-                        - index * num_envs // workers,
-                        seed=min(seed + index * num_envs // workers, 2**64 - 1),
-                        seed_stride=num_envs,
-                        skip_trivial=True,
-                        opponent_policy="none",
-                    ),
+                native=CapturedVector(
+                    num_envs=(index + 1) * num_envs // workers
+                    - index * num_envs // workers,
+                    seed=min(seed + index * num_envs // workers, 2**64 - 1),
+                    seed_stride=num_envs,
+                    stream_offset=index * num_envs // workers,
+                    skip_trivial=True,
+                    opponent_policy="none",
                 ),
             )
             for index in range(workers)
@@ -189,6 +167,35 @@ class ShardedVectorEnv:
             for index in shard.native.current_agent_indices()
         ]
 
+    def step_isolated_into_buffers(
+        self, actions: list[int], active: list[bool]
+    ) -> None:
+        """Gameplay errors are row outcomes; infrastructure errors still stop."""
+        self._rows(len(actions))
+        self._rows(len(active))
+        self._run(
+            [
+                partial(
+                    shard.native.step_isolated_into_buffers,
+                    actions[shard.start : shard.stop],
+                    active[shard.start : shard.stop],
+                )
+                for shard in self._shards
+            ]
+        )
+
+    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
+        self._rows(len(failed))
+        self._run(
+            [
+                partial(
+                    shard.native.replace_failed_into_buffers,
+                    failed[shard.start : shard.stop],
+                )
+                for shard in self._shards
+            ]
+        )
+
     def current_game_seeds(self) -> list[int]:
         self._check()
         return [
@@ -198,6 +205,11 @@ class ShardedVectorEnv:
     def get_last_info(self) -> list[dict[str, Any]]:
         self._check()
         return [info for shard in self._shards for info in shard.native.get_last_info()]
+
+    def capture_failure(self, error: BaseException) -> None:
+        # Capture from the owning thread so live run coordinates remain available.
+        for shard in self._shards:
+            shard.native.capture_failure(error)
 
     def close(self) -> None:
         if not self._closed:

@@ -80,6 +80,7 @@ def test_pause_export_and_resume_preserve_target_and_learning(
         assert paused.allocation_deadline == allocation.deadline
         assert paused.recovery_artifact is not None
         second = job_spec(1).admit(clock.time())
+        assert second.deadline > allocation.deadline
         resumed = execution.execute_regime(
             value,
             197,
@@ -92,6 +93,8 @@ def test_pause_export_and_resume_preserve_target_and_learning(
             value, 197, tmp_path / "control", store, allocation=second
         )
         assert resumed.status == control.status == "completed"
+        assert resumed.allocation_deadline == second.deadline
+        assert resumed.parent_run_id == paused.id
         assert resumed.updates_through() == control.updates_through() == 3
         assert resumed.regime_digest == paused.regime_digest == control.regime_digest
         assert_learning_diagnostics_equal(resumed.stages[0], control.stages[0])

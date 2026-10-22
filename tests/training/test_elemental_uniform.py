@@ -12,10 +12,17 @@ import torch
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
+from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training.execution import execute_regime, validate_regime
+from manabot.training.game_errors import (
+    GameAttempt,
+    GameErrorLedger,
+    GameErrorPolicy,
+    replay_attempt,
+)
 from manabot.training.matchups import elemental_roster
 from manabot.training.models import TrainingRegime, TrainSelfPlay
 from manabot.training.self_play import deck_identity
@@ -64,7 +71,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
     exposure = first.stats.exposure
-    assert sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
+    assert (
+        sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
+    )
     if learning_seats == "one":
         assert batch.actions.size == 4 * 128
     else:
@@ -235,3 +244,78 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     assert len(raw.world_binding["setups"]) == 10
     assert len(ema.world_binding["setups"]) == 10
     assert all(torch.isfinite(p).all() for p in raw.parameters())
+
+
+def test_uniform_crash_refill_retains_sampled_setups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch.set_num_threads(1)
+    policy = GameErrorPolicy()
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    agent = Agent(
+        ObservationSpace(),
+        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+    )
+    collector = SeatRoutedCollector(
+        ObservationSpace(),
+        _match(),
+        Reward(RewardHypers()),
+        num_envs=2,
+        seed=17402,
+        opponent_mode="self",
+        games_per_stream=1,
+        matchup_curriculum="elemental-uniform",
+        game_errors=policy,
+        record_attempt=lambda row: ledger.record(row, {}),
+    )
+    original = collector._sample_learning_rows
+    calls = 0
+
+    def sample(
+        agent: Agent, rows: np.ndarray, acting: np.ndarray, inference: PolicyInference
+    ) -> np.ndarray:
+        nonlocal calls
+        actions = original(agent, rows, acting, inference)
+        calls += 1
+        if calls == 4:
+            actions[0] = -1
+        return actions
+
+    monkeypatch.setattr(collector, "_sample_learning_rows", sample)
+    try:
+        batch = collector.collect(agent, 1)
+        attempts = [
+            GameAttempt.model_validate(json.loads(line)["attempt"])
+            for line in ledger.path.read_text().splitlines()
+        ]
+        assert ledger.state.crashed == 1 and ledger.state.completed == 2
+        failed = next(row for row in attempts if row.outcome == "engine_error")
+        assert len(failed.actions) == 4
+        replay = replay_attempt(failed)
+        assert replay["status"] == "failed" and replay["at_retained_failure"]
+        assert replay["frame"] == failed.frame_json
+        # Independently reset native roots at every retained seed: receipts must
+        # bind the sampled pair, including the replacement, rather than the recipe pair.
+        for attempt in attempts:
+            probe = managym.VectorEnv(num_envs=1, seed=attempt.seed)
+            roster = elemental_roster(_match())
+            probe.set_uniform_roster(roster)
+            probe.reset_all(_match().to_rust())
+            a, b = probe.current_matchup_indices()[0]
+            assert attempt.matchup.hero_deck == roster[a].decklist
+            assert attempt.matchup.villain_deck == roster[b].decklist
+            assert attempt.matchup.hero_sideboard == roster[a].sideboard
+            assert attempt.matchup.villain_sideboard == roster[b].sideboard
+        replacement = next(
+            row for row in attempts if row.stream == 0 and row.outcome == "completed"
+        )
+        assert replacement.seed == failed.seed + 2
+        assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 5
+        assert (
+            sum(c["learner_transitions"] for c in collector.stats.exposure.values())
+            == batch.actions.size
+        )
+        assert sum(c["terminal_games"] for c in collector.stats.exposure.values()) == 2
+        assert ledger.state.discarded_samples == 4
+    finally:
+        collector.close()

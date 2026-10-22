@@ -26,6 +26,7 @@ import numpy as np
 import torch
 
 from manabot.env import Env, Match, ObservationSpace
+from manabot.env.failures import CapturedVector
 from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
 from manabot.model.world import validate_agent_setup
@@ -34,7 +35,6 @@ from manabot.sim.flat_mc import (
     GameRecord,
     SearchStats,
 )
-import managym
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 
@@ -72,9 +72,7 @@ class BatchedSampler:
         self.forward_calls = 0
         self.obs_selected = 0
 
-    def select(
-        self, buffers: dict[str, np.ndarray], rows: np.ndarray
-    ) -> np.ndarray:
+    def select(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
         """Actions (len(rows),) for the given rows of the observation buffers."""
 
         obs = {
@@ -114,9 +112,7 @@ class RandomBatchController:
     def __init__(self, seed: int = 0):
         self._rng = np.random.default_rng(seed)
 
-    def select(
-        self, buffers: dict[str, np.ndarray], rows: np.ndarray
-    ) -> np.ndarray:
+    def select(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
         valid = buffers["actions_valid"][rows] > 0
         weights = valid.astype(np.float64)
         totals = weights.sum(axis=1, keepdims=True)
@@ -175,7 +171,7 @@ def run_vector_games(
     for controller in (hero, villain):
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
-    env = managym.VectorEnv(
+    env = CapturedVector(
         num_envs=num_streams, seed=seed, skip_trivial=True, opponent_policy="none"
     )
     buffers = _allocate_buffers(obs_space, num_streams)
@@ -192,7 +188,9 @@ def run_vector_games(
     max_env_steps = max_env_steps or 10_000_000
 
     start = time.perf_counter()
-    while (recorded[0] < quota[0] or recorded[1] < quota[1]) and total_steps < max_env_steps:
+    while (
+        recorded[0] < quota[0] or recorded[1] < quota[1]
+    ) and total_steps < max_env_steps:
         acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
         actions = np.zeros(num_streams, dtype=np.int64)
         hero_rows = np.flatnonzero(acting == hero_seat)
@@ -202,6 +200,12 @@ def run_vector_games(
         if len(villain_rows):
             actions[villain_rows] = villain.select(buffers, villain_rows)
 
+        env.context.update(
+            requested_games=num_games,
+            recorded_games=recorded.copy(),
+            environment_steps=total_steps,
+            max_env_steps=max_env_steps,
+        )
         env.step_into_buffers(actions.tolist())
         total_steps += num_streams
         steps_in_game += 1
@@ -312,9 +316,7 @@ class PolicyRolloutMCPlayer:
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
         start = time.perf_counter()
 
-        pool = env._engine.rollout_pool(
-            self.worlds, self.rollouts, call_seed, self.max_steps
-        )
+        pool = env.rollout_pool(self.worlds, self.rollouts, call_seed, self.max_steps)
         pool.set_buffers(self._buffers, self._capacity)
         num_slots = pool.num_slots
         actions_full = np.zeros(num_slots, dtype=np.int64)

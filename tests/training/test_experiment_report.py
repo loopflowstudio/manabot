@@ -22,8 +22,43 @@ from manabot.training.experiment_report import (
     strength_figures,
     write_dashboard,
 )
+from manabot.training.game_errors import GameErrorState
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
+
+
+@pytest.mark.parametrize("stop_reason", [None, "game_error_rate_exceeded"])
+def test_game_recovery_summary_does_not_publish_private_inputs(
+    tmp_path: Path, stop_reason: str | None
+) -> None:
+    evidence = load_evidence(DEMO)
+    run = evidence.runs[0].model_copy(deep=True)
+    run.game_errors = GameErrorState(
+        attempted=10,
+        completed=9,
+        crashed=1,
+        discarded_samples=5,
+        replacement_samples=5,
+        window=[False] * 9 + [True],
+        stop_reason=stop_reason,
+    )
+    run.status = "failed"
+    run.error = "AgentError: private-card-name in hidden hand at private-seed"
+    run.game_error_ledgers = ["private-seed-and-action-prefix.jsonl"]
+    output = write_dashboard(
+        replace(evidence, runs=(run,)),
+        tmp_path / "report.html",
+        question="Recovery",
+        docs="metrics.html",
+        sections=[],
+    )
+    html = output.read_text()
+    assert "10 settled game attempts, 9 completed, 1 crashed" in html
+    assert "5 samples discarded, 5 replacement samples" in html
+    assert "10.0% over the last 10 settled attempts" in html
+    assert "private-seed-and-action-prefix" not in html
+    assert "private-card-name" not in html and "private-seed" not in html
+    assert f"stop reason: {stop_reason or 'failed'}" in html
 
 
 def test_tracker_declarations_are_sources_without_extra_trajectories(

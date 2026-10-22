@@ -23,6 +23,7 @@ import math
 import time
 from typing import Any, Literal, Protocol, overload
 
+from managym.decision import Command, DecisionFrame
 import numpy as np
 import torch
 
@@ -44,7 +45,6 @@ from manabot.verify.util import (
     _select_agent_action,
     winner_from_info_or_obs,
 )
-from managym.decision import Command, DecisionFrame
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 
@@ -127,7 +127,7 @@ class FlatMCPlayer:
         self._calls += 1
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
         start = time.perf_counter()
-        scores, simulations, cap_hits = env._engine.flat_mc_scores(
+        scores, simulations, cap_hits = env.flat_mc_scores(
             self.worlds,
             self.rollouts,
             call_seed,

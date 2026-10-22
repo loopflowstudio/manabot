@@ -6,7 +6,7 @@ The ordinary model export remains the only serving artifact. Replay restores
 native auto-reset state from the original seed, then checks every output buffer.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -129,6 +129,28 @@ def save_update(
     temporary.unlink()
 
 
+def admit_recovery_identities(
+    previous: Mapping[str, object],
+    current: Mapping[str, object],
+    repair: str | None,
+) -> None:
+    """Explicit repair may change source bytes, never world/content/input/runtime."""
+    mutable = (
+        {
+            "source_commit",
+            "training_source_sha256",
+            "engine_source_sha256",
+            "engine_extension_sha256",
+        }
+        if repair
+        else set()
+    )
+    if {k: v for k, v in previous.items() if k not in mutable} != {
+        k: v for k, v in current.items() if k not in mutable
+    }:
+        raise ValueError("recovery runtime/source identity mismatch")
+
+
 def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
     """Load only the latest artifact registered in the canonical local store."""
     artifact = parent.recovery_artifact
@@ -143,12 +165,11 @@ def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
         state, "format_version", None
     ) not in {2, 3}:
         raise ValueError("invalid recovery snapshot type")
-    if (
-        state.regime_digest != parent.regime_digest
-        or state.seed != parent.seed
-        or state.identities != parent.identities
-    ):
+    if state.regime_digest != parent.regime_digest or state.seed != parent.seed:
         raise ValueError("recovery snapshot identity mismatch")
+    admit_recovery_identities(
+        state.identities, parent.identities, parent.source_repair_reason
+    )
     records = [*state.completed_stages, state.record]
     if state.format_version == 3:
         if state.diagnostic_run_id is None:

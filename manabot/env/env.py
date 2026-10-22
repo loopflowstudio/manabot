@@ -7,17 +7,18 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
-
-# Local imports
-from manabot.infra.log import getLogger
-import managym
 from managym.decision import (
     Command,
     SemanticContractError,
     SemanticTransition,
 )
 
+# Local imports
+from manabot.infra.log import getLogger
+import managym
+
 # Local directory imports
+from .failures import CapturedSearch, ScalarCapture
 from .match import Match, Reward
 from .observation import ObservationSpace
 
@@ -63,6 +64,7 @@ class Env(gym.Env):
         """
         super().__init__()
         self.seed = seed
+        self._capture = ScalarCapture(seed)
         self.skip_trivial = True
         self.enable_profiler = enable_profiler
         self.enable_behavior_tracking = enable_behavior_tracking
@@ -78,6 +80,10 @@ class Env(gym.Env):
         )
 
         # For when we need manabot.ObservationSpace
+        self.failure_context = self._capture.context
+        self._capture.identities["input_shapes"] = {
+            name: list(shape) for name, shape in obs_space.shapes.items()
+        }
         self.obs_space: ObservationSpace = obs_space
         # Type: gymnasium.Space
         self.observation_space = self.obs_space
@@ -113,11 +119,12 @@ class Env(gym.Env):
         if seed is not None and seed != self.seed:
             self.seed = seed
             self._engine.set_seed(seed)
+            self._capture.seed = seed
 
         match = self.match if not options else options.get("match", self.match)
 
         # Get the initial managym observation
-        raw_obs, raw_info = self._engine.reset(match.to_rust())
+        raw_obs, raw_info = self._capture.reset(self._engine, match.to_rust())
         self.match = match
         self._last_obs = raw_obs
         # Encode to our dictionary-of-numpy format
@@ -141,7 +148,9 @@ class Env(gym.Env):
             info: Additional debug info from managym, e.g. partial game logs.
         """
         log = getLogger(__name__).getChild("step")
-        raw_obs, raw_reward, terminated, truncated, info = self._engine.step(action)
+        raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
+            self._engine, action
+        )
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         info["true_terminated"] = terminated
         info["true_truncated"] = truncated
@@ -153,7 +162,7 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
-                raw_obs, _ = self._engine.reset(self.match.to_rust())
+                raw_obs, _ = self._capture.reset(self._engine, self.match.to_rust())
                 terminated = False
                 truncated = False
 
@@ -173,7 +182,9 @@ class Env(gym.Env):
 
         try:
             transition_json, raw_obs, raw_reward, terminated, truncated, info = (
-                self._engine.step_semantic_command(command.to_json())
+                self._capture.command(
+                    self._engine, command.to_json(), transition_only=False
+                )
             )
         except Exception as error:  # managym.AgentError
             message = str(error)
@@ -197,6 +208,26 @@ class Env(gym.Env):
             info,
             transition,
         )
+
+    def rollout_pool(
+        self, worlds: int, rollouts: int, seed: int, max_steps: int
+    ) -> CapturedSearch:
+        return CapturedSearch(
+            self._capture,
+            self._engine,
+            "rollout_pool",
+            [worlds, rollouts, seed, max_steps],
+        )
+
+    def flat_mc_scores(
+        self, worlds: int, rollouts: int, seed: int, max_steps: int
+    ) -> tuple[list[float], int, int]:
+        return CapturedSearch(
+            self._capture,
+            self._engine,
+            "flat_mc_scores",
+            [worlds, rollouts, seed, max_steps],
+        ).native
 
     def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
         """Re-sync after managym scenario_* state injection.

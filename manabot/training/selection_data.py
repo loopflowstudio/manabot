@@ -8,21 +8,23 @@ Rows are ordered by game, seat, then decision for same-viewer estimators.
 
 from collections.abc import Callable
 import json
+import os
 from pathlib import Path
 from typing import Literal
 
+from managym.decision import Command, DecisionFrame, Observation
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match
+from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.model.agent import Agent
 from manabot.model.world import validate_agent_setup
 from manabot.training.models import SelectionGameSpec, Strict
 from manabot.training.references import reference_distribution
 import managym
-from managym.decision import Command, DecisionFrame, Observation
 
 
 class FrozenRecord(Strict):
@@ -100,10 +102,17 @@ def collect_selection_game(
         )
     validate_agent_setup(agent, match.to_rust())
     env = managym.Env(seed=spec.seed, skip_trivial=True)
-    raw, _ = env.reset(match.to_rust())
+    capture = ScalarCapture(spec.seed, True)
+    raw, _ = capture.reset(env, match.to_rust())
     generator = torch.Generator().manual_seed(spec.action_seed)
     rows: list[SelectionDecision] = []
-    with path.open("x") as output:
+    capture.context["receipt_path"] = str(path)
+    with (
+        capture.guard(),
+        os.fdopen(
+            os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
+        ) as output,
+    ):
         output.write(
             json.dumps(
                 {
@@ -154,7 +163,7 @@ def collect_selection_game(
                 frame.revision,
                 int(frame.offers[action]["id"]),
             )
-            transition = env.execute_semantic_command_json(command.to_json())
+            transition = capture.command(env, command.to_json())
             output.write(
                 json.dumps(
                     {

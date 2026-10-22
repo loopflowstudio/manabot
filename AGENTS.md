@@ -129,6 +129,10 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+- Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
+  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  full vector diagnostic payloads in evidence.
 - Experiment results under `experiments/data/` live in the artifact store. Before
   committing new results or merging a branch that tracked them, publish their
   bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,

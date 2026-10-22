@@ -32,6 +32,7 @@ from manabot.env import (
     Reward,
     VectorEnv,
 )
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_receipt
@@ -107,7 +108,20 @@ class Trainer:
 
     def train(self) -> None:
         # Use context manager for root timer
-        with self.experiment, self.profiler.track("train"):
+        update = 0
+        failure_scope = CaptureScope(
+            self.experiment.runs_dir / "failures",
+            lambda: {
+                "transitions": self.global_step,
+                "update": update,
+                "elapsed_seconds": time.time() - self.start_time,
+            },
+        )
+        with (
+            self.experiment,
+            self.profiler.track("train"),
+            capture_scope(failure_scope),
+        ):
             hypers = self.hypers
             env = self.env
             device = self.experiment.device
