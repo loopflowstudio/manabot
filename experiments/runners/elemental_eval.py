@@ -18,10 +18,10 @@ from etude.eval.records import Agent, Match, RoundRobin, digest
 from etude.jobs import evaluation
 from etude.launch.client import launch
 from etude.launch.records import Runtime
+from etude.reports import Evaluation, record
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef, Clock
 from etude.run.storage import DirectoryStorage
-from etude.reports import Evaluation, record
 from etude.train.records import CheckpointRecord
 
 
