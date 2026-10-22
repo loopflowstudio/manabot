@@ -124,11 +124,11 @@
     },
     "terminals": [
       {
-        "id": "terminal-ur-lessons-loss",
+        "id": "terminal-ur-lessons-win",
         "scenario_id": "ur-lessons-seed-51"
       },
       {
-        "id": "terminal-gw-allies-win",
+        "id": "terminal-gw-allies-loss",
         "scenario_id": "gw-prompts-seed-62"
       }
     ]
