@@ -875,5 +875,259 @@
       "Four monitor cases: random/explicit-matrix outcomes, checkpoint-admission failure persistence, saved dashboard"
     ],
     "evidence_scope": "Earlier bounded consumer/debug/conformance receipts remain historical; this adds current canonical protocol and full learnability evidence only. No full conformance or strength certification."
+  },
+  "integrated_runtime_validation": {
+    "base_revision": "dae5b8f9e99cf5705ac0d843a7d5924fcdba855c",
+    "tested_working_changes": [
+      "managym/src/flow/target_authority_tests.rs",
+      "tests/academy/test_study_branch.py"
+    ],
+    "source_scope": "All tracked .py/.rs files under academy, manabot and managym/src, sorted by path; SHA256 updates path bytes then contents. Final report-only edits do not change this digest.",
+    "runtime_source_sha256": "67d4885d18c547fbda32759b4b71dead99ae3eff1b03d6e9d8fd3ea0c6ee2ef4",
+    "native_sha256": "8117551ab85c998e3374dc2cafb3d1eaacab9d05aee9863fcc261a6b5350b82d",
+    "receipts": [
+      {
+        "label": "integrated-study",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_study_runtime.py::test_semantic_retry_supports_land_and_rejects_drift",
+          "tests/academy/test_study_branch.py",
+          "-vv",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.006,
+        "exit_code": 124,
+        "log": "scratch/integrated-study.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-study-branch-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv",
+          "--durations=7",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 69.178,
+        "exit_code": 0,
+        "log": "scratch/integrated-study-branch-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-monitor",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv",
+          "--durations=4",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 26.094,
+        "exit_code": 0,
+        "log": "scratch/integrated-monitor.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-monitor-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 14.831,
+        "exit_code": 0,
+        "log": "scratch/integrated-monitor-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-target-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 19.402,
+        "exit_code": 0,
+        "log": "scratch/integrated-target-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "integrated-native-wheel",
+        "command": [
+          "uv",
+          "run",
+          "maturin",
+          "build",
+          "--release",
+          "-i",
+          ".venv/bin/python",
+          "-m",
+          "managym/Cargo.toml",
+          "-o",
+          "managym/target/wheels"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 76.619,
+        "exit_code": 0,
+        "log": "scratch/integrated-native-wheel.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": false
+      },
+      {
+        "label": "integrated-native-import",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "scratch/install_native.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.338,
+        "exit_code": 0,
+        "log": "scratch/integrated-native-import.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-protocol",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 2.69,
+        "exit_code": 0,
+        "log": "scratch/integrated-protocol.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-inventory",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/infra/test_rules_inventory.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 1.414,
+        "exit_code": 0,
+        "log": "scratch/integrated-inventory.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      }
+    ],
+    "results": {
+      "native_debug": "10 passed; one pre-existing known trigger-order proposal ignored",
+      "study_runtime": "Semantic retry passed in the initial bounded run; the other three unchanged cases retain their prior passing receipts.",
+      "study_branch": "All 7 cases passed after fixture repair, 69.178s including startup.",
+      "monitor": "All 20 cases passed across two nonoverlapping bounded runs, 40.925s total.",
+      "dependency_blocked_play_and_study_protocol": "17 passed against rebuilt extension; ed2 pre-command independence and command-bound erd1 preserved.",
+      "inventory": "6 integrity tests passed; exact pinned source reconstruction has 3322 entries: 3 implemented, 30 partial, 2 missing, 322 not_applicable, 2965 unknown."
+    },
+    "failure_diagnosis": {
+      "receipt": "integrated-study",
+      "outcome": "120s limit expired after semantic retry and first branch case passed, while creating the next complete-match fixture.",
+      "stack_sample": "At 45s the first branch fixture was in academy/attempts.py:save, called by GameSession._experience_frame -> _persist_attempt. It later passed before the total limit expired.",
+      "repair": "Reuse returned authoritative frames and enable existing recorded priority automation in test_study_branch._completed_session. Same seed, decks, complete-match requirement and assertions; no production persistence or rule change.",
+      "limit": "This identifies work consuming the new fixture run, not the cause of every older timeout."
+    },
+    "learnability": {
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "-m",
+        "manabot.verify.learnability",
+        "--out",
+        ".runs/learnability/rules-targeting-w12-integrated"
+      ],
+      "result": "learnability-w12-integrated.json",
+      "status": "passed",
+      "wall_seconds": 43.492039625009056,
+      "cpu_seconds": 42.239298000000005,
+      "source_digest": "443a9867f4672f31c65db7cb99514564e2f6d06d6245d76d5281b05fe27db191",
+      "capacity_assertions": 144,
+      "ppo_transitions": 65536,
+      "after": 1.0,
+      "no_update": 0.640625,
+      "limits": "Unchanged 480s total / 300s PPO watchdogs, capacity assertions and production PPO recipe."
+    },
+    "reused_evidence": {
+      "reference": "202416a8",
+      "reason": "git diff 202416a8 HEAD -- academy managym/src manabot/arena tests/academy tests/arena is empty. This follow-up changes only test code plus audit artifacts. Native production rules, Academy consumers, arena owners and frozen fixtures are unchanged. Upstream monitor rename was inspected and all monitor cases rerun; collector integration is covered by fresh full learnability.",
+      "receipts": [
+        "6 debug w12 conformance checks",
+        "11 arena admission cases",
+        "8 Command/recovery cases",
+        "4 decision-surface cases",
+        "3 Study runtime cases"
+      ],
+      "selection": ".github/workflows/ci.yml and semantic_conformance_tests.rs select semantic-kernel-w12-v1; no new runtime identity in this test-only follow-up."
+    },
+    "additional_checks": [
+      "cargo fmt --manifest-path managym/Cargo.toml -- --check passed",
+      "ruff check tests/academy/test_study_branch.py passed",
+      "git diff --check passed",
+      "git diff --exit-code 202416a8 -- conformance/semantic-kernel-w11-v1 protocol/fixtures academy/fixtures/*w11.json passed"
+    ],
+    "incremental_cost": {
+      "timed_command_seconds_sum": 374.064,
+      "paid_compute_dollars": 0,
+      "scope": "Measured command durations including the retained timeout and native build, not session wall time. Read-only inspection, formatting, lint and report edits not timed. No CI topology change or measured sharding claim."
+    },
+    "acceptance": "Targeting increment acceptance closed using fresh checks and explicitly justified unchanged-source receipts. Whole-rules audit unfinished; no publication, merge or Task completion."
   }
 }

@@ -17,7 +17,19 @@ This plan orders the remaining work. The existing draft-review boundary still
 applies: publication, merge and Task completion require their selected delivery
 step; rewriting this plan starts none of them.
 
-## 1. Finish acceptance of the targeting repair
+## Delete — do not maintain
+
+- Already removed: independent stack-target mana-value comparison in
+  `stack_spell_targets` and permanent-wording-local hexproof guards. Preserve
+  candidate order, selection/resolution rechecks and frozen w11 evidence.
+- Remove the Study branch fixture's redundant `_experience_frame` calls and
+  manual priority-pass setup. Use returned authoritative frames and configured,
+  recorded priority automation; preserve complete-match creation, all seven
+  branch assertions, Learn coverage, viewer isolation and exact return.
+- No replacement target representation or broad rules redesign is selected in
+  this increment. Stack-spell incarnation reachability needs adjudication first.
+
+## 1. Targeting repair acceptance — closed for this increment
 
 The highest-value code change already exists: `target_is_legal` applies live
 battlefield presence and opposing hexproof before target-wording restrictions.
@@ -26,37 +38,35 @@ responses can invalidate targets; mixed legal targets still resolve; departing
 and returning objects do not inherit old targets. The independent stack-target
 mana-value comparison is removed. Keep this repair as the core of delivery.
 
-Close these concrete acceptance gaps on the final integrated source:
+The integrated diagnostic passes in 43.5s with 144 capacity assertions and
+reward-driven PPO/checkpoint reload (65,536 transitions, after 1.0 versus
+no-update 0.640625), using unchanged 480s total / 300s PPO limits. Semantic
+retry, all seven Study branch cases, all 20 monitor cases and 17
+dependency-blocked play/protocol cases pass. Debug targeting is 10 passed,
+with the separate known trigger-order proposal ignored. The rebuilt w12
+extension was installed atomically. No production source changed in this
+follow-up; existing conformance, arena, recovery and decision-surface receipts
+remain applicable to their unchanged owners and fixtures.
 
-- Run the full learnability diagnostic after the upstream collector integration.
-  The 99.6s canonical pass predates that integration and remains historical
-  evidence. Keep the earlier collector timeout too; contention is plausible,
-  not a proved cause. Preserve the existing 480s total / 300s PPO watchdogs.
-- Finish Study semantic retry, all seven Study branch cases, and four monitor
-  cases: random/explicit-matrix outcomes, admission-failure persistence and the
-  saved dashboard. Inspect the retained timeout logs first and use focused,
-  bounded invocations. Partial suites are not passes. If a check still cannot
-  finish, identify the exact check and cause; “gate/CI owns it” is not closure.
-- Verify the final w12 native build, conformance selection, arena admission and
-  Command/recovery evidence against the delivered source. Reuse receipts only
-  where their tested code and dependencies remain applicable. Do not rerun
-  unrelated suites for prose changes.
-
-**Done when:** affected behavior and required current-world checks have passing
-receipts tied to the final source, or a specific unresolved acceptance failure
-is plainly blocking delivery. Preserve all failures and frozen w11 evidence.
-No assertion weakening, timeout inflation or speculative training repair.
+The fresh branch timeout was in complete-match setup/persistence; using
+returned frames and recorded priority automation closes it in 69.2s without
+changing assertions. All failures and frozen w11 evidence remain. The earlier
+collector timeout cause remains unproved; no training repair was made.
 
 ## 2. Turn the inventory into a useful implementation audit
 
 The main shortfall is evidence depth: 3,166 numbered rules/subrules plus 156
-headings are indexed, but 2,970 entries remain unknown. Generic family triage
+headings are indexed, but 2,965 entries remain unknown. Generic family triage
 cannot satisfy the original per-rule request. Deepen the audit in this order:
 
 1. **Targets and resolution (CR 115, 400.7, 608, 702.11).** Finish the reviewed
    obligations around this repair: each supported target form, restrictions,
    response-time changes, mixed/all-invalid targets and object identity. Inspect
-   the unresolved `Target::StackSpell(CardId)` incarnation boundary explicitly.
+   the remaining exceptions. The follow-up individually reviews 115.1c/d,
+   115.2/3/6 and refines 400.7/608.2b. Stack CardId loses incarnation, but the
+   new ordinary recast/LIFO witness has no stale-target effect. General
+   retargeting and activated multi-target/source-exclusion/whole-object
+   invalidation remain outside the proven subset.
 2. **Triggers and state-based actions (CR 603, 704).** Establish which supported
    event/stack/ordering obligations are implemented and tested. Retain the
    controller-order counterexample: at 2 life, gain-2/damage-2 ordering changes
@@ -111,7 +121,7 @@ Refresh the concise review guide, coverage map and HTML walkthrough for the
 final diff. Lead with the targeting behavior, reviewed rule families, corrected
 citations and remaining gaps. Keep detailed inventory/receipts behind links.
 Separate authored change cost from generated evidence: the last recorded charge
-is 4,054 lines against the approximate 10k ceiling. Fresh conformance receipts
+is 4,132 lines against the approximate 10k ceiling. Fresh conformance receipts
 are evidence; runtime demo fixtures are charged product inputs. Preserve the
 original pins and report observed incremental validation cost and checks not run.
 
@@ -123,7 +133,7 @@ original substantive audit obligation remains unfinished.
 
 ## Evidence and constraints to carry forward
 
-Current committed reference: `e6585adc2`. Code milestones: inventory/directed
+Implementation base: `dae5b8f9e`. Code milestones: inventory/directed
 checks `2b6e2b1b7`, shared stack-target predicate `c514d11b0`, permanent targeting
 repair and w12 evidence `202416a8`. The latest upstream collector integration
 is included; it is an independent contribution, not this audit's work.
@@ -145,5 +155,8 @@ run with debug assertions and two build jobs; replace rebuilt native extensions
 atomically. Ordinary ceilings remain 900s cold Rust, 180s warm Rust and 120s
 Python, with the existing full-learnability watchdog noted above.
 
-Check: plan reconciled with current Task status and retained evidence; this edit
-runs no engine tests and launches no Flow.
+Check: `unification-validation.json::integrated_runtime_validation` records
+fresh checks, unchanged-source receipt reuse, timeout diagnosis and cost.
+This increment closes targeting acceptance and deepens five rule entries;
+the remaining whole-rules review stays open. Publication and lifecycle changes
+belong to the selected delivery step.

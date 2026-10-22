@@ -109,10 +109,40 @@ target / all-illegal-target cases in `elemental_cards.rs` already cover the
 requested distinctions. We did not add copies of those tests. The new only-
 target witness adds the otherwise-untargeted effect distinction.
 
-This inspection does not prove every CR 400.7 exception or stack-spell
-leave/reenter case. In particular, `Target::StackSpell(CardId)` deserves a
-separate incarnation review; no claim about its complete identity behavior is
-made here. Current-state checks at selection and resolution must remain.
+The follow-up inspection traces `Target::StackSpell(CardId)` through
+`push_spell_to_stack`, `commit_zone_move`, `find_spell_on_stack_index` and
+resolution. Zone movement advances ObjectRef incarnations, but the target
+retains only CardId, and lookup finds any current spell with that card. This
+representation loses the old/new distinction while the recast spell is present.
+That observation alone does not establish a reachable supported-play defect:
+stack insertion is at the top and resolution is LIFO. The new directed
+`recast_spell_resolves_before_the_old_targeted_ability` witness bounces and
+recasts a targeted Ogre, resolves the new Ogre first, then proves the old
+countering ability neither removes that permanent nor grants its untargeted
+life gain. General non-LIFO insertion, copy/retargeting effects and all CR 400.7
+exceptions remain uncertified. An exact-object migration should be decided
+with a reachable counterexample and its semantic serialization/receipt impact,
+not by adding a second target identity field beside the existing authority.
+
+Five additional individual entries now carry inspected obligations rather than
+family triage: **115.1c, 115.1d, 115.2, 115.3 and 115.6**. The bounded evidence
+covers activated/triggered target timing, explicit target zones, clause-local
+distinctness and optional zero-target selection. Existing Azula and Dai Li
+tests distinguish repeated targets across clauses; Jet excludes duplicates
+within one clause. The new direct-submission witness also rejects the duplicate
+without discarding progress, then accepts reuse in the next clause. These are
+stage-specific responsibilities sharing target metadata, not contradictory
+authorities. Tests cited in `reviews.json` were read; only the commands in the
+validation receipt were executed in this increment.
+
+Two authoring limits remain explicit. Activated selection currently supports
+one target and always excludes the source permanent; this fits Disciple's
+“another” wording but is not CR 115.5's general self-target rule. Activated
+resolution also lacks the spell/trigger whole-object all-invalid gate, although
+current targeted effects recheck locally. Before admitting compound activated
+effects with independent untargeted instructions, prove that an invalid sole
+target suppresses the entire ability. No current-card failure or additional
+world change is claimed from these observations.
 
 ## SBA, replacements and committed movement: duplication not established
 
@@ -170,14 +200,22 @@ Exact checks, failed probes, toolchain failure and incremental cost are in
 required-check weakening, training-recipe/deck/experiment change, publication,
 merge, auto-merge request or Task completion belongs to this increment.
 
-## Canonical runtime validation
+## Integrated runtime validation
 
-The full [w12 diagnostic](learnability-w12-canonical.json) passes in 99.6s
-with all 144 capacity assertions and reward-driven production PPO/checkpoint
-reload. PPO collected 65,536 learner transitions; after/no-update scores are
-1.0/0.640625. The unchanged two-update profile completed in 9.047s; no collector
-defect was reproduced. Earlier low CPU-to-wall utilization suggests contention
-but cannot prove the old timeout cause. No production training code, budget or
-assertion changed. Canonical dependency-blocked play/Study protocol passes
-17 tests. Historical receipts remain unchanged; Study runtime semantic retry,
-seven Study branch cases and four monitor cases remain with gate/CI.
+The full [integrated w12 diagnostic](learnability-w12-integrated.json) passes
+in 43.5s after the upstream collector integration, with all capacity seeds and
+reward-driven production PPO/checkpoint reload. PPO collected 65,536 learner
+transitions; after/no-update scores are 1.0/0.640625. Fresh dependency-blocked
+play/Study protocol passes 17 tests. Semantic retry, all seven Study branch
+cases and all 20 monitor cases now pass across bounded invocations. The branch
+fixture uses returned frames and recorded priority automation; complete-match
+creation and assertions are unchanged. Two additional native witnesses bring
+the debug targeting result to 10 passed, with the separate known trigger-order
+proposal still ignored.
+
+The original collector timeout, the 99.6s historical pass, and the new branch
+fixture timeout remain in the receipts. A stack sample placed the branch
+fixture delay in attempt persistence; that does not establish the cause of
+every historical timeout. No production runtime, training budget, timeout or
+assertion changed in this follow-up. Conformance, arena and other consumer
+receipts are reused only where production source and fixtures remain unchanged.

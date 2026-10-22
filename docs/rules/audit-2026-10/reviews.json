@@ -687,14 +687,16 @@
       "authority": "managym/src/flow/zones.rs:Game::commit_zone_move; managym/src/flow/identity.rs:Game::lookup_current_permanent",
       "tests": [
         "managym/tests/rules/cr_400_identity.rs:object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation",
-        "managym/tests/rules/cr_400_identity.rs:cr_400_7_death_trigger_keeps_source_lki_across_reentry"
+        "managym/tests/rules/cr_400_identity.rs:cr_400_7_death_trigger_keeps_source_lki_across_reentry",
+        "managym/src/flow/target_authority_tests.rs:recast_spell_resolves_before_the_old_targeted_ability"
       ],
-      "gap": "Enumerated 400.7 exceptions need independent review, especially moves involving hidden zones.",
+      "gap": "StackSpell retains CardId, not ObjectRef: the representation cannot distinguish a recast spell while it is on the stack. The directed ordinary LIFO witness resolves the new spell before the old targeted ability and preserves the new permanent. No supported-play stale-target failure is established; non-LIFO placement and all enumerated exceptions remain unproved.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
         "managym/tests/rules/cr_400_identity.rs::object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation",
-        "managym/tests/rules/cr_400_identity.rs::cr_400_7_death_trigger_keeps_source_lki_across_reentry"
+        "managym/tests/rules/cr_400_identity.rs::cr_400_7_death_trigger_keeps_source_lki_across_reentry",
+        "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability"
       ]
     },
     "514.2": {
@@ -954,10 +956,61 @@
         "managym/tests/rules/cr_603_triggers.rs",
         "managym/tests/rules/elemental_cards.rs"
       ],
-      "gap": "Not exhaustive effect/target-clause/identity proof; stack CardId incarnation review remains open.",
+      "gap": "Not exhaustive effect/target-clause/identity proof. Stack CardId loses incarnation, but the directed bounce/recast sequence resolves the new spell before the old ability and has no stale-target effect. Activated abilities lack the spell/trigger whole-object all-invalid gate; current targeted effects recheck locally, so a multi-effect activated ability needs a separate witness before expansion.",
       "anchors": [
-        "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life"
+        "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life",
+        "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability"
       ]
+    },
+    "115.1c": {
+      "status": "partial",
+      "scope": "Authored targeted activated abilities choose a target before payment and stack placement; Deserter's Disciple retains its independent target after the source leaves.",
+      "authority": "managym/src/flow/play.rs:Game::activate_ability_action, Game::choose_activated_target, Game::push_activated_ability",
+      "dispersion": "shared selection and effect metadata",
+      "comments": "Effect::target_spec defines the authored subset. The blanket activation-source exclusion is not documented as a general MTG rule and must not be generalized beyond current cards.",
+      "tests": ["managym/tests/rules/elemental_cards.rs"],
+      "anchors": ["managym/tests/rules/elemental_cards.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure"],
+      "gap": "Only one activated target is supported by PendingChoice::ActivatedTarget. Source exclusion fits Disciple's 'another' wording but is broader than CR 115.5, which forbids the ability targeting itself on the stack, not its source permanent. General targeted activations need review."
+    },
+    "115.1d": {
+      "status": "partial",
+      "scope": "Triggered targets are selected during flush before placement, from explicit effect target requirements; illegal submitted targets are rejected.",
+      "authority": "managym/src/flow/triggers.rs:Game::flush_triggers, Game::choose_trigger_target, Game::place_triggered_ability_on_stack",
+      "dispersion": "single trigger selection path",
+      "comments": "Trigger source snapshot comment explains committed-event ownership; stack placement and target selection are separate from event matching.",
+      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/cr_603_triggers.rs"],
+      "anchors": ["managym/src/flow/target_authority_tests.rs::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell", "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"],
+      "gap": "Authored typed effects only; delayed/context-dependent targeting and each keyword's implicit target wording are not exhaustively reviewed. Controller ordering remains the separate CR 603.3b defect."
+    },
+    "115.2": {
+      "status": "partial",
+      "scope": "TargetSpec explicitly distinguishes battlefield permanents, players, stack spells and owner graveyard objects. Enumeration and rechecks preserve those zone restrictions for supported forms.",
+      "authority": "managym/src/state/ability.rs:TargetSpec; managym/src/flow/triggers.rs:Game::legal_targets_for_spec; managym/src/flow/resolution.rs:Game::target_is_legal",
+      "dispersion": "shared legality, typed enumeration",
+      "comments": "Target legality documents current-state rechecks; graveyard lookup checks exact incarnation. Stack-spell identity limits are separately adjudicated in unification.md.",
+      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/elemental_cards.rs"],
+      "anchors": ["managym/src/flow/target_authority_tests.rs::stack_target_mana_value_boundaries_have_explicit_expected_choices", "managym/tests/rules/elemental_cards.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"],
+      "gap": "No targets for stack abilities, exile or arbitrary graveyards. Missing target forms are unsupported mechanics, not evidence that ordinary permanent targeting bypasses zones."
+    },
+    "115.3": {
+      "status": "partial",
+      "scope": "Spell and trigger selection track requirement indices: duplicates are excluded within a clause and allowed across clauses. Direct repeated trigger submission fails without erasing prior selections.",
+      "authority": "managym/src/flow/play.rs:Game::remaining_legal_targets; managym/src/flow/triggers.rs:Game::choose_trigger_target, Game::flush_triggers",
+      "dispersion": "stage-specific selection over shared target requirements",
+      "comments": "remaining_legal_targets explicitly documents clause-local distinctness; effect_target_requirements documents independent clauses versus shared 'that target' effects.",
+      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/elemental_cards.rs"],
+      "anchors": ["managym/src/flow/target_authority_tests.rs::trigger_target_distinctness_is_enforced_per_clause_at_submission", "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object", "managym/tests/rules/elemental_cards.rs::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters", "managym/tests/rules/elemental_cards.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"],
+      "gap": "General retargeting/new-target effects are not implemented by these paths; multi-target activated abilities are not covered. Distinct stages are not duplicate definitions to collapse."
+    },
+    "115.6": {
+      "status": "partial",
+      "scope": "TargetRequirement min=0 permits declining optional targets. Curious Farm Animals can choose zero, pay sacrifice, and resolve its separate death-trigger life gain; Allies at Last can decline its first target clause.",
+      "authority": "managym/src/state/ability.rs:TargetRequirement; managym/src/flow/play.rs:Game::advance_target_selection, Game::decline_activated_target",
+      "dispersion": "typed requirement with stage-specific continuations",
+      "comments": "TargetRequirement explicitly documents min=0 as 'up to'; continuation code preserves costs after declining.",
+      "tests": ["managym/tests/rules/sacrifice_cards.rs", "managym/tests/rules/stage2_cards.rs"],
+      "anchors": ["managym/tests/rules/sacrifice_cards.rs::farm_animals_can_decline_target_and_still_pay_sacrifice", "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal"],
+      "gap": "These witnesses establish zero-target execution, not every downstream query distinguishing 'requires targets' from 'is targeted', nor general target-changing effects."
     },
     "702.11b": {
       "status": "partial",

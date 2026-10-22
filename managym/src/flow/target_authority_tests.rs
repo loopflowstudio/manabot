@@ -170,6 +170,72 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
 }
 
 #[test]
+fn recast_spell_resolves_before_the_old_targeted_ability() {
+    let (mut game, source, ogre, _, _) = fixture();
+    let original = game.current_object_ref(ogre).unwrap();
+    game.state.pending_triggers.push(trigger(
+        source,
+        vec![
+            Effect::CounterSpell {
+                target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+            },
+            Effect::GainLife { amount: 7 },
+        ],
+        0,
+    ));
+    assert!(game.flush_triggers().is_some());
+    game.choose_trigger_target(PlayerId(0), Target::StackSpell(ogre))
+        .unwrap();
+    assert!(game.flush_triggers().is_none());
+    game.move_card(ogre, ZoneType::Hand);
+    game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], false);
+    assert_ne!(game.current_object_ref(ogre).unwrap(), original);
+
+    // CR 405.2 / 608.2b: the recast object is above the older ability, so
+    // resolves first. CardId-only targets remain an identity limitation;
+    // this ordinary LIFO sequence does not expose a stale-target effect.
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Battlefield));
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Battlefield));
+    assert_eq!(game.state.players[0].life, 20);
+}
+
+#[test]
+fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
+    let (mut game, source, _, first, second) = fixture();
+    let spec = TargetSpec::Permanent {
+        predicate: CardPredicate::default(),
+    };
+    game.state.pending_triggers.push(trigger(
+        source,
+        vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement::up_to(2, spec.clone()),
+                effects: vec![],
+            },
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(spec),
+                effects: vec![],
+            },
+            Effect::GainLife { amount: 7 },
+        ],
+        0,
+    ));
+    assert!(game.flush_triggers().is_some());
+    game.choose_trigger_target(PlayerId(0), first).unwrap();
+    // CR 115.3: resubmitting the same target in one clause is illegal even
+    // when bypassing the offered candidate list; rejection preserves progress.
+    assert!(game.choose_trigger_target(PlayerId(0), first).is_err());
+    game.choose_trigger_target(PlayerId(0), second).unwrap();
+    // The next instance of "target" may choose the same object again.
+    game.choose_trigger_target(PlayerId(0), first).unwrap();
+    assert!(game.flush_triggers().is_none());
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.players[0].life, 27);
+}
+
+#[test]
 #[ignore = "CR 603.3b missing same-controller trigger-order decision; proposal only"]
 fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();

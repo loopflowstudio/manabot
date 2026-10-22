@@ -10,3 +10,16 @@
 - A new runtime manifest also requires fresh play demo prefixes: old w11 demos correctly reject w12. Record new w12 fixtures through the ordinary Command path and move only runtime selectors; keep old fixture bytes frozen. Full-match consumer/arena checks that exceed the retained 120-second ceiling remain open for gate/CI, without weakening their assertions.
 
 - Collector diagnosis (2026-10-21 local): inspect the unchanged production PPO/collector before treating elapsed wall time as a code defect. The failed run used 76.2 CPU seconds over 384.3 wall seconds; a two-update profile now completes in 9.047 seconds. Host scheduling/contention is a hypothesis, not a proved root cause. Keep budgets and acceptance fixed; retain prior timeout evidence and make only a demonstrated repair.
+
+- Study branch validation (2026-10-22): a new 120s run passed semantic retry
+  and the first branch case, then timed out during another complete-match
+  fixture. The 45s stack sample was in SQLite attempt persistence, not fork
+  execution. Reuse returned frames and enable existing recorded priority
+  automation in that fixture; retain seed/decks, complete-match creation and
+  every branch assertion. All seven cases then passed in 69.2s without changing
+  production code, limits, or frozen evidence.
+- Stack-target review (2026-10-22): CardId cannot distinguish stack
+  incarnations, but ordinary top insertion/LIFO resolves a recast spell before
+  the old targeted ability. Retain this bounded passing witness and report the
+  representation limitation without claiming a demonstrated supported-play
+  defect or starting an unapproved target ABI migration.

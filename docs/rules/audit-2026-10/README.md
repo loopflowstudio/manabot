@@ -73,31 +73,34 @@ legitimate rechecks have not been collapsed into a universal rules engine.
 
 ## Validation limits
 
-The w12 repair passes 8 native targeting witnesses and 6 debug conformance
+The w12 repair passes 10 native targeting witnesses and 6 debug conformance
 checks over a fresh 14-case / 3,491-Command corpus. Dependency-blocked play/Study
 protocol (17), Command/recovery (8), repaired decision surface (4), and tooling/
 package-boundary (44) tests pass. All 11 arena admission cases passed across
 bounded chunks. Frozen w11 and protocol fixture bytes are unchanged.
 
-The canonical full [learnability diagnostic](learnability-w12-canonical.json)
-now passes in 99.6s, including all three capacity seeds and reward-driven PPO
-with checkpoint reload (65,536 transitions; after 1.0 versus no-update 0.640625).
-The focused canonical dependency-blocked play/Study protocol check passes all
-17 tests. Earlier debug, conformance and consumer counts above are retained
-historical receipts, not newly rerun suites after the packaging merge.
+The full [integrated learnability diagnostic](learnability-w12-integrated.json)
+passes in 43.5s after the upstream `07ddef0e` collector integration. It includes
+all three capacity seeds and reward-driven PPO with checkpoint reload (65,536
+transitions; after 1.0 versus no-update 0.640625). The positive control retains
+its original one-seat recipe and 480s total / 300s PPO watchdogs. The earlier
+[99.6s pass](learnability-w12-canonical.json) remains historical evidence.
+Fresh dependency-blocked play/Study protocol checks pass all 17 tests against
+the rebuilt native extension. Native targeting, the integrated diagnostic and
+these protocol results are fresh; conformance, arena, Command/recovery and
+decision-surface counts above reuse receipts whose production sources are
+unchanged. They are not newly run full suites.
 
-Upstream `07ddef0e`, merged after that diagnostic, changes the shared collector
-for both-seat learning and updates monitoring. The frozen-opponent positive
-control retains one-seat collection and its original recipe. The retained full
-diagnostic is historical draft evidence; current-head full validation remains
-with gate/CI alongside the unfinished checks below.
-
-Acceptance remains incomplete: Study semantic retry, Study branch and four
-monitor cases remain with gate/CI after bounded 120-second timeouts. Partial
-suites are not passes. The earlier collector deadline failure remains in the
-[validation receipts](unification-validation.json). A bounded two-update profile
-completed normally; no collector defect was reproduced. Host contention is
-plausible but unproved. No training budgets, timeouts or assertions changed.
+Study semantic retry, all seven Study branch cases and the four outstanding
+monitor cases now pass. The branch fixture had been repeatedly persisting a
+full growing replay while manually passing priority. Reusing returned frames
+and enabling configured, recorded priority automation completes its seven
+cases in 69.2s; all existing assertions and complete-match creation remain.
+The four monitor cases pass in 26.1s; the other 16 also pass in a separate
+14.8s bounded invocation after reviewing the upstream monitor rename. Earlier timeouts remain in the
+[validation receipts](unification-validation.json), including a new bounded
+failure with a persistence stack sample. No production persistence behavior,
+training budgets, timeout limits or assertions changed.
 
 ## Ownership, checks and scope
 
@@ -120,6 +123,10 @@ Task completion is selected. The durable draft stops for review.
 The [original evidence](evidence.md), [source pin](source.json),
 [rule index](index.jsonl), [authored reviews](reviews.json),
 [original validation](validation.json) and [CI analysis](ci.md) remain available.
-The four individually reviewed target-related entries receive scoped partial
-findings in this increment; unknown rules do not inherit those results.
+Five more target entries (115.1c/d, 115.2/3/6) now have individual scoped
+findings, bringing the index to 30 partial, 3 implemented, 2 missing,
+322 not applicable and 2,965 unknown entries. The inventory is complete;
+the substantive whole-rules audit remains unfinished. Unknown rules do not
+inherit these results. Stack CardId loses incarnation, but the new ordinary
+recast/LIFO witness does not expose a supported-play stale-target effect.
 The original report's counts describe its original snapshot.
