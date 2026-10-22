@@ -21,7 +21,7 @@ else
       scripts/audit_rules.py|docs/rules/audit-2026-10/*)
         select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
-      content/*|conformance/*|managym/src/*|managym/*.py|managym/*.pyi)
+      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/*.py|managym/*.pyi)
         all ;;
       docs/rules/elemental/decks.json|docs/rules/elemental/cube-snapshot.csv) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;

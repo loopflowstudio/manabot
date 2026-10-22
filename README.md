@@ -93,6 +93,12 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
+## Versioned installs
+
+Versioned PyPI release preparation, platform support, CPU/CUDA installation and
+maintainer publishing are described in [the release guide](docs/releases.md).
+The first planned release is 0.2.0; the source workflow below remains available.
+
 ## Quickstart
 
 You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.

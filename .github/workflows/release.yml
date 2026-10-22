@@ -1,0 +1,159 @@
+name: Release packages
+
+on:
+  pull_request:
+    paths:
+      - 'manabot/**'
+      - 'managym/**'
+      - 'academy/**'
+      - 'content/**'
+      - 'scripts/release/**'
+      - 'tests/infra/test_release.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/release.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - name: Validate versions and release tag
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$IS_TAG" = true ]; then
+            git merge-base --is-ancestor HEAD origin/main
+            uv run --no-project python scripts/release/check.py --tag "$RELEASE_TAG" --unpublished
+          else
+            uv run --no-project python scripts/release/check.py
+          fi
+      - name: Check release tooling
+        run: uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
+
+  package:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: macos-15
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv run --no-project python scripts/release/prepare.py staging
+      - name: Build Manabot wheel with bundled engine from the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: '2_28'
+          args: --release --sdist --locked -m staging/managym/Cargo.toml -i python3.12 --out dist
+      - run: uv run --no-project --with twine twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manabot-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: matrix.target == 'x86_64'
+        with:
+          name: manabot-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  install:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: macos-15
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: manabot-${{ matrix.target }}
+          path: dist
+      - name: Install wheel and exercise CPU training outside the checkout
+        shell: bash
+        run: |
+          uv venv --python 3.12 "$RUNNER_TEMP/release-venv"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/manabot-*.whl
+          uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
+          cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
+          cd "$RUNNER_TEMP"
+          export PATH="$RUNNER_TEMP/release-venv/bin:$PATH"
+          unset PYTHONPATH
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" smoke.py
+      - name: Verify optional API and report dependencies
+        shell: bash
+        run: |
+          wheel=$(echo "$GITHUB_WORKSPACE"/dist/manabot-*.whl)
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation]"
+          cd "$RUNNER_TEMP"
+          unset PYTHONPATH
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.training.experiment_report; import manabot.training.time_sources'
+          uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
+
+  artifacts:
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: manabot-*
+          merge-multiple: true
+          path: dist
+      - run: uv run --no-project python scripts/release/validate.py dist --complete
+      - run: uv run --no-project --with twine twine check --strict dist/*
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: artifacts
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/manabot
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: manabot-*
+          merge-multiple: true
+          path: dist
+      - name: Publish Manabot with PyPI attestations
+        uses: pypa/gh-action-pypi-publish@release/v1

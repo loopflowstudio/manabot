@@ -78,3 +78,15 @@ def test_manabot_entry_points_import_without_academy() -> None:
         cwd=REPO_ROOT,
         check=True,
     )
+
+
+def test_managym_legacy_import_is_the_bundled_engine() -> None:
+    from managym.decision import Command as LegacyCommand
+
+    from manabot import managym as engine
+    from manabot.managym.decision import Command
+    import managym as legacy
+
+    assert legacy is engine
+    assert LegacyCommand is Command
+    assert Path(engine._managym.__file__).parent == REPO_ROOT / "manabot/managym"
