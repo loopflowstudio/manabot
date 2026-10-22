@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "id": "structured-reference",
+  "world": "w4",
+  "match": {
+    "hero": "arena-seat-0",
+    "villain": "arena-seat-1",
+    "hero_deck": {
+      "First-Time Flyer": 2,
+      "It'll Quench Ya!": 2,
+      "Pop Quiz": 2,
+      "Tiger-Seal": 2,
+      "Accumulate Wisdom": 2,
+      "Igneous Inspiration": 2,
+      "Firebending Lesson": 4,
+      "Forecasting Fortune Teller": 1,
+      "Island": 9,
+      "Fire Nation Cadets": 2,
+      "Mountain": 8,
+      "Otter-Penguin": 2,
+      "Dragonfly Swarm": 1,
+      "Divide by Zero": 2
+    },
+    "villain_deck": {
+      "South Pole Voyager": 1,
+      "Allies at Last": 2,
+      "Earth Kingdom Jailer": 2,
+      "Fancy Footwork": 2,
+      "Plains": 9,
+      "White Lotus Reinforcements": 2,
+      "Yip Yip!": 1,
+      "Invasion Reinforcements": 2,
+      "Earth King's Lieutenant": 2,
+      "Badgermole Cub": 2,
+      "Water Tribe Rallier": 2,
+      "Compassionate Healer": 2,
+      "Forest": 8,
+      "Kyoshi Warriors": 2,
+      "Suki, Kyoshi Warrior": 1
+    },
+    "hero_sideboard": {
+      "Firebending Lesson": 1,
+      "Accumulate Wisdom": 1,
+      "It'll Quench Ya!": 1
+    },
+    "villain_sideboard": {
+      "Fancy Footwork": 1,
+      "Yip Yip!": 1
+    }
+  },
+  "observation": {
+    "max_cards_per_player": 60,
+    "max_permanents_per_player": 40,
+    "max_actions": 64,
+    "max_focus_objects": 2,
+    "max_events": 32
+  },
+  "agent": {
+    "hidden_dim": 64,
+    "num_attention_heads": 4,
+    "attention_on": true,
+    "belief_count_buckets": 0,
+    "belief_card_vocab_size": 0,
+    "belief_owner_role_vocab_size": 2,
+    "belief_hidden_zone_vocab_size": 7,
+    "semantic_pack": "ur-lessons-vs-gw-allies"
+  },
+  "stages": [
+    {
+      "id": "policy-0",
+      "execution": {
+        "device": "cpu",
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_self_play",
+      "initial": null,
+      "updates": 2,
+      "streams": 4,
+      "transitions": 64,
+      "learning": {
+        "gamma": 1.0,
+        "policy_lambda": 0.95,
+        "value_lambda": 0.95,
+        "retained_fraction": 1.0,
+        "min_advantage": 0.0,
+        "reference": "action_type_uniform",
+        "learning_rate": {
+          "initial": 0.00025,
+          "decay": 0.0,
+          "power": 1.0
+        },
+        "tau": {
+          "initial": 0.01,
+          "decay": 0.0,
+          "power": 1.0
+        },
+        "collection_kl": 0.1,
+        "clip": 0.1,
+        "value_weight": 0.5,
+        "max_grad_norm": 0.5,
+        "epochs": 4,
+        "minibatches": 4,
+        "ema": null
+      }
+    },
+    {
+      "id": "policy-1",
+      "execution": {
+        "device": "cpu",
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_self_play",
+      "initial": "policy-0",
+      "updates": 2,
+      "streams": 4,
+      "transitions": 64,
+      "learning": {
+        "gamma": 1.0,
+        "policy_lambda": 0.95,
+        "value_lambda": 0.95,
+        "retained_fraction": 1.0,
+        "min_advantage": 0.0,
+        "reference": "action_type_uniform",
+        "learning_rate": {
+          "initial": 0.00025,
+          "decay": 0.0,
+          "power": 1.0
+        },
+        "tau": {
+          "initial": 0.01,
+          "decay": 0.0,
+          "power": 1.0
+        },
+        "collection_kl": 0.1,
+        "clip": 0.1,
+        "value_weight": 0.5,
+        "max_grad_norm": 0.5,
+        "epochs": 4,
+        "minibatches": 4,
+        "ema": null
+      }
+    }
+  ],
+  "wall_seconds": 900.0,
+  "selection": "last-complete-raw"
+}

@@ -131,6 +131,13 @@ impl PaymentProgress {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
     Payment(PaymentProgress),
+    /// A mana ability's printed upfront cost, before its output exists.
+    ManaUpfront {
+        player: PlayerId,
+        permanent: crate::state::game_object::PermanentId,
+        ability_index: usize,
+        resume: Option<Box<Decision>>,
+    },
     ManaChoice {
         player: PlayerId,
         choices: Vec<crate::state::mana::Mana>,
@@ -215,21 +222,12 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl Decision {
-    pub(crate) fn payment(&self) -> Option<&PaymentProgress> {
-        match self {
-            Self::Payment(payment) => Some(payment),
-            Self::ManaChoice {
-                resume: Some(resume),
-                ..
-            } => resume.payment(),
-            _ => None,
-        }
-    }
-
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::ManaChoice { player, .. } | Decision::Sacrifice { player, .. } => *player,
+            Decision::ManaUpfront { player, .. }
+            | Decision::ManaChoice { player, .. }
+            | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -247,7 +245,10 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
-            Decision::Payment(_) | Decision::ManaChoice { .. } | Decision::Sacrifice { .. } => &[],
+            Decision::ManaUpfront { .. }
+            | Decision::Payment(_)
+            | Decision::ManaChoice { .. }
+            | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SelectMilled { .. }
@@ -325,6 +326,12 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::ManaUpfront { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::PayOrNot,
+                actions: self.mana_ability_actions(*player, None),
+                focus: source_focus,
+            },
             Decision::Payment(payment) => {
                 let player = payment.player;
                 let mut actions = self.mana_ability_actions(player, None);
@@ -342,10 +349,7 @@ impl Game {
                         }
                     }
                 }
-                if self
-                    .available_mana(player)
-                    .can_pay(&payment.remaining.mana_cost())
-                {
+                if self.can_pay_mana_cost(player, &payment.remaining.mana_cost()) {
                     actions.push(Action::PayCost { player });
                 }
                 if payment.can_decline() {
@@ -555,17 +559,33 @@ impl Game {
 
     /// Feed a player action into the pending mid-resolution decision.
     pub(crate) fn execute_decision_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        let Some(mut suspended) = self.state.suspended_decision.take() else {
+        let Some(suspended) = &self.state.suspended_decision else {
             return Err(AgentError("no pending decision".to_string()));
         };
 
         if let Some(player) = action_player(action) {
             if player != suspended.decision.player() {
-                self.state.suspended_decision = Some(suspended);
                 return Err(AgentError("wrong player for pending decision".to_string()));
             }
         }
 
+        // Validate while the full continuation is still attached, so the
+        // payment model sees every reserved source and remaining obligation.
+        if let (
+            Decision::ManaChoice {
+                player, choices, ..
+            },
+            Action::ChooseMode { mode, .. },
+        ) = (&suspended.decision, action)
+        {
+            let mana = choices
+                .get(*mode)
+                .ok_or_else(|| AgentError("illegal mana color".into()))?;
+            if !self.mana_choice_completes_payment(*player, mana) {
+                return Err(AgentError("mana color cannot complete the payment".into()));
+            }
+        }
+        let mut suspended = self.state.suspended_decision.take().unwrap();
         match (&mut suspended.decision, action) {
             (
                 Decision::Payment(PaymentProgress {
@@ -613,19 +633,13 @@ impl Game {
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
-                let Some(mana) = choices.get(*mode) else {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("illegal mana color".into()));
-                };
-                if !self.mana_choice_completes_payment(*player, mana) {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("mana color cannot complete the payment".into()));
-                }
+                let mana = &choices[*mode];
                 self.journal_player(*player);
                 self.state.players[player.0].mana_pool.add(mana);
                 if let Some(resume) = resume.take() {
                     suspended.decision = *resume;
                     self.state.suspended_decision = Some(suspended);
+                    self.advance_mana_upfront()?;
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
