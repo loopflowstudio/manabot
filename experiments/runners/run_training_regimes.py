@@ -10,6 +10,7 @@ import time
 
 import torch
 
+from experiments.recipes import regime
 from experiments.runners.history_input import EVALUATION_SECONDS
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.match import SELECTED_SUITE, play_cell
@@ -92,9 +93,7 @@ def registration(
 
 
 def smoke_recipe(name: str) -> TrainingRegime:
-    recipe = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes" / f"{name}.json").read_text()
-    )
+    recipe = regime(name)
     recipe.agent.hidden_dim = 16
     recipe.agent.num_attention_heads = 2
     for stage in recipe.stages:
@@ -122,9 +121,7 @@ def calibration_plan(study: str) -> ResolvedStudy:
         )
     recipes = []
     for name in STUDIES[study]:
-        recipe = TrainingRegime.model_validate_json(
-            (ROOT / "experiments/regimes" / f"{name}.json").read_text()
-        )
+        recipe = regime(name)
         recipe.wall_seconds = 600
         for stage in recipe.stages:
             stage.execution.wall_seconds = 300

@@ -16,6 +16,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
+from experiments.recipes import value_model_baseline
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match, ObservationSpace
 from manabot.model.world import checkpoint_world
@@ -123,10 +124,9 @@ class Calibration(BaseModel):
 def recipes(updates: int = 800, *, calibration: bool = False) -> list[TrainingRegime]:
     if updates not in ((40,) if calibration else (400, 500, 600, 700, 800)):
         raise ValueError("unsupported history screen update count")
-    base = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/value-model-baseline-v1.json").read_text()
+    base = with_value_aggregation(
+        value_model_baseline(), id="history-base", aggregation="value_token"
     )
-    base = with_value_aggregation(base, id="history-base", aggregation="value_token")
     base.wall_seconds = 400 if calibration else 2400
     for stage in base.stages:
         if not isinstance(stage, TrainSelfPlay):
@@ -188,7 +188,7 @@ def runtime_bindings(
                 ROOT / "experiments/study/training-regimes.ipynb",
                 ROOT / "uv.lock",
                 ROOT / "pyproject.toml",
-                ROOT / "experiments/regimes/value-model-baseline-v1.json",
+                ROOT / "experiments/recipes.py",
                 ROOT / protocol_path,
             ]
         )

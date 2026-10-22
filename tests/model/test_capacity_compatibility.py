@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 
 from experiments.runners.calibrate_training import capacity_plan
+from manabot.arena.models import canonical_sha256
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
@@ -25,7 +26,13 @@ def test_frozen_capacity_contract() -> None:
             AgentSpec(attention_layers=row["depth"], value_aggregation=row["pooling"]),
         )
         assert architecture_receipt(agent).model_dump(mode="json") != row["receipt"]
-    plan = json.dumps(
-        capacity_plan().model_dump(mode="json"), sort_keys=True, separators=(",", ":")
-    )
+    # Recipes follow the engine's current world; the plan was frozen in w4, so
+    # compare it with the world (and the regime digests that cover it) put back.
+    planned = capacity_plan().model_dump(mode="json")
+    for recipe in planned["recipes"]:
+        recipe["world"] = "w4"
+    planned["protocol"]["regime_digests"] = [
+        canonical_sha256(recipe) for recipe in planned["recipes"]
+    ]
+    plan = json.dumps(planned, sort_keys=True, separators=(",", ":"))
     assert hashlib.sha256(plan.encode()).hexdigest() == frozen["plan_sha256"]

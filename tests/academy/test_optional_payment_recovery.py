@@ -44,7 +44,7 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
             prism_cast = False
             land_plays = 0
             # Keep enough lands for both optional outcomes after the filter.
-            # Otherwise skip_trivial can legitimately collapse the sole decline.
+            # The filter fee must leave the four-mana payment available.
             # The setup uses the real server, without state injection.
             for ordinal in range(160):
                 if frame.action_space == "WATERBEND" and any(

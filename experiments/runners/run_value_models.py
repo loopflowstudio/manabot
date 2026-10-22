@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import shutil
 
+from experiments.recipes import value_model_baseline
 from experiments.runners.run_training_regimes import run_study
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import file_sha256
@@ -23,7 +24,7 @@ from manabot.training.experiments import (
     Model,
     ResolvedExperiment,
 )
-from manabot.training.models import TrainingRegime, TrainingRun
+from manabot.training.models import TrainingRun
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -83,19 +84,11 @@ def recover_evaluation(source: Path, out: Path) -> None:
     run_study("value-models", out, plan, resume=True)
 
 
-def smoke_baseline() -> TrainingRegime:
-    """Frozen ETU-106 settings; future defaults cannot alter the registered cross."""
-    return Baseline(
-        "value-model-baseline-v1",
-        (ROOT / "experiments/regimes/value-model-baseline-v1.json").read_text(),
-    ).regime()
-
-
 def experiment() -> Experiment:
     """Declare pooling/depth cases crossed independently with value output."""
     return Experiment(
         name="value",
-        baseline=Baseline.capture("value-model-baseline-v1", smoke_baseline()),
+        baseline=Baseline.capture("value-model-baseline", value_model_baseline()),
         cases=(
             Case("historical-mean-1", label="Historical mean"),
             Case(

@@ -11,6 +11,7 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict
 
+from experiments.recipes import AblationArm, ataraxos_ablation
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
@@ -21,6 +22,7 @@ from manabot.training.models import (
     TrainSelfPlay,
 )
 from manabot.training.recipes import ataraxos_baseline, with_value_output
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 ContrastName = Literal[
@@ -57,7 +59,7 @@ def resolve_contrast(name: ContrastName) -> Contrast:
     if name == "paper-value-head":
         base = ataraxos_baseline(
             id=f"{name}-control",
-            world="w4",
+            world=managym.WORLD_VERSION,
             match=MatchHypers.authored(
                 "ur-lessons-vs-gw-allies",
                 "ur_lessons",
@@ -86,14 +88,12 @@ def resolve_contrast(name: ContrastName) -> Contrast:
             ),
         )
 
-    base_name = "rl-control"
+    base_name: AblationArm = "rl-control"
     if name in {"paper-filter", "filter-ties", "filter-scope"}:
         base_name = "advantage-filtering"
     elif name.startswith("combined-no-"):
         base_name = "combined"
-    base = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes" / f"{base_name}.json").read_text()
-    )
+    base = ataraxos_ablation(base_name)
     base.id = f"{name}-control"
     for stage in base.stages:
         assert isinstance(stage, TrainSelfPlay)
