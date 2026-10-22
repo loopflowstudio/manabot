@@ -19,7 +19,7 @@ faster over the first 1,500 updates, and does it stay stable?
 
 | | |
 | --- | --- |
-| Recipe | ETU-118 mini recipe ([source](regimes/early-learning-rate-mini-source.json)): width 64, depth 2, 4 heads, masked-mean scalar value, Ataraxos move rule, 4 streams x 64 transitions, current-self behavior, CPU, one learner thread |
+| Recipe | ETU-118 mini recipe ([source](https://github.com/loopflowstudio/manabot/blob/e6a2aab1/experiments/regimes/early-learning-rate-mini-source.json)): width 64, depth 2, 4 heads, masked-mean scalar value, Ataraxos move rule, 4 streams x 64 transitions, current-self behavior, CPU, one learner thread |
 | Arms | constant learning rate `1e-4` (control), `3e-4`, `1e-3` |
 | How the rate is held constant | `learning_rate_min = learning_rate_max = rate`; nothing else differs between arms |
 | Seeds | 11851, 11852, each run under all three arms |

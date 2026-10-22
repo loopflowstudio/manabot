@@ -8,19 +8,18 @@ import subprocess
 from etude.track.read import read_all
 import pytest
 
+from experiments.recipes import ataraxos_move_scalar
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.etude_job import TrainingJob, run_worker
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.models import TrainingRun, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def specification() -> TrainingJob:
-    regime = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
-    )
+    regime = ataraxos_move_scalar()
     regime.stages = regime.stages[:1]
     regime.agent.hidden_dim = 8
     stage = regime.stages[0]

@@ -41,6 +41,9 @@ def train_command(
         None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
     ),
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
+    regime_name: str | None = typer.Option(
+        None, help="Named regime from experiments/recipes.py"
+    ),
     seed: Optional[int] = typer.Option(None, help="Regime or recipe training seed"),
     out: Optional[str] = typer.Option(None, help="New run directory"),
     resume_from: Optional[str] = typer.Option(
@@ -72,6 +75,7 @@ def train_command(
                 for value in (
                     preset,
                     regime,
+                    regime_name,
                     resume_from,
                     checkpoint_updates,
                     checkpoint_seconds,
@@ -98,7 +102,9 @@ def train_command(
         return
     if steps is not None or seconds is not None:
         raise typer.BadParameter("--steps and --seconds require --recipe")
-    if regime:
+    if regime and regime_name:
+        raise typer.BadParameter("select --regime or --regime-name, not both")
+    if regime or regime_name:
         if preset is not None or set_values:
             raise typer.BadParameter(
                 "--regime cannot be combined with --preset or --set"
@@ -110,7 +116,13 @@ def train_command(
         from manabot.training.models import TrainingRegime
         from manabot.verify.store import VerifyStore
 
-        regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
+        if regime_name:
+            # Named regimes are repository experiment code, outside the package.
+            from experiments.recipes import regime as named_regime
+
+            regime_spec = named_regime(regime_name)
+        elif regime:
+            regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
         with VerifyStore(Path(out).parent / "training.sqlite") as store:
             execute_regime(
                 regime_spec,
