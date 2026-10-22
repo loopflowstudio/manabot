@@ -194,6 +194,7 @@ pub struct PermanentData {
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
     pub exile_if_dies_this_turn: bool,
+    pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
@@ -566,6 +567,7 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            temp_subtypes: permanent.temp_subtypes.clone(),
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,
             toughness,

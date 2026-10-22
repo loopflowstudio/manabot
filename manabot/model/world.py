@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import hashlib
 import json
-from pathlib import Path
 from typing import Any
 
+from manabot.semantic.learning import BoundSemanticPack
 from manabot.semantic.policy_catalog import learning_schema_path
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
@@ -15,7 +15,6 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
 WORLD = managym.WORLD_VERSION
 POLICY_INPUT_VERSION = 1
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def _digest(value: Any) -> str:
@@ -47,19 +46,24 @@ def validate_agent_setup(
     if binding is None:
         return
     actual = _setups(player_configs)
-    if not allow_deck_repetition:
+    compiled = binding["content_manifest"].get("compiled_semantics")
+    pack_key = compiled["pack_key"] if compiled is not None else None
+    roster_world = pack_key == "elemental-world-v1"
+    if not roster_world and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
         return
 
     if len(actual) != 2 or any(setup not in binding["setups"] for setup in actual):
         raise ValueError("execution deck is outside checkpoint's exact setup roster")
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    expected_pack = compiled["pack_key"] if compiled is not None else None
-    if any(p.content_pack not in (None, expected_pack) for p in player_configs):
+    if roster_world:
+        if any(p.content_pack != pack_key for p in player_configs):
+            raise ValueError("Elemental execution requires its explicit content pack")
+        return
+    if any(p.content_pack not in (None, pack_key) for p in player_configs):
         raise ValueError("execution content pack differs from the checkpoint")
     if actual != binding["setups"] and any(
-        p.content_pack != expected_pack for p in player_configs
+        p.content_pack != pack_key for p in player_configs
     ):
         raise ValueError(
             "repeated decks require the checkpoint's explicit content pack"
@@ -85,7 +89,19 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         raise ValueError("checkpoint world requires exactly two player setups")
     engine = managym.Env(seed=0)
     engine.reset(configs)
-    setups = _setups(configs)
+    manifest = engine.content_pack_manifest()
+    compiled = manifest.get("compiled_semantics")
+    if compiled is not None and compiled["pack_key"] == "elemental-world-v1":
+        # The authored world admits every pair, including mirrors. Bind the
+        # complete native roster, while collection still uses its actual pair.
+        setups = _setups(
+            [
+                managym.authored_deck_setup(compiled["pack_key"], key)
+                for key in managym.authored_deck_keys(compiled["pack_key"])
+            ]
+        )
+    else:
+        setups = _setups(configs)
     schema = {
         key: {"shape": list(shape), "dtype": str(observation_space.encoder.dtypes[key])}
         for key, shape in observation_space.shapes.items()
@@ -103,8 +119,28 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         "setups": setups,
         "content_manifest": manifest,
         "input_schema": schema,
-        "learning_schema_sha256": hashlib.sha256(schema_path.read_bytes()).hexdigest(),
+        "learning_schema_sha256": (
+            _digest(BoundSemanticPack.bind(manifest).schema.raw)
+            if compiled is not None and compiled["pack_key"] == "elemental-world-v1"
+            else hashlib.sha256(schema_path.read_bytes()).hexdigest()
+        ),
     }
+
+
+def checkpoint_configs(binding: Mapping[str, Any]) -> list[managym.PlayerConfig]:
+    """Reconstruct a representative root without dropping authored pack identity."""
+    compiled = binding["content_manifest"].get("compiled_semantics")
+    pack_key = None
+    if compiled is not None:
+        if not isinstance(compiled, dict) or not isinstance(
+            compiled.get("pack_key"), str
+        ):
+            raise ValueError("invalid compiled content pack selection")
+        pack_key = compiled["pack_key"]
+    return [
+        managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"], pack_key)
+        for index, setup in enumerate(binding["setups"][:2])
+    ]
 
 
 def validate_checkpoint_world(
@@ -118,24 +154,7 @@ def validate_checkpoint_world(
     try:
         configs = player_configs
         if configs is None:
-            # Deck multisets alone do not select a compiled pack for mirrors
-            # or research rosters. Reconstruct the recorded selection, then
-            # validate its complete manifest below; this does not trust its
-            # digest or grant new setup membership.
-            compiled = binding["content_manifest"].get("compiled_semantics")
-            pack_key = None
-            if compiled is not None:
-                if not isinstance(compiled, dict) or not isinstance(
-                    compiled.get("pack_key"), str
-                ):
-                    raise ValueError("invalid compiled content pack selection")
-                pack_key = compiled["pack_key"]
-            configs = [
-                managym.PlayerConfig(
-                    str(index), setup["deck"], setup["sideboard"], pack_key
-                )
-                for index, setup in enumerate(binding["setups"])
-            ]
+            configs = checkpoint_configs(binding)
         expected = checkpoint_world(configs, observation_space)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error

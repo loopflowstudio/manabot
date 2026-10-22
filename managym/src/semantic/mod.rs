@@ -20,6 +20,7 @@ mod content;
 pub(crate) use content::content_pack_for_authored_match;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 
 use serde_json::Value;
 
@@ -106,6 +107,9 @@ pub enum Opcode {
     CreateNonlegendaryCopy = 59,
     ModifyControlled = 60,
     WaterbendOrDiscard = 61,
+    Discard = 62,
+    ExileIfDies = 63,
+    AddSubtype = 64,
 }
 
 impl Opcode {
@@ -172,6 +176,9 @@ impl Opcode {
             59 => Opcode::CreateNonlegendaryCopy,
             60 => Opcode::ModifyControlled,
             61 => Opcode::WaterbendOrDiscard,
+            62 => Opcode::Discard,
+            63 => Opcode::ExileIfDies,
+            64 => Opcode::AddSubtype,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -255,6 +262,14 @@ pub enum Condition {
 /// their own step lists, matching the compiler's `then`/`otherwise`/`body`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
+    Discard,
+    ExileIfDies {
+        target: String,
+    },
+    AddSubtype {
+        target: String,
+        subtype: String,
+    },
     AddLessonMana {
         mana: String,
     },
@@ -639,6 +654,33 @@ const COMPLEXITY_IR: &str =
     include_str!("../../../content/semantic/v1/generated/complexity.ir.json");
 
 impl SemanticPack {
+    /// Every admitted immutable pack; shared by runtime and Python setup discovery.
+    pub fn catalog() -> Result<&'static [Self], IrError> {
+        // Embedded documents never change during a process. Setup discovery
+        // and runtime compilation share their parsed definitions.
+        static CATALOG: OnceLock<Result<Vec<SemanticPack>, IrError>> = OnceLock::new();
+        CATALOG
+            .get_or_init(|| {
+                Ok(vec![
+                    Self::two_deck()?,
+                    Self::jeong_increment()?,
+                    Self::elemental()?,
+                    Self::sacrifice()?,
+                    Self::temur()?,
+                    Self::elemental_world()?,
+                    Self::complexity()?,
+                ])
+            })
+            .as_deref()
+            .map_err(Clone::clone)
+    }
+
+    pub fn elemental_world() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/v1/generated/elemental_world.ir.json"
+        ))
+    }
+
     pub fn temur() -> Result<Self, IrError> {
         Self::from_json(include_str!(
             "../../../content/semantic/v1/generated/temur.ir.json"
@@ -946,7 +988,10 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
-            Step::AddLessonMana { .. }
+            Step::Discard
+            | Step::ExileIfDies { .. }
+            | Step::AddSubtype { .. }
+            | Step::AddLessonMana { .. }
             | Step::GrantFlashback
             | Step::GrantMana { .. }
             | Step::CreateNonlegendaryCopy
@@ -1072,6 +1117,14 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
     let step = match opcode {
         Opcode::AddLessonMana => Step::AddLessonMana {
             mana: str_field(value, "mana")?.to_owned(),
+        },
+        Opcode::Discard => Step::Discard,
+        Opcode::ExileIfDies => Step::ExileIfDies {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::AddSubtype => Step::AddSubtype {
+            target: str_field(value, "target")?.to_owned(),
+            subtype: str_field(value, "subtype")?.to_owned(),
         },
         Opcode::GrantFlashback => Step::GrantFlashback,
         Opcode::GrantMana => Step::GrantMana {

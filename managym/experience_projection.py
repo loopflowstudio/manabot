@@ -77,6 +77,11 @@ def _serialize_permanent(
         "name": card.name if card else None,
         "text_box": card.text_box if card else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
+        **(
+            {"temp_subtypes": list(permanent.temp_subtypes)}
+            if permanent.temp_subtypes
+            else {}
+        ),
         "controller_id": int(permanent.controller_id),
         "tapped": bool(permanent.tapped),
         "damage": int(permanent.damage),

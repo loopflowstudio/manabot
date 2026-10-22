@@ -268,6 +268,9 @@ class LegacyCardView(ProtocolModel):
 
 
 class LegacyPermanentView(ProtocolModel):
+    temp_subtypes: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )

@@ -726,15 +726,13 @@ impl CardRegistry {
         // Until end of turn, target creature you control becomes an Avatar
         // in addition to its other types and gains flying, first strike,
         // lifelink, and hexproof.
-        // (Type addition not modeled — Avatar has no mechanical relevance
-        // in Milestone 1; see wave doc.)
         self.register_card(CardDefinition {
             name: "Enter the Avatar State".to_string(),
             mana_cost: Some(ManaCost::parse("W")),
             types: CardTypes::new([CardType::Instant]),
             subtypes: vec!["Lesson".into()],
             targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
-            spell_effects: vec![Effect::GrantKeywordsToTarget {
+            spell_effects: vec![Effect::AddSubtypeToTarget { target: TargetSpec::CreatureYouControl, subtype: "Avatar".into() }, Effect::GrantKeywordsToTarget {
                 keywords: Keywords {
                     flying: true,
                     first_strike: true,

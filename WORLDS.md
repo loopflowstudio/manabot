@@ -19,9 +19,10 @@ was dead on arrival in exp-10.)
 | **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
 | **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
 | **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
+| **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
 
-**Current development world: w9.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w8) are **not comparable** to w9; do not reuse their
+**Current development world: w10.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w9) are **not comparable** to w10; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -195,3 +196,30 @@ and receipts retain their original contents. The current conformance corpus is
 [semantic-kernel-w9-v1](conformance/semantic-kernel-w9-v1/). The validation pack
 is separate from MTG-164's final ten-deck admission. These are rules and
 integration changes, without a strength claim or a promoted checkpoint.
+
+
+## w10: one ten-deck Elemental world
+
+`elemental-world-v1` adds the exact ten accepted 40-card decks and outside-game
+Lesson pools in [the Elemental contract](docs/rules/elemental/world.md). Its closure
+contains 89 selected nonbasic cards, five basics and six token definitions.
+Earlier authored packs and receipts retain their bytes and setup meanings.
+
+Temporary battlefield subtype grants are now incarnation-local state, part of
+match-state hash version 7 and both viewer projections. The native and Python
+permanent encoders add an Avatar-grant feature at index 26; validity moves to
+index 27. Player/card/action widths stay 40/41/20. Learning schema 6 adds typed
+mandatory discard, death-exile marking and temporary subtype instructions;
+`content/semantic/w9/learning_schema.json` retains schema 5. Earlier checkpoints
+fail world admission before weights load.
+
+A selected Elemental checkpoint binds the entire ten-setup native roster,
+including each Lesson pool, the complete compiled manifest and schema 6. Any
+pair or mirror from that roster can execute with explicit pack identity;
+foreign or modified setups fail admission. This is compatibility, not a claim
+that every admitted matchup was trained or that the policy is strong.
+
+The current conformance corpus is `conformance/semantic-kernel-w10-v1`.
+Native all-pairs smoke and a predeclared 14-game same-Command cohort cover
+integration. World freeze, full diagnostic, release-browser certification and
+strength evaluation remain distinct outcomes.

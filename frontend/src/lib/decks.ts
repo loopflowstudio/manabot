@@ -1,6 +1,7 @@
-import { CURATED_PACK } from './curated-pack';
+import { CURATED_PACK, ELEMENTAL_WORLD_PACK } from './curated-pack';
 
-export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'interactive';
+export type ElementalDeckChoice = `elemental_${'gr' | 'gw' | 'ur' | 'ub' | 'uw' | 'ug' | 'wr' | 'wb' | 'rb' | 'bg'}`;
+export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'interactive' | ElementalDeckChoice;
 
 // The two curated choices and their defaults are derived from the installed
 // manifest. Interactive remains a backwards-compatible, uncurated option.
@@ -14,6 +15,7 @@ export const DECK_CHOICES: readonly { key: DeckChoice; label: string }[] = [
     label: CURATED_PACK.matchup.villain.display_name,
   },
   { key: 'interactive', label: 'Interactive' },
+  ...(ELEMENTAL_WORLD_PACK.roster ?? []).map((row) => ({ key: row.deck_id as ElementalDeckChoice, label: row.display_name })),
 ];
 
 const DECK_KEYS = new Set<string>(DECK_CHOICES.map((deck) => deck.key));
