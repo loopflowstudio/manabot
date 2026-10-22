@@ -15,6 +15,7 @@ import time
 
 import torch
 
+from experiments.recipes import ataraxos_move
 from experiments.runners.calibrate_training import calibrate
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match, ObservationSpace, Reward, VectorEnv
@@ -32,8 +33,10 @@ from managym import _managym as native
 
 def _recipe(path: Path | None, timeout: float) -> TrainingRegime:
     """Admit a resolved self-play recipe unchanged, or construct the tiny smoke."""
-    recipe = TrainingRegime.model_validate_json(
-        (path or Path("experiments/regimes/ataraxos-move.json")).read_bytes()
+    recipe = (
+        TrainingRegime.model_validate_json(path.read_bytes())
+        if path is not None
+        else ataraxos_move()
     )
     if path is None:
         recipe.world = native.WORLD_VERSION

@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from experiments.recipes import regime
 import manabot.remote.bundle as bundles
 from manabot.remote.bundle import Bundle, BundleFile, make_bundle
 from manabot.remote.plan import digest
-from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
+from manabot.training.models import StageRecord, TrainingRun
 from manabot.verify.store import VerifyStore
-from tests.remote.test_compile import ROOT
 
 
 def test_relocated_bytes_and_corruption(tmp_path: Path) -> None:
@@ -78,9 +78,7 @@ def test_duplicate_manifest_paths_fail_before_download(field: str) -> None:
 def test_verified_bundle_must_match_run_artifact_receipts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str | None
 ) -> None:
-    recipe = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text()
-    )
+    recipe = regime("direct-self-play")
     policy = tmp_path / "raw.pt"
     policy.write_bytes(b"policy-loader-fixture")
     artifact = {
