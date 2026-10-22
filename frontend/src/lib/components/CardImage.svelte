@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
-  import { CURATED_PACK, resolveTreatment, treatmentBackground } from '$lib/curated-pack';
+  import { resolveTreatment, treatmentBackground } from '$lib/curated-pack';
 
   // The card is a printed plate. Art palettes are fixed dark colors, so
   // everything on the art — grain, varnish, hatching, the name plate — is
@@ -60,7 +60,7 @@
     data-testid="card-treatment"
     data-card-name={name}
     data-asset-source={treatment.source}
-    data-pack-id={treatment.source === 'pack' ? CURATED_PACK.pack.id : undefined}
+    data-pack-id={treatment.packId}
     class={`plate-root relative isolate overflow-hidden ${className}`}
     style:background={background}
   >

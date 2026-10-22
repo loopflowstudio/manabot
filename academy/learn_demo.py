@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from .server import GameSession
 
 
-DEMO_PATH = Path(__file__).parent / "fixtures" / "learn-demo-w9.json"
+DEMO_PATH = Path(__file__).parent / "fixtures" / "learn-demo-w10.json"
 
 
 def load_learn_demo() -> dict[str, Any]:

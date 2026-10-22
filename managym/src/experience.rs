@@ -315,6 +315,8 @@ pub struct LegacyCardView {
 pub struct LegacyPermanentView {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub temp_subtypes: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,

@@ -48,6 +48,9 @@ jobs:
       - name: Checkpoint world bindings
         run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
 
+      - name: Elemental roster admission
+        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
+
       - name: Frozen-policy search fixtures
         run: |
           uv run --python 3.12 --extra dev pytest -q \

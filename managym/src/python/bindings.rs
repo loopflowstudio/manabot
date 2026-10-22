@@ -1408,6 +1408,8 @@ pub struct PyPermanent {
     pub has_exile_link: bool,
     #[pyo3(get, set)]
     pub exile_if_dies_this_turn: bool,
+    #[pyo3(get, set)]
+    pub temp_subtypes: Vec<String>,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1430,6 +1432,7 @@ impl From<PermanentData> for PyPermanent {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
     }
@@ -1452,6 +1455,7 @@ impl From<PyPermanent> for PermanentData {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
     }
@@ -3396,33 +3400,36 @@ impl PyEnv {
 }
 
 #[cfg(feature = "python")]
+fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticPack> {
+    crate::semantic::SemanticPack::catalog()
+        .map_err(|error| PyValueError::new_err(error.to_string()))?
+        .iter()
+        .find(|pack| pack.pack_key == pack_key)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown authored pack {pack_key:?}")))
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfig> {
-    let packs = [
-        crate::semantic::SemanticPack::two_deck(),
-        crate::semantic::SemanticPack::jeong_increment(),
-        crate::semantic::SemanticPack::elemental(),
-        crate::semantic::SemanticPack::sacrifice(),
-        crate::semantic::SemanticPack::temur(),
-        crate::semantic::SemanticPack::complexity(),
-    ];
-    for pack in packs {
-        let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;
-        if pack.pack_key == pack_key {
-            let config = pack
-                .player_config(deck_key, deck_key)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
-            return Ok(PyPlayerConfig {
-                name: config.name,
-                decklist: config.decklist.into_iter().collect(),
-                sideboard: config.sideboard.into_iter().collect(),
-                content_pack: Some(pack_key.to_string()),
-            });
-        }
-    }
-    Err(PyValueError::new_err(format!(
-        "unknown authored pack {pack_key:?}"
-    )))
+    let config = authored_pack(pack_key)?
+        .player_config(deck_key, deck_key)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    Ok(PyPlayerConfig {
+        name: config.name,
+        decklist: config.decklist.into_iter().collect(),
+        sideboard: config.sideboard.into_iter().collect(),
+        content_pack: Some(pack_key.to_string()),
+    })
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
+    Ok(authored_pack(pack_key)?
+        .decks
+        .iter()
+        .map(|deck| deck.key.clone())
+        .collect())
 }
 
 #[cfg(feature = "python")]
@@ -3447,6 +3454,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
+    m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
