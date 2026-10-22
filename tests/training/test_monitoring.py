@@ -9,16 +9,10 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import VISIT_COUNT_KEY, load_shards
 from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.search_supervised import (
-    CHOSEN_ACTION_TARGET,
-    SearchSupervisedEpochStats,
-    evaluate_search_supervised,
-    train_search_supervised,
-)
 from manabot.training import execution, monitoring
 from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.execution import execute_regime
@@ -36,10 +30,16 @@ from manabot.training.monitoring import (
     default_panels,
     training_dashboard,
 )
+from manabot.training.supervised import (
+    CHOSEN_ACTION_TARGET,
+    SearchSupervisedEpochStats,
+    evaluate_search_supervised,
+    train_search_supervised,
+)
 from manabot.verify.store import VerifyStore
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
-from tests.sim.test_search_supervised import _dataset
+from tests.training.test_supervised import _dataset
 
 
 def _recipe() -> TrainingRegime:
@@ -105,8 +105,8 @@ def test_fixed_validation_callback_and_leak_rejection() -> None:
     fixed = {k: v[mask] for k, v in dataset.items()}
     seen: list[SearchSupervisedEpochStats] = []
 
-    def record(stats: SearchSupervisedEpochStats, model: Agent) -> None:
-        assert isinstance(model, Agent)
+    def record(stats: SearchSupervisedEpochStats, model: ActorCritic) -> None:
+        assert isinstance(model, ActorCritic)
         seen.append(stats)
 
     _, _, _, history = train_search_supervised(
@@ -226,10 +226,10 @@ def test_executor_streams_fixed_and_growing_validation(
     recipe = TrainingRegime(
         id="distillation-fixture",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         stages=[
             CollectSearch(id="data-0", operation="collect_search", games=2),
             TrainSupervised(

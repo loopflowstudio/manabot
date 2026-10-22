@@ -11,8 +11,8 @@ from manabot.arena.match import selected_match
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.teacher1_evidence import runtime_fingerprints
 from manabot.training import monitor_evaluation as monitor
@@ -292,13 +292,13 @@ def test_real_arena_checkpoint_outcomes(
         )
         match = matrix.match() if matrix else selected_match()
         space = ObservationSpace()
-        hypers = AgentSpec(
+        config = ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         )
         torch.manual_seed(101)
         checkpoint = tmp_path / "untrained.pt"
         save_bc_checkpoint(
-            Agent(space, hypers),
+            ActorCritic(space, config),
             space,
             checkpoint,
             player_configs=Match(match).to_rust(),
@@ -307,7 +307,7 @@ def test_real_arena_checkpoint_outcomes(
             id="monitor-fixture",
             world=managym.WORLD_VERSION,
             match=match,
-            agent=hypers,
+            agent=config,
             wall_seconds=10,
             stages=[
                 TrainSelfPlay(
@@ -326,7 +326,7 @@ def test_real_arena_checkpoint_outcomes(
             seed=17,
             seed_streams={},
             identities=runtime_fingerprints(
-                17, match_hypers=match, observation_space=space
+                17, match_config=match, observation_space=space
             ),
         )
         result = monitor.evaluate_checkpoint(

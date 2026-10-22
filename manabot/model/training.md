@@ -6,7 +6,7 @@ same `SeatRoutedCollector` and `update_iteration` primitives directly. A new
 loop or optimizer implementation needs a concrete unsupported behavior and a
 current consumer; an old import or test is not a reason to retain one.
 
-`Learner` owns the admitted train-mode `Agent`, Adam (epsilon 1e-5), device and
+`Learner` owns the admitted train-mode `ActorCritic`, Adam (epsilon 1e-5), device and
 native-stream minibatch width. The executor owns collection, EMA, schedules,
 tracking, checkpoint exports, failure receipts and recovery. `PairedLearners`
 uses two independent owners with one collector. Supervised, search and belief
@@ -84,10 +84,9 @@ allowance. Source repair requires explicit restart admission; replay advancement
 alone neither admits training nor establishes the original game's outcome.
 See [game crash recovery](../../docs/game-crash-recovery.md) for bounds and limits.
 
-Historical `ataraxos_move` recipe tags decode only at the compatibility boundary
-into the same descriptive algorithm. They retain their original serialized tag
-and digest; schema-1 recipes retain one-seat semantics. No historical result,
-checkpoint or frozen recipe is rewritten.
+Current recipes use `damped_policy` directly. The historical `ataraxos_move`
+discriminator is rejected: old recipes require pinned source. No compatibility
+decoder, serialized-tag override or old preset execution path remains.
 
 ## Entry points and retired routes
 

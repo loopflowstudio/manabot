@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.training.builders import gray_ogre_match
 from manabot.training.models import (
     CollectLocalUpdate,
@@ -39,7 +39,7 @@ def frozen_policy_local_update() -> TrainingRegime:
         id="frozen-policy-local-update",
         world=managym.WORLD_VERSION,
         match=gray_ogre_match(),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         stages=[
             TrainSelfPlay(
                 id="policy",

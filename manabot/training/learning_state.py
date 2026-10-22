@@ -16,8 +16,8 @@ import torch
 
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match
-from manabot.infra.hypers import MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
 from manabot.sim.flat_mc import load_checkpoint_agent
 
@@ -36,8 +36,8 @@ from .models import (
 class AdmittedLearningState:
     artifacts: dict[str, ArtifactReference]
     origin: LearningStateOrigin
-    raw: Agent
-    ema: Agent
+    raw: ActorCritic
+    ema: ActorCritic
     # Adam's nested torch serialization boundary; validated before application.
     optimizer: dict[str, Any]
     seed: int
@@ -110,7 +110,7 @@ def validate_adam(optimizer: torch.optim.Adam) -> None:
                 raise ValueError(f"invalid Adam moment: {name}")
 
 
-def _admit_setup_transfer(source: MatchHypers, regime: TrainingRegime) -> None:
+def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
     """A deck switch stays inside the agent's semantic pack and changes decks."""
     pack = regime.agent.semantic_pack
     if source == regime.match:
@@ -178,7 +178,7 @@ def admit_learning_state(
     if origin.iteration >= stage.updates:
         raise ValueError("learning-state target must exceed parent absolute iteration")
     artifacts = {"parent_run": receipt}
-    policies: dict[str, Agent] = {}
+    policies: dict[str, ActorCritic] = {}
     for role in ("raw", "ema", "optimizer"):
         reference = getattr(spec, role)
         published = record.artifacts.get(role)
@@ -195,7 +195,7 @@ def admit_learning_state(
         # The parent export is bound to the match it trained on; the segment's
         # own exports are bound to the regime's match when they are written.
         validate_agent_setup(agent, Match(source_match).to_rust())
-        if agent.hypers != regime.agent or space.encoder.hypers != regime.observation:
+        if agent.config != regime.agent or space.encoder.config != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
         payload = torch.load(copied["path"], map_location="cpu", weights_only=False)
         # Adam stores positional parameter IDs. The historical checkpoint's

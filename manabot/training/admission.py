@@ -134,7 +134,7 @@ def admit_policy(
     # Fork RNG so validation never shifts downstream initialization streams.
     with torch.random.fork_rng(devices=[]):
         agent, space = load_checkpoint_agent(admitted["path"])
-    if agent.hypers != regime.agent or space.encoder.hypers != regime.observation:
+    if agent.config != regime.agent or space.encoder.config != regime.observation:
         raise ValueError("published checkpoint model/observation differs from regime")
     validate_agent_setup(agent, Match(source.regime.match).to_rust())
     validate_agent_setup(agent, Match(regime.match).to_rust())

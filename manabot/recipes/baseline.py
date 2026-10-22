@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import Field
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.training.builders import PACK
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.experiment_execution import (
@@ -108,8 +108,8 @@ def baseline(
             id=BASELINE_VERSION,
             world=managym.WORLD_VERSION,
             match=selected_match(),
-            observation=ObservationSpaceHypers(),
-            agent=AgentSpec(
+            observation=ObservationConfig(),
+            agent=ModelConfig(
                 hidden_dim=64,
                 attention_layers=2,
                 num_attention_heads=4,

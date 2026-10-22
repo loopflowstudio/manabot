@@ -10,10 +10,10 @@ import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
+from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
+from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
-from manabot.training.baseline import BASELINE_STEPS, run_baseline
-from manabot.training.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.training.models import TrainingRegime
 
 app = typer.Typer(
@@ -65,10 +65,10 @@ def named_regime(name: str) -> TrainingRegime:
 
 
 def _run_sim(preset: str, set_values: list[str]) -> None:
-    sim_hypers, experiment_hypers = load_sim_config(
+    sim_config, runtime_config = load_sim_config(
         preset=preset, set_overrides=set_values
     )
-    run_simulation(sim_hypers, experiment_hypers)
+    run_simulation(sim_config, runtime_config)
 
 
 @app.command("train")

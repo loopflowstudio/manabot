@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_monitor_evaluation import _manifest, _rows
+
+from tests.training.test_monitor_evaluation import _manifest, _rows
 
 pytest.importorskip("etude.eval.match")
 

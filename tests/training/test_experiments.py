@@ -10,7 +10,8 @@ import pytest
 
 from experiments.value_model_baseline import value_model_baseline
 from manabot.arena.models import canonical_sha256
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.recipes.ataraxos import ataraxos
 from manabot.training.experiments import (
     Axis,
     Baseline,
@@ -18,7 +19,7 @@ from manabot.training.experiments import (
     Environment,
     Experiment,
     LearningRule,
-    Model,
+    ModelOverride,
     Pipeline,
     Resources,
     RunControl,
@@ -30,7 +31,6 @@ from manabot.training.models import (
     Execution,
     Learning,
 )
-from manabot.training.presets import ataraxos_mtg_v1
 
 
 def _baseline() -> Baseline:
@@ -48,14 +48,14 @@ def _flatten(value: JsonValue, prefix: tuple[str, ...] = ()) -> set[tuple[str, .
 
 
 def test_provenance_covers_complete_configuration_and_explicit_equal_values() -> None:
-    base = ataraxos_mtg_v1()
+    base = ataraxos()
     resolved = (
         Experiment(
             "audit",
             base,
             overrides=(
-                Model(
-                    AgentSpec(
+                ModelOverride(
+                    ModelConfig(
                         hidden_dim=64, semantic_pack=None, compound_decisions=False
                     )
                 ),
@@ -64,8 +64,8 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
                     DampedPolicyLearning(gradient="damped_policy", policy_lambda=0.3)
                 ),
                 Environment(
-                    observation=ObservationSpaceHypers(max_actions=128),
-                    match=MatchHypers(hero="new-hero"),
+                    observation=ObservationConfig(max_actions=128),
+                    match=MatchConfig(hero="new-hero"),
                 ),
                 RunControl(
                     schedule_clock="iteration_fraction", recovery_max_microsteps=None
@@ -84,13 +84,13 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
     assert settings[("agent", "hidden_dim")].value == 64
     assert settings[("agent", "semantic_pack")].value is None
     assert settings[("agent", "compound_decisions")].origin == "override"
-    assert settings[("agent", "value_kind")].origin == "preset"
+    assert settings[("agent", "value_kind")].origin == "baseline"
     assert (
         settings[("stages", "0", "learning", "policy_lambda")].component == "learning"
     )
     assert settings[("stages", "1", "execution", "threads")].component == "resources"
     assert settings[("match", "hero")].origin == "override"
-    assert settings[("match", "villain")].origin == "preset"
+    assert settings[("match", "villain")].origin == "baseline"
     assert settings[("id",)].origin == "identity"
     assert settings[("recovery_max_microsteps",)].value is None
     assert {p.component for p in settings.values()} == {
@@ -116,7 +116,10 @@ def test_baseline_and_resolved_artifacts_are_isolated() -> None:
         base,
         cases=(
             Case("historical-mean-1"),
-            Case("masked-mean-1", (Model(AgentSpec(value_aggregation="masked_mean")),)),
+            Case(
+                "masked-mean-1",
+                (ModelOverride(ModelConfig(value_aggregation="masked_mean")),),
+            ),
         ),
     ).resolve()
     identity = cells.identity
@@ -134,23 +137,22 @@ def test_baseline_and_resolved_artifacts_are_isolated() -> None:
     assert empty.value == {}
 
 
-def test_snapshot_rejects_missing_defaults_and_preset_is_pinned() -> None:
-    base = ataraxos_mtg_v1()
-    assert (
-        base.digest
-        == "43e7ece151480504a795f3d355c792080d8088215151bf9fe24d64e6c22166cb"
-    )
+def test_snapshot_rejects_missing_defaults() -> None:
+    base = ataraxos()
     raw = json.loads(base.configuration)
     del raw["agent"]["attention_layers"]
     with pytest.raises(ValueError, match="incomplete"):
         replace(base, configuration=json.dumps(raw)).regime()
-    assert ataraxos_mtg_v1().regime().agent.value_kind == "categorical_wdl"
+    assert ataraxos().regime().agent.value_kind == "categorical_wdl"
 
 
 @pytest.mark.parametrize(
     "overrides",
     [
-        (Model(AgentSpec(hidden_dim=64)), Model(AgentSpec(hidden_dim=64))),
+        (
+            ModelOverride(ModelConfig(hidden_dim=64)),
+            ModelOverride(ModelConfig(hidden_dim=64)),
+        ),
         (Resources(wall_seconds=100), Resources(wall_seconds=200)),
         (
             Pipeline(tuple(value_model_baseline().stages)),
@@ -160,7 +162,7 @@ def test_snapshot_rejects_missing_defaults_and_preset_is_pinned() -> None:
     ],
 )
 def test_conflicts_rejected_in_either_order(
-    overrides: tuple[Model | Resources | Pipeline | LearningRule, ...],
+    overrides: tuple[ModelOverride | Resources | Pipeline | LearningRule, ...],
 ) -> None:
     for ordered in (overrides, tuple(reversed(overrides))):
         with pytest.raises(ValueError, match="conflicting writes"):
@@ -168,7 +170,7 @@ def test_conflicts_rejected_in_either_order(
 
 
 def test_case_axis_and_common_overrides_cannot_shadow_each_other() -> None:
-    change = (Model(AgentSpec(value_kind="scalar")),)
+    change = (ModelOverride(ModelConfig(value_kind="scalar")),)
     declaration = Experiment(
         "conflict",
         _baseline(),
@@ -183,7 +185,7 @@ def test_case_axis_and_common_overrides_cannot_shadow_each_other() -> None:
 
 def test_disjoint_writes_are_order_independent_and_provenance_is_identity() -> None:
     overrides = (
-        Model(AgentSpec(value_aggregation="value_token")),
+        ModelOverride(ModelConfig(value_aggregation="value_token")),
         Resources(wall_seconds=120),
     )
     declaration = Experiment("independent", _baseline(), overrides=overrides)
@@ -193,7 +195,9 @@ def test_disjoint_writes_are_order_independent_and_provenance_is_identity() -> N
     )
     implicit = Experiment("same", _baseline()).resolve().cases[0]
     explicit = (
-        Experiment("same", _baseline(), overrides=(Model(AgentSpec(hidden_dim=64)),))
+        Experiment(
+            "same", _baseline(), overrides=(ModelOverride(ModelConfig(hidden_dim=64)),)
+        )
         .resolve()
         .cases[0]
     )
@@ -214,7 +218,7 @@ def test_matrix_order_labels_and_deterministic_resolution() -> None:
                     Case("mean", label="Mean"),
                     Case(
                         "token",
-                        (Model(AgentSpec(value_aggregation="value_token")),),
+                        (ModelOverride(ModelConfig(value_aggregation="value_token")),),
                         "Token",
                     ),
                 ),
@@ -224,7 +228,9 @@ def test_matrix_order_labels_and_deterministic_resolution() -> None:
                 (
                     Case("scalar"),
                     Case(
-                        "wdl", (Model(AgentSpec(value_kind="categorical_wdl")),), "WDL"
+                        "wdl",
+                        (ModelOverride(ModelConfig(value_kind="categorical_wdl")),),
+                        "WDL",
                     ),
                 ),
             ),
@@ -262,24 +268,27 @@ def test_ambiguous_or_empty_names_rejected(changes: dict[str, object]) -> None:
 
 
 def test_compatibility_is_checked_after_independent_components_compose() -> None:
-    no_attention = Model(AgentSpec(attention_on=False))
-    token = Model(AgentSpec(value_aggregation="value_token"))
+    no_attention = ModelOverride(ModelConfig(attention_on=False))
+    token = ModelOverride(ModelConfig(value_aggregation="value_token"))
     with pytest.raises(ValidationError, match="require attention"):
         Experiment("invalid", _baseline(), overrides=(no_attention, token)).resolve()
     with pytest.raises(ValidationError, match="requires damped_policy"):
         Experiment(
-            "invalid", ataraxos_mtg_v1(), overrides=(LearningRule(Learning()),)
+            "invalid", ataraxos(), overrides=(LearningRule(Learning()),)
         ).resolve()
     with pytest.raises(ValidationError, match="compound"):
         Experiment(
             "invalid",
             _baseline(),
-            overrides=(Model(AgentSpec(compound_decisions=True)),),
+            overrides=(ModelOverride(ModelConfig(compound_decisions=True)),),
         ).resolve()
     valid = Experiment(
         "ppo",
-        ataraxos_mtg_v1(),
-        overrides=(LearningRule(Learning()), Model(AgentSpec(value_kind="scalar"))),
+        ataraxos(),
+        overrides=(
+            LearningRule(Learning()),
+            ModelOverride(ModelConfig(value_kind="scalar")),
+        ),
     ).resolve()
     assert valid.cases[0].regime.agent.value_kind == "scalar"
 
@@ -315,22 +324,24 @@ def test_pipeline_replacement_and_learning_boundary() -> None:
     "component",
     [
         Environment(world="unsupported-world"),
-        Model(AgentSpec(belief_count_buckets=4)),
+        ModelOverride(ModelConfig(belief_count_buckets=4)),
     ],
 )
 def test_resolution_uses_existing_runtime_admission(
-    component: Environment | Model,
+    component: Environment | ModelOverride,
 ) -> None:
     with pytest.raises(ValueError, match="world|belief inputs"):
         Experiment("unsupported", _baseline(), overrides=(component,)).resolve()
 
 
 def test_explicit_false_default_remains_in_provenance() -> None:
-    # An explicitly written default must survive AgentSpec's serialization omission.
+    # An explicitly written default must survive ModelConfig's serialization omission.
     base = _baseline()
     cell = (
         Experiment(
-            "flat", base, overrides=(Model(AgentSpec(compound_decisions=False)),)
+            "flat",
+            base,
+            overrides=(ModelOverride(ModelConfig(compound_decisions=False)),),
         )
         .resolve()
         .cases[0]
@@ -349,7 +360,7 @@ def test_resolution_allocates_no_model_training_or_store(
         raise AssertionError("resolution attempted execution")
 
     monkeypatch.setattr("manabot.training.execution.execute_regime", forbidden)
-    monkeypatch.setattr("manabot.model.agent.Agent.__init__", forbidden)
+    monkeypatch.setattr("manabot.model.actor_critic.ActorCritic.__init__", forbidden)
     monkeypatch.setattr("manabot.verify.store.VerifyStore.__init__", forbidden)
     monkeypatch.setattr("managym.Env", forbidden)
     monkeypatch.chdir(tmp_path)
@@ -358,7 +369,10 @@ def test_resolution_allocates_no_model_training_or_store(
         _baseline(),
         cases=(
             Case("historical-mean-1"),
-            Case("value-token-1", (Model(AgentSpec(value_aggregation="value_token")),)),
+            Case(
+                "value-token-1",
+                (ModelOverride(ModelConfig(value_aggregation="value_token")),),
+            ),
         ),
     ).resolve()
     assert len(set(result.digests)) == 2

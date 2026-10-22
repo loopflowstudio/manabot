@@ -10,8 +10,8 @@ import torch
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.belief.sampling_data import read_dataset
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import LOCAL_TARGET_KEY, load_shards, save_bc_checkpoint
 from manabot.sim.local_update import LocalSearchConfig
 from manabot.training.execution import atomic_json, execute_regime
@@ -49,11 +49,11 @@ def published_fixture(
     recipe = TrainingRegime(
         id="fixture-producer",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         stages=[
             TrainSelfPlay(
                 id="producer",
@@ -79,7 +79,7 @@ def published_fixture(
     space = ObservationSpace(recipe.observation)
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(112)
-        agent = Agent(space, recipe.agent)
+        agent = ActorCritic(space, recipe.agent)
     path = tmp_path / "published.pt"
     save_bc_checkpoint(
         agent,

@@ -1,8 +1,7 @@
 """
-agent.py
 Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
 
-Agent.forward preserves the serving policy/value interface. Training uses
+ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
 """
 
@@ -14,7 +13,7 @@ import torch.nn as nn
 # Local imports
 from manabot.env import ObservationSpace
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX
-from manabot.infra import AgentSpec
+from manabot.infra import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.inference import PreparedObservation
@@ -24,9 +23,9 @@ from manabot.sim.structured_policy import RaggedOfferBatch
 import managym
 
 
-class Agent(nn.Module):
+class ActorCritic(nn.Module):
     """
-    Agent that:
+    Shared actor/critic network that:
       1. Encodes game objects with typed embeddings.
       2. Uses an attention mechanism to allow information exchange.
       3. Augments action representations with focus object information.
@@ -36,30 +35,32 @@ class Agent(nn.Module):
     such as why the model appears to always select the default action.
     """
 
-    def __init__(self, observation_space: ObservationSpace, hypers: AgentSpec) -> None:
+    def __init__(
+        self, observation_space: ObservationSpace, config: ModelConfig
+    ) -> None:
         super().__init__()
         self.observation_space = observation_space
-        self.hypers = hypers
+        self.config = config
         # Scalar heads need the checkpoint's training-target declaration. WDL
         # means and compound prefix critics have architectural signed units.
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
             "signed_outcome"
-            if hypers.value_kind == "categorical_wdl" or hypers.compound_decisions
+            if config.value_kind == "categorical_wdl" or config.compound_decisions
             else None
         )
         self.logger = getLogger(__name__)
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
-        if hypers.recent_events and (
-            hypers.semantic_pack is None or enc.hypers.policy_history_version != 1
+        if config.recent_events and (
+            config.semantic_pack is None or enc.config.policy_history_version != 1
         ):
             raise ValueError(
                 "recent events require semantic_pack and policy_history_version=1"
             )
-        if not hypers.recent_events and enc.hypers.policy_history_version != 0:
+        if not config.recent_events and enc.config.policy_history_version != 0:
             raise ValueError(
-                "history observation contract requires recent_events Agent"
+                "history observation contract requires recent_events ActorCritic"
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
@@ -67,17 +68,17 @@ class Agent(nn.Module):
         perm_dim = enc.permanent_dim - 1
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
-        embed_dim = hypers.hidden_dim
+        embed_dim = config.hidden_dim
         self.compound_decoder = (
-            CompoundDecoder(embed_dim) if hypers.compound_decisions else None
+            CompoundDecoder(embed_dim) if config.compound_decisions else None
         )
 
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
-        if hypers.semantic_pack is not None:
+        if config.semantic_pack is not None:
             from .semantic_cards import SemanticCardEncoder
 
-            self.semantic_cards = SemanticCardEncoder(hypers.semantic_pack, embed_dim)
+            self.semantic_cards = SemanticCardEncoder(config.semantic_pack, embed_dim)
         else:
             # Generic worlds still distinguish card definitions. The content
             # manifest binds the vocabulary; this is identity, not rules transfer.
@@ -98,12 +99,12 @@ class Agent(nn.Module):
         self.logger.info(f"Action embedding: ({action_dim - 1} -> {embed_dim})")
 
         # Global game state processor via attention.
-        if self.hypers.attention_on:
-            num_heads = self.hypers.num_attention_heads
+        if self.config.attention_on:
+            num_heads = self.config.num_attention_heads
             self.attention = GameObjectAttention(
                 embed_dim,
                 num_heads=num_heads,
-                feedforward_dim=hypers.attention_feedforward_dim,
+                feedforward_dim=config.attention_feedforward_dim,
             )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
@@ -122,7 +123,7 @@ class Agent(nn.Module):
             nn.ReLU(),
             layer_init(nn.Linear(embed_dim, 1), gain=0.01),
         )
-        value_dim = 3 if hypers.value_kind == "categorical_wdl" else 1
+        value_dim = 3 if config.value_kind == "categorical_wdl" else 1
         self.value_head = nn.Sequential(
             layer_init(nn.Linear(embed_dim, embed_dim)),
             nn.ReLU(),
@@ -134,20 +135,20 @@ class Agent(nn.Module):
         self.logger.info(f"Policy head: ({embed_dim} -> 1)")
         self.logger.info(f"Value head: ({embed_dim} -> {value_dim})")
 
-        self.belief_count_buckets = int(hypers.belief_count_buckets)
+        self.belief_count_buckets = int(config.belief_count_buckets)
         if self.belief_count_buckets > 0:
-            if hypers.belief_card_vocab_size < 1:
+            if config.belief_card_vocab_size < 1:
                 raise ValueError(
                     "belief_card_vocab_size must be positive when belief input is enabled"
                 )
             self.belief_card_embedding = nn.Embedding(
-                hypers.belief_card_vocab_size, embed_dim
+                config.belief_card_vocab_size, embed_dim
             )
             self.belief_owner_embedding = nn.Embedding(
-                hypers.belief_owner_role_vocab_size, embed_dim
+                config.belief_owner_role_vocab_size, embed_dim
             )
             self.belief_zone_embedding = nn.Embedding(
-                hypers.belief_hidden_zone_vocab_size, embed_dim
+                config.belief_hidden_zone_vocab_size, embed_dim
             )
             self.belief_count_embedding = ProjectionLayer(
                 self.belief_count_buckets, embed_dim
@@ -156,7 +157,7 @@ class Agent(nn.Module):
             self.logger.info(
                 "Belief channel: on (%d count buckets, %d card definitions)",
                 self.belief_count_buckets,
-                hypers.belief_card_vocab_size,
+                config.belief_card_vocab_size,
             )
         else:
             self.belief_card_embedding = None
@@ -182,19 +183,19 @@ class Agent(nn.Module):
         self.extra_attention = nn.ModuleList(
             GameObjectAttention(
                 embed_dim,
-                hypers.num_attention_heads,
+                config.num_attention_heads,
                 ownership=False,
-                feedforward_dim=hypers.attention_feedforward_dim,
+                feedforward_dim=config.attention_feedforward_dim,
             )
-            for _ in range(hypers.attention_layers - 1)
+            for _ in range(config.attention_layers - 1)
         )
         self.value_token = (
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
-            if hypers.value_aggregation == "value_token"
+            if config.value_aggregation == "value_token"
             else None
         )
         self.recent_events = (
-            RecentEventEncoder(embed_dim) if hypers.recent_events else None
+            RecentEventEncoder(embed_dim) if config.recent_events else None
         )
         # FiLM policy conditioning (Perez et al., 2018, scale only): the head
         # reads informed_action * (1 + W @ state) for the masked mean of the
@@ -206,7 +207,7 @@ class Agent(nn.Module):
         # start. Zero weights keep the initial function additive, and skip_init
         # draws no RNG, so earlier parameters keep their historical values.
         self.policy_film: nn.Linear | None = None
-        if hypers.policy_film:
+        if config.policy_film:
             self.policy_film = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
@@ -225,7 +226,7 @@ class Agent(nn.Module):
         WDL expectations are signed; scalar units follow value_semantic.
         """
         logits, raw_value = self.forward_distribution(obs)
-        if self.hypers.value_kind == "categorical_wdl":
+        if self.config.value_kind == "categorical_wdl":
             probabilities = raw_value.softmax(dim=-1)
             value = probabilities[:, 2] - probabilities[:, 0]
         else:
@@ -245,7 +246,7 @@ class Agent(nn.Module):
         """
         if self.compound_decoder is not None:
             raise ValueError(
-                "compound checkpoint requires authoritative offers; use Agent.compound"
+                "compound checkpoint requires authoritative offers; use ActorCritic.compound"
             )
         objects, is_agent, validity, history = self._gather_object_embeddings(obs)
 
@@ -298,7 +299,7 @@ class Agent(nn.Module):
         """Encode real objects and, when configured, a trailing neutral value token."""
         if (
             not objects_checked
-            and self.hypers.value_aggregation != "historical_mean"
+            and self.config.value_aggregation != "historical_mean"
             and (validity.sum(1) == 0).any()
         ):
             raise ValueError("value aggregation requires a valid object")
@@ -310,7 +311,7 @@ class Agent(nn.Module):
             key_padding_mask = torch.cat(
                 (key_padding_mask, torch.zeros_like(key_padding_mask[:, :1])), dim=1
             )
-        if self.hypers.attention_on:
+        if self.config.attention_on:
             objects = self.attention(
                 objects, is_agent, key_padding_mask=key_padding_mask
             )
@@ -322,12 +323,12 @@ class Agent(nn.Module):
         self, objects: torch.Tensor, validity: torch.Tensor
     ) -> torch.Tensor:
         """Read the critic while preserving historical value_head parameter names."""
-        if self.hypers.value_aggregation == "historical_mean":
+        if self.config.value_aggregation == "historical_mean":
             return self.value_head(objects)
         if self.value_token is not None:
             objects = objects[:, -1]
         projected = self.value_head[1](self.value_head[0](objects))
-        if self.hypers.value_aggregation == "masked_mean":
+        if self.config.value_aggregation == "masked_mean":
             projected = projected.masked_fill((validity == 0).unsqueeze(-1), 0)
             projected = projected.sum(1) / validity.sum(1, keepdim=True)
         # Indexing avoids constructing temporary Sequential modules per decision.
@@ -349,7 +350,7 @@ class Agent(nn.Module):
         objects, ownership, valid, history = self._gather_object_embeddings(obs)
         if objects.shape[0] != 1:
             raise ValueError("compound decoding requires one root")
-        if self.hypers.attention_on:
+        if self.config.attention_on:
             objects = self.attention(objects, ownership, key_padding_mask=valid == 0)
         context = (objects * valid.unsqueeze(-1)).sum(1) / valid.sum(
             1, keepdim=True
@@ -566,7 +567,7 @@ class Agent(nn.Module):
         }
         missing = sorted(required.difference(obs))
         if missing:
-            raise ValueError(f"belief-enabled Agent is missing inputs: {missing}")
+            raise ValueError(f"belief-enabled ActorCritic is missing inputs: {missing}")
         card_ids = obs["belief_card_def_ids"].long()
         owner_ids = obs["belief_owner_role_ids"].long()
         zone_ids = obs["belief_hidden_zone_ids"].long()

@@ -7,8 +7,8 @@ import torch
 
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
@@ -26,8 +26,8 @@ def _regime(path: Path) -> TrainingRegime:
     return TrainingRegime(
         id="frozen-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        match=MatchConfig(),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         stages=[
             TrainSelfPlay(
                 id="attack",
@@ -66,9 +66,9 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     torch.set_num_threads(1)
     path = tmp_path / "opponent.pt"
     space = ObservationSpace()
-    opponent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+    opponent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     save_bc_checkpoint(
-        opponent, space, path, player_configs=Match(MatchHypers()).to_rust()
+        opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     before = file_sha256(path)
     regime = _regime(path)
@@ -93,12 +93,12 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
 
 def test_compound_opponent_is_rejected_before_training(tmp_path: Path) -> None:
     space = ObservationSpace()
-    opponent = Agent(
-        space, AgentSpec(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
+    opponent = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
     )
     path = tmp_path / "compound.pt"
     save_bc_checkpoint(
-        opponent, space, path, player_configs=Match(MatchHypers()).to_rust()
+        opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="compound opponent submissions"):

@@ -7,9 +7,9 @@ import pytest
 from typer.testing import CliRunner
 
 from manabot import cli
-from manabot.training.baseline import baseline
+from manabot.recipes.baseline import baseline
+from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, local_smoke
 from manabot.training.comparison_notebook import write_comparison_notebook
-from manabot.training.local import LOCAL_SECONDS, LOCAL_STEPS, local_smoke
 from manabot.training.models import (
     DampedPolicyLearning,
     IterationSchedule,

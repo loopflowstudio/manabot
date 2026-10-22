@@ -5,7 +5,7 @@ and fit the belief sampler; `learned_belief_local_search` then searches with
 sampled worlds and distils the labels into a student.
 """
 
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.training.builders import gray_ogre_match
 from manabot.training.models import (
     CollectBelief,
@@ -61,7 +61,7 @@ def belief_sampler() -> TrainingRegime:
         id="frozen-policy-belief-pilot",
         world=managym.WORLD_VERSION,
         match=gray_ogre_match(),
-        agent=AgentSpec(hidden_dim=16, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=16, num_attention_heads=2),
         stages=_belief_stages(),
         wall_seconds=180,
     )

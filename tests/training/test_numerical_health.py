@@ -16,8 +16,8 @@ from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -274,7 +274,7 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
 
-class ExtremeAgent(Agent):
+class ExtremeAgent(ActorCritic):
     def forward_distribution(self, obs: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         logits, values = super().forward_distribution(obs)
         # Keep real game/observation/learner flow, make one legal alternative
@@ -285,13 +285,13 @@ class ExtremeAgent(Agent):
 
 def test_extreme_real_collector_to_learner() -> None:
     space = ObservationSpace()
-    agent = ExtremeAgent(space, AgentSpec(hidden_dim=8, num_attention_heads=2)).to(
+    agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
     )
     collector = SeatRoutedCollector(
         space,
-        Match(MatchHypers()),
-        Reward(RewardHypers()),
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
         device=DEVICE,

@@ -23,7 +23,7 @@ import numpy as np
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.net_opponent import (
     CollectorSnapshot,
     CollectorStats,
@@ -77,7 +77,7 @@ def save_update(
     path: Path,
     learner: Learner,
     collector: SeatRoutedCollector,
-    ema: Agent | None,
+    ema: ActorCritic | None,
     rng: np.random.Generator,
     iteration: int,
     record: StageRecord,
@@ -217,7 +217,7 @@ def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
 def restore_learning(
     state: UpdateSnapshot,
     learner: Learner,
-    ema: Agent | None,
+    ema: ActorCritic | None,
     rng: np.random.Generator,
 ) -> None:
     """Restore RNG last: construction and replay must not perturb training."""

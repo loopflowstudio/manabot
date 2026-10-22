@@ -23,12 +23,12 @@ from manabot.arena.models import (
 )
 from manabot.arena.replay import read_game_journal, write_trace
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.returns import transition_gae
 from manabot.sim.net_opponent import (
     SeatRoutedCollector,
@@ -127,9 +127,11 @@ class ScriptedFailures:
         return self.infos
 
 
-def agent() -> Agent:
+def agent() -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(ObservationSpace(), AgentSpec(attention_on=False, hidden_dim=8))
+    return ActorCritic(
+        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
+    )
 
 
 def attempt(failed: bool, seed: int = 0) -> GameAttempt:
@@ -137,7 +139,7 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
         stream=0,
         seed=seed,
         seat=0,
-        matchup=MatchHypers(),
+        matchup=MatchConfig(),
         outcome="engine_error" if failed else "completed",
         discarded_samples=3 if failed else 0,
         valid_samples=4 if not failed else 0,
@@ -145,12 +147,15 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
 
 
 def _tolerant_collector(
-    model: Agent, ledger: GameErrorLedger, *, seats: Literal["one", "both"] = "both"
+    model: ActorCritic,
+    ledger: GameErrorLedger,
+    *,
+    seats: Literal["one", "both"] = "both",
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         model.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
         learning_seats=seats,
@@ -257,7 +262,7 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
     collector = SeatRoutedCollector(
         model.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=3,
         opponent_mode="self",
         workers=workers,
@@ -278,7 +283,7 @@ def _assert_native_failure_replay(collector: SeatRoutedCollector) -> None:
         stream=1,
         seed=1,
         seat=0,
-        matchup=MatchHypers(),
+        matchup=MatchConfig(),
         outcome="engine_error",
         actions=[-1],
         error_class=infos[1]["game_error_class"],

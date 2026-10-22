@@ -46,7 +46,7 @@ def play(request: Request) -> list[dict[str, object]]:
     matrix = AuthoredMatchup(
         pack_key="elemental-world-v1", role_a=request.role_a, role_b=request.role_b
     )
-    fingerprints = runtime_fingerprints(match_hypers=matrix.match())
+    fingerprints = runtime_fingerprints(match_config=matrix.match())
     registrations: list[PlayerRegistration] = []
     paths: dict[str, str] = {}
     for seat, player in enumerate(request.players):

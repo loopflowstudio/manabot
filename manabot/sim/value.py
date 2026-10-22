@@ -5,7 +5,7 @@ ROLLOUT crank on economics (a policy playout costs ~160x a random playout);
 the escape route is a VALUE at the leaves: one forward pass replacing an
 entire playout. This module provides the three pieces the gate needs:
 
-- ``train_value`` / ``save_value_checkpoint``: fit the Agent's existing
+- ``train_value`` / ``save_value_checkpoint``: fit the ActorCritic's existing
   scalar value head (shared encoder, hero-perspective win-prob via sigmoid)
   to terminal game outcomes recorded in distillation shards (BCE, split by
   game). Type-error caveat (wave/beliefs): scalar V(observation) is rung-1 —
@@ -37,8 +37,8 @@ import numpy as np
 import torch
 
 from manabot.env import Env, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint, split_by_game
 from manabot.sim.flat_mc import (
@@ -61,7 +61,7 @@ class ValueScorer:
     wins. Callers flip 1-V for non-hero actors.
     """
 
-    def __init__(self, agent: Agent, *, device: str = "cpu"):
+    def __init__(self, agent: ActorCritic, *, device: str = "cpu"):
         self.agent = agent.to(device)
         self.agent.eval()
         self.device = torch.device(device)
@@ -111,7 +111,7 @@ def outcome_labels(dataset: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarr
 
 @torch.no_grad()
 def _evaluate_value(
-    agent: Agent,
+    agent: ActorCritic,
     dataset: dict[str, np.ndarray],
     indices: np.ndarray,
     labels: np.ndarray,
@@ -160,10 +160,10 @@ def train_value(
     val_fraction: float = 0.1,
     seed: int = 0,
     device: str = "cpu",
-    agent_hypers: AgentSpec | None = None,
+    agent_config: ModelConfig | None = None,
     log: bool = False,
-) -> tuple[Agent, ObservationSpace, list[ValueEpochStats]]:
-    """Fit the Agent's value head to terminal outcomes (BCE, split by game).
+) -> tuple[ActorCritic, ObservationSpace, list[ValueEpochStats]]:
+    """Fit the ActorCritic's value head to terminal outcomes (BCE, split by game).
 
     ``init_state`` warm-starts from an existing checkpoint (e.g. the BC
     student, so the encoder starts from policy-distillation features).
@@ -176,7 +176,7 @@ def train_value(
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = ObservationSpace()
-    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
+    agent = ActorCritic(obs_space, agent_config or ModelConfig()).to(dev)
     if init_state is not None:
         agent.load_state_dict(init_state)
     if freeze_encoder:
@@ -247,7 +247,7 @@ def train_value(
 
 
 def save_value_checkpoint(
-    agent: Agent,
+    agent: ActorCritic,
     obs_space: ObservationSpace,
     path: str | Path,
     *,
@@ -570,7 +570,7 @@ def collect_value_assessment(
     """
 
     from manabot.env import Match, Reward
-    from manabot.infra.hypers import MatchHypers, RewardHypers
+    from manabot.infra.config import MatchConfig, RewardConfig
     from manabot.sim.flat_mc import make_player
     from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
@@ -581,7 +581,7 @@ def collect_value_assessment(
     )
     obs_space = obs_space or ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="assess-a",
             villain="assess-b",
             hero_deck=dict(INTERACTIVE_DECK),
@@ -591,7 +591,7 @@ def collect_value_assessment(
     env = Env(
         match,
         obs_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
         enable_profiler=False,

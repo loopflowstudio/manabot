@@ -14,7 +14,7 @@ from typing import Iterable
 
 # First-party imports
 from manabot.env import Match
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 
 # Local imports
 from ..measures import choices
@@ -47,18 +47,18 @@ Lists = dict[str, dict[str, int]]
 
 def authored_lists() -> Lists:
     """The authored main decks, by deck key."""
-    match = MatchHypers.authored(PACK, "ur_lessons", "gw_allies")
+    match = MatchConfig.authored(PACK, "ur_lessons", "gw_allies")
     return {"ur_lessons": dict(match.hero_deck), "gw_allies": dict(match.villain_deck)}
 
 
 def setup(
     first_deck: str, lists: Lists | None = None
-) -> tuple[MatchHypers, tuple[str, str]]:
+) -> tuple[MatchConfig, tuple[str, str]]:
     """The match with `first_deck` in seat 0, optionally with replaced main decks.
 
     Sideboards always come from the authored setup.
     """
-    match = MatchHypers.authored(
+    match = MatchConfig.authored(
         PACK, "ur_lessons", "gw_allies", hero="seat-0", villain="seat-1"
     )
     if lists is not None:
@@ -70,7 +70,7 @@ def setup(
         )
     if first_deck == "ur_lessons":
         return match, ("ur_lessons", "gw_allies")
-    return Match(match).swapped().hypers, ("gw_allies", "ur_lessons")
+    return Match(match).swapped().config, ("gw_allies", "ur_lessons")
 
 
 def schedule(

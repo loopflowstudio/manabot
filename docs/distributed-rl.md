@@ -42,7 +42,7 @@ objects, preserving indexes; the token still influences policy representations
 through shared attention. `_value_from_objects` dispatches historical fixed-slot
 mean, masked mean after projection, or the trailing token through the existing
 critic weights. `forward` converts WDL logits to signed expectation. Compound
-play has a separate decoder/critic path; AgentSpec rejects aggregation/depth
+play has a separate decoder/critic path; ModelConfig rejects aggregation/depth
 variants there. The presence of MeanPoolingLayer in the constructor alone cannot
 establish which critic path executes. These are source findings, not new runtime
 or strength evidence.
@@ -109,7 +109,7 @@ unresolved algorithm change.
 
 ## Local system model and reusable seams
 
-* `manabot/training/models.py`: `TrainingRegime` owns resolved AgentSpec, world,
+* `manabot/training/models.py`: `TrainingRegime` owns resolved ModelConfig, world,
   match, observation and stage configuration. `Execution` admits CPU float32
   and one worker here. Do not add a remote device string to bypass validation.
 * `manabot/sim/net_opponent.py`: `SeatRoutedCollector.collect` emits
@@ -460,7 +460,7 @@ Harness modes and their scopes:
 | --- | --- |
 | `inventory` | No Torch/native imports or training; host and source receipt only |
 | `simulator` | Four native streams, random legal actions, current authored setup; surfaced decisions/s including wrapper/tensor/sampling overhead, not pure Rust ticks/s |
-| `inference` | Defaults to width-16 semantic WDL, batch 64; an explicit recipe selects AgentSpec, match/observation and first self-play stage streams × transitions. Forward observations/s excludes initialization and collection; no weights are trained or loaded |
+| `inference` | Defaults to width-16 semantic WDL, batch 64; an explicit recipe selects ModelConfig, match/observation and first self-play stage streams × transitions. Forward observations/s excludes initialization and collection; no weights are trained or loaded |
 | `train` | Defaults to two iterations, 4 streams × 16 transitions/iteration; an explicit recipe executes unchanged through TrainingRegime. Reports collection, learning and export clocks, completed iterations, learner transitions, optimizer exposures and empty-filter skips |
 | `complete` | Existing CPU calibration (its own direct-self-play recipe and seed), export plus eight exact-replayed arena games; outer cap can cut it short and is not relaxed on failure |
 
@@ -485,7 +485,7 @@ but not runtime patches or host load. Any controlled repeated comparison must
 address those differences and preserve cold startup separately from warm timing.
 Repeat only under a separately declared aggregate budget. Report device and thread
 counts, memory and host load beside the counters. Select intended value-token/depth
-variants and PPO/Ataraxos contrasts through existing AgentSpec and TrainingRegime
+variants and PPO/Ataraxos contrasts through existing ModelConfig and TrainingRegime
 fields. The explicit recipe path now
 exposes these choices without changing the learner. Do not retrofit future results.
 

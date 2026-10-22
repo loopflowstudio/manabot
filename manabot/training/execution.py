@@ -30,10 +30,10 @@ from manabot.belief.sampling_fit import (
 )
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, capture_scope
-from manabot.infra import Experiment
-from manabot.infra.hypers import ExperimentHypers, RewardHypers
+from manabot.infra import RunContext
+from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.profiler import Profiler
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
@@ -41,13 +41,13 @@ from manabot.remote.plan import Allocation
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.sim.search_supervised import (
-    SearchSupervisedEpochStats,
-    train_search_supervised,
-)
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
 from manabot.training.learner import Learner
 from manabot.training.matchups import elemental_roster
+from manabot.training.supervised import (
+    SearchSupervisedEpochStats,
+    train_search_supervised,
+)
 import managym
 
 from .admission import admit_policy
@@ -179,7 +179,7 @@ def _runtime_identities(
     seed: int, regime: TrainingRegime, space: ObservationSpace
 ) -> dict[str, object]:
     identities = runtime_fingerprints(
-        seed, match_hypers=regime.match, observation_space=space
+        seed, match_config=regime.match, observation_space=space
     )
     identities.update(
         architecture=architecture_identity(regime.agent, space),
@@ -564,7 +564,9 @@ def _execute_regime(
             + sum(s.cpu_seconds for s in run.stages[:-1]),
         }
 
-    def monitor_checkpoint(model: Agent, experiment: Experiment | None = None) -> None:
+    def monitor_checkpoint(
+        model: ActorCritic, experiment: RunContext | None = None
+    ) -> None:
         nonlocal last_monitor_seconds
         active_endpoint = (
             isinstance(stage, TrainSelfPlay) and stage.active_seconds is not None
@@ -880,7 +882,7 @@ def _execute_regime(
                     target = out / f"{stage.id}-{game_index}.npz"
                     temporary = target.with_name(target.stem + ".tmp.npz")
                     match = (
-                        Match(regime.match).swapped().hypers
+                        Match(regime.match).swapped().config
                         if game_index % 2
                         else regime.match
                     )
@@ -893,8 +895,8 @@ def _execute_regime(
                         seed=seeds["collection"],
                         game_offset=game_index,
                         out_path=temporary,
-                        match_hypers=match,
-                        observation_hypers=regime.observation,
+                        match_config=match,
+                        observation_config=regime.observation,
                         deadline_monotonic=deadline,
                     )
                     os.replace(temporary, target)
@@ -923,7 +925,7 @@ def _execute_regime(
                     agent, optimizer = outputs[stage.initial]
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = Agent(space, regime.agent)
+                    agent = ActorCritic(space, regime.agent)
                     optimizer = torch.optim.Adam(
                         agent.parameters(), lr=stage.learning.learning_rate.initial
                     )
@@ -1033,8 +1035,8 @@ def _execute_regime(
                     raise ValueError("selection policy artifact changed")
                 agent, policy_space = load_checkpoint_agent(frozen["path"])
                 if (
-                    agent.hypers != regime.agent
-                    or policy_space.encoder.hypers != regime.observation
+                    agent.config != regime.agent
+                    or policy_space.encoder.config != regime.observation
                 ):
                     raise ValueError(
                         "selection policy configuration differs from regime"
@@ -1107,7 +1109,7 @@ def _execute_regime(
                 policy_artifact = source.artifacts[stage.weights]
                 dataset = collect_frozen_policy(
                     checkpoint=Path(policy_artifact["path"]),
-                    match_hypers=regime.match,
+                    match_config=regime.match,
                     games=stage.games,
                     seed=seeds["belief_collection"] + game_index,
                     max_steps=stage.max_steps,
@@ -1232,9 +1234,9 @@ def _execute_regime(
                         validate_agent_setup(
                             opponent_agent, Match(regime.match).to_rust()
                         )
-                        if opponent_space.encoder.hypers != space.encoder.hypers:
+                        if opponent_space.encoder.config != space.encoder.config:
                             raise ValueError("frozen opponent observation ABI differs")
-                        if opponent_agent.hypers.compound_decisions:
+                        if opponent_agent.config.compound_decisions:
                             raise ValueError(
                                 "frozen collector does not support compound opponent submissions"
                             )
@@ -1248,7 +1250,7 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = Agent(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
                     if imported is not None:
                         agent.load_state_dict(imported.raw.state_dict())
                     if pretrained is not None:
@@ -1315,7 +1317,7 @@ def _execute_regime(
                     collector = SeatRoutedCollector(
                         space,
                         Match(regime.match),
-                        Reward(RewardHypers()),
+                        Reward(RewardConfig()),
                         num_envs=stage.streams,
                         seed=seeds["collection"],
                         opponent_mode="frozen"
@@ -1340,14 +1342,13 @@ def _execute_regime(
                         workers=stage.execution.workers,
                     )
                     producers.callback(collector.close)
-                    experiment = Experiment(
-                        ExperimentHypers(
-                            wandb=False,
+                    experiment = RunContext(
+                        RuntimeConfig(
                             seed=seeds["initialization"]
                             if imported is not None
                             else seed,
                             runs_dir=out,
-                            exp_name=stage.id,
+                            name=stage.id,
                             device=stage.execution.device,
                             log_level="WARNING",
                         ),
@@ -1653,7 +1654,7 @@ def _execute_regime(
                 tick = time.perf_counter()
 
                 def report_epoch(
-                    stats: SearchSupervisedEpochStats, model: Agent
+                    stats: SearchSupervisedEpochStats, model: ActorCritic
                 ) -> None:
                     record.actual_device = str(next(model.parameters()).device)
                     record.learning_seconds = time.perf_counter() - tick
@@ -1670,8 +1671,8 @@ def _execute_regime(
                     dataset,
                     policy_target_kind=stage.target,
                     value_weight=0,
-                    agent_hypers=regime.agent,
-                    observation_hypers=regime.observation,
+                    agent_config=regime.agent,
+                    observation_config=regime.observation,
                     epochs=stage.epochs,
                     batch_size=stage.batch_size,
                     lr=stage.learning_rate,

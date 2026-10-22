@@ -1,6 +1,5 @@
 """
-hypers.py
-Pydantic hyperparameter schemas shared across training and simulation.
+Configuration models shared across training, simulation and runtime setup.
 """
 
 import os
@@ -26,11 +25,11 @@ def _default_runs_dir() -> Path:
     return Path.cwd() / ".runs"
 
 
-class BaseHypersModel(BaseModel):
+class BaseConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ObservationSpaceHypers(BaseHypersModel):
+class ObservationConfig(BaseConfig):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
@@ -44,7 +43,7 @@ class ObservationSpaceHypers(BaseHypersModel):
     )
 
 
-class MatchHypers(BaseHypersModel):
+class MatchConfig(BaseConfig):
     """Parameters passed to the match builder."""
 
     content_pack: str | None = Field(
@@ -79,7 +78,7 @@ class MatchHypers(BaseHypersModel):
         *,
         hero: str = "gaea",
         villain: str = "urza",
-    ) -> "MatchHypers":
+    ) -> "MatchConfig":
         """Resolve both complete setups from the compiled rules pack."""
         import managym
 
@@ -101,22 +100,18 @@ class MatchHypers(BaseHypersModel):
         )
 
 
-class ExperimentHypers(BaseHypersModel):
+class RuntimeConfig(BaseConfig):
     """Configuration for experiment tracking and runtime setup."""
 
-    exp_name: str = "manabot"
+    name: str = "manabot"
     seed: int = 1
     torch_deterministic: bool = True
     device: str = "cpu"
-    # Frozen recipe compatibility only; live training records through Etude.
-    wandb: bool = True
-    wandb_project_name: str = "manabot"
     runs_dir: Path = Field(default_factory=_default_runs_dir)
     log_level: str = "INFO"
-    profiler_enabled: bool = False
 
 
-class AgentSpec(BaseHypersModel):
+class ModelConfig(BaseConfig):
     """Model construction contract, independent of learning and execution settings.
 
     Checkpoints retain the serialized ``agent_hypers`` dictionary key; renaming
@@ -134,7 +129,7 @@ class AgentSpec(BaseHypersModel):
     )
     # Scale each action embedding by the pooled game state before the policy
     # head (FiLM). Omitted is the historical additive policy, so frozen
-    # recipes and checkpoints keep their meaning; see `new_agent_spec`.
+    # recipes and checkpoints keep their meaning.
     policy_film: bool = Field(default=False, exclude_if=lambda value: not value)
     attention_layers: int = Field(default=1, ge=1)
     # Omitted defaults preserve historical recipe and checkpoint identities.
@@ -155,7 +150,7 @@ class AgentSpec(BaseHypersModel):
     belief_hidden_zone_vocab_size: int = 7
 
     @model_validator(mode="after")
-    def validate_value_architecture(self) -> "AgentSpec":
+    def validate_value_architecture(self) -> "ModelConfig":
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
@@ -180,52 +175,7 @@ class AgentSpec(BaseHypersModel):
         return self
 
 
-def new_agent_spec() -> AgentSpec:
-    """The model a new training run builds when its caller names none.
-
-    FiLM: the additive policy leaves some initializations unable to learn
-    state-conditioned offer choices (docs/nightly-learnability.md).
-    """
-    return AgentSpec(policy_film=True)
-
-
-class TrainHypers(BaseHypersModel):
-    """Historical PPO configuration for saved evidence, not an execution route."""
-
-    total_timesteps: int = 20_000_000
-    learning_rate: float = 2.5e-4
-    num_envs: int = 16
-    num_steps: int = 128
-    anneal_lr: bool = True
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
-    num_minibatches: int = 4
-    update_epochs: int = 4
-    norm_adv: bool = True
-    clip_coef: float = 0.1
-    clip_vloss: bool = True
-    ent_coef: float = 0.01
-    vf_coef: float = 0.5
-    max_grad_norm: float = 0.5
-    target_kl: float = float("inf")
-    opponent_policy: str = "passive"
-    eval_interval: int = 100
-    eval_num_games: int = 50
-
-    @field_validator("target_kl", mode="before")
-    @classmethod
-    def _coerce_target_kl(cls, value: Any) -> Any:
-        if isinstance(value, str) and value.lower() in {
-            "inf",
-            "+inf",
-            "infinity",
-            "+infinity",
-        }:
-            return float("inf")
-        return value
-
-
-class RewardHypers(BaseHypersModel):
+class RewardConfig(BaseConfig):
     trivial: bool = False
     managym: bool = False
     win_reward: float = 1.0
@@ -249,32 +199,7 @@ class RewardHypers(BaseHypersModel):
     potential_life_weight: float = 0.2
 
 
-class Hypers(BaseHypersModel):
-    """Legacy configuration bundle used by evidence readers and diagnostics.
-
-    Executable training recipes are TrainingRegime; this serialized shape keeps
-    historical hyperparameters readable without translating their semantics.
-    """
-
-    observation: ObservationSpaceHypers = Field(default_factory=ObservationSpaceHypers)
-    match: MatchHypers = Field(default_factory=MatchHypers)
-    train: TrainHypers = Field(default_factory=TrainHypers)
-    reward: RewardHypers = Field(default_factory=RewardHypers)
-    agent: AgentSpec = Field(default_factory=new_agent_spec)
-    experiment: ExperimentHypers = Field(default_factory=ExperimentHypers)
-
-    @model_validator(mode="after")
-    def _validate_observation_limits(self) -> "Hypers":
-        if self.observation.max_cards_per_player < 1:
-            raise ValueError("max_cards_per_player must be positive")
-        if self.observation.max_actions < 1:
-            raise ValueError("max_actions must be positive")
-        if self.observation.max_events < 1:
-            raise ValueError("max_events must be positive")
-        return self
-
-
-class SimulationHypers(BaseHypersModel):
+class SimulationConfig(BaseConfig):
     """Hyperparameters for model simulation."""
 
     hero: str = "simple"
@@ -282,5 +207,5 @@ class SimulationHypers(BaseHypersModel):
     num_games: int = 100
     num_threads: int = 4
     max_steps: int = 2000
-    match: MatchHypers = Field(default_factory=MatchHypers)
-    reward: RewardHypers = Field(default_factory=RewardHypers)
+    match: MatchConfig = Field(default_factory=MatchConfig)
+    reward: RewardConfig = Field(default_factory=RewardConfig)

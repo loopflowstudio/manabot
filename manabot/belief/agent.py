@@ -7,6 +7,8 @@ import hashlib
 import time
 from typing import Mapping
 
+from managym.decision import Command
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 from numpy.typing import NDArray
 import torch
@@ -18,9 +20,7 @@ from manabot.belief.state import (
     BeliefUpdate,
     ViewerHistory,
 )
-from manabot.model.agent import Agent
-from managym.decision import Command
-from managym.possible_worlds import PossibleWorldSpace
+from manabot.model.actor_critic import ActorCritic
 
 
 def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
@@ -96,27 +96,33 @@ class Manabot:
     def __init__(
         self,
         *,
-        policy_value: Agent,
+        policy_value: ActorCritic,
         belief_model: BeliefModel,
         belief_schema: BeliefEncodingSchema,
     ) -> None:
         if policy_value.belief_count_buckets != belief_schema.count_buckets:
-            raise BeliefError("Agent and belief encoding count buckets differ")
+            raise BeliefError("ActorCritic and belief encoding count buckets differ")
         if policy_value.belief_card_embedding is None:
-            raise BeliefError("Manabot requires an Agent with belief input enabled")
+            raise BeliefError(
+                "Manabot requires an ActorCritic with belief input enabled"
+            )
         maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
         if maximum_card_id >= policy_value.belief_card_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the Agent card vocabulary")
+            raise BeliefError("belief schema exceeds the ActorCritic card vocabulary")
         if policy_value.belief_owner_embedding is None:
-            raise BeliefError("Manabot requires an Agent owner-role vocabulary")
+            raise BeliefError("Manabot requires an ActorCritic owner-role vocabulary")
         maximum_owner_id = max(row.owner_role_id for row in belief_schema.rows)
         if maximum_owner_id >= policy_value.belief_owner_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the Agent owner-role vocabulary")
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic owner-role vocabulary"
+            )
         if policy_value.belief_zone_embedding is None:
-            raise BeliefError("Manabot requires an Agent hidden-zone vocabulary")
+            raise BeliefError("Manabot requires an ActorCritic hidden-zone vocabulary")
         maximum_zone_id = max(row.hidden_zone_id for row in belief_schema.rows)
         if maximum_zone_id >= policy_value.belief_zone_embedding.num_embeddings:
-            raise BeliefError("belief schema exceeds the Agent hidden-zone vocabulary")
+            raise BeliefError(
+                "belief schema exceeds the ActorCritic hidden-zone vocabulary"
+            )
         self.policy_value = policy_value
         self.belief_model = belief_model
         self.belief_schema = belief_schema

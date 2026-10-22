@@ -7,13 +7,13 @@ import torch
 
 from manabot.env import Match, ObservationSpace
 from manabot.env.observation import ACTION_DECLARED_INDEX, ACTION_TYPE_DIM
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.model.world import WORLD, checkpoint_world
+from manabot.recipes.ataraxos import ataraxos
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.experiments import Experiment
-from manabot.training.presets import ataraxos_mtg_v1
 from manabot.training.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
@@ -49,9 +49,9 @@ def test_native_attack_choice_can_learn_either_preference(
     try:
         with torch.random.fork_rng():
             torch.manual_seed(17)
-            agent = Agent(
+            agent = ActorCritic(
                 ObservationSpace(),
-                AgentSpec(hidden_dim=8, num_attention_heads=2, attention_on=False),
+                ModelConfig(hidden_dim=8, num_attention_heads=2, attention_on=False),
             )
         # Erasing the declaration reproduces the old, weight-independent tie.
         logits, _ = agent(identity_removed(attack_case))
@@ -91,8 +91,8 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         {
             "world_binding": binding,
             "hypers": {
-                "agent_hypers": AgentSpec().model_dump(),
-                "observation_hypers": space.encoder.hypers.model_dump(),
+                "agent_hypers": ModelConfig().model_dump(),
+                "observation_hypers": space.encoder.config.model_dump(),
             },
             "model_state_dict": {},
         },
@@ -103,9 +103,10 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
 
 
 def test_historical_recipe_resolves_but_cannot_execute(tmp_path: Path) -> None:
-    baseline = ataraxos_mtg_v1()
+    baseline = ataraxos()
     recipe = Experiment("historical", baseline).resolve().cases[0].regime
-    assert recipe.world == baseline.regime().world == "w4"
+    assert recipe.world == baseline.regime().world == WORLD
+    recipe.world = "w4"
     out = tmp_path / "must-not-start"
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="world differs from native runtime"):

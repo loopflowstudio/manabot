@@ -3,7 +3,7 @@
 from pydantic import Field, model_validator
 
 from manabot.arena.models import StrictModel, canonical_sha256
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 from managym import WORLD_VERSION
 
 
@@ -30,8 +30,8 @@ class AuthoredMatchup(StrictModel):
         a, b = self.role_a, self.role_b
         return ((a, b), (b, a), (a, a), (b, b))[leg // 2]
 
-    def match(self, leg: int = 0) -> MatchHypers:
-        setup = MatchHypers.authored(
+    def match(self, leg: int = 0) -> MatchConfig:
+        setup = MatchConfig.authored(
             self.pack_key, *self.decks(leg), hero="arena-seat-0", villain="arena-seat-1"
         )
         # Research packs can register more than two decks, so the cross pair

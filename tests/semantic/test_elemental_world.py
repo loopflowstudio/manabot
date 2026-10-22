@@ -17,13 +17,13 @@ from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ObservationEncoder
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
@@ -96,13 +96,13 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
     space = ObservationSpace()
-    pair = Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
+    pair = Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"))
     binding = checkpoint_world(pair.to_rust(), space)
     assert len(binding["setups"]) == 10
     assert validate_checkpoint_world({"world_binding": binding}, space) == binding
     agent = SimpleNamespace(world_binding=binding)
     for key in managym.authored_deck_keys(PACK):
-        configs = Match(MatchHypers.authored(PACK, key, key)).to_rust()
+        configs = Match(MatchConfig.authored(PACK, key, key)).to_rust()
         validate_agent_setup(agent, configs)
         assert (
             validate_checkpoint_world({"world_binding": binding}, space, configs)
@@ -133,16 +133,18 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     torch.set_num_threads(1)
     space = ObservationSpace()
     env = Env(
-        Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg")),
+        Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")),
         space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=164,
     )
     observation, _ = env.reset(seed=164)
-    agent = Agent(space, AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True))
+    agent = ActorCritic(
+        space, ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True)
+    )
     native = managym.Env(seed=164)
     native.reset(
-        Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
+        Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
     assert len(pack.ir.definitions) == 100
@@ -193,8 +195,8 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
     recipe = TrainingRegime(
         id="elemental-ppo-smoke",
         world=managym.WORLD_VERSION,
-        match=MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"),
-        agent=AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True),
+        match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
+        agent=ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True),
         stages=[
             TrainSelfPlay(
                 id="self-play",
@@ -222,7 +224,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
     assert len(restored.world_binding["setups"]) == 10
     validate_agent_setup(
         restored,
-        Match(MatchHypers.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
+        Match(MatchConfig.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
     )
 
 
@@ -276,7 +278,7 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
         obs = engine.step(action["index"])[0]
     else:
         pytest.fail("Avatar grant did not resolve")
-    expected = ObservationEncoder(ObservationSpaceHypers()).encode(view)
+    expected = ObservationEncoder(ObservationConfig()).encode(view)
     actual = engine.encode_observation(view)
     for key in expected:
         np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
@@ -336,9 +338,9 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
     left: str, right: str
 ) -> None:
     env = Env(
-        Match(MatchHypers.authored(PACK, "elemental_" + left, "elemental_" + right)),
+        Match(MatchConfig.authored(PACK, "elemental_" + left, "elemental_" + right)),
         ObservationSpace(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=164,
     )
     observation, _ = env.reset(seed=164)

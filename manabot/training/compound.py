@@ -22,8 +22,8 @@ from torch import Tensor
 
 from manabot.env import Match
 from manabot.env.failures import ScalarCapture
-from manabot.infra.hypers import MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.returns import transition_gae
 from manabot.sim.compound import CompoundDecision, sample_compound
 import managym
@@ -84,7 +84,7 @@ class CompoundStatistics:
 
 
 def collect_game(
-    agent: Agent,
+    agent: ActorCritic,
     match: Match,
     seed: int,
     generator: torch.Generator,
@@ -115,7 +115,7 @@ def collect_game(
             json.dumps(
                 {
                     "seed": seed,
-                    "match": match.hypers.model_dump(mode="json"),
+                    "match": match.config.model_dump(mode="json"),
                     "skip_trivial": skip_trivial,
                 }
             )
@@ -171,7 +171,7 @@ def replay_game(path: Path) -> int:
     with path.open() as source:
         header = json.loads(next(source))
         env = managym.Env(seed=header["seed"], skip_trivial=header["skip_trivial"])
-        env.reset(Match(MatchHypers(**header["match"])).to_rust())
+        env.reset(Match(MatchConfig(**header["match"])).to_rust())
         count = 0
         complete = False
         for line in source:
@@ -275,7 +275,7 @@ class CompoundUpdate:
 
 
 def optimize_games(
-    agent: Agent,
+    agent: ActorCritic,
     optimizer: torch.optim.Optimizer,
     games: list[CompoundGame],
     learning: Learning,

@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import torch
 
@@ -21,18 +22,17 @@ from manabot.belief.encoding import (
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model import ActorCritic
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import make_player
 from manabot.verify.util import INTERACTIVE_DECK
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
 def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     observation_space = ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="belief-demo-hero",
             villain="belief-demo-villain",
             hero_deck=dict(INTERACTIVE_DECK),
@@ -42,7 +42,7 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     env = Env(
         match,
         observation_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=19,
         auto_reset=False,
         enable_profiler=False,
@@ -52,7 +52,9 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     return env, observation
 
 
-def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, Agent]:
+def _schema_and_agent(
+    engine: Any, viewer: int
+) -> tuple[BeliefEncodingSchema, ActorCritic]:
     space = PossibleWorldSpace.from_engine(engine, viewer)
     count_buckets = max(2, max(count for _, count in space.pool) + 1)
     schema = belief_schema_from_engine(
@@ -62,9 +64,9 @@ def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, A
     )
     card_vocab_size = 1 + max(row.card_def_id for row in schema.rows)
     torch.manual_seed(19)
-    policy_value = Agent(
+    policy_value = ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,
@@ -78,7 +80,7 @@ def _run_swapped_world(
     engine: Any,
     observation: dict[str, np.ndarray],
     viewer: int,
-    policy_value: Agent,
+    policy_value: ActorCritic,
     schema: BeliefEncodingSchema,
 ) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)

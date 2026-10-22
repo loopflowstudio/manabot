@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 # Local imports
-from manabot.env.observation import ObservationEncoder, ObservationSpaceHypers
+from manabot.env.observation import ObservationConfig, ObservationEncoder
 import managym
 
 
@@ -23,9 +23,9 @@ def random_valid_action(obs: managym.Observation, rng: np.random.Generator) -> i
 
 def allocate_vector_buffers(
     num_envs: int,
-    hypers: ObservationSpaceHypers,
+    config: ObservationConfig,
 ) -> dict[str, np.ndarray]:
-    encoder = ObservationEncoder(hypers)
+    encoder = ObservationEncoder(config)
     buffers = encoder.allocate(num_envs)
     buffers.update(
         rewards=np.zeros((num_envs,), dtype=np.float64),
@@ -59,7 +59,7 @@ def assert_buffer_observation_equal(
 
 def expected_focus_indices(
     obs: managym.Observation,
-    hypers: ObservationSpaceHypers,
+    config: ObservationConfig,
 ) -> np.ndarray:
     object_to_index: dict[int, int] = {}
     current_object_index = 0
@@ -70,29 +70,29 @@ def expected_focus_indices(
     current_object_index += 1
 
     for cards in (obs.agent_cards, obs.opponent_cards):
-        ordered = cards[: hypers.max_cards_per_player]
+        ordered = cards[: config.max_cards_per_player]
         for card in ordered:
             object_to_index[card.id] = current_object_index
             current_object_index += 1
-        current_object_index += hypers.max_cards_per_player - len(ordered)
+        current_object_index += config.max_cards_per_player - len(ordered)
 
     for permanents in (obs.agent_permanents, obs.opponent_permanents):
-        ordered = permanents[: hypers.max_permanents_per_player]
+        ordered = permanents[: config.max_permanents_per_player]
         for permanent in ordered:
             object_to_index[permanent.id] = current_object_index
             current_object_index += 1
-        current_object_index += hypers.max_permanents_per_player - len(ordered)
+        current_object_index += config.max_permanents_per_player - len(ordered)
 
     out = np.full(
-        (hypers.max_actions, hypers.max_focus_objects),
+        (config.max_actions, config.max_focus_objects),
         -1,
         dtype=np.int32,
     )
     for action_index, action in enumerate(
-        obs.action_space.actions[: hypers.max_actions]
+        obs.action_space.actions[: config.max_actions]
     ):
         for focus_index, object_id in enumerate(
-            action.focus[: hypers.max_focus_objects]
+            action.focus[: config.max_focus_objects]
         ):
             out[action_index, focus_index] = object_to_index.get(object_id, -1)
 
@@ -103,8 +103,8 @@ def test_observation_parity():
     """Run 200 games, encode every observation both ways, and assert exact parity."""
     rng = np.random.default_rng(42)
     env = managym.Env(seed=42, skip_trivial=True)
-    hypers = ObservationSpaceHypers()
-    encoder = ObservationEncoder(hypers)
+    config = ObservationConfig()
+    encoder = ObservationEncoder(config)
 
     for game_i in range(200):
         obs, _ = env.reset(make_player_configs())
@@ -137,12 +137,12 @@ def test_observation_parity():
 def test_object_index_mapping_and_padded_focus_resolution():
     """Focus indices use deterministic object ordering and pad unused slots with -1."""
     env = managym.Env(seed=7, skip_trivial=True)
-    hypers = ObservationSpaceHypers()
+    config = ObservationConfig()
 
     obs, _ = env.reset(make_player_configs())
     encoded = env.encode_observation(obs)
 
-    expected_focus = expected_focus_indices(obs, hypers)
+    expected_focus = expected_focus_indices(obs, config)
     np.testing.assert_array_equal(encoded["action_focus"], expected_focus)
 
 
@@ -150,8 +150,8 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     None
 ):
     env = managym.Env(seed=5, skip_trivial=True)
-    hypers = ObservationSpaceHypers()
-    encoder = ObservationEncoder(hypers)
+    config = ObservationConfig()
+    encoder = ObservationEncoder(config)
     obs, _ = env.reset(make_player_configs())
 
     expected = env.encode_observation(obs)
@@ -167,7 +167,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
 
     bad = dict(out)
     bad["actions"] = np.zeros(
-        (hypers.max_actions, encoder.action_dim), dtype=np.float64
+        (config.max_actions, encoder.action_dim), dtype=np.float64
     )
     try:
         env.encode_observation_into(obs, bad)
@@ -179,8 +179,8 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
 
 def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
     rng = np.random.default_rng(1234)
-    hypers = ObservationSpaceHypers()
-    encoder = ObservationEncoder(hypers)
+    config = ObservationConfig()
+    encoder = ObservationEncoder(config)
     num_envs = 4
     player_configs = make_player_configs()
 
@@ -196,7 +196,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
         skip_trivial=True,
         opponent_policy="passive",
     )
-    buffers = allocate_vector_buffers(num_envs, hypers)
+    buffers = allocate_vector_buffers(num_envs, config)
     hot.set_buffers(buffers)
 
     compat_reset = compat.reset_all(player_configs)
@@ -238,7 +238,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
 
 
 def test_vector_env_set_buffers_validates_contract():
-    hypers = ObservationSpaceHypers()
+    config = ObservationConfig()
     num_envs = 2
     player_configs = make_player_configs()
     env = managym.VectorEnv(
@@ -247,7 +247,7 @@ def test_vector_env_set_buffers_validates_contract():
         skip_trivial=True,
         opponent_policy="passive",
     )
-    good = allocate_vector_buffers(num_envs, hypers)
+    good = allocate_vector_buffers(num_envs, config)
 
     env.set_buffers(good)
     env.reset_all_into_buffers(player_configs)
@@ -307,7 +307,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     permanents[0] = permanent
     obs.agent_permanents = permanents
 
-    encoder = ObservationEncoder(ObservationSpaceHypers())
+    encoder = ObservationEncoder(ObservationConfig())
     expected = encoder.encode(obs)
     actual = env.encode_observation(obs)
     for key, value in expected.items():

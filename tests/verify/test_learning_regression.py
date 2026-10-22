@@ -7,12 +7,12 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.model import Agent
+from manabot.model import ActorCritic
+from manabot.recipes.baseline import baseline
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.teacher1_evidence import runtime_fingerprints
-from manabot.training.baseline import baseline
 from manabot.training.models import TrainingCoordinates, TrainingRun
-from manabot.training.monitor_evaluation import _manifest
+from manabot.training.monitor_evaluation import checkpoint_manifest
 from manabot.verify.action_cases import decision_case
 from manabot.verify.choice_corpus import Case
 from manabot.verify.learning_regression import (
@@ -105,7 +105,7 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
     try:
         with torch.random.fork_rng():
             plan = baseline(1)
-            agent = Agent(ObservationSpace(), plan.regime.agent)
+            agent = ActorCritic(ObservationSpace(), plan.regime.agent)
             path = tmp_path / "initial.pt"
             save_bc_checkpoint(
                 agent,
@@ -121,11 +121,11 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
                 seed_streams={},
                 identities=runtime_fingerprints(
                     197,
-                    match_hypers=plan.regime.match,
+                    match_config=plan.regime.match,
                     observation_space=ObservationSpace(),
                 ),
             )
-            admitted = _manifest(
+            admitted = checkpoint_manifest(
                 run,
                 {
                     "path": str(path),

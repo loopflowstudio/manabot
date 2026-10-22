@@ -12,17 +12,17 @@ from dataclasses import dataclass
 import json
 from typing import Callable
 
+from managym.decision import Command, DecisionFrame, Observation
 import numpy as np
 from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.compound import CompoundOutput
 from manabot.sim.search_branch import SelectedFullCloneBackend
 from manabot.sim.structured_policy import RaggedOfferBatch, flatten_projection
 import managym
-from managym.decision import Command, DecisionFrame, Observation
 
 
 @dataclass(frozen=True)
@@ -93,7 +93,7 @@ def _routes_match(left: Command, right: Command) -> bool:
 
 
 def _decode(
-    agent: Agent,
+    agent: ActorCritic,
     cursor: CompoundCursor,
     prefix: tuple[int, ...],
     check: Callable[[], None],
@@ -143,7 +143,7 @@ def _lower(
 
 
 def compound_cursor(
-    agent: Agent, engine: managym.Env, check: Callable[[], None]
+    agent: ActorCritic, engine: managym.Env, check: Callable[[], None]
 ) -> CompoundCursor:
     check()
     actor = int(engine.current_agent_index())
@@ -167,7 +167,7 @@ def compound_cursor(
 
 
 def project_compound(
-    agent: Agent,
+    agent: ActorCritic,
     engine: managym.Env,
     cursor: CompoundCursor | None,
     check: Callable[[], None],
@@ -336,7 +336,7 @@ def project_compound(
 
 
 def advance_compound(
-    agent: Agent,
+    agent: ActorCritic,
     projection: CompoundProjection,
     action: int,
     check: Callable[[], None],
@@ -365,7 +365,7 @@ def advance_compound(
 
 
 def sample_suffix(
-    agent: Agent,
+    agent: ActorCritic,
     cursor: CompoundCursor,
     generator: torch.Generator,
     check: Callable[[], None],
@@ -384,7 +384,7 @@ class CompoundRollout:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         root: CompoundProjection,
         seed: int,
         check: Callable[[], None],

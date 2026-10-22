@@ -14,8 +14,8 @@ import torch
 from torch import Tensor
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.net_opponent import (
     RolloutBatch,
     SeatRoutedCollector,
@@ -65,13 +65,13 @@ def one_thread() -> Iterator[None]:
     torch.set_num_threads(previous)
 
 
-class TableAgent(Agent):
+class TableAgent(ActorCritic):
     """Independent logits per visible marker make per-row gradients inspectable."""
 
     def __init__(self, kind: Kind, *, opposite: bool = False) -> None:
         super().__init__(
             ObservationSpace(),
-            AgentSpec(attention_on=False, hidden_dim=4, value_kind=kind),
+            ModelConfig(attention_on=False, hidden_dim=4, value_kind=kind),
         )
         p = torch.tensor(
             [DISTRIBUTIONS.get(i % 20, [0.3, 0.3, 0.4]) for i in range(80)]
@@ -169,7 +169,7 @@ def collector_for(
     collector = SeatRoutedCollector(
         agent.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self" if second is None else "learning",
         opponent_agent=second,
@@ -413,7 +413,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
     collector = SeatRoutedCollector(
         agent.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode=mode,
         opponent_agent=opponent,

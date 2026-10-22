@@ -4,29 +4,29 @@ import numpy as np
 import pytest
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.verify.util import INTERACTIVE_DECK
 
 
 def _make_collector(
     opponent_mode: str,
-    opponent_agent: Agent | None = None,
+    opponent_agent: ActorCritic | None = None,
     num_envs: int = 4,
     seed: int = 7,
     recovery_max_game_microsteps: int | None = None,
 ) -> SeatRoutedCollector:
     obs_space = ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="hero",
             villain="villain",
             hero_deck=INTERACTIVE_DECK,
             villain_deck=INTERACTIVE_DECK,
         )
     )
-    reward = Reward(RewardHypers())
+    reward = Reward(RewardConfig())
     return SeatRoutedCollector(
         obs_space,
         match,
@@ -41,7 +41,7 @@ def _make_collector(
 
 
 def _make_agent():
-    return Agent(ObservationSpace(), AgentSpec(attention_on=False))
+    return ActorCritic(ObservationSpace(), ModelConfig(attention_on=False))
 
 
 def _check_batch(batch, num_steps, num_envs):

@@ -21,7 +21,7 @@ from typing import Any
 import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.sim.distill import OBS_KEYS, SCORE_KEY, _git_commit
 from manabot.sim.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
@@ -39,7 +39,7 @@ class _GameStream:
         self.env = Env(
             match,
             obs_space,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             seed=seed,
             auto_reset=False,
             enable_profiler=False,
@@ -107,7 +107,7 @@ def generate_selfplay_shard_pooled(
     sampler = BatchedSampler(agent, epsilon=epsilon, seed=seed * 2 + 1, device=device)
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero=f"{name}-a"[:32],
             villain=f"{name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),

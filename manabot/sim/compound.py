@@ -10,15 +10,15 @@ from dataclasses import dataclass
 import json
 from time import perf_counter
 
+from managym.decision import Command, DecisionFrame
 import torch
 from torch import Tensor
 
 from manabot.env import ObservationSpace
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.compound import CompoundOutput
 from manabot.sim.structured_policy import RaggedOfferBatch, flatten_projection
 import managym
-from managym.decision import Command, DecisionFrame
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class CompoundDecision:
 
 
 def sample_compound(
-    agent: Agent,
+    agent: ActorCritic,
     engine: managym.Env,
     raw: managym.Observation,
     *,
@@ -45,7 +45,7 @@ def sample_compound(
     space = agent.observation_space
     if len(raw.action_space.actions) > space.encoder.max_actions:
         space = ObservationSpace(
-            space.encoder.hypers.model_copy(
+            space.encoder.config.model_copy(
                 update={
                     "max_actions": len(raw.action_space.actions),
                 }
@@ -80,7 +80,7 @@ class CompoundPolicy:
     adapter supplies each already-decided microchoice, never resamples a suffix.
     """
 
-    def __init__(self, agent: Agent, *, deterministic: bool = False) -> None:
+    def __init__(self, agent: ActorCritic, *, deterministic: bool = False) -> None:
         self.agent = agent
         self.deterministic = deterministic
         self.pending: deque[Command] = deque()

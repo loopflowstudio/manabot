@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training import execution
 from manabot.training.checkpoint_queue import checkpoints
@@ -43,11 +43,11 @@ def producer(tmp_path: Path) -> TrainingRun:
     recipe = TrainingRegime(
         id="portable-test",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(
+        agent=ModelConfig(
             hidden_dim=8, num_attention_heads=2, value_kind="categorical_wdl"
         ),
         schedule_clock="iteration_fraction",
@@ -119,7 +119,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     original_update_ema = execution.update_ema
     observed_ema_updates = 0
 
-    def checked_ema(averaged: Agent, learner: Agent, rate: float) -> None:
+    def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
         nonlocal observed_ema_updates
         if observed_ema_updates == 0:
             for key, value in averaged.state_dict().items():

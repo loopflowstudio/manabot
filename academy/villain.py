@@ -12,7 +12,7 @@ Supported villain types (see ``build_villain_policy``):
   - "random":     uniform random over legal actions
   - "search":     manabot's FlatSearchPolicy, flat determinized Monte Carlo
                   (strength dial: sims per legal action, default 64)
-  - "checkpoint": a trained Agent loaded from a .pt training checkpoint,
+  - "checkpoint": a trained ActorCritic loaded from a .pt training checkpoint,
                   acting stochastically or greedily (deterministic flag)
 """
 
@@ -22,11 +22,12 @@ from collections.abc import Sequence
 import random
 from typing import TYPE_CHECKING, Callable
 
+from managym.enums import ActionEnum
+
 from manabot.sim.flat_search import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 
 # Local imports
 import managym
-from managym.enums import ActionEnum
 
 from .bot_decision import BotDecision, PolicyFactor
 
@@ -68,7 +69,7 @@ class RandomVillain:
 
 
 class CheckpointVillain:
-    """A trained Agent loaded from a training checkpoint (.pt).
+    """A trained ActorCritic loaded from a training checkpoint (.pt).
 
     Torch and the model stack are imported lazily so that search/random games
     never pay the import cost.
@@ -94,7 +95,7 @@ class CheckpointVillain:
         self.last_decision: BotDecision | None = None
         self.compound = (
             CompoundPolicy(self.agent, deterministic=deterministic)
-            if self.agent.hypers.compound_decisions
+            if self.agent.config.compound_decisions
             else None
         )
 
@@ -126,7 +127,7 @@ class CheckpointVillain:
             from manabot.env import ObservationSpace
 
             space = ObservationSpace(
-                space.encoder.hypers.model_copy(
+                space.encoder.config.model_copy(
                     update={
                         "max_actions": len(obs.action_space.actions),
                     }

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.flat_mc import MatchupPlayer, load_checkpoint_agent
 from manabot.sim.mcts import (
     DeterminizedPuctPlayer,
@@ -25,10 +25,10 @@ from .players import build_player
 class PolicyPriorRandomLeafEvaluator:
     """Use checkpoint logits only for priors and random terminal leaf values."""
 
-    def __init__(self, agent: Agent, observation_space: ObservationSpace):
+    def __init__(self, agent: ActorCritic, observation_space: ObservationSpace):
         try:
             device = next(agent.parameters()).device
-        except StopIteration as exc:  # pragma: no cover - Agent has parameters
+        except StopIteration as exc:  # pragma: no cover - ActorCritic has parameters
             raise ValueError("policy-prior evaluator requires a model") from exc
         if device.type != "cpu":
             raise ValueError("policy-prior evaluator requires a CPU model")

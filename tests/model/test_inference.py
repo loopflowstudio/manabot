@@ -9,8 +9,8 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
 from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from tests.training.test_recovery import recipe
@@ -32,7 +32,7 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 
 @dataclass
 class PolicyFixture:
-    agent: Agent
+    agent: ActorCritic
     collector: SeatRoutedCollector
     obs: dict[str, torch.Tensor]
 
@@ -45,11 +45,11 @@ def _policy(*, semantic: bool = True) -> PolicyFixture:
     if not semantic:
         config.agent.semantic_pack = None
     space = ObservationSpace(config.observation)
-    agent = Agent(space, config.agent).eval()
+    agent = ActorCritic(space, config.agent).eval()
     collector = SeatRoutedCollector(
         space,
         Match(config.match),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         seed=91,
         opponent_mode="self",

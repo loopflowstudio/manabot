@@ -14,7 +14,7 @@ from torch import Tensor
 from torch.nn import functional as F
 
 from manabot.env.observation import ACTION_TYPE_DIM
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -161,7 +161,7 @@ def _targets(
     learner: Learner,
     batch: RolloutBatch,
     learning: DampedPolicyLearning,
-    bootstrap_agent: Agent | None = None,
+    bootstrap_agent: ActorCritic | None = None,
 ) -> DampedTargets:
     device = learner.device
     rewards = torch.as_tensor(batch.rewards, device=device)
@@ -172,7 +172,7 @@ def _targets(
     next_obs = observation_tensors(batch.next_obs, device)
     _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
-    if learner.agent.hypers.value_kind == "categorical_wdl":
+    if learner.agent.config.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
             raise ValueError(
                 "categorical update requires collection outcome probabilities"
@@ -217,7 +217,7 @@ def update_damped_iteration(
     learning: DampedPolicyLearning,
     iteration: int,
     *,
-    bootstrap_agent: Agent | None = None,
+    bootstrap_agent: ActorCritic | None = None,
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
@@ -237,7 +237,7 @@ def update_damped_iteration(
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
-        "value_kind": learner.agent.hypers.value_kind,
+        "value_kind": learner.agent.config.value_kind,
         "rows": actions.numel(),
         "retained": int(targets.selected.sum()),
         "optimizer_exposures": 0,
@@ -263,7 +263,7 @@ def update_damped_iteration(
     observer = OptimizerHealth(learner.agent, learner.optimizer, health, iteration)
     expected_targets = (
         targets.values[..., 2] - targets.values[..., 0]
-        if learner.agent.hypers.value_kind == "categorical_wdl"
+        if learner.agent.config.value_kind == "categorical_wdl"
         else targets.values
     )
     chosen_types = (
@@ -333,7 +333,7 @@ def update_damped_iteration(
         )
         actor_mask = actor_selected[selected]
         policy_loss = selected_mean(policy_loss, actor_mask)
-        if learner.agent.hypers.value_kind == "categorical_wdl":
+        if learner.agent.config.value_kind == "categorical_wdl":
             value_loss = (
                 -(targets.values[indexes] * value_logits.log_softmax(-1)).sum(-1).mean()
             )

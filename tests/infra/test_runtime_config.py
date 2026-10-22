@@ -6,7 +6,7 @@ Tests for hyperparameter defaults that depend on process environment.
 import os
 import shutil
 
-from manabot.infra import Hypers
+from manabot.infra import RuntimeConfig
 
 
 def test_runs_dir_env_is_used_when_current_directory_was_removed(monkeypatch, tmp_path):
@@ -20,7 +20,7 @@ def test_runs_dir_env_is_used_when_current_directory_was_removed(monkeypatch, tm
         os.chdir(removed_cwd)
         shutil.rmtree(removed_cwd)
 
-        hypers = Hypers()
-        assert hypers.experiment.runs_dir == runs_dir
+        config = RuntimeConfig()
+        assert config.runs_dir == runs_dir
     finally:
         os.chdir(original_cwd)

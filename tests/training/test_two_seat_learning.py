@@ -9,12 +9,12 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.returns import transition_gae
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -76,18 +76,18 @@ class ScriptedGames:
         return [{"winner_index": 1}, {"winner_index": 1}]
 
 
-def _agent(kind: Literal["scalar", "categorical_wdl"] = "scalar") -> Agent:
+def _agent(kind: Literal["scalar", "categorical_wdl"] = "scalar") -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(
+    return ActorCritic(
         ObservationSpace(),
-        AgentSpec(attention_on=False, hidden_dim=8, value_kind=kind),
+        ModelConfig(attention_on=False, hidden_dim=8, value_kind=kind),
     )
 
 
 def _collector(
-    agent: Agent,
+    agent: ActorCritic,
     *,
-    second: Agent | None = None,
+    second: ActorCritic | None = None,
     seats: Literal["one", "both"] = "both",
     games: int | None = None,
     scripted: bool = True,
@@ -95,7 +95,7 @@ def _collector(
     collector = SeatRoutedCollector(
         agent.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="learning" if second is not None else "self",
         opponent_agent=second,
@@ -108,7 +108,7 @@ def _collector(
     return collector
 
 
-def _behavior_matches(batch: RolloutBatch, agent: Agent) -> None:
+def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     obs = observation_tensors(
         {
             key: value.reshape((-1,) + value.shape[2:])
@@ -266,7 +266,7 @@ def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
         SeatRoutedCollector(
             agent.observation_space,
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode=mode,
             opponent_agent=agent,
@@ -313,8 +313,8 @@ def test_regime_trains_and_exports_both_seats(
     regime = TrainingRegime(
         id="two-seat-smoke",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(),
-        agent=agent.hypers,
+        match=MatchConfig(),
+        agent=agent.config,
         stages=[stage],
         wall_seconds=120,
         schedule_clock="iteration_fraction",
@@ -330,7 +330,7 @@ def test_regime_trains_and_exports_both_seats(
     assert all(row["bootstrapped_tail_fraction"] == 0 for row in record.diagnostics)
     for role in ("raw", "ema"):
         loaded, _ = load_checkpoint_agent(record.artifacts[role]["path"])
-        assert loaded.hypers == agent.hypers
+        assert loaded.config == agent.config
 
 
 def test_live_continuation_cannot_silently_change_seat_recipe() -> None:
@@ -342,7 +342,7 @@ def test_live_continuation_cannot_silently_change_seat_recipe() -> None:
         TrainingRegime(
             id="invalid",
             world=managym.WORLD_VERSION,
-            match=MatchHypers(),
+            match=MatchConfig(),
             stages=[first, second],
         )
 
@@ -374,19 +374,6 @@ def test_move_learning_consumes_complete_seat_trajectories(
     assert max(steps) <= 4
 
 
-def test_schema_one_evidence_keeps_one_seat_and_its_original_bytes() -> None:
-    from manabot.training.presets import ataraxos_mtg_v1
-
-    frozen = ataraxos_mtg_v1().regime()
-    assert frozen.schema_version == 1
-    for stage in frozen.stages:
-        if isinstance(stage, TrainSelfPlay):
-            assert stage.learning_seats == "one"
-    assert "learning_seats" not in frozen.model_dump_json()
-    restored = TrainingRegime.model_validate_json(frozen.model_dump_json())
-    assert restored == frozen
-
-
 def test_collector_defaults_follow_policy_ownership() -> None:
     agent = _agent()
     for mode, seats in (
@@ -398,7 +385,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
         collector = SeatRoutedCollector(
             agent.observation_space,
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode=mode,
             opponent_agent=_agent(),

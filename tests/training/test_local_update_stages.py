@@ -3,16 +3,16 @@
 import json
 from pathlib import Path
 
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import pytest
 
 from experiments.belief_sampler import learned_belief_local_search
 from manabot.belief.likelihood import RulesProviderGap
-from manabot.infra.hypers import AgentSpec, MatchHypers
+from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.sim.distill import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.local_update import LocalSearchConfig
-from manabot.sim.search_supervised import _validate_dataset
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectLocalUpdate,
@@ -21,20 +21,20 @@ from manabot.training.models import (
     TrainSelfPlay,
     TrainSupervised,
 )
+from manabot.training.supervised import _validate_dataset
 from manabot.verify.store import VerifyStore
 import managym
-from managym.possible_worlds import PossibleWorldSpace
 
 
 def local_recipe() -> TrainingRegime:
     return TrainingRegime(
         id="local-update-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         wall_seconds=90,
         stages=[
             TrainSelfPlay(

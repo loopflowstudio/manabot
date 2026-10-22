@@ -1,7 +1,7 @@
 """The large model whose CUDA training-pipeline costs are profiled."""
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.training.builders import PACK, move_learning
 from manabot.training.models import Execution, TrainingRegime, TrainSelfPlay
 import managym
@@ -13,7 +13,7 @@ def gpu_training_profile() -> TrainingRegime:
         id="gpu-training-profile",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(
+        agent=ModelConfig(
             semantic_pack=PACK,
             value_aggregation="value_token",
             attention_layers=8,

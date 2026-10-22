@@ -8,8 +8,8 @@ import torch
 
 from manabot.arena.match import selected_match
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training.matchups import stream_matches
@@ -40,13 +40,13 @@ def test_strata_balance_decks_and_play_order() -> None:
 def test_mirror_admission_requires_exact_roster_and_explicit_option() -> None:
     base = Match(selected_match())
     space = ObservationSpace()
-    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     agent.world_binding = checkpoint_world(base.to_rust(), space)
     mirror = stream_matches(base, 12, "mirrors-balanced")[0]
     with pytest.raises(ValueError, match="setup differs"):
         validate_agent_setup(agent, mirror.to_rust())
     validate_agent_setup(agent, mirror.to_rust(), allow_deck_repetition=True)
-    changed = mirror.hypers.model_copy(deep=True)
+    changed = mirror.config.model_copy(deep=True)
     changed.hero_sideboard = {}
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(
@@ -58,9 +58,9 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
     torch.set_num_threads(1)
     match = Match(selected_match())
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )
@@ -69,7 +69,7 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
         return SeatRoutedCollector(
             space,
             match,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=12,
             seed=1250,
             opponent_mode="self",
@@ -92,7 +92,7 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
     engine.reset(Match(selected_match()).to_rust())
     expected = engine.content_pack_manifest()
     for deck in ("ur_lessons", "gw_allies"):
-        mirror = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
+        mirror = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
         engine.reset(mirror.to_rust())
         assert engine.content_pack_manifest() == expected
         engine.reset(mirror.swapped().to_rust())

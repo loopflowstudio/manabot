@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import (
     OBS_KEYS,
     ROOT_VALUE_KEY,
@@ -18,7 +18,7 @@ from manabot.sim.distill import (
     save_bc_checkpoint,
 )
 from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.search_supervised import (
+from manabot.training.supervised import (
     BLENDED_VALUE_TARGET,
     CHOSEN_ACTION_TARGET,
     ROOT_VALUE_TARGET,
@@ -33,14 +33,14 @@ from manabot.verify.util import INTERACTIVE_DECK
 def _dataset(seed: int = 7) -> dict[str, np.ndarray]:
     obs_space = ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="teacher-a",
             villain="teacher-b",
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    env = Env(match, obs_space, Reward(RewardHypers()), seed=seed, auto_reset=False)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
     rng = np.random.default_rng(seed)
     observations: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
     scores: list[np.ndarray] = []
@@ -97,7 +97,7 @@ def test_policy_only_and_joint_arms_isolate_value_gradient() -> None:
     dataset = _dataset()
     seed = 11
     torch.manual_seed(seed)
-    initial = Agent(ObservationSpace(), AgentSpec())
+    initial = ActorCritic(ObservationSpace(), ModelConfig())
     initial_state = {
         name: value.clone() for name, value in initial.state_dict().items()
     }
@@ -135,9 +135,7 @@ def test_policy_only_and_joint_arms_isolate_value_gradient() -> None:
     )
 
 
-def test_joint_checkpoint_round_trips(
-    tmp_path: Path, interactive_player_configs
-) -> None:
+def test_joint_checkpoint_round_trips(tmp_path: Path) -> None:
     dataset = _dataset(seed=19)
     agent, obs_space, _, history = train_search_supervised(
         dataset, epochs=1, batch_size=32, val_fraction=0.25, seed=3
@@ -147,7 +145,11 @@ def test_joint_checkpoint_round_trips(
         agent,
         obs_space,
         path,
-        player_configs=interactive_player_configs,
+        player_configs=Match(
+            MatchConfig(
+                hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
+            )
+        ).to_rust(),
         extra={
             "search_supervised": True,
             "value_brier": history[-1].validation.value_brier,
@@ -261,12 +263,12 @@ def test_training_fails_closed_at_expired_wall_deadline() -> None:
 
 
 def test_search_supervised_binds_the_declared_observation_shape():
-    from manabot.infra.hypers import ObservationSpaceHypers
+    from manabot.infra.config import ObservationConfig
 
     dataset = _dataset()
-    wider = ObservationSpaceHypers(max_actions=128)
+    wider = ObservationConfig(max_actions=128)
     with pytest.raises(ValueError, match="actions shape differs"):
-        train_search_supervised(dataset, epochs=1, observation_hypers=wider)
+        train_search_supervised(dataset, epochs=1, observation_config=wider)
 
     padded = dict(dataset)
     for key in ("actions", "action_focus", "actions_valid", SCORE_KEY):
@@ -275,9 +277,9 @@ def test_search_supervised_binds_the_declared_observation_shape():
         fill = {"action_focus": -1, SCORE_KEY: -1.0}.get(key, 0)
         padded[key] = np.pad(dataset[key], width, constant_values=fill)
     _, obs_space, _, _ = train_search_supervised(
-        padded, epochs=1, batch_size=32, observation_hypers=wider
+        padded, epochs=1, batch_size=32, observation_config=wider
     )
-    assert obs_space.encoder.hypers == wider
+    assert obs_space.encoder.config == wider
 
 
 def test_cumulative_training_keeps_whole_game_split_and_adam_state():

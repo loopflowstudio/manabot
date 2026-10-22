@@ -53,8 +53,8 @@ and do not turn an observation-only policy into a belief-enabled player.
 The [belief sampler guide](belief-sampler.md) describes the bounded pilot,
 physical-deal baseline, history-dropout treatment and scientific limits.
 
-The recipe reuses `AgentSpec`, `ObservationSpaceHypers`, and authored
-`MatchHypers`, including both sideboards. Architecture and match binding live
+The recipe reuses `ModelConfig`, `ObservationConfig`, and authored
+`MatchConfig`, including both sideboards. Architecture and match binding live
 once per regime. Every stage declares its device, float32 precision, worker
 count, Torch thread count, wall and memory limits. Learning settings independently
 select estimators, filtering, regularization reference, schedules, and EMA.
@@ -100,7 +100,7 @@ named components, frozen baselines/versioned presets, explicit overrides and ord
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
 identities. `manabot.training.builders` holds the reusable composition helpers.
-`AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
+`ModelConfig` remains the model type; checkpoints retain the `agent_hypers` dictionary
 and existing field meanings. Resolution never allocates compute or starts training.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
@@ -160,7 +160,7 @@ recipes remain controls; the new recipe does not alter a frozen study.
 
 ## Compound decisions
 
-`AgentSpec.compound_decisions=true` selects the learned ragged policy, and
+`ModelConfig.compound_decisions=true` selects the learned ragged policy, and
 `train_compound` collects complete self-play games before each optimizer update.
 Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
 are separate from the frozen ETU-91 campaign. Their defaults are bounded proof
@@ -318,7 +318,7 @@ histories = CollectBelief(
 # Resolution only declares work; execute_regime / manabot train --regime executes it.
 ```
 
-The regime's AgentSpec, observation contract and world must match the producer
+The regime's ModelConfig, observation contract and world must match the producer
 and checkpoint. Ordinary checkpoint loading validates model weights, architecture,
 native world/content/input bindings and the actual execution setup. The selected
 producer stage must be completed; a later failure in the producer run does not
@@ -370,7 +370,7 @@ The settings divide by what the weights depend on:
 | Must equal the producer | Free to change |
 | --- | --- |
 | world | learning rule and every schedule (learning rate, tau, filtering, EMA rate) |
-| `AgentSpec` (architecture, value kind) | `streams`, `transitions`, `updates` |
+| `ModelConfig` (architecture, value kind) | `streams`, `transitions`, `updates` |
 | observation contract | `behavior`, `opponent`, execution device |
 | | training seed, and the match if the checkpoint validates against it |
 

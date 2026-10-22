@@ -11,7 +11,7 @@ cannot change its baseline. TrainingRegime remains the serialized owner.
 from collections.abc import Sequence
 from typing import Literal
 
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.training.models import (
     DampedPolicyLearning,
     Execution,
@@ -114,9 +114,9 @@ def ppo_checkpoints(count: int, learning: Learning) -> list[Operation]:
 # ---------------------------------------------------------------------------
 
 
-def gray_ogre_match() -> MatchHypers:
+def gray_ogre_match() -> MatchConfig:
     """The small Gray Ogre against Llanowar Elves matchup for belief and local search."""
-    return MatchHypers(
+    return MatchConfig(
         hero_deck={"Mountain": 8, "Gray Ogre": 8},
         villain_deck={"Forest": 8, "Llanowar Elves": 8},
     )
@@ -138,9 +138,9 @@ def ataraxos_baseline(
     *,
     id: str,
     world: str,
-    match: MatchHypers,
-    observation: ObservationSpaceHypers,
-    agent: AgentSpec,
+    match: MatchConfig,
+    observation: ObservationConfig,
+    agent: ModelConfig,
     checkpoints: int,
     updates: int,
     transitions: int,
@@ -171,7 +171,9 @@ def ataraxos_baseline(
     return TrainingRegime.model_validate(regime.model_dump())
 
 
-def with_agent(regime: TrainingRegime, *, id: str, agent: AgentSpec) -> TrainingRegime:
+def with_agent(
+    regime: TrainingRegime, *, id: str, agent: ModelConfig
+) -> TrainingRegime:
     """Replace only model settings and label; reject incompatible stage targets."""
     return TrainingRegime.model_validate(
         {**regime.model_dump(), "id": id, "agent": agent.model_dump()}
@@ -182,7 +184,7 @@ def with_recent_events(
     regime: TrainingRegime, *, id: str, enabled: bool
 ) -> TrainingRegime:
     """Select public recent-event context independently of model size and learning."""
-    agent = AgentSpec.model_validate(
+    agent = ModelConfig.model_validate(
         {**regime.agent.model_dump(), "recent_events": enabled}
     )
     return with_agent(regime, id=id, agent=agent)
@@ -196,7 +198,7 @@ def with_value_output(
     The learning rule is preserved. In particular, converting ordinary PPO to WDL
     fails regime validation instead of silently switching to Ataraxos move learning.
     """
-    agent = AgentSpec.model_validate(
+    agent = ModelConfig.model_validate(
         {**regime.agent.model_dump(), "value_kind": output}
     )
     return with_agent(regime, id=id, agent=agent)
@@ -206,7 +208,7 @@ def with_value_aggregation(
     regime: TrainingRegime, *, id: str, aggregation: ValueAggregation
 ) -> TrainingRegime:
     """Change pooling only, preserving output representation and learning rules."""
-    agent = AgentSpec.model_validate(
+    agent = ModelConfig.model_validate(
         {**regime.agent.model_dump(), "value_aggregation": aggregation}
     )
     return with_agent(regime, id=id, agent=agent)
@@ -224,14 +226,14 @@ def with_capacity(
     """Select delivered width/depth/head fields without changing information inputs.
 
     Omission preserves the baseline expansion; None restores heads × width.
-    Invalid head divisibility and compound combinations fail ordinary AgentSpec validation.
+    Invalid head divisibility and compound combinations fail ordinary ModelConfig validation.
     """
     expansion = (
         {}
         if isinstance(feedforward_dim, _Unset)
         else {"attention_feedforward_dim": feedforward_dim}
     )
-    agent = AgentSpec.model_validate(
+    agent = ModelConfig.model_validate(
         {
             **regime.agent.model_dump(),
             **expansion,

@@ -11,9 +11,8 @@ from pydantic import (
     model_validator,
 )
 
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.sim.local_update import LocalSearchConfig
-from manabot.training.compatibility import LearningInput
 from manabot.training.game_errors import GameErrorPolicy, GameErrorState
 
 
@@ -149,7 +148,7 @@ class IterationSchedule(Strict):
         return 1 + progress * (self.reference_steps - 1)
 
 
-class DampedPolicyLearning(LearningInput, Strict):
+class DampedPolicyLearning(Strict):
     """Unnormalized clipped policy update with reverse-KL regularization.
 
     Iteration schedules, one epoch and no advantage normalization belong to
@@ -305,7 +304,7 @@ class FrozenOpponent(Strict):
 class PretrainedPolicy(Strict):
     """Published weights a self-play stage starts from instead of random ones.
 
-    The producer fixes what the weights mean, so its world, Agent architecture
+    The producer fixes what the weights mean, so its world, ActorCritic architecture
     and observation encoding must equal this regime's. How learning proceeds is
     this run's own choice: the learning rule and its schedules, streams,
     transitions, behavior, opponent and seed may all differ from the producer.
@@ -340,7 +339,7 @@ class LearningStateImport(Strict):
     raw: ArtifactReference
     ema: ArtifactReference
     optimizer: ArtifactReference
-    source_match: MatchHypers | None = Field(
+    source_match: MatchConfig | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
 
@@ -596,9 +595,9 @@ class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
     world: str
-    match: MatchHypers
-    observation: ObservationSpaceHypers = ObservationSpaceHypers()
-    agent: AgentSpec = AgentSpec()
+    match: MatchConfig
+    observation: ObservationConfig = ObservationConfig()
+    agent: ModelConfig = ModelConfig()
     stages: list[Operation] = Field(min_length=1)
     wall_seconds: float = Field(default=900, gt=0)
     schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
@@ -694,7 +693,7 @@ class TrainingRegime(Strict):
             or (self.agent.compound_decisions and not (has_compound or has_import))
         ):
             raise ValueError(
-                "compound stages and compound Agent must be selected together"
+                "compound stages and compound ActorCritic must be selected together"
             )
         if self.agent.compound_decisions and any(
             not isinstance(

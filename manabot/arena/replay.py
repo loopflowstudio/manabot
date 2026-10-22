@@ -20,7 +20,7 @@ from manabot.env.replay import (
     require_replay_runtime,
     run_bounded_replay,
 )
-from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
+from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.model.world import checkpoint_world
 from manabot.sim.teacher1_evidence import (
     RECORDED_ASSET_MANIFEST_HASH,
@@ -100,7 +100,7 @@ def replay_environment(
         if root != scenario_identity(name):
             raise ValueError("scenario root version/world/source mismatch")
         space = observation_space or ObservationSpace(
-            ObservationSpaceHypers(**game["observation_hypers"])
+            ObservationConfig(**game["observation_hypers"])
         )
         env, observation, _ = build_scenario_env(
             SCENARIOS[name], space, int(game["deal_seed"])
@@ -111,9 +111,9 @@ def replay_environment(
         return env, observation
     names = game["seat_players"]
     match = Match(
-        MatchHypers.model_validate(game["match_hypers"])
+        MatchConfig.model_validate(game["match_hypers"])
         if "match_hypers" in game
-        else MatchHypers(
+        else MatchConfig(
             hero=str(names[0]),
             villain=str(names[1]),
             hero_deck=dict(INTERACTIVE_DECK),
@@ -123,10 +123,8 @@ def replay_environment(
     env = Env(
         match,
         observation_space
-        or ObservationSpace(
-            ObservationSpaceHypers(**game.get("observation_hypers", {}))
-        ),
-        Reward(RewardHypers()),
+        or ObservationSpace(ObservationConfig(**game.get("observation_hypers", {}))),
+        Reward(RewardConfig()),
         seed=int(game["deal_seed"]),
         auto_reset=False,
     )

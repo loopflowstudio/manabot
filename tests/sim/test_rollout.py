@@ -9,8 +9,8 @@ import numpy as np
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import soft_targets_from_scores
 from manabot.sim.flat_mc import aggregate_records
 from manabot.sim.rollout import (
@@ -26,14 +26,14 @@ from manabot.verify.util import INTERACTIVE_DECK
 def make_env(seed: int = 3) -> tuple[Env, dict]:
     obs_space = ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="a",
             villain="b",
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    env = Env(match, obs_space, Reward(RewardHypers()), seed=seed, auto_reset=False)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
     obs, _ = env.reset(seed=seed)
     return env, obs
 
@@ -113,7 +113,7 @@ class TestBatchedSampler:
         return buffers
 
     def test_selects_valid_actions_only(self):
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         buffers = self._obs_batch()
         rows = np.arange(8)
         for kwargs in (
@@ -139,7 +139,7 @@ class TestBatchedSampler:
 class TestVectorDriver:
     def test_seat_balanced_records(self):
         torch.manual_seed(0)
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         sampler = BatchedSampler(agent, seed=1)
         records, stats = run_vector_games(
             sampler,
@@ -159,7 +159,7 @@ class TestPolicyRolloutPlayer:
     def test_plays_and_scores(self):
         torch.manual_seed(0)
         env, obs = make_env(seed=13)
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         sampler = BatchedSampler(agent, epsilon=0.2, seed=5)
         player = PolicyRolloutMCPlayer(4, sampler, seed=17)
         action = player.act(env, obs)

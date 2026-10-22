@@ -246,7 +246,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     space = space or ObservationSpace()
     match = selected_match()
     runtime = arena_runtime_fingerprints(
-        match_hypers=match, observation_space=space, world=WORLD_VERSION
+        match_config=match, observation_space=space, world=WORLD_VERSION
     )
     common = dict(
         runner_kind="code",
@@ -322,7 +322,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
         "source_paths": source_paths,
         "source_sha256": source_sha256,
         "match_hypers": match.model_dump(),
-        "observation": space.encoder.hypers.model_dump(),
+        "observation": space.encoder.config.model_dump(),
         "deal_seeds": list(args.deal_seeds),
         "legs_per_block": 4,
         "game_seconds": args.game_seconds,

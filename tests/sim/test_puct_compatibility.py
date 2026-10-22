@@ -18,8 +18,8 @@ from manabot.arena.models import (
 from manabot.arena.players import build_player
 from manabot.arena.replay import replay_games
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.local_compound import advance_compound, project_compound
@@ -40,12 +40,12 @@ def _check() -> None:
     pass
 
 
-def _flat_agent(*, categorical: bool = False) -> tuple[Agent, ObservationSpace]:
+def _flat_agent(*, categorical: bool = False) -> tuple[ActorCritic, ObservationSpace]:
     torch.set_num_threads(1)
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=16,
             num_attention_heads=2,
             value_kind="categorical_wdl" if categorical else "scalar",
@@ -248,9 +248,9 @@ def test_registered_puct_completes_games_and_replays(
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(hidden_dim=16, num_attention_heads=2, compound_decisions=compound),
+        ModelConfig(hidden_dim=16, num_attention_heads=2, compound_decisions=compound),
     )
     path = tmp_path / "fixture.pt"
     save_bc_checkpoint(

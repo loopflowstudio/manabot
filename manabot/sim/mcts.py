@@ -39,7 +39,7 @@ from manabot.sim.search_branch import (
 from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 if TYPE_CHECKING:
-    from manabot.model.agent import Agent
+    from manabot.model.actor_critic import ActorCritic
 
 _U64_MASK = (1 << 64) - 1
 
@@ -54,7 +54,7 @@ def puct_source_sha256() -> str:
         "manabot/sim/structured_policy.py",
         "manabot/sim/search_branch.py",
         "manabot/model/compound.py",
-        "manabot/model/agent.py",
+        "manabot/model/actor_critic.py",
         "manabot/model/world.py",
         "manabot/env/observation.py",
     )
@@ -173,14 +173,16 @@ class AgentLeafEvaluator:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         observation_space: ObservationSpace,
         *,
         value_mode: str = "learned",
     ) -> None:
         try:
             device = next(agent.parameters()).device
-        except StopIteration as exc:  # pragma: no cover - Agent always has parameters
+        except (
+            StopIteration
+        ) as exc:  # pragma: no cover - ActorCritic always has parameters
             raise ValueError(
                 "agent leaf evaluator requires a parameterized model"
             ) from exc
@@ -217,7 +219,7 @@ class AgentLeafEvaluator:
     def _predict(
         self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
     ) -> tuple[np.ndarray, float]:
-        if self.agent.hypers.compound_decisions:
+        if self.agent.config.compound_decisions:
             raise ValueError("compound PUCT requires an engine and retained prefix")
         encoded = (
             observation
@@ -281,7 +283,7 @@ class AgentLeafEvaluator:
     ) -> LeafEvaluation:
         del branch_session, seed, max_steps
         projection = None
-        if self.agent.hypers.compound_decisions:
+        if self.agent.config.compound_decisions:
             projection = self.project(env, compound_cursor, check)
             priors, node_value = projection.probabilities, self._score(projection.value)
         else:
@@ -556,7 +558,7 @@ def determinized_puct(
     root_projection = None
     if (
         isinstance(evaluator, AgentLeafEvaluator)
-        and evaluator.agent.hypers.compound_decisions
+        and evaluator.agent.config.compound_decisions
     ):
         root_projection = evaluator.project(root_env, compound_cursor, check)
         root_priors = root_projection.probabilities

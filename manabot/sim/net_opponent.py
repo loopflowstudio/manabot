@@ -1,4 +1,4 @@
-"""Seat-routed on-policy collection and PPO training.
+"""Seat-routed on-policy collection for shared RL learning rules.
 
 ``SeatRoutedCollector`` owns native game streams and frozen behavior scopes.
 One-seat collection alternates learner seats by stream and pauses at an exact
@@ -32,9 +32,9 @@ import torch
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CapturedVector
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
 from manabot.model.policy_distribution import (
     NumericalError,
@@ -203,7 +203,7 @@ class SeatRoutedCollector:
         num_envs: int,
         seed: int = 0,
         opponent_mode: str = "random",
-        opponent_agent: Agent | None = None,
+        opponent_agent: ActorCritic | None = None,
         learning_seats: Literal["one", "both"] | None = None,
         games_per_stream: int | None = None,
         device: str = "cpu",
@@ -339,8 +339,8 @@ class SeatRoutedCollector:
                 self._opponent = None
             self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
 
-            self._win_reward = float(reward.hypers.win_reward)
-            self._lose_reward = float(reward.hypers.lose_reward)
+            self._win_reward = float(reward.config.win_reward)
+            self._lose_reward = float(reward.config.lose_reward)
             for row in range(num_envs):
                 self._expose(row, "game_roots")
         except BaseException:
@@ -435,7 +435,7 @@ class SeatRoutedCollector:
                 first, second = self._uniform_roster[a], self._uniform_roster[b]
                 self.stream_matches.append(
                     Match(
-                        MatchHypers(
+                        MatchConfig(
                             hero=first.name,
                             villain=second.name,
                             hero_deck=first.decklist,
@@ -479,7 +479,7 @@ class SeatRoutedCollector:
     # -- opponent routing -----------------------------------------------------
 
     def _opponent_actions(
-        self, agent: Agent, rows: np.ndarray, inference: PolicyInference
+        self, agent: ActorCritic, rows: np.ndarray, inference: PolicyInference
     ) -> np.ndarray:
         if self.opponent_mode == "self":
             obs = self._slice_obs_tensors(rows, inference)
@@ -539,7 +539,7 @@ class SeatRoutedCollector:
 
     def collect(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -569,7 +569,7 @@ class SeatRoutedCollector:
 
     def collect_pair(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -598,7 +598,7 @@ class SeatRoutedCollector:
 
     def _collect(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         num_steps: int,
         inference: PolicyInference,
         *,
@@ -883,7 +883,7 @@ class SeatRoutedCollector:
                 stream=row,
                 seed=seed,
                 seat=seat,
-                matchup=self.stream_matches[row].hypers,
+                matchup=self.stream_matches[row].config,
                 outcome=outcome,
                 actions=[] if completed else list(self._game_actions[row]),
                 error_class=error_class,
@@ -900,7 +900,7 @@ class SeatRoutedCollector:
 
     def _sample_learning_rows(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
         inference: PolicyInference,
@@ -910,7 +910,7 @@ class SeatRoutedCollector:
         with self.profiler.track("Policy inference and action selection"):
             with torch.no_grad():
                 outcomes: np.ndarray | None = None
-                if agent.hypers.value_kind == "categorical_wdl":
+                if agent.config.value_kind == "categorical_wdl":
                     logits, outcome_logits = agent.forward_distribution(obs_t)
                     outcome_t = outcome_logits.softmax(dim=-1)
                     value_t = outcome_t[:, 2] - outcome_t[:, 0]

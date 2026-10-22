@@ -108,14 +108,14 @@ def test_deadline_retains_failed_attempt(tmp_path):
 def test_named_treatments_execute_real_optimizer_batches():
 
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec
-    from manabot.model.agent import Agent
+    from manabot.infra.config import ModelConfig
+    from manabot.model.actor_critic import ActorCritic
     from manabot.sim.net_opponent import RolloutBatch
     from manabot.training.objectives import update_iteration
 
     torch.set_num_threads(1)
     space = ObservationSpace()
-    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     obs = space.encoder.allocate(2)
     obs["actions_valid"][:, :2] = 1
     obs["agent_player_valid"][:] = 1
@@ -214,13 +214,13 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     from manabot.training import execution
 
     closed = []
-    close = execution.Experiment.close
+    close = execution.RunContext.close
 
     def track_close(experiment, state="finished"):
         closed.append(experiment)
         close(experiment, state)
 
-    monkeypatch.setattr(execution.Experiment, "close", track_close)
+    monkeypatch.setattr(execution.RunContext, "close", track_close)
     value = recipe()
     value.agent.hidden_dim = 8
     value.agent.num_attention_heads = 2
@@ -421,3 +421,12 @@ def test_regime_names_say_file_and_recipe() -> None:
     assert scale.id == "scale-ladder-allies-lessons-v1"
     with pytest.raises(typer.BadParameter, match="batched_baseline:scale_ladder"):
         named_regime("scale-ladder")
+
+
+def test_legacy_learning_discriminator_is_rejected() -> None:
+    from manabot.training.models import DampedPolicyLearning
+
+    with pytest.raises(ValueError):
+        DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
+    rule = DampedPolicyLearning(gradient="damped_policy")
+    assert rule.model_dump()["gradient"] == "damped_policy"

@@ -9,7 +9,7 @@ from manabot.config.load import (
     load_sim_config,
     parse_set_override,
 )
-from manabot.infra import ExperimentHypers, SimulationHypers
+from manabot.infra import RuntimeConfig, SimulationConfig
 
 
 def test_parse_set_override_basic_types():
@@ -32,14 +32,14 @@ def test_apply_set_overrides_creates_nested_keys():
 
 
 def test_load_sim_config_with_overrides():
-    sim, experiment = load_sim_config(
+    sim, runtime = load_sim_config(
         preset="sim",
-        set_overrides=["sim.num_games=10", "experiment.log_level=INFO"],
+        set_overrides=["sim.num_games=10", "runtime.log_level=INFO"],
     )
-    assert isinstance(sim, SimulationHypers)
-    assert isinstance(experiment, ExperimentHypers)
+    assert isinstance(sim, SimulationConfig)
+    assert isinstance(runtime, RuntimeConfig)
     assert sim.num_games == 10
-    assert experiment.log_level == "INFO"
+    assert runtime.log_level == "INFO"
 
 
 @pytest.mark.parametrize(

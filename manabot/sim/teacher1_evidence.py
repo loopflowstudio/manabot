@@ -14,19 +14,6 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
-import numpy as np
-
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ActionEnum, ActionSpaceEnum
-from manabot.infra.hypers import MatchHypers, RewardHypers
-from manabot.sim.mcts import (
-    DeterminizedPuctPlayer,
-    _mix_seed as _mcts_mix_seed,
-    determinized_puct,
-)
-from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
-from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
-import managym
 from managym.experience import (
     PROTOCOL_VERSION,
     UNVERSIONED_CONTENT_HASH,
@@ -39,6 +26,19 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+import numpy as np
+
+from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.observation import ActionEnum, ActionSpaceEnum
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.sim.mcts import (
+    DeterminizedPuctPlayer,
+    _mix_seed as _mcts_mix_seed,
+    determinized_puct,
+)
+from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
+from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
+import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
@@ -107,7 +107,7 @@ def engine_source_paths() -> list[Path]:
 def runtime_fingerprints(
     seed: int = 197,
     *,
-    match_hypers: MatchHypers | None = None,
+    match_config: MatchConfig | None = None,
     observation_space: ObservationSpace | None = None,
     world: str = managym.WORLD_VERSION,
 ) -> dict[str, Any]:
@@ -118,7 +118,7 @@ def runtime_fingerprints(
         )
 
     obs_space = observation_space or ObservationSpace()
-    matchup = match_hypers or MatchHypers(
+    matchup = match_config or MatchConfig(
         hero="teacher-a",
         villain="teacher-b",
         hero_deck=dict(INTERACTIVE_DECK),
@@ -127,7 +127,7 @@ def runtime_fingerprints(
     env = Env(
         Match(matchup),
         obs_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
     )
@@ -265,7 +265,7 @@ def build_command(frame: dict[str, Any], action: int) -> dict[str, Any]:
 
 def _fresh_env(seed: int) -> Env:
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="teacher-a",
             villain="teacher-b",
             hero_deck=dict(INTERACTIVE_DECK),
@@ -275,7 +275,7 @@ def _fresh_env(seed: int) -> Env:
     env = Env(
         match,
         ObservationSpace(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
     )

@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.compound import CompoundDecoder
 from manabot.sim.compound import CompoundPolicy, sample_compound
 from manabot.sim.flat_mc import load_checkpoint_agent, make_player
@@ -55,17 +55,17 @@ def _projection(count: int, minimum: int, maximum: int) -> dict[str, object]:
     }
 
 
-def _agent(*, wide: bool = False) -> Agent:
+def _agent(*, wide: bool = False) -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(
+    return ActorCritic(
         ObservationSpace(
-            ObservationSpaceHypers(
+            ObservationConfig(
                 max_cards_per_player=100 if wide else 60,
                 max_permanents_per_player=80 if wide else 40,
                 max_actions=128 if wide else 64,
             )
         ),
-        AgentSpec(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
+        ModelConfig(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
     )
 
 
@@ -219,7 +219,7 @@ def _check() -> None:
 
 def _match() -> Match:
     return Match(
-        MatchHypers(
+        MatchConfig(
             hero_deck={"Mountain": 6, "Gray Ogre": 6},
             villain_deck={"Mountain": 6, "Gray Ogre": 6},
         )
@@ -287,7 +287,7 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
         {
             "id": "compound-test",
             "world": managym.WORLD_VERSION,
-            "match": _match().hypers.model_dump(),
+            "match": _match().config.model_dump(),
             "agent": {
                 "compound_decisions": True,
                 "hidden_dim": 16,
@@ -310,7 +310,7 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
     path = run.stages[0].artifacts["raw"]["path"]
     loaded, _ = load_checkpoint_agent(path)
     torch.manual_seed(91)
-    original = Agent(loaded.observation_space, regime.agent)
+    original = ActorCritic(loaded.observation_space, regime.agent)
     assert not torch.equal(
         original.compound_decoder.include_score.weight,
         loaded.compound_decoder.include_score.weight,
@@ -601,8 +601,8 @@ def test_hidden_world_swap_cannot_change_root_policy(kind: str) -> None:
 
 
 def test_legacy_recipe_serialization_does_not_gain_compound_identity() -> None:
-    assert "compound_decisions" not in AgentSpec().model_dump()
-    assert AgentSpec(compound_decisions=True).model_dump()["compound_decisions"]
+    assert "compound_decisions" not in ModelConfig().model_dump()
+    assert ModelConfig(compound_decisions=True).model_dump()["compound_decisions"]
 
 
 def test_failed_regime_registers_incomplete_attempt_without_checkpoint(
@@ -612,7 +612,7 @@ def test_failed_regime_registers_incomplete_attempt_without_checkpoint(
         {
             "id": "partial-compound",
             "world": managym.WORLD_VERSION,
-            "match": _match().hypers.model_dump(),
+            "match": _match().config.model_dump(),
             "agent": {
                 "compound_decisions": True,
                 "hidden_dim": 16,
@@ -670,7 +670,7 @@ def test_terminal_game_without_choices_does_not_invent_optimizer_rows(
 ) -> None:
     agent = _agent()
     match = Match(
-        MatchHypers(hero_deck={"Craw Wurm": 7}, villain_deck={"Craw Wurm": 7})
+        MatchConfig(hero_deck={"Craw Wurm": 7}, villain_deck={"Craw Wurm": 7})
     )
     game = collect_game(
         agent,

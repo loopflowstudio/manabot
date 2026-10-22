@@ -17,7 +17,7 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.remote import plan as remote_plan
 from manabot.remote.cohort import CohortEntry
 from manabot.remote.jobs import JobPhase, JobRecord, Resource
@@ -64,7 +64,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         id="game-recovery",
         world=managym.WORLD_VERSION,
         match=_payment_match(),
-        agent=AgentSpec(attention_on=False, hidden_dim=8),
+        agent=ModelConfig(attention_on=False, hidden_dim=8),
         schedule_clock="iteration_fraction",
         wall_seconds=120,
         recovery=RecoveryPolicy(checkpoint_updates=1),

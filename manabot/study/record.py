@@ -20,7 +20,7 @@ import time
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 # First-party imports
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 
 from .targeting import TargetChoice, inspect_target
 
@@ -221,15 +221,15 @@ def _decision(
 
 def record_game(spec: GameSpec) -> GameRecord:
     """Play one game to the end. Failures are kept as records, never dropped."""
+    from managym.experience import UNVERSIONED_CONTENT_HASH
     import torch
 
     from manabot.env import Env, Match, ObservationSpace, Reward
-    from manabot.infra.hypers import RewardHypers
+    from manabot.infra.config import RewardConfig
     from manabot.sim.teacher1_evidence import (
         RECORDED_ASSET_MANIFEST_HASH,
         build_viewer_frame,
     )
-    from managym.experience import UNVERSIONED_CONTENT_HASH
 
     torch.set_num_threads(1)
     record = GameRecord(spec.game_id, spec.labels, spec.decks, spec.seed)
@@ -243,9 +243,9 @@ def record_game(spec: GameSpec) -> GameRecord:
         if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
             raise ValueError("players have different observation ABIs")
         env = Env(
-            Match(MatchHypers.model_validate(spec.match)),
+            Match(MatchConfig.model_validate(spec.match)),
             spaces[0] if spaces else ObservationSpace(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             seed=spec.seed,
             auto_reset=False,
         )

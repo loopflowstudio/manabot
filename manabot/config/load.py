@@ -4,7 +4,7 @@ import ast
 from copy import deepcopy
 from typing import Any, Iterable
 
-from manabot.infra import ExperimentHypers, SimulationHypers
+from manabot.infra import RuntimeConfig, SimulationConfig
 
 from .presets import (
     DEFAULT_SIM_PRESET,
@@ -92,21 +92,21 @@ def apply_set_overrides(
 def load_sim_config(
     preset: str = DEFAULT_SIM_PRESET,
     set_overrides: Iterable[str] | None = None,
-) -> tuple[SimulationHypers, ExperimentHypers]:
+) -> tuple[SimulationConfig, RuntimeConfig]:
     """Load and validate a simulation config from preset + overrides."""
 
     config = get_sim_preset(preset)
     if set_overrides:
         config = apply_set_overrides(config, set_overrides)
 
-    extra_top_level = set(config) - {"sim", "experiment"}
+    extra_top_level = set(config) - {"sim", "runtime"}
     if extra_top_level:
         extras = ", ".join(sorted(extra_top_level))
         raise ValueError(f"Unknown simulation config section(s): {extras}")
 
     sim_raw = config.get("sim", {})
-    experiment_raw = config.get("experiment", {})
+    runtime_raw = config.get("runtime", {})
     return (
-        SimulationHypers.model_validate(sim_raw),
-        ExperimentHypers.model_validate(experiment_raw),
+        SimulationConfig.model_validate(sim_raw),
+        RuntimeConfig.model_validate(runtime_raw),
     )

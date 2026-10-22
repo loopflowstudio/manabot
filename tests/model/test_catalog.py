@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.model.catalog import (
     NotAPolicyCheckpoint,
     discover_checkpoints,
@@ -23,9 +23,9 @@ PACK = "ur-lessons-vs-gw-allies"
 
 
 def _write_checkpoint(path: Path) -> None:
-    agent = Agent(
+    agent = ActorCritic(
         ObservationSpace(),
-        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
     save_bc_checkpoint(
         agent,

@@ -8,7 +8,7 @@ import pytest
 
 from manabot.belief.sampling_data import read_dataset
 from manabot.belief.sampling_fit import load_belief_sampler
-from manabot.infra.hypers import AgentSpec, MatchHypers
+from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
@@ -29,11 +29,11 @@ def belief_recipe() -> TrainingRegime:
     return TrainingRegime(
         id="belief-stage-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         wall_seconds=120,
         stages=[
             TrainSelfPlay(
@@ -125,8 +125,8 @@ def test_frozen_belief_stages_run_and_reload(
         assert collection.inputs["policy/raw"] == policy.artifacts["raw"]
         assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
         loaded, _ = load_checkpoint_agent(policy.artifacts[weights]["path"])
-        assert loaded.hypers.value_kind == recipe.agent.value_kind
-        assert loaded.hypers.compound_decisions == recipe.agent.compound_decisions
+        assert loaded.config.value_kind == recipe.agent.value_kind
+        assert loaded.config.compound_decisions == recipe.agent.compound_decisions
         assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]
         dataset = read_dataset(Path(collection.artifacts["dataset"]["path"]))
         assert {game.split for game in dataset.games} == {"train", "validation", "test"}

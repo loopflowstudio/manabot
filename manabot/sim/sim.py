@@ -21,9 +21,9 @@ import wandb
 
 # Local imports
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.experiment import Experiment
-from manabot.infra.hypers import ExperimentHypers, SimulationHypers
+from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger
+from manabot.infra.runtime import RunContext
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
@@ -466,7 +466,7 @@ def determine_outcome(
 def simulate_models(
     hero_player: Player,
     villain_player: Player,
-    sim_hypers: Optional[SimulationHypers] = None,
+    sim_config: Optional[SimulationConfig] = None,
 ) -> GameStats:
     """
     Evaluate models in parallel by running multiple games simultaneously.
@@ -482,13 +482,13 @@ def simulate_models(
     logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
 
     # Set up hyperparameters
-    sim_hypers = sim_hypers or SimulationHypers()
+    sim_config = sim_config or SimulationConfig()
 
     # Determine number of threads (capped by games and CPU cores)
-    num_threads = min(sim_hypers.num_threads, sim_hypers.num_games)
+    num_threads = min(sim_config.num_threads, sim_config.num_games)
     logger.info(f"Starting simulation: {hero_player.name} vs {villain_player.name}")
     logger.info(
-        f"Running {sim_hypers.num_games} games with max {sim_hypers.max_steps} steps each"
+        f"Running {sim_config.num_games} games with max {sim_config.max_steps} steps each"
     )
     logger.info(f"Using {num_threads} parallel threads")
 
@@ -503,9 +503,9 @@ def simulate_models(
     # Worker function that runs games until target count is reached
     def worker_thread(thread_id):
         # Create environment for this thread
-        match = Match(sim_hypers.match)
+        match = Match(sim_config.match)
         observation_space = ObservationSpace()
-        reward = Reward(sim_hypers.reward)
+        reward = Reward(sim_config.reward)
         env = Env(
             match,
             observation_space,
@@ -521,13 +521,13 @@ def simulate_models(
         while True:
             # Check if we've completed enough games
             with completed_lock:
-                if completed_games >= sim_hypers.num_games:
+                if completed_games >= sim_config.num_games:
                     break
                 completed_games += 1
 
             # Simulate a single game
             outcome, steps, duration, profiler_data, behavior_data = _simulate_game(
-                env, hero_player, villain_player, sim_hypers.max_steps
+                env, hero_player, villain_player, sim_config.max_steps
             )
 
             # Record game with minimal metadata
@@ -570,10 +570,10 @@ def simulate_models(
             current = completed_games
 
         # Progress update every 5 seconds
-        if current < sim_hypers.num_games:
+        if current < sim_config.num_games:
             elapsed = time.time() - start_time
             rate = current / elapsed if elapsed > 0 else 0
-            remaining = sim_hypers.num_games - current
+            remaining = sim_config.num_games - current
             eta = remaining / rate if rate > 0 else "unknown"
 
             if isinstance(eta, float):
@@ -582,8 +582,8 @@ def simulate_models(
                 eta_str = str(eta)
 
             logger.info(
-                f"Progress: {current}/{sim_hypers.num_games} games completed "
-                f"({current / sim_hypers.num_games:.1%}) | "
+                f"Progress: {current}/{sim_config.num_games} games completed "
+                f"({current / sim_config.num_games:.1%}) | "
                 f"Rate: {rate:.2f} games/sec | ETA: {eta_str}"
             )
 
@@ -718,25 +718,23 @@ def load_player(model_str: str) -> Player:
 # -----------------------------------------------------------------------------
 
 
-def run_simulation(
-    sim_hypers: SimulationHypers, experiment_hypers: ExperimentHypers
-) -> None:
+def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) -> None:
     """Run a simulation sweep for hero/villain model specs."""
-    _ = Experiment(experiment_hypers)
-    logger = getLogger("manabot.sim.sim")
-    logger.info(
-        "Simulation config: "
-        f"hero={sim_hypers.hero}, villain={sim_hypers.villain}, "
-        f"num_games={sim_hypers.num_games}, num_threads={sim_hypers.num_threads}, "
-        f"max_steps={sim_hypers.max_steps}"
-    )
+    with RunContext(runtime_config):
+        logger = getLogger("manabot.sim.sim")
+        logger.info(
+            "Simulation config: "
+            f"hero={sim_config.hero}, villain={sim_config.villain}, "
+            f"num_games={sim_config.num_games}, num_threads={sim_config.num_threads}, "
+            f"max_steps={sim_config.max_steps}"
+        )
 
-    logger.info(f"Loading hero model: {sim_hypers.hero}")
-    logger.info(f"Loading villain model: {sim_hypers.villain}")
-    hero_player = load_player(sim_hypers.hero)
-    villain_player = load_player(sim_hypers.villain)
+        logger.info(f"Loading hero model: {sim_config.hero}")
+        logger.info(f"Loading villain model: {sim_config.villain}")
+        hero_player = load_player(sim_config.hero)
+        villain_player = load_player(sim_config.villain)
 
-    simulate_models(hero_player, villain_player, sim_hypers)
+        simulate_models(hero_player, villain_player, sim_config)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -754,10 +752,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    sim_hypers, experiment_hypers = load_sim_config(
+    sim_config, runtime_config = load_sim_config(
         preset=args.preset, set_overrides=args.set_values
     )
-    run_simulation(sim_hypers, experiment_hypers)
+    run_simulation(sim_config, runtime_config)
 
 
 if __name__ == "__main__":

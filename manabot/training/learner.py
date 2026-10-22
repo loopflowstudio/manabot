@@ -1,21 +1,22 @@
 """Trainable policy and Adam state shared by every RL objective.
 
-The executor owns collection, clocks, tracking, exports and recovery. A Learner
-owns only train-mode admission, optimizer state and the damped update's native
-stream-sized minibatches; it has no environment or independent training loop.
+A Learner bundles the trainable actor/critic and its optimizer, enabling train
+mode on admission. Learning-rule functions update this state; execute_regime
+owns collection, clocks, tracking, exports and recovery. Native stream count
+sets the damped rule's minibatch width. There is no independent training loop.
 """
 
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 
 
 class Learner:
     def __init__(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         device: torch.device | str,
         *,
         minibatch_rows: int,

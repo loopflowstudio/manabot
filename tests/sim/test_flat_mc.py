@@ -10,8 +10,8 @@ import pytest
 
 from manabot.belief import ManabotPlayer
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 import manabot.sim.flat_mc as flat_mc
 from manabot.sim.flat_mc import (
     AgentMatchupPlayer,
@@ -116,9 +116,9 @@ def test_checkpoint_routes_by_serialized_agent_capability(
     monkeypatch,
 ):
     observation_space = ObservationSpace()
-    belief_agent = Agent(
+    belief_agent = ActorCritic(
         observation_space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=3,
@@ -136,9 +136,9 @@ def test_checkpoint_routes_by_serialized_agent_capability(
     player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
     assert isinstance(player, ManabotPlayer)
 
-    policy_agent = Agent(
+    policy_agent = ActorCritic(
         observation_space,
-        AgentSpec(hidden_dim=8, num_attention_heads=2),
+        ModelConfig(hidden_dim=8, num_attention_heads=2),
     )
 
     def load_policy_agent(_path, *, include_belief_binding=False):

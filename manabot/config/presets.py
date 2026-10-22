@@ -1,6 +1,6 @@
 """Built-in runtime presets for simulation commands."""
 
-from manabot.infra import ExperimentHypers, SimulationHypers
+from manabot.infra import RuntimeConfig, SimulationConfig
 
 DEFAULT_SIM_PRESET = "sim"
 
@@ -11,15 +11,14 @@ def get_sim_preset(name: str) -> dict:
             f"Unknown simulation preset '{name}'. Available: {DEFAULT_SIM_PRESET}"
         )
 
-    experiment = ExperimentHypers().model_dump()
-    experiment.update(
+    runtime = RuntimeConfig().model_dump()
+    runtime.update(
         {
-            "exp_name": DEFAULT_SIM_PRESET,
-            "wandb": False,
+            "name": DEFAULT_SIM_PRESET,
             "log_level": "DEBUG",
         }
     )
     return {
-        "experiment": experiment,
-        "sim": SimulationHypers().model_dump(),
+        "runtime": runtime,
+        "sim": SimulationConfig().model_dump(),
     }

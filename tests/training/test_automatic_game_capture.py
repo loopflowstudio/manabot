@@ -20,8 +20,8 @@ from manabot.env.failures import (
     runtime_identities,
 )
 from manabot.env.replay import require_replay_runtime
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim import distill, rollout
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.sim.pooled_datagen import _GameStream
@@ -41,18 +41,18 @@ from tests.training.game_error_fixtures import (
 )
 
 
-def _model(*, compound_decisions: bool = False) -> Agent:
+def _model(*, compound_decisions: bool = False) -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(
+    return ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, attention_on=False, compound_decisions=compound_decisions
         ),
     )
 
 
 def _env() -> Env:
-    return Env(Match(), ObservationSpace(), Reward(RewardHypers()), seed=24)
+    return Env(Match(), ObservationSpace(), Reward(RewardConfig()), seed=24)
 
 
 def _bounded(path: Path) -> dict[str, Any]:
@@ -146,7 +146,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     with capture_scope(scope):
         if mode == "vector":
             vector = VectorEnv(
-                1, Match(), ObservationSpace(), Reward(RewardHypers()), "cpu", seed=24
+                1, Match(), ObservationSpace(), Reward(RewardConfig()), "cpu", seed=24
             )
             vector.reset()
             with pytest.raises(managym.AgentError):
@@ -202,7 +202,7 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
             2,
             Match(),
             ObservationSpace(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             "cpu",
             seed=24,
             opponent_policy=policy,
@@ -239,7 +239,7 @@ def test_strict_collector_preserves_masked_prefixes(
         collector = SeatRoutedCollector(
             ObservationSpace(),
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode="self",
             workers=workers,
@@ -268,8 +268,8 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     recipe = TrainingRegime(
         id="strict-capture",
         world=managym.WORLD_VERSION,
-        match=Match().hypers,
-        agent=model.hypers,
+        match=Match().config,
+        agent=model.config,
         wall_seconds=120,
         stages=[
             TrainSelfPlay(
@@ -423,7 +423,7 @@ def test_distillation_failure_uses_scalar_capture(
             num_games=1,
             teacher_spec={"kind": "random"},
             seed=24,
-            match_hypers=_payment_match(),
+            match_config=_payment_match(),
         )
     assert read_failure(scope.paths[0]).context["producer"] == "distill"
     result = _bounded_fixture_replay(
@@ -543,7 +543,7 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
         collector = SeatRoutedCollector(
             ObservationSpace(),
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode="self",
             workers=2,
@@ -592,13 +592,13 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
 def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
     match = Match(
-        MatchHypers.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
+        MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     with capture_scope(scope):
         collector = SeatRoutedCollector(
             ObservationSpace(),
             match,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             seed=17402,
             opponent_mode="self",

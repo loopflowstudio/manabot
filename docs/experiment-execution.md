@@ -25,11 +25,11 @@ from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.experiment_execution import ExperimentSchedule, HardwareInventory
 from manabot.training.experiment_runner import run_experiment
 from manabot.training.experiments import Case, Experiment
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.recipes.ataraxos import ataraxos
 
 experiment = Experiment(
     name="my-comparison",
-    baseline=ataraxos_mtg_v1(),
+    baseline=ataraxos(),
     cases=(Case("control"),),
     schedule=ExperimentSchedule(
         seeds=(117, 118),

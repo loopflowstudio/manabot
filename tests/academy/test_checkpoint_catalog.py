@@ -6,12 +6,12 @@ import random
 
 from fastapi.testclient import TestClient
 import pytest
-from test_play_modes import _recorded_traces, _write_tiny_checkpoint
 import torch
 
 from academy import server, trace as trace_store
 from academy.server import app
 from manabot.model.world import WORLD
+from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 
 
 @pytest.fixture()

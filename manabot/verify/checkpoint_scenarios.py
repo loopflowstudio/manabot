@@ -14,6 +14,7 @@ from pathlib import Path
 import time
 from typing import Any, Literal
 
+from managym.experience import UNVERSIONED_CONTENT_HASH
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
@@ -39,7 +40,6 @@ from manabot.verify.scenario_validation import (
     scenario_identity,
     validate_scenarios,
 )
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class ScenarioScore(BaseModel):
@@ -94,7 +94,7 @@ def score_checkpoint(
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",
             "scenario_root": scenario_identity(scenario_name),
             "world_binding": checkpoint_world(env.match.to_rust(), space),
-            "observation_hypers": space.encoder.hypers.model_dump(),
+            "observation_hypers": space.encoder.config.model_dump(),
             "deal_seed": seed,
             "seat_players": [score.checkpoint_sha256, "scripted-villain"],
             "checkpoint_sha256": score.checkpoint_sha256,

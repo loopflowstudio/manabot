@@ -52,7 +52,7 @@ class VectorEnv:
         self._card_land_index = self.observation_space.encoder.num_zones + 1 + 2 + 1
         self._card_creature_index = self._card_land_index + 1
         self._prev_obs_keys: Tuple[str, ...] = ("agent_cards", "opponent_player")
-        if self.reward.hypers.potential_enabled:
+        if self.reward.config.potential_enabled:
             self._prev_obs_keys = (
                 "agent_cards",
                 "opponent_cards",
@@ -125,10 +125,10 @@ class VectorEnv:
         self._truncated_tensor.copy_(self._truncated_cpu_view)
 
     def _apply_reward_policy(self) -> None:
-        if self.reward.hypers.managym:
+        if self.reward.config.managym:
             return
 
-        if self.reward.hypers.trivial:
+        if self.reward.config.trivial:
             self._reward_tensor.fill_(1.0)
             return
 
@@ -141,10 +141,10 @@ class VectorEnv:
         done = self._terminated_tensor | self._truncated_tensor
         if bool(done.any()):
             win_reward = torch.full_like(
-                self._reward_tensor, self.reward.hypers.win_reward
+                self._reward_tensor, self.reward.config.win_reward
             )
             lose_reward = torch.full_like(
-                self._reward_tensor, self.reward.hypers.lose_reward
+                self._reward_tensor, self.reward.config.lose_reward
             )
             terminal_shaped = torch.where(
                 self._reward_tensor > 0,
@@ -167,11 +167,11 @@ class VectorEnv:
             self._reward_tensor.add_(potential_shaping)
 
     def _compute_progress_shaping(self) -> torch.Tensor | None:
-        hypers = self.reward.hypers
+        config = self.reward.config
         if (
-            hypers.land_play_reward == 0.0
-            and hypers.creature_play_reward == 0.0
-            and hypers.opponent_life_loss_reward == 0.0
+            config.land_play_reward == 0.0
+            and config.creature_play_reward == 0.0
+            and config.opponent_life_loss_reward == 0.0
         ):
             return None
 
@@ -182,7 +182,7 @@ class VectorEnv:
 
         shaping = torch.zeros_like(self._reward_tensor)
 
-        if hypers.land_play_reward != 0.0:
+        if config.land_play_reward != 0.0:
             land_delta = self._battlefield_card_count(
                 next_agent_cards,
                 self._card_land_index,
@@ -190,9 +190,9 @@ class VectorEnv:
                 prev_agent_cards,
                 self._card_land_index,
             )
-            shaping += hypers.land_play_reward * torch.clamp(land_delta, min=0.0)
+            shaping += config.land_play_reward * torch.clamp(land_delta, min=0.0)
 
-        if hypers.creature_play_reward != 0.0:
+        if config.creature_play_reward != 0.0:
             creature_delta = self._battlefield_card_count(
                 next_agent_cards,
                 self._card_creature_index,
@@ -200,14 +200,14 @@ class VectorEnv:
                 prev_agent_cards,
                 self._card_creature_index,
             )
-            shaping += hypers.creature_play_reward * torch.clamp(
+            shaping += config.creature_play_reward * torch.clamp(
                 creature_delta, min=0.0
             )
 
-        if hypers.opponent_life_loss_reward != 0.0:
+        if config.opponent_life_loss_reward != 0.0:
             prev_life = prev_opponent_player[:, 0, 0]
             next_life = next_opponent_player[:, 0, 0]
-            shaping += hypers.opponent_life_loss_reward * torch.clamp(
+            shaping += config.opponent_life_loss_reward * torch.clamp(
                 prev_life - next_life,
                 min=0.0,
             )
@@ -225,8 +225,8 @@ class VectorEnv:
         shaping, and zeroing the terminal potential is what makes the shaping
         telescope out over an episode (Ng, Harada & Russell 1999).
         """
-        hypers = self.reward.hypers
-        if not hypers.potential_enabled:
+        config = self.reward.config
+        if not config.potential_enabled:
             return None
 
         prev_phi = self._potential(
@@ -243,7 +243,7 @@ class VectorEnv:
         )
         done = self._terminated_tensor | self._truncated_tensor
         next_phi = next_phi.masked_fill(done, 0.0)
-        return hypers.potential_gamma * next_phi - prev_phi
+        return config.potential_gamma * next_phi - prev_phi
 
     def _potential(
         self,
@@ -257,23 +257,23 @@ class VectorEnv:
         Life features are already encoded as life/20, matching the
         (hero_life - villain_life)/20 term in the Phi definition.
         """
-        hypers = self.reward.hypers
+        config = self.reward.config
         phi = torch.zeros_like(self._reward_tensor)
 
-        if hypers.potential_land_weight != 0.0:
-            phi += hypers.potential_land_weight * (
+        if config.potential_land_weight != 0.0:
+            phi += config.potential_land_weight * (
                 self._battlefield_card_count(agent_cards, self._card_land_index)
                 - self._battlefield_card_count(opponent_cards, self._card_land_index)
             )
-        if hypers.potential_creature_weight != 0.0:
-            phi += hypers.potential_creature_weight * (
+        if config.potential_creature_weight != 0.0:
+            phi += config.potential_creature_weight * (
                 self._battlefield_card_count(agent_cards, self._card_creature_index)
                 - self._battlefield_card_count(
                     opponent_cards, self._card_creature_index
                 )
             )
-        if hypers.potential_life_weight != 0.0:
-            phi += hypers.potential_life_weight * (
+        if config.potential_life_weight != 0.0:
+            phi += config.potential_life_weight * (
                 agent_player[:, 0, 0] - opponent_player[:, 0, 0]
             )
         return phi

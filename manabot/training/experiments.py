@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from manabot.arena.models import canonical_json, canonical_sha256
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.remote.job_client import prepare_experiment_job
 from manabot.remote.jobs import Job
 from manabot.remote.plan import DeploymentPlan, Source, compile_plan
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 ComponentName = Literal[
     "model", "environment", "learning", "resources", "pipeline", "run", "identity"
 ]
-Origin = Literal["baseline", "preset", "override", "identity"]
+Origin = Literal["baseline", "override", "identity"]
 Path = tuple[str, ...]
 _JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
 _JSON_VALUE = TypeAdapter(JsonValue)
@@ -91,7 +91,6 @@ class Baseline:
 
     name: str
     configuration: str
-    origin: Literal["baseline", "preset"] = "baseline"
 
     @classmethod
     def capture(cls, name: str, regime: TrainingRegime) -> "Baseline":
@@ -114,17 +113,20 @@ class Baseline:
 
 
 @dataclass(frozen=True)
-class Model:
-    """Only explicitly supplied AgentSpec fields change; no implicit defaults."""
+class ModelOverride:
+    """Experiment override of model configuration, not a runtime neural network.
 
-    settings: AgentSpec
+    Only explicitly supplied fields change; no implicit defaults.
+    """
+
+    settings: ModelConfig
 
 
 @dataclass(frozen=True)
 class Environment:
     world: str | None = None
-    match: MatchHypers | None = None
-    observation: ObservationSpaceHypers | None = None
+    match: MatchConfig | None = None
+    observation: ObservationConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -159,7 +161,9 @@ class RunControl:
     recovery_every_updates: int = 1
 
 
-Component = Model | Environment | LearningRule | Resources | Pipeline | RunControl
+Component = (
+    ModelOverride | Environment | LearningRule | Resources | Pipeline | RunControl
+)
 
 
 @dataclass(frozen=True)
@@ -268,7 +272,7 @@ def _fields(prefix: Path, model: BaseModel, source: str) -> list[_Write]:
     values = _object(model, explicit=True)
     # Compatibility defaults may be omitted from saved files, but an explicit
     # False remains an authored override (including switching a treatment off).
-    if isinstance(model, AgentSpec):
+    if isinstance(model, ModelConfig):
         for field in ("compound_decisions", "recent_events"):
             if field in model.model_fields_set:
                 values[field] = getattr(model, field)
@@ -277,7 +281,7 @@ def _fields(prefix: Path, model: BaseModel, source: str) -> list[_Write]:
 
 def _writes(component: Component, base: TrainingRegime, source: str) -> list[_Write]:
     match component:
-        case Model(settings):
+        case ModelOverride(settings):
             writes = _fields(("agent",), settings, source)
             if "recent_events" in settings.model_fields_set:
                 writes.append(
@@ -295,7 +299,7 @@ def _writes(component: Component, base: TrainingRegime, source: str) -> list[_Wr
             if observation is not None:
                 if "policy_history_version" in observation.model_fields_set:
                     raise ValueError(
-                        "history input is selected by Model(recent_events=...), not Environment"
+                        "history input is selected by ModelOverride(recent_events=...), not Environment"
                     )
                 writes.extend(_fields(("observation",), observation, source))
             return writes
@@ -531,7 +535,7 @@ class Experiment:
                         resolved.agent.recent_events
                     )
                 for path, value in _leaves(effective):
-                    origin: Origin = self.baseline.origin
+                    origin: Origin = "baseline"
                     source = self.baseline.name
                     for write in writes:
                         if path[: len(write.path)] == write.path:

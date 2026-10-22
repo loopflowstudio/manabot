@@ -44,7 +44,7 @@ cohort is necessary to isolate these generic-input defects. Existing focused
 semantic target tests remain in `tests/model/test_action_identity.py`.
 
 The model has width 32, two attention heads and feed-forward width 64, with the
-FiLM-conditioned policy (`AgentSpec(policy_film=True)`, protocol
+FiLM-conditioned policy (`ModelConfig(policy_film=True)`, protocol
 `learnability-2`; see
 [starting-weight sensitivity](#starting-weight-sensitivity)). Each of 240 Adam
 updates (learning rate .003) uses the same 24 fit cases, for 5,760 supervised

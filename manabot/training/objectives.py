@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from manabot.env.observation import ACTION_TYPE_DIM
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -57,7 +57,7 @@ def update_iteration(
     rng: np.random.Generator,
     *,
     iteration: int = 1,
-    bootstrap_agent: Agent | None = None,
+    bootstrap_agent: ActorCritic | None = None,
 ) -> UpdateDiagnostics:
     """Optimize one fresh collector batch on the shared learner and Adam owner."""
     if isinstance(learning, DampedPolicyLearning):

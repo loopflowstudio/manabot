@@ -27,7 +27,7 @@ from manabot.env.replay import (
     require_replay_runtime,
     run_bounded_replay,
 )
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 from manabot.training.self_play import deck_identity
 import managym
 
@@ -58,7 +58,7 @@ class GameAttempt(BaseModel):
     stream: int
     seed: int
     seat: int
-    matchup: MatchHypers
+    matchup: MatchConfig
     outcome: GameOutcome
     actions: list[int] = []
     error_class: str | None = None

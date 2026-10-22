@@ -19,7 +19,6 @@ import wandb
 
 from manabot.arena.models import canonical_sha256
 from manabot.infra.artifacts import verify_file
-from manabot.infra.experiment import flatten_config
 from manabot.training.artifacts import ArtifactManifest
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRun
@@ -28,6 +27,20 @@ from manabot.training.recovery import attempt_lock
 from manabot.verify.store import VerifyStore
 
 Scalar = int | float | str | bool
+
+
+def _flatten_config(
+    cfg: Mapping[str, object], parent_key: str = "", sep: str = "/"
+) -> dict[str, object]:
+    """Flatten named configuration for historical reporting consumers."""
+    items: dict[str, object] = {}
+    for key, value in cfg.items():
+        name = f"{parent_key}{sep}{key}" if parent_key else key
+        if isinstance(value, dict):
+            items.update(_flatten_config(value, name, sep))
+        else:
+            items[name] = value
+    return items
 
 
 class Dashboard(BaseModel):
@@ -327,7 +340,7 @@ def publish_dashboard(
         name=f"{dashboard.config.get('training_run_id', dashboard.run_id)}",
         job_type=job_type,
         dir=str(out),
-        config=flatten_config(dashboard.config),
+        config=_flatten_config(dashboard.config),
         mode="online",
         settings=wandb.Settings(init_timeout=30),
     )

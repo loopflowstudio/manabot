@@ -9,7 +9,7 @@ import wandb
 
 # Local imports
 from manabot.infra.log import getLogger
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 
 # -----------------------------------------------------------------------------
 # Model Loading
@@ -21,7 +21,7 @@ def load_model_from_wandb(
     version: str = "latest",
     project: Optional[str] = None,
     device: str = "cpu",
-) -> Agent:
+) -> ActorCritic:
     """
     Load a trained model from wandb artifacts with minimal wandb interaction.
 
@@ -164,7 +164,7 @@ class ModelPlayer(Player):
     def __init__(
         self,
         name: str,
-        agent: Agent,
+        agent: ActorCritic,
         deterministic: bool = False,
         record_logits: bool = False,
     ):

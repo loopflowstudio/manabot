@@ -112,7 +112,7 @@ def cmd_assess(args: argparse.Namespace) -> None:
     bins = np.clip((v * 10).astype(int), 0, 9)
     calibration = [
         {
-            "bin": f"[{b/10:.1f},{(b+1)/10:.1f})",
+            "bin": f"[{b / 10:.1f},{(b + 1) / 10:.1f})",
             "n": int((bins == b).sum()),
             "mean_v": float(v[bins == b].mean()) if (bins == b).any() else None,
             "mean_gt": float(gt[bins == b].mean()) if (bins == b).any() else None,
@@ -184,9 +184,7 @@ def cmd_match(args: argparse.Namespace) -> None:
             chunks = pool.map(_match_worker, payloads)
     wall = time.perf_counter() - t0
 
-    records = [
-        GameRecord(**r) for chunk in chunks for r in chunk["records"]
-    ]
+    records = [GameRecord(**r) for chunk in chunks for r in chunk["records"]]
 
     def _sum_stats(key: str) -> dict | None:
         stats = [c[key] for c in chunks if c[key]]
@@ -224,12 +222,11 @@ def cmd_agree(args: argparse.Namespace) -> None:
     and a deeper leaf is needed for the gate to be meaningful.
     """
 
-    from manabot.env import Env, Match, Reward
-    from manabot.infra.hypers import MatchHypers, RewardHypers
-    from manabot.env import ObservationSpace
+    from manabot.env import Env, Match, ObservationSpace, Reward
+    from manabot.infra.config import MatchConfig, RewardConfig
     from manabot.sim.value import (
-        VGreedyPlayer,
         ValueSearchPlayer,
+        VGreedyPlayer,
         load_value_scorer,
     )
     from manabot.verify.util import INTERACTIVE_DECK
@@ -242,7 +239,7 @@ def cmd_agree(args: argparse.Namespace) -> None:
     greedy = VGreedyPlayer(scorer_greedy, seed=args.seed + 1)
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="agree-a",
             villain="agree-b",
             hero_deck=dict(INTERACTIVE_DECK),
@@ -252,7 +249,7 @@ def cmd_agree(args: argparse.Namespace) -> None:
     env = Env(
         match,
         ObservationSpace(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=args.seed,
         auto_reset=False,
         enable_profiler=False,
@@ -273,8 +270,7 @@ def cmd_agree(args: argparse.Namespace) -> None:
                 agreements += int(action == greedy_action)
                 score_gaps.append(
                     float(
-                        search.last_scores[action]
-                        - search.last_scores[greedy_action]
+                        search.last_scores[action] - search.last_scores[greedy_action]
                     )
                 )
             obs, _, terminated, truncated, _ = env.step(action)
@@ -286,9 +282,9 @@ def cmd_agree(args: argparse.Namespace) -> None:
         "decisions": decisions,
         "agreement": agreements / max(1, decisions),
         "mean_score_gap_when_disagree": (
-            float(np.mean([g for g in score_gaps if g > 0])) if any(
-                g > 0 for g in score_gaps
-            ) else 0.0
+            float(np.mean([g for g in score_gaps if g > 0]))
+            if any(g > 0 for g in score_gaps)
+            else 0.0
         ),
     }
     print(json.dumps(summary, indent=2))

@@ -71,8 +71,8 @@ def test_real_collection_update_export_reload(
         assert stage.diagnostics[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
         for variant in ("raw", "ema"):
             loaded, _ = load_checkpoint_agent(stage.artifacts[variant]["path"])
-            assert loaded.hypers.value_kind == recipe.agent.value_kind
-            assert loaded.hypers.semantic_pack == "ur-lessons-vs-gw-allies"
+            assert loaded.config.value_kind == recipe.agent.value_kind
+            assert loaded.config.semantic_pack == "ur-lessons-vs-gw-allies"
             assert all(
                 torch.isfinite(parameter).all() for parameter in loaded.parameters()
             )

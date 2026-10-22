@@ -7,8 +7,8 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -24,9 +24,9 @@ def test_capacity_export_and_real_legal_policy(
     kind: Literal["scalar", "categorical_wdl"],
 ) -> None:
     torch.set_num_threads(1)
-    agent = Agent(
+    agent = ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=width,
             attention_layers=depth,
             value_kind=kind,
@@ -42,7 +42,7 @@ def test_capacity_export_and_real_legal_policy(
     collector = SeatRoutedCollector(
         agent.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         seed=102,
     )
@@ -83,14 +83,14 @@ def test_capacity_export_and_real_legal_policy(
 
 def test_resolved_identity_and_accounting_follow_meaning() -> None:
     space = ObservationSpace()
-    implicit = AgentSpec()
-    explicit = AgentSpec.model_validate(implicit.model_dump())
+    implicit = ModelConfig()
+    explicit = ModelConfig.model_validate(implicit.model_dump())
     assert architecture_identity(implicit, space) == architecture_identity(
         explicit, space
     )
-    masked = AgentSpec(value_aggregation="masked_mean")
-    agent = Agent(space, implicit)
-    other = Agent(space, masked)
+    masked = ModelConfig(value_aggregation="masked_mean")
+    agent = ActorCritic(space, implicit)
+    other = ActorCritic(space, masked)
     baseline = architecture_receipt(agent)
     assert baseline.parameters == architecture_receipt(other).parameters
     assert baseline.identity != architecture_receipt(other).identity
@@ -103,26 +103,26 @@ def test_resolved_identity_and_accounting_follow_meaning() -> None:
 
 def test_deep_feedforward_identity_and_weights() -> None:
     space = ObservationSpace()
-    default = AgentSpec(attention_layers=8, hidden_dim=384)
-    explicit = AgentSpec(
+    default = ModelConfig(attention_layers=8, hidden_dim=384)
+    explicit = ModelConfig(
         attention_layers=8, hidden_dim=384, attention_feedforward_dim=1536
     )
     assert architecture_identity(default, space) == architecture_identity(
         explicit, space
     )
-    narrow = AgentSpec(
+    narrow = ModelConfig(
         attention_layers=8, hidden_dim=384, attention_feedforward_dim=768
     )
     assert architecture_identity(narrow, space) != architecture_identity(default, space)
     torch.set_num_threads(1)
-    agent = Agent(space, narrow)
+    agent = ActorCritic(space, narrow)
     assert len(agent.extra_attention) == 7
     assert all(
         layer.mlp[0].out_features == 768
         for layer in [agent.attention, *agent.extra_attention]
     )
     with pytest.raises(RuntimeError, match="size mismatch"):
-        Agent(space, default).load_state_dict(agent.state_dict())
+        ActorCritic(space, default).load_state_dict(agent.state_dict())
 
 
 @pytest.mark.parametrize(
@@ -137,4 +137,4 @@ def test_deep_feedforward_identity_and_weights() -> None:
 )
 def test_invalid_expansion(fields: dict[str, object]) -> None:
     with pytest.raises(ValueError):
-        AgentSpec.model_validate(fields)
+        ModelConfig.model_validate(fields)

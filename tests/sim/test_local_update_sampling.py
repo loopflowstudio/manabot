@@ -4,6 +4,13 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Callable
 
+from managym.decision import (
+    PUBLIC_COMMITMENT_KINDS,
+    Command,
+    DecisionFrame,
+    Observation,
+)
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 import torch
@@ -25,14 +32,7 @@ from manabot.sim.local_update import (
     LocalUpdateTeacher,
     SamplerArtifact,
 )
-from manabot.sim.search_supervised import _validate_dataset
-from managym.decision import (
-    PUBLIC_COMMITMENT_KINDS,
-    Command,
-    DecisionFrame,
-    Observation,
-)
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from manabot.training.supervised import _validate_dataset
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher, small_match
 
@@ -224,7 +224,7 @@ def test_prior_targets_reload_through_distillation_reader(tmp_path: Path) -> Non
         seed=44,
         out_path=shard,
         max_steps_per_game=1000,
-        match_hypers=small_match(),
+        match_config=small_match(),
         teacher_spec={
             "kind": "local_update",
             "checkpoint": str(teacher.likelihood.checkpoint),

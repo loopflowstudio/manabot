@@ -19,19 +19,19 @@ import torch
 from manabot.env import Reward, VectorEnv
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.hypers import RewardHypers
+from manabot.infra.config import RewardConfig
 import managym
 
 BATTLEFIELD = int(managym.ZoneEnum.BATTLEFIELD)
 HAND = int(managym.ZoneEnum.HAND)
 
 
-def make_vector_env(reward_hypers: RewardHypers, seed: int = 0) -> VectorEnv:
+def make_vector_env(reward_config: RewardConfig, seed: int = 0) -> VectorEnv:
     return VectorEnv(
         num_envs=2,
         match=Match(),
         observation_space=ObservationSpace(),
-        reward=Reward(reward_hypers),
+        reward=Reward(reward_config),
         device="cpu",
         seed=seed,
         opponent_policy="random",
@@ -73,13 +73,13 @@ class TestVectorEnvPotential:
         cards[env_index, slot, -1] = 1.0  # validity
 
     def test_potential_sign_conventions(self):
-        hypers = RewardHypers(
+        config = RewardConfig(
             potential_enabled=True,
             potential_land_weight=0.03,
             potential_creature_weight=0.06,
             potential_life_weight=0.2,
         )
-        env = make_vector_env(hypers)
+        env = make_vector_env(config)
         env.reset()
 
         agent_cards, agent_player = self._blank_tensors(env)
@@ -118,7 +118,7 @@ class TestVectorEnvPotential:
         assert abs(phi[1].item() - 0.1) < 1e-6
 
     def test_disabled_by_default(self):
-        env = make_vector_env(RewardHypers())
+        env = make_vector_env(RewardConfig())
         env.reset()
         assert env._compute_potential_shaping() is None
 
@@ -127,15 +127,15 @@ class TestVectorEnvPotential:
         -Phi(s_0), which is 0 for the symmetric start — so per-episode
         shaped and unshaped returns must be identical."""
 
-        base = RewardHypers()
-        shaped = RewardHypers(potential_enabled=True, potential_gamma=1.0)
+        base = RewardConfig()
+        shaped = RewardConfig(potential_enabled=True, potential_gamma=1.0)
 
         episode_sums: dict[str, list[float]] = {"base": [], "shaped": []}
         step_rewards: dict[str, list[torch.Tensor]] = {"base": [], "shaped": []}
         dones: dict[str, list[torch.Tensor]] = {"base": [], "shaped": []}
 
-        for name, hypers in (("base", base), ("shaped", shaped)):
-            env = make_vector_env(hypers, seed=123)
+        for name, config in (("base", base), ("shaped", shaped)):
+            env = make_vector_env(config, seed=123)
             obs, _ = env.reset()
             running = torch.zeros(env.num_envs)
             for _ in range(3000):
@@ -180,7 +180,7 @@ class TestVectorEnvPotential:
         buffers hold the next episode's reset obs, and Phi(terminal) = 0."""
 
         env = make_vector_env(
-            RewardHypers(potential_enabled=True, potential_gamma=1.0), seed=7
+            RewardConfig(potential_enabled=True, potential_gamma=1.0), seed=7
         )
         obs, _ = env.reset()
         for _ in range(3000):
@@ -240,8 +240,8 @@ def _stub_obs(
 
 
 class TestSingleEnvRewardPotential:
-    def _hypers(self, gamma: float = 1.0) -> RewardHypers:
-        return RewardHypers(
+    def _config(self, gamma: float = 1.0) -> RewardConfig:
+        return RewardConfig(
             potential_enabled=True,
             potential_gamma=gamma,
             potential_land_weight=0.03,
@@ -250,7 +250,7 @@ class TestSingleEnvRewardPotential:
         )
 
     def test_potential_sign_conventions(self):
-        reward = Reward(self._hypers())
+        reward = Reward(self._config())
         symmetric = _stub_obs()
         assert reward._potential(symmetric) == 0.0
 
@@ -273,7 +273,7 @@ class TestSingleEnvRewardPotential:
         assert abs(reward._potential(life_lead) - 0.2 * 0.5) < 1e-9
 
     def test_step_reward_is_gamma_phi_next_minus_phi_prev(self):
-        reward = Reward(self._hypers(gamma=0.99))
+        reward = Reward(self._config(gamma=0.99))
         s0 = _stub_obs()
         s1 = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         value = reward.compute(0.0, s0, s1)
@@ -283,7 +283,7 @@ class TestSingleEnvRewardPotential:
         """gamma = 1 telescoping: total shaped return over an episode equals
         the terminal return plus -Phi(s_0) (= terminal return here)."""
 
-        reward = Reward(self._hypers(gamma=1.0))
+        reward = Reward(self._config(gamma=1.0))
         s0 = _stub_obs()
         s1 = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         s2 = _stub_obs(
@@ -300,7 +300,7 @@ class TestSingleEnvRewardPotential:
             + reward.compute(0.0, s1, s2)
             + reward.compute(0.0, s2, s3)
         )
-        unshaped = Reward(RewardHypers())
+        unshaped = Reward(RewardConfig())
         unshaped_total = (
             unshaped.compute(0.0, s0, s1)
             + unshaped.compute(0.0, s1, s2)
@@ -316,7 +316,7 @@ class TestSingleEnvRewardPotential:
         assert abs(terminal_value - (1.0 - phi_s2)) < 1e-9
 
     def test_disabled_by_default(self):
-        reward = Reward(RewardHypers())
+        reward = Reward(RewardConfig())
         s0 = _stub_obs()
         s1 = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         assert reward.compute(0.0, s0, s1) == 0.0
@@ -324,7 +324,7 @@ class TestSingleEnvRewardPotential:
 
 def test_terminal_draw_remains_neutral_before_potential_correction() -> None:
     env = make_vector_env(
-        RewardHypers(
+        RewardConfig(
             win_reward=7,
             lose_reward=-3,
             potential_enabled=True,

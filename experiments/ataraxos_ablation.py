@@ -9,7 +9,7 @@ runs the five-arm study (smoke by default; see `--help`).
 """
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.training.builders import PACK, ppo_checkpoints
 from manabot.training.models import Learning, Schedule, TrainingRegime
 from manabot.training.regime_study import main
@@ -34,7 +34,7 @@ def _arm(
         id=id,
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(semantic_pack=PACK),
+        agent=ModelConfig(semantic_pack=PACK),
         stages=ppo_checkpoints(2, learning),
         wall_seconds=900,
     )

@@ -19,8 +19,8 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.distill import (
     LOCAL_RECEIPT_KEY,
     LOCAL_TARGET_KEY,
@@ -258,7 +258,7 @@ def _policy_targets(
 
 @torch.no_grad()
 def evaluate_search_supervised(
-    agent: Agent,
+    agent: ActorCritic,
     dataset: dict[str, np.ndarray],
     indices: np.ndarray,
     *,
@@ -290,7 +290,7 @@ def evaluate_search_supervised(
 
 @torch.no_grad()
 def _evaluate_search_supervised(
-    agent: Agent,
+    agent: ActorCritic,
     dataset: dict[str, np.ndarray],
     indices: np.ndarray,
     *,
@@ -401,8 +401,8 @@ def train_search_supervised(
     split_seed: int | None = None,
     minibatch_seed: int | None = None,
     device: str = "cpu",
-    agent_hypers: AgentSpec | None = None,
-    observation_hypers: ObservationSpaceHypers | None = None,
+    agent_config: ModelConfig | None = None,
+    observation_config: ObservationConfig | None = None,
     initial_agent_state: dict[str, Any] | None = None,
     optimizer_state: dict[str, Any] | None = None,
     validation_games: set[int] | None = None,
@@ -410,20 +410,20 @@ def train_search_supervised(
     deadline_monotonic: float | None = None,
     fixed_validation_dataset: dict[str, np.ndarray] | None = None,
     fixed_validation_target_kind: str | None = None,
-    on_epoch: Callable[[SearchSupervisedEpochStats, Agent], None] | None = None,
+    on_epoch: Callable[[SearchSupervisedEpochStats, ActorCritic], None] | None = None,
     log: bool = False,
 ) -> tuple[
-    Agent,
+    ActorCritic,
     ObservationSpace,
     SearchSupervisedMetrics,
     list[SearchSupervisedEpochStats],
 ]:
-    """Train one Agent jointly on explicitly selected policy and value targets.
+    """Train one ActorCritic jointly on explicitly selected policy and value targets.
 
     Callers are responsible for matched experimental arms. The Teacher-0
     runner uses ``value_weight=0`` to isolate value supervision; Teacher-1
     holds root-value supervision fixed while changing the policy target.
-    The dataset must match ``observation_hypers`` exactly; a shard encoded
+    The dataset must match ``observation_config`` exactly; a shard encoded
     under another observation shape is rejected instead of reinterpreted.
     """
 
@@ -441,8 +441,8 @@ def train_search_supervised(
 
     torch.manual_seed(seed)
     dev = torch.device(device)
-    obs_space = dataset_observation_space(dataset, observation_hypers)
-    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
+    obs_space = dataset_observation_space(dataset, observation_config)
+    agent = ActorCritic(obs_space, agent_config or ModelConfig()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)

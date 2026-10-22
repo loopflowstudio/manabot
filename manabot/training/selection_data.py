@@ -20,7 +20,7 @@ from manabot.arena.models import canonical_sha256
 from manabot.env import Match
 from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
 from manabot.training.models import SelectionGameSpec, Strict
 from manabot.training.references import reference_distribution
@@ -80,7 +80,7 @@ class SelectionDataset(FrozenRecord):
 
 @torch.inference_mode()
 def collect_selection_game(
-    agent: Agent,
+    agent: ActorCritic,
     space: ObservationSpace,
     match: Match,
     spec: SelectionGameSpec,
@@ -96,7 +96,7 @@ def collect_selection_game(
     Both seats use the same frozen model and a game-local action RNG. Forced
     native auto-resolution is not a policy row; distance counts surfaced rows.
     """
-    if agent.belief_count_buckets or agent.hypers.compound_decisions:
+    if agent.belief_count_buckets or agent.config.compound_decisions:
         raise ValueError(
             "selection collection requires ordinary observation-only policy"
         )
@@ -117,7 +117,7 @@ def collect_selection_game(
             json.dumps(
                 {
                     "seed": spec.seed,
-                    "match": match.hypers.model_dump(mode="json"),
+                    "match": match.config.model_dump(mode="json"),
                     "skip_trivial": True,
                 }
             )

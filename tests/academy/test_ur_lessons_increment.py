@@ -2,19 +2,19 @@
 
 import random
 
+from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.infra.config import MatchConfig, RewardConfig
 import managym
-from managym.experience_projection import describe_actions, serialize_observation
 
 
 def candidate_match():
-    authored = MatchHypers.authored(
+    authored = MatchConfig.authored(
         "ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies"
     )
     deck = dict(authored.hero_deck)
@@ -36,7 +36,7 @@ def candidate_match():
         deck[name] = deck.get(name, 0) + count
     assert sum(deck.values()) == 40
     assert sum(authored.hero_deck.values()) == 41
-    return Match(MatchHypers(**{**authored.model_dump(), "hero_deck": deck}))
+    return Match(MatchConfig(**{**authored.model_dump(), "hero_deck": deck}))
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -50,7 +50,7 @@ def test_match_hypers_candidate_finishes_with_complete_native_and_python_encodin
     space = ObservationSpace()
     assert space.encoder.permanent_dim == 28
     assert managym.WORLD_VERSION == "w10"
-    env = Env(match, space, Reward(RewardHypers()), seed=seed)
+    env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
     assert env.content_pack_manifest()["world_version"] == "w10"
     rng = random.Random(seed)

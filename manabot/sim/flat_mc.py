@@ -30,13 +30,13 @@ import torch
 from manabot.belief.encoding import BeliefCheckpointBinding
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import validate_architecture_receipt
 from manabot.sim.compound import CompoundPolicy
 from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
@@ -165,7 +165,7 @@ class AgentMatchupPlayer:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         deterministic: bool = False,
         *,
         allow_deck_repetition: bool = False,
@@ -176,7 +176,7 @@ class AgentMatchupPlayer:
         agent.eval()
         self.compound = (
             CompoundPolicy(agent, deterministic=deterministic)
-            if agent.hypers.compound_decisions
+            if agent.config.compound_decisions
             else None
         )
 
@@ -205,20 +205,20 @@ class AgentMatchupPlayer:
 @overload
 def load_checkpoint_agent(
     path: str | StoredArtifact,
-) -> tuple[Agent, ObservationSpace]: ...
+) -> tuple[ActorCritic, ObservationSpace]: ...
 
 
 @overload
 def load_checkpoint_agent(
     path: str | StoredArtifact, *, include_belief_binding: Literal[True]
-) -> tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]: ...
+) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]: ...
 
 
 def load_checkpoint_agent(
     path: str | StoredArtifact, *, include_belief_binding: bool = False
 ) -> (
-    tuple[Agent, ObservationSpace]
-    | tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]
+    tuple[ActorCritic, ObservationSpace]
+    | tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]
 ):
     """Load saved hypers and validate world/schema; verify S3 bytes before loading."""
 
@@ -226,12 +226,12 @@ def load_checkpoint_agent(
         path = str(materialize_artifact(path))
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-    hypers = checkpoint["hypers"]
-    obs_space = ObservationSpace(ObservationSpaceHypers(**hypers["observation_hypers"]))
+    config = checkpoint["hypers"]
+    obs_space = ObservationSpace(ObservationConfig(**config["observation_hypers"]))
     from manabot.model.world import validate_checkpoint_world, validate_policy_input
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = Agent(obs_space, AgentSpec(**hypers["agent_hypers"]))
+    agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):
@@ -541,7 +541,7 @@ def play_games(
     obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero=spec_name(hero_spec)[:32],
             villain=spec_name(villain_spec)[:32],
             hero_deck=hero_deck or dict(INTERACTIVE_DECK),
@@ -552,7 +552,7 @@ def play_games(
     env = Env(
         match,
         obs_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
         enable_profiler=False,

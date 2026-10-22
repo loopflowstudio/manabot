@@ -18,8 +18,8 @@ import time
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 import managym
 
 PINS = {
@@ -44,7 +44,9 @@ def main() -> None:
     spec.loader.exec_module(cases_module)
     torch.set_num_threads(1)
     torch.manual_seed(17)
-    agent = Agent(ObservationSpace(), AgentSpec(hidden_dim=16, num_attention_heads=2))
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=16, num_attention_heads=2)
+    )
     cases = [
         cases_module.decision_case(family, legacy_selectors=True)
         for family in cases_module.FAMILIES

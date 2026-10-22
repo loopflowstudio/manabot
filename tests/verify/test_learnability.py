@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.verify.action_cases import (
     curriculum,
     decision_case,
@@ -51,8 +51,8 @@ def test_native_outcomes_and_object_order_invariance() -> None:
     previous = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
-        agent = Agent(
-            ObservationSpace(), AgentSpec(hidden_dim=8, num_attention_heads=2)
+        agent = ActorCritic(
+            ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
         )
         agent.eval()
         cases = curriculum()

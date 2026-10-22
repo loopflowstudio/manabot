@@ -6,7 +6,7 @@ from pydantic import ValidationError
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
 from manabot.training.builders import (
     ataraxos_baseline,
     move_checkpoints,
@@ -86,7 +86,7 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
 
 def test_variations_revalidate_mutated_input_objects() -> None:
     base = _baseline()
-    agent = AgentSpec()
+    agent = ModelConfig()
     agent.compound_decisions = True
     with pytest.raises(ValidationError, match="compound"):
         with_agent(base, id="invalid", agent=agent)

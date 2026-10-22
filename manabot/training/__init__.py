@@ -1,4 +1,4 @@
-"""Executable training regimes over the existing manabot trainers."""
+"""Executable training regimes, learning rules and retained run records."""
 
 from .models import TrainingRegime, TrainingRun
 

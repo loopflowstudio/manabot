@@ -19,6 +19,8 @@ import time
 from typing import Literal
 
 import managym._managym as native
+from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
+from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -61,8 +63,6 @@ from manabot.sim.local_sampling import (
 )
 from manabot.sim.search_branch import SelectedFullCloneBackend
 import managym
-from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
-from managym.possible_worlds import WorldQuery
 
 FloatArray = NDArray[np.float64]
 
@@ -427,7 +427,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/local_sampling.py",
         "manabot/sim/local_compound.py",
         "manabot/model/compound.py",
-        "manabot/model/agent.py",
+        "manabot/model/actor_critic.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/sampling_fit.py",
@@ -451,14 +451,14 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        if self.agent.hypers.compound_decisions and config.sampling == "belief":
+        if self.agent.config.compound_decisions and config.sampling == "belief":
             raise ValueError(
                 "compound exact-history likelihood is unsupported; use a direct sampler"
             )
         metadata = torch.load(checkpoint, map_location="cpu", weights_only=False)
         if (
-            not self.agent.hypers.compound_decisions
-            and self.agent.hypers.value_kind != "categorical_wdl"
+            not self.agent.config.compound_decisions
+            and self.agent.config.value_kind != "categorical_wdl"
             and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"
         ):
             raise ValueError(
@@ -505,7 +505,7 @@ class LocalUpdateTeacher:
         self.source_sha256 = local_search_source_sha256()
 
     def predict(self, engine: managym.Env) -> tuple[FloatArray, float]:
-        if self.agent.hypers.compound_decisions:
+        if self.agent.config.compound_decisions:
             raise ValueError("compound inference requires a retained prefix projection")
         actor = int(engine.current_agent_index())
         raw = engine.observation_for_player(actor)
@@ -654,7 +654,7 @@ class LocalUpdateTeacher:
         frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
         compound = (
             project_compound(self.agent, engine, compound_cursor, check)
-            if self.agent.hypers.compound_decisions
+            if self.agent.config.compound_decisions
             else None
         )
         if compound is not None:
@@ -1023,7 +1023,7 @@ class LocalUpdatePlayer(ExactRangePlayer):
             deadline=limit,
             compound_cursor=self.compound_cursor,
         )
-        if self.teacher.agent.hypers.compound_decisions:
+        if self.teacher.agent.config.compound_decisions:
             self._decision_limit = limit
             self.compound_projection = project_compound(
                 self.teacher.agent,

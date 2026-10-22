@@ -10,7 +10,7 @@ import json
 from typing import Literal
 
 from manabot.env import Match
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 import managym
 
 Curriculum = Literal["fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"]
@@ -29,7 +29,7 @@ def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[M
     if curriculum == "cross-balanced":
         return cross * (streams // width)
     roster = Match(
-        MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
 
     def setups(value: Match) -> set[str]:
@@ -45,11 +45,11 @@ def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[M
         raise ValueError(
             "mirror curriculum requires the exact selected authored roster"
         )
-    first = match.hypers.model_copy(deep=True)
+    first = match.config.model_copy(deep=True)
     first.content_pack = "ur-lessons-vs-gw-allies"
     first.villain_deck = dict(first.hero_deck)
     first.villain_sideboard = dict(first.hero_sideboard)
-    second = reverse.hypers.model_copy(deep=True)
+    second = reverse.config.model_copy(deep=True)
     second.content_pack = "ur-lessons-vs-gw-allies"
     second.villain_deck = dict(second.hero_deck)
     second.villain_sideboard = dict(second.hero_sideboard)

@@ -9,7 +9,8 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
-from manabot.infra.hypers import AgentSpec
+from manabot.infra.config import ModelConfig
+from manabot.recipes.ataraxos import ataraxos
 from manabot.training.checkpoint_queue import Attempt, MonitoringBudget
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.experiment_execution import (
@@ -19,9 +20,8 @@ from manabot.training.experiment_execution import (
     HardwareInventory,
 )
 from manabot.training.experiment_runner import run_experiment
-from manabot.training.experiments import Baseline, Case, Experiment, Model
+from manabot.training.experiments import Baseline, Case, Experiment, ModelOverride
 from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
-from manabot.training.presets import ataraxos_mtg_v1
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_monitor_evaluation import failure_summary
@@ -35,7 +35,7 @@ def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 def demo_declaration() -> Experiment:
     """Four short training runs and four milestones: a workflow fixture."""
-    base = ataraxos_mtg_v1().regime()
+    base = ataraxos().regime()
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]
@@ -53,7 +53,10 @@ def demo_declaration() -> Experiment:
     return Experiment(
         name="fixture",
         baseline=Baseline.capture(f"fixture-{base.world}", base),
-        cases=(Case("small"), Case("wide", (Model(AgentSpec(hidden_dim=16)),))),
+        cases=(
+            Case("small"),
+            Case("wide", (ModelOverride(ModelConfig(hidden_dim=16)),)),
+        ),
         schedule=ExperimentSchedule(
             seeds=(117, 118),
             hardware="fixture",

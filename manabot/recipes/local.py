@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from manabot.training.baseline import baseline
+from manabot.recipes.baseline import baseline
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.verify.store import VerifyStore

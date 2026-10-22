@@ -2,7 +2,7 @@
 
 import pytest
 
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 from manabot.training.attacks import AttackPlan, AttackTarget
 from manabot.training.models import FrozenOpponent, TrainingRegime, TrainSelfPlay
 import managym
@@ -24,7 +24,7 @@ def _plan() -> AttackPlan:
         template=TrainingRegime(
             id="attacker",
             world=managym.WORLD_VERSION,
-            match=MatchHypers(),
+            match=MatchConfig(),
             wall_seconds=30,
             stages=[TrainSelfPlay(id="policy", operation="train_self_play")],
         ),

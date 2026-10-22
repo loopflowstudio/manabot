@@ -378,7 +378,7 @@ def checkpoint_manifest(
         raise ValueError("monitoring requires its exact declared authored setup")
     agent, space = load_checkpoint_agent(str(path))
     runtime = runtime_fingerprints(
-        run.seed, match_hypers=run.regime.match, observation_space=space
+        run.seed, match_config=run.regime.match, observation_space=space
     )
     for name in (
         "world",

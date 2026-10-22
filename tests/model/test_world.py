@@ -8,23 +8,23 @@ import torch
 
 from academy.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model import ActorCritic
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def selected_match():
     return Match(
-        MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
 
 
 def checkpoint():
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )
@@ -32,8 +32,8 @@ def checkpoint():
         "model_state_dict": agent.state_dict(),
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
-            "agent_hypers": agent.hypers.model_dump(),
-            "observation_hypers": space.encoder.hypers.model_dump(),
+            "agent_hypers": agent.config.model_dump(),
+            "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(selected_match().to_rust(), space),
     }
@@ -126,7 +126,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
         "rollout": lambda: PolicyRolloutMCPlayer(1, BatchedSampler(agent)),
         "value": lambda: VGreedyPlayer(ValueScorer(agent)),
     }
-    env = Env(Match(), space, Reward(RewardHypers()))
+    env = Env(Match(), space, Reward(RewardConfig()))
     obs, _ = env.reset(seed=0)
     with pytest.raises(ValueError, match="setup differs"):
         players[consumer]().act(env, obs)
@@ -137,7 +137,7 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     tmp_path: Path, deck: str
 ) -> None:
     space = ObservationSpace()
-    match = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
+    match = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
     payload = checkpoint()
     payload["world_binding"] = checkpoint_world(match.to_rust(), space)
     path = tmp_path / "mirror.pt"

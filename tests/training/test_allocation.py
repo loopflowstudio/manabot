@@ -7,7 +7,7 @@ import time
 import pytest
 
 from manabot.env import ObservationSpace
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from manabot.training import execution
 from manabot.training.checkpoint_queue import MonitoringBudget
@@ -132,7 +132,7 @@ def test_collection_cutoff_leaves_checkpoint_reserve_without_claiming_cuda_recov
 
     def expire_collection(
         collector: SeatRoutedCollector,
-        agent: Agent,
+        agent: ActorCritic,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -193,7 +193,7 @@ def test_export_reserve_exhaustion_is_not_a_completed_or_paused_run(
     value.recovery_max_microsteps = None
     load = execution.load_checkpoint_agent
 
-    def slow_admission(path: str) -> tuple[Agent, ObservationSpace]:
+    def slow_admission(path: str) -> tuple[ActorCritic, ObservationSpace]:
         result = load(path)
         clock.now = allocation.checkpoint_deadline
         return result

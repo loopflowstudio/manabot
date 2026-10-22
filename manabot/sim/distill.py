@@ -6,7 +6,7 @@ viewer-safe observation, legal mask, chosen action, and provenance boundary.
 
 Dataset format (one .npz shard per worker):
     - one array per observation key (shape (D, *obs_shape), float32) — exactly
-      the encoded observation dict the Agent consumes at that decision;
+      the encoded observation dict the ActorCritic consumes at that decision;
     - "action" (D,) int16 — the action actually played;
     - "game_index" (D,) int32, "seat" (D,) int8 — provenance;
     - "num_valid" (D,) int16 — count of valid actions at the decision;
@@ -36,13 +36,13 @@ from manabot.belief.encoding import (
     belief_checkpoint_fields,
 )
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
@@ -101,8 +101,8 @@ def generate_selfplay_shard(
     round_index: int = 0,
     dataset_run_fingerprint: str | None = None,
     deadline_monotonic: float | None = None,
-    match_hypers: MatchHypers | None = None,
-    observation_hypers: ObservationSpaceHypers | None = None,
+    match_config: MatchConfig | None = None,
+    observation_config: ObservationConfig | None = None,
 ) -> dict[str, Any]:
     """Play teacher-vs-teacher self-play games, recording every decision.
 
@@ -124,10 +124,10 @@ def generate_selfplay_shard(
         teacher_spec = {"kind": "search", "sims": sims}
     teacher_name = spec_name(teacher_spec)
 
-    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
+    obs_space = ObservationSpace(observation_config or ObservationConfig())
     match = Match(
-        match_hypers
-        or MatchHypers(
+        match_config
+        or MatchConfig(
             hero=f"{teacher_name}-a"[:32],
             villain=f"{teacher_name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),
@@ -137,7 +137,7 @@ def generate_selfplay_shard(
     env = Env(
         match,
         obs_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
         enable_profiler=False,
@@ -353,8 +353,8 @@ def generate_selfplay_shard(
         "seed": seed,
         "game_offset": game_offset,
         "num_games": num_games,
-        "match": match.hypers.model_dump(),
-        "observation_hypers": obs_space.encoder.hypers.model_dump(),
+        "match": match.config.model_dump(),
+        "observation_hypers": obs_space.encoder.config.model_dump(),
         "content_manifest": env._engine.content_pack_manifest(),
         "dataset_run_fingerprint": dataset_run_fingerprint,
         "policy_target_kind": (
@@ -558,7 +558,7 @@ def soft_targets_from_scores(scores: torch.Tensor, temperature: float) -> torch.
 
 @torch.no_grad()
 def evaluate_bc(
-    agent: Agent,
+    agent: ActorCritic,
     dataset: dict[str, np.ndarray],
     indices: np.ndarray,
     *,
@@ -596,10 +596,10 @@ def evaluate_bc(
 
 def dataset_observation_space(
     dataset: dict[str, np.ndarray],
-    observation_hypers: ObservationSpaceHypers | None,
+    observation_config: ObservationConfig | None,
 ) -> ObservationSpace:
     """Build the declared observation space; reject data of another shape."""
-    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
+    obs_space = ObservationSpace(observation_config or ObservationConfig())
     for key, shape in obs_space.shapes.items():
         if dataset[key].shape[1:] != shape:
             raise ValueError(
@@ -617,16 +617,16 @@ def train_bc(
     val_fraction: float = 0.1,
     seed: int = 0,
     device: str = "cpu",
-    agent_hypers: AgentSpec | None = None,
-    observation_hypers: ObservationSpaceHypers | None = None,
+    agent_config: ModelConfig | None = None,
+    observation_config: ObservationConfig | None = None,
     soft_temperature: float | None = None,
     initial_agent_state: dict[str, Any] | None = None,
     log: bool = False,
-) -> tuple[Agent, ObservationSpace, list[BCEpochStats]]:
-    """Behavior-clone a fresh Agent on (observation, search action) pairs.
+) -> tuple[ActorCritic, ObservationSpace, list[BCEpochStats]]:
+    """Behavior-clone a fresh ActorCritic on (observation, search action) pairs.
 
-    Cross-entropy on the Agent's masked logits (invalid actions are already
-    filled with -1e8 inside Agent.forward, so the distribution is over valid
+    Cross-entropy on the ActorCritic's masked logits (invalid actions are already
+    filled with -1e8 inside ActorCritic.forward, so the distribution is over valid
     actions only). With ``soft_temperature`` set (requires the dataset's
     "scores" column), the target is the softened flat-MC score distribution
     instead of the one-hot argmax. Validation metrics are always measured
@@ -640,8 +640,8 @@ def train_bc(
 
     torch.manual_seed(seed)
     dev = torch.device(device)
-    obs_space = dataset_observation_space(dataset, observation_hypers)
-    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
+    obs_space = dataset_observation_space(dataset, observation_config)
+    agent = ActorCritic(obs_space, agent_config or ModelConfig()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
@@ -715,7 +715,7 @@ def train_bc(
 
 
 def save_bc_checkpoint(
-    agent: Agent,
+    agent: ActorCritic,
     obs_space: ObservationSpace,
     path: str | Path,
     *,
@@ -739,8 +739,8 @@ def save_bc_checkpoint(
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
-            "agent_hypers": agent.hypers.model_dump(),
-            "observation_hypers": obs_space.encoder.hypers.model_dump(),
+            "agent_hypers": agent.config.model_dump(),
+            "observation_hypers": obs_space.encoder.config.model_dump(),
             "train_hypers": {},
         },
         "bc": extra or {},
@@ -750,7 +750,7 @@ def save_bc_checkpoint(
         belief_checkpoint_fields(
             belief_schema,
             count_buckets=agent.belief_count_buckets,
-            card_vocab_size=agent.hypers.belief_card_vocab_size,
+            card_vocab_size=agent.config.belief_card_vocab_size,
         )
     )
     torch.save(checkpoint, path)

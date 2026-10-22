@@ -60,7 +60,7 @@ existing search-distillation trainer and a server-pinned candidate; players see
 the bot's identity in the ordinary table. The local smoke above trains the same authored matchup but does not run
 that challenger workflow.
 
-Build named curated matches with `MatchHypers.authored(pack_key, hero_deck,
+Build named curated matches with `MatchConfig.authored(pack_key, hero_deck,
 villain_deck)` so both main decks and sideboards come from managym's compiled
 setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `Match.swapped()` moves both lists together;
@@ -107,7 +107,7 @@ writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
 For the compiled Allies/Lessons matchup, use
-`AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+`ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. Selected compiled checkpoints
@@ -115,7 +115,7 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
-`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+`ModelConfig(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. New runs train it: `new_agent_spec()` is the
 `manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
@@ -146,7 +146,7 @@ world. The cross-package contracts and convergence status are in
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
-2. **`manabot.model`**: trainable policy and value models (`Agent`);
+2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the regime executor and `Learner`
 3. **`manabot.sim`**: search, teacher data generation, and game simulation
    (`Player`, `Sim`, determinized PUCT, Teacher-1 evidence)
@@ -154,7 +154,7 @@ world. The cross-package contracts and convergence status are in
    representation experiments
 5. **`manabot.verify`**: competency scenarios, behavioral probes, and the
    run-provenance store
-6. **`manabot.infra`**: experiment tracking (W&B/TensorBoard), `Hypers`
+6. **`manabot.infra`**: shared configuration models and runtime setup/Etude tracking
    config models, profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
    supervised exact-world learning, and the `ManabotPlayer` lifecycle
@@ -347,3 +347,12 @@ The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and
 checks reward-driven production PPO plus checkpoint reload. Its credential-free
 CPU runner and failure reports are separate from full-game strength evidence.
+
+Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
+`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
+owns per-run seeding and tracking; `training/experiments.py::Experiment` describes
+experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
+The regime’s search-supervised fitting and evaluation live in
+`training/supervised.py`; search-data generation remains in `sim`. Older BC and
+value-only fitting helpers still live in `sim` and remain a layout review item. Historical checkpoint dictionary keys remain unchanged,
+but old `ataraxos_move` recipes require pinned source rather than runtime aliases.

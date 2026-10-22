@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 import numpy as np
 import pytest
 import torch
@@ -14,11 +15,10 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.flat_mc import play_games
 from manabot.sim.teacher1_evidence import _fresh_env
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 
 
 class NeutralLikelihood:
@@ -229,10 +229,10 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
 
     tiny_deck = {"Mountain": 4, "Raging Goblin": 4}
     checkpoint = tmp_path / "tiny-policy.pt"
-    obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentSpec()
-    obs_space = ObservationSpace(obs_hypers)
-    agent = Agent(obs_space, agent_hypers)
+    obs_config = ObservationConfig()
+    agent_config = ModelConfig()
+    obs_space = ObservationSpace(obs_config)
+    agent = ActorCritic(obs_space, agent_config)
     torch.save(
         {
             "world_binding": checkpoint_world(
@@ -243,8 +243,8 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
                 obs_space,
             ),
             "hypers": {
-                "observation_hypers": obs_hypers.model_dump(),
-                "agent_hypers": agent_hypers.model_dump(),
+                "observation_hypers": obs_config.model_dump(),
+                "agent_hypers": agent_config.model_dump(),
             },
             "model_state_dict": agent.state_dict(),
         },
