@@ -147,3 +147,93 @@ Both temporary activation/preflight LaunchAgents were removed after success;
 the budget-owning cohort service remains loaded. The controller now owns later
 admission, exact exported-state binding, cost accounting, and cleanup without
 this laptop or conversation remaining connected.
+
+## Report publication goal — active
+
+Jack Heart requested publication of a report on the $50 two-seat experiment.
+At 2026-10-21 23:57 UTC the experiment was still running in its first segment;
+the final $50 endpoint was not reached. Published an explicitly interim report
+at `experiments/two-seat-ladder.md`, machine-readable observation
+`experiments/data/two-seat-ladder/2026-10-21-interim.json`, and an experiment-index
+entry. `lf pr publish` pushed these and marked PR #330 ready, using refreshed
+copy that corrects the stale earlier description of authorized rentals. GitHub
+contents API verified the report exists on the published branch. PR head at
+verification: 26d0c68edeeddc902fc815c482e96c5895d1e5fb. Publication warned about a
+missing Linear Initiative/Wave binding; GitHub publication succeeded. Do not
+repair that unrelated planning binding or merge/complete MTG-165.
+
+Verified/fetched immutable generation 414 of job 002, TrainingRun
+b855d41288c542ffb8af8c337db81186: 704 updates, 211389 games, 20909111 learner
+and environment decisions, 5227546 filtered optimizer exposures and 81988
+optimizer steps. Counts equal sums of diagnostic rows/steps; zero numerical
+nonfinite or rejected optimizer steps. Both raw milestone checkpoints load with
+ordinary readers. Run JSON and checkpoint hashes are pinned in the report data.
+The later fresh provider/S3 read found job 002 running at 712 updates. Estimated
+incurred cost to observation was $4.010065 including prior attempt 001 and the
+002 guardian; $49.98126 is reserved admission, not spend. Controller remains live
+on the mini with a fresh heartbeat; all six continuations are still queued.
+
+A bounded CPU evaluation of update 250 is now running on the existing mini,
+without another rental. Uses the predeclared 25 deals 1590100000–1590100024,
+heuristic, mirrors/eight legs = 200 games, bootstrap seed17/4000 repetitions,
+600-second per-game allowance. CheckpointQueue owns the evaluator with a
+3600-second attempt cap (3660 total queue budget), isolated subprocess group
+and persistent attempt/result records. LaunchAgent `manabot.mtg165-eval250` was
+confirmed live, PID85134; its child processes were confirmed live too. Inputs
+and all queue evidence are under
+`/Users/jack/src/manabot.mtg165-controller/.runs/mtg165-two-seat-50/evaluation-250`
+on mini-heart.local. The local counterpart is `.runs/mtg165-two-seat-50/evaluation-250`.
+Do not retry failed/incomplete evaluations silently. Fetch `queue/**/evaluation/monitor.json`
+and its arena evidence, verify completed rows/replay, then update the published
+report with any valid result. Native evaluator source4ff4086 matches the w6
+training engine; the ordinary admission checks exact source/world/content ABI.
+
+Goal remains active for the final report: inspect authoritative cohort state and
+exact current job/provider before assuming terminal state; no restart solely on
+observation timeout. After terminal evidence, settle all attempted costs and
+cleanup, fetch/bind final raw/EMA/Adam exports, score the selected tier checkpoints
+with the declared anchor on owned CPU, retain failures, and publish the final
+report. Do not present this interim publication as a completed $50 experiment.
+
+### Early heuristic evaluation verified (2026-10-22)
+
+The previous goal turn made progress by publishing the interim report and
+starting a bounded evaluation. Fresh authoritative reads in this turn confirmed
+cohort/controller running and evaluator PID85134 live; evaluation advanced from
+72 through 184 to200 games, then completed with exit0. The GPU job remained
+running (727 updates at the first fresh mini read), no continuation yet.
+
+Copied all evaluation queue evidence to local
+`.runs/mtg165-two-seat-50/evaluation-250/retained/`. MonitorResult is completed,
+200/200 unique expected seed/leg rows, every row valid/terminal/replayed, no
+integrity failures. Verified the SHA-256 of every compressed trace shard for
+both this cohort and the completed one-seat #333 cohort at
+`~/manabot-runs/mtg159/eval/results/monitor/out/heuristic-0/monitor.json`.
+Engine/content/input ABI, heuristic registration and monitor-source identities
+match. One-seat checkpoint a9fe2d23…, two-seat checkpoint2bd07fa2….
+
+Both-seat250 score .515 [.485,.545] versus one-seat250 .475 [.445,.505]. Shared
+whole-deal bootstrap (4000 draws, seed17) gives paired mean difference .04
+[-.01,.085]. LvA .24 [.12,.38] versus .22 [.12,.32], paired .02[-.10,.14];
+AvL .74 vs.82, paired-.08[-.18,0]; LvL .60 vs.38, paired .22[.08,.36]; AvA
+.48 vs.48, paired0[-.08,.08]. One training seed; descriptive same-update,
+post-hoc and unmatched cost/decision budgets, not method-level superiority.
+Two-seat250 used7,595,063 learner rows and5222.94 seconds of training wall;
+one-seat250 used4,096,000 rows and1530.62 seconds (1.85×rows,3.41×wall).
+Evaluation on the mini took425.84 seconds, with no paid evaluation rental.
+Compact scored rows/intervals/receipts are in
+`experiments/data/two-seat-ladder/250-update-heuristic.json` and the report now
+includes the full matchup table and the null/unequal-cost interpretation.
+
+Installed standard bounded projection companion using the same frozen cohort
+and existing controller allowance: LaunchAgent
+`manabot.cohort.mtg165-two-seat-50.projection`, PID85625 at verification, saves
+report.json/report.html and original dashboard exports under
+`/Users/jack/.manabot/mtg165-two-seat-50/projection`. First verified saved report
+showed job002 running at731 updates, generation427, no report error. It polls
+at300seconds with120-second child allowance and3600seconds total. It cannot
+rent machines; scheduler ownership/lease stays unchanged. Removed the temporary
+report-service bootstrap LaunchAgent and the finished evaluation LaunchAgent;
+main scheduler and projection remain running. Goal remains active for the final
+budget-limited endpoint/report. Do not restart a stopped or failed job or add
+paid evaluation work merely to obtain a more favorable result.
