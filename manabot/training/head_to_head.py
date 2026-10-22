@@ -301,10 +301,12 @@ def report(directory: Path, source: Path, attempts: dict[str, DirectAttempt]) ->
             rows += (
                 f'<tr><td>{updates}</td><td colspan="4">{escape(str(item))}</td></tr>'
             )
+    if not rows:
+        rows = '<tr><td colspan="5">Waiting for the first completed 1,000-update admission; direct evaluations follow the heuristic evaluation.</td></tr>'
     page = (
         '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="30"><title>Direct two-seat vs one-seat</title><style>body{font:16px system-ui;margin:2rem}td,th{padding:.5rem}</style><h1>Two-seat vs one-seat, equal updates</h1><p>200 games per checkpoint: 25 paired deals × eight deck/seat legs. 50 games per deck pairing, balanced play/draw. Score is from the two-seat model’s perspective. Win/draw/loss counts shown. 95% intervals resample whole deals (4000 draws, seed 0).</p><p>Repeated exploratory monitoring, one training seed, unequal training cost/data. Repeated looks and subgroup intervals do not establish method superiority. No automatic training or budget changes.</p><p><a href="/">Heuristic monitoring</a> · <a href="head-to-head.json">Attempt ledger</a></p><table><tr><th>Updates</th><th>Deck pairing</th><th>Two-seat score</th><th>95% interval</th><th>W/D/L</th></tr>'
         + rows
-        + "</table>"
+        + f"</table><p>Observer refreshed {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}. Above 50% favors two-seat; below 50% favors one-seat. Exact controls are retained through 12,000 updates.</p>"
     )
     temporary = public / "head-to-head.html.tmp"
     temporary.write_text(page)

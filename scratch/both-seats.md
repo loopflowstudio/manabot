@@ -428,3 +428,16 @@ no rental or training mutation. Public report head-to-head.html/JSON uses
 4000 whole-deal bootstrap draws seed0, W/D/L and cost/data coordinates.
 Repeated exploratory monitoring and one training seed, no method superiority
 or formal adaptive stopping claim. Deployment/first execution pending.
+
+Deployment verified: PR330 published sourceac120a8; Mini evaluation checkout now
+at that commit, existing observer93232/controller76098 untouched. Mini origin is
+local pinned worker checkout (notGitHub), so initial source fetch did not include
+new commit; first new service activation exited with module-not-found before any
+match or direct attempt. Retained stderr; transferred exact git bundle, checked
+outac120a8, explicitly bootstrapped onlynewservice. Head-to-head observer95345 live,
+HTTPhead-to-head.html/JSON verified, noattemptyet.12controls admitted and available.
+First direct comparison waits standard1000heuristic evaluation completion,
+thenconsumesitsdigest-boundadmission. Trainingfresh1006updates,cohortrunning.
+Tests:13focusedEtude/headheadpass, then3finalfollower/reportpass. CIincludesnewtest.
+Reportgoalremainspaused; newdirectmonitoringauthorizedindependently. No paidwork
+changes, trainingrestart, merge, Taskcompletion orauthchanges.
