@@ -45,6 +45,7 @@ from manabot.sim.search_supervised import (
     train_search_supervised,
 )
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
+from manabot.training.matchups import elemental_roster
 import managym
 
 from .admission import admit_policy
@@ -155,6 +156,16 @@ def validate_regime(
         managym.WORLD_VERSION,
     }:
         raise ValueError("unsupported regime world")
+    if any(
+        isinstance(stage, TrainSelfPlay)
+        and stage.matchup_curriculum == "elemental-uniform"
+        for stage in regime.stages
+    ):
+        elemental_roster(Match(regime.match))
+        if regime.agent.semantic_pack != "elemental-world-v1":
+            raise ValueError(
+                "elemental-uniform requires complete Elemental policy input"
+            )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime
@@ -1427,6 +1438,10 @@ def _execute_regime(
                         )
                         if stage.matchup_curriculum != "fixed":
                             diagnostic["matchup_curriculum"] = stage.matchup_curriculum
+                            if stage.matchup_curriculum == "elemental-uniform":
+                                diagnostic["cumulative_matchup_exposure"] = deepcopy(
+                                    trainer.collector.stats.exposure
+                                )
                             diagnostic["cumulative_games_by_stream"] = {
                                 str(k): v
                                 for k, v in trainer.collector.stats.games_by_stream.items()

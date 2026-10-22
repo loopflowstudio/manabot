@@ -344,3 +344,25 @@ The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and
 checks reward-driven production PPO plus checkpoint reload. Its credential-free
 CPU runner and failure reports are separate from full-game strength evidence.
+
+### Uniform Elemental self-play
+
+`TrainSelfPlay(matchup_curriculum="elemental-uniform", streams=256,
+transitions=64)` uses the existing seat-routed collector, with learner seat
+`stream % 2`. It requires current-self behavior, ordinary roots, one producer,
+the complete `elemental-world-v1` semantic policy input, and an exact authored
+representative match. Unsupported producer modes fail before allocation.
+
+Native `VectorEnv.set_uniform_roster` admits every exact authored setup once,
+including outside Lesson pools. Each game root independently selects both deck
+indices uniformly, so all 100 ordered pairs (including mirrors) are eligible.
+A domain-separated ChaCha8 selector is keyed by the native reset seed and does
+not consume game or policy RNG. Terminal resets and both recovery paths use the
+same selector; updates preserve unfinished games.
+
+Diagnostics retain `cumulative_matchup_exposure`: keys are ordered
+`deck_identity(seat0)/deck_identity(seat1)/learner-N`, with realized game-root,
+environment-decision, learner-transition, terminal-game and truncated-game counts. Deck identities
+hash the exact main deck and Lesson pool (`training.self_play.deck_identity`).
+Game roots are the sampling unit; finite counts fluctuate, and game length can
+skew transition exposure. Existing fixed/cross/mirror modes retain their setups.

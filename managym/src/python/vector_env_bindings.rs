@@ -221,6 +221,16 @@ impl PyVectorEnv {
         self.inner.current_agent_indices()
     }
 
+    fn set_uniform_roster(&mut self, roster: Vec<PyPlayerConfig>) -> PyResult<()> {
+        self.inner
+            .set_uniform_roster(roster.into_iter().map(PlayerConfig::from).collect())
+            .map_err(map_agent_err)
+    }
+
+    fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
+        self.inner.current_matchup_indices()
+    }
+
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
     }

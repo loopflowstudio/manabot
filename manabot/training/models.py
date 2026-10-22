@@ -393,9 +393,9 @@ class TrainSelfPlay(Stage):
     )
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
-    matchup_curriculum: Literal["fixed", "cross-balanced", "mirrors-balanced"] = Field(
-        default="fixed", exclude_if=lambda value: value == "fixed"
-    )
+    matchup_curriculum: Literal[
+        "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
+    ] = Field(default="fixed", exclude_if=lambda value: value == "fixed")
     learning: Learning | AtaraxosMoveLearning = Learning()
 
     @model_validator(mode="after")
@@ -404,7 +404,16 @@ class TrainSelfPlay(Stage):
             raise ValueError("producer count cannot exceed streams")
         if self.execution.workers != 1 and self.root is not None:
             raise ValueError("diagnostic roots require one producer")
-        if self.matchup_curriculum != "fixed":
+        if self.matchup_curriculum == "elemental-uniform":
+            if (
+                self.behavior != "current-self"
+                or self.execution.workers != 1
+                or self.root is not None
+            ):
+                raise ValueError(
+                    "elemental-uniform requires current-self, one producer and ordinary roots"
+                )
+        elif self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
             if self.streams % width or self.behavior != "current-self":
                 raise ValueError(
