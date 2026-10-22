@@ -1,130 +1,149 @@
-# Rules authority consolidation — working plan
+# MTG-177 — deliver the most valuable rules-audit work
 
-## Accepted outcome and constraints
+## Outcome and delivery boundary
 
-MTG-177 is draft work for review: account for every pinned Comprehensive Rule
-with honest evidence, deliver bounded improvements, and assess CI cost without
-weakening coverage. Jack Heart approved the draft and a later pursue run,
-prioritizing competing definitions that execute the same rule differently;
-those approvals have no supplied calendar dates. No ready publication, merge,
-auto-merge or Task completion is authorized.
+Jack Heart's original request was a whole-Comprehensive-Rules audit of
+implementation, ownership, comments and behavioral tests, plus concrete bounded
+improvements and a measured CI-cost assessment. Later direction prioritized
+competing definitions: judge them against MTG, keep the faithful authority and
+remove the contradictory implementation. On 2026-10-22, Jack Heart requested
+this plan focus on landing the most important results against those goals.
 
-Jack Heart's 2026-10-21 direction in AGENTS.md requires complete shared human/bot
-choices, viewer-safe observations and one native authority. Preserve Command
-binding, stale rejection, actual pending decisions on reconnect, replay/fork
-identity and identifiable priority-stop automation. Changed rules meaning needs
-new world/conformance identity; frozen evidence remains unchanged.
+Deliver a reviewable change that fixes a real supported-play defect, establishes
+useful reviewed coverage, and makes the remaining rules investments clear.
+The inventory is complete; the substantive whole-rules audit is not. Landing a
+bounded increment must not be reported as completing that original obligation.
+This plan orders the remaining work. The existing draft-review boundary still
+applies: publication, merge and Task completion require their selected delivery
+step; rewriting this plan starts none of them.
 
-## Current implementation
+## 1. Finish acceptance of the targeting repair
 
-- The original audit is committed at `2b6e2b1b7`. The index accounts for 3,166
-  numbered rules/subrules and 156 headings: 3 implemented, 25 partial, 2 missing,
-  322 not applicable and 2,970 unknown. Unknown means triaged without proof.
-- `c514d11b0` removes the independent stack-target minimum-mana-value comparison
-  from offers; enumeration, acceptance and resolution use `target_is_legal`.
-  Candidate order and distinct game-stage responsibilities remain.
-- `202416a8` centralizes permanent battlefield presence and opposing hexproof
-  before wording restrictions. It removes `hexproof_blocks`, four branch-local
-  guards and repeated lookups. Controller, type, predicate and threshold checks
-  remain; nontargeted presence helpers still have consumers. The CR 702.11b
-  witness is enabled. No offer-time legality cache or stage merge is introduced.
-- Live world is w12; tensor shapes, authored w11 content and learning schema 7
-  are unchanged. CI/tests select fresh `semantic-kernel-w12-v1` receipts and
-  Academy selects newly recorded w12 demo prefixes. Old worlds, checkpoints,
-  protocol fixtures and demo bytes remain frozen.
-- The Academy regression changes the selected legal offer and matching played
-  Command while preserving its pre-command address. Existing ed2 frame/landmark
-  checks, erd1 Command/digest rejection and optional-import boundaries remain.
-- Inventory tests use a normal `scripts.audit_rules` import and rule-ID lookups;
-  source text is cached only within one anchor-validation call. The CLI now
-  selects rows, validates them, then compares/writes output, so invalid evidence
-  cannot replace the index.
+The highest-value code change already exists: `target_is_legal` applies live
+battlefield presence and opposing hexproof before target-wording restrictions.
+Offers, acceptance and resolution share it. Own hexproof stays targetable;
+responses can invalidate targets; mixed legal targets still resolve; departing
+and returning objects do not inherit old targets. The independent stack-target
+mana-value comparison is removed. Keep this repair as the core of delivery.
 
-Rules input is the September 25, 2026 Wizards TXT at
-`scratch/MagicCompRules-20260925.txt`, SHA-256
+Close these concrete acceptance gaps on the final integrated source:
+
+- Run the full learnability diagnostic after the upstream collector integration.
+  The 99.6s canonical pass predates that integration and remains historical
+  evidence. Keep the earlier collector timeout too; contention is plausible,
+  not a proved cause. Preserve the existing 480s total / 300s PPO watchdogs.
+- Finish Study semantic retry, all seven Study branch cases, and four monitor
+  cases: random/explicit-matrix outcomes, admission-failure persistence and the
+  saved dashboard. Inspect the retained timeout logs first and use focused,
+  bounded invocations. Partial suites are not passes. If a check still cannot
+  finish, identify the exact check and cause; “gate/CI owns it” is not closure.
+- Verify the final w12 native build, conformance selection, arena admission and
+  Command/recovery evidence against the delivered source. Reuse receipts only
+  where their tested code and dependencies remain applicable. Do not rerun
+  unrelated suites for prose changes.
+
+**Done when:** affected behavior and required current-world checks have passing
+receipts tied to the final source, or a specific unresolved acceptance failure
+is plainly blocking delivery. Preserve all failures and frozen w11 evidence.
+No assertion weakening, timeout inflation or speculative training repair.
+
+## 2. Turn the inventory into a useful implementation audit
+
+The main shortfall is evidence depth: 3,166 numbered rules/subrules plus 156
+headings are indexed, but 2,970 entries remain unknown. Generic family triage
+cannot satisfy the original per-rule request. Deepen the audit in this order:
+
+1. **Targets and resolution (CR 115, 400.7, 608, 702.11).** Finish the reviewed
+   obligations around this repair: each supported target form, restrictions,
+   response-time changes, mixed/all-invalid targets and object identity. Inspect
+   the unresolved `Target::StackSpell(CardId)` incarnation boundary explicitly.
+2. **Triggers and state-based actions (CR 603, 704).** Establish which supported
+   event/stack/ordering obligations are implemented and tested. Retain the
+   controller-order counterexample: at 2 life, gain-2/damage-2 ordering changes
+   survival. Fixed enqueue order does not provide the required player choice.
+3. **Replacement interactions (CR 614–616), then current-card combat and layers.**
+   Review real supported interactions and their owners, including affected-player
+   replacement ordering. Distinguish legitimate stages from duplicate semantics.
+   General timestamps/dependencies and unused mechanics need explicit scope.
+
+For each reviewed rule/subrule, inspect the actual authority and callers,
+explain the implemented subset, assess the nearby intent comment, and identify
+an independent behavioral witness or precise gap. Compare competing paths
+against the pinned rule before choosing one. A passing agreement test or matching
+citation alone is insufficient. Update individual index rows and the coverage
+map; keep unreviewed rows unknown and unsupported formats distinct from defects.
+
+**Done for each landing increment:** its claimed rule set is explicitly listed,
+individually adjudicated and traceable to code and evidence; the coverage map
+explains strong subsets and consequential gaps. Keep the remaining whole-rules
+review visible until actually completed. Do not claim a percentage implemented
+from inventory statuses or reduce unknown counts through bulk relabeling.
+
+## 3. Add only improvements that make those findings actionable
+
+Retain the cheap mana and SBA matrices and the targeting regressions. Add missing
+negative cases and bounded combinations discovered by the review. Put current
+rule citations beside the implementation that owns the invariant, explaining
+intent and limitations. Existing corrections cover targeting, setup, priority,
+sacrifice and P/T layers; extend this within the rules actually inspected.
+
+Repair small demonstrated supported-play contradictions through a single native
+authority. Keep distinct phases, current-state rechecks and viewer-safe projections.
+Trigger/replacement ordering are missing shared choices, not proven duplicate
+engines: retain their witnesses and a concrete next implementation decision.
+A large new decision model should not become an incidental addition to this
+repair. Payment work remains with its owners; refresh ownership because the
+historical MTG-174 payment reference is stale.
+
+**Done when:** each added test, comment or consolidation closes a named finding;
+remaining proposals state the user-visible consequence, native owner and next
+proof. Avoid another round of equivalent-code cleanup ahead of known defects.
+
+## 4. Finish the cost and review package
+
+Keep the measured CI assessment and duration reporting. Existing samples show
+35–46 runner-minutes for 9–11 minutes of wall span; sharding savings have not
+been demonstrated. Make no topology change without evidence for both wall time
+and total runner cost, duplicated setup, cancellation and required aggregation.
+Do not weaken PR coverage to improve timing.
+
+Refresh the concise review guide, coverage map and HTML walkthrough for the
+final diff. Lead with the targeting behavior, reviewed rule families, corrected
+citations and remaining gaps. Keep detailed inventory/receipts behind links.
+Separate authored change cost from generated evidence: the last recorded charge
+is 4,054 lines against the approximate 10k ceiling. Fresh conformance receipts
+are evidence; runtime demo fixtures are charged product inputs. Preserve the
+original pins and report observed incremental validation cost and checks not run.
+
+**Ready for delivery review when:** the repair's acceptance is closed, the audit
+claims match individually reviewed evidence, the line/cost accounting is current,
+and the review surface explains what can land and what remains. Deliver the
+bounded result through the selected PR operation. Keep the Task open if its
+original substantive audit obligation remains unfinished.
+
+## Evidence and constraints to carry forward
+
+Current committed reference: `e6585adc2`. Code milestones: inventory/directed
+checks `2b6e2b1b7`, shared stack-target predicate `c514d11b0`, permanent targeting
+repair and w12 evidence `202416a8`. The latest upstream collector integration
+is included; it is an independent contribution, not this audit's work.
+
+Rules source: September 25, 2026 Wizards TXT, retained at
+`scratch/MagicCompRules-20260925.txt`; SHA-256
 `8d860e451f20f38865b725b42d82feb714c725373dd8f3b32b8652b3eeb070ca`.
-Detailed findings, anchors and receipts live in `docs/rules/audit-2026-10/`.
+Detailed evidence: `docs/rules/audit-2026-10/unification-validation.json`,
+`learnability-w12-canonical.json`, `reviews.json`, `index.jsonl`, `ci.md` and
+`line-accounting.json`. Historical plan detail remains in git.
 
-## Delete — do not maintain
+Preserve complete human/bot legal choices, Command binding/stale rejection,
+actual pending decisions on reconnect, costs and revealed information, viewer
+privacy, replay/fork identity and identifiable priority-stop automation. Changed
+rules meaning uses new world identity and fresh evidence; shapes alone do not
+establish compatibility. No paid compute, stress loops, deck expansion, frozen
+experiment edits or competing payment rewrite. All Python uses uv; Rust checks
+run with debug assertions and two build jobs; replace rebuilt native extensions
+atomically. Ordinary ceilings remain 900s cold Rust, 180s warm Rust and 120s
+Python, with the existing full-learnability watchdog noted above.
 
-Removed `scratch/profile_collector.py`: the one-off two-update monkeypatch served
-its diagnosis and has no runtime/test consumers. Its complete source is retained
-at `0c640a2e:scratch/profile_collector.py`; the profile log and validation receipt
-remain. No production deletion targets or exclusive fixtures remain in this cut.
-
-## Validation and remaining acceptance
-
-`0c640a2e` retains the passing canonical diagnostic and reconciles the earlier
-collector failure. Full result: `docs/rules/audit-2026-10/learnability-w12-canonical.json`.
-The run used the draft later committed as `202416a8`; its source digest/native
-SHA identify the tested bytes. It passed in 99.6s (86.5 CPU seconds), with 144
-capacity assertions and production PPO/checkpoint reload: 65,536 transitions,
-1,541 games, after 1.0 versus no-update 0.640625. The 480s total/300s PPO
-deadlines, sample counts and assertions were unchanged. Canonical dependency-
-blocked play/Study protocol also passed all 17 tests.
-
-The earlier `.runs/learnability/rules-targeting-w12/worker.log` records a collector
-deadline failure after 384.3s (76.2 CPU seconds). Inspection of
-`manabot/verify/learning_control.py` and `manabot/sim/net_opponent.py`, plus the
-unchanged two-update profile (9.047s), reproduced no collector defect. Host
-contention is plausible, not proved. No production training repair was warranted.
-Keep both outcomes; do not replay the full diagnostic for documentation/tooling.
-
-The 2026-10-21 reconciliation also inspected upstream `07ddef0e`, now merged
-at `ce867935`. It adds both-seat learning and changes the shared collector and
-monitor implementation after the canonical diagnostic. The positive control
-still requests a frozen opponent, which defaults to one learning seat; its
-recipe and assertions are unchanged. The 99.6s result therefore remains a
-historical draft result, not a current-head full diagnostic. A focused check
-of frozen-opponent continuity and seat defaults covers this integration;
-current-head full diagnostic validation remains with gate/CI.
-
-Retained pre-packaging evidence: 8 debug targeting witnesses (plus 1 ignored
-separate trigger-order proposal), 6 debug conformance checks over 14 cases /
-3,491 Commands / 15 Phase rows, 8 Command/recovery checks, 4 repaired decision-
-surface checks and 44 tooling/package-boundary checks. All 11 arena admission
-cases passed across bounded chunks. These are historical receipts, not current-
-head suite passes or full conformance/strength certification. The canonical
-native wheel build and atomic install/alias-identity check passed after upstream's
-`fd8cfb92` packaging merge (58.4s / 0.7s).
-
-Gate/CI owns unfinished Study semantic retry, all 7 Study branch cases, and four
-monitor cases (random/explicit-matrix outcomes, admission-failure persistence,
-saved dashboard). Study runtime passed 3/4 and monitor 16/20 before 120s timeouts;
-partial suites are not passes. Preserve failures, including the original mixed-
-target fixture mistake and invalid pytest selector. The timeout helper now kills
-its process group; its earlier owned orphans were stopped. No broad rerun or
-budget increase is justified without changed code or new evidence.
-
-## Separate findings and scope
-
-CR 603.3b same-controller trigger ordering lacks a shared choice: at 2 life,
-gain-2/damage-2 ordering distinguishes survival from loss. CR 616 replacement
-ordering also covers a narrower deterministic subset than affected-player
-choice. Collection, placement and movement have legitimate separate roles.
-These missing-choice designs remain separate from targeting consolidation.
-
-Prism/Treasure payment still has a retained counterexample despite bounded
-arithmetic evidence. Payment repair stays with its owners. The last refresh
-found MTG-174 identifies a training Task, so replacement payment ownership is
-unresolved; optional-cost/continuation Task `4ba5dd` has delivery in history.
-These historical observations authorize no lifecycle changes or new coordination.
-
-No paid compute, training/deck expansion, frozen-evidence edits or Wave-memory
-writes. Rules' GOAL was read; `.lf/wave/rules/MEMORY.md` is absent. Proposed memory
-lesson: a shared predicate can still contain contradictory branch semantics;
-consumer agreement and a rules-correct repair need distinct evidence.
-
-Validation ceilings: two Cargo jobs, 900s per cold Rust command, 180s per warm
-Rust command and 120s per Python check, with debug required. Full learnability's
-explicit acceptance uses its existing 480s watchdog. No stress loops or random
-load searches. Approximate combined draft ceiling is 10k lines excluding report/
-index artifacts; conservative charged churn is 4,054 lines, including the
-101-line simplification increment (49 tooling/test lines and 52 probe-deletion
-lines). Upstream `07ddef0e` is excluded as an independent contribution. Historical
-step detail and accounting are retained at `0c640a2e:scratch/plan.md` and in the
-report receipts. The accounting retains historical charges even for retired
-helpers; fresh conformance receipts are excluded evidence, while runtime demo
-fixtures remain charged product inputs.
-
-Check: `uv run --no-sync python scratch/run_bounded.py realign-collector 120 uv run --no-sync pytest tests/training/test_two_seat_learning.py::test_collector_defaults_follow_policy_ownership tests/sim/test_net_opponent.py::test_collector_frozen_opponent_and_streaming_continuity -q` — 2 passed (0.86s); full current-head diagnostic and unfinished Study/monitor checks remain with gate/CI.
+Check: plan reconciled with current Task status and retained evidence; this edit
+runs no engine tests and launches no Flow.
