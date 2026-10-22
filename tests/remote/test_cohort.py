@@ -273,3 +273,31 @@ def test_copied_hostname_and_directory_cannot_impersonate_controller_host(
         assert first != other
         with pytest.raises(ValueError, match="another owner"):
             harness.restart(other)
+
+
+def test_adopt_live_job_keeps_lease_and_never_creates_a_rental(
+    harness: Harness,
+) -> None:
+    first = harness.launch()
+    harness.finish(first)
+    status = harness.observe(first)
+    assert status.record is not None
+    # A separate unstarted cohort takes responsibility for the same immutable job.
+    other = harness.cohort.model_copy(update={"cohort_id": "adopting"})
+    store = FileStore(harness.root / "adopting.sqlite")
+    supervisor = CohortSupervisor(
+        other,
+        "same-host",
+        harness.root / "adopt-cache",
+        store=store,
+        observe=harness.observe,
+    )
+    before = harness.provider.created
+    state = supervisor.adopt(first)
+    assert state.attempts[0].spec == first
+    assert state.attempts[0].spec.deadline == first.deadline
+    assert supervisor.adopt(first) == state
+    assert harness.provider.created == before
+    different = first.model_copy(update={"deadline": first.deadline + 1})
+    with pytest.raises(ValueError, match="exactly match"):
+        supervisor.adopt(different)

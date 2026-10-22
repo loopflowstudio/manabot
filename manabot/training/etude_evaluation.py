@@ -1,113 +1,220 @@
-"""Publish immutable arena outcomes through Etude's evaluation API.
+"""Etude benchmarks backed by the replay-checked Manabot arena.
 
-The existing arena owns play, replay and paired-deal statistics. This module
-reads its retained result, verifies the checkpoint bytes and recomputes cohort
-admission before publishing. It never plays games, trains, or repairs evidence.
-Etude episodes count attempted games; valid outcomes and failures stay distinct.
+One Etude match is one deal with all eight correlated deck/seat legs. Etude
+owns match records, resume, Parquet tables and whole-match uncertainty. Arena
+owns game limits, legal actions and retained command/replay evidence. These
+repeatedly inspected deals are development monitoring, not a held-out study.
 """
 
-import hashlib
-import json
+from __future__ import annotations
+
+from collections.abc import Sequence
+import os
 from pathlib import Path
-import uuid
+from urllib.parse import unquote, urlsplit
 
-from etude.track.records import ArtifactRef
-from etude.track.run import Run, definition
+from etude.eval.match import Row, Tables, agent
+from etude.eval.records import Benchmark, Environment, Match, Matchup, Model
+from etude.eval.tournament import hold
+from etude.run.records import ArtifactRef
+from pydantic import BaseModel
 
-from manabot.arena.models import file_sha256
-from manabot.training.monitor_evaluation import MonitorResult
+from manabot.arena.match import play_cell, selected_decks
+from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
+from manabot.infra.artifacts import verify_file
+from manabot.training.execution import atomic_json
+from manabot.training.monitor_evaluation import ArenaRow, MonitorResult
+
+BENCHMARK = "two-seat-ladder-heuristic-deck-seats"
 
 
-def publish_saved_evaluation(tracker: Run, path: Path) -> str:
-    """Publish one retained attempt; a failed attempt cannot overwrite another.
+class Conditions(BaseModel):
+    deal: int
+    key: ArenaKey
+    game_seconds: float
+    max_commands: int
 
-    Returns its source-bound, unique publication key. SDK finish/flush belongs to the
-    caller. Republishing creates a separate publication, never more scientific
-    samples; consumers deduplicate on result_sha256. The original result and checkpoint remain local authoritative bytes;
-    this function does not promise remote archival or rerun canonical replay.
-    """
-    payload = path.read_bytes()
-    result = MonitorResult.model_validate_json(payload)
-    if result.status == "running":
-        raise ValueError("cannot publish a still-running evaluation as settled")
-    admitted = result.model_copy(deep=True)
-    admitted.validate_cohort()
-    for field in ("status", "win", "draw", "score"):
-        if getattr(admitted, field) != getattr(result, field):
-            raise ValueError(f"saved evaluation has inconsistent {field}")
-    if result.expected_games != len(result.protocol.deal_seeds) * result.protocol.legs:
-        raise ValueError("saved evaluation expected games differ from protocol")
-    checkpoint = Path(result.artifact["path"]).resolve()
+
+def benchmark(manifest: MonitorResult) -> Benchmark:
+    """Freeze the arena protocol independently of checkpoint or training progress."""
     if (
-        checkpoint.stat().st_size != result.artifact["bytes"]
-        or file_sha256(checkpoint) != result.artifact["sha256"]
-        or result.candidate.checkpoint_sha256 != result.artifact["sha256"]
-        or result.candidate.checkpoint_bytes != result.artifact["bytes"]
+        manifest.protocol.opponent != "heuristic"
+        or not manifest.protocol.include_mirrors
     ):
-        raise ValueError("evaluation checkpoint bytes differ from its subject")
-    subject = ArtifactRef(
-        uri=checkpoint.as_uri(),
-        sha256=result.artifact["sha256"],
-        size_bytes=result.artifact["bytes"],
-        state="verified",
+        raise ValueError("Etude ladder benchmark requires heuristic and eight legs")
+    # A model seat carries its fixed inference registration, with artifact facts
+    # filled from Etude's checkpoint when played. Never put training coordinates
+    # or host paths in the benchmark identity.
+    registration = manifest.candidate.model_copy(
+        update={
+            "checkpoint_sha256": "0" * 64,
+            "checkpoint_bytes": 1,
+            "artifact_id": "monitor/checkpoint",
+        }
     )
-    meaning = {
-        "schema": "manabot-arena-evaluation-v1",
-        "protocol": result.protocol.model_dump(mode="json"),
-        "arena_key": result.key.model_dump(mode="json"),
-        "opponent": result.opponent.model_dump(mode="json"),
-        "evaluation_identities": result.evaluation_identities,
-        "uncertainty": "95% percentile whole-deal bootstrap conditional on checkpoint; not training-seed uncertainty",
-        "episodes": "attempted games, including failed and truncated attempts",
+    code = [
+        path
+        for folder in (
+            "manabot/arena",
+            "manabot/model",
+            "manabot/env",
+            "manabot/sim",
+            "manabot/infra",
+        )
+        for path in sorted(Path(folder).rglob("*.py"))
+    ] + [Path(__file__)]
+    opponent = agent(
+        "heuristic",
+        code=code,
+        config={"registration": manifest.opponent.model_dump(mode="json")},
+    )
+    return Benchmark(
+        name=BENCHMARK,
+        environment=Environment(
+            name=f"{manifest.key.world}-allies-lessons-development",
+            files=canonical_sha256(manifest.evaluation_identities),
+            config={"purpose": "repeated-development-monitoring"},
+        ),
+        matchups=(
+            Matchup(
+                name="checkpoint vs heuristic",
+                players=(
+                    Model(
+                        code=code,
+                        config={"registration": registration.model_dump(mode="json")},
+                    ),
+                    opponent,
+                ),
+                conditions=tuple(
+                    Conditions(
+                        deal=seed,
+                        key=manifest.key,
+                        game_seconds=manifest.protocol.game_seconds,
+                        max_commands=manifest.protocol.max_commands,
+                    ).model_dump(mode="json")
+                    for seed in manifest.protocol.deal_seeds
+                ),
+                games=8,
+            ),
+        ),
+    )
+
+
+def play(match: Match) -> Tables:
+    """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
+    if len(match.agents) != 2 or match.games != 8:
+        raise ValueError("expected one eight-leg checkpoint/heuristic deal")
+    checkpoint, anchor = match.agents
+    uri = urlsplit(checkpoint.uri or "")
+    if checkpoint.kind != "checkpoint" or uri.scheme != "file" or uri.netloc:
+        raise ValueError("checkpoint must be a verified local file")
+    path = Path(unquote(uri.path))
+    candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
+    candidate = candidate.model_copy(
+        update={
+            "checkpoint_sha256": checkpoint.artifact,
+            "checkpoint_bytes": path.stat().st_size,
+            "artifact_id": f"monitor/{checkpoint.artifact}",
+        }
+    )
+    verify_file(path, checkpoint.artifact, path.stat().st_size)
+    opponent = PlayerRegistration.model_validate(anchor.config["registration"])
+    conditions = Conditions.model_validate(match.conditions)
+    out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    out.mkdir(parents=True, exist_ok=True)
+    rows, trace, replay = play_cell(
+        key=conditions.key,
+        player_a=candidate,
+        player_b=opponent,
+        deal_seeds=(conditions.deal,),
+        out_dir=out,
+        checkpoint_paths={candidate.player_id: str(path)},
+        game_seconds=conditions.game_seconds,
+        max_commands=conditions.max_commands,
+        matchup_mode="all",
+    )
+    atomic_json(out / "rows.json", rows)
+    atomic_json(out / "trace.json", trace)
+    atomic_json(out / "replay.json", replay)
+    return arena_tables([ArenaRow.model_validate(row) for row in rows])
+
+
+def arena_tables(rows: Sequence[ArenaRow]) -> Tables:
+    """Project one replay-checked deal using each player's actual authored deck.
+
+    Cross-deck opponents exchange seats inside a pair of legs: the candidate
+    plays Lessons in legs 0 and 3, Allies in 1 and 2. Leg pairs alone name the
+    authored setup, not which deck the candidate controls.
+    """
+    if (
+        {row.leg for row in rows} != set(range(8))
+        or len(rows) != 8
+        or not all(row.valid for row in rows)
+    ):
+        raise ValueError("arena deal incomplete or failed integrity; evidence retained")
+    labels = {
+        ("ur_lessons", "gw_allies"): "LvA",
+        ("gw_allies", "ur_lessons"): "AvL",
+        ("ur_lessons", "ur_lessons"): "LvL",
+        ("gw_allies", "gw_allies"): "AvA",
     }
-    evaluation_definition = definition(
-        "manabot-arena", json.dumps(meaning, sort_keys=True, separators=(",", ":"))
-    )
-    attempt_digest = hashlib.sha256(payload).hexdigest()
-    # A publication retry must not append duplicate episode lines to the
-    # SDK's existing evaluation key. The evidence digest remains explicit so
-    # later comparison readers can collapse publications of identical evidence.
-    key = "arena-" + attempt_digest + "-" + uuid.uuid4().hex
-    evaluation = tracker.evaluation(
-        evaluation_definition, subject, expected_episodes=result.expected_games, key=key
-    )
-    try:
-        for row in result.rows:
-            # Whitelist summary facts. Do not forward arbitrary arena extras,
-            # Commands, observation tensors, hidden worlds or private targets.
-            evaluation.add(
+    plays: list[Row] = []
+    for row in rows:
+        decks = selected_decks(row.leg)
+        extra = row.model_extra or {}
+        if (
+            extra.get("seat_decks") != list(decks)
+            or extra.get("player_a_seat") != row.leg % 2
+        ):
+            raise ValueError("arena row differs from authored deck/seat assignment")
+        score = row.score_a
+        if score is None:
+            raise ValueError("valid arena row requires a score")
+        # Etude's player is a tournament participant, not the native on-play
+        # seat. Deck labels and on-play flags describe that row's participant.
+        for player in (0, 1):
+            native_seat = (row.leg + player) % 2
+            plays.append(
                 {
-                    "deal_seed": row.deal_seed,
-                    "leg": row.leg,
-                    "valid": row.valid,
-                    "score": row.score_a if row.valid else None,
-                    "terminated": row.terminated,
-                    "truncated": row.truncated,
-                    "replay_passed": row.replay_passed,
-                    "game_seconds": row.game_seconds,
-                    "coordinates": result.coordinates.model_dump(mode="json"),
-                    "training_seed": result.training_seed,
-                    "result_sha256": attempt_digest,
+                    "player": player,
+                    "game": row.leg,
+                    "score": score if player == 0 else 1.0 - score,
+                    "matchup": labels[(decks[native_seat], decks[1 - native_seat])],
+                    "on_play": native_seat == 0,
+                    "valid": True,
                 }
             )
-        if result.status != "completed":
-            evaluation.fail(
-                result.error or "incomplete arena cohort; see retained result"
-            )
-        else:
-            for metric in ("win", "draw", "score"):
-                interval = getattr(result, metric)
-                assert interval is not None
-                evaluation.estimate(
-                    metric,
-                    interval.mean,
-                    interval.lower,
-                    interval.upper,
-                    n=len(result.protocol.deal_seeds),
-                    method="paired-whole-deal-percentile-bootstrap-95; conditional-on-checkpoint",
-                )
-            evaluation.settle()
-    except BaseException as error:
-        evaluation.fail(f"publication failed: {type(error).__name__}")
-        raise
-    return key
+    return {"plays": plays}
+
+
+def evaluate(manifest: MonitorResult, directory: Path) -> None:
+    """Hold one digest-bound benchmark; the parent owns the process deadline."""
+    path = Path(manifest.artifact["path"]).resolve()
+    verify_file(path, manifest.artifact["sha256"], manifest.artifact["bytes"])
+    directory.mkdir(parents=True, exist_ok=True)
+    os.environ["ETUDE_OUTPUT_DIR"] = str(directory)
+    os.environ["ETUDE_RUN"] = "checkpoint-" + manifest.artifact["sha256"]
+    result = hold(
+        benchmark(manifest),
+        play=play,
+        checkpoint=ArtifactRef(
+            uri=path.as_uri(),
+            sha256=manifest.artifact["sha256"],
+            size_bytes=manifest.artifact["bytes"],
+        ),
+        directory=directory.parent.parent / "track",
+        workers=1,
+    )
+    atomic_json(directory / "result.json", result.model_dump(mode="json"))
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    args = parser.parse_args()
+    evaluate(
+        MonitorResult.model_validate_json(args.manifest.read_bytes()),
+        args.manifest.parent,
+    )

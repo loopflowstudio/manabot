@@ -93,6 +93,13 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
+## Versioned installs
+
+Versioned PyPI release preparation, platform support, CPU/CUDA installation and
+maintainer publishing are described in [the release guide](docs/releases.md).
+[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
+the source workflow below remains available.
+
 ## Quickstart
 
 You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
@@ -108,9 +115,11 @@ uv run manabot train          # small CPU training run, under a minute, no W&B
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to
-`.runs/local/`. Training recipes are typed *regimes* composed in Python in
-[experiments/recipes.py](experiments/recipes.py). The current GPU baseline is
-`uv run manabot train --regime-name batched-baseline --out .runs/batched/run`.
+`.runs/local/`. Training recipes are typed *regimes* composed in Python, one module per
+current experiment in [experiments/](experiments/), from reusable parts in
+[manabot/training/builders.py](manabot/training/builders.py). The current GPU
+baseline is
+`uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
 [manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
 simulation, and evaluation.
 

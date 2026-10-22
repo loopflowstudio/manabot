@@ -157,7 +157,7 @@ def test_arena_import_keeps_source_and_rejects_tampering(
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
     contract = ArenaContract.model_validate(
-        json.loads(Path("experiments/contracts/int-6-skill-arena-v1.json").read_text())
+        json.loads(Path("tests/fixtures/int-6-skill-arena-v1.json").read_text())
     )
     _, trace, receipt = play_cell(
         key=contract.key,

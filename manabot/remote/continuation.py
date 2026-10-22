@@ -6,7 +6,7 @@ versioned bytes and TrainingRun admission checks learning semantics and counters
 
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field
 
@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 class Continuation(Frozen):
     job_id: str
     stage_id: str = "policy"
-    iteration: int = Field(ge=1)
+    # Allocation-bound segments select the last finalized update after cleanup.
+    iteration: Annotated[int, Field(ge=1)] | Literal["last-complete"]
 
 
 def bind_continuation(
@@ -38,15 +39,18 @@ def bind_continuation(
     record = status.record
     if dependency is None or status.spec.job_id != dependency.job_id:
         raise ValueError("continuation predecessor differs")
+    budget_boundary = dependency.iteration == "last-complete"
+    allowed = {"completed", "paused"} if budget_boundary else {"completed"}
     if (
         record is None
-        or record.phase != "completed"
+        or record.phase not in allowed
         or not record.artifacts_complete
-        or record.updates != dependency.iteration
+        or record.updates < 1
+        or (not budget_boundary and record.updates != dependency.iteration)
         or status.cleanup is None
     ):
         raise ValueError(
-            "continuation requires completed, cleaned-up predecessor at exact iteration"
+            "continuation requires finalized, cleaned-up predecessor at admitted iteration"
         )
     manifest = manifest or job_manifest(status.spec, record, cache)
     if (
@@ -73,7 +77,7 @@ def bind_continuation(
     inputs = {role: files[name] for role, name in names.items()}
     regime = entry.plan.regime.model_copy(deep=True)
     stage = regime.stages[0]
-    if not isinstance(stage, TrainSelfPlay) or stage.updates <= dependency.iteration:
+    if not isinstance(stage, TrainSelfPlay) or stage.updates <= record.updates:
         raise ValueError("continuation endpoint must exceed predecessor iteration")
     stage.learning_state = LearningStateImport.model_validate(
         {

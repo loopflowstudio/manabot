@@ -8,12 +8,7 @@ from typing import NoReturn
 from pydantic import JsonValue, ValidationError
 import pytest
 
-from experiments.recipes import value_model_baseline
-from experiments.runners.model_capacity import experiment as capacity_experiment
-from experiments.runners.run_value_models import (
-    experiment as value_experiment,
-    smoke_plan,
-)
+from experiments.value_model_baseline import value_model_baseline
 from manabot.arena.models import canonical_sha256
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.training.experiments import (
@@ -34,8 +29,6 @@ from manabot.training.models import (
     CollectSearch,
     Execution,
     Learning,
-    TrainingRegime,
-    TrainSelfPlay,
 )
 from manabot.training.presets import ataraxos_mtg_v1
 
@@ -118,7 +111,14 @@ def test_baseline_and_resolved_artifacts_are_isolated() -> None:
     before = base.digest
     regime.match.hero_deck.clear()
     base.regime().agent.hidden_dim = 128
-    cells = value_experiment().resolve()
+    cells = Experiment(
+        "isolation",
+        base,
+        cases=(
+            Case("historical-mean-1"),
+            Case("masked-mean-1", (Model(AgentSpec(value_aggregation="masked_mean")),)),
+        ),
+    ).resolve()
     identity = cells.identity
     cells.regimes[cells.cases[0].name].match.hero_deck.clear()
     receipt = cells.receipt()
@@ -311,34 +311,6 @@ def test_pipeline_replacement_and_learning_boundary() -> None:
         ).resolve()
 
 
-def test_resolution_allocates_no_model_training_or_store(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    def forbidden(*args: object, **kwargs: object) -> NoReturn:
-        raise AssertionError("resolution attempted execution")
-
-    monkeypatch.setattr("manabot.training.execution.execute_regime", forbidden)
-    monkeypatch.setattr("experiments.runners.run_value_models.run_study", forbidden)
-    monkeypatch.setattr("manabot.model.agent.Agent.__init__", forbidden)
-    monkeypatch.setattr("manabot.verify.store.VerifyStore.__init__", forbidden)
-    monkeypatch.setattr("managym.Env", forbidden)
-    monkeypatch.chdir(tmp_path)
-    result = value_experiment().resolve()
-    plan = smoke_plan(result)
-    assert plan.protocol.regime_digests == result.digests
-    assert len(plan.recipes) == 8
-    assert list(tmp_path.iterdir()) == []
-    assert all("seed" not in p.path for c in result.cases for p in c.provenance)
-
-
-def test_capacity_cases_round_trip_their_configurations() -> None:
-    result = capacity_experiment(value_model_baseline()).resolve()
-    assert len(set(result.digests)) == 3
-    for case in result.cases:
-        assert TrainingRegime.model_validate_json(case.configuration) == case.regime
-        assert all(isinstance(s, TrainSelfPlay) for s in case.regime.stages)
-
-
 @pytest.mark.parametrize(
     "component",
     [
@@ -368,3 +340,27 @@ def test_explicit_false_default_remains_in_provenance() -> None:
     )
     assert field.origin == "override" and field.value is False
     assert not cell.regime.agent.compound_decisions
+
+
+def test_resolution_allocates_no_model_training_or_store(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def forbidden(*args: object, **kwargs: object) -> NoReturn:
+        raise AssertionError("resolution attempted execution")
+
+    monkeypatch.setattr("manabot.training.execution.execute_regime", forbidden)
+    monkeypatch.setattr("manabot.model.agent.Agent.__init__", forbidden)
+    monkeypatch.setattr("manabot.verify.store.VerifyStore.__init__", forbidden)
+    monkeypatch.setattr("managym.Env", forbidden)
+    monkeypatch.chdir(tmp_path)
+    result = Experiment(
+        "value",
+        _baseline(),
+        cases=(
+            Case("historical-mean-1"),
+            Case("value-token-1", (Model(AgentSpec(value_aggregation="value_token")),)),
+        ),
+    ).resolve()
+    assert len(set(result.digests)) == 2
+    assert list(tmp_path.iterdir()) == []
+    assert all("seed" not in p.path for c in result.cases for p in c.provenance)

@@ -411,6 +411,26 @@ class CohortSupervisor:
         """Retain last observations and expose a redacted control-plane failure."""
         return self._save(phase="uncertain", error=type(error).__name__)
 
+    def adopt(self, spec: Job) -> CohortState:
+        """Take up the first entry's existing job without changing its lease.
+
+        The owner lock must be held. Existing attempts make a repeated adoption
+        idempotent only for the exact same job; no provider creation occurs.
+        """
+        entry = self.cohort.entries[0]
+        if entry.continuation is not None or entry.job(spec.created_at) != spec:
+            raise ValueError("adopted job must exactly match the first cohort entry")
+        if self.state.attempts:
+            if self.state.attempts[0].spec != spec:
+                raise ValueError("cohort already owns a different first job")
+            return self.state
+        status = self.observe(spec)
+        if status.spec != spec or status.record is None:
+            raise ValueError("adoption requires an existing supervisor record")
+        return self._save(
+            attempts=(CohortAttempt(spec=spec, observation=status),), phase="running"
+        )
+
     def tick(self) -> CohortState:
         cohort = self.cohort
         cancelled = cancellation_requested(self.store) is not None
@@ -434,7 +454,15 @@ class CohortSupervisor:
                 return self._save(phase="uncertain")
             record = status.record
             if record is not None and record.terminal:
-                if record.phase != "completed":
+                remaining = self.state.entries(cohort)[len(attempts) :]
+                next_dependency = remaining[0].continuation if remaining else None
+                continuing_pause = (
+                    record.phase == "paused"
+                    and next_dependency is not None
+                    and next_dependency.job_id == attempt.spec.job_id
+                    and next_dependency.iteration == "last-complete"
+                )
+                if record.phase != "completed" and not continuing_pause:
                     phase: Phase = (
                         "deadline" if record.phase == "deadline" else record.phase
                     )

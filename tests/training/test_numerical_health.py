@@ -16,7 +16,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from experiments.recipes import regime
+from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
@@ -314,7 +314,10 @@ def test_extreme_real_collector_to_learner() -> None:
     )
     result = update_move_iteration(trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
-    assert result["numerical"]["optimizer_steps"] == 4
+    assert (
+        result["numerical"]["optimizer_steps"]
+        == (batch.actions.size + collector.num_envs - 1) // collector.num_envs
+    )
     assert result["numerical"]["parameter_delta_l2"] > 0
     assert all(torch.isfinite(p).all() for p in agent.parameters())
 
@@ -323,7 +326,7 @@ def test_extreme_real_collector_to_learner() -> None:
 def test_failed_update_retains_state_and_excludes_prior_overhead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
-    recipe = regime("ataraxos-move-scalar")
+    recipe = ataraxos_move_scalar()
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.stages = recipe.stages[:1]
@@ -339,6 +342,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset[0])
     original_update = execution.update_iteration
     calls = [0]
+    corrupted_rows: list[int] = []
 
     def update(*args: object, **kwargs: object) -> object:
         calls[0] += 1
@@ -348,6 +352,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         batch = args[1]
         probabilities = torch.as_tensor(batch.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
+        corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
         check_probabilities(
             probabilities,
             torch.as_tensor(batch.obs["actions_valid"]) > 0,
@@ -414,7 +419,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
     assert torch.isnan(tensors["probabilities"]).any()
-    assert tensors["row_indexes"].tolist() == [7]
+    assert tensors["row_indexes"].tolist() == corrupted_rows
     state = torch.load(artifacts["numerical/state.pt"]["path"], weights_only=False)
     assert (
         state["optimizer"]["state"]

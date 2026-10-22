@@ -483,13 +483,13 @@ def _source_manifest() -> dict[str, Any]:
         "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
-        "managym/experience_projection.py",
+        "manabot/managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
         "manabot/belief/tracker.py",
-        "managym/__init__.pyi",
-        "managym/decision.py",
-        "managym/possible_worlds.py",
+        "manabot/managym/__init__.pyi",
+        "manabot/managym/decision.py",
+        "manabot/managym/possible_worlds.py",
         "managym/src/agent/env.rs",
         "managym/src/agent/structured_offer.rs",
         "managym/src/decision.rs",
@@ -501,7 +501,6 @@ def _source_manifest() -> dict[str, Any]:
         "tests/belief/test_tracker.py",
         "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
-        "tests/sim/test_exact_range_runner.py",
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())} for path in paths

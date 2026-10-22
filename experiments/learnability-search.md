@@ -59,7 +59,7 @@ An unchanged source rerun is not independent evidence of a repaired defect.
 Execution entry point:
 
 ```sh
-uv run experiments/runners/learnability_search.py --out .runs/learnability-search --seconds 1800
+uv run python -m manabot.verify.learnability.search --out .runs/learnability-search --seconds 1800
 ```
 
 The temporary branch-only push trigger requires `[learnability-search]` in the
@@ -183,7 +183,7 @@ artifacts for 14 days and locally under `.runs/learnability-search-evidence/`.
 Reproduce the all-offer input audit and one native replay per family with:
 
 ```sh
-uv run experiments/runners/learnability_input_audit.py .runs/learnability-search-evidence/primary --replay
+uv run python -m manabot.verify.learnability.input_audit .runs/learnability-search-evidence/primary --replay
 ```
 
 The experiment supports spending extra compute on state/choice diversity and

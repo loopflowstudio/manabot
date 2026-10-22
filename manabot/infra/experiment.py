@@ -14,8 +14,9 @@ import random
 from types import TracebackType
 from typing import Literal, Self
 
-from etude.track.records import ArtifactRef, Step
-from etude.track.run import Run, init
+from etude.run.records import ArtifactRef
+from etude.train.records import Step
+from etude.train.run import Run, track
 import numpy as np
 import torch
 
@@ -68,7 +69,7 @@ class Experiment:
         manabot.infra.log.setGlobalLogLevel(level)
         self.logger = manabot.infra.log.getLogger(__name__)
         self._setup_random()
-        self.run: Run = init(
+        self.run: Run = track(
             experiment=self.exp_name,
             clocks=[
                 Step("learner_transitions", "collected learner transitions"),

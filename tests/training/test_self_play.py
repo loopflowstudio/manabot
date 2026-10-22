@@ -49,7 +49,7 @@ def test_identity_includes_sideboard_and_ignores_dictionary_order() -> None:
 
 
 def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:
-    evidence = load_evidence(Path("experiments/study/experiment-demo"))
+    evidence = load_evidence(Path("tests/fixtures/experiment-demo"))
     run = evidence.runs[0].model_copy(deep=True)
     stage = run.stages[0]
     stage.diagnostics = []

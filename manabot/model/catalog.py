@@ -340,9 +340,8 @@ def _tournament(
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 
-    The schema owner is ``experiments.runners.head_to_head.Tournament``; only
-    the entrant fields that identify exact bytes are read here, and code
-    anchors without a ``file`` are skipped.
+    Only the entrant fields that identify exact bytes (``file``, ``sha256``)
+    are read here; code anchors without a ``file`` are skipped.
     """
 
     try:

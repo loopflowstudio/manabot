@@ -19,7 +19,7 @@ else
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
-      content/*|conformance/*|managym/src/*|managym/*.py|managym/*.pyi)
+      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/*.py|managym/*.pyi)
         all ;;
       docs/rules/elemental/decks.json|docs/rules/elemental/cube-snapshot.csv) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;

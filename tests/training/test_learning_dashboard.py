@@ -18,7 +18,7 @@ from manabot.training.learning_dashboard import (
 )
 from manabot.training.monitor_evaluation import MonitorResult
 
-DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
 
 def _monitor() -> MonitorResult:

@@ -8,7 +8,7 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
-uv run manabot train --regime-name batched-baseline --out .runs/batched/run  # batched GPU baseline
+uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -37,7 +37,8 @@ Override any hyperparameter with `--set dotted.path=value`; presets live in
 `--recipe baseline` selects a complete ordinary training run above the regime
 layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
 checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
-collection/update iterations (four streams × 64 transitions each), not optimizer
+collection/update iterations (four streams, at least 64 combined seat decisions
+each, finishing current games before updating), not optimizer
 calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
@@ -45,7 +46,7 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
-For GPU training, start from `batched_baseline()` in `experiments/recipes.py`. It is the
+For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
@@ -77,6 +78,14 @@ New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
 default 1,000); freeze targets and shared intervals before launch. Operational
 lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training-monitoring.md#new-training-and-live-dashboards).
 
+New self-play training learns from both seats by default (`baseline-v3`).
+Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
+saved schema-1 recipes retain their historical one-seat behavior.
+Use `games_per_stream` on both arms to match complete-game budgets. Distinct
+learning models can use `PairedLearners` to update both independent optimizers
+from their own seat trajectories. See [both-seat learning](../docs/training-regimes.md#learning-from-both-seats)
+for collection boundaries, accounting and measurement limits.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from
@@ -99,7 +108,7 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 `AgentSpec(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. New runs train it: `new_agent_spec()` is the
-`manabot train` default, and the ordinary baseline recipe is `baseline-v2`.
+`manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.
@@ -173,14 +182,14 @@ Declare training comparisons with [typed Python experiments](../docs/training-ex
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
-Experiment-specific driver scripts live in
-[experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
-only reusable instruments. The experiment discipline and ledger are in
+Each current experiment is one module in [experiments/](../experiments/), holding
+its recipes and anything only it needs to run and report; `manabot/` keeps
+the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
 Study records retain viewer-safe target source names and target controller sides.
 Audit retained Allies/Lessons records without starting games with
-`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+`uv run python -m manabot.study.allies_lessons.targeting_audit --games games.jsonl.gz --label greedy`.
 The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
 seat, including absent cohorts, unfinished records, declined targets and unknown
 identities. Target offers list player 0's objects first, so a first-offer
@@ -323,22 +332,6 @@ the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural
 policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
-
-`manabot.training.etude_evaluation.publish_saved_evaluation(tracker, path)`
-publishes a retained `monitor.json` through the public Etude evaluation API. It
-checks exact checkpoint bytes and recomputes cohort completeness/intervals before
-recording outcomes. It does not rerun games or replay, and cannot certify an
-untrusted report's historical claims. Successful estimates use the saved
-whole-deal bootstrap: `n` counts deals, not games or training seeds. Incomplete
-cohorts remain failed evaluations without strength estimates.
-
-Only whitelisted outcome, timing and coordinate fields enter SDK episode rows;
-private Commands and arbitrary arena extras do not. Episode counts include failed
-attempts, with validity explicit. Each publication has its own key containing the
-source result SHA-256. Re-publication is not new evidence: comparison readers must
-deduplicate identical result digests. The caller owns tracker flushing. Admission
-failures without a MonitorResult remain in their original failure files; remote
-archival and campaign-level reporting are not supplied by this publisher.
 
 The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and

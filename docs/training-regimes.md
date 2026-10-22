@@ -6,8 +6,22 @@ ETU-89 owns this infrastructure. ETU-90 owns its direct-RL treatment correctness
 ETU-91 owns the comparison/ablation protocols and analysis.
 
 ```bash
-uv run manabot train --regime-name direct-self-play --seed 197 --out .runs/direct-pilot
-uv run manabot train --regime-name search-distillation --seed 197 --out .runs/search-pilot
+uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
+uv run manabot train --regime-name direct_self_play:search_distillation --seed 197 --out .runs/search-pilot
+```
+
+Each current experiment is one module, `experiments/<experiment>.py`, next to
+its write-up. It composes parts from `manabot.training.builders` into one
+canonical recipe, the function named like the module, plus explicit variants,
+and holds whatever else that experiment needs to run and report.
+`--regime-name <experiment>` selects the canonical recipe and
+`<experiment>:<variant>` any other; `manabot.cli.regime_names()` lists them.
+Experiments with an arena study run with `python -m experiments.<experiment>`;
+shared study plumbing is `manabot.training.regime_study`. Write a regime file
+for `--regime` or `manabot deploy` from Python:
+
+```bash
+uv run python -c "from experiments.batched_baseline import batched_baseline; print(batched_baseline().model_dump_json(indent=2))" > regime.json
 ```
 
 The supplied recipes are bounded pilots, not the proposed week-long experiment.
@@ -85,7 +99,7 @@ Training comparisons use [declarative typed-Python experiments](training-experim
 named components, frozen baselines/versioned presets, explicit overrides and ordered
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
-identities. `manabot.training.recipes` retains internal composition helpers.
+identities. `manabot.training.builders` holds the reusable composition helpers.
 `AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
 and existing field meanings. Resolution never allocates compute or starts training.
 
@@ -235,8 +249,8 @@ checks; it does not require another training study. The retained comparison smok
 uses the existing arena and offline notebook/report path:
 
 ```bash
-OMP_NUM_THREADS=1 uv run --extra notebook -m experiments.runners.run_training_regimes --study compound-decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook -m experiments.runners.run_training_regimes --report-only .runs/compound-smoke
+OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
+uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
 ```
 
 This smoke has one initialization seed and four-leg, held-out complete-game
@@ -395,3 +409,62 @@ ETU-112's fixed untrained fixtures exercise complete ordinary belief and local
 search collection, raw/EMA admission, historical receipt shape, immutable source
 bytes and rejection paths without optimizer training. ETU-99 owns actual producer
 selection, independent seeds, empirical cohorts and budgets.
+
+## Learning from both seats
+
+`train_self_play.learning_seats` defaults to `"both"` for newly authored
+current-self and EMA-self training. Select `"one"` explicitly for the ablation
+control. Random and frozen opponents default to one learner seat: their decisions
+remain off-policy and are never trained on. New TrainingRegimes use schema 2 and
+serialize the resolved seat choice. Saved schema-1 recipes and receipts retain
+their original one-seat interpretation and serialized identities; historical
+ladder v1 and frozen presets are not reinterpreted. The ordinary baseline recipe
+is now `baseline-v3`.
+
+Both-seat collection records observation, sampled action, log probability,
+value, policy distribution and (for a categorical critic) outcome distribution
+from the acting seat's behavior policy. Each seat has its own trajectory; its
+last decision gets that seat's terminal win/loss/draw reward. GAE and categorical
+lambda returns stop at each seat's game boundary. Draws get zero signed reward.
+No observation contains the other seat's private information.
+
+Here `transitions` is a **minimum total decision count per native stream**,
+counting both seats. After reaching it, that stream finishes its current game
+before updating. Batches can exceed the floor and have variable row counts.
+Complete seat trajectories are packed into `[rows, 1]` with terminal separators;
+there are no padding rows, stale actions, or pending targets across an update.
+This is a complete-game estimator, unlike the one-seat control's bootstrapped
+partial-game estimator. Collection can take longer than a fixed row window;
+ordinary stage deadlines still fail an over-budget attempt. Ataraxos move learning
+computes credit on these trajectories, then groups consecutive packed rows into
+minibatches of at most the native stream count. Rectangular controls keep their
+timestep groups; complete-game batches retain their packed order and may end
+with a smaller minibatch.
+
+For an equal-game comparison, set `games_per_stream` to the same positive count
+on **both** controls. It overrides the transition quota and collects that many
+complete games per stream per update, with the same terminal estimator on both
+arms. One-seat collection still keeps only its designated seat's rows. Freeze
+match, seed cohort, hardware, money limit, schedule, and heuristic-anchor evaluation
+before running; score Lessons vs Allies first. Report actual `learner_transitions`
+and `environment_decisions` separately along with games, optimizer exposures,
+collection/learning time and cost. Equal games alone do not establish equal cost,
+and correlated seat samples do not establish a 2x gain. No comparison has been
+run for this change; the default was selected by Jack Heart on 2026-10-20 and
+does not establish a strength or cost gain. Existing
+schedule clocks retain their meanings; no decisions-clock ladder is implied.
+
+Two distinct live models use `manabot.training.paired.PairedLearners`. Construct
+one `SeatRoutedCollector` with `opponent_mode="learning"`,
+`learning_seats="both"` and `opponent_agent=second_agent`; build two
+`NetOpponentTrainer`s with that collector and independent agents/optimizers.
+Wrap each trainer with `LearningPlayer(trainer, learning, rng)` and pass both to
+`PairedLearners`. `step(transitions, progress=...)` freezes both behavior policies,
+collects complete games, and updates **both** models with only their own rows.
+The first model occupies `stream % 2`; the second occupies the other seat.
+Returned `PairedUpdate.first` and `.second` report each model's trained rows and
+optimizer exposures; `.environment_decisions` and `.games` count shared work once.
+The API supports raw behavior with PPO or Ataraxos learning and rejects shared
+model parameters, shared optimizers and implicit EMA. The caller owns bounded
+iteration schedules, checkpoint exports and cost receipts for both models; this
+API does not launch jobs or introduce a second remote regime executor.

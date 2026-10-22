@@ -451,7 +451,7 @@ def main() -> int:
         *root.glob("academy/**/*.py"),
         *root.glob("managym/*.py"),
         *root.glob("managym/src/**/*.rs"),
-        *root.glob("managym/_managym*.so"),
+        *root.glob("manabot/managym/_managym*.so"),
         root / "uv.lock",
         root / "pyproject.toml",
         root / "managym/Cargo.lock",

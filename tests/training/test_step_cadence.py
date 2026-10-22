@@ -45,7 +45,8 @@ def test_step_interval_is_a_positive_integer(interval: object) -> None:
 
 @pytest.mark.parametrize("cadence", [2, (2, 4)])
 def test_real_iterations_export_exact_milestones_and_one_endpoint(
-    tmp_path: Path, cadence: int | tuple[int, ...],
+    tmp_path: Path,
+    cadence: int | tuple[int, ...],
 ) -> None:
     recipe = _recipe()
     stage = recipe.stages[0]
@@ -75,7 +76,8 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
         6,
     ]
     assert all(
-        c.coordinates.learner_transitions == c.coordinates.updates * 32
+        c.coordinates.learner_transitions
+        == sum(d["rows"] for d in run.stages[0].diagnostics[: c.coordinates.updates])
         for c in checkpoints(run)
     )
 
@@ -209,7 +211,9 @@ def test_empty_filter_still_advances_steps_without_optimizer_calls(
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 2
-    assert run.stages[0].learner_transitions == 64
+    assert run.stages[0].learner_transitions == sum(
+        d["rows"] for d in run.stages[0].diagnostics
+    )
     assert run.stages[0].optimizer_exposures == run.optimizer_updates_through() == 0
     assert [c.coordinates.updates for c in checkpoints(run)] == [1, 2]
     assert all(c.coordinates.optimizer_updates == 0 for c in checkpoints(run))

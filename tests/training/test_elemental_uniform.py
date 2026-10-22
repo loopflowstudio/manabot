@@ -3,6 +3,7 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -28,7 +29,11 @@ def _match() -> Match:
     return Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
 
 
-def _collector(recovery: str, streams: int = 4) -> SeatRoutedCollector:
+def _collector(
+    recovery: str,
+    streams: int = 4,
+    learning_seats: Literal["one", "both"] = "one",
+) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         ObservationSpace(),
         _match(),
@@ -36,6 +41,7 @@ def _collector(recovery: str, streams: int = 4) -> SeatRoutedCollector:
         num_envs=streams,
         seed=17402,
         opponent_mode="self",
+        learning_seats=learning_seats,
         matchup_curriculum="elemental-uniform",
         recovery_max_microsteps=200000 if recovery == "exact" else None,
         recovery_max_game_microsteps=200000 if recovery == "current" else None,
@@ -43,19 +49,27 @@ def _collector(recovery: str, streams: int = 4) -> SeatRoutedCollector:
 
 
 @pytest.mark.parametrize("recovery", ["exact", "current"])
-def test_uniform_collector_recovers_changed_terminal_roots(recovery: str) -> None:
+@pytest.mark.parametrize("learning_seats", ["one", "both"])
+def test_uniform_collector_recovers_changed_terminal_roots(
+    recovery: str, learning_seats: Literal["one", "both"]
+) -> None:
     torch.set_num_threads(1)
     agent = Agent(
         ObservationSpace(),
         AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
-    first = _collector(recovery)
+    first = _collector(recovery, learning_seats=learning_seats)
     initial_pairs = first._env.current_matchup_indices()
-    first.collect(agent, 128)
+    batch = first.collect(agent, 128)
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
     exposure = first.stats.exposure
-    assert sum(c["learner_transitions"] for c in exposure.values()) == 4 * 128
+    assert sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
+    if learning_seats == "one":
+        assert batch.actions.size == 4 * 128
+    else:
+        assert batch.actions.size == first.stats.micro_steps
+        assert int(batch.dones.sum()) == first.stats.games * 2
     assert sum(c["terminal_games"] for c in exposure.values()) == first.stats.games
     assert sum(c["game_roots"] for c in exposure.values()) == first.stats.games + 4
     assert (
@@ -69,14 +83,15 @@ def test_uniform_collector_recovers_changed_terminal_roots(recovery: str) -> Non
     if recovery == "exact":
         # Independent action-journal audit: count decisions against the actual
         # native pair BEFORE auto-reset, not the pair in the returned observation.
-        replay = _collector(recovery)
+        replay = _collector(recovery, learning_seats=learning_seats)
         expected: dict[str, dict[str, int]] = {}
         identities = [
             deck_identity(p.decklist, p.sideboard) for p in elemental_roster(_match())
         ]
 
         def key(row: int, pair: tuple[int, int]) -> str:
-            return f"{identities[pair[0]]}/{identities[pair[1]]}/learner-{row % 2}"
+            seat = "both" if learning_seats == "both" else str(row % 2)
+            return f"{identities[pair[0]]}/{identities[pair[1]]}/learner-{seat}"
 
         def count(identity: str, kind: str) -> None:
             counts = expected.setdefault(
@@ -102,7 +117,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(recovery: str) -> Non
                     continue
                 identity = key(row, pairs[row])
                 count(identity, "environment_decisions")
-                if acting[row] == row % 2:
+                if learning_seats == "both" or acting[row] == row % 2:
                     count(identity, "learner_transitions")
                 if replay._buffers["terminated"][row]:
                     count(identity, "terminal_games")
@@ -111,7 +126,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(recovery: str) -> Non
                         "game_roots",
                     )
         assert expected == first.stats.exposure
-    restored = _collector(recovery)
+    restored = _collector(recovery, learning_seats=learning_seats)
     restored.restore(first.snapshot(), lambda: None)
     assert first._self_play_decks == restored._self_play_decks
     left, right = first.collect(agent, 64), restored.collect(agent, 64)

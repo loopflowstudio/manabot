@@ -127,31 +127,12 @@ capacity allocation. Scalar output, historical/masked pooling and capacity chang
 are explicit experimental overrides. ETU-102 still owns capacity accounting and
 calibration. The value-token experiment remains independently runnable.
 
-## Existing studies and exports
+## Declarations and studies
 
-The [value-model example](../experiments/runners/run_value_models.py) declares four
-pooling/depth cases crossed with two output heads. Its baseline is a frozen export
-of the pre-migration settings, **not** the new Ataraxos preset. All eight complete
-regimes, their IDs/digests and the EvaluationProtocol remain identical to PR #223.
-The [capacity example](../experiments/runners/model_capacity.py) declares three
-explicit cases against a supplied complete baseline; its previous IDs and values
-also remain identical. No saved experiment or checkpoint is rewritten.
-
-Export the existing bounded plan and a separate authoring receipt, without training:
-
-```bash
-uv run python -m experiments.runners.run_value_models \
-  --write-plan /tmp/value-plan.json --write-provenance /tmp/value-provenance.json
-```
-
-Both destinations must be new. `--write-provenance` requires `--write-plan`.
-The complete regimes and ordered `resolved.digests` feed the existing
-EvaluationProtocol and ResolvedStudy exactly as shown in `smoke_plan`; the study
-schema and executor are unchanged. General declarations are not a new study type:
-current EvaluationProtocol discriminators still limit admitted cell counts,
-checkpoint counts, seeds, budgets and raw/EMA selection. Resolve any valid regime
-set independently; do not relabel it as an existing scientific study to bypass
-those requirements. Only an explicit call to the existing runner executes work.
+A declaration resolves complete regimes; it is not a study type. The arena
+studies in `manabot.training.regime_study` admit only their own arm counts,
+checkpoint counts, seeds and budgets, so do not relabel a resolved set as one
+of them to bypass those requirements. Resolution never executes work.
 
 `ResolvedCase.digest` is the existing canonical TrainingRegime digest, including
 its regime ID. `ResolvedCase.identity` additionally hashes the label, baseline

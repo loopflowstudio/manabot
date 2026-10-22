@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("etude.eval.query")
-from experiments.runners import elemental_live as live  # noqa: E402
+from manabot.verify.learnability import elemental_live as live  # noqa: E402
 
 
 def _config(tmp_path: Path) -> live.Config:

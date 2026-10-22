@@ -37,6 +37,8 @@ def test_baseline_horizon_preserves_recipe_and_rate_endpoints() -> None:
     assert short.regime.agent == long.regime.agent
     assert short.regime.match == long.regime.match
     assert a.behavior == b.behavior == "current-self"
+    assert a.learning_seats == b.learning_seats == "both"
+    assert short.version == long.version == "baseline-v3"
     assert a.opponent is None and a.trainable == "policy_value"
     plan = short.experiment(197).schedule
     assert plan is not None
