@@ -14,11 +14,15 @@ import subprocess
 from urllib.parse import unquote, urlparse
 
 from etude.eval.match import Tables, agent, environment
-from etude.eval.records import Agent, Match, RoundRobin
+from etude.eval.records import Agent, Match, RoundRobin, digest
 from etude.jobs import evaluation
 from etude.launch.client import launch
 from etude.launch.records import Runtime
-from etude.run.records import ArtifactRef
+from etude.run.declaration import declare
+from etude.run.records import ArtifactRef, Clock
+from etude.run.storage import DirectoryStorage
+from etude.reports import Evaluation, record
+from etude.train.records import CheckpointRecord
 
 
 def play(match: Match) -> Tables:
@@ -56,7 +60,7 @@ def play(match: Match) -> Tables:
         input=json.dumps(request),
         text=True,
         capture_output=True,
-        timeout=150,
+        timeout=600,
     )
     if result.returncode:
         (output.parent / f"{match.key}.error.txt").write_text(result.stderr)
@@ -97,6 +101,9 @@ def launch_evaluation(
     revision: str,
     pool: str = "local",
     run_id: str | None = None,
+    training_run: str | None = None,
+    update: int | None = None,
+    cohort: str | None = None,
 ) -> str:
     def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
@@ -150,4 +157,64 @@ def launch_evaluation(
     run = job.runs(17402)[0]
     if run_id is not None:
         run = run.model_copy(update={"id": run_id})
+    if training_run is not None:
+        if update is None or cohort is None:
+            raise ValueError("training link requires absolute update and frozen cohort")
+        track = Path(os.environ["ETUDE_HOME"]) / "track"
+        declared = declare(
+            experiment="mtg174-elemental",
+            run=training_run,
+            namespace="manabot",
+            clocks=[
+                Clock(name="updates", kind="step", meaning="absolute optimizer updates")
+            ],
+            directory=track,
+            kind="training",
+            config={"revision": revision},
+        )
+        # A projection of the verified Manabot checkpoint, not a second trainer.
+        saved = CheckpointRecord(
+            ordinal=update + 1,
+            artifact=ArtifactRef(
+                uri=candidate.uri or "",
+                sha256=candidate.artifact,
+                size_bytes=checkpoint.stat().st_size,
+                state="verified",
+            ),
+            at={"updates": update},
+            wall_ms=0,
+        )
+        storage = DirectoryStorage(track)
+        checkpoint_key = f"{training_run}/checkpoints/updates-{update}.json"
+        try:
+            prior = CheckpointRecord.model_validate_json(storage.get(checkpoint_key))
+        except FileNotFoundError:
+            storage.put(checkpoint_key, saved.model_dump_json().encode())
+        else:
+            if prior != saved:
+                raise ValueError("training checkpoint binding changed")
+        protocol = digest(
+            {
+                "environment": world.identity,
+                "conditions": conditions,
+                "games": tournament.games,
+                "candidate_code": candidate.code,
+                "candidate_config": candidate.config,
+                "opponent": anchor.identity,
+                "cohort": cohort,
+                "revision": revision,
+            }
+        )
+        record(
+            track,
+            training_run,
+            Evaluation(
+                training=declared.declaration.source_key,
+                checkpoint=saved,
+                run=run.id,
+                benchmark=protocol,
+                label=cohort,
+                subject=candidate.identity,
+            ),
+        )
     return launch(run, pool=pool)

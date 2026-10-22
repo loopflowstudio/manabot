@@ -115,7 +115,7 @@ def play(request: Request) -> list[dict[str, object]]:
         deal_seeds=(request.deal,),
         out_dir=request.output,
         checkpoint_paths=paths,
-        game_seconds=30,
+        game_seconds=120,
         max_commands=10000,
         authored_matchup=matrix,
         matchup_mode="mirrors" if request.mirrors else "cross",

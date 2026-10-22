@@ -25,9 +25,11 @@ def _config(tmp_path: Path) -> live.Config:
     )
 
 
-def _observation() -> dict[str, Any]:
+def _observation(tmp_path: Path) -> dict[str, Any]:
+    (tmp_path / "0.pt").write_bytes(b"initial")
     # This fake is the validated JSON process boundary, not a second job model.
     return {
+        "run": {"id": "training-174"},
         "source": {"commit": "a" * 40},
         "observed_at": "2026-10-22T01:00:00Z",
         "status": {
@@ -36,11 +38,11 @@ def _observation() -> dict[str, Any]:
         },
         "checkpoints": [
             dict(
-                path=f"/{update}.pt",
+                path=str(tmp_path / f"{update}.pt"),
                 sha256=str(update),
                 coordinates={"updates": update},
             )
-            for update in (0, 500, 501)
+            for update in (0, 25, 100, 499, 500, 501)
         ],
     }
 
@@ -49,9 +51,14 @@ def test_endpoint_and_initialization_remain_required(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = _config(tmp_path)
+    monkeypatch.setattr(
+        live,
+        "status",
+        lambda run: (_ for _ in ()).throw(live.LauncherError(f"no run {run!r}")),
+    )
     ledger = live.Ledger(config_sha256="test")
     launched: list[dict[str, Any]] = []
-    monkeypatch.setattr(live, "_remote", lambda *a, **kw: _observation())
+    monkeypatch.setattr(live, "_remote", lambda *a, **kw: _observation(tmp_path))
     monkeypatch.setattr(live, "_report", lambda *a: None)
     monkeypatch.setattr(live.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(live, "launch_evaluation", lambda *a, **kw: launched.append(kw))
@@ -86,12 +93,17 @@ def test_invalid_evaluation_retains_failure_and_cancels(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = _config(tmp_path)
+    monkeypatch.setattr(
+        live,
+        "status",
+        lambda run: (_ for _ in ()).throw(live.LauncherError(f"no run {run!r}")),
+    )
     ledger = live.Ledger(config_sha256="test")
     cancellations: list[bool] = []
 
     def remote(config: live.Config, *, cancel: bool = False) -> dict[str, Any]:
         cancellations.append(cancel)
-        return _observation()
+        return _observation(tmp_path)
 
     def refresh(config: live.Config, point: live.Point) -> None:
         point.phase, point.outcome = "done", "succeeded"
@@ -112,3 +124,75 @@ def test_invalid_evaluation_retains_failure_and_cancels(
     assert cancellations == [False, True, True]
     assert not retained.settled
     assert retained.error is not None
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_restart_reconciles_interruption_around_submission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, accepted: bool
+) -> None:
+    config = _config(tmp_path)
+    point = live.Point(
+        key="request",
+        training_run="training-174",
+        update=500,
+        checkpoint=tmp_path / "model.pt",
+        sha256="a" * 64,
+        cohort="monitor",
+        eval_id="174000000004",
+        started=123,
+    )
+    ledger = live.Ledger(config_sha256="test", points=[point])
+    path = tmp_path / "ledger.json"
+    live._save(path, ledger)
+    # A durable accepted job exists independently of the owner's ledger.
+    jobs = {point.eval_id} if accepted else set()
+    submissions = 0
+
+    def status(run: str) -> None:
+        if run not in jobs:
+            raise live.LauncherError(f"no run {run!r}")
+
+    def launch(*args: object, **kwargs: Any) -> str:
+        nonlocal submissions
+        run = str(kwargs["run_id"])
+        if run in jobs:
+            raise AssertionError("duplicate submission")
+        jobs.add(run)
+        submissions += 1
+        raise KeyboardInterrupt  # Lose the reply after durable acceptance.
+
+    monkeypatch.setattr(live, "status", status)
+    monkeypatch.setattr(live, "launch_evaluation", launch)
+    if not accepted:
+        with pytest.raises(KeyboardInterrupt):
+            live._ensure_launched(config, point, ledger, path)
+    retained = live.Ledger.model_validate_json(path.read_bytes())
+    live._ensure_launched(config, retained.points[0], retained, path)
+    assert jobs == {point.eval_id}
+    assert submissions == (0 if accepted else 1)
+    assert retained.points[0].phase == "pending"
+
+
+def test_uncertain_submission_lookup_stops_without_resubmission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path)
+    point = live.Point(
+        key="request",
+        training_run="training-174",
+        update=0,
+        checkpoint=tmp_path / "model",
+        sha256="a" * 64,
+        cohort="monitor",
+        eval_id="174000000005",
+    )
+
+    def unavailable(run: str) -> None:
+        raise live.LauncherError("controller connection lost")
+
+    monkeypatch.setattr(live, "status", unavailable)
+    with pytest.raises(live.LauncherError, match="connection lost"):
+        live._ensure_launched(
+            config, point, live.Ledger(config_sha256="test"), tmp_path / "ledger.json"
+        )
+    assert not (tmp_path / "ledger.json").exists()

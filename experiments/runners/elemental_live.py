@@ -10,7 +10,6 @@ import argparse
 from datetime import UTC, datetime
 import fcntl
 import hashlib
-from html import escape
 import json
 import os
 from pathlib import Path
@@ -18,8 +17,10 @@ import subprocess
 import time
 
 from etude.eval.query import connect
-from etude.eval.report import write
 from etude.launch.client import status
+from etude.launch.errors import LauncherError
+from etude.reports import Evaluation
+from etude.train.report import pages, write
 from pydantic import BaseModel, ConfigDict, Field
 
 from experiments.runners.elemental_eval import launch_evaluation
@@ -39,6 +40,7 @@ class Config(BaseModel):
 
 class Point(BaseModel):
     key: str
+    training_run: str
     update: int
     checkpoint: Path
     sha256: str
@@ -109,54 +111,53 @@ def _report(config: Config, ledger: Ledger) -> None:
     report = config.directory / "reports"
     report.mkdir(exist_ok=True)
     track = Path(os.environ["ETUDE_HOME"]) / "track"
-    if track.exists():
-        write(track, report, refresh=30)
-    rows = "".join(
-        f"<tr><td>{p.update}</td><td>{escape(p.cohort)}</td>"
-        f"<td>{escape(p.eval_id)}</td><td>{escape(p.phase)}/{escape(p.outcome or '')}</td>"
-        f"<td>{p.score if p.score is not None else 'missing'}</td>"
-        f"<td>{p.valid}/{p.games}</td><td>{p.sha256}</td></tr>"
-        for p in ledger.points
-    )
-    complete = [
-        p for p in ledger.points if p.cohort == "monitor" and p.score is not None
-    ]
-    xmax = max([p.update for p in complete] + [config.cadence])
-    points = " ".join(
-        f"{40 + 700 * p.update / xmax:.2f},{220 - 180 * p.score:.2f}" for p in complete
-    )
-    body = (
-        '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="30">'
-        "<title>MTG-174 Elemental baseline live report</title>"
-        "<h1>MTG-174 Elemental baseline</h1>"
-        f"<p>Report generated {datetime.now(UTC).isoformat()}; last remote observation "
-        f"{ledger.observed_at}. Training {ledger.remote_phase}, update {ledger.remote_updates}. "
-        f"Confirmed cleanup: {ledger.cleanup_confirmed}. Inclusive estimated cost: {ledger.inclusive_cost}.</p>"
-        "<p>Freshness: observations older than 180 seconds are stale. Missing evaluations are "
-        "pending or failed, never zero scores. Monitoring is a fixed cohort against scripted greedy; "
-        "final scoring is disjoint. One training seed; game noise is not method evidence.</p>"
-        f"<p>Source {escape(config.revision)}; error: {escape(ledger.error or 'none')}</p>"
-        "<h2>Learning curve</h2><p>Raw policy score vs scripted greedy; x = absolute updates; "
-        "y = score, 0 at bottom and 1 at top. Fixed pair/deal/seat cohort.</p>"
-        f'<svg viewBox="0 0 800 250"><path d="M40 40 V220 H760" fill="none" stroke="black"/>'
-        f'<polyline points="{points}" fill="none" stroke="#964d35" stroke-width="3"/></svg>'
-        '<p><a href="eval/index.html">Etude evaluation tables and uncertainty</a></p>'
-        '<table border="1"><tr><th>update</th><th>cohort</th><th>Etude run</th>'
-        "<th>state</th><th>score</th><th>valid/attempted</th><th>checkpoint sha256</th></tr>"
-        f"{rows}</table>"
-    )
-    temporary = report / "index.partial"
-    temporary.write_text(body)
-    temporary.replace(report / "index.html")
+    for page in pages(track).values():
+        write(
+            page
+            | {
+                "owner": ledger.model_dump(mode="json"),
+                "owner_deadline": config.deadline,
+            },
+            report,
+            refresh=30,
+        )
+    # Readiness and remote lifecycle are machine-readable beside the native report.
+    _save(report / "readiness.json", ledger)
 
 
 def _point(
-    config: Config, checkpoint: dict, cohort: str, opponent: Path | None = None
+    config: Config,
+    checkpoint: dict,
+    cohort: str,
+    opponent: Path | None = None,
+    *,
+    training_run: str,
 ) -> Point:
     update = checkpoint["coordinates"]["updates"]
-    key = f"{checkpoint['sha256']}/{cohort}"
+    key = hashlib.sha256(
+        json.dumps(
+            {
+                "job": config.job_id,
+                "training_run": training_run,
+                "update": update,
+                "checkpoint": checkpoint["sha256"],
+                "cohort": cohort,
+                "opponent": hashlib.file_digest(
+                    opponent.open("rb"), "sha256"
+                ).hexdigest()
+                if opponent
+                else None,
+                "conditions": config.monitoring
+                if cohort == "monitor"
+                else config.scoring,
+                "revision": config.revision,
+            },
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
     return Point(
         key=key,
+        training_run=training_run,
         update=update,
         checkpoint=Path(checkpoint["path"]),
         sha256=checkpoint["sha256"],
@@ -177,15 +178,54 @@ def _refresh(config: Config, point: Point) -> None:
         try:
             tables = {r[0] for r in db.sql("show tables").fetchall()}
             if "plays" in tables:
+                binding = Evaluation.model_validate_json(
+                    (
+                        track
+                        / point.training_run
+                        / "evaluations"
+                        / f"{point.eval_id}.json"
+                    ).read_bytes()
+                )
                 row = db.execute(
-                    "select avg(score), count(*), count(*) filter (where valid) "
-                    "from plays where run = ? and player = 0",
-                    [point.eval_id],
+                    "select avg(p.score), count(*), count(*) filter (where p.valid) "
+                    "from plays p join seats s using (run, match, player) "
+                    "where p.run = ? and s.agent = ?",
+                    [point.eval_id, binding.subject],
                 ).fetchone()
                 if row is not None:
                     point.score, point.games, point.valid = row
         finally:
             db.close()
+
+
+def _ensure_launched(config: Config, point: Point, ledger: Ledger, path: Path) -> None:
+    """Reconcile a stable ID after interruption on either side of submission.
+
+    Only a definite missing run permits submission. Transport errors and other
+    refusals stop the owner; they cannot establish that a launch was absent.
+    """
+    try:
+        status(point.eval_id)
+    except LauncherError as error:
+        if str(error) != f"no run {point.eval_id!r}":
+            raise
+        point.started = time.time()
+        _save(path, ledger)
+        launch_evaluation(
+            config.root,
+            point.checkpoint,
+            point.opponent,
+            name=f"mtg174-{point.cohort}-updates-{point.update}",
+            conditions=config.monitoring
+            if point.cohort == "monitor"
+            else config.scoring,
+            revision=config.revision,
+            pool="controller",
+            run_id=point.eval_id,
+            training_run=point.training_run,
+            update=point.update,
+            cohort=point.cohort,
+        )
 
 
 def operate(config: Config, ledger: Ledger, path: Path) -> None:
@@ -240,20 +280,33 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
                 # retained immutable generation, not renewable cloud credentials.
                 with final_observation.open("x") as output:
                     json.dump(observation, output)
+            training_run = observation["run"]["id"] if available else ""
+            endpoint_update = max(
+                (c["coordinates"]["updates"] for c in available), default=0
+            )
             additions = [
-                _point(config, c, "monitor")
+                _point(config, c, "monitor", training_run=training_run)
                 for c in available
-                if c["coordinates"]["updates"] % config.cadence == 0 or terminal
+                if c["coordinates"]["updates"] % config.cadence == 0
+                or (terminal and c["coordinates"]["updates"] == endpoint_update)
             ]
             if terminal and initial is not None and available:
                 endpoint = max(available, key=lambda c: c["coordinates"]["updates"])
                 additions.extend(
                     (
                         _point(
-                            config, endpoint, "final-initial", Path(initial["path"])
+                            config,
+                            endpoint,
+                            "final-initial",
+                            Path(initial["path"]),
+                            training_run=training_run,
                         ),
-                        _point(config, endpoint, "final-greedy"),
-                        _point(config, initial, "initial-greedy"),
+                        _point(
+                            config, endpoint, "final-greedy", training_run=training_run
+                        ),
+                        _point(
+                            config, initial, "initial-greedy", training_run=training_run
+                        ),
                     )
                 )
             known = {p.key for p in ledger.points}
@@ -261,21 +314,7 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
             _save(path, ledger)
             active = next((p for p in ledger.points if p.phase not in ("done",)), None)
             if active is not None:
-                if active.started is None:
-                    active.started = time.time()
-                    _save(path, ledger)
-                    launch_evaluation(
-                        config.root,
-                        active.checkpoint,
-                        active.opponent,
-                        name=f"mtg174-{active.cohort}-updates-{active.update}",
-                        conditions=config.monitoring
-                        if active.cohort == "monitor"
-                        else config.scoring,
-                        revision=config.revision,
-                        pool="controller",
-                        run_id=active.eval_id,
-                    )
+                _ensure_launched(config, active, ledger, path)
                 _refresh(config, active)
                 if active.phase == "done" and (
                     active.outcome != "succeeded"
