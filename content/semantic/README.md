@@ -100,3 +100,53 @@ uv run --extra dev pytest -q \
   tests/semantic/test_learning_projection.py \
   tests/semantic/test_learning_projection_env.py
 ```
+
+## Elemental development pack (w7)
+
+`v1/elemental.source.json` supplies complete executable semantics for the 42
+owned Elemental cards, five basics and four referenced tokens. It is a distinct
+`elemental-combat-v1` catalog entry, exercised through two 46-card validation
+rosters. Final product deck admission remains separate. Compile or check it with:
+
+```bash
+uv run scripts/compile_semantic_content.py --check \
+  --source content/semantic/v1/elemental.source.json \
+  --fixtures content/semantic/v1/elemental.fixtures.json \
+  --ir-output content/semantic/v1/generated/elemental.ir.json \
+  --coverage-output content/semantic/v1/generated/elemental.coverage.json
+```
+
+Shared operations lower modal choices, explicit target clauses, private search,
+mill/select, graveyard returns, dynamic quantities and conditional statics into
+the ordinary engine. A spell's `target_binding: "inferred"` means its `targets`
+name semantic roles while the shared effect traversal binds the selected mode's
+actual clauses. Omitted binding retains the frozen packs' explicit contract.
+
+`w7/learning_schema.json` is learning schema 3 for this pack. Schema 2 and its
+original 23-opcode vocabulary remain readable and unchanged. The current schema
+adds typed quantities and nested modes, hybrid pips and the additional rules
+operations. `BoundSemanticPack.from_env` selects the artifacts from the exact
+Elemental manifest and rejects source/IR drift. No latest-pack alias changes
+historical meanings. Full structure parity against the native registry lives
+in `managym/tests/authored_match_tests.rs`; consumer admission lives in
+`tests/semantic/test_elemental.py`.
+
+## Sacrifice and landfall development pack (w8)
+
+`elemental-sacrifice-v1` adds the 17 owned sacrifice/landfall cards, five basics
+and five tokens in separate 40-card validation rosters. Schema 4 is at
+`w8/learning_schema.json`. It adds typed sacrifice costs, payment alternatives,
+per-turn trigger limits and search options. Earlier sources and learning
+schemas retain their identities and vocabularies. The native search authority
+is shared with frozen opcode 24, while opcode 51 supplies its additional options.
+
+```bash
+uv run scripts/compile_semantic_content.py --check \
+  --source content/semantic/v1/sacrifice.source.json \
+  --fixtures content/semantic/v1/sacrifice.fixtures.json \
+  --ir-output content/semantic/v1/generated/sacrifice.ir.json \
+  --coverage-output content/semantic/v1/generated/sacrifice.coverage.json
+```
+
+The [rule contracts](../../docs/rules/elemental-sacrifice.md) identify behavioral
+coverage and the separate final-deck and release boundaries.

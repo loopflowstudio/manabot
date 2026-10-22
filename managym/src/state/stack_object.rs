@@ -4,6 +4,8 @@ use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Targe
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
+    pub cast_from: super::zone::ZoneType,
+    pub flashback: bool,
     pub id: ObjectId,
     pub card: CardId,
     pub controller: PlayerId,
@@ -17,6 +19,7 @@ pub struct SpellOnStack {
     pub target_req_indices: Vec<usize>,
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
+    pub mode: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -26,7 +29,7 @@ pub struct ActivatedAbilityOnStack {
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
     pub source_card: CardId,
-    pub source_permanent_object_id: ObjectId,
+    pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
 }
@@ -44,6 +47,7 @@ pub struct TriggeredAbilityOnStack {
     pub targets: Vec<Target>,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
+    pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Card::abilities[ability_index]`.
@@ -87,13 +91,6 @@ impl StackObject {
     /// integer registry key with the same value.
     pub fn source_card_registry_key(&self) -> ObjectId {
         ObjectId(self.source_definition_id().0)
-    }
-
-    pub fn source_permanent_object_id(&self) -> Option<ObjectId> {
-        match self {
-            StackObject::Spell(_) | StackObject::TriggeredAbility(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_permanent_object_id),
-        }
     }
 
     pub fn ability_index(&self) -> Option<usize> {

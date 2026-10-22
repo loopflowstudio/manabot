@@ -18,7 +18,7 @@ Allies/Lessons scale ladder? Jack Heart selected the ladder in
 [PR #333](https://github.com/loopflowstudio/manabot/pull/333), then raised this
 experiment from $10 to $50 and selected the Mac mini as controller.
 
-The [frozen recipe](regimes/scale-ladder-allies-lessons-both-v2.json) keeps seed
+The [frozen recipe](data/two-seat-ladder/frozen-regime.json) keeps seed
 15902, the width-64/two-layer semantic policy with scalar masked-mean value,
 256 cross-balanced streams, Ataraxos move learning, float32 CUDA, one learner
 CPU thread, EMA .999 and absolute-iteration learning-rate/tau schedules. It uses

@@ -43,14 +43,19 @@ Learn Lesson identity, and ability selector projection. No semantic-program
 cohort is necessary to isolate these generic-input defects. Existing focused
 semantic target tests remain in `tests/model/test_action_identity.py`.
 
-The model has width 32, two attention heads and feed-forward width 64. Each of
-240 Adam updates (learning rate .003) uses the same 24 fit cases, for 5,760
-supervised sample exposures per seed. No early stopping or model selection.
+The model has width 32, two attention heads and feed-forward width 64, with the
+FiLM-conditioned policy (`AgentSpec(policy_film=True)`, protocol
+`learnability-2`; see
+[starting-weight sensitivity](#starting-weight-sensitivity)). Each of 240 Adam
+updates (learning rate .003) uses the same 24 fit cases, for 5,760 supervised
+sample exposures per seed. No early stopping or model selection.
 All 24 held-out cases are evaluated only after training and weight reload.
 
 Both preferences occur in each family: public life 5/7 selects candidate zero,
 35/33 selects candidate one. Held-out life 6/8 and 34/32, with different native
-shuffle seeds, tests interpolation over changed states. These labels are an
+shuffle seeds, tests interpolation over changed states. Held-out cases change
+state only: case creation asserts that every card definition a held-out case
+shows also appears in its family's fit cases. These labels are an
 artificial visible context, **not a claim that low life strategically favors
 attacking or any particular Lesson**. No identical observable state has opposite
 labels. Case creation asserts native/scalar encoding equality.
@@ -80,6 +85,52 @@ Capacity weights span several setups and intentionally omit semantic programs.
 They are diagnostic artifacts, not playable checkpoints with an invented match
 binding. The separate PPO layer below tests ordinary production checkpoint
 admission and reload.
+
+## Starting-weight sensitivity
+
+Protocol `learnability-1` trained the additive policy. There, offer and state
+meet only by addition inside the ReLU `action_layer` and `policy_head`. In the
+attack, mode and ability cases the two offers differ in one selector column,
+and public life chooses the label. If no hidden unit changes activation across
+those offers and life levels, the offers' logit gap cannot depend on life.
+Equal logits are then stationary, and the loss stays at ln 2. Whether a start
+has such a unit is luck. Over seeds 1–300 at the frozen budget, 55 additive
+starts stuck on at least one of those families. Changing
+`CARD_DEFINITION_COUNT` reshuffles every later initialization, which is how
+MTG-122's three vanilla cards turned seed 17 red.
+
+`learnability-2` keeps every seed, budget and threshold. It adds one
+multiplicative path: the head reads each action embedding scaled by
+`1 + W·state`, where `state` is the masked mean of the post-attention objects
+(FiLM, Perez et al. 2018, scale only). The product has a gradient at the
+symmetric point from any start. `W` starts at zero, so the initial function and
+all historical parameters are unchanged. The gate is still as sensitive:
+`identity_removed` inputs still produce exact ties, and zeroing the
+attack/mode/ability selector columns in training fails all 30 of 30 seeds.
+
+It also uses case set `action-cases-2`. In `action-cases-1`, Learn's held-out
+variant 1 (native seed 112) has Pop Quiz draw a Mountain. No Learn fit case shows
+that definition, and about one FiLM seed in ten missed that case. Variant 1 now
+uses seed 116, which draws an Island, at the same life totals. Case creation
+rejects any held-out definition missing from the family's fit cases; no other
+family had one.
+
+| Seeds 1–300 | Seeds failing | Stuck fit (attack / mode / ability) | Other misses |
+|---|---|---|---|
+| additive, `action-cases-1` (`learnability-1`) | 78 | 34 / 25 / 25 | held-out Learn 28; Learn fit 1 |
+| FiLM, `action-cases-1` | 31 | 0 / 0 / 0 | held-out Learn 29, target 2 |
+| additive, `action-cases-2` | 57 | 34 / 25 / 25 | held-out Learn 1; Learn fit 1 |
+| FiLM, `action-cases-2` (`learnability-2`) | 3 | 0 / 0 / 0 | held-out Learn 1, target 2 |
+
+All remaining held-out misses involve only definitions their fit cases show:
+they vary only life or native state, so they are generalization misses.
+
+The weakness is not confined to the probe's one-column contrasts. On 96 real
+authored decisions (choice-corpus rounds 0–2, ten families, each at life 5 and
+35) at the production baseline's model size, 1 of 12 additive seeds stayed
+at chance on 85 of the 96 decisions; all 12 FiLM seeds fit every decision.
+New training runs therefore train the FiLM policy too (`new_agent_spec()`,
+baseline recipe `baseline-v3`), so this gate tests the policy that is trained.
 
 ## Broader choice separability
 
@@ -133,8 +184,12 @@ Seed 197 trains width 8 against a frozen passing opponent in the existing
 Mountain/Gray Ogre toy world: 64 updates × 8 environments × 128 transitions =
 65,536 learner samples. Each update uses four epochs/four minibatches, learning
 rate .01, clip .2, full sample retention, no KL penalty, and the existing default
-critic/gradient clipping settings. A 150-second collection deadline is nested
-inside the overall watchdog. Ordinary world-bound save/reload precedes scoring.
+critic/gradient clipping settings. The collection deadline is 300 seconds,
+recorded as `Config.ppo_timeout_seconds`, inside the overall 480-second watchdog.
+The w7 CI run exceeded the former 150-second budget after all capacity scores
+passed; this allowance preserves the fixed sample count and held-out thresholds
+on shared CPU runners. The standalone PPO test uses the same budget. Ordinary
+world-bound save/reload precedes scoring.
 
 There are 64 evaluation games before training (deal seed 100197), then 64 each
 for the trained/reloaded and no-update policies on the same held-out seed

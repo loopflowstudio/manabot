@@ -46,12 +46,12 @@ from academy.replay_index import (
     InvalidAddressError,
     ReplayDecisionAddress,
 )
+from academy.shared_table_protocol import BeliefScenario, ViewerIdentity
 from academy.study_branch import (
     StudyBranchUnavailableError,
     StudyForkProvider,
 )
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
-from academy.testing_house_protocol import BeliefScenario, ViewerIdentity
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 from managym.possible_worlds import (

@@ -165,6 +165,17 @@ impl Game {
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+        if delta > 0
+            && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
+                self.battlefield_permanents(owner).into_iter().any(|id| {
+                    self.state.permanents[id]
+                        .as_ref()
+                        .is_some_and(|p| self.state.cards[p.card].prevents_life_gain)
+                })
+            })
+        {
+            return false;
+        }
         self.journal_player(player);
         let Some(player_state) = self.state.players.get_mut(player.0) else {
             return false;
@@ -201,14 +212,11 @@ impl Game {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return Some(self.effective_keywords(permanent_id));
         }
-        if let Some(definition) = self.object_lki_definition(source) {
-            return Some(definition.keywords.clone());
+        if let Some(lki) = self.object_lki(source) {
+            return Some(lki.keywords);
         }
         let card = CardId::from(source.entity);
-        self.state
-            .cards
-            .get(card.0)
-            .map(|card| card.keywords.clone())
+        self.state.cards.get(card.0).map(|card| card.keywords)
     }
 
     fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {

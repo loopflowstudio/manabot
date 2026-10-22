@@ -6,7 +6,7 @@ Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 import json
 import os
@@ -71,18 +71,26 @@ class GameConfig:
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
+        configs: list[managym.PlayerConfig] = []
         if pack is not None:
             if self.asset_pack != pack.reference:
                 raise ValueError("Recorded asset pack differs from the installed setup")
-            for name, deck, sideboard in (
-                (self.hero_deck_name, self.hero_deck, self.hero_sideboard),
-                (self.villain_deck_name, self.villain_deck, self.villain_sideboard),
+            for seat, name, deck, sideboard in (
+                ("Hero", self.hero_deck_name, self.hero_deck, self.hero_sideboard),
+                (
+                    "Villain",
+                    self.villain_deck_name,
+                    self.villain_deck,
+                    self.villain_sideboard,
+                ),
             ):
-                expected = pack.player_config(name, name)
+                expected = pack.player_config(name, seat)
                 if deck != expected.decklist or sideboard != expected.sideboard:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
+                configs.append(expected)
+            return configs
         return [
             managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
             managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),
@@ -101,8 +109,9 @@ class TraceEvent:
     # replay, and the decision-inspector seam consume these same persisted
     # objects; no consumer reconstructs them from observation differences.
     # True when the server auto-passed this priority window (stops system /
-    # F6), False for decisions the human actually clicked. Competency metrics
-    # must not credit auto-passes as deliberate passes.
+    # F6), False for explicit Commands, including declared validation prefixes.
+    # Competency metrics must also use record origin; False alone is not human
+    # provenance and auto-passes are never deliberate passes.
     auto: bool = False
     # Ordered semantic facts committed by the same authority transition. Old
     # traces omit this field and remain valid because replay treats it as an
@@ -125,6 +134,27 @@ class Trace:
     # removed from the established trace API before any redaction mode is
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
+
+    def to_record(self) -> dict[str, Any]:
+        """Borrow JSON payloads for immediate, read-only persistence.
+
+        Copying every observation and canonical frame before JSON encoding
+        makes each live save pay for the entire history twice. Only dataclass
+        boundaries need conversion; the store serializes before gameplay resumes.
+        Callers must not mutate this record or retain it across a game step.
+        """
+        record = {item.name: getattr(self, item.name) for item in fields(self)}
+        record["config"] = asdict(self.config)
+        record["events"] = [
+            {
+                **{item.name: getattr(event, item.name) for item in fields(event)},
+                "bot_decision": (
+                    None if event.bot_decision is None else asdict(event.bot_decision)
+                ),
+            }
+            for event in self.events
+        ]
+        return record
 
 
 def utc_now_iso() -> str:

@@ -28,16 +28,16 @@ def test_browser_prepares_before_readiness_and_is_reaped(tmp_path, outcome):
     executable(binaries / "uv", "echo 123456789\n")
     executable(
         binaries / "sleep",
-        'if [ "$1" = 90 ]; then while [ ! -f browser-started ]; do /bin/sleep 0.01; done; exec /bin/sleep 0.1; fi\n'
+        'if [ "$1" = 600 ]; then while [ ! -f browser-started ]; do /bin/sleep 0.01; done; exec /bin/sleep 0.1; fi\n'
         'exec /bin/sleep "$@"\n',
     )
     executable(
         scripts / "play",
-        "mkdir -p frontend/node_modules\n"
-        "touch frontend/node_modules/.academy-package-lock.sha256\n"
+        "mkdir -p academy/ui/node_modules\n"
+        "touch academy/ui/node_modules/.academy-package-lock.sha256\n"
         "while [ ! -f browser-started ]; do sleep 0.01; done\n"
         'if [ "$PROOF_OUTCOME" = launch_failure ]; then exit 7; fi\n'
-        'if [ "$PROOF_OUTCOME" = ready ]; then echo \'ACADEMY_PLAY_READY {}\'; fi\n'
+        "if [ \"$PROOF_OUTCOME\" = ready ]; then echo 'ACADEMY_PLAY_READY {}'; fi\n"
         "while :; do sleep 0.1; done\n",
     )
     executable(
@@ -74,7 +74,9 @@ def test_browser_prepares_before_readiness_and_is_reaped(tmp_path, outcome):
         assert '"result":"pass"' in stdout
     else:
         assert process.returncode == 2, stderr
-        expected_code = "proof.launch" if outcome == "launch_failure" else "proof.timeout"
+        expected_code = (
+            "proof.launch" if outcome == "launch_failure" else "proof.timeout"
+        )
         assert expected_code in stderr
         assert (tmp_path / "browser-stopped").exists()
     browser_pid = int((tmp_path / "browser-pid").read_text())

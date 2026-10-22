@@ -1,0 +1,24 @@
+name: macOS Integration
+
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+
+# Keep one active nightly/manual run and at most one pending replacement.
+concurrency:
+  group: macos-integration-nightly
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    name: Integration
+    uses: ./.github/workflows/manabot-integration.yml
+    with:
+      runner: macos-latest
+
+  academy-integration:
+    name: Academy Integration
+    uses: ./.github/workflows/academy-integration.yml
+    with:
+      runner: macos-latest

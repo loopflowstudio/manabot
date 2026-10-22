@@ -112,9 +112,7 @@ class TestRollout:
         self, trainer: Trainer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         trainer.start_time = 0.0
-        trainer.wandb = MagicMock()
         trainer.save()
-        trainer.wandb.log_artifact.assert_not_called()
         agent, space = load_checkpoint_agent(
             str(trainer.experiment.runs_dir / "step_0.pt")
         )

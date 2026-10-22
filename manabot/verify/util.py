@@ -109,6 +109,8 @@ def build_hypers(**overrides) -> Hypers:
         }
     )
     base["agent"]["attention_on"] = False
+    # Versioned verification recipes (first light, exp-11) predate FiLM.
+    base["agent"]["policy_film"] = False
     base["train"]["opponent_policy"] = "passive"
 
     match_overrides = overrides.pop("match", None)

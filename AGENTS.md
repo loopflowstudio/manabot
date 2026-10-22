@@ -6,7 +6,7 @@ Never add "Co-Authored by:" tags in commits
   The repository is `loopflowstudio/manabot` (renamed at Jack Heart's request
   on 2026-10-15).
 - **Academy** — the browser UI for inspecting bots and replays: the `academy`
-  package, the frontend, and their service namespaces. It is a client of
+  package, its Svelte frontend in `academy/ui`, and their service namespaces. It is a client of
   manabot and secondary to training. The project website uses Manabot.
 - **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
@@ -42,6 +42,22 @@ the name of the visual language.
 
 Package dependencies flow academy → manabot → managym: manabot never imports
 academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+
+## Academy's shared decision surface
+
+Jack Heart's direction (2026-10-21): Academy should make the acting agent's
+viewer-safe observations and complete legal action space understandable to a
+human. Navigation, grouping and labels may clarify that shared contract; they
+must not hide strategic choices, silently select actions, reveal unavailable
+information or introduce human-only game semantics. Evaluate awkward decisions
+at the shared observation/action authority rather than disguising them in the
+browser. Preserve Command binding, stale rejection, actual pending decisions on
+reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
+explicit shared action and cannot erase committed costs or revealed information.
+Configured priority-stop automation must remain identifiable as automation,
+separate from deliberate human decisions.
+This direction does not approve a particular redesign or change frozen worlds,
+checkpoints or experiment evidence.
 
 ## Style
 
@@ -103,12 +119,25 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
-  `managym/_managym.cpython-312-darwin.so`.
+  `managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
+  file, then rename); overwriting a mapped extension in place can trigger macOS
+  code-signature termination on subsequent imports.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
 ## Testing
 
+- Experiment results under `experiments/data/` live in the artifact store. Before
+  committing new results or merging a branch that tracked them, publish their
+  bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
+  commit `experiments/data.manifest.json`, and remove git tracking while retaining
+  the local files. Verify with
+  `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
+- After a world or observation-shape change, validate current-world arena
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
+  and run the full diagnostic with
+  `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
+  The `--pr` subset omits reward-driven PPO and cannot verify that path.
 - Remote credential tests require the `artifacts` extra. Validate dependency
   changes in an isolated environment so locally installed extras cannot hide
   missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.
@@ -119,3 +148,7 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   it `debug_assert!`s that the name resolves to a token definition, so passing
   an ordinary card name is release-silent and debug-fatal. Clippy does not
   catch this either.
+- Finish frontend generation/check/build commands before starting Playwright's
+  Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
+  can reload active pages and destroy in-page revision probes; use isolated
+  ports and stable generated files for concurrent headless runs.

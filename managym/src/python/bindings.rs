@@ -865,6 +865,7 @@ pub enum StackTargetKindEnum {
     Player = 0,
     Permanent = 1,
     StackObject = 2,
+    Card = 3,
 }
 
 #[cfg(feature = "python")]
@@ -876,6 +877,8 @@ impl StackTargetKindEnum {
     const PERMANENT: Self = Self::Permanent;
     #[classattr]
     const STACK_OBJECT: Self = Self::StackObject;
+    #[classattr]
+    const CARD: Self = Self::Card;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -893,6 +896,7 @@ impl From<StackTargetKindData> for StackTargetKindEnum {
             StackTargetKindData::Player => Self::Player,
             StackTargetKindData::Permanent => Self::Permanent,
             StackTargetKindData::StackObject => Self::StackObject,
+            StackTargetKindData::Card => Self::Card,
         }
     }
 }
@@ -904,6 +908,7 @@ impl From<StackTargetKindEnum> for StackTargetKindData {
             StackTargetKindEnum::Player => Self::Player,
             StackTargetKindEnum::Permanent => Self::Permanent,
             StackTargetKindEnum::StackObject => Self::StackObject,
+            StackTargetKindEnum::Card => Self::Card,
         }
     }
 }
@@ -980,6 +985,10 @@ pub struct PyPlayer {
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
     #[pyo3(get, set)]
     pub combat_mana: i32,
+    #[pyo3(get)]
+    pub mana: [i32; 6],
+    #[pyo3(get)]
+    pub lesson_mana: [i32; 6],
 }
 
 #[cfg(feature = "python")]
@@ -997,6 +1006,8 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
+            mana: value.mana,
+            lesson_mana: value.lesson_mana,
         }
     }
 }
@@ -1021,6 +1032,8 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
+            mana: value.mana,
+            lesson_mana: value.lesson_mana,
         }
     }
 }
@@ -1167,6 +1180,8 @@ pub struct PyKeywords {
     pub menace: bool,
     #[pyo3(get, set)]
     pub hexproof: bool,
+    #[pyo3(get, set)]
+    pub indestructible: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1186,6 +1201,7 @@ impl From<KeywordData> for PyKeywords {
             defender: value.defender,
             menace: value.menace,
             hexproof: value.hexproof,
+            indestructible: value.indestructible,
         }
     }
 }
@@ -1194,6 +1210,8 @@ impl From<KeywordData> for PyKeywords {
 #[pyclass(name = "ManaCost")]
 #[derive(Clone)]
 pub struct PyManaCost {
+    #[pyo3(get)]
+    pub hybrid: Vec<(u8, u8)>,
     #[pyo3(get, set)]
     pub cost: Vec<i32>,
     #[pyo3(get, set)]
@@ -1204,6 +1222,11 @@ pub struct PyManaCost {
 impl From<ManaCost> for PyManaCost {
     fn from(value: ManaCost) -> Self {
         Self {
+            hybrid: value
+                .hybrid
+                .iter()
+                .map(|pip| (pip[0] as u8, pip[1] as u8))
+                .collect(),
             cost: value.cost[..6].iter().map(|v| i32::from(*v)).collect(),
             mana_value: i32::from(value.mana_value),
         }
@@ -1221,7 +1244,25 @@ impl From<PyManaCost> for ManaCost {
         cost[6] = 0;
         let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
 
-        Self { cost, mana_value }
+        Self {
+            spend_on_lesson: false,
+            cost,
+            mana_value,
+            hybrid: value
+                .hybrid
+                .into_iter()
+                .map(|(left, right)| {
+                    let colors = [
+                        crate::state::mana::Color::White,
+                        crate::state::mana::Color::Blue,
+                        crate::state::mana::Color::Black,
+                        crate::state::mana::Color::Red,
+                        crate::state::mana::Color::Green,
+                    ];
+                    [colors[left as usize], colors[right as usize]]
+                })
+                .collect(),
+        }
     }
 }
 
@@ -1247,6 +1288,8 @@ pub struct PyCard {
     pub toughness: i32,
     #[pyo3(get, set)]
     pub is_token: bool,
+    #[pyo3(get, set)]
+    pub is_legendary: bool,
     #[pyo3(get, set)]
     pub is_ally: bool,
     #[pyo3(get, set)]
@@ -1276,6 +1319,7 @@ impl From<CardData> for PyCard {
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
+            is_legendary: value.is_legendary,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
             ward_cost: value.ward_cost,
@@ -1300,6 +1344,7 @@ impl From<PyCard> for CardData {
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
+            is_legendary: value.is_legendary,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
             ward_cost: value.ward_cost,
@@ -1328,6 +1373,7 @@ impl From<PyKeywords> for KeywordData {
             defender: value.defender,
             menace: value.menace,
             hexproof: value.hexproof,
+            indestructible: value.indestructible,
         }
     }
 }
@@ -1362,6 +1408,8 @@ pub struct PyPermanent {
     pub has_exile_link: bool,
     #[pyo3(get, set)]
     pub exile_if_dies_this_turn: bool,
+    #[pyo3(get, set)]
+    pub temp_subtypes: Vec<String>,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1384,6 +1432,7 @@ impl From<PermanentData> for PyPermanent {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
     }
@@ -1406,6 +1455,7 @@ impl From<PyPermanent> for PermanentData {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
     }
@@ -1415,6 +1465,8 @@ impl From<PyPermanent> for PermanentData {
 #[pyclass(name = "Action")]
 #[derive(Clone)]
 pub struct PyAction {
+    #[pyo3(get, set)]
+    pub description: Option<String>,
     #[pyo3(get, set)]
     pub action_type: ActionEnum,
     #[pyo3(get, set)]
@@ -1530,6 +1582,7 @@ impl From<ActionOption> for PyAction {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
         }
@@ -1543,6 +1596,7 @@ impl From<PyAction> for ActionOption {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
         }
@@ -1595,6 +1649,8 @@ pub struct PyStackTarget {
     pub permanent_id: Option<i32>,
     #[pyo3(get, set)]
     pub stack_object_id: Option<i32>,
+    #[pyo3(get, set)]
+    pub card_id: Option<i32>,
 }
 
 #[cfg(feature = "python")]
@@ -1605,6 +1661,7 @@ impl From<StackTargetData> for PyStackTarget {
             player_id: value.player_id,
             permanent_id: value.permanent_id,
             stack_object_id: value.stack_object_id,
+            card_id: value.card_id,
         }
     }
 }
@@ -1617,6 +1674,7 @@ impl From<PyStackTarget> for StackTargetData {
             player_id: value.player_id,
             permanent_id: value.permanent_id,
             stack_object_id: value.stack_object_id,
+            card_id: value.card_id,
         }
     }
 }
@@ -1636,6 +1694,8 @@ pub struct PyStackObject {
     #[pyo3(get, set)]
     pub source_permanent_id: Option<i32>,
     #[pyo3(get, set)]
+    pub chosen_mode: Option<usize>,
+    #[pyo3(get, set)]
     pub ability_index: Option<i32>,
     #[pyo3(get, set)]
     pub targets: Vec<PyStackTarget>,
@@ -1650,6 +1710,7 @@ impl From<StackObjectData> for PyStackObject {
             controller_id: value.controller_id,
             source_card_registry_key: value.source_card_registry_key,
             source_permanent_id: value.source_permanent_id,
+            chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
             targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
         }
@@ -1665,6 +1726,7 @@ impl From<PyStackObject> for StackObjectData {
             controller_id: value.controller_id,
             source_card_registry_key: value.source_card_registry_key,
             source_permanent_id: value.source_permanent_id,
+            chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
             targets: value
                 .targets
@@ -2841,6 +2903,34 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Public event identities used to explain a committed transition.
+    fn presentation_subjects_json(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.presentation_subjects().map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_offer_subjects_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.decision_offer_subjects(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let context = env.decision_context(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&context).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Composite viewer-safe Observation for `viewer`, as canonical JSON.
     fn semantic_observation_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
@@ -3338,29 +3428,36 @@ impl PyEnv {
 }
 
 #[cfg(feature = "python")]
+fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticPack> {
+    crate::semantic::SemanticPack::catalog()
+        .map_err(|error| PyValueError::new_err(error.to_string()))?
+        .iter()
+        .find(|pack| pack.pack_key == pack_key)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown authored pack {pack_key:?}")))
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfig> {
-    let packs = [
-        crate::semantic::SemanticPack::two_deck(),
-        crate::semantic::SemanticPack::jeong_increment(),
-    ];
-    for pack in packs {
-        let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;
-        if pack.pack_key == pack_key {
-            let config = pack
-                .player_config(deck_key, deck_key)
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
-            return Ok(PyPlayerConfig {
-                name: config.name,
-                decklist: config.decklist.into_iter().collect(),
-                sideboard: config.sideboard.into_iter().collect(),
-                content_pack: Some(pack_key.to_string()),
-            });
-        }
-    }
-    Err(PyValueError::new_err(format!(
-        "unknown authored pack {pack_key:?}"
-    )))
+    let config = authored_pack(pack_key)?
+        .player_config(deck_key, deck_key)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    Ok(PyPlayerConfig {
+        name: config.name,
+        decklist: config.decklist.into_iter().collect(),
+        sideboard: config.sideboard.into_iter().collect(),
+        content_pack: Some(pack_key.to_string()),
+    })
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
+    Ok(authored_pack(pack_key)?
+        .decks
+        .iter()
+        .map(|deck| deck.key.clone())
+        .collect())
 }
 
 #[cfg(feature = "python")]
@@ -3385,6 +3482,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
+    m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;

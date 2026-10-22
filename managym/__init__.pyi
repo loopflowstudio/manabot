@@ -54,6 +54,9 @@ class Env:
     # Shared semantic decision contract (managym.decision). JSON mirrors of
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...
+    def decision_context_json(self, viewer: int) -> str: ...
+    def decision_offer_subjects_json(self, viewer: int) -> str: ...
+    def presentation_subjects_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
     def observation_for_player(self, player_index: int) -> Observation: ...
     def execute_semantic_command_json(self, command_json: str) -> str: ...
@@ -252,6 +255,7 @@ class StackTargetKindEnum(IntEnum):
     PLAYER = 0
     PERMANENT = 1
     STACK_OBJECT = 2
+    CARD = 3
 
 class EventTypeEnum(IntEnum):
     CARD_MOVED = 0
@@ -277,6 +281,7 @@ class EventEntityKindEnum(IntEnum):
     DEFINITION = 5
 
 class ManaCost:
+    hybrid: List[tuple[int, int]]
     cost: List[int]
     mana_value: int
 
@@ -308,6 +313,7 @@ class Keywords:
     defender: bool
     menace: bool
     hexproof: bool
+    indestructible: bool
 
 class Player:
     player_index: int
@@ -321,6 +327,8 @@ class Player:
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
     combat_mana: int
+    mana: tuple[int, int, int, int, int, int]
+    lesson_mana: tuple[int, int, int, int, int, int]
 
 class Card:
     zone: ZoneEnum
@@ -331,6 +339,7 @@ class Card:
     power: int
     toughness: int
     is_token: bool
+    is_legendary: bool
     is_ally: bool
     is_lesson: bool
     ward_cost: int
@@ -372,6 +381,7 @@ class Action:
     action_type: ActionEnum
     focus: List[int]
     declared: bool | None
+    description: str | None
     mode_index: int | None
     ability_index: int | None
 
@@ -385,6 +395,7 @@ class StackTarget:
     player_id: int | None
     permanent_id: int | None
     stack_object_id: int | None
+    card_id: int | None
 
 class StackObject:
     stack_object_id: int
@@ -392,6 +403,7 @@ class StackObject:
     controller_id: int
     source_card_registry_key: int
     source_permanent_id: int | None
+    chosen_mode: int | None
     ability_index: int | None
     targets: List[StackTarget]
 

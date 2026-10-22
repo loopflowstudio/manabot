@@ -68,6 +68,13 @@ impl Game {
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
+            PowerCda::CountersOnLandsYouControl => self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .filter_map(|id| self.state.permanents[id].as_ref())
+                .filter(|p| self.state.cards[p.card].types.is_land())
+                .map(|p| p.plus1_counters)
+                .sum(),
             PowerCda::CreaturesYouControl => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -140,6 +147,8 @@ impl Game {
         controller: PlayerId,
     ) -> bool {
         match condition {
+            StaticCondition::Always => true,
+            StaticCondition::YourTurn => self.active_player() == controller,
             StaticCondition::CardsDrawnAtLeast { count } => {
                 self.state.turn.cards_drawn_this_turn[controller.0] >= *count
             }
@@ -193,6 +202,27 @@ impl Game {
             return false;
         };
         let card = &self.state.cards[permanent.card];
+        if predicate.flying && !self.effective_keywords(permanent_id).flying {
+            return false;
+        }
+        let mut predicate = predicate.clone();
+        predicate.flying = false;
+        let has_subtype = |name: &str| {
+            card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
+        };
+        if predicate
+            .subtype
+            .as_deref()
+            .is_some_and(|s| !has_subtype(s))
+            || (!predicate.subtypes_any.is_empty()
+                && !predicate.subtypes_any.iter().any(|s| has_subtype(s)))
+            || predicate.not_subtypes.iter().any(|s| has_subtype(s))
+        {
+            return false;
+        }
+        predicate.subtype = None;
+        predicate.subtypes_any.clear();
+        predicate.not_subtypes.clear();
         predicate.matches(card, self.effective_power(permanent_id), permanent.animated)
     }
 }

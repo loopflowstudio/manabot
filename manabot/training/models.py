@@ -330,6 +330,12 @@ class LearningStateImport(Strict):
 
     Paths here locate staged copies. Their hashes/sizes must match the parent
     TrainingRun. Game streams and all RNGs explicitly start afresh.
+
+    `source_match` declares a deck switch: the parent trained on exactly this
+    match and this segment continues on the regime's. Both must name the
+    agent's own semantic pack, so card identities and the learned programs
+    keep their meaning; only deck/sideboard composition changes. Omitted, the
+    parent's match must equal the regime's.
     """
 
     source_run: ArtifactReference
@@ -337,6 +343,9 @@ class LearningStateImport(Strict):
     raw: ArtifactReference
     ema: ArtifactReference
     optimizer: ArtifactReference
+    source_match: MatchHypers | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class LearningStateOrigin(Strict):

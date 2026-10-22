@@ -6,7 +6,7 @@ records current behavior and catches regressions; it is not a Phase-parity or
 release-readiness claim.
 
 The machine-readable source of truth is
-[`frontend/e2e/experience-proof-baseline.ts`](../frontend/e2e/experience-proof-baseline.ts).
+[`academy/ui/e2e/experience-proof-baseline.ts`](../academy/ui/e2e/experience-proof-baseline.ts).
 It pins the reference profile, sample counts, initial measurements, regression
 budgets, and explicit exclusions. Each proof run attaches its full observed
 distribution as `experience-proof.json`.
@@ -17,17 +17,17 @@ Prepare the repository's pinned CPython 3.12 extension as described in
 `AGENTS.md`, then run:
 
 ```bash
-npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
 ```
 
 The complete scoped verification is:
 
 ```bash
 uv run pytest tests/academy
-npm --prefix frontend run check
-npm --prefix frontend test
-npm --prefix frontend run build
-npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+npm --prefix academy/ui run check
+npm --prefix academy/ui test
+npm --prefix academy/ui run build
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
 ```
 
 All Python entry points remain behind `uv` (or the uv-managed interpreter path
@@ -87,102 +87,18 @@ replay stepping, priority stops/F6, and at least one encountered
 mid-resolution choice. Those tests do not yet deterministically cover all nine
 families; absence is reported rather than inferred from frontend support.
 
-## Terminal release-build matrix
+## Focused browser checks
 
-The deterministic follow-on gate is defined by
-[`frontend/e2e/release-prompt-matrix.json`](../frontend/e2e/release-prompt-matrix.json).
-It runs the built Svelte application through Vite preview, proxies the shipped
-HTTP/WebSocket paths to uvicorn, and drives two fixed-seed games to terminal.
-The default UR-hero orientation covers the seven UR-side families; a proof-only
-reverse-seat game surfaces GW's `SCRY` and `WATERBEND` prompts through the same
-table and protocol. The product default remains UR Lessons versus GW Allies.
+`npm --prefix academy/ui run test:e2e:release` builds the application and runs
+focused decision, Learn, combat, navigation and Elemental-selector tests against
+Vite preview and uvicorn. These checks retain keyboard interaction, reconnect,
+explicit Command submission and automated accessibility coverage without
+playing two complete matches or comparing screenshot baselines.
 
-Run the release gate with:
-
-```bash
-uv run pytest tests/academy/test_release_prompt_matrix.py
-npm --prefix frontend run test:e2e:release -- release-prompt-matrix.spec.ts
-```
-
-There is no runtime seed search or retry. Each scenario pins its prompt counts,
-terminal winner, turn, and command count. The gate fails on incomplete or
-unexpected family coverage, a non-terminal run, a missing terminal trace, or
-any browser console/page error.
-
-The same two trajectories run entirely through Enter/Space command activation
-with the browser's reduced-motion preference enabled. Every prompt occurrence
-must expose a named and described Actions region, exact accessible names for
-all legal offers, and focus on the next legal choice. The first occurrence of
-each family additionally proves tab-boundary behavior, reduced-motion computed
-styles, and automated WCAG A/AA checks including color contrast. The terminal
-overlay announces the result and contains focus. A bounded socket close checks
-only the accessibility of the already-existing reconnect status and focus
-restoration; it adds no recovery protocol claim. The run also rejects public or
-failed play-asset requests, curated-pack fallbacks, and browser errors.
-
-This gate does not claim replay equivalence, stale/duplicate/checkpoint
-recovery semantics, touch/mobile/zoom certification, real
-assistive-technology automation, or a new performance baseline.
-
-## Versioned visual references
-
-The same two terminal trajectories compare 18 committed references under
-[`frontend/e2e/visual-references/v6`](../frontend/e2e/visual-references/v6):
-
-- one Actions-panel reference for every one of the ten reachable prompt
-  families;
-- opening, combat, and developed board references;
-- disconnected, reconnecting, and recovered-connected header references; and
-- the distinct terminal result from each fixed scenario.
-
-The `visual_references` record in the release matrix binds every filename to an
-exact scenario and prompt occurrence. Each scenario also pins its complete
-pre-terminal prompt-family sequence, so a reordered intermediate decision
-fails before the terminal aggregate can conceal it. The ordinary gate never
-creates missing PNGs: a missing reference and a changed reference are both
-failures.
-
-The named reference profile is `ubuntu-24.04-chromium`: GitHub-hosted Ubuntu
-24.04 x86-64, Node 22, Playwright 1.61.1's Chromium 149.0.7827.55, a 1600 x
-1200 CSS-pixel viewport at device scale factor 1, dark color scheme, `en-US`,
-UTC, and reduced motion. Cormorant Garamond, Lato, and JetBrains Mono are
-bundled from the shared Loopflow visual system by the release build and loaded
-from loopback before comparison. Screenshot capture
-disables animation and the caret and permits zero pixels beyond Playwright's
-0.2 perceptual color threshold on that profile, filtering subpixel text
-rasterization noise without tolerating a visible change.
-
-The release browser blocks and records public HTTP and WebSocket requests. It
-also fails on a missing or failed local font, broken rendered images, a card
-treatment outside the pinned pack, any fallback treatment, failed/local-error
-responses, console errors, and page errors. The reconnect screenshots isolate
-the existing connection summary in the game header, avoiding unrelated native
-deck/opponent selectors whose glyph rasterization is host-controlled. They
-pause only the replacement Playwright WebSocket route; the client still
-reconnects to uvicorn and must restore the same authoritative offer.
-
-### Intentional baseline updates
-
-Do not use a developer workstation capture as the reviewed baseline. Push the
-intentional visual change to its branch, dispatch the `CI` workflow for that
-branch with `update_visual_references` set to `true`, and download the
-`visual-references-v6` artifact. That job uses the named Linux profile, runs
-Playwright with its explicit snapshot-update flag, reruns normal comparison,
-and continues to enforce every non-pixel assertion.
-
-Review all 18 images and the product diff, replace the versioned directory with
-the reviewed artifact, and commit the PNGs. A normal pull-request run must then
-pass without update mode. Snapshot updating must never be used to accept a
-changed prompt sequence, terminal result, authority response, asset source,
-network request, console error, or page error.
-
-For a deliberate new product appearance, increment the matrix reference
-version and update the matrix directory, Playwright snapshot path, and CI
-artifact path together before dispatching. Git history retains the earlier
-set. A screenshot-ignored local run does not validate an intentional appearance
-change: inspect the pinned Linux expected/actual/diff images and complete the
-versioned-reference workflow before arming delivery. A pure pinned-runner or browser recapture may keep the visual version only
-when review confirms that the intended appearance did not change.
+CI selects this suite for browser code and the backend/rules paths it consumes.
+Training, remote-runner, website and documentation changes do not select it.
+The former full-match visual suite and its update workflow have been removed;
+older committed reference corpora remain historical evidence, not active gates.
 
 ## Boundaries and next evidence
 

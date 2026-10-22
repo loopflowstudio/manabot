@@ -2,7 +2,9 @@
 
 Admission retains original bytes, validates ordinary policy/world contracts and
 the unchanged learning recipe, and derives absolute counters from the producer.
-This is a new segment with fresh game/RNG streams, never process recovery.
+This is a new segment with fresh game/RNG streams, never process recovery. A
+declared setup transfer lets the segment continue on different decks from the
+same semantic pack (a curriculum); nothing else about the recipe may change.
 """
 
 from dataclasses import dataclass
@@ -14,6 +16,7 @@ import torch
 
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match
+from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
 from manabot.model.world import validate_agent_setup
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -107,6 +110,15 @@ def validate_adam(optimizer: torch.optim.Adam) -> None:
                 raise ValueError(f"invalid Adam moment: {name}")
 
 
+def _admit_setup_transfer(source: MatchHypers, regime: TrainingRegime) -> None:
+    """A deck switch stays inside the agent's semantic pack and changes decks."""
+    pack = regime.agent.semantic_pack
+    if source == regime.match:
+        raise ValueError("setup transfer must change the match")
+    if source.content_pack != pack or regime.match.content_pack != pack:
+        raise ValueError("setup transfer must stay inside the agent's semantic pack")
+
+
 def admit_learning_state(
     stage: TrainSelfPlay, regime: TrainingRegime, out: Path
 ) -> AdmittedLearningState:
@@ -139,11 +151,15 @@ def admit_learning_state(
         or source.parent_run_id is not None
     ):
         raise ValueError("learning-state parent must have a completed or paused export")
+    source_match = regime.match
+    if spec.source_match is not None:
+        _admit_setup_transfer(spec.source_match, regime)
+        source_match = spec.source_match
     if (
         source.regime.world != regime.world
         or source.regime.agent != regime.agent
         or source.regime.observation != regime.observation
-        or source.regime.match != regime.match
+        or source.regime.match != source_match
         or source.regime.schedule_clock != regime.schedule_clock
     ):
         raise ValueError("learning-state model/world/setup/schedule mismatch")
@@ -176,7 +192,9 @@ def admit_learning_state(
             continue
         with torch.random.fork_rng(devices=[]):
             agent, space = load_checkpoint_agent(copied["path"])
-        validate_agent_setup(agent, Match(regime.match).to_rust())
+        # The parent export is bound to the match it trained on; the segment's
+        # own exports are bound to the regime's match when they are written.
+        validate_agent_setup(agent, Match(source_match).to_rust())
         if agent.hypers != regime.agent or space.encoder.hypers != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
         payload = torch.load(copied["path"], map_location="cpu", weights_only=False)

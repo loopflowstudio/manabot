@@ -416,3 +416,16 @@ def test_collector_defaults_follow_policy_ownership() -> None:
         )
         assert collector.learning_seats == seats
         collector.close()
+
+
+def test_named_ladder_recipes_preserve_the_control_and_select_both_seats() -> None:
+    from experiments.batched_baseline import scale_ladder, scale_ladder_both
+
+    control, treatment = scale_ladder(), scale_ladder_both()
+    first, second = control.stages[0], treatment.stages[0]
+    assert isinstance(first, TrainSelfPlay) and isinstance(second, TrainSelfPlay)
+    assert first.learning_seats == "one" and second.learning_seats == "both"
+    assert first.learning == second.learning
+    assert first.streams == second.streams == 256
+    assert control.world == treatment.world == managym.WORLD_VERSION
+    assert control.id != treatment.id

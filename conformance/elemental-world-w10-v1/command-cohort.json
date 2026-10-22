@@ -1,0 +1,162 @@
+{
+  "max_commands": 30000,
+  "pack": "elemental-world-v1",
+  "policy": "uniform legal offers; random.Random(164)",
+  "results": [
+    {
+      "command_sha256": "6c8e5ca255c163d16609124b8a27bed84a6e66e2c62a8e304f0eb2c20ba2f460",
+      "commands": 560,
+      "final_state": "ca7d24d44f78e6c8641491d96897a44abe477a9fc92b17ded97195ad191b0278",
+      "fork_checks": 12,
+      "left": "gr",
+      "max_actions": 10,
+      "right": "gr",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "d54a31e6dc02c9e4af8ffa3a198d0b3ba70f045f26792d0e6fc980f68d5e95f9",
+      "commands": 803,
+      "final_state": "b22bdf69292aef514dceba679319897f6908b2955d5d8cb74da1e0ec6456cc23",
+      "fork_checks": 17,
+      "left": "gw",
+      "max_actions": 14,
+      "right": "gw",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "38095fb668476850ab7355d96111736dc1878a7f2b78016fc991ea2c70785e69",
+      "commands": 1170,
+      "final_state": "ce40d87e242108d2dc7d337877dc9626a99c339b5a259c21ffc7c26505d0acc6",
+      "fork_checks": 24,
+      "left": "ur",
+      "max_actions": 14,
+      "right": "ur",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "ae62c531cb9bacd327d5da79c36a2436d2f2dacb330abc0b5073bd5079196412",
+      "commands": 999,
+      "final_state": "1d806e99e3b8e15aa5fd7b5ad79407741ae839622ff81267763f0708d25f67a1",
+      "fork_checks": 20,
+      "left": "ub",
+      "max_actions": 16,
+      "right": "ub",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "e9b7f6ba527cda96bf88d5fde1705708466b05c6920d4ec62bae126b4adf54de",
+      "commands": 990,
+      "final_state": "9aea6d9f037e45934e8eb3269b8589574fff961f834d5293d00e52abf5f447a3",
+      "fork_checks": 20,
+      "left": "uw",
+      "max_actions": 15,
+      "right": "uw",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "773f318086b9b1f9c2f06287f3a9fb51316929dc1aedbf8df98a276be5398148",
+      "commands": 988,
+      "final_state": "2f35f6f19e75033c9633511fa6a8cbc1e1775d5dcbee004b70d2d0388fc2ef67",
+      "fork_checks": 20,
+      "left": "ug",
+      "max_actions": 20,
+      "right": "ug",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "b96e3946040a65887da63e45a6a5466d3915753613d122378f05ca57f3143228",
+      "commands": 1048,
+      "final_state": "1755dc8898c59cc38befbeae3ee5bb486f3910667716f73a891c2ace2339aabb",
+      "fork_checks": 21,
+      "left": "wr",
+      "max_actions": 14,
+      "right": "wr",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "1f6c015590b3802a1450379f2a2c84e7237aa67b9e0f6073c2f0c816af2202a5",
+      "commands": 1380,
+      "final_state": "3fccd8484778226867d226ed4c4e91ceba0952a588c509a9b5d28964b4c3715e",
+      "fork_checks": 28,
+      "left": "wb",
+      "max_actions": 12,
+      "right": "wb",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "008ebb0cad3988ee1d97b55141c534bc61417c5852d51a7ab569e3da681a1b98",
+      "commands": 1136,
+      "final_state": "741ab0931339e867a4fdf4558b5327ed7ad3cb64de5ecca558a07528fcfb81bf",
+      "fork_checks": 23,
+      "left": "rb",
+      "max_actions": 12,
+      "right": "rb",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "d046fdc1e24c43372b936b3c240582b6a9ea2f3ea357f8549b126d3917d6f0f6",
+      "commands": 1013,
+      "final_state": "cc7a309fe3c03ab4927b9fc6e691faa7d2956f1a782f020e4b225605d378be26",
+      "fork_checks": 21,
+      "left": "bg",
+      "max_actions": 19,
+      "right": "bg",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "bfe3aeb363f6eb0235fcd718059334d4087aa475fb6952da8888ceb108fdd32d",
+      "commands": 644,
+      "final_state": "00ce6c1149b58cf24ff9b5ca85e25e84d8613476e66a0ff795087ea9e8b27eee",
+      "fork_checks": 13,
+      "left": "gr",
+      "max_actions": 13,
+      "right": "ug",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "0007f0212b7f76ab6c752f9123533a645be91cafe2bfcb2a4038ff4d23c03998",
+      "commands": 633,
+      "final_state": "c15c14a022e5acbfc51a129ebf87a9f4dc24aaa551016675edc7e4c24c149453",
+      "fork_checks": 13,
+      "left": "ug",
+      "max_actions": 10,
+      "right": "gr",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "a052f18aa87aa45222bad8e23e9f2f504458a9ed0ea6a9173f5881930b229e63",
+      "commands": 742,
+      "final_state": "a79d138bae4b07415864aff49a8ff29b23293e1aac5a2df888e730bf50e68323",
+      "fork_checks": 15,
+      "left": "ur",
+      "max_actions": 14,
+      "right": "gw",
+      "seed": 164,
+      "terminal": true
+    },
+    {
+      "command_sha256": "d085760b249910f394f1a2396d1ecf807c5af3d9864838bb36d081597133fbc5",
+      "commands": 1020,
+      "final_state": "5640d6313ea3e0e9151e5e992181c2017f0a216fada79e2b9370f35ba451f443",
+      "fork_checks": 21,
+      "left": "gw",
+      "max_actions": 14,
+      "right": "ur",
+      "seed": 164,
+      "terminal": true
+    }
+  ],
+  "world": "w10"
+}

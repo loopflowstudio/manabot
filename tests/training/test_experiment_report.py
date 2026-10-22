@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from manabot.training.report_study import ScientificStudy
 
+from etude.run.records import RunDeclaration, RunFile, SourceKey
 from nbclient import NotebookClient
 import nbformat
+from pydantic import ValidationError
 import pytest
 
 from manabot.training.comparison_notebook import write_comparison_notebook
@@ -21,7 +23,41 @@ from manabot.training.experiment_report import (
     write_dashboard,
 )
 
-DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
+
+
+def test_tracker_declarations_are_sources_without_extra_trajectories(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "evidence"
+    shutil.copytree(DEMO, root)
+    before = load_evidence(root)
+    tracker = root / "tracking" / "run.json"
+    tracker.parent.mkdir()
+    declaration = RunFile(
+        experiment="report-fixture",
+        namespace="manabot",
+        declaration=RunDeclaration(
+            source_key=SourceKey(namespace="manabot", kind="run", source_id="fixture"),
+            clocks=(),
+        ),
+    )
+    tracker.write_text(declaration.model_dump_json())
+    after = load_evidence(root)
+    assert after.runs == before.runs
+    assert tracker in after.paths
+    assert matched_milestones(after) == matched_milestones(before)
+
+    # A broken tracker record must not be silently skipped either.
+    tracker.write_text('{"schema_version": 1, "declaration": {}}')
+    with pytest.raises(ValidationError):
+        load_evidence(root)
+
+
+def test_malformed_training_run_still_fails_report_admission(tmp_path: Path) -> None:
+    (tmp_path / "run.json").write_text('{"id": "broken-training-run"}')
+    with pytest.raises(ValidationError):
+        load_evidence(tmp_path)
 
 
 @pytest.mark.parametrize("individual_progress", [False, True])

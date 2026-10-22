@@ -8,22 +8,28 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
-uv run manabot train --regime experiments/regimes/batched-baseline.json  # batched GPU baseline
+uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local` preset is the certified laptop path: it trains a small
-manabot on CPU in under a minute, needs no W&B account or CUDA, and saves
-checkpoints to `.runs/local/step_N.pt`. The `simple` and `attention` presets
-are real training runs: they expect a CUDA machine (see
-[remote training](../docs/remote-training.md)) and track to the `manabot` Weights &
-Biases project. New checkpoints stay local until explicitly published to
-[S3 artifact storage](../docs/training-monitoring.md#s3-model-and-artifact-storage).
-W&B tracks metrics and S3 references; the historical W&B model reader remains
-available for previously published checkpoints.
+The default `local` preset is the bounded laptop training path. Ordinary
+Trainer metrics and exported checkpoints now record through the public
+Etude SDK without a W&B account. Standalone tracking lives under
+`<runs_dir>/<experiment>/etude/`; under `etude launch`, the SDK supplies
+`ETUDE_RUN` and `ETUDE_TRACK_DIR`. The `simple` and `attention` presets still
+expect CUDA. Historical W&B model readers and frozen recipe fields remain
+readable; those fields no longer select the live Trainer tracker.
+
+Self-play TrainingRegime execution logs cumulative update/transition clocks and
+retains admitted initialization, exact monitoring milestones, and raw stage
+exports in Etude. These are policy artifacts, not portable training recovery. TrainingRun/VerifyStore still hold
+scientific execution records, and the existing scheduler/evaluator has not yet
+been replaced by Etude jobs. This is a partial migration, not end-to-end experiment
+admission. SDK artifact retention alone does not establish portable collector/RNG
+recovery. Remote storage, rentals and scientific runs require explicit allocation.
 
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.
@@ -40,7 +46,7 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
-For GPU training, start from `experiments/regimes/batched-baseline.json`. It is the
+For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
@@ -72,7 +78,7 @@ New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
 default 1,000); freeze targets and shared intervals before launch. Operational
 lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training-monitoring.md#new-training-and-live-dashboards).
 
-New self-play training learns from both seats by default (`baseline-v2`).
+New self-play training learns from both seats by default (`baseline-v3`).
 Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
 saved schema-1 recipes retain their historical one-seat behavior.
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
@@ -99,11 +105,21 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
+`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+state before the policy head, so offer choices that depend on the state stay
+learnable from any start. New runs train it: `new_agent_spec()` is the
+`manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
+Omitted, the field serializes as the historical additive policy, so frozen
+recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
+keep their meaning. The learnability gate trains the same FiLM policy.
+
 An observation/action-shape or rules-meaning change is a world version.
-The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w11** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w5 artifacts with aliased object and mode choices, are not compatible
-with w6. The local
+including w10 artifacts, are not compatible with w11. Elemental combat,
+[sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
+[ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
+`elemental-world-v2`; release certification remains unfinished. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
@@ -166,14 +182,14 @@ Declare training comparisons with [typed Python experiments](../docs/training-ex
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
-Experiment-specific driver scripts live in
-[experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
-only reusable instruments. The experiment discipline and ledger are in
+Each current experiment is one module in [experiments/](../experiments/), holding
+its recipes and anything only it needs to run and report; `manabot/` keeps
+the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
 Study records retain viewer-safe target source names and target controller sides.
 Audit retained Allies/Lessons records without starting games with
-`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+`uv run python -m manabot.study.allies_lessons.targeting_audit --games games.jsonl.gz --label greedy`.
 The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
 seat, including absent cohorts, unfinished records, declined targets and unknown
 identities. Target offers list player 0's objects first, so a first-offer
@@ -253,6 +269,69 @@ For exploratory same-deck checkpoint play, the [head-to-head runner](../experime
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
 roster decks/sideboards and carries their compiled content pack through replay;
 it is not ordinary training-match admission or evidence of mirror competence.
+
+### Etude-owned training jobs
+
+`manabot.training.etude_job.TrainingJob` freezes a single fresh self-play
+`TrainingRegime` and its interior update milestones into an `etude.launch.Job`.
+Its `job(repo=..., revision=..., max_hours=...)` method only builds the job;
+`job.runs(*seeds)` only declares runs. Neither submits or reserves resources.
+The job command is:
+
+```sh
+uv run --locked python -m manabot.training.etude_job
+```
+
+Run that command through an Etude worker, not as a standalone training CLI: it
+requires the SDK's config, seed, target, deadline, output, stop and tracking
+environment. The source revision is explicit, the update target must agree with
+the recipe, and the remaining lifetime must cover the entire recipe watchdog
+plus the declared finalization reserve. A late start fails instead of shortening
+the experiment. The machine must supply this source's built native extension;
+portable source-build setup and the full complexity campaign remain unfinished.
+
+Etude owns job execution and tracking on this path; the old ExperimentSchedule
+runner is not involved. TrainingRun/VerifyStore still retain scientific learning,
+world/ABI admission and failure receipts inside the attempt output. Only a
+completed target emits `etude-result.json` with the admitted policy path.
+Cancellation is checked with the resource watchdog (at most once per second at
+check boundaries) and retains a failed receipt, not a successful partial target.
+Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
+retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
+not yet admitted. This worker proof does not establish SDK placement, remote
+provisioning, scientific evaluation, artifact upload or learning strength.
+
+### Semantic catalog dimensions
+
+`SemanticCardEncoder` uses a shared GRU over semantic-token embeddings, not an
+independent learned embedding per card. Its `catalog_shape` reports definition
+count, unique token count, total expanded sequence length, longest sequence and
+padded token count. Referenced definitions are expanded into the parent sequence.
+The embedding runs over the padded array; the packed GRU skips padding. These
+counts describe representation cost, not observed learning difficulty.
+
+`manabot.semantic.policy_catalog` owns explicit native/IR admission. Policy
+construction checks compiled pack, IR and source hashes and complete native
+coverage before joining transport IDs. The selected product catalog remains the
+only registered policy catalog; research catalogs need their own checked IR and
+schema admission. In particular, the native Jeong increment alone is not policy
+admission: its `Rebel` subtype is absent from the current learning schema.
+
+### Explicit research evaluation matrices
+
+`AuthoredMatchup(pack_key=..., role_a=..., role_b=...)` names two exact native
+authored setups. Pass it as `MonitorProtocol(authored_matchup=...,
+include_mirrors=True)` to evaluate A–B, B–A, A–A and B–B, each with both player
+seat assignments. The training match must equal `matrix.match()`; arbitrary
+renaming or substituting a different setup fails admission. Simple roles retain
+their own names, never Allies/Lessons labels.
+
+The shared arena records the actual decks, explicit content pack and Commands;
+its ordinary replay checks still apply. The matrix identity is separate from
+the historical selected-world suite. Omitting it preserves existing selected
+protocol serialization. A native authored roster does not itself admit a neural
+policy catalog. Research report presentation and Etude evaluation recording are
+still separate remaining integration work.
 
 The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and

@@ -14,6 +14,7 @@ from pydantic import Field
 
 from manabot.arena.match import selected_match
 from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
+from manabot.training.builders import PACK
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.experiment_execution import (
     ExperimentRun,
@@ -36,11 +37,11 @@ from manabot.verify.learning_regression import report_baseline
 import managym
 
 BASELINE_STEPS = 128
-BASELINE_VERSION = "baseline-v2"
+# v3 combines the FiLM policy with learning from both seats by default.
+BASELINE_VERSION = "baseline-v3"
 # Separate from the existing scientific and monitoring cohorts. Repeated nightly
 # use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
-PACK = "ur-lessons-vs-gw-allies"
 
 
 class TrainingRecipe(Strict):
@@ -84,10 +85,11 @@ def baseline(
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
     The scalar, width-64, depth-2 model follows the existing ordinary self-play
-    baseline. The explicit schedule mapping is a new recipe choice: its first
-    and last rates match iterations 1 and 10,000 of the historical rule. Short
-    runs are compressed schedules, not prefixes of a longer run. Reward remains
-    the executor's terminal game outcome. Wall time is only a failure bound.
+    baseline, with the FiLM policy that new runs train. The explicit schedule
+    mapping is a new recipe choice: its first and last rates match iterations 1
+    and 10,000 of the historical rule. Short runs are compressed schedules, not
+    prefixes of a longer run. Reward remains the executor's terminal game
+    outcome. Wall time is only a failure bound.
     """
     schedule = IterationSchedule(steps=steps)
     allowance = seconds if seconds is not None else max(1680.0, steps * 8.0 + 600)
@@ -110,6 +112,7 @@ def baseline(
                 semantic_pack=PACK,
                 value_kind="scalar",
                 value_aggregation="masked_mean",
+                policy_film=True,
             ),
             stages=[
                 TrainSelfPlay(

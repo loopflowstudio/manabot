@@ -133,6 +133,41 @@ impl ContentPack {
         self.register_tla();
         self.register_tla_lessons_increment();
         self.register_mkm();
+        self.register_elemental();
+        self.register_sacrifice();
+        self.register_temur();
+    }
+
+    /// Presentation entries for the isolated complexity catalog. The default
+    /// registry and its checked content digest must remain unchanged.
+    pub(crate) fn register_complexity_presentation(&mut self) {
+        self.register_creature(
+            "Savannah Lions",
+            "W",
+            &["Cat"],
+            2,
+            1,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Glory Seeker",
+            "1W",
+            &["Human", "Soldier"],
+            2,
+            2,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Hill Giant",
+            "3R",
+            &["Giant"],
+            3,
+            3,
+            Keywords::default(),
+            "",
+        );
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {
@@ -436,6 +471,7 @@ impl ContentPack {
                 ..Default::default()
             },
             activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: false,
                 mana_cost: ManaCost::parse("R"),
                 sacrifice_source: false,
                 waterbend: false,
@@ -443,6 +479,7 @@ impl ContentPack {
                     power_delta: 1,
                     toughness_delta: 0,
                 },
+                ..Default::default()
             }],
             text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(5),

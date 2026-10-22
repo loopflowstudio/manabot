@@ -641,8 +641,8 @@ changes. See the [capacity record](../experiments/model-capacity.md#queued-price
 ### Live Etude evaluation on an owned controller
 
 Install the `evaluation` and `artifacts` extras in a separate controller runtime
-(Python 3.12). `evaluation` pins Etude's public Eval API to an exact source commit;
-legacy `reports` uses an older Etude reader and is a separate, conflicting extra.
+(Python 3.12). Both `evaluation` and `reports` use the released Etude 0.2.0 API;
+the evaluation extra adds its optional Eval dependencies.
 The native engine and checkpoint admission must match the frozen training world.
 
 ```sh

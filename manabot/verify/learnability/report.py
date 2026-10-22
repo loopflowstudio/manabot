@@ -13,7 +13,8 @@ def markdown(result: Result) -> str:
         f"Seeds {result.config.seeds}; {result.config.updates} capacity updates/seed; "
         f"threshold {result.config.probability:.2f}; CPU only, one Torch thread.",
         f"Wall {result.wall_seconds:.1f}s; CPU {result.cpu_seconds:.1f}s (setup/build separate).",
-        f"{result.fit_cases} fit / {result.held_out_cases} held-out cases; "
+        f"{result.fit_cases} fit / {result.held_out_cases} held-out cases "
+        f"(`{result.case_set or 'unversioned'}`); "
         f"{result.fit_cases * result.config.updates} supervised sample exposures/seed. "
         "Initialization is the frozen no-update control. Each row gates every preference/variant.",
         "",

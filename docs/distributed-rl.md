@@ -124,12 +124,7 @@ unresolved algorithm change.
   ordinary export admission and single-writer execution. JSON is an export.
   A distributed adapter should feed this learner path rather than invent a
   competing checkpoint schema or shared writable SQLite file.
-* `experiments/runners/calibrate_training.py`: existing complete CPU collect,
-  update, export, arena and exact-replay proof. Parent CPU time excludes arena
-  workers; replay time is a subset of arena time. Existing calibration's seed
-  and tiny model are smoke fixtures, not hardware or scientific calibration.
-* Tests worth reusing later: `tests/training/test_calibration.py`,
-  `test_ataraxos_regime.py`, `test_ataraxos_gradients.py`, and collector boundary
+* Tests worth reusing later: `tests/training/test_ataraxos_regime.py`, `test_ataraxos_gradients.py`, and collector boundary
   tests. None verifies remote packet admission or disconnect recovery yet.
 
 ## Proposed contracts beyond the Macs
@@ -204,9 +199,8 @@ are retained byte-for-byte. Their scratch paths, hashes and `prepared` inventory
 status describe the earlier harness; the listed commands were not executed.
 The mini error is a retained textual observation, not a network receipt.
 
-`experiments/runners/distributed_benchmark.py` is a standard-library supervisor;
-`experiments/runners/distributed_workloads.py` contains optional repository-dependent workers.
-Each attempt gets a new directory, frozen command/source hashes, host metadata,
+The (since removed) standard-library supervisor ran optional repository-dependent
+workers. Each attempt gets a new directory, frozen command/source hashes, host metadata,
 stdout/stderr and result. Failed exits/timeouts remain visible. Its resource
 summary records child CPU seconds and OS-reported child max RSS, not a sampled
 aggregate memory peak, energy consumption or throttling estimate. No stored
@@ -478,79 +472,11 @@ different objective from the Ataraxos micro workload and must be labeled as such
 The retained mini attempts exercise these paths; their single-run coverage is not
 a general runtime or hardware certification.
 
-### Reproduction and stopping
+### Reproduction
 
-From this checkout, without installing project dependencies:
-
-```bash
-uv run --no-project --python 3.12 --no-python-downloads experiments/runners/distributed_benchmark.py \
-  --mode inventory --out .runs/etu108-inventory-new
-```
-
-After the priority experiment releases capacity and a matching environment is
-already provisioned, run one selected mode in a fresh directory:
-
-```bash
-uv run --no-project --python 3.12 --no-python-downloads experiments/runners/distributed_benchmark.py \
-  --mode inference --seconds 3 --timeout 110 --out .runs/etu108-inference-1
-```
-
-Replace `inference` with `simulator`, `train` or `complete` for the other modes.
-The supervisor invokes `uv run --no-sync` inside the existing project environment.
-Ctrl-C stops its own child process group and retains an interrupted result;
-the deadline does the same for timeout. Use a new output path for every attempt.
-An external hard kill of the supervisor itself is outside this cleanup promise.
-
-For a future authorized representative measurement, supply resolved TrainingRegime
-JSON with `--recipe` and a declared `--seed` (default 108). For example, after
-exporting the desired recipe to `.runs/representative-recipe.json`:
-
-```bash
-uv run --no-project --python 3.12 --no-python-downloads experiments/runners/distributed_benchmark.py \
-  --mode train --recipe .runs/representative-recipe.json --seed 10831 \
-  --timeout 240 --out .runs/etu108-representative-new
-```
-
-This is an unexecuted launch example, not an allocation. The exact representative
-mini recipe is retained in the compact evidence extract's
-`attempts[attempt="etu108-mini-representative-1"]["recipe.json"]`; it declares
-220 seconds overall and 100 per stage. It can be exported as JSON without
-importing its original ad hoc script. A new run binds current source/runtime
-identities; it cannot inherit the old measurement or source identity. Inference
-can use the same recipe and seed in another fresh attempt directory, but measures
-an untrained model and only the first stage's collection geometry. Remaining
-stages are provenance, not executed inference work.
-
-Only inference and train accept recipes. Admission uses the ordinary regime
-validator and requires current-self self-play stages, CPU float32, one worker
-and one thread; unsupported stages, belief input, EMA/frozen behavior, wrong
-worlds, malformed fields and budgets beyond the supervisor cap fail explicitly.
-PPO and Ataraxos move settings retain their existing validators. Simulator remains
-a fixed four-stream probe; complete retains calibration's own recipe and seed
-197. Neither silently consumes a supplied recipe or custom calibration seed.
-
-`input-recipe.json` preserves supplied bytes and their SHA-256 before the child
-launches. `workload/recipe.json` is the resolved recipe; `identity.json` binds its
-canonical regime digest, serialized recipe hash, training source bundle,
-Python/Torch/native runtime, world/setup/ABI, seed and requested memory by stage.
-The supervisor retains its source hashes, host RAM and actual deadline separately.
-Requested memory is **not enforced** by this harness. Raw/EMA checkpoint admission,
-TrainingRun and VerifyStore remain the training authorities.
-
-Train's `measurement.json` projects completed iterations, learner transitions,
-optimizer exposures and explicit empty-filter skips from TrainingRun; an iteration
-is not proof of a gradient update. Learning time includes target/filter overhead
-and may be positive with zero exposures. On executor exceptions, original store
-and run failure receipts plus supervisor logs remain authoritative; abrupt kill
-may leave no summary, which must not be treated as zero work. Per-stage resources
-and diagnostics remain in `training-result.json` on normal return.
-
-Remote mini execution succeeded in the retained receipts. Future placement/remote
-task execution must use `lf`; run the same
-harness at the pinned source on mini. Do not copy a Mac native extension blindly
-or infer the remote repository path. Do not launch another coding agent merely
-to obtain benchmark numbers. The local command above is the workload entry point,
-not a tested `lf` remote-execution recipe.
+The benchmark supervisor and workers were removed unexecuted beyond the attempts
+above; git history holds them with the commands this section used to list. A
+future measurement needs a new, separately authorized harness.
 
 ### Remaining measurement plan
 

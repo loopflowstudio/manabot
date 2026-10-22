@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 RESULT = Path("experiments/data/structural-semantic-katas-v1.json")
 
 
+@pytest.mark.experiment_data("experiments/data/structural-semantic-katas-v1.json")
 def test_checked_result_is_complete_and_selects_registered_branch() -> None:
     result = json.loads(RESULT.read_text(encoding="utf-8"))
 
@@ -25,20 +28,21 @@ def test_checked_result_is_complete_and_selects_registered_branch() -> None:
     }
 
 
+@pytest.mark.experiment_data("experiments/data/structural-semantic-katas-v1.json")
 def test_bag_symmetry_holds_but_structural_trainability_does_not() -> None:
     result = json.loads(RESULT.read_text(encoding="utf-8"))
     evidence = result["decision"]["evidence"]
     bag_runs = [run for run in result["runs"] if run["arm"] == "bag_v1"]
     structural_runs = [
-        run
-        for run in result["runs"]
-        if run["arm"] == "relational_semantic_encoder_v1"
+        run for run in result["runs"] if run["arm"] == "relational_semantic_encoder_v1"
     ]
 
     assert evidence["bag_symmetry"]
     assert not evidence["structural_trainability"]
     assert all(run["test"]["accuracy"] == 0.5 for run in bag_runs)
-    assert all(run["symmetry"]["paired_prediction_disagreements"] == 0 for run in bag_runs)
+    assert all(
+        run["symmetry"]["paired_prediction_disagreements"] == 0 for run in bag_runs
+    )
     assert all(
         run["test"]["by_family"]["order"]["accuracy"] == 1.0
         and run["test"]["by_family"]["hierarchy"]["accuracy"] == 1.0
@@ -47,6 +51,7 @@ def test_bag_symmetry_holds_but_structural_trainability_does_not() -> None:
     assert any(run["train"]["accuracy"] < 0.99 for run in structural_runs)
 
 
+@pytest.mark.experiment_data("experiments/data/structural-semantic-katas-v1.json")
 def test_result_preserves_scope_and_instrument_audits() -> None:
     result = json.loads(RESULT.read_text(encoding="utf-8"))
     audit = result["suite_audit"]

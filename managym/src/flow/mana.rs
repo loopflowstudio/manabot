@@ -5,12 +5,333 @@ use crate::{
     agent::action::AgentError,
     flow::game::Game,
     state::{
-        game_object::PlayerId,
+        ability::Effect,
+        card::ActivatedAbilityDefinition,
+        game_object::{PermanentId, PlayerId},
         mana::{Mana, ManaCost},
     },
 };
 
+type ManaChoices = Vec<(ManaCost, Mana)>;
+type PaymentSearchState = (Vec<usize>, [u8; 6], [u8; 6]);
+
+struct ManaAbilityCostPlan {
+    sources: Vec<PermanentId>,
+    remainder: Mana,
+}
+
 impl Game {
+    /// Printed abilities followed by currently granted abilities, in source order.
+    pub(crate) fn activated_abilities_for(
+        &self,
+        permanent: PermanentId,
+    ) -> Vec<ActivatedAbilityDefinition> {
+        let Some(source) = self.state.permanents[permanent].as_ref() else {
+            return Vec::new();
+        };
+        let mut abilities = self.state.cards[source.card].activated_abilities.clone();
+        for grant in self.battlefield_permanents(source.controller) {
+            let grant = self.state.permanents[grant].as_ref().unwrap();
+            if self.state.cards[grant.card]
+                .mana_grant
+                .iter()
+                .any(|predicate| self.permanent_matches_predicate(permanent, predicate))
+            {
+                abilities.push(ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effect: Effect::any_color_mana(),
+                    ..Default::default()
+                });
+            }
+        }
+        abilities
+    }
+
+    pub(crate) fn mana_ability_actions(
+        &self,
+        player: PlayerId,
+        excluded: Option<PermanentId>,
+    ) -> Vec<crate::agent::action::Action> {
+        let mut actions = Vec::new();
+        for permanent in self.battlefield_permanents(player) {
+            if Some(permanent) == excluded || Some(permanent) == self.pending_mana_source() {
+                continue;
+            }
+            let source = self.state.permanents[permanent].as_ref().unwrap();
+            let card = &self.state.cards[source.card];
+            for (ability_index, ability) in
+                self.activated_abilities_for(permanent).iter().enumerate()
+            {
+                let Some(choices) = ability.mana_choices() else {
+                    continue;
+                };
+                if (!ability.tap_source || source.can_tap(card))
+                    && self
+                        .available_mana_without(player, Some(permanent))
+                        .can_pay(&ability.mana_cost)
+                {
+                    // A committed cost must retain at least one legal completion
+                    // after this source is consumed, before publishing its color choice.
+                    if self.pending_choice.is_some() || self.state.suspended_decision.is_some() {
+                        let mut probe = self.clone();
+                        if probe
+                            .pay_mana_ability_cost(player, permanent, ability)
+                            .is_err()
+                        {
+                            continue;
+                        }
+                        if !choices
+                            .iter()
+                            .any(|mana| probe.mana_choice_completes_payment(player, mana))
+                        {
+                            continue;
+                        }
+                    }
+                    actions.push(crate::agent::action::Action::ActivateAbility {
+                        player,
+                        permanent,
+                        ability_index,
+                    });
+                }
+            }
+        }
+        actions
+    }
+
+    pub(crate) fn can_pay_with_mana_abilities(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        excluded: Option<PermanentId>,
+    ) -> bool {
+        let pool = self.pooled_mana(player);
+        if pool.can_pay(cost) {
+            return true;
+        }
+        let mut groups: Vec<(ManaChoices, usize)> = Vec::new();
+        for permanent in self.battlefield_permanents(player) {
+            if Some(permanent) == excluded || Some(permanent) == self.pending_mana_source() {
+                continue;
+            }
+            let source = self.state.permanents[permanent].as_ref().unwrap();
+            let card = &self.state.cards[source.card];
+            let mut choices = Vec::new();
+            if source.can_tap(card) && !card.mana_abilities.is_empty() {
+                choices.push((ManaCost::default(), self.fixed_source_mana(permanent)));
+            }
+            for ability in self.activated_abilities_for(permanent) {
+                if ability.tap_source && !source.can_tap(card) {
+                    continue;
+                }
+                if let Some(outputs) = ability.mana_choices() {
+                    choices.extend(outputs.into_iter().map(|mut output| {
+                        if ability.tap_source {
+                            output.add(&self.tap_mana_bonus(permanent, player));
+                        }
+                        (ability.mana_cost.clone(), output)
+                    }));
+                }
+            }
+            if choices.is_empty() {
+                continue;
+            }
+            if let Some((_, count)) = groups.iter_mut().find(|(existing, _)| *existing == choices) {
+                *count += 1;
+            } else {
+                groups.push((choices, 1));
+            }
+        }
+        let counts = groups.iter().map(|(_, count)| *count).collect();
+        can_cover_cost(&groups, counts, pool, cost, &mut Default::default())
+    }
+
+    /// A mandatory payment cannot publish a color that makes its announced
+    /// costs impossible. The color choice itself has not committed any mana.
+    pub(crate) fn mana_choice_completes_payment(&self, player: PlayerId, mana: &Mana) -> bool {
+        let mut probe = self.clone();
+        probe.state.players[player.0].mana_pool.add(mana);
+        match &self.pending_choice {
+            Some(crate::flow::game::PendingChoice::ManaPayment {
+                payment,
+                sacrifice,
+                alternative,
+                ..
+            }) => probe.can_pay_with_mana_abilities(
+                player,
+                &self.payment_mana_cost(player, payment, alternative.as_ref()),
+                *sacrifice,
+            ),
+            Some(crate::flow::game::PendingChoice::Waterbend {
+                permanent,
+                ability_index,
+                remaining_generic,
+                ..
+            }) => {
+                let source = self.state.permanents[*permanent].as_ref().unwrap();
+                let cost = self.state.cards[source.card].activated_abilities[*ability_index]
+                    .mana_cost
+                    .with_generic(*remaining_generic);
+                probe.can_pay_with_waterbend(player, &cost)
+            }
+            _ => match self
+                .state
+                .suspended_decision
+                .as_ref()
+                .and_then(|s| s.decision.payment())
+            {
+                // Only a waterbend contribution commits an optional payment.
+                Some(payment) if !payment.can_decline() => {
+                    probe.can_pay_with_waterbend(player, &payment.remaining.mana_cost())
+                }
+                _ => true,
+            },
+        }
+    }
+
+    pub(crate) fn activate_mana_ability(
+        &mut self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -> Result<(), AgentError> {
+        if !self.mana_ability_actions(player, None).contains(
+            &crate::agent::action::Action::ActivateAbility {
+                player,
+                permanent,
+                ability_index,
+            },
+        ) {
+            return Err(AgentError("illegal mana activation".into()));
+        }
+        let ability = self.activated_abilities_for(permanent)[ability_index].clone();
+        let choices = ability.mana_choices().unwrap();
+        self.pay_mana_ability_cost(player, permanent, &ability)?;
+        let old = self.state.suspended_decision.take();
+        self.suspend_rule_decision(crate::flow::decision::Decision::ManaChoice {
+            player,
+            choices,
+            resume: old
+                .as_ref()
+                .map(|suspended| Box::new(suspended.decision.clone())),
+        });
+        if let Some(old) = old {
+            self.state.suspended_decision.as_mut().unwrap().frame = old.frame;
+        }
+        Ok(())
+    }
+
+    /// Share the upfront cost between completion probes and real activations.
+    fn pay_mana_ability_cost(
+        &mut self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Result<(), AgentError> {
+        // A filter's generic activation cost must not consume the only color
+        // needed by the announced spell. Use the same concrete payment plan in
+        // offer probes and execution, rather than a greedy battlefield prefix.
+        let plan = if self.pending_choice.is_some() || self.state.suspended_decision.is_some() {
+            Some(
+                self.mana_ability_cost_plan(player, permanent, ability)
+                    .ok_or_else(|| {
+                        AgentError("mana activation would prevent completing payment".into())
+                    })?,
+            )
+        } else {
+            None
+        };
+        if ability.tap_source {
+            self.tap_permanent(permanent, true);
+        }
+        if let Some(plan) = plan {
+            for source in plan.sources {
+                self.tap_fixed_mana_source(player, source);
+            }
+            self.spend_mana_to_remainder(player, plan.remainder);
+        } else {
+            self.produce_mana(player, &ability.mana_cost)?;
+            self.spend_mana(player, &ability.mana_cost)?;
+        }
+        if ability.sacrifice_source {
+            self.sacrifice_permanent(permanent);
+        }
+        Ok(())
+    }
+
+    /// Find a realizable upfront payment that leaves at least one legal output.
+    /// Only fixed sources auto-tap; chosen-color abilities remain agent decisions.
+    fn mana_ability_cost_plan(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Option<ManaAbilityCostPlan> {
+        let mut probe = self.clone();
+        if ability.tap_source {
+            probe.tap_permanent(permanent, true);
+        }
+        let sources = probe
+            .battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| {
+                if *id == permanent || Some(*id) == probe.pending_mana_source() {
+                    return false;
+                }
+                let source = probe.state.permanents[*id].as_ref().unwrap();
+                let card = &probe.state.cards[source.card];
+                source.can_tap(card) && !card.mana_abilities.is_empty()
+            })
+            .collect::<Vec<_>>();
+        let search = ManaAbilityPaymentSearch {
+            player,
+            permanent,
+            ability,
+            choices: ability.mana_choices().unwrap(),
+            sources,
+        };
+        // Prefer the fewest tapped sources; pool payment alternatives preserve
+        // colors needed by the announced cost instead of tapping extra lands.
+        let max_sources = if ability.mana_cost.mana_value == 0 {
+            // Tapping fixed sources cannot change affordability of a free
+            // activation; completion search already sees their full outputs.
+            0
+        } else {
+            search.sources.len()
+        };
+        for count in 0..=max_sources {
+            if let Some(plan) = search.find(&probe, 0, count, &mut Vec::new()) {
+                return Some(plan);
+            }
+        }
+        None
+    }
+
+    fn tap_fixed_mana_source(&mut self, player: PlayerId, permanent: PermanentId) {
+        let source = self.state.permanents[permanent].as_ref().unwrap();
+        let produced = self.state.cards[source.card]
+            .mana_abilities
+            .iter()
+            .map(|ability| ability.mana.clone())
+            .collect::<Vec<_>>();
+        self.tap_permanent(permanent, true);
+        self.journal_player(player);
+        for mana in produced {
+            self.state.players[player.0].mana_pool.add(&mana);
+        }
+    }
+
+    /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
+    /// in the payment search until the player selects a color.
+    fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
+        let source = self.state.permanents[permanent].as_ref().unwrap();
+        let card = &self.state.cards[source.card];
+        let mut output = source.producible_mana(card);
+        if source.can_tap(card) && !card.mana_abilities.is_empty() {
+            output.add(&self.tap_mana_bonus(permanent, source.controller));
+        }
+        output
+    }
+
     pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
         if let Some(cached) = &self.state.mana_cache[player.0] {
             return cached.clone();
@@ -29,7 +350,17 @@ impl Game {
     /// Mana already in `player`'s pools (regular + until-end-of-combat)
     /// plus everything their untapped permanents could produce.
     pub(crate) fn available_mana(&self, player: PlayerId) -> Mana {
-        let mut total = self.producible_mana(player);
+        self.available_mana_without(player, None)
+    }
+
+    fn available_mana_without(&self, player: PlayerId, excluded: Option<PermanentId>) -> Mana {
+        let mut total = Mana::default();
+        for permanent in self.battlefield_permanents(player) {
+            if Some(permanent) == excluded || Some(permanent) == self.pending_mana_source() {
+                continue;
+            }
+            total.add(&self.fixed_source_mana(permanent));
+        }
         total.add(&self.state.players[player.0].mana_pool);
         total.add(&self.state.players[player.0].combat_mana_pool);
         total
@@ -47,12 +378,24 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        if !self.available_mana(player).can_pay(cost) {
+        self.produce_mana_without(player, cost, None)
+    }
+
+    pub(crate) fn produce_mana_without(
+        &mut self,
+        player: PlayerId,
+        cost: &ManaCost,
+        excluded: Option<PermanentId>,
+    ) -> Result<(), AgentError> {
+        if !self.available_mana_without(player, excluded).can_pay(cost) {
             return Err(AgentError("not enough producible mana".to_string()));
         }
 
         let permanents = self.battlefield_permanents(player);
         for permanent_id in permanents {
+            if Some(permanent_id) == excluded {
+                continue;
+            }
             if self.pooled_mana(player).can_pay(cost) {
                 break;
             }
@@ -65,19 +408,9 @@ impl Game {
             if permanent.tapped || card.mana_abilities.is_empty() || !permanent.can_tap(card) {
                 continue;
             }
-            let produced: Vec<_> = card
-                .mana_abilities
-                .iter()
-                .map(|ability| ability.mana.clone())
-                .collect();
-
             // CR 106.3 — Activate mana abilities to add mana to the mana pool.
             // Tapping for mana emits a PermanentTapped { for_mana: true } event.
-            self.tap_permanent(permanent_id, true);
-            self.journal_player(player);
-            for mana in &produced {
-                self.state.players[player.0].mana_pool.add(mana);
-            }
+            self.tap_fixed_mana_source(player, permanent_id);
         }
 
         if !self.pooled_mana(player).can_pay(cost) {
@@ -87,8 +420,8 @@ impl Game {
         Ok(())
     }
 
-    /// Pay `cost` from the player's pools. Until-end-of-combat mana is
-    /// spent first (it expires sooner).
+    /// Pay `cost` from eligible pools. Within each color, restricted mana is
+    /// spent first; combat mana is spent first within each restriction class.
     pub(crate) fn spend_mana(
         &mut self,
         player: PlayerId,
@@ -101,29 +434,37 @@ impl Game {
         let mut remaining = combined;
         remaining.pay(cost);
 
-        // Rebuild the two pools from what's left: spent mana comes out of
-        // the combat pool first, slot by slot.
+        self.spend_mana_to_remainder(player, remaining);
+        Ok(())
+    }
+
+    /// Commit an already validated pool payment. Feasibility probes and real
+    /// activations retain the same remainder, including restriction classes.
+    fn spend_mana_to_remainder(&mut self, player: PlayerId, remaining: Mana) {
+        // Rebuild the pools by restriction class and color, consuming the
+        // expiring combat pool before the regular pool within each class.
         self.journal_player(player);
         let player_state = &mut self.state.players[player.0];
         for slot in 0..remaining.mana.len() {
-            let before =
-                player_state.mana_pool.mana[slot] + player_state.combat_mana_pool.mana[slot];
-            let spent = before - remaining.mana[slot];
-            let from_combat = spent.min(player_state.combat_mana_pool.mana[slot]);
-            player_state.combat_mana_pool.mana[slot] -= from_combat;
-            player_state.mana_pool.mana[slot] -= spent - from_combat;
+            let restricted_spent = player_state.mana_pool.lesson[slot]
+                + player_state.combat_mana_pool.lesson[slot]
+                - remaining.lesson[slot];
+            let combat = restricted_spent.min(player_state.combat_mana_pool.lesson[slot]);
+            player_state.combat_mana_pool.lesson[slot] -= combat;
+            player_state.mana_pool.lesson[slot] -= restricted_spent - combat;
+            let spent = player_state.mana_pool.mana[slot]
+                + player_state.combat_mana_pool.mana[slot]
+                - remaining.mana[slot];
+            let combat = spent.min(player_state.combat_mana_pool.mana[slot]);
+            player_state.combat_mana_pool.mana[slot] -= combat;
+            player_state.mana_pool.mana[slot] -= spent - combat;
         }
-        Ok(())
     }
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                continue;
-            };
-            let card = &self.state.cards[permanent.card];
-            total.add(&permanent.producible_mana(card));
+            total.add(&self.fixed_source_mana(permanent_id));
         }
         total
     }
@@ -145,4 +486,94 @@ impl Game {
             self.state.players[player.0].combat_mana_pool.clear();
         }
     }
+}
+
+struct ManaAbilityPaymentSearch<'a> {
+    player: PlayerId,
+    permanent: PermanentId,
+    ability: &'a ActivatedAbilityDefinition,
+    choices: Vec<Mana>,
+    sources: Vec<PermanentId>,
+}
+
+impl ManaAbilityPaymentSearch<'_> {
+    fn find(
+        &self,
+        game: &Game,
+        start: usize,
+        remaining: usize,
+        selected: &mut Vec<PermanentId>,
+    ) -> Option<ManaAbilityCostPlan> {
+        if remaining == 0 {
+            for remainder in game
+                .pooled_mana(self.player)
+                .payment_options(&self.ability.mana_cost)
+            {
+                let mut paid = game.clone();
+                paid.spend_mana_to_remainder(self.player, remainder.clone());
+                if self.ability.sacrifice_source {
+                    paid.sacrifice_permanent(self.permanent);
+                }
+                if self
+                    .choices
+                    .iter()
+                    .any(|mana| paid.mana_choice_completes_payment(self.player, mana))
+                {
+                    return Some(ManaAbilityCostPlan {
+                        sources: selected.clone(),
+                        remainder,
+                    });
+                }
+            }
+            return None;
+        }
+        for index in start..self.sources.len() {
+            if self.sources.len() - index < remaining {
+                break;
+            }
+            let source = self.sources[index];
+            let mut next = game.clone();
+            next.tap_fixed_mana_source(self.player, source);
+            selected.push(source);
+            let plan = self.find(&next, index + 1, remaining - 1, selected);
+            selected.pop();
+            if plan.is_some() {
+                return plan;
+            }
+        }
+        None
+    }
+}
+
+/// Search payment sequences, grouping identical sources to avoid land permutations.
+/// Activation costs are paid before outputs exist; a filter cannot seed itself.
+fn can_cover_cost(
+    groups: &[(ManaChoices, usize)],
+    counts: Vec<usize>,
+    pool: Mana,
+    cost: &ManaCost,
+    visited: &mut std::collections::BTreeSet<PaymentSearchState>,
+) -> bool {
+    if pool.can_pay(cost) {
+        return true;
+    }
+    if !visited.insert((counts.clone(), pool.mana, pool.lesson)) {
+        return false;
+    }
+    for (index, (choices, _)) in groups.iter().enumerate() {
+        if counts[index] == 0 {
+            continue;
+        }
+        for (activation, output) in choices {
+            for mut next in pool.payment_options(activation) {
+                next.add(output);
+                let mut remaining = counts.clone();
+                remaining[index] -= 1;
+                if can_cover_cost(groups, remaining, next, cost, visited) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }

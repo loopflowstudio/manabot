@@ -6,14 +6,14 @@ counts after calibration under the inclusive campaign ceiling in
 [the learning-speed protocol](training-regimes.md#resumed-scientific-execution-2026-10-04); root owns the single launch.
 
 ```bash
-uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile smoke --out .runs/ablations
-uv run --extra notebook experiments/runners/run_training_regimes.py --report-only .runs/ablations
+uv run --extra notebook python -m experiments.ataraxos_ablation --profile smoke --out .runs/ablations
+uv run --extra notebook python -m experiments.ataraxos_ablation --report-only .runs/ablations
 ```
 
 The smoke runs all five core arms for two checkpoints and two updates per
 checkpoint, on one initialization seed. Each checkpoint completes a four-leg
 block against the control and fixed random anchor. It is deliberately too small
-to accept or reject a treatment. Regimes in `experiments/regimes/` are bounded
+to accept or reject a treatment. Regimes in `experiments/ataraxos_ablation.py` are bounded
 pilot recipes; their counts do not encode the draft hour-long screen below.
 Named add-ons have separate runnable recipes and bounded optimizer fixtures;
 they are not secretly added to the core five-arm run list.

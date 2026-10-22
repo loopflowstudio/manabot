@@ -70,9 +70,11 @@ represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
 
-## Testing-house control v1
+## Shared-table control v1
 
-`academy/testing_house_protocol.py` owns the Game control envelope around the
+The shared table is where a pilot and a watcher share one game. Its wire schema
+keeps the frozen identifier `testing-house-v1` (`testing-house-v1.schema.json`).
+`academy/shared_table_protocol.py` owns the Game control envelope around the
 unchanged match protocol. It closes the one-pilot/one-watcher request
 vocabulary, server-derived roles and capabilities, participant leases,
 personal-until-shared GAM-6 scenario references, and participant-local Study
@@ -82,7 +84,7 @@ remain bound server-side to the same player-0 rules projection.
 Regenerate the checked schema after changing the Pydantic authority:
 
 ```bash
-uv run --python 3.12 --locked python scripts/export_testing_house_protocol.py
+uv run --python 3.12 --locked python scripts/export_shared_table_protocol.py
 ```
 
 `fixtures/testing-house-control-v1.json` contains pilot/watcher access and one
@@ -123,7 +125,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_canonical_replay -- protocol/canonical-replay-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test canonical_replay_tests
 uv run --extra dev pytest -q tests/gui/test_replay_index.py
-npm --prefix frontend test -- --run src/lib/replay-index.test.ts
+npm --prefix academy/ui test -- --run src/lib/replay-index.test.ts
 ```
 
 ## Study artifact v1
@@ -151,7 +153,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_study_protocol -- protocol/study-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
 uv run pytest -q tests/academy/test_study_protocol.py
-npm --prefix frontend test -- --run src/lib/study-protocol.test.ts
+npm --prefix academy/ui test -- --run src/lib/study-protocol.test.ts
 ```
 
 This certifies portable restoration and evidence labelling only. V1 contains

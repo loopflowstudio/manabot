@@ -27,7 +27,8 @@ def _source() -> dict:
 def _named_product_decks() -> dict[str, dict[str, int]]:
     manifest_path = (
         ROOT
-        / "frontend"
+        / "academy"
+        / "ui"
         / "src"
         / "lib"
         / "packs"
@@ -141,7 +142,7 @@ def test_instructions_dispatch_only_on_typed_opcodes_and_resolved_references():
     assert not any(json.dumps(name) in compiler_source for name in selected_names)
 
 
-def test_opcode_numbers_are_an_explicit_compatibility_surface():
+def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
     assert {opcode.name: int(opcode) for opcode in Opcode} == {
         "ADD_MANA": 1,
         "DRAW_CARDS": 2,
@@ -166,6 +167,48 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface():
         "EXILE_UNTIL_SOURCE_LEAVES": 21,
         "DEAL_POWER_DAMAGE": 22,
         "SET_POWER_FROM_COUNT": 23,
+        "SEARCH_BASIC_LAND": 24,
+        "OPTIONAL_DISCARD_DRAW": 25,
+        "DISCARD_TARGET_PLAYER": 26,
+        "DESTROY": 27,
+        "EXILE": 28,
+        "BUFF_TARGET_VALUE": 29,
+        "RETURN_TO_HAND_DRAW_IF_CONTROLLED": 30,
+        "MODIFY_TRIGGERING_PERMANENT": 31,
+        "DEAL_DAMAGE_VALUE": 32,
+        "PUT_COUNTERS_VALUE": 33,
+        "CREATE_TOKENS_VALUE": 34,
+        "EXILE_WITH_CONTROLLER_TOKEN": 35,
+        "DAMAGE_OPPONENT_CREATURES": 36,
+        "MILL_CARDS": 37,
+        "MILL_AND_SELECT": 38,
+        "DRAIN_LIFE_VALUE": 39,
+        "COUNTER_SPELL": 40,
+        "CANT_BE_BLOCKED_TARGET": 41,
+        "RETURN_GRAVEYARD_TARGET": 42,
+        "MODAL": 43,
+        "TARGET_CLAUSE": 44,
+        "PREVENT_LIFE_GAIN": 45,
+        "COMBAT_REQUIRES_OTHER": 46,
+        "BLOCKING_RESTRICTION": 47,
+        "POWER_FROM_LAND_COUNTERS": 48,
+        "SPELL_COST_REDUCTION": 49,
+        "STATIC_PT": 50,
+        "SEARCH_BASIC_LANDS": 51,
+        "SACRIFICE": 52,
+        "DEAL_DAMAGE_TO_CONTROLLER": 53,
+        "DRAIN_LIFE": 54,
+        "UNBLOCKABLE_IF": 55,
+        "ADD_LESSON_MANA": 56,
+        "GRANT_FLASHBACK": 57,
+        "GRANT_MANA": 58,
+        "CREATE_NONLEGENDARY_COPY": 59,
+        "MODIFY_CONTROLLED": 60,
+        "WATERBEND_OR_DISCARD": 61,
+        "DISCARD": 62,
+        "EXILE_IF_DIES": 63,
+        "ADD_SUBTYPE": 64,
+        "OPTIONAL_PAYMENT": 65,
     }
 
 

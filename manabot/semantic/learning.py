@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -116,9 +117,9 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version != 2:
+        if version not in {2, 3, 4, 5, 6, 7}:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 2, got {version}"
+                f"learning_schema.schema_version: expected 2, 3, 4, 5, 6 or 7, got {version}"
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -173,7 +174,13 @@ class LearningSchema:
             )
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
-        expected_opcodes = {opcode.name.lower(): int(opcode) for opcode in Opcode}
+        # Frozen schemas admit only the opcode prefix available at publication.
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65}[version]
+        expected_opcodes = {
+            opcode.name.lower(): int(opcode)
+            for opcode in Opcode
+            if int(opcode) <= max_opcode
+        }
         if opcodes != expected_opcodes:
             raise SemanticProjectionError(
                 "learning_schema.opcodes disagrees with compiler Opcode"
@@ -228,7 +235,9 @@ def _walk_instructions(instructions: Sequence[Any]) -> Iterable[Mapping[str, Any
     for raw_instruction in instructions:
         instruction = _mapping(raw_instruction, "instruction")
         yield instruction
-        for field in ("then", "otherwise", "body"):
+        for mode in instruction.get("modes", []):
+            yield from _walk_instructions(_sequence(mode, "instruction.modes[]"))
+        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
             nested = instruction.get(field)
             if nested is not None:
                 yield from _walk_instructions(_sequence(nested, f"instruction.{field}"))
@@ -427,7 +436,15 @@ class _TokenBuilder:
     def mana(self, value: str, context: str) -> None:
         counts: dict[str, int] = {name: 0 for name in self._MANA_FIELDS}
         digits = ""
-        for char in value:
+        hybrids = re.findall(r"\{([WUBRG])/([WUBRG])\}", value)
+        if hybrids and self.schema.raw["schema_version"] < 3:
+            raise SemanticProjectionError(
+                f"{context}: hybrid mana requires the current schema"
+            )
+        ordinary = (
+            re.sub(r"\{[WUBRG]/[WUBRG]\}", "", value).replace("{", "").replace("}", "")
+        )
+        for char in ordinary:
             if char.isdigit():
                 digits += char
                 continue
@@ -447,6 +464,11 @@ class _TokenBuilder:
             if count:
                 self.field(self._MANA_FIELDS[component])
                 self.emit("integer", count)
+        for first, second in hybrids:
+            self.structure("hybrid_begin")
+            self.enum("color", first)
+            self.enum("color", second)
+            self.structure("hybrid_end")
         self.structure("mana_end")
 
     def _domain_for_string(self, field: str, value: str, context: str) -> str:
@@ -454,6 +476,8 @@ class _TokenBuilder:
             return "card_type"
         if field == "values" and value in self.schema.enums["card_type"]:
             return "card_type"
+        if field == "values" and value in self.schema.enums["subtype"]:
+            return "subtype"
         if field == "value":
             if value in self.schema.enums["card_type"]:
                 return "card_type"
@@ -461,6 +485,9 @@ class _TokenBuilder:
                 return "subtype"
         fixed = {
             "colors": "color",
+            "subtype": "subtype",
+            "direction": "direction",
+            "target_binding": "target_binding",
             "keywords": "keyword",
             "subtypes": "subtype",
             "supertypes": "supertype",
@@ -476,7 +503,7 @@ class _TokenBuilder:
         if field in fixed:
             return fixed[field]
         if field == "kind":
-            if context in {"selector", "predicate", "condition", "subject"}:
+            if context in {"selector", "predicate", "condition", "subject", "quantity"}:
                 return context
         raise SemanticProjectionError(
             f"{context}.{field}: no typed categorical domain for {value!r}"
@@ -500,7 +527,7 @@ class _TokenBuilder:
             self.emit("integer", value)
             return
         if isinstance(value, str):
-            if field in {"mana", "mana_cost", "kicker", "cost"}:
+            if field in {"mana", "mana_cost", "kicker", "cost", "or_mana"}:
                 self.mana(value, f"{context}.{field}")
             elif field in {"role", "sources", "target"}:
                 self.role(value, roles)
@@ -509,6 +536,9 @@ class _TokenBuilder:
             return
         if isinstance(value, Mapping):
             nested_context = {
+                "amount": "quantity",
+                "count": "quantity",
+                "power": "quantity",
                 "affinity": "predicate",
                 "condition": "condition",
                 "if": "condition",
@@ -534,7 +564,16 @@ class _TokenBuilder:
         context: str,
         roles: Mapping[str, int],
     ) -> None:
-        if field in {"then", "otherwise", "body"}:
+        if field == "modes":
+            self.structure("list_begin")
+            for mode in values:
+                self.structure("list_begin")
+                for instruction in _sequence(mode, "mode"):
+                    self.instruction(_mapping(instruction, "mode instruction"), roles)
+                self.structure("list_end")
+            self.structure("list_end")
+            return
+        if field in {"then", "otherwise", "body", "if_paid", "if_declined"}:
             self.structure(f"{field}_begin")
             for instruction in values:
                 self.instruction(_mapping(instruction, f"{context}.{field}[]"), roles)
@@ -866,11 +905,43 @@ class BoundSemanticPack:
         cls,
         manifest: Mapping[str, Any],
         *,
-        schema_path: str | Path = DEFAULT_SCHEMA_PATH,
-        ir_path: str | Path = DEFAULT_IR_PATH,
+        schema_path: str | Path | None = None,
+        ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
-        schema = LearningSchema.load(schema_path)
-        ir = SemanticIr.load(schema, ir_path)
+        provenance = manifest.get("compiled_semantics")
+        default_schema, default_ir = DEFAULT_SCHEMA_PATH, DEFAULT_IR_PATH
+        if isinstance(provenance, Mapping):
+            match provenance.get("pack_key"):
+                case "elemental-combat-v1":
+                    default_schema = ROOT / "content/semantic/w7/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/elemental.ir.json"
+                    )
+                case "elemental-world-v2":
+                    default_schema = ROOT / "content/semantic/w11/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/w11/generated/elemental_world.ir.json"
+                    )
+                case "elemental-world-v1":
+                    default_schema = ROOT / "content/semantic/w10/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/elemental_world.ir.json"
+                    )
+                case "elemental-temur-v1":
+                    default_schema = ROOT / "content/semantic/w9/learning_schema.json"
+                    default_ir = ROOT / "content/semantic/v1/generated/temur.ir.json"
+                case "elemental-sacrifice-v1":
+                    default_schema = ROOT / "content/semantic/w8/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/sacrifice.ir.json"
+                    )
+        schema = LearningSchema.load(schema_path or default_schema)
+        ir = SemanticIr.load(schema, ir_path or default_ir)
+        if default_ir != DEFAULT_IR_PATH and (
+            provenance.get("ir_hash") != ir.ir_hash
+            or provenance.get("source_hash") != ir.raw["source_hash"]
+        ):
+            raise ContentPackBindingError("Compiled IR differs from the live pack")
         manifest = _mapping(manifest, "content_pack_manifest")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"
@@ -959,8 +1030,8 @@ class BoundSemanticPack:
         cls,
         env: Any,
         *,
-        schema_path: str | Path = DEFAULT_SCHEMA_PATH,
-        ir_path: str | Path = DEFAULT_IR_PATH,
+        schema_path: str | Path | None = None,
+        ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
         try:
             manifest = env.content_pack_manifest()

@@ -14,12 +14,14 @@ target/
 .uv-cache/
 academy/traces/*.json
 academy/traces/*.sqlite*
-frontend/node_modules/
-frontend/test-results/
-frontend/playwright-report/
-frontend/.svelte-kit/
-frontend/build/
-frontend/.vite/
+academy/ui/node_modules/
+academy/ui/test-results/
+academy/ui/playwright-report/
+academy/ui/.svelte-kit/
+academy/ui/build/
+academy/ui/.vite/
+academy/ui/src/lib/card-art/*.jpg
+academy/ui/src/lib/card-art/credits.json
 .runs/
 
 # claude-code session worktrees (local harness artifacts)
@@ -30,3 +32,7 @@ scratch/*.json
 
 # Generated Loopflow context and runtime state stay local.
 .lf/tmp/
+
+# Experiment data lives in S3, recorded by experiments/data.manifest.json.
+# Fetch it with `uv run --extra artifacts python -m manabot.data fetch`.
+experiments/data/

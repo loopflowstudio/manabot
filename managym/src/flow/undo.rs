@@ -151,10 +151,10 @@ enum UndoEntry {
         from: Option<(ZoneType, usize)>,
         card_zones_len: usize,
     },
-    Permanent(PermanentId, Option<crate::state::permanent::Permanent>),
+    Permanent(PermanentId, Box<Option<crate::state::permanent::Permanent>>),
     CardToPermanent(CardId, Option<PermanentId>),
     Incarnation(CardId, Incarnation),
-    ObjectLki(ObjectRef, Option<ObjectLki>),
+    ObjectLki(ObjectRef, Option<Box<ObjectLki>>),
     /// Bulk zone rewrites (reshuffle, reorder, determinize) are rare, so they
     /// are boxed: inline they would be 360 bytes and, as the largest variant,
     /// would set that size for every entry in the journal.
@@ -187,6 +187,8 @@ impl UndoEntry {
     fn owned_bytes(&self) -> usize {
         match self {
             Self::Zones(zones) => zones.allocated_bytes(),
+            Self::Permanent(_, _) => size_of::<Option<crate::state::permanent::Permanent>>(),
+            Self::ObjectLki(_, old) => old.as_ref().map_or(0, |_| size_of::<ObjectLki>()),
             Self::Turn(turn) => turn
                 .ability_resolutions_this_turn
                 .len()
@@ -235,10 +237,8 @@ impl UndoEntry {
             Self::Player(_, _)
             | Self::KnownHand(..)
             | Self::ZoneMove { .. }
-            | Self::Permanent(_, _)
             | Self::CardToPermanent(_, _)
             | Self::Incarnation(_, _)
-            | Self::ObjectLki(_, _)
             | Self::Priority(_)
             | Self::ManaCache(_, _)
             | Self::EventLength(_, _)
@@ -271,11 +271,11 @@ impl UndoEntry {
                 .state
                 .zones
                 .undo_move(card, owner, from, card_zones_len),
-            Self::Permanent(permanent, old) => game.state.permanents[permanent] = old,
+            Self::Permanent(permanent, old) => game.state.permanents[permanent] = *old,
             Self::CardToPermanent(card, old) => game.state.card_to_permanent[card] = old,
             Self::Incarnation(card, old) => game.state.object_incarnations[card] = old,
             Self::ObjectLki(object, Some(old)) => {
-                game.state.object_lki.insert(object, old);
+                game.state.object_lki.insert(object, *old);
             }
             Self::ObjectLki(object, None) => {
                 game.state.object_lki.remove(&object);
@@ -555,7 +555,7 @@ impl Game {
     pub(crate) fn journal_permanent(&mut self, permanent: PermanentId) {
         self.record_undo(UndoEntry::Permanent(
             permanent,
-            self.state.permanents[permanent].clone(),
+            Box::new(self.state.permanents[permanent].clone()),
         ));
     }
 
@@ -575,7 +575,7 @@ impl Game {
     pub(crate) fn journal_object_lki(&mut self, object: ObjectRef) {
         self.record_undo(UndoEntry::ObjectLki(
             object,
-            self.state.object_lki.get(&object).copied(),
+            self.state.object_lki.get(&object).copied().map(Box::new),
         ));
     }
 
@@ -737,10 +737,8 @@ mod tests {
     /// player record paid for a whole zone snapshot. Keep the bulk payloads
     /// behind a box.
     ///
-    /// 72 bytes is the floor worth reaching: what remains are `Permanent` and
-    /// `ObjectLki`, the two hottest entries. Boxing those would shrink the
-    /// entry but add a heap allocation to every permanent mutation, trading
-    /// the size win for a larger time cost.
+    /// Keep the bound when permanent snapshots gain fields: their boxed payload
+    /// must not widen every unrelated journal entry.
     #[test]
     fn an_undo_entry_stays_compact() {
         assert!(
@@ -748,6 +746,9 @@ mod tests {
             "UndoEntry grew to {} bytes; box the variant that widened it",
             size_of::<UndoEntry>()
         );
-        assert!(size_of::<PlayerVitals>() <= 24);
+        // Two pools each retain six ordinary and six Lesson-restricted colors,
+        // alongside life and flags. These scalars remain allocation-free and
+        // fit within the unchanged UndoEntry budget above.
+        assert!(size_of::<PlayerVitals>() <= 32);
     }
 }

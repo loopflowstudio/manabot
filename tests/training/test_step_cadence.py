@@ -45,7 +45,8 @@ def test_step_interval_is_a_positive_integer(interval: object) -> None:
 
 @pytest.mark.parametrize("cadence", [2, (2, 4)])
 def test_real_iterations_export_exact_milestones_and_one_endpoint(
-    tmp_path: Path, cadence: int | tuple[int, ...],
+    tmp_path: Path,
+    cadence: int | tuple[int, ...],
 ) -> None:
     recipe = _recipe()
     stage = recipe.stages[0]

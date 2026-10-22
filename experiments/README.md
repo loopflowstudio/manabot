@@ -1,9 +1,51 @@
 # experiments/
 
-One experiment = one report (`exp-NN-<name>.md`). Raw data in `data/`.
+One experiment = one report (`<name>.md`). Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
-**Runners:** the exp-specific driver scripts live in [runners/](runners/) —
-`manabot/` keeps only reusable instruments.
+
+Each experiment people run today is one module beside its report: its recipes,
+built from [`manabot.training.builders`](../manabot/training/builders.py), and
+anything only it needs to run and report. `manabot/` keeps the reusable
+instruments.
+
+| module | recipes (`--regime-name`) | runs and reports |
+| --- | --- | --- |
+| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / `manabot deploy` |
+| [gpu_training_profile](gpu_training_profile.py) | `gpu_training_profile` ([training time](training-time.md)) | `manabot train` |
+| [ataraxos_mini](ataraxos_mini.py) | `ataraxos_mini`, `:mirror_screen_baseline`, `:sustained_baseline_source` | `manabot train` |
+| [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
+| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/ataraxos.md)) | `manabot train` |
+| [direct_self_play](direct_self_play.py) | `direct_self_play`, `:search_distillation` ([learning speed](training-regimes.md)) | `python -m experiments.direct_self_play` |
+| [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
+| [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler`, `:learned_belief_local_search` ([guide](../docs/belief-sampler.md)) | `manabot train` |
+| [frozen_policy_local_update](frozen_policy_local_update.py) | `frozen_policy_local_update` ([guide](../docs/local-policy-search.md)) | `manabot train` |
+
+Reports of finished studies stay as the record. The runners, contracts, plans
+and fixtures they cite were removed once nothing current used them; git
+history holds them at the commit each report names.
+
+## Data
+
+```bash
+uv run --extra artifacts python -m manabot.data fetch                # everything
+uv run --extra artifacts python -m manabot.data fetch experiments/data/etu126
+uv run --extra artifacts python -m manabot.data publish experiments/data/<new-run>
+```
+
+`data/` is not in git. [`data.manifest.json`](data.manifest.json) records each
+file's path, sha256 and size; the bytes live once per digest at
+`s3://etudefantasia/manabot/sha256/<sha256>` and need the team's AWS
+credentials. `fetch` restores files to their original paths, verifies every
+digest, skips files already present and refuses to overwrite a file whose bytes
+differ. Runs still write results under `data/`; `publish` uploads them (S3
+checks each SHA-256; nothing is read back) and updates the manifest, which you
+commit with the report. Every worktree on a machine shares one read-only cache,
+`$MANABOT_DATA_CACHE` (default `~/.cache/manabot/sha256/<sha256>`), filled by
+`publish` and by downloads, so a machine reads each digest from S3 at most once. Tests that read data are marked
+`experiment_data(...)`: they fetch what they name, or skip with this command
+when the store is unreachable. Data committed before the manifest remains in git
+history.
 
 ## Discipline
 
@@ -98,6 +140,5 @@ studies. Proposed budgets are separate from ETU-91 and grant no execution author
 [sps-closeout](sps-closeout.md).)
 
 Distributed-RL research and the unexecuted bounded workload plan live in
-[the ETU-108 report](../docs/distributed-rl.md). Its supervisor is in
-[runners/distributed_benchmark.py](runners/distributed_benchmark.py); this is
-benchmark preparation, not a completed two-host training experiment.
+[the ETU-108 report](../docs/distributed-rl.md); its benchmark supervisor was
+removed unexecuted and remains in git history.

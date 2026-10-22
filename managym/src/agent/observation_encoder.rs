@@ -5,10 +5,10 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
 };
 
-pub const PLAYER_DIM: usize = 28;
-pub const CARD_DIM: usize = 39;
+pub const PLAYER_DIM: usize = 40;
+pub const CARD_DIM: usize = 41;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const PERMANENT_DIM: usize = 26;
+pub const PERMANENT_DIM: usize = 28;
 pub const ACTION_TYPE_DIM: usize = 16;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -426,7 +426,7 @@ pub fn encode_into(
         let row = &mut out.agent_cards[index * CARD_DIM..(index + 1) * CARD_DIM];
         row[7] = 1.0;
         row[37] = 1.0; // outside inventory; all seven zone bits remain zero
-        row[38] = 1.0;
+        row[CARD_DIM - 1] = 1.0;
         out.agent_cards_valid[index] = 1.0;
         object_to_index.insert(card.candidate_id, 2 + index as i32);
     }
@@ -522,6 +522,10 @@ fn encode_player_features(
 
     out[26] = player.graveyard_lessons as f32 / 10.0;
     out[27] = player.combat_mana as f32 / 10.0;
+    for slot in 0..6 {
+        out[28 + slot] = player.mana[slot] as f32 / 10.0;
+        out[34 + slot] = player.lesson_mana[slot] as f32 / 10.0;
+    }
 
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
@@ -587,7 +591,9 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[34] = bool_to_f32(card.kicker_cost > 0);
     out[35] = card.kicker_cost as f32 / 10.0;
     out[36] = bool_to_f32(card.keywords.hexproof);
-    out[38] = 1.0; // validity flag
+    out[38] = bool_to_f32(card.keywords.indestructible);
+    out[39] = bool_to_f32(card.is_legendary);
+    out[CARD_DIM - 1] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -642,6 +648,8 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[21] = bool_to_f32(permanent.keywords.menace);
     out[22] = bool_to_f32(permanent.keywords.hexproof);
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
+    out[25] = bool_to_f32(permanent.keywords.indestructible);
+    out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
     out[PERMANENT_DIM - 1] = 1.0;
 }
@@ -808,6 +816,7 @@ mod tests {
                         action_type: ActionType::PriorityCastSpell,
                         focus: vec![111, 333],
                         declared: None,
+                        description: None,
                         mode_index: None,
                         ability_index: None,
                     },
@@ -815,6 +824,7 @@ mod tests {
                         action_type: ActionType::ChooseTarget,
                         focus: vec![444],
                         declared: None,
+                        description: None,
                         mode_index: None,
                         ability_index: None,
                     },
@@ -822,6 +832,7 @@ mod tests {
                         action_type: ActionType::DeclareBlocker,
                         focus: vec![999],
                         declared: Some(true),
+                        description: None,
                         mode_index: None,
                         ability_index: None,
                     },
@@ -840,6 +851,8 @@ mod tests {
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
+                mana: [0; 6],
+                lesson_mana: [0; 6],
             },
             agent_sideboard: Vec::new(),
             agent_cards: vec![
@@ -860,6 +873,8 @@ mod tests {
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
+                mana: [0; 6],
+                lesson_mana: [0; 6],
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -918,6 +933,7 @@ mod tests {
                 action_type: ActionType::DeclareAttacker,
                 focus: vec![333],
                 declared: Some(declared),
+                description: None,
                 mode_index: None,
                 ability_index: None,
             })
@@ -954,6 +970,7 @@ mod tests {
             power,
             toughness,
             is_token: false,
+            is_legendary: false,
             is_ally: false,
             is_lesson: false,
             ward_cost: 0,
@@ -974,8 +991,10 @@ mod tests {
             },
             keywords: KeywordData::default(),
             mana_cost: ManaCost {
+                spend_on_lesson: false,
                 cost: [0; 7],
                 mana_value,
+                hybrid: Vec::new(),
             },
         }
     }
@@ -995,6 +1014,7 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
+            temp_subtypes: Vec::new(),
             keywords: KeywordData::default(),
         }
     }
@@ -1074,6 +1094,7 @@ mod tests {
                 action_type: ActionType::LearnTakeLesson,
                 focus: vec![card.candidate_id],
                 declared: None,
+                description: None,
                 mode_index: None,
                 ability_index: None,
             })

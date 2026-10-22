@@ -27,6 +27,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cardsets::alpha::CardRegistry;
+use managym::semantic::SemanticPack;
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
@@ -81,6 +82,9 @@ fn render_mana_cost(cost: &ManaCost) -> String {
         for _ in 0..cost.cost[color as usize] {
             out.push_str(&format!("{{{}}}", color.symbol()));
         }
+    }
+    for pip in &cost.hybrid {
+        out.push_str(&format!("{{{}/{}}}", pip[0].symbol(), pip[1].symbol()));
     }
     out
 }
@@ -186,12 +190,21 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
+    let research = SemanticPack::complexity()
+        .and_then(|pack| pack.compile_content_pack())
+        .expect("complexity catalog compiles");
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
 
-    for def in registry.definitions() {
+    // The research-only cards use the same real-card checks without entering
+    // the default registry or changing its versioned content digest.
+    for def in registry.definitions().chain(
+        research
+            .definitions()
+            .filter(|def| registry.definition_id(&def.name).is_none()),
+    ) {
         let name = def.name.as_str();
         if def.is_token {
             continue;

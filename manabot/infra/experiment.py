@@ -1,148 +1,158 @@
-"""
-experiment.py
-Experiment tracking and environment setup with proper config handling.
+"""Training runtime setup and the public Etude tracking client.
+
+Experiment owns seeding and the learner's tracking lifetime, not scheduling or
+scientific evaluation. Etude owns metric storage, checkpoint copies and reports.
+Legacy W&B configuration fields remain readable in frozen recipes but do not
+select a second live tracker. Historical W&B readers live elsewhere.
 """
 
+from collections.abc import Mapping
 import logging
 import os
 from pathlib import Path
 import random
-import time
-from typing import Optional
+from types import TracebackType
+from typing import Literal, Self
 
+from etude.run.records import ArtifactRef
+from etude.train.records import Step
+from etude.train.run import Run, track
 import numpy as np
 import torch
-import wandb
 
-# Local imports
 import manabot.infra.log
 from manabot.infra.profiler import Profiler
 
-# Local directory imports
 from .hypers import ExperimentHypers, Hypers
 
-CODE_CONTEXT_ROOT = Path(os.getenv("CODE_CONTEXT_ROOT", str(Path.home() / "src")))
 
-
-def flatten_config(cfg: dict, parent_key: str = "", sep: str = "/") -> dict:
-    """Flatten nested dictionary with path-like keys."""
-    items = []
-    for k, v in cfg.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_config(v, new_key, sep=sep).items())
+def flatten_config(
+    cfg: Mapping[str, object], parent_key: str = "", sep: str = "/"
+) -> dict[str, object]:
+    """Flatten named configuration for historical reporting consumers."""
+    items: dict[str, object] = {}
+    for key, value in cfg.items():
+        name = f"{parent_key}{sep}{key}" if parent_key else key
+        if isinstance(value, dict):
+            items.update(flatten_config(value, name, sep))
         else:
-            items.append((new_key, v))
-    return dict(items)
+            items[name] = value
+    return items
 
 
 class Experiment:
-    """Experiment tracking and environment setup."""
+    """Seed the learner and record locally or into an Etude-launched run.
+
+    A standalone invocation writes below runs_dir; under the SDK launcher its
+    run identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR.
+    SDK admission failures are not silently converted to untracked training.
+    """
 
     def __init__(
         self,
-        experiment_hypers: Optional[ExperimentHypers] = None,
-        full_hypers: Optional[Hypers] = None,
-    ):
-        experiment_hypers = experiment_hypers or ExperimentHypers()
-        full_hypers = full_hypers or Hypers()
-        self.experiment_hypers = experiment_hypers
-        self.full_hypers = full_hypers
-        self.exp_name = experiment_hypers.exp_name
-        self.seed = experiment_hypers.seed
-        self.torch_deterministic = experiment_hypers.torch_deterministic
-        self.device = experiment_hypers.device
-        self.wandb_on = experiment_hypers.wandb
-        self.wandb_project_name = experiment_hypers.wandb_project_name
-        self.runs_dir = self.experiment_hypers.runs_dir / self.exp_name
+        experiment_hypers: ExperimentHypers | None = None,
+        full_hypers: Hypers | None = None,
+        *,
+        resolved_config: Mapping[str, object] | None = None,
+    ) -> None:
+        self.experiment_hypers = experiment_hypers or ExperimentHypers()
+        self.full_hypers = full_hypers or Hypers()
+        config = self.experiment_hypers
+        self.exp_name = config.exp_name
+        self.seed = config.seed
+        self.torch_deterministic = config.torch_deterministic
+        self.device = config.device
+        self.runs_dir = config.runs_dir / self.exp_name
         self.runs_dir.mkdir(parents=True, exist_ok=True)
-        self.wandb_run = None
-        self.profiler = Profiler(enabled=experiment_hypers.profiler_enabled)
-        level = getattr(logging, self.experiment_hypers.log_level.upper(), logging.INFO)
+        self.profiler = Profiler(enabled=config.profiler_enabled)
+        level = getattr(logging, config.log_level.upper(), logging.INFO)
         manabot.infra.log.setGlobalLogLevel(level)
         self.logger = manabot.infra.log.getLogger(__name__)
-
         self._setup_random()
-        self._setup_tracking()
+        self.run: Run = track(
+            experiment=self.exp_name,
+            clocks=[
+                Step("learner_transitions", "collected learner transitions"),
+                Step("updates", "completed collect/update iterations"),
+            ],
+            seed=self.seed,
+            config={
+                "training": dict(resolved_config)
+                if resolved_config is not None
+                else full_hypers.model_dump(mode="json")
+                if full_hypers is not None
+                else None,
+                "runtime": config.model_dump(mode="json"),
+            },
+            directory=None
+            if os.environ.get("ETUDE_TRACK_DIR")
+            else self.runs_dir / "etude",
+            strict=True,
+        )
+        self._closed = False
+        self._updates = 0
+        self._transitions = 0
 
-    def _get_flattened_config(self) -> dict:
-        """Convert nested hypers to flat dict for wandb."""
-        return flatten_config(self.full_hypers.model_dump())
+    def __enter__(self) -> Self:
+        return self
 
-    def _setup_tracking(self):
-        """Setup experiment tracking with wandb."""
-        run_name = f"{self.exp_name}__{self.seed}__{int(time.time())}"
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close("failed" if exc_type else "finished")
 
-        if self.wandb_on:
-            try:
-                config = self._get_flattened_config()
-                config.update(
-                    {
-                        "seed": self.seed,
-                        "device": self.device,
-                        "runs_dir": str(self.runs_dir),
-                        "code_context": str(CODE_CONTEXT_ROOT),
-                    }
-                )
-                self.wandb_run = wandb.init(
-                    project=self.wandb_project_name,
-                    entity=None,
-                    name=run_name,
-                    dir=str(self.runs_dir),
-                    config=config,
-                    monitor_gym=True,
-                    save_code=True,
-                )
-                self.logger.info(f"Initialized wandb run: {run_name}")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize wandb: {e}")
-                self.wandb_on = False
+    def log(self, metrics: Mapping[str, object], step: int | None = None) -> None:
+        """Record metrics; the legacy step argument counts learner transitions."""
+        if self._closed:
+            raise RuntimeError("cannot log to a closed experiment")
+        if step is not None:
+            self._transitions = step
+        self.run.log(
+            metrics, updates=self._updates, learner_transitions=self._transitions
+        )
 
-    def log(self, metrics: dict, step: Optional[int] = None):
-        """Log metrics to wandb."""
-        if self.wandb_on and self.wandb_run:
-            self.wandb_run.log(metrics, step=step)
+    def log_update(
+        self, metrics: Mapping[str, object], *, updates: int, transitions: int
+    ) -> None:
+        """Record completed work without conflating iterations and samples."""
+        if self._closed:
+            raise RuntimeError("cannot log to a closed experiment")
+        self._updates = updates
+        self._transitions = transitions
+        self.run.log(metrics, updates=updates, learner_transitions=transitions)
 
-    def add_scalar(self, tag: str, value, step: int):
-        """Compatibility method for tensorboard-style logging, now uses wandb."""
-        if self.wandb_on and self.wandb_run:
-            self.wandb_run.log({tag: value}, step=step)
+    def add_scalar(self, tag: str, value: float, step: int) -> None:
+        self.log({tag: value}, step=step)
 
-    def _setup_random(self):
-        """Setup random number generators."""
+    def checkpoint(self, path: Path, *, transitions: int) -> ArtifactRef:
+        """Retain exact exported bytes; this is not policy or resume admission."""
+        if self._closed:
+            raise RuntimeError("cannot checkpoint a closed experiment")
+        return self.run.checkpoint(
+            path, updates=self._updates, learner_transitions=transitions
+        )
+
+    def _setup_random(self) -> None:
         random.seed(self.seed)
         np.random.seed(self.seed)
         torch.manual_seed(self.seed)
         torch.backends.cudnn.deterministic = self.torch_deterministic
 
-    def close(self):
-        """Cleanup wandb resources."""
-        if self.wandb_on and self.wandb_run:
-            try:
-                wandb.finish()
-                self.wandb_run = None
-            except Exception as e:
-                self.logger.warning(f"Error finishing wandb run: {e}")
+    def close(self, state: Literal["finished", "failed"] = "finished") -> None:
+        """Flush tracking once; callers must mark failed training explicitly."""
+        if not self._closed:
+            self.run.finish(state)
+            self._closed = True
 
-    # -------------------------------------------------------------------------
-    # Performance Logging
-    # -------------------------------------------------------------------------
-    def log_performance(self, step: Optional[int] = None) -> None:
-        """
-        Logs hierarchical performance metrics. For each node in the hierarchy,
-        logs the total time spent, its percentage of the parent's time, and its
-        percentage of the overall (root) time. The keys are prefixed with
-        'hierarchical/'.
-        """
-        if not self.wandb_on or not self.wandb_run:
-            self.logger.warning("Wandb not initialized, skipping performance logging")
-            return
-
-        perf_stats = self.profiler.get_stats()
-
-        log_dict = {}
-        for node_path, data in perf_stats.items():
-            log_dict[f"performance/{node_path}/pct_of_total"] = data["pct_of_total"]
-
-        self.wandb_run.log(log_dict, step=step)
-        self.logger.info(f"Performance stats: {log_dict}")
+    def log_performance(self, step: int | None = None) -> None:
+        """Record profiler fractions, not a separately reconstructed time clock."""
+        self.log(
+            {
+                f"performance/{name}/pct_of_total": data["pct_of_total"]
+                for name, data in self.profiler.get_stats().items()
+            },
+            step=step,
+        )

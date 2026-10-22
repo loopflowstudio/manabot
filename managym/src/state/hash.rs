@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 3;
+pub const MATCH_STATE_HASH_VERSION: u32 = 8;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -51,6 +51,8 @@ impl fmt::Display for MatchStateHash {
 
 #[derive(Serialize)]
 struct CanonicalCard {
+    /// Copied tokens can differ from their registered source definition.
+    copied_characteristics: Option<super::card::CardDefinition>,
     object_id: ObjectId,
     definition_id: CardDefId,
     owner: PlayerId,
@@ -61,7 +63,10 @@ struct CanonicalTurn {
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
+    spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     cards_drawn_this_turn: [u32; 2],
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
     current_phase: usize,
     current_step: usize,
@@ -76,7 +81,13 @@ impl From<&TurnState> for CanonicalTurn {
             active_player: turn.active_player,
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,
+            spells_cast: turn.spells_cast.clone(),
             cards_drawn_this_turn: turn.cards_drawn_this_turn,
+            ability_triggers_this_turn: turn
+                .ability_triggers_this_turn
+                .iter()
+                .map(|((source, index), count)| (*source, *index, *count))
+                .collect(),
             ability_resolutions_this_turn: turn
                 .ability_resolutions_this_turn
                 .iter()
@@ -178,6 +189,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
         let cards = cards
             .iter()
             .map(|card| CanonicalCard {
+                copied_characteristics: card.is_token.then(|| (**card).clone()),
                 object_id: card.id,
                 definition_id: card.definition_id,
                 owner: card.owner,

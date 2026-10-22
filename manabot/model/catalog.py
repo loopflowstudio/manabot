@@ -28,8 +28,7 @@ import torch
 
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-from manabot.model.world import WORLD, checkpoint_world
-from managym import PlayerConfig
+from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
 
 CheckpointSource = Literal["path", "runs", "tournament"]
 
@@ -167,10 +166,7 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
         observation = ObservationSpaceHypers(
             **checkpoint["hypers"]["observation_hypers"]
         )
-        configs = [
-            PlayerConfig(str(index), setup["deck"], setup["sideboard"])
-            for index, setup in enumerate(binding["setups"])
-        ]
+        configs = checkpoint_configs(binding)
         expected = checkpoint_world(configs, ObservationSpace(observation))
     except BaseException as error:  # PyO3 panics on invalid native setups
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
@@ -344,9 +340,8 @@ def _tournament(
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 
-    The schema owner is ``experiments.runners.head_to_head.Tournament``; only
-    the entrant fields that identify exact bytes are read here, and code
-    anchors without a ``file`` are skipped.
+    Only the entrant fields that identify exact bytes (``file``, ``sha256``)
+    are read here; code anchors without a ``file`` are skipped.
     """
 
     try:

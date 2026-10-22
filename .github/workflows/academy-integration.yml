@@ -1,0 +1,58 @@
+name: Academy integration suite
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner label selected by PR CI or the macOS nightly
+        required: true
+        type: string
+
+jobs:
+  academy-integration:
+    name: Academy Integration (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
+    env:
+      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            managym -> target
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'managym/pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra dev --extra play
+
+      - name: Build managym extension
+        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+
+      - name: Checkpoint world bindings
+        run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
+
+      - name: Elemental roster admission
+        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
+
+      - name: Frozen-policy search fixtures
+        run: |
+          uv run --python 3.12 --extra dev pytest -q \
+            tests/sim/test_local_update_sampling.py \
+            tests/sim/test_local_update_compound.py

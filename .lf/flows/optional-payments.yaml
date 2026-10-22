@@ -1,0 +1,9 @@
+- cmd: task wait MTG-164 --until terminal
+- xor:
+    router: xor-route
+    paths:
+      build:
+        description: "Read lf task status MTG-164 --json fresh. Select build only when task.completed is true and the accepted ten-deck delivery is verified. A stopped/failed/published Flow alone is insufficient. The user accepted scratch/optional-payments.md and authorized autonomous implementation and landing without human review."
+        flow: optional-payments-deliver
+      dependency_blocked:
+        description: "Select this no-op exit if fresh status cannot prove MTG-164 completed its accepted delivery. Record the exact blocker. Do not implement, publish, complete this Task, duplicate a live Flow, or waive its prerequisite."

@@ -2,6 +2,13 @@
 
 Polish and validate only the current branch scope.
 
+## Required checks for tracking and offline reports
+
+Run `uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`
+when changing tracking or report discovery. The live tiny-comparison test writes
+both TrainingRun exports and Etude tracker declarations named `run.json`; saved
+report fixtures alone do not exercise their coexistence.
+
 ## Required checks for new Python test modules
 
 Use unique test module basenames across unpackaged test directories. Collect new
@@ -11,10 +18,7 @@ modules together with the existing tests in their CI invocation using
 ## Required checks for play layout changes
 
 Run `combat-presentation.spec.ts` for board/sidebar geometry and narration controls.
-Run the release visual gate on its pinned Linux profile for layout changes,
-including sidebar-only content changes: grid stretching can change board bounds
-without changing any cards. Keep visual references unchanged for layout bugs;
-local macOS geometry checks do not certify the Linux screenshot corpus.
+Run the focused release browser suite with `npm --prefix academy/ui run test:e2e:release`.
 Settle JavaScript narration through `finishBoardNarration` before terminal as
 well as decision-board captures. Reduced motion and disabled CSS animations do
 not stop semantic beat timers; retain terminal focus and consequence history.
@@ -54,17 +58,22 @@ extension imports and mocked service startup alone cannot prove cold ordering.
 
 ## Required checks for authored rules and setup changes
 
+Run `uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q`
+for Elemental roster or training admission changes, including after syncing
+training infrastructure changes. The PPO smoke must reload the final checkpoint
+written by `Trainer.train()`, which closes its experiment before returning.
+
 Run the complete debug Rust suite, including checked conformance receipts, and
-the release prompt matrix contract and browser scenario. Pack versions, prompt
-families and seeded opponent choices can change together. Preserve historical
-receipts and screenshots; create a new corpus version for an accepted rules
-change, document its scope, and reproduce it before switching CI to it. Generate
-and compare visual references on the pinned Linux profile. A digest-only edit
-or a macOS run with ignored screenshots does not certify the release matrix.
-Classify a new prompt family as excluded only after the browser scenarios show
-it is unreached; a new turn-based rule can reach it in either seeded game. A
-world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
+focused browser interactions. Also run
+`uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
+replays only two of its retained positions, so it cannot certify other digests.
+Bind refreshed positions to a new world file and retain prior evidence.
+A world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
 checked Learn demo fixture pins the content manifest and state digests.
+Run `uv run --extra dev pytest tests/model/ -q` after a world-version change
+to exercise checkpoint loading and historical-world rejection. Tests that
+construct a current checkpoint should use the runtime world version; retain
+explicit historical versions for incompatible checkpoints.
 
 ## Required checks for Rust managym work
 
@@ -95,8 +104,6 @@ Record local timing separately from production coverage. Preserve failures in
 frozen advice evidence as explicit gate blockers; do not regenerate fixtures
 or relax historical checkpoint validation to make the suite green.
 
-When history permissions or replay projections change, run the release prompt
-matrix too. Match terminal traces by the live table's `attempt_id`; replay
-responses omit the deal seed even for participants.
-On macOS, `--ignore-snapshots` can verify gameplay and trace lookup, but only
-the pinned Linux profile certifies committed visual references.
+When history permissions or replay projections change, exercise the relevant
+history, replay and shared-table browser cases. Match terminal traces by the
+live table's `attempt_id`; replay responses omit the deal seed even for participants.

@@ -4,6 +4,7 @@ pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;
 pub mod decision;
+mod decision_context;
 pub mod experience;
 pub mod flow;
 pub mod infra;
@@ -21,4 +22,4 @@ pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
 pub use state::player::PlayerConfig;
 
 /// Rules and observation/action meaning; see WORLDS.md for compatibility.
-pub const WORLD_VERSION: &str = "w6";
+pub const WORLD_VERSION: &str = "w11";

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "contract_id": "manabot.semantic-kernel-conformance.v1",
+  "cases": [
+    {
+      "id": "ur-vs-gw-5eed",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "game_seed": 24301,
+      "choice_seed": 49374,
+      "max_commands": 2000
+    },
+    {
+      "id": "gw-vs-ur-5eee",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "game_seed": 24302,
+      "choice_seed": 49375,
+      "max_commands": 2000
+    },
+    {
+      "id": "ur-vs-gw-5eef",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "game_seed": 24303,
+      "choice_seed": 49376,
+      "max_commands": 2000
+    },
+    {
+      "id": "gw-vs-ur-5ef0",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "game_seed": 24304,
+      "choice_seed": 49377,
+      "max_commands": 2000
+    },
+    {
+      "id": "elemental-161",
+      "orientation": "elemental_left_vs_right",
+      "game_seed": 161,
+      "choice_seed": 16100,
+      "max_commands": 2000
+    },
+    {
+      "id": "elemental-162",
+      "orientation": "elemental_right_vs_left",
+      "game_seed": 162,
+      "choice_seed": 16101,
+      "max_commands": 2000
+    },
+    {
+      "id": "elemental-163",
+      "orientation": "elemental_left_vs_right",
+      "game_seed": 163,
+      "choice_seed": 16102,
+      "max_commands": 2000
+    },
+    {
+      "id": "elemental-164",
+      "orientation": "elemental_right_vs_left",
+      "game_seed": 164,
+      "choice_seed": 16103,
+      "max_commands": 2000
+    }
+  ],
+  "fuzz": {
+    "seed": 24301,
+    "cases": 32,
+    "max_commands": 512
+  },
+  "world_version": "w7"
+}

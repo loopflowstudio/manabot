@@ -384,6 +384,45 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    /// Public event identities used to explain a committed transition.
+    pub fn presentation_subjects(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, crate::experience::SubjectRef>, AgentError> {
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .presentation_subjects())
+    }
+
+    pub fn decision_offer_subjects(
+        &self,
+        viewer: usize,
+    ) -> Result<Vec<Vec<crate::experience::OfferSubjectView>>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision_offer_subjects(PlayerId(viewer)))
+    }
+
+    pub fn decision_context(
+        &self,
+        viewer: usize,
+    ) -> Result<Option<crate::experience::DecisionContextView>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision_context(PlayerId(viewer)))
+    }
+
     /// Project the composite viewer-safe semantic observation for `viewer`.
     /// See [`Game::semantic_observation`].
     pub fn semantic_observation(&self, viewer: usize) -> Result<SemanticObservation, AgentError> {

@@ -32,7 +32,7 @@ from managym.decision import (
 from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
-from .authored_match_receipt import DEFAULT_RECEIPT_PATH
+from .authored_match_receipt import HISTORICAL_RECEIPT_PATH
 from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
@@ -72,7 +72,7 @@ def _require(field: str, expected: object, actual: object) -> None:
 
 
 def _load_authority() -> dict[str, Any]:
-    raw = DEFAULT_RECEIPT_PATH.read_bytes()
+    raw = HISTORICAL_RECEIPT_PATH.read_bytes()
     _require("authority receipt SHA-256", AUTHORITY_RECEIPT_SHA256, _sha256(raw))
     authority = json.loads(raw)
     _require("authority commands", 132, len(authority["decisions"]))
@@ -501,7 +501,6 @@ def _source_manifest() -> dict[str, Any]:
         "tests/belief/test_tracker.py",
         "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
-        "tests/sim/test_exact_range_runner.py",
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())} for path in paths

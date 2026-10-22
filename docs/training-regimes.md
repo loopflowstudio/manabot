@@ -6,8 +6,22 @@ ETU-89 owns this infrastructure. ETU-90 owns its direct-RL treatment correctness
 ETU-91 owns the comparison/ablation protocols and analysis.
 
 ```bash
-uv run manabot train --regime experiments/regimes/direct-self-play.json --seed 197 --out .runs/direct-pilot
-uv run manabot train --regime experiments/regimes/search-distillation.json --seed 197 --out .runs/search-pilot
+uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
+uv run manabot train --regime-name direct_self_play:search_distillation --seed 197 --out .runs/search-pilot
+```
+
+Each current experiment is one module, `experiments/<experiment>.py`, next to
+its write-up. It composes parts from `manabot.training.builders` into one
+canonical recipe, the function named like the module, plus explicit variants,
+and holds whatever else that experiment needs to run and report.
+`--regime-name <experiment>` selects the canonical recipe and
+`<experiment>:<variant>` any other; `manabot.cli.regime_names()` lists them.
+Experiments with an arena study run with `python -m experiments.<experiment>`;
+shared study plumbing is `manabot.training.regime_study`. Write a regime file
+for `--regime` or `manabot deploy` from Python:
+
+```bash
+uv run python -c "from experiments.batched_baseline import batched_baseline; print(batched_baseline().model_dump_json(indent=2))" > regime.json
 ```
 
 The supplied recipes are bounded pilots, not the proposed week-long experiment.
@@ -85,7 +99,7 @@ Training comparisons use [declarative typed-Python experiments](training-experim
 named components, frozen baselines/versioned presets, explicit overrides and ordered
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
-identities. `manabot.training.recipes` retains internal composition helpers.
+identities. `manabot.training.builders` holds the reusable composition helpers.
 `AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
 and existing field meanings. Resolution never allocates compute or starts training.
 
@@ -235,8 +249,8 @@ checks; it does not require another training study. The retained comparison smok
 uses the existing arena and offline notebook/report path:
 
 ```bash
-OMP_NUM_THREADS=1 uv run --extra notebook -m experiments.runners.run_training_regimes --study compound-decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook -m experiments.runners.run_training_regimes --report-only .runs/compound-smoke
+OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
+uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
 ```
 
 This smoke has one initialization seed and four-leg, held-out complete-game
@@ -405,7 +419,7 @@ remain off-policy and are never trained on. New TrainingRegimes use schema 2 and
 serialize the resolved seat choice. Saved schema-1 recipes and receipts retain
 their original one-seat interpretation and serialized identities; historical
 ladder v1 and frozen presets are not reinterpreted. The ordinary baseline recipe
-is now `baseline-v2`.
+is now `baseline-v3`.
 
 Both-seat collection records observation, sampled action, log probability,
 value, policy distribution and (for a categorical critic) outcome distribution

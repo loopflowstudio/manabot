@@ -7,7 +7,7 @@ complement is the opponent library multiset; library order and other hidden
 state are outside this domain.
 
 ```bash
-uv run manabot train --regime experiments/regimes/belief-sampler.json --seed 421 --out .runs/belief-pilot
+uv run manabot train --regime-name belief_sampler --seed 421 --out .runs/belief-pilot
 ```
 
 This bounded three-game, small-deck pilot demonstrates the dependency chain.
@@ -190,15 +190,8 @@ uv run python -m manabot.belief.sampling_cohort \
 ```
 
 The command writes JSON and a Markdown companion, refuses overwrites and resolves
-input report paths relative to the manifest. The [synthetic example generator](../experiments/runners/sampler_uncertainty_example.py)
-writes a complete manifest and hashed input reports; its [report](../experiments/data/sampler-uncertainty-synthetic/analysis.md)
-is **fabricated software evidence**, not measured calibration. Regenerate it in a
-fresh directory without training, games or hand sampling:
-
-```bash
-uv run python experiments/runners/sampler_uncertainty_example.py \
-  --out .runs/sampler-uncertainty-synthetic
-```
+input report paths relative to the manifest. Its retained [synthetic report](../experiments/data/sampler-uncertainty-synthetic/analysis.md)
+is **fabricated software evidence**, not measured calibration.
 
 Each attempt declares its treatment, independent training seed, fit receipt and
 configuration identities, immutable training dataset, status, and either a hashed
@@ -256,6 +249,5 @@ source identities, bootstrap seed/count, analysis Python/NumPy and saved evaluat
 Statistical regeneration reads these frozen reports and does no sampling; measured
 sampling time and Python allocations remain in the hashed inputs. New sampling
 reports measure fresh costs and must not be substituted as if only their intervals
-had changed. The synthetic and fixed-weight saved-artifact checks in
-`tests/belief/test_sampling_cohort.py` and `test_sampling_report.py` exercise this
-software contract. ETU-99 retains empirical cohorts and budget authorization.
+had changed. The fixed-weight saved-artifact checks in
+`tests/belief/test_sampling_report.py` exercise this software contract. ETU-99 retains empirical cohorts and budget authorization.

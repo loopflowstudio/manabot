@@ -6,17 +6,32 @@ import pytest
 
 from manabot.arena.models import (
     ArenaContract,
+    ArenaKey,
     PlayerRegistration,
     canonical_sha256,
     file_sha256,
 )
 from manabot.arena.players import build_player
+from managym import WORLD_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_current_world_round_trips_arena_and_player_identities() -> None:
+    contract = ArenaContract.model_validate_json(
+        (ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text()
+    )
+    key = contract.key.model_dump() | {"world": WORLD_VERSION}
+    player = contract.anchors[0].model_dump() | {"world": WORLD_VERSION}
+    assert ArenaKey.model_validate(key).world == WORLD_VERSION
+    assert PlayerRegistration.model_validate(player).world == WORLD_VERSION
+    for model, raw in ((ArenaKey, key), (PlayerRegistration, player)):
+        with pytest.raises(ValidationError, match="world"):
+            model.model_validate(raw | {"world": "unknown"})
+
+
 def test_checked_contract_has_exact_code_only_base() -> None:
-    path = ROOT / "experiments/contracts/int-6-skill-arena-v1.json"
+    path = ROOT / "tests/fixtures/int-6-skill-arena-v1.json"
     assert file_sha256(path) == (
         "fc9cb76c0d80ad64951455ac6fede94b1355f383dde2f2964d0e578f62671a71"
     )
@@ -50,7 +65,7 @@ def test_checked_contract_has_exact_code_only_base() -> None:
 
 def test_dpuct_registration_requires_every_effective_parameter() -> None:
     candidate = json.loads(
-        (ROOT / "experiments/candidates/int-6-dpuct-32-w4-v1.json").read_text()
+        (ROOT / "tests/fixtures/int-6-dpuct-32-w4-v1.json").read_text()
     )
     candidate["player_spec"].pop("c_puct")
     with pytest.raises(ValidationError, match="fully explicit"):
@@ -59,9 +74,7 @@ def test_dpuct_registration_requires_every_effective_parameter() -> None:
 
 def test_dpuct_registration_and_factory_echo_frozen_semantics() -> None:
     candidate = PlayerRegistration.model_validate(
-        json.loads(
-            (ROOT / "experiments/candidates/int-6-dpuct-32-w4-v1.json").read_text()
-        )
+        json.loads((ROOT / "tests/fixtures/int-6-dpuct-32-w4-v1.json").read_text())
     )
     player, observation_space = build_player(candidate, seed=7)
     assert observation_space is None
@@ -74,9 +87,7 @@ def test_dpuct_registration_and_factory_echo_frozen_semantics() -> None:
 
 
 def test_base_contract_rejects_cohort_expansion_even_with_rehashed_identity() -> None:
-    raw = json.loads(
-        (ROOT / "experiments/contracts/int-6-skill-arena-v1.json").read_text()
-    )
+    raw = json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
     learned = dict(raw["anchors"][0])
     learned.update(
         {

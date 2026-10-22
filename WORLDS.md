@@ -16,9 +16,14 @@ was dead on arrival in exp-10.)
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
 | **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
+| **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
+| **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
+| **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
+| **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
+| **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 
-**Current world: w6.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w5) are **not comparable** to w6; do not reuse their
+**Current development world: w11.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w10) are **not comparable** to w11; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -26,6 +31,40 @@ Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
+
+## w7: Elemental rules and compiled content (not yet frozen)
+
+MTG-161 adds two-color hybrid costs, private basic-land search, printed discard
+counts, noncreature-cast triggers, conditional combat eligibility, and additional
+native Elemental definitions. Hybrid costs retain their pips in native/Python
+observation metadata. Card rows add indestructible at 38 and move validity to
+39; permanent rows add indestructible at 25 and move validity to 26. The outside
+marker remains card index 37. Match-state hash version 4 includes spell mode,
+target clauses, scry ordering, and per-turn cast history as well as counted
+discard continuations. An activated ability's
+independent effects now survive its source leaving the battlefield (CR 113.7a).
+
+All 42 owned cards execute natively and through the `elemental-combat-v1`
+compiled pack. Its two 46-card validation rosters cover the owned pool and five
+basics; four token definitions complete the closure. These rosters do not adopt
+the final ten product decks. Learning schema 3 in
+`content/semantic/w7/learning_schema.json` adds the corresponding typed
+operations, quantities, hybrid pips and nested choices. The frozen learning
+schema and earlier authored sources remain unchanged. Model permanent features
+retain indestructible while excluding only the categorical definition join.
+
+The w7 rules corpus is
+[semantic-kernel-w7-v1](conformance/semantic-kernel-w7-v1/), including inherited
+matchup cases and compiled Elemental cases in both seat orders. Earlier corpora,
+`erd1` receipts, authored IR and checkpoints retain their identities. Release
+validation and world freeze remain with gate; no new training or strength
+comparison is certified by these checks.
+
+Gate's current limits are recorded in
+[Elemental contracts](docs/rules/elemental-combat.md#gate-evidence-and-remaining-limits--2026-10-20).
+The w7 authored-match authority and replay parity have separate versioned
+receipts; historical public-commitment/RUL-9 checks and pinned Linux visual
+validation remain unresolved. w7 is not frozen.
 
 ## w6: preserve action and object identity
 
@@ -125,3 +164,72 @@ top of tensor dimensions:
 
 The full rationale and required controls are in
 [`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
+
+## w8: Sacrifice and landfall (not yet frozen)
+
+MTG-162 adds selected sacrifice costs, payment alternatives, immediate chosen-color
+mana abilities, sacrifice triggers and per-incarnation turn limits. Basic-land
+search retains one native operation with count, entry and continuation options.
+Last-known facts retain animation for creature-death triggers and effective
+keywords for damage after a source leaves. Match-state hash
+version 5 includes the additional trigger state. Choice descriptions are native
+presentation metadata; bounded tensor widths stay unchanged.
+
+The `elemental-sacrifice-v1` pack contains all 17 owned real cards, five basics
+and five tokens. Its two validation rosters are separate from the final ten
+decks. Learning schema 4 is at `content/semantic/w8/learning_schema.json`.
+The current rules corpus is [semantic-kernel-w8-v1](conformance/semantic-kernel-w8-v1/).
+Earlier worlds, sources, schemas, receipts and experiment evidence remain unchanged.
+World freeze and release certification remain separate from implementation.
+
+## w9: Temur mana and graveyard casting (not yet frozen)
+
+[The Temur rules contract](docs/rules/elemental-temur.md) covers six added real
+cards, granted mana abilities, Lesson-restricted mana, Iroh flashback, and Ran
+and Shaw's nonlegendary token. Player features grow from 28 to 40 to retain both
+ordinary and Lesson-restricted W/U/B/R/G/C pool counts. Card features grow from
+40 to 41 to expose actual legendary status, including copied tokens. Action and
+permanent widths remain 20 and 27. Mutable state hash version 6 includes copied
+token characteristics; cast provenance lives on stack and battlefield objects.
+
+Learning schema 5 is `content/semantic/w9/learning_schema.json`; earlier schemas
+and receipts retain their original contents. The current conformance corpus is
+[semantic-kernel-w9-v1](conformance/semantic-kernel-w9-v1/). The validation pack
+is separate from MTG-164's final ten-deck admission. These are rules and
+integration changes, without a strength claim or a promoted checkpoint.
+
+
+## w10: one ten-deck Elemental world
+
+`elemental-world-v1` adds the exact ten accepted 40-card decks and outside-game
+Lesson pools in [the Elemental contract](docs/rules/elemental/world.md). Its closure
+contains 89 selected nonbasic cards, five basics and six token definitions.
+Earlier authored packs and receipts retain their bytes and setup meanings.
+
+Temporary battlefield subtype grants are now incarnation-local state, part of
+match-state hash version 7 and both viewer projections. The native and Python
+permanent encoders add an Avatar-grant feature at index 26; validity moves to
+index 27. Player/card/action widths stay 40/41/20. Learning schema 6 adds typed
+mandatory discard, death-exile marking and temporary subtype instructions;
+`content/semantic/w9/learning_schema.json` retains schema 5. Earlier checkpoints
+fail world admission before weights load.
+
+A selected Elemental checkpoint binds the entire ten-setup native roster,
+including each Lesson pool, the complete compiled manifest and schema 6. Any
+pair or mirror from that roster can execute with explicit pack identity;
+foreign or modified setups fail admission. This is compatibility, not a claim
+that every admitted matchup was trained or that the policy is strong.
+
+The current conformance corpus is `conformance/semantic-kernel-w10-v1`.
+Native all-pairs smoke and a predeclared 14-game same-Command cohort cover
+integration. World freeze, full diagnostic, release-browser certification and
+strength evaluation remain distinct outcomes.
+
+## w11: shared optional payment continuations
+
+Ordinary optional mana and waterbend share typed progress and outcome effects.
+Match-state hash 8 identifies the changed serialized state; learning schema 7
+and opcode 65 identify authored payment branches. Tensor dimensions stay fixed.
+Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
+receipts remain unchanged; w10 checkpoints are rejected. See
+[optional payments](docs/rules/optional-payments.md) for ownership and authoring.

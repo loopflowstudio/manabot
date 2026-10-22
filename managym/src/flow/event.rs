@@ -32,6 +32,10 @@ pub enum EventEntity {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
+    PermanentSacrificed {
+        card: CardId,
+        controller: PlayerId,
+    },
     /// Public definition reveal; outside/hidden copies have no public object identity.
     CardRevealed {
         owner: PlayerId,

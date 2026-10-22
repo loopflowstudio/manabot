@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.runners.experiment_mirrors import recipe
 from manabot.arena.match import selected_match
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
@@ -14,7 +13,6 @@ from manabot.model.agent import Agent
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training.matchups import stream_matches
-from manabot.training.models import TrainingRegime
 import managym
 
 
@@ -103,10 +101,3 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
         wrong[0].content_pack = None
         with pytest.raises(RuntimeError, match="explicit pack"):
             engine.reset(wrong)
-
-
-def test_linked_stages_cannot_change_curriculum() -> None:
-    value = recipe("cross-balanced", 100, 3600).model_dump()
-    value["stages"][1]["matchup_curriculum"] = "mirrors-balanced"
-    with pytest.raises(ValueError, match="preserve streams, curriculum"):
-        TrainingRegime.model_validate(value)

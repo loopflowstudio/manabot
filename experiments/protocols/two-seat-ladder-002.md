@@ -11,7 +11,7 @@ seed 15902, float32 CUDA and one learner CPU thread. Preserve its complete
 learning settings, including absolute iteration LR/tau schedules and EMA .999.
 Keep raw exports every 250 updates. Do not alter the live v1 run.
 
-The new recipe is `experiments/regimes/scale-ladder-allies-lessons-both-v2.json`.
+The new recipe is `experiments/data/two-seat-ladder/frozen-regime.json`.
 Relative to the saved control JSON, only the ID, schema version and explicit
 `learning_seats: both` differ. Both-seat collection finishes games after a
 combined decision floor; learner rows can exceed 256 × 64. GAE and value targets

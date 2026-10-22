@@ -47,7 +47,8 @@ PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
 # tests/academy/test_curated_pack.py checks it equals Academy's served pack.
 RECORDED_ASSET_MANIFEST = (
     REPO_ROOT
-    / "frontend"
+    / "academy"
+    / "ui"
     / "src"
     / "lib"
     / "packs"
@@ -147,12 +148,6 @@ def runtime_fingerprints(
     return {
         "world": world,
         "engine_source_sha256": source_bundle_sha256(engine_source_paths()),
-        "pilot_source_sha256": source_bundle_sha256(
-            [
-                Path(__file__).resolve(),
-                REPO_ROOT / "experiments" / "runners" / "run_teacher1_pilot.py",
-            ]
-        ),
         "engine_extension_sha256": file_sha256(extension_path),
         "engine_extension_name": extension_path.name,
         "content_schema_version": content.get("schema_version"),

@@ -11,6 +11,7 @@ from academy.replay_index import (
     projection_with_addresses,
 )
 from academy.server import GameSession
+from manabot.model.world import WORLD
 
 
 def _selected_game(trace_dir: Path) -> GameSession:
@@ -60,6 +61,7 @@ def test_current_ed2_promotes_to_the_exact_committed_replay_identity(
     game.close("test")
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_selected_live_root_rejects_retired_likelihood_checkpoint(
     tmp_path: Path,
 ) -> None:
@@ -72,7 +74,7 @@ def test_selected_live_root_rejects_retired_likelihood_checkpoint(
         with pytest.raises(LiveBeliefUnavailable, match="failed") as failure:
             _await_posterior(game, pending.address.serialize())
         assert isinstance(failure.value.__cause__, ValueError)
-        assert "compatible w4 world binding" in str(failure.value.__cause__)
+        assert f"compatible {WORLD} world binding" in str(failure.value.__cause__)
         assert game.env.state_digest() == authority_digest
     finally:
         game.close("test")
