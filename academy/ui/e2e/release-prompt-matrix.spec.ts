@@ -516,17 +516,20 @@ async function assertAccessiblePrompt(
   await expect(panel.getByRole('status').filter({ hasText: /^Your move$/ })).toBeVisible();
   await expect(actionButtons).toHaveCount(actions.length);
 
-  for (let index = 0; index < actions.length; index += 1) {
-    const action = actions[index];
+  // These read-only checks are independent. Large Waterbend offers should not
+  // require three sequential browser round trips for every permanent.
+  await Promise.all(actions.map(async (action, index) => {
     const button = actionButtons.nth(index);
     expect(action.offer_id, `${scenario.id}: ${family} offer id is absent`).toBeGreaterThanOrEqual(0);
     expect(action.type, `${scenario.id}: ${family} action type is absent`).not.toBe('');
     expect(action.description.trim(), `${scenario.id}: ${family} action label is empty`).not.toBe('');
     expect(action.disabled, `${scenario.id}: ${family} action is disabled`).toBe(false);
-    await expect(button).toHaveAccessibleName(action.description);
-    expect(await button.getAttribute('aria-describedby')).toContain('decision-prompt');
-    await expect(button).toHaveAccessibleDescription(new RegExp(instruction.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  }
+    await Promise.all([
+      expect(button).toHaveAccessibleName(action.description),
+      button.getAttribute('aria-describedby').then((ids) => expect(ids).toContain('decision-prompt')),
+      expect(button).toHaveAccessibleDescription(new RegExp(instruction.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))),
+    ]);
+  }));
   await expect(actionButtons.first()).toBeFocused();
 }
 
@@ -768,6 +771,7 @@ async function activateKeyboardChoice(
 
   await expect
     .poll(() => commandCount(page), {
+      intervals: [20, 50, 100, 250],
       timeout: 5_000,
       message: `${scenario.id}: ${family} keyboard activation sent no command`,
     })
@@ -784,6 +788,7 @@ async function activateKeyboardChoice(
 
   await expect
     .poll(() => updateSequence(page), {
+      intervals: [20, 50, 100, 250],
       timeout: 30_000,
       message: `${scenario.id}: no authority update after command ${commandNumber + 1}`,
     })
@@ -1044,7 +1049,9 @@ async function runScenario(
 test('release stack proves versioned visuals and accessibility across the prompt matrix', async ({
   browser,
 }, testInfo) => {
-  test.setTimeout(1_200_000);
+  // Both full matches took 19.8 minutes on the reference runner; leave room
+  // for shared-runner variance without changing their exact command proof.
+  test.setTimeout(1_800_000);
   const baseURL = testInfo.project.use.baseURL;
   expect(typeof baseURL).toBe('string');
 
