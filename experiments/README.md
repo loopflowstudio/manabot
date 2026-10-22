@@ -31,6 +31,11 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 ## Index
 
+[MTG-165 two-seat scale ladder](two-seat-ladder.md): **running, interim report** —
+20.9M learner/environment decisions retained in a verified 704-update snapshot;
+$4.01 estimated incurred including the earlier failure, $50 ceiling. No strength
+comparison or completed $50 endpoint yet.
+
 [ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
 actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
 training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.
