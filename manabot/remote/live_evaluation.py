@@ -19,7 +19,7 @@ from typing import Literal
 
 from etude.eval.query import connect
 from etude.eval.report import render
-from etude.eval.tournament import curves
+from etude.eval.tournament import Curve, curves
 from pydantic import BaseModel
 
 from manabot.infra.artifacts import verify_file
@@ -52,13 +52,15 @@ class Ledger(BaseModel):
     attempts: dict[str, Attempt] = {}
     error: str | None = None
     observed_at: float = 0
+    cohort_phase: str = "unknown"
+    training_updates: dict[str, int] = {}
 
 
 def report(directory: Path, ledger: Ledger) -> None:
     """Atomically refresh the live page from Etude's retained match tables."""
     public = directory / "public"
     public.mkdir(exist_ok=True)
-    summaries: list[dict[str, object]] = []
+    summaries: list[Curve] = []
     if (directory / "track").exists():
         db = connect(directory / "track")
         try:
@@ -72,16 +74,31 @@ def report(directory: Path, ledger: Ledger) -> None:
                     )
                 )
                 temporary.replace(public / "eval.html")
-                summaries = [
-                    c.model_dump(mode="json")
-                    for c in curves(
-                        db, "two-seat-ladder-heuristic", table="plays", value="score"
-                    )
-                ]
+                summaries = curves(
+                    db, "two-seat-ladder-heuristic", table="plays", value="score"
+                )
         finally:
             db.close()
     atomic_json(public / "status.json", ledger.model_dump(mode="json"))
-    atomic_json(public / "curves.json", summaries)
+    atomic_json(
+        public / "curves.json", [curve.model_dump(mode="json") for curve in summaries]
+    )
+    score_rows: list[str] = []
+    for curve in summaries:
+        for point in curve.points:
+            attempt = ledger.attempts.get(point.checkpoint)
+            interval = point.interval
+            bounds = (
+                f"[{interval[0]:.1%}, {interval[1]:.1%}]" if interval else "unavailable"
+            )
+            score_rows.append(
+                f"<tr><td>{attempt.updates if attempt else escape(point.name)}</td><td>{point.value:.1%}</td><td>{bounds}</td><td>{point.matches}/25 deals</td></tr>"
+            )
+    score_table = (
+        "<h2>Heuristic score</h2><table><tr><th>Updates</th><th>Score</th><th>95% deal interval</th><th>Coverage</th></tr>"
+        + "".join(score_rows)
+        + "</table>"
+    )
     rows = "".join(
         f"<tr><td>{a.updates}</td><td>{escape(a.phase)}</td><td>{a.learner_decisions:,}</td><td>{a.training_seconds / 3600:.2f}</td><td>{a.digest[:12]}</td><td>{escape(a.error or '')}</td></tr>"
         for a in sorted(ledger.attempts.values(), key=lambda a: a.updates)
@@ -94,7 +111,7 @@ def report(directory: Path, ledger: Ledger) -> None:
         f"<p>Updated {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(ledger.observed_at))}. "
         "Etude evaluates each exported 250-update checkpoint: 25 fixed deals × eight deck/seat legs, heuristic, one CPU worker on the Mac mini. No evaluation rentals.</p>"
         "<p>Repeated development monitoring, one training seed, unmatched one-seat training cost. Intervals resample whole deals; partial checkpoints are labeled running. Training updates, learner decisions and wall time are different clocks.</p>"
-        f"<p>{escape(ledger.error or '')}</p><table><tr><th>Updates</th><th>Evaluation</th><th>Learner decisions</th><th>Training hours</th><th>Checkpoint SHA</th><th>Error</th></tr>{rows}</table>"
+        f"<p>Cohort: {escape(ledger.cohort_phase)}. Latest observed training updates by job: {escape(str(ledger.training_updates))}.</p>{score_table}<p>{escape(ledger.error or '')}</p><table><tr><th>Updates</th><th>Evaluation</th><th>Learner decisions</th><th>Training hours</th><th>Checkpoint SHA</th><th>Error</th></tr>{rows}</table>"
         '<p><a href="eval.html">Etude evaluation report</a> · <a href="curves.json">Curves JSON</a> · <a href="status.json">Status JSON</a></p><iframe src="eval.html"></iframe>'
     )
     temporary = public / "index.html.tmp"
@@ -112,6 +129,7 @@ def evaluate_exports(
         if raw is None:
             continue
         record = JobRecord.model_validate_json(raw.data)
+        ledger.training_updates[spec.job_id] = record.updates
         if record.manifest is None:
             continue
         cache = directory / "cache"
@@ -129,6 +147,8 @@ def evaluate_exports(
             continue
         run = TrainingRun.model_validate_json(run_path.read_bytes())
         for checkpoint in run.monitoring_checkpoints:
+            if time.time() >= cohort.deadline + 3600:
+                return
             artifact = checkpoint.artifact
             if (
                 checkpoint.updates <= 0
@@ -192,7 +212,9 @@ def evaluate_exports(
                 item.pid = child.pid
                 atomic_json(directory / "ledger.json", ledger.model_dump(mode="json"))
                 try:
-                    deadline = time.monotonic() + 3600
+                    deadline = time.monotonic() + min(
+                        3600, max(0, cohort.deadline + 3600 - time.time())
+                    )
                     while child.poll() is None and time.monotonic() < deadline:
                         ledger.observed_at = time.time()
                         report(directory, ledger)
@@ -258,6 +280,7 @@ def follow(cohort_id: str, directory: Path) -> None:
                 if state.cohort_sha256 != cohort.identity:
                     raise ValueError("cohort state identity differs")
                 ledger.error = None
+                ledger.cohort_phase = state.phase
                 evaluate_exports(cohort, state, directory, ledger)
                 terminal = state.phase not in {"running", "pending"}
             except Exception as error:
