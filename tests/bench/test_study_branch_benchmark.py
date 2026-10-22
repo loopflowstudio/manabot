@@ -21,6 +21,13 @@ def _rehash(payload: dict) -> dict:
     return payload
 
 
+
+def test_source_closure_includes_bundled_engine_adapters() -> None:
+    paths = set(bench.source_paths())
+    assert ROOT / "manabot/managym/decision.py" in paths
+    assert ROOT / "manabot/managym/experience_projection.py" in paths
+
+
 def test_percentile_uses_nearest_rank() -> None:
     assert bench.percentile([4, 1, 3, 2], 0.50) == 2
     assert bench.percentile([4, 1, 3, 2], 0.95) == 4

@@ -17,6 +17,7 @@ on:
       - 'manabot/sim/player.py'
       - 'manabot/sim/structured_policy.py'
       - 'managym/**'
+      - 'manabot/managym/**'
       - 'content/**'
       - 'tests/model/**'
       - 'tests/verify/**'
