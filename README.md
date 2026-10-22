@@ -97,7 +97,8 @@ wide range of environments.
 
 Versioned PyPI release preparation, platform support, CPU/CUDA installation and
 maintainer publishing are described in [the release guide](docs/releases.md).
-The first planned release is 0.2.0; the source workflow below remains available.
+[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
+the source workflow below remains available.
 
 ## Quickstart
 

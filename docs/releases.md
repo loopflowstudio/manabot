@@ -7,7 +7,7 @@ remains a compatibility alias to the same module and native/protocol types.
 New code can use `from manabot import managym`.
 
 Releases use `X.Y.Z`, tagged `vX.Y.Z`; Python metadata and the bundled Rust crate
-use the same version. The first planned release is **0.2.0**, including Etude SDK
+use the same version. The first public release is [**0.2.0**](https://pypi.org/project/manabot/0.2.0/), including Etude SDK
 0.2.0 from [#349](https://github.com/loopflowstudio/manabot/pull/349). Package
 versions do not replace native world, content, observation or checkpoint
 identities. An upgrade does not make old checkpoints compatible. These are
@@ -15,7 +15,7 @@ research releases, not certification of playing strength or full rules coverage.
 
 ## Install a pinned release
 
-After publication, outside a checkout:
+Outside a source checkout:
 
 ```bash
 uv venv --python 3.12
@@ -133,12 +133,10 @@ Configure one trusted publisher for `manabot`:
 | Workflow name | `release.yml` |
 | Environment name | `pypi` |
 
-Jack Heart reported submitting the pending publisher on 2026-10-21. Before tagging,
-verify the publisher record and configure the GitHub `pypi` environment with
-required reviewers and version-tag deployment restrictions. The public PyPI
-JSON endpoint returned 404 during preparation; that does not establish account
-ownership or publisher configuration. The environment API also returned 404;
-its protection setup remains unverified.
+The pending publisher submitted by Jack Heart was used successfully on
+2026-10-22. The matching GitHub `pypi` environment restricts deployment to
+`v*` tags and requires review by the configured repository account. Future
+maintainers should verify these publisher/environment settings before tagging.
 See [pending publisher setup](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 
 For each release, update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`,
@@ -154,3 +152,31 @@ blindly retry publication, delete a release or move a used tag. If no files
 reached PyPI, resolve the cause and rerun the reviewed tag workflow. After
 upload, install from PyPI without local artifacts on both targets, confirm the
 version and attestations, and retain the release URL and check results.
+
+## 0.2.0 publication record
+
+Published on 2026-10-22 from tag `v0.2.0`, commit
+`29ab4fa0ddcc759ddb2b699ce3d08ccfe51ad757`, after
+[release PR #351](https://github.com/loopflowstudio/manabot/pull/351).
+The [tag workflow](https://github.com/loopflowstudio/manabot/actions/runs/39790120844)
+passed both platform builds/install checks and published through the trusted
+publisher. [PyPI](https://pypi.org/project/manabot/0.2.0/) contains two wheels
+and one source archive.
+
+Fresh registry-only CPython 3.12 installations passed on macOS Apple Silicon
+and Linux x86-64 (an isolated Docker container on Apple Silicon): semantic
+catalog admission, canonical/legacy import identity, CLI startup, a 32-transition
+CPU training update with checkpoint saves, optional API/report imports and
+`uv pip check`. No source checkout or local wheel directory was used.
+GPU execution remains unverified.
+
+`pypi-attestations verify pypi` verified all three files against
+`https://github.com/loopflowstudio/manabot`. Their signed certificates bind the
+release commit and tag above; attested subject digests match PyPI metadata.
+Published SHA-256 digests:
+
+| File | SHA-256 |
+|---|---|
+| `manabot-0.2.0-cp312-cp312-macosx_11_0_arm64.whl` | `aa6a7741ed7fd2a15b4a12b8979900cf5cd1a57712375241cde98cc627f46adb` |
+| `manabot-0.2.0-cp312-cp312-manylinux_2_28_x86_64.whl` | `a4f3bbbf643799d3d2e89374a3cb3676b5b174dc97471ef371f87a9e8444d0d9` |
+| `manabot-0.2.0.tar.gz` | `740b889c6baccafc411faadf803a0bd402721442a7698c8be6b4e4c89da677da` |
