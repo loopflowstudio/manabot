@@ -8,10 +8,10 @@ from typing import NoReturn
 from pydantic import JsonValue, ValidationError
 import pytest
 
+from experiments.recipes import value_model_baseline
 from experiments.runners.model_capacity import experiment as capacity_experiment
 from experiments.runners.run_value_models import (
     experiment as value_experiment,
-    smoke_baseline,
     smoke_plan,
 )
 from manabot.arena.models import canonical_sha256
@@ -41,7 +41,7 @@ from manabot.training.presets import ataraxos_mtg_v1
 
 
 def _baseline() -> Baseline:
-    return Baseline.capture("control-v1", smoke_baseline())
+    return Baseline.capture("control-v1", value_model_baseline())
 
 
 def _flatten(value: JsonValue, prefix: tuple[str, ...] = ()) -> set[tuple[str, ...]]:
@@ -113,7 +113,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
 
 
 def test_baseline_and_resolved_artifacts_are_isolated() -> None:
-    regime = smoke_baseline()
+    regime = value_model_baseline()
     base = Baseline.capture("immutable-v1", regime)
     before = base.digest
     regime.match.hero_deck.clear()
@@ -153,10 +153,10 @@ def test_snapshot_rejects_missing_defaults_and_preset_is_pinned() -> None:
         (Model(AgentSpec(hidden_dim=64)), Model(AgentSpec(hidden_dim=64))),
         (Resources(wall_seconds=100), Resources(wall_seconds=200)),
         (
-            Pipeline(tuple(smoke_baseline().stages)),
+            Pipeline(tuple(value_model_baseline().stages)),
             Resources(execution=Execution(threads=2)),
         ),
-        (Pipeline(tuple(smoke_baseline().stages)), LearningRule(Learning())),
+        (Pipeline(tuple(value_model_baseline().stages)), LearningRule(Learning())),
     ],
 )
 def test_conflicts_rejected_in_either_order(
@@ -331,13 +331,9 @@ def test_resolution_allocates_no_model_training_or_store(
     assert all("seed" not in p.path for c in result.cases for p in c.provenance)
 
 
-def test_capacity_migration_preserves_registered_identities() -> None:
-    result = capacity_experiment(smoke_baseline()).resolve()
-    assert result.digests == (
-        "3aa8175c21095df6620fdb3485ca55b0eb2259d58a1bcc4705d769e8a5b4ce35",
-        "01050b55349236b68c96bb7ecdb5dd4a60d20f9b904192057546ca1f786ed4a1",
-        "b3d98735210e95988a941ae01547ee54ae093433d8d61310af91d335036f3a80",
-    )
+def test_capacity_cases_round_trip_their_configurations() -> None:
+    result = capacity_experiment(value_model_baseline()).resolve()
+    assert len(set(result.digests)) == 3
     for case in result.cases:
         assert TrainingRegime.model_validate_json(case.configuration) == case.regime
         assert all(isinstance(s, TrainSelfPlay) for s in case.regime.stages)

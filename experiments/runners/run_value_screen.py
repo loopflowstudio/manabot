@@ -9,8 +9,8 @@ from pathlib import Path
 
 import torch
 
+from experiments.recipes import value_model_baseline
 from experiments.runners.run_training_regimes import ROOT, run_study
-from experiments.runners.run_value_models import smoke_baseline
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256
 from manabot.env import ObservationSpace
@@ -22,7 +22,7 @@ from manabot.training.recipes import with_value_aggregation
 
 def screen_plan() -> ResolvedStudy:
     """Pin a prospective fixed-count cohort with phase watchdogs, without scoring."""
-    base = smoke_baseline()
+    base = value_model_baseline()
     base.wall_seconds = 2400
     for stage in base.stages:
         assert isinstance(stage, TrainSelfPlay)

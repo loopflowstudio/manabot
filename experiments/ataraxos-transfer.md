@@ -343,14 +343,11 @@ The following is a **plan-only illustration** using the repository's tiny
 mechanism recipe, not a selected-matchup study or authorization to execute it:
 
 ```python
-from pathlib import Path
-
+from experiments.recipes import learned_belief_local_search
 from manabot.training.experiments import Baseline, Experiment, Pipeline
-from manabot.training.models import TrainingRegime, TrainSupervised
+from manabot.training.models import TrainSupervised
 
-source = TrainingRegime.model_validate_json(
-    Path("experiments/regimes/learned-belief-local-search.json").read_text()
-)
+source = learned_belief_local_search()
 # One producer, one saved history dataset, one sampler and one label collection.
 prefix = tuple(source.stages[:4])
 soft = TrainSupervised(
