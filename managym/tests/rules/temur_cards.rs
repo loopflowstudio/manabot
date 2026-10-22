@@ -373,3 +373,140 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     settle(&mut s);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
+
+#[test]
+fn prism_upfront_payment_preserves_professors_second_green() {
+    for sources in [
+        ["Forest", "Island", "Prophetic Prism", "Island", "Mountain"],
+        ["Mountain", "Island", "Prophetic Prism", "Island", "Forest"],
+    ] {
+        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        for name in sources {
+            enter(&mut s, name);
+        }
+        s.set_player_mana_pool(0, "0");
+        let professor = cast(&mut s, "Gnarled Professor");
+        assert!(s
+            .action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::ActivateAbility { .. })));
+        activate(&mut s, "Prophetic Prism", 0);
+        assert!(
+            !s.game().state.permanents[permanent(&s, "Forest")]
+                .as_ref()
+                .unwrap()
+                .tapped
+        );
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        assert_eq!(s.action_space().actions.len(), 1);
+        choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(
+            s.game().state.zones.zone_of(professor),
+            Some(ZoneType::Stack)
+        );
+        settle(&mut s);
+        assert!(!s
+            .battlefield_permanents_named(0, "Gnarled Professor")
+            .is_empty());
+    }
+}
+
+#[test]
+fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
+    use managym::{
+        search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
+        Game,
+    };
+
+    fn complete_every_offer(game: &mut Game, spell: CardId, depth: usize) {
+        if game.state.zones.zone_of(spell) == Some(ZoneType::Stack) {
+            return;
+        }
+        assert!(
+            depth > 0,
+            "payment must complete within its three decisions"
+        );
+        let driver = ClonePlusUndoDriver::default();
+        let root = witness(game);
+        let actions = game.action_space().unwrap().actions.clone();
+        assert!(!actions.is_empty());
+        for action_index in 0..actions.len() {
+            let mark = driver.mark(game);
+            driver
+                .apply(
+                    game,
+                    BenchCommand {
+                        action_index,
+                        expected_action_hash: None,
+                        expected_state_hash: None,
+                    },
+                )
+                .unwrap();
+            complete_every_offer(game, spell, depth - 1);
+            driver.rollback(game, mark);
+            assert_eq!(witness(game), root);
+        }
+    }
+
+    for forests in 0..=2 {
+        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        for _ in 0..forests {
+            enter(&mut s, "Forest");
+        }
+        for name in ["Island", "Prophetic Prism", "Island", "Mountain"] {
+            enter(&mut s, name);
+        }
+        s.set_player_mana_pool(0, "0");
+        let professor = card(&s, 0, "Gnarled Professor");
+        s.game_mut().move_card(professor, ZoneType::Hand);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&s, professor), forests > 0);
+        if forests == 0 {
+            continue;
+        }
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { card, .. } if *card == professor),
+        );
+        let root = witness(s.game());
+        let driver = ClonePlusUndoDriver::default();
+        let mut branch = driver.fork_exact(s.game());
+        complete_every_offer(&mut branch, professor, 3);
+        assert_eq!(witness(s.game()), root);
+        assert_eq!(witness(&branch), root);
+    }
+}
+
+#[test]
+fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
+    let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+    for name in ["Prophetic Prism", "Island", "Island", "Mountain"] {
+        enter(&mut s, name);
+    }
+    s.set_player_mana_pool(0, "G");
+    let professor = cast(&mut s, "Gnarled Professor");
+    activate(&mut s, "Prophetic Prism", 0);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(
+        s.game().state.zones.zone_of(professor),
+        Some(ZoneType::Stack)
+    );
+}
+
+#[test]
+fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
+    let mut s = setup(&["Prophetic Prism", "Serra Angel"]);
+    enter(&mut s, "Prophetic Prism");
+    s.set_player_mana_pool(0, "WUUUU");
+    let angel = cast(&mut s, "Serra Angel");
+    activate(&mut s, "Prophetic Prism", 0);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
+    assert_eq!(s.action_space().actions.len(), 1);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.zones.zone_of(angel), Some(ZoneType::Stack));
+}
