@@ -581,9 +581,9 @@ fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
 
 /// CR 605.3a/b, 118.3: one Treasure can pay Prism's activation cost;
 /// sacrifice precedes the chosen-color output, and neither uses the stack.
-/// Kept as an explicit known-failure probe for MTG-174's payment authority.
+/// Kept as an explicit known-failure probe for the separate payment work.
 #[test]
-#[ignore = "MTG-174: offered Prism activation rejects Treasure-funded cost at audited revision"]
+#[ignore = "known payment defect: offered Prism activation rejects Treasure-funded cost"]
 fn audit_prism_treasure_empty_pool_activation() {
     let deck = BTreeMap::from([
         ("Mountain".to_string(), 8),

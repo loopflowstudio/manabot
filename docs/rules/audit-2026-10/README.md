@@ -1,6 +1,6 @@
-# Rules unification: draft review guide
+# Rules unification: bounded delivery review
 
-This draft follows the accepted plan to find competing definitions of a rule,
+This increment follows the accepted plan to find competing definitions of a rule,
 adjudicate them against the pinned MTG rules, and share the faithful authority.
 It preserves the original committed inventory and draft; it does not repeat
 the whole-inventory audit or claim full MTG conformance.
@@ -73,7 +73,23 @@ legitimate rechecks have not been collapsed into a universal rules engine.
 
 ## Validation limits
 
-The w12 repair passes 10 native targeting witnesses and 6 debug conformance
+The enumeration cleanup now has fresh checks against its rebuilt, atomically
+installed native extension: 11 debug targeting witnesses, 300 debug rules cases,
+6 w12 conformance checks, 11 Command/recovery and decision-surface cases, and
+21 dependency-blocked play/Study protocol/runtime cases. The known payment and
+trigger-order probes remain ignored, with their failures retained separately.
+Clippy, Rust formatting and changed Python lint pass. Clippy's initial finding
+in the new mana matrix was fixed without changing its cases or expected outcomes;
+that matrix was rerun. All 7 Study branch, 11 arena admission/replay and 20 monitor
+cases also pass. The fresh [gate learnability diagnostic](learnability-w12-gate.json) passes in
+43.0s with 144 capacity assertions and 65,536 reward-driven PPO transitions,
+including checkpoint reload (after 1.0; no-update 0.640625). Its 480s total /
+300s PPO watchdogs are unchanged. The selected checks total 317 passing debug
+Rust tests and 116 Python tests, plus the targeted mana recheck after the lint
+fix. See the gate receipts for source/native digests and timings.
+
+At acceptance checkpoint `bda9b0aeb`, the w12 repair had 10 passing native
+targeting witnesses and 6 debug conformance
 checks over a fresh 14-case / 3,491-Command corpus. Dependency-blocked play/Study
 protocol (17), Command/recovery (8), repaired decision surface (4), and tooling/
 package-boundary (44) tests pass. All 11 arena admission cases passed across
@@ -86,10 +102,11 @@ transitions; after 1.0 versus no-update 0.640625). The positive control retains
 its original one-seat recipe and 480s total / 300s PPO watchdogs. The earlier
 [99.6s pass](learnability-w12-canonical.json) remains historical evidence.
 Fresh dependency-blocked play/Study protocol checks pass all 17 tests against
-the rebuilt native extension. Native targeting, the integrated diagnostic and
-these protocol results are fresh; conformance, arena, Command/recovery and
-decision-surface counts above reuse receipts whose production sources are
-unchanged. They are not newly run full suites.
+the extension rebuilt for that checkpoint. Its native targeting, integrated
+diagnostic and protocol results were fresh; conformance, arena, Command/recovery
+and decision-surface counts reused receipts for then-unchanged production
+sources. These are historical acceptance results, not full suites rerun after
+the enumeration cleanup.
 
 Study semantic retry, all seven Study branch cases and the four outstanding
 monitor cases now pass. The branch fixture had been repeatedly persisting a
@@ -101,6 +118,12 @@ The four monitor cases pass in 26.1s; the other 16 also pass in a separate
 [validation receipts](unification-validation.json), including a new bounded
 failure with a persistence stack sample. No production persistence behavior,
 training budgets, timeout limits or assertions changed.
+
+Gate measured 331.942 command-seconds including native build, failed Clippy and
+targeted rechecks, plus full learnability. This is local command duration, not
+CI runner cost or session wall time. No required affected check is deferred;
+the full platform/cross-language/fuzz matrix remains CI-owned. Recorded authored
+churn is 4,274 lines against the approximate 10k budget.
 
 ## Ownership, checks and scope
 
@@ -115,8 +138,11 @@ failure, native rebuild/import, Python checks, cost and coverage limits.
 [Line accounting](line-accounting.json) reconciles the original 621-line draft
 with this bounded increment against the approximate combined 10k-line budget.
 Earlier frozen worlds, decks, experiment evidence and training budgets remain unchanged.
-CI conformance checks select the new w12 root with unchanged required-check semantics. No ready publication, merge, auto-merge or
-Task completion is selected. The durable draft stops for review.
+CI conformance checks select the w12 root with unchanged required-check semantics.
+On 2026-10-22, Jack Heart reviewed the walkthrough and approved shipping this
+bounded increment, superseding older draft-only holds. Gate prepares this checkout;
+the parent conversation owns publication and landing. MTG-177 remains open for the
+unfinished substantive whole-rules audit.
 
 ## Reference evidence
 

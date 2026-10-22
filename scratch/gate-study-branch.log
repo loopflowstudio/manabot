@@ -1,0 +1,11 @@
+.......                                                                  [100%]
+============================= slowest 7 durations ==============================
+12.79s call     tests/academy/test_study_branch.py::test_submission_failures_are_typed_one_shot_and_zero_fallback
+12.63s call     tests/academy/test_study_branch.py::test_historical_address_forks_executes_structured_command_and_returns
+12.55s call     tests/academy/test_study_branch.py::test_unsupported_native_surface_is_typed_and_returnable
+12.34s call     tests/academy/test_study_branch.py::test_study_fork_fails_closed_for_invalid_missing_and_other_viewer
+12.21s call     tests/academy/test_study_branch.py::test_projected_object_incarnation_cannot_replace_native_binding
+11.98s call     tests/academy/test_study_branch.py::test_retained_root_drift_consumes_return_and_blocks_later_forks
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+7 passed in 74.71s (0:01:14)

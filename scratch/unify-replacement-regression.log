@@ -1,0 +1,13 @@
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.27s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)
+
+running 5 tests
+test rules::cr_614_replacement::entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves ... ok
+test rules::cr_614_replacement::cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits ... ok
+test rules::cr_614_replacement::cr_615_prevented_damage_emits_no_committed_damage_or_life_event ... ok
+test rules::cr_614_replacement::nonmatching_replacement_preserves_the_legacy_committed_trace ... ok
+test rules::cr_614_replacement::cr_616_curated_replacement_order_is_deterministic_and_observable ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.01s
+

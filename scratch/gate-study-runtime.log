@@ -1,0 +1,8 @@
+.....................                                                    [100%]
+============================= slowest 5 durations ==============================
+16.53s call     tests/academy/test_study_runtime.py::test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return
+8.25s call     tests/academy/test_study_runtime.py::test_semantic_retry_supports_land_and_rejects_drift
+7.97s call     tests/academy/test_study_runtime.py::test_injected_exact_fixture_reveals_and_previews_on_fresh_forks
+7.39s call     tests/academy/test_study_runtime.py::test_normal_runtime_seals_evidence_and_returns_exactly
+0.30s call     tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies
+21 passed in 41.42s

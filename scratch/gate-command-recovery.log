@@ -1,0 +1,8 @@
+...........                                                              [100%]
+============================= slowest 5 durations ==============================
+2.29s call     tests/academy/test_optional_payment_recovery.py::test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate
+1.89s call     tests/academy/test_decision_surface.py::test_precision_treasure_boundaries
+1.39s call     tests/academy/test_decision_surface.py::test_precision_four_mana_branch
+0.60s call     tests/academy/test_decision_surface.py::test_imported_replay_rejects_private_inspection
+0.02s call     tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry
+11 passed in 7.02s

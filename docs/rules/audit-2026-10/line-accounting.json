@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 4132,
+  "combined_draft_churn_lines": 4274,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -384,5 +384,42 @@
       }
     ],
     "churn_lines": 78
+  },
+  "enumeration_cleanup_increment": {
+    "basis": "Working cleanup against 6756acb0a (2026-10-22); additions plus deletions for native enumeration, its behavioral witness and ownership documentation. Retains the earlier 4132-line charge. Audit reports, plans and receipt summaries excluded; no new retained helper.",
+    "files": [
+      {
+        "path": "managym/src/flow/triggers.rs",
+        "added": 36,
+        "deleted": 47
+      },
+      {
+        "path": "managym/src/flow/target_authority_tests.rs",
+        "added": 49,
+        "deleted": 0
+      },
+      {
+        "path": "managym/README.md",
+        "added": 3,
+        "deleted": 1
+      }
+    ],
+    "churn_lines": 136
+  },
+  "gate_increment": {
+    "basis": "Gate against the supplied working cleanup; remove stale payment-Task attribution and simplify the new mana oracle comparison as required by clippy. Test coverage/assertions unchanged. Audit reports and receipts excluded; no new retained tooling helper.",
+    "files": [
+      {
+        "path": "managym/tests/rules/temur_cards.rs",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "managym/tests/rules/cr_106_mana.rs",
+        "added": 1,
+        "deleted": 1
+      }
+    ],
+    "churn_lines": 6
   }
 }

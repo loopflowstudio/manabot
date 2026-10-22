@@ -55,22 +55,23 @@ the refreshed ownership section before coordinating work.
 | Alternate wins/losses and special zones | Ordinary life/draw losses have evidence; poison loss and ante zone were inspected as missing; broader alternate wins/loops unresolved. | Separate genuinely absent representation from unreviewed behavior. |
 | Multiplayer and casual variants — CR 800–905 | Outside current admission, including two-player variants without a variant state machine. | Explicit product/format admission work, not defects in the ordinary two-player contract. |
 
-The index contains **3,166 numbered rules/subrules**, plus 156 headings. After
-the latest reviewed target entries, **2,970 total entries remain unknown**.
+The index contains **3,166 numbered rules/subrules**, plus 156 headings. The
+[review guide](README.md#reference-evidence) records current status counts.
 These counts measure review status, not a percentage of MTG implemented. The
 original inventory was mostly family triage; a precise whole-rules coverage
 percentage would be misleading.
 
 ## What this suggests doing next
 
-Finish the targeting repair's remaining Study and monitor acceptance checks;
-the w12 correction and full learnability diagnostic are already retained. Then
-restore missing player choices for trigger and replacement ordering through the
+The targeting repair's Study, monitor and full learnability acceptance checks
+and the enumeration cleanup's affected consumer/conformance checks are closed;
+their evidence is linked in the [review guide](README.md#validation-limits).
+Restore missing player choices for trigger and replacement ordering through the
 shared native decision surface. Continue
 reviewing current-card interactions before expanding formats or building a
 general engine for unused mechanics. Keep closing evidence gaps in strong
 subsets too: agreement between consumers cannot rule out a shared rules bug.
 
 Full detail stays in the [index](index.jsonl), [original evidence](evidence.md)
-and [draft review guide](README.md). No new test run or conformance claim is
+and [delivery review guide](README.md). No new test run or conformance claim is
 implied by this map.

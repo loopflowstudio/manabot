@@ -1,0 +1,23 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (managym/target/debug/deps/managym-46b830237fb1f4e1)
+
+running 2 tests
+
+thread 'flow::triggers::target_authority_tests::audit_same_controller_triggers_require_an_order_choice' (92542567) panicked at src/flow/target_authority_tests.rs:183:5:
+must suspend for the controller's order choice
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'flow::triggers::target_authority_tests::audit_spell_or_permanent_must_respect_opponents_hexproof' (92542568) panicked at src/flow/target_authority_tests.rs:237:5:
+assertion failed: !game.legal_targets_for_spec(&spec, PlayerId(1)).contains(&permanent)
+test flow::triggers::target_authority_tests::audit_same_controller_triggers_require_an_order_choice ... FAILED
+test flow::triggers::target_authority_tests::audit_spell_or_permanent_must_respect_opponents_hexproof ... FAILED
+
+failures:
+
+failures:
+    flow::triggers::target_authority_tests::audit_same_controller_triggers_require_an_order_choice
+    flow::triggers::target_authority_tests::audit_spell_or_permanent_must_respect_opponents_hexproof
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 78 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`

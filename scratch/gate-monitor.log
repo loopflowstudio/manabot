@@ -1,0 +1,8 @@
+....................                                                     [100%]
+============================= slowest 5 durations ==============================
+12.31s call     tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]
+8.30s call     tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]
+5.76s call     tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False]
+3.13s call     tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[1-scripted_greedy-False]
+0.40s call     tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts
+20 passed in 30.72s

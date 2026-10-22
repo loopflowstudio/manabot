@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/jack/src/manabot.rules-audit/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jack/src/manabot.rules-audit
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collecting ... collected 4 items
+
+tests/academy/test_decision_surface.py::test_precision_treasure_boundaries PASSED [ 25%]
+tests/academy/test_decision_surface.py::test_precision_four_mana_branch PASSED [ 50%]
+tests/academy/test_decision_surface.py::test_imported_replay_rejects_private_inspection PASSED [ 75%]
+tests/academy/test_decision_surface.py::test_trace_record_preserves_nested_policy_evidence PASSED [100%]
+
+============================== 4 passed in 16.35s ==============================

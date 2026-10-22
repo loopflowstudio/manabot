@@ -1,0 +1,10 @@
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.12 at /Users/jack/src/manabot.rules-audit/.venv/bin/python
+🔗 Found pyo3 bindings
+📡 Using build options features, bindings from pyproject.toml
+💻 Using `MACOSX_DEPLOYMENT_TARGET=11.0` for aarch64-apple-darwin by default
+   Compiling managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)
+    Finished `release` profile [optimized] target(s) in 24.79s
+📦 Including files matching "content/semantic/**/*.json"
+📦 Including files matching "docs/experiment-metrics.md"
+📦 Built wheel for CPython 3.12 to managym/target/wheels/manabot-0.2.0-cp312-cp312-macosx_11_0_arm64.whl

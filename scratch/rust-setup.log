@@ -1,0 +1,11 @@
+   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.59s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)
+
+running 3 tests
+test rules::cr_103_game_start::cr_103_4_players_start_at_twenty_life ... ok
+test rules::cr_103_game_start::cr_103_5_opening_hands_have_seven_cards ... ok
+test rules::cr_103_game_start::cr_103_negative_rejects_non_two_player_game - should panic ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 0.01s
+

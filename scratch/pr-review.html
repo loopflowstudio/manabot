@@ -1,0 +1,227 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Targeting authority — current draft review</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#faf9f6;color:#252b2f;font:18px/1.6 system-ui,sans-serif}main{max-width:1080px;margin:auto;padding:52px 30px 80px}h1{font-size:40px;line-height:1.15;letter-spacing:-1.2px;margin:12px 0 22px}h2{font-size:27px;line-height:1.3;margin:0 0 16px}h3{font-size:20px}p{max-width:850px}a{color:#125d78;text-underline-offset:3px}nav{display:flex;flex-wrap:wrap;gap:10px 26px;margin:28px 0 42px;font-size:15px}section{margin-top:64px;padding-top:22px;border-top:1px solid #cdd2d1}small,.meta,figcaption{font-size:13px;color:#535e64;overflow-wrap:anywhere}.lead{font-size:22px;line-height:1.5}.verdict{border-left:3px solid #867349;padding-left:18px}figure{margin:26px 0}figcaption{margin-bottom:8px;overflow-wrap:anywhere}pre{font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f0f1ee;border:1px solid #d8ddd7;padding:20px;overflow:auto;tab-size:4}pre code{font:inherit}pre span{display:block;min-height:1.55em;min-width:max-content}.plus{color:#195537;background:#e0eee2}.minus{color:#872b2c;background:#f6e3e0}table{width:100%;border-collapse:collapse;font-size:16px}th,td{text-align:left;vertical-align:top;padding:13px 12px;border-bottom:1px solid #d8ddd7}th:first-child,td:first-child{padding-left:0}details{margin:22px 0}summary{cursor:pointer;color:#125d78}a:focus-visible,summary:focus-visible,pre:focus-visible{outline:3px solid #a36c25;outline-offset:4px}.trace{font-size:16px;color:#48535b}footer{margin-top:60px;border-top:1px solid #cdd2d1;padding-top:20px}@media(max-width:600px){main{padding:28px 18px 50px}h1{font-size:32px}h2{font-size:24px}.lead{font-size:20px}pre{font-size:13px;padding:14px}table,tbody,tr,td{display:block}thead{display:none}td{padding:8px 0}tr{margin:20px 0}td:first-child{font-weight:650}section{margin-top:44px}}@media print{body{background:white;font-size:11pt}main{max-width:none;padding:0}nav{display:none}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:8pt}pre span{min-width:0}figure{break-inside:avoid}a{color:inherit}details{display:block}} .eyebrow{font-size:13px;color:#535e64} .meta details{margin:0} header p{margin:12px 0} .note{font-size:16px;color:#48535b} .two-stage{border-left:3px solid #867349;padding-left:18px}.boundary{border-left:3px solid #867349;padding-left:18px}.sourcehash{overflow-wrap:anywhere}.footnotes{font-size:15px}.uncommitted{color:#734b0b}</style></head><body><main>
+<header><p class="eyebrow">MTG-177 · local branch + working changes · no published PR</p><h1>Faithful targeting is implemented.<br>Now review the last enumeration cleanup.</h1><p class="lead">Opposing hexproof excludes a permanent under every supported target wording; own hexproof remains legal when other restrictions permit it. The committed repair's acceptance gaps are closed. A later, uncommitted cleanup collects candidates in their established order and applies legality once.</p><p class="boundary">The distinction that matters: passing integrated acceptance describes the committed repair before that cleanup. The cleanup has 11 focused debug passes and a rebuilt native extension, but broader affected consumer/conformance checks remain.</p><details><summary>Exact review scope</summary><p class="meta">Branch base 0d981499554bfb93d20ea77f5275410999a8967a<br>Committed head 6756acb0a729c2445d9812d02fbfb8b95233d7bc<br>Working patch SHA-256 <span class="sourcehash">7c7c3fc73e17560e310ae0edd28ec53ecc5d3c1af70a091fdab19dbab0ff097b</span><br>The branch comparison excludes upstream release/collector contributions already in its actual merge base. Uncommitted excerpts below are labeled and pinned by file hash, not linked to nonexistent GitHub revisions. This page embeds snapshots; later edits do not change its evidence. Untracked Flow definitions and raw logs are context, outside the committed diff.</p></details></header>
+<nav aria-label="Reading route"><a href="#choices">1. Same choices, one filter</a><a href="#rule">2. Rule authority and recovery</a><a href="#study">3. Acceptance without redundant setup</a><a href="#proof">4. What is established</a></nav>
+<section id="choices"><h2>Offers keep their order; legality has one owner</h2><p>For player, graveyard and mixed targets, you should see the same legal choices in the same order. Previously enumeration filtered in several branches and delegated stack candidates to a helper. The working change builds an ordered candidate list, then filters it once through <code>target_is_legal</code>.</p><figure id="core-code"><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/managym/src/flow/triggers.rs#L226-L292">managym/src/flow/triggers.rs · legal_targets_for_spec and removed stack_spell_targets</a><br>6756acb0a7 · lines 226–292 · committed source; head unpublished</figcaption><figcaption class="uncommitted">managym/src/flow/triggers.rs · legal_targets_for_spec and removed stack_spell_targets<br>Uncommitted local snapshot · lines 226–281 · file SHA-256 <span class="sourcehash">a8f40e190fa9ef8c5003e63850eaa680859eb631dbecdff4c1d4ca20052b72b1</span></figcaption><pre tabindex="0"><code><span class="context">--- 6756acb0a7:managym/src/flow/triggers.rs
+</span><span class="context">+++ WORKTREE:managym/src/flow/triggers.rs
+</span><span class="context">@@ -226,67 +226,56 @@
+</span><span class="context">     pub(crate) fn legal_targets_for_spec(</span><span class="context">         &amp;self,</span><span class="context">         target_spec: &amp;TargetSpec,</span><span class="context">         controller: PlayerId,</span><span class="context">     ) -&gt; Vec&lt;Target&gt; {</span><span class="minus">-        match target_spec {</span><span class="plus">+        let mut candidates: Vec&lt;Target&gt; = match target_spec {</span><span class="context">             TargetSpec::GraveyardCardYouOwn { .. } =&gt; self</span><span class="context">                 .state</span><span class="context">                 .zones</span><span class="context">                 .zone_cards(ZoneType::Graveyard, controller)</span><span class="context">                 .iter()</span><span class="context">                 .filter_map(|card| self.current_object_ref(*card))</span><span class="context">                 .map(Target::GraveyardCard)</span><span class="minus">-                .filter(|target| self.target_is_legal(*target, target_spec, controller))</span><span class="context">                 .collect(),</span><span class="minus">-            TargetSpec::Player =&gt; vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))],</span><span class="minus">-            TargetSpec::Opponent =&gt; vec![Target::Player(PlayerId((controller.0 + 1) % 2))],</span><span class="plus">+            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer =&gt; {</span><span class="plus">+                vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]</span><span class="plus">+            }</span><span class="plus">+            TargetSpec::Spell | TargetSpec::SpellOrPermanent { .. } =&gt; self</span><span class="plus">+                .state</span><span class="plus">+                .stack_objects</span><span class="plus">+                .iter()</span><span class="plus">+                .rev()</span><span class="plus">+                .filter_map(|object| match object {</span><span class="plus">+                    StackObject::Spell(spell) =&gt; Some(Target::StackSpell(spell.card)),</span><span class="plus">+                    _ =&gt; None,</span><span class="plus">+                })</span><span class="plus">+                .collect(),</span><span class="plus">+            _ =&gt; Vec::new(),</span><span class="plus">+        };</span><span class="plus">+        // Preserve offer order: players or newest spells first, then permanents</span><span class="plus">+        // in player/zone order. Enumeration supplies candidates; legality below</span><span class="plus">+        // owns restrictions at selection (CR 601.2c) and resolution (608.2b).</span><span class="plus">+        if matches!(</span><span class="plus">+            target_spec,</span><span class="context">             TargetSpec::PermanentYouControl { .. }</span><span class="minus">-            | TargetSpec::Permanent { .. }</span><span class="minus">-            | TargetSpec::Creature</span><span class="minus">-            | TargetSpec::CreatureOrPlayer</span><span class="minus">-            | TargetSpec::CreatureYouControl</span><span class="minus">-            | TargetSpec::CreatureOpponentControls</span><span class="minus">-            | TargetSpec::LandYouControl</span><span class="minus">-            | TargetSpec::PermanentOpponentControls { .. }</span><span class="minus">-            | TargetSpec::SpellOrPermanent { .. } =&gt; {</span><span class="minus">-                let mut out = match target_spec {</span><span class="minus">-                    TargetSpec::CreatureOrPlayer =&gt; {</span><span class="minus">-                        vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]</span><span class="minus">-                    }</span><span class="minus">-                    TargetSpec::SpellOrPermanent { .. } =&gt; {</span><span class="minus">-                        self.stack_spell_targets(target_spec, controller)</span><span class="minus">-                    }</span><span class="minus">-                    _ =&gt; Vec::new(),</span><span class="minus">-                };</span><span class="minus">-                for player in [PlayerId(0), PlayerId(1)] {</span><span class="minus">-                    for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {</span><span class="minus">-                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {</span><span class="minus">-                            continue;</span><span class="minus">-                        };</span><span class="minus">-                        let target = Target::Permanent(permanent_id);</span><span class="minus">-                        if self.target_is_legal(target, target_spec, controller) {</span><span class="minus">-                            out.push(target);</span><span class="minus">-                        }</span><span class="plus">+                | TargetSpec::Permanent { .. }</span><span class="plus">+                | TargetSpec::Creature</span><span class="plus">+                | TargetSpec::CreatureOrPlayer</span><span class="plus">+                | TargetSpec::CreatureYouControl</span><span class="plus">+                | TargetSpec::CreatureOpponentControls</span><span class="plus">+                | TargetSpec::LandYouControl</span><span class="plus">+                | TargetSpec::PermanentOpponentControls { .. }</span><span class="plus">+                | TargetSpec::SpellOrPermanent { .. }</span><span class="plus">+        ) {</span><span class="plus">+            for player in [PlayerId(0), PlayerId(1)] {</span><span class="plus">+                for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {</span><span class="plus">+                    if let Some(permanent_id) = self.state.card_to_permanent[card_id] {</span><span class="plus">+                        candidates.push(Target::Permanent(permanent_id));</span><span class="context">                     }</span><span class="context">                 }</span><span class="minus">-                out</span><span class="context">             }</span><span class="minus">-            TargetSpec::Spell =&gt; self.stack_spell_targets(target_spec, controller),</span><span class="context">         }</span><span class="plus">+        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));</span><span class="plus">+        candidates</span><span class="context">     }</span><span class="context"> </span><span class="minus">-    // Enumeration supplies candidates in stack order; the shared predicate</span><span class="minus">-    // owns restrictions both when choosing (CR 601.2c) and rechecking (608.2b).</span><span class="minus">-    fn stack_spell_targets(&amp;self, spec: &amp;TargetSpec, controller: PlayerId) -&gt; Vec&lt;Target&gt; {</span><span class="minus">-        self.state</span><span class="minus">-            .stack_objects</span><span class="minus">-            .iter()</span><span class="minus">-            .rev()</span><span class="minus">-            .filter_map(|object| match object {</span><span class="minus">-                StackObject::Spell(spell) =&gt; Some(Target::StackSpell(spell.card)),</span><span class="minus">-                _ =&gt; None,</span><span class="minus">-            })</span><span class="minus">-            .filter(|target| self.target_is_legal(*target, spec, controller))</span><span class="minus">-            .collect()</span><span class="minus">-    }</span><span class="minus">-</span></code></pre></figure><p class="note">Opponent choice is now derived by the shared predicate instead of calculated as a separate player index. Graveyard candidates retain exact ObjectRefs. Players or newest spells precede battlefield candidates in player/zone order. Counts, per-clause distinctness and applicable source exclusions remain selection-stage responsibilities.</p><details><summary>New independent scope/order witness</summary><p>The expected player lists and graveyard object order are written explicitly for both controllers; the test does not merely compare two callers using the same implementation.</p><figure><figcaption class="uncommitted">managym/src/flow/target_authority_tests.rs · player_and_graveyard_targets_preserve_scope_and_order (new working test)<br>Uncommitted local snapshot · lines 125–173 · file SHA-256 <span class="sourcehash">d7d8a4e876bba8c12db37d1b8fa7ad0cc9c42f22271d785849ed430fff3267d7</span></figcaption><pre tabindex="0"><code>#[test]
+fn player_and_graveyard_targets_preserve_scope_and_order() {
+    let (mut game, bolt, ogre, permanent, _) = fixture();
+    // CR 115.2: player choices do not admit cards, and graveyard choices do
+    // not admit battlefield objects. Mixed choices keep players first.
+    for (controller, opponent) in [(PlayerId(0), PlayerId(1)), (PlayerId(1), PlayerId(0))] {
+        assert_eq!(
+            game.legal_targets_for_spec(&amp;TargetSpec::Player, controller),
+            vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
+        );
+        assert_eq!(
+            game.legal_targets_for_spec(&amp;TargetSpec::Opponent, controller),
+            vec![Target::Player(opponent)]
+        );
+        assert_eq!(
+            game.legal_targets_for_spec(&amp;TargetSpec::CreatureOrPlayer, controller),
+            vec![
+                Target::Player(PlayerId(0)),
+                Target::Player(PlayerId(1)),
+                permanent
+            ]
+        );
+    }
+    game.move_card(bolt, ZoneType::Graveyard);
+    game.move_card(ogre, ZoneType::Graveyard);
+    let spec = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate::default(),
+    };
+    assert!(game.legal_targets_for_spec(&amp;spec, PlayerId(0)).is_empty());
+    assert_eq!(
+        game.legal_targets_for_spec(&amp;spec, PlayerId(1)),
+        vec![
+            Target::GraveyardCard(game.current_object_ref(bolt).unwrap()),
+            Target::GraveyardCard(game.current_object_ref(ogre).unwrap()),
+        ]
+    );
+    assert_eq!(
+        game.legal_targets_for_spec(
+            &amp;TargetSpec::GraveyardCardYouOwn {
+                predicate: CardPredicate::creature()
+            },
+            PlayerId(1)
+        ),
+        vec![Target::GraveyardCard(
+            game.current_object_ref(ogre).unwrap()
+        )]
+    );
+}
+</code></pre></figure></details></section>
+<section id="rule"><h2>The invariant is shared; game stages stay distinct</h2><p>The committed repair groups by target kind, checks permanent presence and opposing hexproof once, then applies the wording's restrictions. The same function serves offer enumeration, acceptance and resolution. An unchanged signature now owns a broader invariant.</p><figure><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/managym/src/flow/resolution.rs#L1044-L1093">managym/src/flow/resolution.rs · target_is_legal: permanent restrictions (committed repair)</a><br>6756acb0a7 · lines 1044–1093 · committed source; head unpublished</figcaption><pre tabindex="0"><code>    pub(crate) fn target_is_legal(
+        &amp;self,
+        target: Target,
+        spec: &amp;TargetSpec,
+        controller: PlayerId,
+    ) -&gt; bool {
+        match target {
+            Target::Permanent(id) =&gt; {
+                let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref())
+                else {
+                    return false;
+                };
+                // CR 702.11b applies regardless of target wording. Recheck live
+                // presence and hexproof at selection and resolution (608.2b).
+                if self.state.zones.zone_of(permanent.card) != Some(ZoneType::Battlefield)
+                    || (permanent.controller != controller &amp;&amp; self.effective_keywords(id).hexproof)
+                {
+                    return false;
+                }
+                match spec {
+                    TargetSpec::Permanent { predicate } =&gt; {
+                        self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentYouControl { predicate } =&gt; {
+                        permanent.controller == controller
+                            &amp;&amp; self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentOpponentControls { predicate } =&gt; {
+                        permanent.controller != controller
+                            &amp;&amp; self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::CreatureOrPlayer | TargetSpec::Creature =&gt; {
+                        self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureYouControl =&gt; {
+                        permanent.controller == controller &amp;&amp; self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureOpponentControls =&gt; {
+                        permanent.controller != controller &amp;&amp; self.permanent_is_creature(id)
+                    }
+                    TargetSpec::LandYouControl =&gt; {
+                        permanent.controller == controller
+                            &amp;&amp; self.state.cards[permanent.card].types.is_land()
+                    }
+                    TargetSpec::SpellOrPermanent { min_mana_value } =&gt; {
+                        self.card_mana_value(permanent.card) &gt;= *min_mana_value
+                    }
+                    _ =&gt; false,
+                }
+            }</code></pre></figure><p class="trace">Select an offered target → submit its bound Command → store the chosen Target on the pending/stack object → response changes live state → resolution rechecks. It does not cache offer-time legality or pick a replacement target automatically.</p><p>Concrete native witness: choose two opposing Ogres for a return-to-hand effect plus gain 7 life. If one gains hexproof, the other still returns and life is gained. If both gain hexproof, neither returns and no life is gained. Both controller orientations are covered.</p><details><summary>Committed response witness and existing recovery entry API</summary><figure><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/managym/src/flow/target_authority_tests.rs#L387-L457">managym/src/flow/target_authority_tests.rs · response-time hexproof: committed outcome witness</a><br>6756acb0a7 · lines 387–457 · committed source; head unpublished</figcaption><pre tabindex="0"><code>#[test]
+fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
+    for controller in [PlayerId(0), PlayerId(1)] {
+        for mixed in [false, true] {
+            let (mut game, source, _, _, _) = fixture();
+            let opponent = PlayerId(1 - controller.0);
+            let first = game
+                .scenario_force_battlefield(opponent, &quot;Gray Ogre&quot;, true)
+                .unwrap();
+            let second = game
+                .scenario_force_battlefield(opponent, &quot;Gray Ogre&quot;, true)
+                .unwrap();
+            let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
+            let mut pending = trigger(
+                source,
+                vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(spec.clone()),
+                        effects: vec![Effect::ReturnToHand {
+                            target: spec.clone(),
+                        }],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(spec.clone()),
+                        effects: vec![Effect::ReturnToHand { target: spec }],
+                    },
+                    Effect::GainLife { amount: 7 },
+                ],
+                0,
+            );
+            pending.controller = controller;
+            game.state.pending_triggers.push(pending);
+            assert!(game.flush_triggers().is_some());
+            game.choose_trigger_target(controller, Target::Permanent(first))
+                .unwrap();
+            game.choose_trigger_target(controller, Target::Permanent(second))
+                .unwrap();
+            assert!(game.flush_triggers().is_none());
+            let second_card = game.state.permanents[second].as_ref().unwrap().card;
+            // CR 608.2b: gaining hexproof after selection invalidates an opposing
+            // target; remaining legal targets and untargeted instructions survive.
+            game.state.permanents[first]
+                .as_mut()
+                .unwrap()
+                .temp_keywords
+                .hexproof = true;
+            if !mixed {
+                game.state.permanents[second]
+                    .as_mut()
+                    .unwrap()
+                    .temp_keywords
+                    .hexproof = true;
+            }
+            game.resolve_top_of_stack();
+            assert!(game.state.permanents[first].is_some());
+            assert_eq!(
+                game.state.zones.zone_of(second_card),
+                Some(if mixed {
+                    ZoneType::Hand
+                } else {
+                    ZoneType::Battlefield
+                })
+            );
+            assert_eq!(
+                game.state.players[controller.0].life,
+                if mixed { 27 } else { 20 }
+            );
+        }
+    }
+}
+</code></pre></figure><p>A lost reply after commitment is recovered by the command receipt. A stale revision receives current recovery. These existing API conditions remain unchanged; the recorded consumer checks exercise that authority contract, not a newly recorded human hexproof/disconnect session.</p><figure><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/academy/server.py#L1140-L1178">academy/server.py · hero_command: existing duplicate/stale recovery</a><br>6756acb0a7 · lines 1140–1178 · committed source; head unpublished</figcaption><pre tabindex="0"><code>    def hero_command(self, raw: Any) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;Validate and apply one revision-bound protocol-v1 command.
+
+        Offer IDs are lowered through ``PublishedPrompt``. The client never
+        chooses or replays a raw engine action index on this path.
+        &quot;&quot;&quot;
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError(&quot;No active game session. Send new_game first.&quot;)
+        if not isinstance(raw, dict):
+            raise ValueError(&quot;command must be an object.&quot;)
+
+        command_id = raw.get(&quot;command_id&quot;)
+        if not isinstance(command_id, str) or not command_id:
+            raise ValueError(&quot;command_id must be a non-empty string.&quot;)
+        if command_id.startswith(&quot;authority.&quot;):
+            return self._reject_command(raw, &quot;reserved_command_id&quot;, recover=False)
+
+        # Check retries before any revision/match validation. A response may
+        # have been lost after the original command committed.
+        receipt = self.accepted_commands.get(command_id)
+        if receipt is not None:
+            return {
+                &quot;type&quot;: &quot;command_outcome&quot;,
+                &quot;status&quot;: &quot;duplicate&quot;,
+                &quot;receipt&quot;: dict(receipt),
+                &quot;recovery&quot;: self.current_recovery(&quot;duplicate_command&quot;),
+            }
+
+        if raw.get(&quot;match_id&quot;) != self.match_id:
+            return self._reject_command(raw, &quot;wrong_match&quot;, recover=False)
+
+        context = self.published_prompt
+        if context is None:
+            return self._reject_command(raw, &quot;authority_busy&quot;, recover=True)
+        if raw.get(&quot;expected_revision&quot;) != context.revision:
+            return self._reject_command(raw, &quot;stale_revision&quot;, recover=True)
+        if raw.get(&quot;prompt_id&quot;) != context.prompt_id:
+            return self._reject_command(raw, &quot;stale_prompt&quot;, recover=True)
+</code></pre></figure></details><details><summary>Why the repaired rules are w12</summary><figure><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/0d981499554bfb93d20ea77f5275410999a8967a/managym/src/lib.rs#L24-L25">managym/src/lib.rs · WORLD_VERSION</a><br>0d98149955 · lines 24–25 · committed source; head unpublished</figcaption><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/managym/src/lib.rs#L24-L25">managym/src/lib.rs · WORLD_VERSION</a><br>6756acb0a7 · lines 24–25 · committed source; head unpublished</figcaption><pre tabindex="0"><code><span class="context">--- 0d98149955:managym/src/lib.rs
+</span><span class="context">+++ 6756acb0a7:managym/src/lib.rs
+</span><span class="context">@@ -24,2 +24,2 @@
+</span><span class="context"> /// Rules and observation/action meaning; see WORLDS.md for compatibility.</span><span class="minus">-pub const WORLD_VERSION: &amp;str = &quot;w11&quot;;</span><span class="plus">+pub const WORLD_VERSION: &amp;str = &quot;w12&quot;;</span></code></pre></figure><p>Changed legal actions require fresh identity even with unchanged tensor shapes. New conformance/demo receipts are selected; w11 evidence and historical checkpoints retain their meaning. The working enumeration cleanup intends to preserve w12 meaning, which final affected checks must confirm.</p></details></section>
+<section id="study"><h2>Study's complete-match proof now finishes inside its budget</h2><p>The timeout was in fixture setup and persistence. The committed fixture now consumes each returned frame and uses configured, recorded priority automation instead of redundant frame requests and manual passes. It still creates the complete match used by all seven branch tests.</p><figure><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/0d981499554bfb93d20ea77f5275410999a8967a/tests/academy/test_study_branch.py#L26-L66">tests/academy/test_study_branch.py · _completed_session: reuse authoritative frames</a><br>0d98149955 · lines 26–66 · committed source; head unpublished</figcaption><figcaption><a href="https://github.com/loopflowstudio/manabot/blob/6756acb0a729c2445d9812d02fbfb8b95233d7bc/tests/academy/test_study_branch.py#L27-L70">tests/academy/test_study_branch.py · _completed_session: reuse authoritative frames</a><br>6756acb0a7 · lines 27–70 · committed source; head unpublished</figcaption><pre tabindex="0"><code><span class="context">--- 0d98149955:tests/academy/test_study_branch.py
+</span><span class="context">+++ 6756acb0a7:tests/academy/test_study_branch.py
+</span><span class="context">@@ -26,38 +27,41 @@
+</span><span class="minus">-def _completed_session(tmp_path) -&gt; tuple[GameSession, CanonicalReplayV1]:</span><span class="plus">+def _completed_session(tmp_path: Path) -&gt; tuple[GameSession, CanonicalReplayV1]:</span><span class="context">     session = GameSession(</span><span class="context">         tmp_path,</span><span class="context">         id_factory=lambda kind: f&quot;study-fork-{kind}&quot;,</span><span class="context">         clock=lambda: &quot;2026-07-17T00:00:00+00:00&quot;,</span><span class="context">         villain_offer_policy=lambda context: int(context.offers[-1][&quot;id&quot;]),</span><span class="context">     )</span><span class="minus">-    session.new_game(</span><span class="plus">+    # Priority automation still records Commands and retains their Study roots.</span><span class="plus">+    # Reuse each returned frame: requesting it again persists the growing replay.</span><span class="plus">+    initial = session.new_game(</span><span class="context">         {</span><span class="context">             &quot;villain_type&quot;: &quot;passive&quot;,</span><span class="context">             &quot;seed&quot;: 7,</span><span class="context">             &quot;hero_deck&quot;: &quot;ur_lessons&quot;,</span><span class="context">             &quot;villain_deck&quot;: &quot;gw_allies&quot;,</span><span class="minus">-            &quot;auto_pass&quot;: False,</span><span class="plus">+            &quot;auto_pass&quot;: True,</span><span class="context">         }</span><span class="context">     )</span><span class="plus">+    frame = initial[&quot;frame&quot;]</span><span class="context">     for index in range(2_000):</span><span class="context">         assert session.obs is not None</span><span class="context">         if session.obs.game_over:</span><span class="context">             break</span><span class="minus">-        frame = session._experience_frame()</span><span class="context">         outcome = session.hero_command(</span><span class="context">             {</span><span class="context">                 &quot;command_id&quot;: f&quot;study-source-{index}&quot;,</span><span class="context">                 &quot;match_id&quot;: frame[&quot;match_id&quot;],</span><span class="context">                 &quot;expected_revision&quot;: frame[&quot;revision&quot;],</span><span class="context">                 &quot;prompt_id&quot;: frame[&quot;prompt&quot;][&quot;id&quot;],</span><span class="context">                 &quot;offer_id&quot;: frame[&quot;offers&quot;][0][&quot;id&quot;],</span><span class="context">                 &quot;answers&quot;: [],</span><span class="context">             }</span><span class="context">         )</span><span class="context">         assert outcome[&quot;status&quot;] == &quot;accepted&quot;</span><span class="plus">+        frame = outcome[&quot;update&quot;][&quot;frame&quot;]</span><span class="context">     else:</span><span class="context">         pytest.fail(&quot;deterministic Study source match did not terminate&quot;)</span><span class="context"> </span><span class="context">     session.close(&quot;game_over&quot;)</span><span class="context">     assert session.trace is not None</span><span class="context">     assert session.trace.canonical_replay is not None</span></code></pre></figure><p class="note">This changes test setup, not the user's Study workflow. The retained branch assertions, Learn coverage, viewer isolation and exact return remain. All seven cases passed in 69.2s; the test ceiling and assertions were not relaxed.</p></section>
+<section id="proof"><h2>Evidence is stronger; the remaining boundary is explicit</h2><table><thead><tr><th>Source scope</th><th>Established result</th><th>What it does not establish</th></tr></thead><tbody>
+<tr><td>Committed repair, integrated acceptance at bda9b0aeb</td><td>Full learnability: 43.5s, 144 capacity assertions, reward-driven PPO/checkpoint reload over 65,536 transitions. Native targeting: 10 passes.</td><td>Not a full run against the later working enumeration change.</td></tr>
+<tr><td>Committed repair, consumer checks</td><td>Semantic retry passed; all 7 Study branch cases; all 20 monitor cases across bounded runs; 17 dependency-blocked play/protocol cases. Unchanged-source conformance, arena and recovery receipts are explicitly reused.</td><td>Reused receipts are not newly run suites. Existing failures remain recorded.</td></tr>
+<tr><td>Enumeration cleanup — fresh gate checks</td><td>11 targeting and 300 rules passes in debug; 6 w12 conformance checks; 11 Command/recovery and decision-surface cases; 21 play/Study protocol/runtime cases; all 7 Study branch, 11 arena and 20 monitor cases. Full gate learnability passes in 43.0s with 144 capacity assertions and 65,536 PPO transitions/checkpoint reload. Native wheel rebuilt and installed atomically.</td><td>Known payment and trigger-order probes stay ignored. No full MTG conformance or strength claim. Earlier receipts retain their original source scope.</td></tr>
+<tr><td>Rules audit</td><td>Five more individual target rules adjudicated; 400.7/608.2b findings refined. Complete 3,322-entry inventory: 3 implemented, 30 partial, 2 missing, 322 outside admitted formats, 2,965 unknown.</td><td>Most of the original substantive whole-rules audit remains unfinished. Counts are review status, not implementation percentage.</td></tr></tbody></table>
+<p class="boundary">Jack Heart approved shipping this bounded increment on 2026-10-22. Fresh gate checks establish behavior preservation for the affected consumers; the parent conversation owns publication and landing. Trigger/replacement ordering and general stack-incarnation design are still separate findings, not hidden prerequisites for this repair.</p><details><summary>Counterexamples and limits retained</summary><p>Own hexproof, mixed versus all-invalid targets, and leave/reenter identity prevent overgeneralizing the shared predicate. Stack targets use CardId; a new ordinary recast/LIFO witness has no stale-target effect, which does not prove every incarnation case safe. Activated multi-target/source-exclusion/whole-object invalidation and general retargeting remain outside the proven subset.</p><p>The missing CR 603.3b controller ordering choice remains demonstrated by gain-2/damage-2 at 2 life. CR 616 replacement ordering also has a narrower deterministic subset than the affected player's choice. These are incomplete shared decisions, not evidence of competing engines.</p><p>The old MTG-174 payment-owner reference is stale; composable payments remain associated with 4ba5dd. This draft does not claim to repair payment or resolve its immediate owner.</p></details><details><summary>Cost, citations and the original goals</summary><p>Rule citations accompany targeting, setup, priority, sacrifice and additive P/T invariants. The branch retains bounded mana/SBA matrices, source-pinned inventory tooling and CI duration reporting. Existing CI samples cost 35–46 runner-minutes for 9–11 minutes wall span; no sharding saving has been demonstrated.</p><p>Recorded authored churn is 4,274 lines including this cleanup. Reports/index/fresh conformance evidence are separate; runtime demos remain charged. Integrated follow-up command durations sum to 374.064s, including a retained timeout and native build; that is not cloud runner cost or session wall time. Fresh gate command durations sum to 331.942s, including the corrected Clippy failure; no paid compute or assertion weakening is claimed.</p></details></section>
+<footer><p>Shipping approved by Jack Heart on 2026-10-22. Gate performs no publication or landing. MTG-177 remains open for the substantive whole-rules audit.</p><p class="meta">Working direction: scratch/plan.md. Receipts: docs/rules/audit-2026-10/unification-validation.json. All source is embedded and escaped; captions identify committed revisions or exact local file hashes. No network assets are required.</p></footer></main></body></html>

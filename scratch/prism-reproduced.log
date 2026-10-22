@@ -1,0 +1,18 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)
+
+running 1 test
+
+thread 'rules::temur_cards::audit_prism_treasure_empty_pool_activation' (91909141) panicked at tests/rules/helpers.rs:250:31:
+scenario step should succeed: AgentError("illegal mana activation")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test rules::temur_cards::audit_prism_treasure_empty_pool_activation ... FAILED
+
+failures:
+
+failures:
+    rules::temur_cards::audit_prism_treasure_empty_pool_activation
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 300 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test rules_tests`

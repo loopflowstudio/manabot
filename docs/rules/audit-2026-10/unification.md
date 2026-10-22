@@ -26,8 +26,11 @@ life-gain instruction must not execute.
 
 **Chosen authority and removed logic:** `target_is_legal` now owns the stack
 restriction for offers too. Enumeration retains reverse stack order and sends
-spell candidates through that predicate. The independent threshold comparison
-and its numeric helper parameter are removed. Spell and ability choices inherit
+all candidates through that predicate once. The independent threshold comparison,
+`stack_spell_targets` helper and separate per-kind filters are removed. Player
+and graveyard witnesses retain controller restrictions, predicates and ordering;
+mixed targets retain their player/spell prefix before battlefield candidates.
+Spell and ability choices inherit
 this through existing `legal_targets_for_spec` callers. Per-requirement duplicate
 exclusion, casting-source exclusion, minimum/maximum target counts, and current
 state rechecks remain stage-specific responsibilities. No legal action, order,
@@ -197,8 +200,10 @@ current shared-payment owner is still required before any future payment work.
 
 Exact checks, failed probes, toolchain failure and incremental cost are in
 [unification-validation.json](unification-validation.json). No paid compute,
-required-check weakening, training-recipe/deck/experiment change, publication,
-merge, auto-merge request or Task completion belongs to this increment.
+required-check weakening or training-recipe/deck/experiment change is included.
+Jack Heart approved shipping the bounded increment on 2026-10-22, superseding
+the older draft-only holds. Gate does not publish or land; the parent conversation
+owns delivery. MTG-177 stays open for the unfinished substantive audit.
 
 ## Integrated runtime validation
 
@@ -217,5 +222,23 @@ The original collector timeout, the 99.6s historical pass, and the new branch
 fixture timeout remain in the receipts. A stack sample placed the branch
 fixture delay in attempt persistence; that does not establish the cause of
 every historical timeout. No production runtime, training budget, timeout or
-assertion changed in this follow-up. Conformance, arena and other consumer
-receipts are reused only where production source and fixtures remain unchanged.
+assertion changed in the `bda9b0aeb` acceptance follow-up. Its conformance, arena
+and other consumer receipts were reused where production source and fixtures
+were unchanged at that checkpoint.
+
+The enumeration cleanup now has fresh affected validation: 11 targeting and
+300 rules cases in debug, 6 w12 conformance checks, 11 Command/recovery and
+decision-surface cases, 21 dependency-blocked play/Study protocol/runtime cases,
+all 7 Study branch cases, all 11 arena cases and all 20 monitor cases. The
+extension was rebuilt and installed atomically; existing w12 corpus/identity
+and pre-w12 frozen evidence remain unchanged. The earlier full acceptance and
+failures remain historical records. See the gate entry in
+[validation receipts](unification-validation.json) for the tested source/native
+digests, remaining scope and measured cost.
+
+The fresh [gate diagnostic](learnability-w12-gate.json) passes in 43.0s with
+144 capacity assertions and reward-driven PPO/checkpoint reload (65,536
+transitions; after/no-update 1.0/0.640625). Total measured gate command duration
+is 331.942s, including one corrected Clippy failure; budgets and assertions
+remain fixed. No required affected check is deferred. The full CI matrix
+remains CI-owned; the parent conversation can land the bounded increment.

@@ -1,0 +1,8 @@
+   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)
+    Finished `test` profile [optimized + debuginfo] target(s) in 14.91s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.00s
+

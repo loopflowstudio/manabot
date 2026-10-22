@@ -91,7 +91,7 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
         for (slot, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
             for generic in 0..=2 {
                 let cost = ManaCost::parse(&format!("{generic}{symbol}"));
-                let expected = pool.mana[slot] == 1 && bits.count_ones() >= generic + 1;
+                let expected = pool.mana[slot] == 1 && bits.count_ones() > generic;
                 assert_eq!(
                     pool.can_pay(&cost),
                     expected,

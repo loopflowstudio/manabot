@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/jack/src/manabot.rules-audit/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jack/src/manabot.rules-audit
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collecting ... collected 4 items / 1 deselected / 3 selected
+
+tests/academy/test_study_runtime.py::test_injected_exact_fixture_reveals_and_previews_on_fresh_forks PASSED [ 33%]
+tests/academy/test_study_runtime.py::test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return PASSED [ 66%]
+tests/academy/test_study_runtime.py::test_semantic_retry_supports_land_and_rejects_drift 

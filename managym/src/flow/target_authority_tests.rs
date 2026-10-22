@@ -123,6 +123,55 @@ fn stack_target_mana_value_boundaries_have_explicit_expected_choices() {
 }
 
 #[test]
+fn player_and_graveyard_targets_preserve_scope_and_order() {
+    let (mut game, bolt, ogre, permanent, _) = fixture();
+    // CR 115.2: player choices do not admit cards, and graveyard choices do
+    // not admit battlefield objects. Mixed choices keep players first.
+    for (controller, opponent) in [(PlayerId(0), PlayerId(1)), (PlayerId(1), PlayerId(0))] {
+        assert_eq!(
+            game.legal_targets_for_spec(&TargetSpec::Player, controller),
+            vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
+        );
+        assert_eq!(
+            game.legal_targets_for_spec(&TargetSpec::Opponent, controller),
+            vec![Target::Player(opponent)]
+        );
+        assert_eq!(
+            game.legal_targets_for_spec(&TargetSpec::CreatureOrPlayer, controller),
+            vec![
+                Target::Player(PlayerId(0)),
+                Target::Player(PlayerId(1)),
+                permanent
+            ]
+        );
+    }
+    game.move_card(bolt, ZoneType::Graveyard);
+    game.move_card(ogre, ZoneType::Graveyard);
+    let spec = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate::default(),
+    };
+    assert!(game.legal_targets_for_spec(&spec, PlayerId(0)).is_empty());
+    assert_eq!(
+        game.legal_targets_for_spec(&spec, PlayerId(1)),
+        vec![
+            Target::GraveyardCard(game.current_object_ref(bolt).unwrap()),
+            Target::GraveyardCard(game.current_object_ref(ogre).unwrap()),
+        ]
+    );
+    assert_eq!(
+        game.legal_targets_for_spec(
+            &TargetSpec::GraveyardCardYouOwn {
+                predicate: CardPredicate::creature()
+            },
+            PlayerId(1)
+        ),
+        vec![Target::GraveyardCard(
+            game.current_object_ref(ogre).unwrap()
+        )]
+    );
+}
+
+#[test]
 fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
     let (mut game, bolt, ogre, _, _) = fixture();
     game.state.pending_triggers.push(trigger(

@@ -1,0 +1,20 @@
+   Compiling managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)
+    Finished `test` profile [optimized + debuginfo] target(s) in 20.67s
+     Running unittests src/lib.rs (managym/target/debug/deps/managym-430c8ac52ccb8fab)
+
+running 12 tests
+test flow::triggers::target_authority_tests::audit_same_controller_triggers_require_an_order_choice ... ignored, CR 603.3b missing same-controller trigger-order decision; proposal only
+test flow::triggers::target_authority_tests::stack_target_mana_value_boundaries_have_explicit_expected_choices ... ok
+test flow::triggers::target_authority_tests::player_and_graveyard_targets_preserve_scope_and_order ... ok
+test flow::triggers::target_authority_tests::departed_only_target_prevents_even_untargeted_gain_life ... ok
+test flow::triggers::target_authority_tests::audit_spell_or_permanent_must_respect_opponents_hexproof ... ok
+test flow::triggers::target_authority_tests::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell ... ok
+test flow::triggers::target_authority_tests::trigger_target_distinctness_is_enforced_per_clause_at_submission ... ok
+test flow::triggers::target_authority_tests::recast_spell_resolves_before_the_old_targeted_ability ... ok
+test flow::triggers::target_authority_tests::simultaneous_trigger_orders_have_distinct_rules_outcomes ... ok
+test flow::triggers::target_authority_tests::spell_or_permanent_target_does_not_follow_a_reentered_card ... ok
+test flow::triggers::target_authority_tests::hexproof_target_wordings_preserve_controller_and_predicate_restrictions ... ok
+test flow::triggers::target_authority_tests::response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability ... ok
+
+test result: ok. 11 passed; 0 failed; 1 ignored; 0 measured; 74 filtered out; finished in 0.01s
+

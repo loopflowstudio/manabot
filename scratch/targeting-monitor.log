@@ -1,0 +1,24 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.0.2, pluggy-1.6.0 -- /Users/jack/src/manabot.rules-audit/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jack/src/manabot.rules-audit
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collecting ... collected 20 items
+
+tests/training/test_monitor_evaluation.py::test_deal_cluster_bootstrap_and_original_coordinates PASSED [  5%]
+tests/training/test_monitor_evaluation.py::test_incomplete_cohort_never_emits_strength[missing] PASSED [ 10%]
+tests/training/test_monitor_evaluation.py::test_incomplete_cohort_never_emits_strength[timeout] PASSED [ 15%]
+tests/training/test_monitor_evaluation.py::test_incomplete_cohort_never_emits_strength[replay] PASSED [ 20%]
+tests/training/test_monitor_evaluation.py::test_incomplete_cohort_never_emits_strength[integrity] PASSED [ 25%]
+tests/training/test_monitor_evaluation.py::test_saved_rows_admission[duplicate] PASSED [ 30%]
+tests/training/test_monitor_evaluation.py::test_saved_rows_admission[identity] PASSED [ 35%]
+tests/training/test_monitor_evaluation.py::test_saved_rows_admission[foreign-deal] PASSED [ 40%]
+tests/training/test_monitor_evaluation.py::test_saved_rows_admission[score] PASSED [ 45%]
+tests/training/test_monitor_evaluation.py::test_block_failure_retains_prior_rows_and_costs PASSED [ 50%]
+tests/training/test_monitor_evaluation.py::test_default_monitoring_cohort PASSED [ 55%]
+tests/training/test_monitor_evaluation.py::test_result_purpose_preserves_protocol_binding[monitoring] PASSED [ 60%]
+tests/training/test_monitor_evaluation.py::test_result_purpose_preserves_protocol_binding[study] PASSED [ 65%]
+tests/training/test_monitor_evaluation.py::test_result_purpose_preserves_protocol_binding[comparison] PASSED [ 70%]
+tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[1-scripted_greedy-False] PASSED [ 75%]
+tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False] 

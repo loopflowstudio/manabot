@@ -1,0 +1,65 @@
+Installed 1 package in 5ms
+🍹 Building a mixed python/rust project
+🐍 Found CPython 3.12 at /Users/jack/src/manabot.rules-audit/.venv/bin/python
+🔗 Found pyo3 bindings
+📡 Using build options features from pyproject.toml
+💻 Using `MACOSX_DEPLOYMENT_TARGET=11.0` for aarch64-apple-darwin by default
+   Compiling target-lexicon v0.12.16
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling pyo3-build-config v0.22.6
+   Compiling once_cell v1.21.4
+   Compiling syn v2.0.119
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling cfg-if v1.0.4
+   Compiling generic-array v0.14.7
+   Compiling typenum v1.20.1
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.54
+   Compiling pyo3-macros-backend v0.22.6
+   Compiling pyo3-ffi v0.22.6
+   Compiling autocfg v1.5.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling zmij v1.0.23
+   Compiling memoffset v0.9.1
+   Compiling cc v1.2.67
+   Compiling getrandom v0.2.17
+   Compiling ref-cast v1.0.25
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling heck v0.5.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.6.4
+   Compiling blake3 v1.8.5
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling serde_derive v1.0.228
+   Compiling ref-cast-impl v1.0.25
+   Compiling serde_derive_internals v0.29.1
+   Compiling pyo3 v0.22.6
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling schemars_derive v1.2.1
+   Compiling pyo3-macros v0.22.6
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.3.1
+   Compiling cpufeatures v0.2.17
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling dyn-clone v1.0.20
+   Compiling indoc v2.0.7
+   Compiling unindent v0.2.4
+   Compiling schemars v1.2.1
+   Compiling sha2 v0.10.9
+   Compiling rand v0.8.7
+   Compiling base64 v0.22.1
+   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)
+    Finished `release` profile [optimized] target(s) in 1m 16s
+⚠️ Warning: A file was excluded from the archive by the target path in the archive
+⚠️ instead of the source path on the filesystem. This behavior is deprecated and
+⚠️ will be removed in future versions of maturin.
+📦 Built wheel for CPython 3.12 to managym/target/wheels/managym-0.2.0-cp312-cp312-macosx_11_0_arm64.whl

@@ -93,7 +93,9 @@ Check the committed inventory offline from the repository root with
 also checks the pinned byte digest and exact source inventory. Do not upgrade
 child rules merely because their family has a test or a matching citation.
 The explicitly ignored Prism/Treasure audit probe records an unresolved
-MTG-174 payment defect; it is not passing conformance evidence.
+payment defect; it is not passing conformance evidence. See the audit's
+[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+before using its historical Task attribution.
 
 ## Style
 
