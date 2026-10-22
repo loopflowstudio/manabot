@@ -95,7 +95,8 @@ struct PaymentSearchState {
     pool: Mana,
     life: u32,
     obligations: Vec<Obligation>,
-    prefix: Option<(usize, usize)>,
+    /// Fixed-source budget until the first Spend; later obligations are unrestricted.
+    prefix: Option<usize>,
 }
 
 /// Which transitions may be automatic at the caller's current boundary.
@@ -293,9 +294,7 @@ impl PaymentModel {
                             pool: remainder.clone(),
                             life,
                             obligations: rest.to_vec(),
-                            prefix: prefix.and_then(|(budget, depth)| {
-                                (depth > 0).then(|| (budget, depth - 1))
-                            }),
+                            prefix: None,
                         },
                         policy,
                         visited,
@@ -304,10 +303,10 @@ impl PaymentModel {
                         return Some(path);
                     }
                 }
-                if matches!(prefix, Some((0, _))) {
+                if prefix == Some(0) {
                     return None;
                 }
-                let after_source = prefix.map(|(budget, depth)| (budget - 1, depth));
+                let after_source = prefix.map(|budget| budget - 1);
                 for (index, source) in self.sources.iter().enumerate() {
                     if !available[index] {
                         continue;
@@ -332,6 +331,8 @@ impl PaymentModel {
                             return Some(path);
                         }
                     }
+                    // Chosen activations cannot nest before the automatic
+                    // prefix's first Spend, so its budget needs no depth.
                     if policy == SourcePolicy::FixedOnly
                         || (policy == SourcePolicy::AutomaticPrefix && prefix.is_some())
                     {
@@ -356,7 +357,7 @@ impl PaymentModel {
                                 pool: pool.clone(),
                                 life,
                                 obligations: nested,
-                                prefix: after_source.map(|(budget, depth)| (budget, depth + 1)),
+                                prefix: None,
                             },
                             policy,
                             visited,
@@ -428,7 +429,7 @@ impl PaymentModel {
                     pool: pool.clone(),
                     life: self.life,
                     obligations: obligations.clone(),
-                    prefix: Some((budget, 0)),
+                    prefix: Some(budget),
                 },
                 policy,
                 &mut Default::default(),
@@ -703,11 +704,10 @@ impl Game {
         ability_index: usize,
     ) -> Option<Vec<PaymentStep>> {
         let mut model = self.payment_model(player, None);
-        let index = model
+        let source = model
             .sources
             .iter()
-            .position(|source| source.permanent == permanent)?;
-        let source = &model.sources[index];
+            .find(|source| source.permanent == permanent)?;
         let ability = source
             .abilities
             .iter()
@@ -848,13 +848,8 @@ impl Game {
         permanent: PermanentId,
         ability_index: usize,
     ) -> Result<(), AgentError> {
-        let path = self
-            .activation_witness(player, permanent, ability_index)
-            .ok_or_else(|| AgentError("illegal mana activation".into()))?;
-        match path.first() {
-            Some(PaymentStep::Activate(source, index))
-                if *source == permanent && *index == ability_index => {}
-            _ => return Err(AgentError("invalid mana activation witness".into())),
+        if !self.can_activate_mana_ability(player, permanent, ability_index) {
+            return Err(AgentError("illegal mana activation".into()));
         }
         let old = self.state.suspended_decision.take();
         self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {

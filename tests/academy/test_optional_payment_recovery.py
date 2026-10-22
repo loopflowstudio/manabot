@@ -3,10 +3,10 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from managym.experience import ExperienceFrame, InteractionOffer
 import pytest
 
 from academy import server, trace as trace_store
-from managym.experience import ExperienceFrame, InteractionOffer
 
 
 def _command(
@@ -52,17 +52,12 @@ def test_optional_mana_cost_survives_lost_response_reconnect_and_duplicate(
                     for offer in frame.offers
                 ):
                     break
-                labels = [
-                    "Play Island",
-                    *(
-                        ["Cast Waterbending Lesson"]
-                        if prism_cast and land_plays >= 6
-                        else ["Cast Prophetic Prism"]
-                        if not prism_cast
-                        else []
-                    ),
-                    "Pass priority",
-                ]
+                labels = ["Play Island"]
+                if not prism_cast:
+                    labels.append("Cast Prophetic Prism")
+                elif land_plays >= 6:
+                    labels.append("Cast Waterbending Lesson")
+                labels.append("Pass priority")
                 offer = next(
                     (
                         offer

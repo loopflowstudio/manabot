@@ -1,7 +1,7 @@
 """The isolated Etude owner must retain failures and wait for endpoint coverage.
 
-Run with the exact evaluation SDK runtime; the training SDK intentionally lacks
-these APIs and skips this module.
+Run with the exact historical report SDK runtime. Released SDK 0.2.0 has
+evaluation queries but lacks this owner's report API, so it skips this module.
 """
 
 from pathlib import Path
@@ -10,6 +10,18 @@ from typing import Any
 import pytest
 
 pytest.importorskip("etude.eval.query")
+_reports = pytest.importorskip(
+    "etude.reports", reason="owner requires the isolated historical report SDK"
+)
+_report = pytest.importorskip("etude.train.report")
+if not all(hasattr(_reports, name) for name in ("Evaluation", "record")) or not all(
+    callable(getattr(_report, name, None)) for name in ("pages", "write")
+):
+    pytest.skip(
+        "owner requires historical Evaluation/record and pages/write report APIs",
+        allow_module_level=True,
+    )
+
 from manabot.verify.learnability import elemental_live as live  # noqa: E402
 
 

@@ -559,18 +559,33 @@ impl Game {
 
     /// Feed a player action into the pending mid-resolution decision.
     pub(crate) fn execute_decision_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        let Some(mut suspended) = self.state.suspended_decision.take() else {
+        let Some(suspended) = &self.state.suspended_decision else {
             return Err(AgentError("no pending decision".to_string()));
         };
 
         if let Some(player) = action_player(action) {
             if player != suspended.decision.player() {
-                self.state.suspended_decision = Some(suspended);
                 return Err(AgentError("wrong player for pending decision".to_string()));
             }
         }
 
-        let validation = suspended.clone();
+        // Validate while the full continuation is still attached, so the
+        // payment model sees every reserved source and remaining obligation.
+        if let (
+            Decision::ManaChoice {
+                player, choices, ..
+            },
+            Action::ChooseMode { mode, .. },
+        ) = (&suspended.decision, action)
+        {
+            let mana = choices
+                .get(*mode)
+                .ok_or_else(|| AgentError("illegal mana color".into()))?;
+            if !self.mana_choice_completes_payment(*player, mana) {
+                return Err(AgentError("mana color cannot complete the payment".into()));
+            }
+        }
+        let mut suspended = self.state.suspended_decision.take().unwrap();
         match (&mut suspended.decision, action) {
             (
                 Decision::Payment(PaymentProgress {
@@ -618,18 +633,7 @@ impl Game {
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
-                let Some(mana) = choices.get(*mode) else {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("illegal mana color".into()));
-                };
-                // The suspended decision was taken for dispatch. Validate with
-                // its full continuation still visible to the payment model.
-                let mut probe = self.clone();
-                probe.state.suspended_decision = Some(validation);
-                if !probe.mana_choice_completes_payment(*player, mana) {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("mana color cannot complete the payment".into()));
-                }
+                let mana = &choices[*mode];
                 self.journal_player(*player);
                 self.state.players[player.0].mana_pool.add(mana);
                 if let Some(resume) = resume.take() {
