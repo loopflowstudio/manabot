@@ -86,6 +86,12 @@ The focused canonical dependency-blocked play/Study protocol check passes all
 17 tests. Earlier debug, conformance and consumer counts above are retained
 historical receipts, not newly rerun suites after the packaging merge.
 
+Upstream `07ddef0e`, merged after that diagnostic, changes the shared collector
+for both-seat learning and updates monitoring. The frozen-opponent positive
+control retains one-seat collection and its original recipe. The retained full
+diagnostic is historical draft evidence; current-head full validation remains
+with gate/CI alongside the unfinished checks below.
+
 Acceptance remains incomplete: Study semantic retry, Study branch and four
 monitor cases remain with gate/CI after bounded 120-second timeouts. Partial
 suites are not passes. The earlier collector deadline failure remains in the

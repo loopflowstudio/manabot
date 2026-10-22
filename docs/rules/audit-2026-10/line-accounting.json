@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 3953,
+  "combined_draft_churn_lines": 4054,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -333,6 +333,15 @@
       }
     ],
     "churn_lines": 8
+  },
+  "simplification_increment": {
+    "basis": "Commit 6a4099c4 after the 3953-line historical charge: additions plus deletions for tooling/tests and retirement of the previously charged probe. Plan/report edits excluded; independent upstream 07ddef0e excluded. Earlier charges remain conservative historical churn, including removed helpers.",
+    "files": [
+      {"path": "scripts/audit_rules.py", "added": 7, "deleted": 5},
+      {"path": "tests/infra/test_rules_inventory.py", "added": 37, "deleted": 0},
+      {"path": "scratch/profile_collector.py", "added": 0, "deleted": 52}
+    ],
+    "churn_lines": 101
   },
   "collector_diagnosis_increment": {
     "basis": "Local-only diagnostic and report reconciliation helpers conservatively charged; report and raw evidence excluded. No production training changes.",

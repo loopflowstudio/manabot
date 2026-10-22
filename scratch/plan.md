@@ -70,6 +70,15 @@ unchanged two-update profile (9.047s), reproduced no collector defect. Host
 contention is plausible, not proved. No production training repair was warranted.
 Keep both outcomes; do not replay the full diagnostic for documentation/tooling.
 
+The 2026-10-21 reconciliation also inspected upstream `07ddef0e`, now merged
+at `ce867935`. It adds both-seat learning and changes the shared collector and
+monitor implementation after the canonical diagnostic. The positive control
+still requests a frozen opponent, which defaults to one learning seat; its
+recipe and assertions are unchanged. The 99.6s result therefore remains a
+historical draft result, not a current-head full diagnostic. A focused check
+of frozen-opponent continuity and seat defaults covers this integration;
+current-head full diagnostic validation remains with gate/CI.
+
 Retained pre-packaging evidence: 8 debug targeting witnesses (plus 1 ignored
 separate trigger-order proposal), 6 debug conformance checks over 14 cases /
 3,491 Commands / 15 Phase rows, 8 Command/recovery checks, 4 repaired decision-
@@ -110,8 +119,12 @@ Validation ceilings: two Cargo jobs, 900s per cold Rust command, 180s per warm
 Rust command and 120s per Python check, with debug required. Full learnability's
 explicit acceptance uses its existing 480s watchdog. No stress loops or random
 load searches. Approximate combined draft ceiling is 10k lines excluding report/
-index artifacts; prior conservative charged churn was 3,953 lines. Historical
+index artifacts; conservative charged churn is 4,054 lines, including the
+101-line simplification increment (49 tooling/test lines and 52 probe-deletion
+lines). Upstream `07ddef0e` is excluded as an independent contribution. Historical
 step detail and accounting are retained at `0c640a2e:scratch/plan.md` and in the
-report receipts. Realign owns reconciliation of the final accounting.
+report receipts. The accounting retains historical charges even for retired
+helpers; fresh conformance receipts are excluded evidence, while runtime demo
+fixtures remain charged product inputs.
 
-Check: `uv run --no-sync python scratch/run_bounded.py compress-inventory-cli 120 uv run --no-sync pytest tests/infra/test_rules_inventory.py tests/infra/test_ci_selection.py -q` — 43 passed (0.65s); unchanged runtime results reused; unfinished Study/monitor checks remain with gate/CI.
+Check: `uv run --no-sync python scratch/run_bounded.py realign-collector 120 uv run --no-sync pytest tests/training/test_two_seat_learning.py::test_collector_defaults_follow_policy_ownership tests/sim/test_net_opponent.py::test_collector_frozen_opponent_and_streaming_continuity -q` — 2 passed (0.86s); full current-head diagnostic and unfinished Study/monitor checks remain with gate/CI.
