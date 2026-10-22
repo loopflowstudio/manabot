@@ -1,10 +1,11 @@
 # Two-seat Allies/Lessons: $50 scale-ladder experiment
 
-**Interim report, 2026-10-21 23:57 UTC. Training is running; the $50
-endpoint and its strength evaluation have not been reached.** This report will
+**Interim report, updated 2026-10-22. The training/cost snapshot is from
+2026-10-21 23:57 UTC; the early heuristic evaluation is now complete. Training
+is running, and the $50 endpoint has not been reached.** This report will
 retain each attempt and its costs, including failures, as the experiment proceeds.
 
-Both-seat learning is working in the real w6 engine: all **20,909,111
+Both-seat learning is working in the real w6 engine: all **20,909,111**
 environment decisions in the verified snapshot were retained as learner decisions,
 and the 250- and 500-update raw checkpoints were exported. This establishes
 collection, optimization and checkpoint export. It does not establish stronger play
@@ -67,11 +68,54 @@ throughput comparison or evidence of a 2× speedup.
 | 250 | 7,595,063 | 7,595,063 | `2bd07fa24a524536471c3e4d0a03e9b5a42fc19201f007db6d1bb6b490126897` |
 | 500 | 14,913,525 | 14,913,525 | `9ca62d8abaf5993c840aae0e62d1935dec167a61d12d40bfb8c8dbfac83c26de` |
 
-A CPU evaluation of update 250 against heuristic is running on the
-existing Mac mini: 25 declared deals, seeds 1590100000–1590100024, with all eight
-seat/deck legs (200 games). It uses the same anchor and deal-bootstrap analysis
-as v1. There is no additional evaluation rental. No win rate is claimed before
-all games complete and their saved results are checked.
+## Early heuristic result: update 250
+
+Completed 2026-10-22T00:07:15.513952+00:00 on the existing Mac mini CPU, without
+another rental: 25 declared deals, seeds 1590100000–1590100024, all eight
+seat/deck legs, **200 games**. Every game was terminal and replay-verified, with
+zero recorded integrity failures. The evaluation took
+425.84 seconds. All referenced compressed trace
+hashes were independently checked after copying the evidence from the mini.
+
+The two-seat checkpoint scored **51.5% [48.5, 54.5]** against heuristic. The
+one-seat v1 checkpoint at the same 250 updates scored 47.5% [44.5, 50.5].
+The descriptive paired difference is **+4.0 percentage points [−1.0, +8.5]**;
+the interval includes zero. Scores below are percentages with 95% intervals;
+deltas are percentage points. Matchups name the trained policy's deck first.
+
+| Matchup | One seat, update 250 | Both seats, update 250 | Paired delta |
+|---|---:|---:|---:|
+| LvA | 22 [12, 32] | 24 [12, 38] | 2 [-10, 14] |
+| AvL | 82 [72, 92] | 74 [62, 86] | -8 [-18, 0] |
+| LvL | 38 [28, 48] | 60 [52, 68] | 22 [8, 36] |
+| AvA | 48 [40, 56] | 48 [40, 56] | 0 [-8, 8] |
+| mean | 47.5 [44.5, 50.5] | 51.5 [48.5, 54.5] | 4 [-1, 8.5] |
+
+LvA is Lessons versus Allies; AvL reverses those decks; LvL and AvA are mirrors.
+Each cell has 50 games from 25 deals; the mean has 200 games. The apparent mean
+gain is concentrated in Lessons mirrors, while Allies versus Lessons declines.
+Lessons versus Allies, the primary tracking matchup, changes from 22% to 24%
+with a paired interval spanning −10 to +14 points.
+
+Both evaluations use the same engine/content/ABI fingerprints, heuristic source,
+25 deals, eight legs and one-pass CPU inference envelope. Bootstrap analysis
+resamples whole deals, keeping both variants and all seat/deck legs paired:
+4,000 draws, seed 17. The paired-difference analysis is descriptive and post hoc,
+not a method-level hypothesis test; matchup intervals are unadjusted for
+multiple comparisons. There is still only one training seed.
+
+**This is not a cost-matched win.** At these checkpoints, two-seat training used
+7,595,063 learner decisions versus 4,096,000, and its training wall coordinate
+was 5,222.94 seconds versus 1,530.62 seconds: 1.85× the learner rows and
+3.41× the wall time. Environment decisions were 7,595,063 versus 8,304,667.
+Complete-game credit, row order, schedule coordinates and physical training hosts
+remain confounded. These results establish a playable early checkpoint with a measured anchor
+score, not improved strength per dollar or a completed $10/$50 tier.
+
+[Scored rows, intervals, identities and receipts](data/two-seat-ladder/250-update-heuristic.json)
+retain both 200-game cohorts and their exact input hashes. The original one-seat
+result is the completed `heuristic-0` cohort retained for #333; its earlier
+spawn-failure attempt is not substituted for successful games.
 
 ## Costs and remaining allocation
 
@@ -89,7 +133,9 @@ observation time; it continues accruing cost.
 | All admitted/queued reservations plus prior cost and controller allowance | Admission bound | **49.9813** |
 | Authorized experiment ceiling | | **50.00** |
 
-The controller is live on the Mac mini. It adopted 002 with its original lease;
+The controller and bounded dashboard-report companion are live on the Mac mini.
+They retain progress independently of this laptop. The controller adopted 002
+with its original lease;
 003–007 each have an 11.9-hour allocation and 008 has 4.9 hours. Their reservations
 include guardian allowances. After a clean allocation pause, final raw/EMA/Adam
 and run exports must verify and provider cleanup must be confirmed before the
@@ -107,7 +153,8 @@ The one-seat v1 small tier reported 151.6M learner decisions, heuristic score
 0.70 as Lessons versus Allies and mean 0.69 over four matchup cells, at its $10
 checkpoint ([frozen v1 report](https://github.com/loopflowstudio/manabot/blob/32acac9019b3d94a10173827f8d6782c87e18fa0/experiments/scale-ladder.md)).
 The present two-seat run has not reached a comparable spend or evaluation endpoint.
-There is no current evidence that two seats outperform one.
+The early same-update paired interval includes zero; there is no current
+evidence of an overall strength or cost-efficiency advantage for two seats.
 
 The strongest confound is the changed collection/credit boundary and row order,
 combined with update-based schedules that see different numbers of decisions.
