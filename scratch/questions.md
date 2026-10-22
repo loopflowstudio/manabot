@@ -57,3 +57,14 @@ They do not select current work or authorize paid execution.
   remains authoritative. Attempt limits here mean the existing permanent provider
   claim, one recovery child per parent, and no checkpoint-evaluation retries within
   the retained cumulative allowance; no new numeric process-retry policy is added.
+
+## Training consolidation defaults — 2026-10-22
+
+The accepted consolidation left exact local defaults and obsolete preset handling
+open. The implementation selects `local-smoke-v1` (two CPU updates, two streams,
+16 decisions per stream, both seats, 120-second failure bound), using the baseline
+model and damped objective through `execute_regime`. Explicit one-seat controls
+retain exact quotas. Old training preset/override flags fail with migration
+instructions because fixed-seat PPO and optional shaping cannot be translated
+faithfully. Historical executables without current consumers are retired; their
+results, pinned source and first-light report readers remain intact.
