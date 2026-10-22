@@ -6,6 +6,7 @@ frozen Manabot environment; this module uses the exact newer Etude source.
 """
 
 from decimal import Decimal
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ import sys
 from urllib.parse import unquote, urlparse
 
 from etude.eval.match import Tables, agent, environment
-from etude.eval.records import Match, RoundRobin
+from etude.eval.records import Agent, Match, RoundRobin
 from etude.jobs import evaluation
 from etude.launch.client import launch
 from etude.launch.records import Runtime
@@ -95,9 +96,7 @@ def launch_evaluation(
     conditions: tuple[dict[str, str | int | bool], ...],
     revision: str,
 ) -> str:
-    import hashlib
-
-    def checkpoint_agent(path: Path, label: str):
+    def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
             label,
             checkpoint=ArtifactRef(
@@ -138,7 +137,7 @@ def launch_evaluation(
         repo=str(root),
         revision=revision,
         max_hours=0.5,
-        max_usd=Decimal(0),
+        max_usd=Decimal("0.01"),
         max_attempts=1,
         runtime=Runtime(
             python=sys.executable,
