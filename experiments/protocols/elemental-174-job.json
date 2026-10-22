@@ -1,0 +1,17 @@
+{
+  "machine": {
+    "gpu_types": [
+      "NVIDIA L4"
+    ],
+    "vcpus": 6,
+    "memory_gb": 48,
+    "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+    "hourly_ceiling": 0.6
+  },
+  "lifetime_hours": 0.9833333333333333,
+  "spending_limit": 1.0,
+  "upload_seconds": 300,
+  "setup_seconds": 600,
+  "checkpoint_seconds": 120,
+  "cleanup_seconds": 120
+}

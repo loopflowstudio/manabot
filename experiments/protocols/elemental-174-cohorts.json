@@ -1,0 +1,396 @@
+{
+  "monitoring": [
+    {
+      "a": "elemental_bg",
+      "b": "elemental_gr",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_gw",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_rb",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_ub",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_ug",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ug",
+      "b": "elemental_ur",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_uw",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_uw",
+      "b": "elemental_wb",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_wb",
+      "b": "elemental_wr",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_wr",
+      "b": "elemental_bg",
+      "deal": 17410001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_gr",
+      "deal": 17410001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_rb",
+      "deal": 17410001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_ug",
+      "deal": 17410001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_uw",
+      "deal": 17410001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_wb",
+      "b": "elemental_wr",
+      "deal": 17410001,
+      "mirrors": true
+    }
+  ],
+  "scoring": [
+    {
+      "a": "elemental_bg",
+      "b": "elemental_gr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_gw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_rb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_ub",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_gw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_rb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_ub",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gr",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_rb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_ub",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_ub",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_rb",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ug",
+      "b": "elemental_ur",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ug",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ug",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ug",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_uw",
+      "b": "elemental_wb",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_uw",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_wb",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": false
+    },
+    {
+      "a": "elemental_bg",
+      "b": "elemental_gr",
+      "deal": 17420001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_gw",
+      "b": "elemental_rb",
+      "deal": 17420001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_ub",
+      "b": "elemental_ug",
+      "deal": 17420001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_ur",
+      "b": "elemental_uw",
+      "deal": 17420001,
+      "mirrors": true
+    },
+    {
+      "a": "elemental_wb",
+      "b": "elemental_wr",
+      "deal": 17420001,
+      "mirrors": true
+    }
+  ]
+}
