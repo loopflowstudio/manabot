@@ -10,12 +10,12 @@ import torch
 from manabot.arena.match import selected_match
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
+from manabot.experiment import attack_execution
+from manabot.experiment.attack_execution import execute_attack_plan
+from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.training import attack_execution
-from manabot.training.attack_execution import execute_attack_plan
-from manabot.training.attacks import AttackPlan, AttackTarget
+from manabot.model.checkpoint import save_checkpoint
 from manabot.training.models import (
     FrozenOpponent,
     Learning,
@@ -34,7 +34,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
     )
     target = tmp_path / "target.pt"
     torch.manual_seed(17)
-    save_bc_checkpoint(
+    save_checkpoint(
         ActorCritic(space, config), space, target, player_configs=Match(match).to_rust()
     )
     plan = AttackPlan(

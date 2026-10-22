@@ -9,13 +9,13 @@ import argparse
 from pathlib import Path
 import time
 
+from manabot.arena.monitor import MonitorProtocol, evaluate_checkpoint
+from manabot.infra.files import atomic_json
 from manabot.remote.bundle import Bundle, verify_training_bundle
 from manabot.remote.deploy import Receipt, current_source, deploy
 from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import RunPod
-from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingCoordinates, TrainingRegime, TrainingRun
-from manabot.training.monitor_evaluation import MonitorProtocol, evaluate_checkpoint
 
 
 def main() -> None:

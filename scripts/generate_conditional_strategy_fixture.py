@@ -12,20 +12,14 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
+from pathlib import Path
 import sys
 
-import numpy as np
-
 from manabot.sim.conditional_search import (
-    CONDITION_TRUE,
-    ConditionalSearchError,
     ConditionalStrategyResult,
     HasCard,
-    NotQuery,
     ScenarioWorldSpace,
-    TrueQuery,
     WorldSpec,
     canonical_result_json,
     conditional_determinized_puct,
@@ -36,7 +30,6 @@ from manabot.sim.conditional_search import (
     validate_result,
 )
 from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
-from manabot.sim.teacher1_evidence import canonical_sha256
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
 
@@ -226,7 +219,7 @@ def main() -> int:
             f"root_value={c.root_value:.3f}  uncertainty={c.uncertainty:.4f}  "
             f"visits={c.visit_counts.tolist()}"
         )
-    print(f"  Comparison deltas vs True:")
+    print("  Comparison deltas vs True:")
     for cid, deltas in first.comparison_deltas.items():
         print(f"    {cid:30s}  {deltas}")
     print("Done.")

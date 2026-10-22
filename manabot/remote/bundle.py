@@ -12,7 +12,7 @@ import tarfile
 
 from pydantic import Field, model_validator
 
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.models import TrainingRun
 from manabot.verify.store import VerifyStore
 
@@ -160,7 +160,7 @@ def verify_training_bundle(root: Path, bundle: Bundle) -> list[Path]:
                 raise ValueError("artifact differs from TrainingRun")
             if name in ("raw", "ema"):
                 path = item.destination(root)
-                load_checkpoint_agent(str(path))
+                load_checkpoint(str(path))
                 policies.append(path)
     if not policies:
         raise ValueError("returned run has no policy exports")

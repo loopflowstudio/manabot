@@ -25,6 +25,7 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import inspect_checkpoint
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_setup,
@@ -32,8 +33,6 @@ from manabot.model.world import (
 )
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import Learning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
@@ -167,11 +166,11 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert not truncated
     assert not info["action_space_truncated"]
     path = tmp_path / "elemental.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=env.match.to_rust())
+    save_checkpoint(agent, space, path, player_configs=env.match.to_rust())
     summary = inspect_checkpoint(path)
     assert summary.compatible
     assert len(summary.setups) == 10
-    restored, _ = load_checkpoint_agent(str(path))
+    restored, _ = load_checkpoint(str(path))
     restored_policy, restored_value = restored(tensors)
     torch.testing.assert_close(restored_policy, policy)
     torch.testing.assert_close(restored_value, value)
@@ -214,8 +213,8 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
     assert run.status == "completed", run.error
     stage = run.stages[0]
     assert stage.learner_transitions == 32
-    initial, _ = load_checkpoint_agent(stage.artifacts["initial_raw"]["path"])
-    restored, _ = load_checkpoint_agent(stage.artifacts["raw"]["path"])
+    initial, _ = load_checkpoint(stage.artifacts["initial_raw"]["path"])
+    restored, _ = load_checkpoint(stage.artifacts["raw"]["path"])
     assert any(
         not torch.equal(a, b)
         for a, b in zip(initial.parameters(), restored.parameters())

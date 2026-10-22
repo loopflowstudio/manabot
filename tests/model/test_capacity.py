@@ -10,9 +10,8 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity, architecture_receipt
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.training.collection import SeatRoutedCollector
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -56,10 +55,10 @@ def test_capacity_export_and_real_legal_policy(
     assert (probabilities[obs["actions_valid"] == 0] == 0).all()
     torch.testing.assert_close(probabilities.sum(-1), torch.ones(2))
     path = tmp_path / "capacity.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent, agent.observation_space, path, player_configs=Match().to_rust()
     )
-    loaded, _ = load_checkpoint_agent(str(path))
+    loaded, _ = load_checkpoint(str(path))
     assert architecture_receipt(loaded) == receipt
     actual = loaded(obs)
     for expected, observed in zip((policy, value), actual, strict=True):
@@ -69,14 +68,14 @@ def test_capacity_export_and_real_legal_policy(
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "masked_mean"
     torch.save(checkpoint, path)
     with pytest.raises(ValueError, match="architecture receipt mismatch"):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "historical_mean"
     del checkpoint["architecture"]
     if depth == 1:
         del checkpoint["hypers"]["agent_hypers"]["attention_layers"]
         del checkpoint["hypers"]["agent_hypers"]["value_aggregation"]
     torch.save(checkpoint, path)
-    historical, _ = load_checkpoint_agent(str(path))
+    historical, _ = load_checkpoint(str(path))
     for expected, observed in zip((policy, value), historical(obs), strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
 

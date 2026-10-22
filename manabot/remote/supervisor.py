@@ -16,8 +16,8 @@ import time
 import traceback
 from typing import Protocol
 
+from manabot.experiment.evaluation_queue import CheckpointQueue
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
-from manabot.training.checkpoint_queue import CheckpointQueue
 from manabot.training.models import TrainingRun
 from manabot.verify.store import VerifyStore
 

@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.experiment.config import Case, Environment, Experiment, ModelOverride
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -16,12 +17,11 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.ataraxos import ataraxos
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent, make_player
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.training.builders import with_recent_events
-from manabot.training.experiments import Case, Environment, Experiment, ModelOverride
+from manabot.recipes.builders import with_recent_events
+from manabot.sim.flat_mc import AgentMatchupPlayer, make_player
+from manabot.training.collection import SeatRoutedCollector
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -92,10 +92,10 @@ def test_real_history_reaches_both_heads_and_reloads(
     )[0]
     assert torch.isfinite(semantic_gradient).all() and semantic_gradient.abs().sum() > 0
     path = tmp_path / "history.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent, agent.observation_space, path, player_configs=_match().to_rust()
     )
-    loaded, space = load_checkpoint_agent(str(path))
+    loaded, space = load_checkpoint(str(path))
     assert space.encoder.config.policy_history_version == 1
     assert architecture_receipt(loaded) == architecture_receipt(agent)
     assert architecture_receipt(agent).components["recent_events"].total > 0
@@ -105,7 +105,7 @@ def test_real_history_reaches_both_heads_and_reloads(
     del checkpoint["hypers"]["agent_hypers"]["recent_events"]
     torch.save(checkpoint, path)
     with pytest.raises((ValueError, RuntimeError)):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_semantics_order_padding_and_stateless_reset() -> None:
@@ -167,7 +167,7 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     space = _space()
     agent = _agent(space)
     path = tmp_path / "player.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=_match().to_rust())
+    save_checkpoint(agent, space, path, player_configs=_match().to_rust())
     player, loaded_space = make_player(
         {"kind": "checkpoint", "path": str(path)}, seed=111
     )

@@ -29,6 +29,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
+from managym.possible_worlds import PossibleWorldSpace as CanonicalPossibleWorldSpace
 import numpy as np
 
 from manabot.belief.range import BeliefState
@@ -46,7 +47,6 @@ from manabot.sim.search_branch import (
     branch_backend as resolve_branch_backend,
 )
 from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS
-from managym.possible_worlds import PossibleWorldSpace as CanonicalPossibleWorldSpace
 
 PLANNER_NAME = "determinized_puct"
 CONDITION_TRUE = "true"

@@ -10,7 +10,8 @@ import torch
 
 from manabot.env import ObservationSpace
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.flat_mc import MatchupPlayer, load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.flat_mc import MatchupPlayer
 from manabot.sim.mcts import (
     DeterminizedPuctPlayer,
     LeafEvaluation,
@@ -111,7 +112,7 @@ def build_arena_player(
         raise FileNotFoundError("checkpoint candidate bytes are unavailable")
     if spec["implementation_source_sha256"] != file_sha256(Path(__file__)):
         raise RuntimeError("policy-prior PUCT implementation source drift")
-    agent, observation_space = load_checkpoint_agent(checkpoint_path)
+    agent, observation_space = load_checkpoint(checkpoint_path)
     evaluator = PolicyPriorRandomLeafEvaluator(agent, observation_space)
     player = DeterminizedPuctPlayer(
         int(spec["sims"]),

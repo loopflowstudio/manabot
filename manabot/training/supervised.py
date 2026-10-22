@@ -21,7 +21,7 @@ import torch
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import (
+from manabot.sim.data import (
     LOCAL_RECEIPT_KEY,
     LOCAL_TARGET_KEY,
     OBS_KEYS,
@@ -29,10 +29,9 @@ from manabot.sim.distill import (
     SCORE_KEY,
     VISIT_COUNT_KEY,
     dataset_observation_space,
-    soft_targets_from_scores,
-    split_by_game,
 )
 from manabot.sim.local_update import LocalUpdateReceipt
+from manabot.training.data import soft_targets_from_scores, split_by_game
 
 SCORE_SOFTMAX_TARGET = "score_softmax"
 VISIT_DISTRIBUTION_TARGET = "visit_distribution"

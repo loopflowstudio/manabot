@@ -9,13 +9,9 @@ import torch
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import (
-    ROOT_VALUE_KEY,
-    VISIT_COUNT_KEY,
-    generate_selfplay_shard,
-    load_shards,
-    save_bc_checkpoint,
-)
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import ROOT_VALUE_KEY, VISIT_COUNT_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
 from manabot.sim.flat_mc import make_player
 from manabot.sim.mcts import (
     AgentLeafEvaluator,
@@ -171,7 +167,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
 ) -> None:
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         ActorCritic(observation_space, ModelConfig()),
         observation_space,
         checkpoint,

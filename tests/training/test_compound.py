@@ -10,9 +10,10 @@ import torch
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.compound import CompoundDecoder
 from manabot.sim.compound import CompoundPolicy, sample_compound
-from manabot.sim.flat_mc import load_checkpoint_agent, make_player
+from manabot.sim.flat_mc import make_player
 from manabot.sim.structured_policy import StructuredPolicyError, flatten_projection
 from manabot.training.compound import (
     collect_game,
@@ -308,7 +309,7 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
     assert run.status == "completed"
     assert run.stages[0].optimizer_exposures > 0
     path = run.stages[0].artifacts["raw"]["path"]
-    loaded, _ = load_checkpoint_agent(path)
+    loaded, _ = load_checkpoint(path)
     torch.manual_seed(91)
     original = ActorCritic(loaded.observation_space, regime.agent)
     assert not torch.equal(

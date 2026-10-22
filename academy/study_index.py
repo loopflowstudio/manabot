@@ -20,6 +20,7 @@ import statistics
 import time
 from typing import Any
 
+from managym.experience import OfferVerb, PresentationImportance, ProtocolModel
 from pydantic import ValidationError, model_validator
 
 from academy.study_protocol import (
@@ -32,7 +33,6 @@ from academy.study_protocol import (
     StudyDecisionKind,
     StudyIdentity,
 )
-from managym.experience import OfferVerb, PresentationImportance, ProtocolModel
 
 DECISION_ID_DOMAIN = b"etude.study-decision.v1\0"
 REPO_ROOT = Path(__file__).parents[1]

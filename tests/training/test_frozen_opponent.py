@@ -9,8 +9,7 @@ from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     FrozenOpponent,
@@ -67,7 +66,7 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     path = tmp_path / "opponent.pt"
     space = ObservationSpace()
     opponent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
-    save_bc_checkpoint(
+    save_checkpoint(
         opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     before = file_sha256(path)
@@ -81,8 +80,8 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     assert file_sha256(path) == before
     assert run.stages[0].inputs["frozen_opponent"]["sha256"] == before
     assert "initial_raw" not in run.stages[1].artifacts
-    initial, _ = load_checkpoint_agent(run.stages[0].artifacts["initial_raw"]["path"])
-    trained, _ = load_checkpoint_agent(run.stages[1].artifacts["raw"]["path"])
+    initial, _ = load_checkpoint(run.stages[0].artifacts["initial_raw"]["path"])
+    trained, _ = load_checkpoint(run.stages[1].artifacts["raw"]["path"])
     assert any(
         not torch.equal(initial.state_dict()[key], value)
         for key, value in trained.state_dict().items()
@@ -97,7 +96,7 @@ def test_compound_opponent_is_rejected_before_training(tmp_path: Path) -> None:
         space, ModelConfig(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
     )
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:

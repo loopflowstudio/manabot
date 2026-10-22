@@ -10,14 +10,8 @@ import torch
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import (
-    OBS_KEYS,
-    ROOT_VALUE_KEY,
-    SCORE_KEY,
-    VISIT_COUNT_KEY,
-    save_bc_checkpoint,
-)
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.sim.data import OBS_KEYS, ROOT_VALUE_KEY, SCORE_KEY, VISIT_COUNT_KEY
 from manabot.training.supervised import (
     BLENDED_VALUE_TARGET,
     CHOSEN_ACTION_TARGET,
@@ -141,7 +135,7 @@ def test_joint_checkpoint_round_trips(tmp_path: Path) -> None:
         dataset, epochs=1, batch_size=32, val_fraction=0.25, seed=3
     )
     path = tmp_path / "search_supervised.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         obs_space,
         path,
@@ -155,7 +149,7 @@ def test_joint_checkpoint_round_trips(tmp_path: Path) -> None:
             "value_brier": history[-1].validation.value_brier,
         },
     )
-    loaded, loaded_space = load_checkpoint_agent(str(path))
+    loaded, loaded_space = load_checkpoint(str(path))
     assert loaded_space == obs_space
     for (name, expected), (_, actual) in zip(
         agent.state_dict().items(), loaded.state_dict().items()

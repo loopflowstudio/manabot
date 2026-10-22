@@ -2,7 +2,7 @@
 
 from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import PACK, move_learning
+from manabot.recipes.builders import PACK, move_learning
 from manabot.training.models import Execution, TrainingRegime, TrainSelfPlay
 import managym
 

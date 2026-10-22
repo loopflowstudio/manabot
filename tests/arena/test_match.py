@@ -258,9 +258,9 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     from manabot.arena.replay import replay_environment
     from manabot.env import ObservationSpace
     from manabot.infra.config import ModelConfig, ObservationConfig
+    from manabot.infra.provenance import runtime_fingerprints
     from manabot.model.actor_critic import ActorCritic
-    from manabot.sim.distill import save_bc_checkpoint
-    from manabot.sim.teacher1_evidence import runtime_fingerprints
+    from manabot.model.checkpoint import save_checkpoint
 
     key, (random, _) = selected_players()
     space = ObservationSpace(
@@ -273,7 +273,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     path = tmp_path / "fixture.pt"
     from manabot.env import Match
 
-    save_bc_checkpoint(
+    save_checkpoint(
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(

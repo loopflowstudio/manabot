@@ -244,8 +244,8 @@ def training_report_command(
     """Select and aggregate saved training runs; never launch compute."""
     from pathlib import Path
 
-    from manabot.training.time_cohort import write_cohort_report
-    from manabot.training.time_sources import load_time_sources
+    from manabot.reports.time_cohort import write_cohort_report
+    from manabot.reports.time_sources import load_time_sources
 
     try:
         cohort = load_time_sources(source, training_clock=training_clock)
@@ -302,7 +302,7 @@ def belief_learn_demo_command(
 ) -> None:
     """Compare population-trained exact-world beliefs with p0 on held-out deals."""
 
-    from manabot.belief.learning_demo import main as run_belief_learn_demo
+    from manabot.recipes.belief import main as run_belief_learn_demo
 
     run_belief_learn_demo(
         episodes=episodes,

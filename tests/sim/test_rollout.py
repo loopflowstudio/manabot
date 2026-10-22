@@ -9,9 +9,9 @@ import numpy as np
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import soft_targets_from_scores
 from manabot.sim.flat_mc import aggregate_records
 from manabot.sim.rollout import (
     BatchedSampler,
@@ -20,6 +20,7 @@ from manabot.sim.rollout import (
     _allocate_buffers,
     run_vector_games,
 )
+from manabot.training.data import soft_targets_from_scores
 from manabot.verify.util import INTERACTIVE_DECK
 
 
@@ -95,7 +96,7 @@ class TestRolloutPool:
 
 
 class TestBatchedSampler:
-    def _obs_batch(self, batch: int = 8):
+    def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
         obs_space = ObservationSpace()
         buffers = _allocate_buffers(obs_space, batch)
         rng = np.random.default_rng(1)
@@ -104,6 +105,10 @@ class TestBatchedSampler:
                 continue
             if arr.dtype == np.float32:
                 arr[:] = rng.random(arr.shape, dtype=np.float32)
+        # Transport definition IDs are discrete even in a synthetic feature batch.
+        buffers["semantic_cards"].fill(0)
+        for key in ("agent_permanents", "opponent_permanents"):
+            buffers[key][..., PERMANENT_DEFINITION_INDEX] = 0
         valid = np.zeros_like(buffers["actions_valid"])
         valid[:, :5] = (rng.random((batch, 5)) < 0.6).astype(np.float32)
         valid[np.arange(batch), rng.integers(0, 5, batch)] = 1.0

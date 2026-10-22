@@ -6,13 +6,13 @@ import pytest
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.arena.monitor import checkpoint_manifest
 from manabot.env import Match, ObservationSpace
+from manabot.infra.provenance import runtime_fingerprints
 from manabot.model import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
 from manabot.recipes.baseline import baseline
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.teacher1_evidence import runtime_fingerprints
 from manabot.training.models import TrainingCoordinates, TrainingRun
-from manabot.training.monitor_evaluation import checkpoint_manifest
 from manabot.verify.action_cases import decision_case
 from manabot.verify.choice_corpus import Case
 from manabot.verify.learning_regression import (
@@ -107,7 +107,7 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
             plan = baseline(1)
             agent = ActorCritic(ObservationSpace(), plan.regime.agent)
             path = tmp_path / "initial.pt"
-            save_bc_checkpoint(
+            save_checkpoint(
                 agent,
                 ObservationSpace(),
                 path,

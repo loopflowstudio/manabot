@@ -39,7 +39,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (bot / "managym/libmanagym.dylib.dSYM").exists()
     assert (bot / "content/semantic/v1/generated/two_deck.ir.json").is_file()
     assert (bot / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json").is_file()
-    assert (bot / "manabot/training/time_cohort.html").is_file()
+    assert (bot / "manabot/reports/time_cohort.html").is_file()
     assert (bot / "manabot/remote/guardian.sh").is_file()
     assert not (bot / "academy/ui/node_modules").exists()
     assert not (bot / "experiments").exists()

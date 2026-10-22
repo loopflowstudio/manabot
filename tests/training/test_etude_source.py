@@ -7,7 +7,7 @@ import sysconfig
 
 import pytest
 
-from manabot.training import source_bundle
+from manabot.infra import source as source_bundle
 
 
 @pytest.mark.parametrize("altered", [False, True])
@@ -15,7 +15,7 @@ def test_archive_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, altered: bool
 ) -> None:
     monkeypatch.setattr(
-        source_bundle, "__file__", str(tmp_path / "manabot/training/source_bundle.py")
+        source_bundle, "__file__", str(tmp_path / "manabot/infra/source.py")
     )
     (tmp_path / "managym").mkdir()
     (tmp_path / "source.py").write_bytes(b"changed" if altered else b"source")

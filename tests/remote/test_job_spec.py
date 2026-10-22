@@ -1,6 +1,8 @@
 """Allocation authority, frozen identities and the real CLI path, without rentals."""
 
+from copy import deepcopy
 from datetime import datetime
+import json
 from pathlib import Path
 import time
 
@@ -8,6 +10,9 @@ import pytest
 from typer.testing import CliRunner
 
 from manabot.cli import app
+from manabot.experiment.config import Baseline, Experiment
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.execution import PlannedRun
 from manabot.remote import cli, job_client, supervisor, transport
 from manabot.remote.job_store import worker_policy
 from manabot.remote.jobs import Job, JobRecord, JobStatus, Resource
@@ -20,9 +25,6 @@ from manabot.remote.plan import (
 )
 from manabot.remote.provider import Pod
 from manabot.remote.transport import job_startup
-from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.experiment_execution import PlannedRun
-from manabot.training.experiments import Baseline, Experiment
 from manabot.training.models import TrainingRegime, TrainSelfPlay
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE
@@ -105,27 +107,49 @@ def test_deadline_reserves_cost_extension_and_renewal() -> None:
     assert "export MANABOT_DEADLINE=2800" in job_startup(job)
 
 
-def test_frozen_four_hour_deployment_keeps_exact_identity() -> None:
+def test_retired_deployment_stays_frozen_and_is_not_admitted() -> None:
     raw = (
         (Path(__file__).parent / "fixtures/legacy-capacity-deployment.json")
         .read_text()
         .strip()
     )
-    old = DeploymentPlan.model_validate_json(raw)
-    assert old.model_dump_json() == raw
     assert (
         digest(raw.encode())
         == "3d1ccbe077df74010c9c76b7738b546be7d73d1a5c62b82829b8d96d87912fc1"
     )
     assert (
-        old.input_sha256
+        json.loads(raw)["input_sha256"]
         == "e6415e4d638f3da19c9b5c9312d7e43e7e1d12040986377ca7a42fb5b839dea2"
     )
-    assert old.allocation_at(1000) is None and old.schema_version == 1
-    stage = old.regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay) and stage.active_seconds == 14400
-    with pytest.raises(ValueError, match="step-target"):
-        compile_plan(old.input_json, job_spec(4), SOURCE, 1)
+    with pytest.raises(ValueError, match="ataraxos_move"):
+        DeploymentPlan.model_validate_json(raw)
+
+
+def _schema1_plan(payload: dict[str, object] | None = None) -> DeploymentPlan:
+    """Exercise the retained allocation envelope with a current executable recipe.
+
+    This synthetic fixture has a new input identity; no old learning rule is
+    translated and no frozen file is rewritten.
+    """
+    if payload is None:
+        payload = json.loads(
+            (
+                Path(__file__).parent / "fixtures/legacy-capacity-deployment.json"
+            ).read_text()
+        )
+    payload = deepcopy(payload)
+    current = recipe()
+    stage = current.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.execution.threads = 1
+    raw = current.model_dump_json()
+    stage.execution.device = "cuda"
+    payload.update(
+        input_json=raw,
+        input_sha256=digest(raw.encode()),
+        regime=current.model_dump(mode="json"),
+    )
+    return DeploymentPlan.model_validate(payload)
 
 
 @pytest.mark.parametrize("validate_numerics", [False, True])
@@ -294,21 +318,24 @@ def test_current_plan_has_one_specification() -> None:
 
 def test_schema1_job_retains_identity_and_deadline() -> None:
     raw = (Path(__file__).parent / "fixtures/legacy-v1-job.json").read_text().strip()
-    job = Job.model_validate_json(raw)
-    assert job.model_dump_json() == raw
     assert (
-        job.identity
+        digest(raw.encode())
         == "83304a98885f4825c47ca5c84f2116d3ffd7ba6295f0310b6098b9420d697234"
     )
+    with pytest.raises(ValueError, match="ataraxos_move"):
+        Job.model_validate_json(raw)
+    payload = json.loads(raw)
+    payload["plan"] = _schema1_plan(payload["plan"]).model_dump(mode="json")
+    job = Job.model_validate(payload)
     assert job.deadline == 26200.25
     assert job.allocation is None
     assert job.work_deadline == job.deadline - 660 - 120
-    assert Job.model_validate(job.model_dump()).identity == job.identity
+    assert Job.model_validate_json(job.model_dump_json()).identity == job.identity
+    assert job.identity != digest(raw.encode())
 
 
 def test_schema1_plan_cannot_silently_rewrite_frozen_content() -> None:
-    path = Path(__file__).parent / "fixtures/legacy-capacity-deployment.json"
-    plan = DeploymentPlan.model_validate_json(path.read_text())
+    plan = _schema1_plan()
     stage = plan.regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.updates += 1
@@ -317,8 +344,7 @@ def test_schema1_plan_cannot_silently_rewrite_frozen_content() -> None:
 
 
 def test_historical_reserves_require_explicit_new_authoring() -> None:
-    path = Path(__file__).parent / "fixtures/legacy-capacity-deployment.json"
-    old = DeploymentPlan.model_validate_json(path.read_text())
+    old = _schema1_plan()
     with pytest.raises(ValueError, match="checkpoint_seconds"):
         compile_plan(recipe().model_dump_json(), old.spec, SOURCE, 1)
 

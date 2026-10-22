@@ -154,10 +154,9 @@ world. The cross-package contracts and convergence status are in
    representation experiments
 5. **`manabot.verify`**: competency scenarios, behavioral probes, and the
    run-provenance store
-6. **`manabot.infra`**: shared configuration models and runtime setup/Etude tracking
-   config models, profiling
+6. **`manabot.infra`**: shared configuration, runtime setup, provenance and profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
-   supervised exact-world learning, and the `ManabotPlayer` lifecycle
+   exact-world inference, and the `ManabotPlayer` lifecycle
 8. **`manabot.study`**: behavioral study of recorded games (`record_games`,
    `measures`, `report`), with one subpackage per matchup
 
@@ -282,14 +281,14 @@ it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
 
-`manabot.training.etude_job.TrainingJob` freezes a single fresh self-play
+`manabot.experiment.job.TrainingJob` freezes a single fresh self-play
 `TrainingRegime` and its interior update milestones into an `etude.launch.Job`.
 Its `job(repo=..., revision=..., max_hours=...)` method only builds the job;
 `job.runs(*seeds)` only declares runs. Neither submits or reserves resources.
 The job command is:
 
 ```sh
-uv run --locked python -m manabot.training.etude_job
+uv run --locked python -m manabot.experiment.job
 ```
 
 Run that command through an Etude worker, not as a standalone training CLI: it
@@ -350,9 +349,44 @@ CPU runner and failure reports are separate from full-game strength evidence.
 
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 `ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
-owns per-run seeding and tracking; `training/experiments.py::Experiment` describes
+owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
 experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
 The regime’s search-supervised fitting and evaluation live in
 `training/supervised.py`; search-data generation remains in `sim`. The standalone exp-10 BC/value fitting loops and launcher are retired; replaying
 that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.
+
+
+### Training and simulation ownership
+
+Dependencies flow from training to simulation. Simulation does not import
+training, experiment scheduling or reports, even when loading a frozen model.
+The package-boundary tests import every simulation module and play a checkpoint
+with those packages blocked.
+
+- `model/`: network construction/inference and portable checkpoint admission.
+  `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
+  their serialized historical keys remain unchanged.
+- `sim/`: frozen players, search, batched games and search-target generation.
+  `sim.data` owns shard formats/loading; `sim.datagen` generates examples.
+- `training/`: regime execution, seat-routed collection, learning rules,
+  supervised/belief fitting, numerical health and optimizer/collector recovery.
+  `training.data` owns whole-game partitions and supervised target transforms.
+- `recipes/`: packaged local/baseline/belief recipes and composition helpers.
+- `experiment/`: authored comparisons, local scheduling, Etude job adapters,
+  checkpoint evaluation scheduling and artifact publication.
+- `arena/`: game authority, replay, checkpoint monitoring and comparisons.
+- `reports/`: retained-run projections, dashboards, report templates and
+  historical evidence readers.
+- `infra/`: runtime context, shared file operations and provenance identities.
+
+A policy checkpoint can be loaded for play without a trainer. Resuming a run
+also requires the admitted optimizer/collector/RNG snapshot and durable failure
+ledger. Moving files changes source identity; it does not admit an old run under
+new source or alter its frozen world, protocol or cost limits.
+
+Reports use `reports.records.RetainedRun` to read recorded stage parameters as
+JSON without translating historical learning tags or adding current execution
+defaults. `TrainingRun` admits the current executable recipe; both share measured
+run fields through `RunRecord`. Reading or publishing a historical result does
+not admit its recipe for a new run or recovery.

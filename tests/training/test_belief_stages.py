@@ -6,10 +6,10 @@ from typing import Literal
 
 import pytest
 
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import read_dataset
-from manabot.belief.sampling_fit import load_belief_sampler
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectBelief,
@@ -124,7 +124,7 @@ def test_frozen_belief_stages_run_and_reload(
         assert collection.games == 3
         assert collection.inputs["policy/raw"] == policy.artifacts["raw"]
         assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
-        loaded, _ = load_checkpoint_agent(policy.artifacts[weights]["path"])
+        loaded, _ = load_checkpoint(policy.artifacts[weights]["path"])
         assert loaded.config.value_kind == recipe.agent.value_kind
         assert loaded.config.compound_decisions == recipe.agent.compound_decisions
         assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]

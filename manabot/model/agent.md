@@ -167,7 +167,7 @@ do not change sampling, request shapes, optimizer state or recovery serializatio
 
 `ModelConfig.hidden_dim`, positive `attention_layers`, optional
 `attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. The builder
-`manabot.training.builders.with_capacity` reuses those fields; they introduce no second model schema. Heads must divide width when
+`manabot.recipes.builders.with_capacity` reuses those fields; they introduce no second model schema. Heads must divide width when
 attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
 The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.

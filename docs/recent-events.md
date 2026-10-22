@@ -11,7 +11,7 @@ This comparison **resolves unexecuted plans only**:
 
 ```python
 from manabot.infra.config import ModelConfig
-from manabot.training.experiments import Case, Experiment, ModelOverride
+from manabot.experiment.config import Case, Experiment, ModelOverride
 from manabot.recipes.ataraxos import ataraxos
 
 comparison = Experiment(

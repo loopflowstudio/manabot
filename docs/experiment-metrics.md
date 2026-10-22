@@ -168,7 +168,7 @@ report from saved records in a notebook or script run through `uv run`:
 
 ```python
 from pathlib import Path
-from manabot.training.experiment_report import load_evidence, write_time_profile
+from manabot.reports.experiment import load_evidence, write_time_profile
 
 write_time_profile(load_evidence(Path("saved-experiment")), Path("training-time.html"))
 ```
@@ -295,7 +295,7 @@ remain named in the overview; there is no pooled partial-cohort average. The
 short interpretation computes first-to-latest change and observed range using
 only that panel. It does not impute initialization, infer strategic causes or
 select a best checkpoint. `deck_results`, `checkpoint_panels` and `panel_figures`
-in `manabot.training.learning_dashboard` expose the same calculations to notebooks.
+in `manabot.reports.learning` expose the same calculations to notebooks.
 
 ## Portable snapshots
 
@@ -304,7 +304,7 @@ export its TrainingRun rows before reporting. Do not copy a live `.sqlite` file
 without its transaction state:
 
 ```bash
-uv run python -m manabot.training.report_snapshot SOURCE_DIRECTORY SNAPSHOT_DIRECTORY
+uv run python -m manabot.reports.snapshot SOURCE_DIRECTORY SNAPSHOT_DIRECTORY
 ```
 
 The destination must not exist. The command copies only reporting evidence,
@@ -355,7 +355,7 @@ never share a curve. No uncertainty interval claims independent training seeds.
 
 Historical runs without these counters remain unavailable. New default notebooks
 include this section. Existing editable notebooks can import
-`self_play_figures` from `manabot.training.self_play_report` and append
+`self_play_figures` from `manabot.reports.self_play` and append
 `('Self-play balance', 'self-play', self_play_figures(evidence))` to `sections`.
 Raw per-update counts are retained under `self_play_outcomes` in each stage's
 diagnostics. This instrumentation does not change losses, actions or schedules.

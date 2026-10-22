@@ -12,10 +12,11 @@ pytest.importorskip("etude.eval.match")
 from etude.eval.query import connect  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
+from manabot.arena import benchmark as evaluation
 from manabot.arena.match import selected_decks, selected_match
 from manabot.arena.models import file_sha256
+from manabot.arena.monitor import MonitorProtocol, MonitorResult
 from manabot.remote.live_evaluation import Ledger, _checkpoints, report
-from manabot.training import etude_evaluation as evaluation
 from manabot.training.models import (
     MonitoringCheckpoint,
     StageRecord,
@@ -23,7 +24,6 @@ from manabot.training.models import (
     TrainingRun,
     TrainSelfPlay,
 )
-from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
 import managym
 
 

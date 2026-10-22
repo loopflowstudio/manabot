@@ -8,7 +8,8 @@ import pytest
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import OBS_KEYS
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.value import (
@@ -98,7 +99,7 @@ class TestPlayers:
         obs_space = ObservationSpace()
         agent = ActorCritic(obs_space, ModelConfig())
         path = tmp_path / "value.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             agent,
             obs_space,
             path,

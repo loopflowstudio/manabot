@@ -40,7 +40,6 @@ def test_build_output_and_phase_start_survive_an_unfinished_command(
 
 
 def test_gui_wire_enum_mirrors_match_the_native_engine():
-    import managym
     from managym.enums import (
         ActionEnum,
         ActionSpaceEnum,
@@ -49,6 +48,8 @@ def test_gui_wire_enum_mirrors_match_the_native_engine():
         StepEnum,
         ZoneEnum,
     )
+
+    import managym
 
     for mirror, native in (
         (ActionEnum, managym.ActionEnum),

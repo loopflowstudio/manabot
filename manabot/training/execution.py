@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import asdict
-import json
 import os
 from pathlib import Path
 import platform
@@ -18,30 +17,31 @@ import psutil
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
     read_dataset,
     save_dataset,
 )
-from manabot.belief.sampling_fit import (
-    fit_belief_sampler,
-    load_belief_sampler,
-    save_belief_sampler,
-)
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import RunContext
 from manabot.infra.config import RewardConfig, RuntimeConfig
+from manabot.infra.files import atomic_json
 from manabot.infra.profiler import Profiler
+from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.source import source_commit
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.remote.plan import Allocation
-from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
+from manabot.reports.selection import analyze_selection, write_selection_report
+from manabot.sim.data import load_shards
+from manabot.sim.datagen import generate_selfplay_shard
+from manabot.training.belief import fit_belief_sampler, save_belief_sampler
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.learner import Learner
 from manabot.training.matchups import elemental_roster
 from manabot.training.supervised import (
@@ -87,9 +87,7 @@ from .recovery import (
     save_update,
     settle_orphan,
 )
-from .selection_analysis import analyze_selection, write_selection_report
 from .selection_data import SelectionDataset, collect_selection_game
-from .source_bundle import source_commit
 
 if TYPE_CHECKING:
     from manabot.verify.store import VerifyStore
@@ -117,15 +115,6 @@ def process_tree_rss(process: psutil.Process) -> int:
         except psutil.NoSuchProcess:
             continue
     return total
-
-
-def atomic_json(path: str | Path, value: object) -> None:
-    path = Path(path)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n"
-    )
-    os.replace(temporary, path)
 
 
 def export_training_run(
@@ -619,7 +608,7 @@ def _execute_regime(
         tick = time.perf_counter()
         target = out / f"monitor-{receipt.ordinal:08d}.pt"
         try:
-            save_bc_checkpoint(
+            save_checkpoint(
                 model,
                 space,
                 target.with_suffix(".tmp"),
@@ -641,7 +630,7 @@ def _execute_regime(
             with torch.random.fork_rng(
                 devices=[0] if next(model.parameters()).is_cuda else []
             ):
-                load_checkpoint_agent(str(target))
+                load_checkpoint(str(target))
             receipt.artifact = artifact(target)
             if experiment is not None:
                 experiment.checkpoint(
@@ -1033,7 +1022,7 @@ def _execute_regime(
                 persist()
                 if file_sha256(frozen["path"]) != frozen["sha256"]:
                     raise ValueError("selection policy artifact changed")
-                agent, policy_space = load_checkpoint_agent(frozen["path"])
+                agent, policy_space = load_checkpoint(frozen["path"])
                 if (
                     agent.config != regime.agent
                     or policy_space.encoder.config != regime.observation
@@ -1209,9 +1198,7 @@ def _execute_regime(
                     record.producer_cost = admitted.producer_cost
                     # Fork RNG so loading never shifts this run's own streams.
                     with torch.random.fork_rng(devices=[]):
-                        pretrained, _ = load_checkpoint_agent(
-                            admitted.checkpoint["path"]
-                        )
+                        pretrained, _ = load_checkpoint(admitted.checkpoint["path"])
                     if any(
                         not torch.isfinite(value).all()
                         for value in pretrained.state_dict().values()
@@ -1228,7 +1215,7 @@ def _execute_regime(
                         raise ValueError("frozen opponent checkpoint digest differs")
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
-                        opponent_agent, opponent_space = load_checkpoint_agent(
+                        opponent_agent, opponent_space = load_checkpoint(
                             str(opponent_path)
                         )
                         validate_agent_setup(
@@ -1263,7 +1250,7 @@ def _execute_regime(
                         tick = time.perf_counter()
                         target = out / f"{stage.id}-initial-raw.pt"
                         temporary = target.with_suffix(".tmp")
-                        save_bc_checkpoint(
+                        save_checkpoint(
                             agent,
                             space,
                             temporary,
@@ -1283,9 +1270,9 @@ def _execute_regime(
                             with torch.random.fork_rng(
                                 devices=[0] if next(agent.parameters()).is_cuda else []
                             ):
-                                load_checkpoint_agent(str(target))
+                                load_checkpoint(str(target))
                         else:
-                            load_checkpoint_agent(str(target))
+                            load_checkpoint(str(target))
                         record.artifacts["initial_raw"] = artifact(target)
                         record.export_seconds += time.perf_counter() - tick
                         persist()
@@ -1646,7 +1633,7 @@ def _execute_regime(
                     source = next(
                         item for item in run.stages if item.id == stage.initial
                     )
-                    initial_agent, _ = load_checkpoint_agent(
+                    initial_agent, _ = load_checkpoint(
                         source.artifacts[stage.initial_weights]["path"]
                     )
                     previous = {"agent": initial_agent}
@@ -1703,7 +1690,7 @@ def _execute_regime(
                 for name, model in variants.items():
                     target = out / f"{stage.id}-{name}.pt"
                     temporary = target.with_suffix(".tmp")
-                    save_bc_checkpoint(
+                    save_checkpoint(
                         model,
                         space,
                         temporary,
@@ -1733,9 +1720,9 @@ def _execute_regime(
                             # Admission constructs a model; pause exports must not
                             # perturb the RNG resumed by the next allocation.
                             with torch.random.fork_rng(devices=[0] if cuda else []):
-                                load_checkpoint_agent(str(target))
+                                load_checkpoint(str(target))
                         else:
-                            load_checkpoint_agent(str(target))
+                            load_checkpoint(str(target))
                     except Exception:
                         record.rejected_artifacts[name] = candidate
                         raise

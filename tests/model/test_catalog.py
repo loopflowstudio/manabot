@@ -15,8 +15,8 @@ from manabot.model.catalog import (
     discover_checkpoints,
     inspect_checkpoint,
 )
+from manabot.model.checkpoint import save_checkpoint
 from manabot.model.world import WORLD
-from manabot.sim.distill import save_bc_checkpoint
 import managym
 
 PACK = "ur-lessons-vs-gw-allies"
@@ -27,7 +27,7 @@ def _write_checkpoint(path: Path) -> None:
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         path,

@@ -13,8 +13,8 @@ from managym.possible_worlds import PossibleWorldError, PossibleWorldSpace, Worl
 import pytest
 
 from manabot.belief.encoding import belief_schema_from_engine
-from manabot.belief.learning import BeliefTrainingExample, pack_belief_examples
 from manabot.belief.likelihood import _matching_offer_indexes
+from manabot.belief.population import BeliefTrainingExample, pack_belief_examples
 from manabot.belief.range import BeliefState
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker

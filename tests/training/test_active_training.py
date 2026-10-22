@@ -10,9 +10,9 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.arena.monitor import stage_checkpoint
 from manabot.training import execution
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
-from manabot.training.monitor_evaluation import stage_checkpoint
 from manabot.verify.store import VerifyStore
 from tests.training.test_ataraxos_regime import _recipe
 
@@ -63,7 +63,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
     monkeypatch.setattr(
-        execution, "save_bc_checkpoint", clock.charge(execution.save_bc_checkpoint, 100)
+        execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         if expected == "failed":

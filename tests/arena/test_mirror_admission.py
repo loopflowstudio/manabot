@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from manabot.arena.match import MatchupMode, play_cell, selected_decks, selected_match
+from manabot.arena.monitor import ArenaRow
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.monitor_evaluation import ArenaRow
 from managym import Env
 from tests.arena.test_match import selected_players
 

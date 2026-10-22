@@ -226,10 +226,8 @@ def record_game(spec: GameSpec) -> GameRecord:
 
     from manabot.env import Env, Match, ObservationSpace, Reward
     from manabot.infra.config import RewardConfig
-    from manabot.sim.teacher1_evidence import (
-        RECORDED_ASSET_MANIFEST_HASH,
-        build_viewer_frame,
-    )
+    from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
+    from manabot.sim.teacher1_evidence import build_viewer_frame
 
     torch.set_num_threads(1)
     record = GameRecord(spec.game_id, spec.labels, spec.decks, spec.seed)

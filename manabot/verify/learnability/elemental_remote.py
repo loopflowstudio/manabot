@@ -10,6 +10,7 @@ import json
 from pathlib import Path, PurePosixPath
 import time
 
+from manabot.experiment.evaluation_queue import checkpoints
 from manabot.remote.job_client import (
     cancel_job,
     fetch_job_file,
@@ -19,7 +20,6 @@ from manabot.remote.job_client import (
 )
 from manabot.remote.job_store import S3JobStore
 from manabot.remote.jobs import Deletion, Resource
-from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.models import TrainingRun
 
 

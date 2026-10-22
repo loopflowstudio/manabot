@@ -24,12 +24,12 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.net_opponent import (
+from manabot.training.clock import boot_identity
+from manabot.training.collection import (
     CollectorSnapshot,
     CollectorStats,
     SeatRoutedCollector,
 )
-from manabot.training.clock import boot_identity
 from manabot.training.learner import Learner
 from manabot.training.models import StageRecord, TrainingRun
 

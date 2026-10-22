@@ -20,15 +20,14 @@ import numpy as np
 
 from manabot.env import ObservationSpace
 from manabot.infra.config import MatchConfig
-from manabot.sim.local_update import LocalUpdatePlayer
-from manabot.sim.mcts import DeterminizedPuctPlayer
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
-    build_command,
-    build_viewer_frame,
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.sim.local_update import LocalUpdatePlayer
+from manabot.sim.mcts import DeterminizedPuctPlayer
+from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 

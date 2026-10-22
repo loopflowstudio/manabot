@@ -22,10 +22,10 @@ from manabot.env.failures import (
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim import distill, rollout
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.sim import datagen, rollout
 from manabot.sim.pooled_datagen import _GameStream
 from manabot.training import compound, execution, selection_data
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.models import (
     Learning,
     SelectionGameSpec,
@@ -411,7 +411,7 @@ def test_distillation_failure_uses_scalar_capture(
             )
 
     monkeypatch.setattr(
-        distill, "make_player", lambda *args, **kwargs: (RejectingPlayer(), None)
+        datagen, "make_player", lambda *args, **kwargs: (RejectingPlayer(), None)
     )
     scope = CaptureScope(tmp_path)
     monkeypatch.setattr(managym, "Env", PaymentMismatchEnv)
@@ -419,7 +419,7 @@ def test_distillation_failure_uses_scalar_capture(
         capture_scope(scope),
         pytest.raises(managym.AgentError, match="fixture payment mismatch"),
     ):
-        distill.generate_selfplay_shard(
+        datagen.generate_selfplay_shard(
             num_games=1,
             teacher_spec={"kind": "random"},
             seed=24,

@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
+from managym.enums import ActionEnum, ActionSpaceEnum
 import pytest
 
 from manabot.study.allies_lessons.targeting_audit import audit
@@ -18,7 +19,6 @@ from manabot.study.targeting import (
     inspect_target,
     target_counts,
 )
-from managym.enums import ActionEnum, ActionSpaceEnum
 
 if TYPE_CHECKING:
     from managym import Observation

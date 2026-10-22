@@ -185,7 +185,7 @@ def deck_order(index: int) -> tuple[str, str]:
 def teacher_game(recipe: dict, index: int, shard: Path) -> dict:
     """Play one authored teacher game into its own shard; return its summary."""
     from manabot.infra.config import MatchConfig, ObservationConfig
-    from manabot.sim.distill import generate_selfplay_shard
+    from manabot.sim.datagen import generate_selfplay_shard
 
     return generate_selfplay_shard(
         num_games=1,
@@ -202,8 +202,8 @@ def train(out: Path, recipe: dict) -> None:
     import torch
 
     from manabot.infra.config import ModelConfig, ObservationConfig
-    from manabot.sim.distill import load_shards, save_bc_checkpoint
-    from manabot.sim.flat_mc import load_checkpoint_agent
+    from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+    from manabot.sim.data import load_shards
     from manabot.training.supervised import train_search_supervised
     import managym
 
@@ -264,7 +264,7 @@ def train(out: Path, recipe: dict) -> None:
     write_json(out / "phases.json", phases)
     phase_start = time.monotonic()
     checkpoint = out / "candidate.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         checkpoint,
@@ -273,7 +273,7 @@ def train(out: Path, recipe: dict) -> None:
         ],
         extra={"recipe": recipe},
     )
-    loaded, _ = load_checkpoint_agent(str(checkpoint))
+    loaded, _ = load_checkpoint(str(checkpoint))
     sample = {
         key: torch.as_tensor(value[:2])
         for key, value in dataset.items()

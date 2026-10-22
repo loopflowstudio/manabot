@@ -7,8 +7,8 @@ import pytest
 from manabot.arena.match import play_cell
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import ArenaContract, canonical_sha256
+from manabot.arena.monitor import MonitorProtocol
 from manabot.arena.replay import read_trace
-from manabot.training.monitor_evaluation import MonitorProtocol
 from managym import WORLD_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]

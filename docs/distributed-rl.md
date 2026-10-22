@@ -112,7 +112,7 @@ unresolved algorithm change.
 * `manabot/training/models.py`: `TrainingRegime` owns resolved ModelConfig, world,
   match, observation and stage configuration. `Execution` admits CPU float32
   and one worker here. Do not add a remote device string to bypass validation.
-* `manabot/sim/net_opponent.py`: `SeatRoutedCollector.collect` emits
+* `manabot/training/collection.py`: `SeatRoutedCollector.collect` emits
   `RolloutBatch` with `[time, stream, ...]` observations, actions, logprobs,
   behavior distributions, values, end markers and exact next observations.
   Only learner-seat decisions train; opponent decisions and native microsteps

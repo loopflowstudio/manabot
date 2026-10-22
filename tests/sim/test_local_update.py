@@ -21,14 +21,13 @@ from manabot.arena.models import (
 from manabot.arena.replay import replay_games
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
-from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
 from manabot.sim import local_update
-from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
@@ -36,6 +35,7 @@ from manabot.sim.local_update import (
     SamplerArtifact,
     regularized_update,
 )
+from manabot.training.belief import fit_belief_sampler, save_belief_sampler
 
 
 def small_match() -> MatchConfig:
@@ -52,7 +52,7 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match(small_match())
     path = tmp_path / "policy.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,

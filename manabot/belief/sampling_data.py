@@ -32,7 +32,8 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.flat_mc import AgentMatchupPlayer
 import managym
 
 Split = Literal["train", "validation", "test"]
@@ -265,7 +266,7 @@ def collect_frozen_policy(
     if games < 3 or max_steps < 1:
         raise ValueError("three-way whole-game split requires at least three games")
     policy_identity = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-    agent, obs_space = load_checkpoint_agent(str(checkpoint))
+    agent, obs_space = load_checkpoint(str(checkpoint))
     if agent.belief_count_buckets:
         raise ValueError(
             "frozen sampler collection requires an observation-only behavior policy"

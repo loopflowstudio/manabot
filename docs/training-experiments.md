@@ -1,6 +1,6 @@
 # Declarative training experiments
 
-`manabot.training.experiments.Experiment` declares typed Python experiments.
+`manabot.experiment.config.Experiment` declares typed Python experiments.
 Resolution returns complete validated `TrainingRegime` values and a provenance
 receipt. It never constructs a model, opens a store, collects games or launches
 training. Existing `EvaluationProtocol`, `ResolvedStudy`, `TrainingRun`, checkpoint
@@ -11,7 +11,7 @@ the evaluation protocol declares the cohort of run seeds.
 
 ```python
 from manabot.infra.config import ModelConfig
-from manabot.training.experiments import Axis, Case, Experiment, ModelOverride
+from manabot.experiment.config import Axis, Case, Experiment, ModelOverride
 from manabot.recipes.ataraxos import ataraxos
 
 experiment = Experiment(
@@ -125,7 +125,7 @@ calibration. The value-token experiment remains independently runnable.
 ## Declarations and studies
 
 A declaration resolves complete regimes; it is not a study type. The arena
-studies in `manabot.training.regime_study` admit only their own arm counts,
+studies in `manabot.experiment.study` admit only their own arm counts,
 checkpoint counts, seeds and budgets, so do not relabel a resolved set as one
 of them to bypass those requirements. Resolution never executes work.
 

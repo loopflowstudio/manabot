@@ -8,7 +8,7 @@ model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
-Admission is still ``manabot.sim.flat_mc.load_checkpoint_agent``; the catalog
+Admission is still ``manabot.sim.flat_mc.load_checkpoint``; the catalog
 reuses its world binding rules (``manabot.model.world``) so a listed
 "compatible" checkpoint and a loadable one cannot disagree about the world.
 """

@@ -8,11 +8,12 @@ import pytest
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.arena.monitor import stage_checkpoint
+from manabot.experiment.evaluation_queue import checkpoints
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
-from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.learning_state import admit_learning_state
 from manabot.training.models import (
     ArtifactReference,
@@ -23,7 +24,6 @@ from manabot.training.models import (
     TrainingRun,
     TrainSelfPlay,
 )
-from manabot.training.monitor_evaluation import stage_checkpoint
 from manabot.verify.store import VerifyStore
 import managym
 from tests.remote.test_job_spec import job_spec
@@ -108,7 +108,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
             producer.stages[0].artifacts[role]["path"], weights_only=False
         )
         # Use ordinary reader state to avoid coupling to checkpoint wire keys.
-        expected, _ = load_checkpoint_agent(producer.stages[0].artifacts[role]["path"])
+        expected, _ = load_checkpoint(producer.stages[0].artifacts[role]["path"])
         for key, value in agent.state_dict().items():
             torch.testing.assert_close(
                 value, expected.state_dict()[key], rtol=0, atol=0

@@ -512,11 +512,10 @@ class SemanticDecisionAdapter:
         # This existing evidence helper owns the exact protocol-v1 viewer
         # projection. Keep its native-engine dependency lazy so compiler-only
         # imports of manabot.semantic work before managym is built.
-        from manabot.sim.teacher1_evidence import (  # noqa: PLC0415
-            build_viewer_frame,
-            canonical_sha256,
-        )
         from managym.experience import ExperienceFrame  # noqa: PLC0415
+
+        from manabot.infra.provenance import canonical_sha256
+        from manabot.sim.teacher1_evidence import build_viewer_frame
 
         frame = build_viewer_frame(
             observation,

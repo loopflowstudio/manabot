@@ -82,13 +82,13 @@ class CheckpointVillain:
         deterministic: bool = False,
         player_configs: Sequence[managym.PlayerConfig] | None = None,
     ) -> None:
+        from manabot.model.checkpoint import load_checkpoint
         from manabot.model.world import validate_agent_setup
 
         # Keep the optional Torch/model stack behind checkpoint construction.
         from manabot.sim.compound import CompoundPolicy
-        from manabot.sim.flat_mc import load_checkpoint_agent
 
-        self.agent, self.obs_space = load_checkpoint_agent(path)
+        self.agent, self.obs_space = load_checkpoint(path)
         if player_configs is not None:
             validate_agent_setup(self.agent, player_configs)
         self.deterministic = deterministic

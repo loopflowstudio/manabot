@@ -5,19 +5,20 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from manabot.training.experiment_report import load_evidence, write_time_profile
-from manabot.training.models import PhaseTiming, StageRecord, TrainingRun
-from manabot.training.time_cohort import native_cohort, phase_totals
-from manabot.training.time_profile import (
+from manabot.reports.experiment import load_evidence, write_time_profile
+from manabot.reports.records import RetainedRun
+from manabot.reports.time_cohort import native_cohort, phase_totals
+from manabot.reports.time_profile import (
     training_intervals,
     training_profiles,
     training_time_report,
 )
+from manabot.training.models import PhaseTiming, StageRecord
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
 
-def _run() -> TrainingRun:
+def _run() -> RetainedRun:
     return (
         load_evidence(DEMO)
         .runs[0]
@@ -182,7 +183,7 @@ def test_absent_historical_counters_are_not_reported_as_measured_zero() -> None:
     assert [(p.name, p.seconds) for p in stage.children] == [("Unattributed", 8.0)]
     payload = run.model_dump()
     del payload["seconds"]
-    absent = TrainingRun.model_validate(payload)
+    absent = RetainedRun.model_validate(payload)
     assert training_profiles([absent])[0].root is None
 
 

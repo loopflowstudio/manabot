@@ -2,7 +2,7 @@
 
 from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import PACK, move_checkpoints
+from manabot.recipes.builders import PACK, move_checkpoints
 from manabot.training.models import TrainingRegime
 import managym
 

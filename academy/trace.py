@@ -14,8 +14,9 @@ from pathlib import Path
 import re
 from typing import Any
 
-import managym
 from managym.experience_projection import redact_observation
+
+import managym
 
 from .bot_decision import BotDecision
 

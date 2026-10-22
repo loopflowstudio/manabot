@@ -8,17 +8,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from manabot.infra.provenance import (
+    ContractError,
+    runtime_fingerprints,
+    validate_runtime_fingerprints,
+)
 from manabot.sim.mcts import determinized_puct
 from manabot.sim.teacher1_evidence import (
-    ContractError,
     _fresh_env,
     build_command,
     build_viewer_frame,
     evaluate_root_stability,
     record_teacher_trajectories,
     replay_teacher_trajectories,
-    runtime_fingerprints,
-    validate_runtime_fingerprints,
 )
 
 

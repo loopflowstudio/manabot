@@ -9,12 +9,19 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.experiment.evaluation_queue import checkpoints
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import VISIT_COUNT_KEY, load_shards
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.training import execution, monitoring
-from manabot.training.checkpoint_queue import checkpoints
+from manabot.model.checkpoint import load_checkpoint
+from manabot.reports import training as monitoring
+from manabot.reports.training import (
+    Dashboard,
+    append_history,
+    default_panels,
+    training_dashboard,
+)
+from manabot.sim.data import VISIT_COUNT_KEY, load_shards
+from manabot.training import execution
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectSearch,
@@ -23,12 +30,6 @@ from manabot.training.models import (
     TrainingRun,
     TrainSelfPlay,
     TrainSupervised,
-)
-from manabot.training.monitoring import (
-    Dashboard,
-    append_history,
-    default_panels,
-    training_dashboard,
 )
 from manabot.training.supervised import (
     CHOSEN_ACTION_TARGET,
@@ -143,9 +144,9 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
     assert evaluated[-1].artifact == monitored.selected_artifact
     for checkpoint in monitored.monitoring_checkpoints:
         assert checkpoint.error is None and checkpoint.artifact is not None
-        load_checkpoint_agent(checkpoint.artifact["path"])
-    plain, _ = load_checkpoint_agent(baseline.selected_artifact["path"])
-    tracked, _ = load_checkpoint_agent(monitored.selected_artifact["path"])
+        load_checkpoint(checkpoint.artifact["path"])
+    plain, _ = load_checkpoint(baseline.selected_artifact["path"])
+    tracked, _ = load_checkpoint(monitored.selected_artifact["path"])
     for key, weights in plain.state_dict().items():
         torch.testing.assert_close(weights, tracked.state_dict()[key], rtol=0, atol=0)
     dashboard = training_dashboard(monitored)
@@ -383,7 +384,7 @@ def test_fixed_reference_target_does_not_change_training_objective() -> None:
 def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
     tmp_path: Path,
 ) -> None:
-    from manabot.training.experiment_report import ReportEvidence, write_dashboard
+    from manabot.reports.experiment import ReportEvidence, write_dashboard
     from manabot.training.models import NumericalFailure
 
     run = TrainingRun(

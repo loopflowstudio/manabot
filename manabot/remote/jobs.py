@@ -11,8 +11,8 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.infra.artifacts import StoredArtifact, split_s3_uri
-from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.models import CheckpointCadence
 
 from .plan import MAX_JOB_SECONDS, Allocation, DeploymentPlan, Frozen, digest

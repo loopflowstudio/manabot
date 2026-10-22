@@ -9,5 +9,5 @@ if [ "$(uname -s)" = Linux ]; then
 fi
 uv sync --locked --python 3.12 --extra play
 uv run --locked maturin develop --release --manifest-path managym/Cargo.toml --features python
-uv run --locked python -m manabot.training.source_bundle
+uv run --locked python -m manabot.infra.source
 exec uv run --locked python -m "$@"

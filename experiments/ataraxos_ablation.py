@@ -9,10 +9,10 @@ runs the five-arm study (smoke by default; see `--help`).
 """
 
 from manabot.arena.match import selected_match
+from manabot.experiment.study import main
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import PACK, ppo_checkpoints
+from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.training.models import Learning, Schedule, TrainingRegime
-from manabot.training.regime_study import main
 import managym
 
 

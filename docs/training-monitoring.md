@@ -69,7 +69,7 @@ when monitoring is disabled. Watchdog/resource budgets charge all export work.
 Once `run.json` exists, launch the read-only dashboard follower separately:
 
 ```bash
-uv run python -m manabot.training.monitoring \
+uv run python -m manabot.reports.training \
   --run .runs/example/run.json --out .runs/example-dashboard --watch-seconds 30
 ```
 
@@ -129,7 +129,7 @@ Scalar sections also provide `elapsed/` copies against original training seconds
 Run evaluation in a separate process, explicitly accounting for its compute:
 
 ```bash
-uv run python -m manabot.training.monitor_checkpoint \
+uv run python -m manabot.arena.monitor_worker \
   --run .runs/example/run.json --out .runs/example-monitor --watch-seconds 30 \
   --concurrent-activity 'training running concurrently' --online --entity TEAM
 ```
@@ -140,9 +140,9 @@ are not automatically replaced. Saved results can be synced later. For an
 individual export or a stage-end checkpoint:
 
 ```bash
-uv run python -m manabot.training.monitor_checkpoint \
+uv run python -m manabot.arena.monitor_worker \
   --run .runs/example/run.json --checkpoint 0 --out .runs/checkpoint-0-monitor
-uv run python -m manabot.training.monitor_checkpoint \
+uv run python -m manabot.arena.monitor_worker \
   --run .runs/example/run.json --stage policy-0 --out .runs/stage-0-monitor
 ```
 
@@ -175,9 +175,9 @@ work does not advance the recorded training coordinates.
 No retraining or new evaluation is needed to publish saved diagnostics:
 
 ```bash
-uv run python -m manabot.training.monitoring \
+uv run python -m manabot.reports.training \
   --run /path/to/saved/run.json --out .runs/historical-dashboard --online
-uv run python -m manabot.training.monitoring \
+uv run python -m manabot.reports.training \
   --evaluations /path/to/checkpoint-0/monitor.json /path/to/checkpoint-1/monitor.json \
   --out .runs/historical-monitor-dashboard --online
 ```
@@ -188,7 +188,7 @@ imported against a saved MonitorResult manifest with original checkpoint,
 coordinates, registrations and protocol:
 
 ```bash
-uv run python -m manabot.training.monitor_checkpoint \
+uv run python -m manabot.arena.monitor_worker \
   --import-manifest /path/to/manifest.json --import-rows /path/to/rows.json \
   --out .runs/imported-monitor
 ```
@@ -221,10 +221,10 @@ Use the standard AWS credential chain (`AWS_PROFILE` or `--profile`); never put
 keys in recipes or manifests. Publish a completed or stopped TrainingRun:
 
 ```bash
-uv run --extra artifacts python -m manabot.training.artifacts publish \
+uv run --extra artifacts python -m manabot.experiment.artifacts publish \
   --run /path/to/run.json --destination s3://etudefantasia/manabot/ \
   --out .runs/storage/run-artifacts.json
-uv run python -m manabot.training.monitoring \
+uv run python -m manabot.reports.training \
   --run /path/to/run.json --artifact-manifest .runs/storage/run-artifacts.json \
   --out .runs/storage/dashboard --online --entity loopflow-studio --project etude
 ```
@@ -253,13 +253,13 @@ and historical W&B reader remain intact.
 Fetch a named role from the manifest (use its exact `artifacts` key):
 
 ```bash
-uv run --extra artifacts python -m manabot.training.artifacts fetch \
+uv run --extra artifacts python -m manabot.experiment.artifacts fetch \
   --manifest .runs/storage/run-artifacts.json \
   --artifact stages/policy-0/artifacts/raw --cache .runs/artifact-cache
 ```
 
 This prints a verified local path for ordinary checkpoint consumers. Python callers
-can pass a manifest's `StoredArtifact` directly to `load_checkpoint_agent`; it uses
+can pass a manifest's `StoredArtifact` directly to `load_checkpoint`; it uses
 `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and the default AWS credential
 chain. Downloads install atomically, and cache hits are rehashed before loading.
 Corruption fails closed. S3 locations do not relax world, architecture, setup or

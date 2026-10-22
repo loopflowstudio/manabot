@@ -14,17 +14,18 @@ from typing import Literal
 from pydantic import Field
 
 from manabot.arena.match import selected_match
-from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.training.builders import PACK
-from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.experiment_execution import (
+from manabot.arena.monitor import MonitorProtocol
+from manabot.experiment.config import Baseline, Experiment
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.execution import (
     ExperimentRun,
     ExperimentSchedule,
     Hardware,
     HardwareInventory,
 )
-from manabot.training.experiment_runner import run_experiment
-from manabot.training.experiments import Baseline, Experiment
+from manabot.experiment.runner import run_experiment
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.recipes.builders import PACK
 from manabot.training.models import (
     DampedPolicyLearning,
     Execution,
@@ -33,7 +34,6 @@ from manabot.training.models import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.monitor_evaluation import MonitorProtocol
 from manabot.verify.learning_regression import report_baseline
 import managym
 

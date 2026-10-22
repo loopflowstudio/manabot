@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 import math
 from typing import Any, Mapping
 
+from managym.experience import Command, ExperienceFrame, InteractionOffer
 import numpy as np
 
-from manabot.sim.teacher1_evidence import canonical_sha256
-from managym.experience import Command, ExperienceFrame, InteractionOffer
+from manabot.infra.provenance import canonical_sha256
 
 from .replay_index import ReplayDecisionAddress, decision_payload_sha256
 from .study_protocol import StudyArtifact

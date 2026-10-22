@@ -19,7 +19,7 @@ import sys
 import time
 from typing import TYPE_CHECKING, Iterator, TypedDict
 
-from manabot.training.execution import atomic_json
+from manabot.infra.files import atomic_json
 
 from .cohort import Cohort, CohortState, CohortSupervisor
 from .deploy import current_source

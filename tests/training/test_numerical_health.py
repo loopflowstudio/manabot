@@ -25,8 +25,8 @@ from manabot.model.policy_distribution import (
     legal_mask,
     policy_logs,
 )
-from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training import execution
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.damped_policy import damped_policy_loss, update_damped_iteration
 from manabot.training.health import NumericalHealth, OptimizerHealth
 from manabot.training.learner import Learner
@@ -422,7 +422,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content
-    initial_agent, _ = execution.load_checkpoint_agent(str(initial_path))
+    initial_agent, _ = execution.load_checkpoint(str(initial_path))
     assert all(
         torch.isfinite(value).all() for value in initial_agent.state_dict().values()
     )

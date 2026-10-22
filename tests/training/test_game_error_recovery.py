@@ -17,14 +17,15 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
+from manabot.experiment import evaluation_queue as checkpoint_queue
 from manabot.infra.config import ModelConfig
 from manabot.remote import plan as remote_plan
 from manabot.remote.cohort import CohortEntry
 from manabot.remote.jobs import JobPhase, JobRecord, Resource
 from manabot.remote.plan import Allocation, JobSpec
 from manabot.remote.provider import ProviderError
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.training import checkpoint_queue, execution
+from manabot.training import execution
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.game_errors import (
     GameAttempt,
     GameErrorLedger,

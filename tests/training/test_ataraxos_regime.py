@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
@@ -70,7 +70,7 @@ def test_real_collection_update_export_reload(
         assert stage.diagnostics[0]["iteration"] == iteration
         assert stage.diagnostics[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
         for variant in ("raw", "ema"):
-            loaded, _ = load_checkpoint_agent(stage.artifacts[variant]["path"])
+            loaded, _ = load_checkpoint(stage.artifacts[variant]["path"])
             assert loaded.config.value_kind == recipe.agent.value_kind
             assert loaded.config.semantic_pack == "ur-lessons-vs-gw-allies"
             assert all(

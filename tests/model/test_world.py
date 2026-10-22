@@ -10,8 +10,8 @@ from academy.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def selected_match():
@@ -43,7 +43,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
     path = tmp_path / "policy.pt"
     payload = checkpoint()
     torch.save(payload, path)
-    agent, space = load_checkpoint_agent(str(path))
+    agent, space = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
@@ -90,7 +90,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
     path = tmp_path / "bad.pt"
     torch.save(payload, path)
     with pytest.raises(ValueError, match="binding"):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_same_shapes_do_not_admit_another_matchup():
@@ -117,7 +117,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
         with pytest.raises(ValueError, match="setup differs"):
             CheckpointVillain(str(path), player_configs=Match().to_rust())
         return
-    agent, space = load_checkpoint_agent(str(path))
+    agent, space = load_checkpoint(str(path))
     players = {
         "policy": lambda: AgentMatchupPlayer(agent),
         "puct": lambda: DeterminizedPuctPlayer(
@@ -142,7 +142,7 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     payload["world_binding"] = checkpoint_world(match.to_rust(), space)
     path = tmp_path / "mirror.pt"
     torch.save(payload, path)
-    agent, _ = load_checkpoint_agent(str(path))
+    agent, _ = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     validate_checkpoint_world(payload, space, match.to_rust())
     with pytest.raises(ValueError, match="world/setup/input"):

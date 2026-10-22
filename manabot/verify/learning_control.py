@@ -20,10 +20,9 @@ from manabot.infra.config import (
 )
 from manabot.infra.runtime import seed_random
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.sim.rollout import BatchedSampler, run_vector_games
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.learner import Learner
 from manabot.training.models import Learning, Schedule
 from manabot.training.objectives import update_iteration
@@ -80,10 +79,10 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
         space = ObservationSpace()
         match = Match(MatchConfig(hero_deck=_DECK, villain_deck=_DECK))
         path = tmp_path / "pass-policy.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             _pass_biased_agent(space, 20), space, path, player_configs=match.to_rust()
         )
-        opponent, _ = load_checkpoint_agent(str(path))
+        opponent, _ = load_checkpoint(str(path))
         torch.manual_seed(197)
         agent = _pass_biased_agent(space, 4)
         before = _score(agent, opponent, 100_197)
@@ -119,8 +118,8 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
                 update_iteration(learner, batch, learning, 0, rng)
             training_seconds = time.perf_counter() - train_started
             checkpoint = tmp_path / "ppo-policy.pt"
-            save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
-            restored, _ = load_checkpoint_agent(str(checkpoint))
+            save_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
+            restored, _ = load_checkpoint(str(checkpoint))
             after = _score(restored, opponent, 200_197)
             no_update = _score(_pass_biased_agent(space, 4), opponent, 200_197)
             return PPOResult(

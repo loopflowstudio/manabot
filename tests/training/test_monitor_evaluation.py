@@ -7,17 +7,17 @@ from typing import Any, Literal
 import pytest
 import torch
 
+from manabot.arena import monitor as monitor
 from manabot.arena.match import selected_match
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
+from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.teacher1_evidence import runtime_fingerprints
-from manabot.training import monitor_evaluation as monitor
+from manabot.model.checkpoint import save_checkpoint
+from manabot.reports.training import default_panels, evaluation_dashboard
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
-from manabot.training.monitoring import default_panels, evaluation_dashboard
 import managym
 
 
@@ -297,7 +297,7 @@ def test_real_arena_checkpoint_outcomes(
         )
         torch.manual_seed(101)
         checkpoint = tmp_path / "untrained.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             ActorCritic(space, config),
             space,
             checkpoint,

@@ -29,10 +29,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.returns import transition_gae
-from manabot.sim.net_opponent import (
-    SeatRoutedCollector,
-)
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -46,6 +43,7 @@ from manabot.training.models import (
     Learning,
 )
 from manabot.training.objectives import update_iteration
+from manabot.training.returns import transition_gae
 import managym
 from tests.training.game_error_fixtures import (
     PaymentMismatchEnv,

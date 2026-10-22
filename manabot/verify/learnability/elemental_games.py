@@ -20,8 +20,8 @@ from manabot.arena.models import (
     canonical_sha256,
     file_sha256,
 )
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.teacher1_evidence import runtime_fingerprints
+from manabot.infra.provenance import runtime_fingerprints
+from manabot.model.checkpoint import load_checkpoint
 import managym
 
 
@@ -66,7 +66,7 @@ def play(request: Request) -> list[dict[str, object]]:
         if player.kind == "checkpoint":
             if player.path is None or file_sha256(player.path) != player.sha256:
                 raise ValueError("checkpoint byte identity differs")
-            model, _ = load_checkpoint_agent(player.path)
+            model, _ = load_checkpoint(player.path)
             paths[common["player_id"]] = player.path
             registrations.append(
                 PlayerRegistration(

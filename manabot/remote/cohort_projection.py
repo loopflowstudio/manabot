@@ -21,8 +21,8 @@ from typing import Protocol
 from pydantic import Field, model_validator
 
 from manabot.infra.artifacts import verify_file
-from manabot.training.execution import atomic_json
-from manabot.training.monitoring import Dashboard, publish_dashboard
+from manabot.infra.files import atomic_json
+from manabot.reports.training import Dashboard, publish_dashboard
 
 from .cohort import Cohort, CohortState
 from .cohort_service import owner_lock

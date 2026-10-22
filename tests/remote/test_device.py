@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime
 from manabot.verify.store import VerifyStore
@@ -48,5 +48,5 @@ def test_cuda_continuation_exports_cpu_loadable_raw_and_ema(tmp_path: Path) -> N
         assert stage.actual_device.startswith("cuda")
         assert stage.optimizer_exposures > 0
         for name in ("raw", "ema"):
-            model, _ = load_checkpoint_agent(stage.artifacts[name]["path"])
+            model, _ = load_checkpoint(stage.artifacts[name]["path"])
             assert next(model.parameters()).device.type == "cpu"

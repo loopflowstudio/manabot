@@ -6,7 +6,7 @@ sampled worlds and distils the labels into a student.
 """
 
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import gray_ogre_match
+from manabot.recipes.builders import gray_ogre_match
 from manabot.training.models import (
     CollectBelief,
     CollectLocalUpdate,

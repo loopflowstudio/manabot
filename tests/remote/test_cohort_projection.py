@@ -13,7 +13,7 @@ from manabot.remote.bundle import Bundle, BundleFile
 from manabot.remote.cohort import CohortAttempt, CohortInsertion, CohortState
 from manabot.remote.jobs import JobRecord
 from manabot.remote.snapshots import JobManifest
-from manabot.training.monitoring import Dashboard
+from manabot.reports.training import Dashboard
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_cohort_service import plan
 from tests.remote.test_job_fetch import Artifacts

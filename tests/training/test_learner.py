@@ -7,21 +7,20 @@ import torch
 from manabot.env import Match, ObservationSpace
 from manabot.infra import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.learner import Learner
 
 
 def test_checkpoint_admission_restores_training_mode(tmp_path: Path) -> None:
     space = ObservationSpace()
     path = tmp_path / "policy.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2)),
         space,
         path,
         player_configs=Match(MatchConfig()).to_rust(),
     )
-    admitted, _ = load_checkpoint_agent(str(path))
+    admitted, _ = load_checkpoint(str(path))
     assert not admitted.training
     learner = Learner(admitted, "cpu", minibatch_rows=2)
     assert all(module.training for module in learner.agent.modules())

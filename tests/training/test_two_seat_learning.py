@@ -15,13 +15,8 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.returns import transition_gae
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import (
-    RolloutBatch,
-    SeatRoutedCollector,
-)
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.training.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.execution import execute_regime
 from manabot.training.learner import Learner, observation_tensors
 from manabot.training.models import (
@@ -33,6 +28,7 @@ from manabot.training.models import (
 )
 from manabot.training.objectives import update_iteration
 from manabot.training.paired import LearningPlayer, PairedLearners
+from manabot.training.returns import transition_gae
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -227,13 +223,13 @@ def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> Non
         )
         assert player.learner.optimizer.state
         path = tmp_path / f"player-{player.transitions}.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             player.learner.agent,
             collector.observation_space,
             path,
             player_configs=collector.match.to_rust(),
         )
-        loaded, _ = load_checkpoint_agent(str(path))
+        loaded, _ = load_checkpoint(str(path))
         for name, value in loaded.state_dict().items():
             torch.testing.assert_close(value, player.learner.agent.state_dict()[name])
     assert learners.first.learner.optimizer is not learners.second.learner.optimizer
@@ -329,7 +325,7 @@ def test_regime_trains_and_exports_both_seats(
     assert record.optimizer_exposures == record.learner_transitions
     assert all(row["bootstrapped_tail_fraction"] == 0 for row in record.diagnostics)
     for role in ("raw", "ema"):
-        loaded, _ = load_checkpoint_agent(record.artifacts[role]["path"])
+        loaded, _ = load_checkpoint(record.artifacts[role]["path"])
         assert loaded.config == agent.config
 
 

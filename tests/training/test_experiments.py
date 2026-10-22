@@ -10,9 +10,7 @@ import pytest
 
 from experiments.value_model_baseline import value_model_baseline
 from manabot.arena.models import canonical_sha256
-from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.recipes.ataraxos import ataraxos
-from manabot.training.experiments import (
+from manabot.experiment.config import (
     Axis,
     Baseline,
     Case,
@@ -25,6 +23,8 @@ from manabot.training.experiments import (
     RunControl,
     SettingProvenance,
 )
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.recipes.ataraxos import ataraxos
 from manabot.training.models import (
     CollectSearch,
     DampedPolicyLearning,

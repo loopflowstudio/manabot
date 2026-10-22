@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 from manabot.arena.models import canonical_sha256
+from manabot.arena.monitor import ArenaRow, _summarize
+from manabot.experiment import evaluation_queue as queue
+from manabot.infra.files import atomic_json
 from manabot.recipes.ataraxos import ataraxos
-from manabot.training import checkpoint_queue as queue
-from manabot.training.execution import atomic_json
 from manabot.training.models import MonitoringCheckpoint, StageRecord, TrainingRun
-from manabot.training.monitor_evaluation import ArenaRow, _summarize
 from tests.training.test_monitor_evaluation import _manifest, _rows
 
 

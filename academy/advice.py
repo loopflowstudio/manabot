@@ -31,6 +31,13 @@ from typing import (
     TypeAlias,
 )
 
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
+from managym.possible_worlds import (
+    POSSIBLE_WORLD_SPACE_VERSION,
+    PossibleWorldError,
+    PossibleWorldSpace,
+)
 from pydantic import Field, TypeAdapter, model_validator
 
 from academy.advice_identity import (
@@ -52,13 +59,6 @@ from academy.study_branch import (
     StudyForkProvider,
 )
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
-from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
-from managym.possible_worlds import (
-    POSSIBLE_WORLD_SPACE_VERSION,
-    PossibleWorldError,
-    PossibleWorldSpace,
-)
 
 if TYPE_CHECKING:
     from manabot.belief.range import BeliefState
@@ -320,7 +320,9 @@ class AdvisorSemanticOffer(ProtocolModel):
 
 class AdvisorStrategyEvidence(ProtocolModel):
     schema_version: Literal[1] = 1
-    policy_semantic: Literal["puct_visit_distribution/v1", "regularized-local-update/v1"]
+    policy_semantic: Literal[
+        "puct_visit_distribution/v1", "regularized-local-update/v1"
+    ]
     decision_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     viewer_frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     advisor_identity: AdvisorIdentity
@@ -999,16 +1001,14 @@ class RegisteredAdvisor:
         if self.identity.evaluator_id != "checkpoint_policy_neutral_value":
             raise AdvisorUnavailable("evaluator_mismatch")
 
-        from manabot.sim.flat_mc import load_checkpoint_agent
+        from manabot.model.checkpoint import load_checkpoint
         from manabot.sim.mcts import AgentLeafEvaluator
         from manabot.sim.search_runtime import (
             model_action_abi_sha256,
             model_observation_abi_sha256,
         )
 
-        agent, observation_space = load_checkpoint_agent(
-            str(registration.checkpoint_path)
-        )
+        agent, observation_space = load_checkpoint(str(registration.checkpoint_path))
         parameter_count = sum(parameter.numel() for parameter in agent.parameters())
         if parameter_count != registration.parameter_count:
             raise AdvisorUnavailable("advisor_artifact_mismatch")
@@ -1099,7 +1099,9 @@ def runtime_advisor_abis() -> tuple[AbiIdentity, AbiIdentity, AbiIdentity]:
         AbiIdentity(
             name="possible_world_space",
             version=str(POSSIBLE_WORLD_SPACE_VERSION),
-            sha256=_file_sha256(REPO_ROOT / "manabot" / "managym" / "possible_worlds.py"),
+            sha256=_file_sha256(
+                REPO_ROOT / "manabot" / "managym" / "possible_worlds.py"
+            ),
         ),
     )
 

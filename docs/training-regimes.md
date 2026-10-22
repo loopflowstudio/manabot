@@ -11,13 +11,13 @@ uv run manabot train --regime-name direct_self_play:search_distillation --seed 1
 ```
 
 Each current experiment is one module, `experiments/<experiment>.py`, next to
-its write-up. It composes parts from `manabot.training.builders` into one
+its write-up. It composes parts from `manabot.recipes.builders` into one
 canonical recipe, the function named like the module, plus explicit variants,
 and holds whatever else that experiment needs to run and report.
 `--regime-name <experiment>` selects the canonical recipe and
 `<experiment>:<variant>` any other; `manabot.cli.regime_names()` lists them.
 Experiments with an arena study run with `python -m experiments.<experiment>`;
-shared study plumbing is `manabot.training.regime_study`. Write a regime file
+shared study plumbing is `manabot.experiment.study`. Write a regime file
 for `--regime` or `manabot deploy` from Python:
 
 ```bash
@@ -99,7 +99,7 @@ Training comparisons use [declarative typed-Python experiments](training-experim
 named components, frozen baselines/versioned presets, explicit overrides and ordered
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
-identities. `manabot.training.builders` holds the reusable composition helpers.
+identities. `manabot.recipes.builders` holds the reusable composition helpers.
 `ModelConfig` remains the model type; checkpoints retain the `agent_hypers` dictionary
 and existing field meanings. Resolution never allocates compute or starts training.
 

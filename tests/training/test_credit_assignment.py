@@ -16,10 +16,7 @@ from torch import Tensor
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.net_opponent import (
-    RolloutBatch,
-    SeatRoutedCollector,
-)
+from manabot.training.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.damped_policy import _targets
 from manabot.training.learner import Learner
 from manabot.training.models import DampedPolicyLearning

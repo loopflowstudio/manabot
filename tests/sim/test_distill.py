@@ -4,13 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from manabot.sim.distill import (
-    META_KEYS,
-    OBS_KEYS,
-    generate_selfplay_shard,
-    load_shards,
-    split_by_game,
-)
+from manabot.sim.data import META_KEYS, OBS_KEYS, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
+from manabot.training.data import split_by_game
 
 
 def _tiny_dataset(tmp_path: Path, num_games: int = 3) -> dict[str, np.ndarray]:

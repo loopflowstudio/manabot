@@ -7,13 +7,13 @@ import torch
 
 from manabot.env import Match, ObservationSpace
 from manabot.env.observation import ACTION_DECLARED_INDEX, ACTION_TYPE_DIM
+from manabot.experiment.config import Experiment
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import WORLD, checkpoint_world
 from manabot.recipes.ataraxos import ataraxos
-from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
-from manabot.training.experiments import Experiment
 from manabot.training.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
@@ -99,7 +99,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         path,
     )
     with pytest.raises(ValueError, match=f"compatible {WORLD} world binding"):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_historical_recipe_resolves_but_cannot_execute(tmp_path: Path) -> None:

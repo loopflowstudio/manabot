@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
 from manabot.training.models import (
     PretrainedPolicy,
@@ -54,8 +54,8 @@ def test_changed_recipe_starts_from_published_weights(
     forked = run(fork(producer, export), tmp_path, "fork", 198)
     assert forked.status == "completed", forked.error
     record = forked.stages[0]
-    expected, _ = load_checkpoint_agent(producer.stages[0].artifacts["ema"]["path"])
-    initial, _ = load_checkpoint_agent(record.artifacts["initial_raw"]["path"])
+    expected, _ = load_checkpoint(producer.stages[0].artifacts["ema"]["path"])
+    initial, _ = load_checkpoint(record.artifacts["initial_raw"]["path"])
     assert initial.value_semantic == "signed_outcome"
     for key, value in initial.state_dict().items():
         torch.testing.assert_close(value, expected.state_dict()[key], rtol=0, atol=0)

@@ -19,7 +19,8 @@ from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
 from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
-from manabot.sim.distill import LOCAL_TARGET_KEY, generate_selfplay_shard, load_shards
+from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
 from manabot.sim.local_sampling import (
     HandBatch,
     HandSample,

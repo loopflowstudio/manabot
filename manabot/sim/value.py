@@ -21,13 +21,10 @@ import torch
 
 from manabot.env import Env, ObservationSpace
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim.distill import OBS_KEYS
-from manabot.sim.flat_mc import (
-    DEFAULT_MAX_PLAYOUT_STEPS,
-    SearchStats,
-    load_checkpoint_agent,
-)
+from manabot.sim.data import OBS_KEYS
+from manabot.sim.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.sim.rollout import _allocate_buffers
 
 # -----------------------------------------------------------------------------
@@ -296,7 +293,7 @@ class ValueSearchPlayer:
 
 
 def load_value_scorer(checkpoint: str, *, device: str = "cpu") -> ValueScorer:
-    agent, _ = load_checkpoint_agent(checkpoint)
+    agent, _ = load_checkpoint(checkpoint)
     return ValueScorer(agent, device=device)
 
 

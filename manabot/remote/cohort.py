@@ -12,7 +12,7 @@ from typing import Callable, Literal
 
 from pydantic import Field, model_validator
 
-from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.training.models import CheckpointCadence
 
 from .continuation import Continuation, bind_continuation

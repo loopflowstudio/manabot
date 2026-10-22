@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from manabot.training import execution
-from manabot.training.checkpoint_queue import (
+from manabot.experiment.evaluation_queue import (
     CheckpointQueue,
     MonitoringBudget,
     checkpoints,
 )
-from manabot.training.experiment_execution import StepCalibration
+from manabot.experiment.execution import StepCalibration
+from manabot.training import execution
 from manabot.training.models import (
     CheckpointCadence,
     StageRecord,

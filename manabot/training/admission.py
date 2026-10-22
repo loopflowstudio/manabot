@@ -16,8 +16,8 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Match
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 from .models import (
     ArtifactReference,
@@ -133,7 +133,7 @@ def admit_policy(
     # Ordinary admission owns architecture, state keys and native world meaning.
     # Fork RNG so validation never shifts downstream initialization streams.
     with torch.random.fork_rng(devices=[]):
-        agent, space = load_checkpoint_agent(admitted["path"])
+        agent, space = load_checkpoint(admitted["path"])
     if agent.config != regime.agent or space.encoder.config != regime.observation:
         raise ValueError("published checkpoint model/observation differs from regime")
     validate_agent_setup(agent, Match(source.regime.match).to_rust())

@@ -6,13 +6,13 @@ import time
 
 import pytest
 
+from manabot.arena.monitor import MonitorProtocol, stage_checkpoint
 from manabot.env import ObservationSpace
+from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from manabot.training import execution
-from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.training.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.models import TrainingRun
-from manabot.training.monitor_evaluation import MonitorProtocol, stage_checkpoint
 from manabot.training.recovery import load_update
 from manabot.verify.store import VerifyStore
 from tests.remote.test_job_spec import job_spec
@@ -191,14 +191,14 @@ def test_export_reserve_exhaustion_is_not_a_completed_or_paused_run(
     value = recipe()
     value.stages[0].updates = 1
     value.recovery_max_microsteps = None
-    load = execution.load_checkpoint_agent
+    load = execution.load_checkpoint
 
     def slow_admission(path: str) -> tuple[ActorCritic, ObservationSpace]:
         result = load(path)
         clock.now = allocation.checkpoint_deadline
         return result
 
-    monkeypatch.setattr(execution, "load_checkpoint_agent", slow_admission)
+    monkeypatch.setattr(execution, "load_checkpoint", slow_admission)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(TimeoutError, match="wall deadline"):
             execution.execute_regime(

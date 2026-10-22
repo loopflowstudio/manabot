@@ -106,7 +106,7 @@ def test_verified_bundle_must_match_run_artifact_receipts(
         store.save_training_run(run)
     bundle = make_bundle(tmp_path)
     loaded: list[str] = []
-    monkeypatch.setattr(bundles, "load_checkpoint_agent", loaded.append)
+    monkeypatch.setattr(bundles, "load_checkpoint", loaded.append)
     if mismatch is None:
         assert bundles.verify_training_bundle(tmp_path, bundle) == [policy]
         assert loaded == [str(policy)]

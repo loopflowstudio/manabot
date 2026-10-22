@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
@@ -73,7 +73,7 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
             assert stage.optimizer_exposures > 0
         assert stage.artifacts["raw"]["sha256"] != stage.artifacts["ema"]["sha256"]
     raw0, ema0, raw1, ema1 = [
-        load_checkpoint_agent(run.stages[index].artifacts[variant]["path"])[0]
+        load_checkpoint(run.stages[index].artifacts[variant]["path"])[0]
         for index, variant in [(0, "raw"), (0, "ema"), (1, "raw"), (1, "ema")]
     ]
     for agent in (raw0, ema0, raw1, ema1):

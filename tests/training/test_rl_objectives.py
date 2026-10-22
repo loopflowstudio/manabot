@@ -6,8 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.model.returns import transition_gae
-from manabot.sim.net_opponent import RolloutBatch
+from manabot.training.collection import RolloutBatch
 from manabot.training.learner import Learner
 from manabot.training.models import Learning, Schedule
 from manabot.training.objectives import (
@@ -15,6 +14,7 @@ from manabot.training.objectives import (
     update_ema,
     update_iteration,
 )
+from manabot.training.returns import transition_gae
 from manabot.training.selection import selected_rows
 
 

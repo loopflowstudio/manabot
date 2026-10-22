@@ -22,21 +22,21 @@ from etude.eval.report import render
 from etude.eval.tournament import Curve, curves
 from pydantic import BaseModel
 
-from manabot.infra.artifacts import verify_file
-from manabot.remote.cohort import Cohort, CohortState, load_cohort
-from manabot.remote.job_client import fetch_job_file, job_manifest
-from manabot.remote.job_store import S3JobStore
-from manabot.remote.jobs import Job, JobRecord
-from manabot.remote.supervisor import stop_process
-from manabot.training.etude_evaluation import BENCHMARK
-from manabot.training.execution import atomic_json
-from manabot.training.models import TrainingRun
-from manabot.training.monitor_evaluation import (
+from manabot.arena.benchmark import BENCHMARK
+from manabot.arena.monitor import (
     Checkpoint,
     MonitorProtocol,
     checkpoint_manifest,
     stage_checkpoint,
 )
+from manabot.infra.artifacts import verify_file
+from manabot.infra.files import atomic_json
+from manabot.remote.cohort import Cohort, CohortState, load_cohort
+from manabot.remote.job_client import fetch_job_file, job_manifest
+from manabot.remote.job_store import S3JobStore
+from manabot.remote.jobs import Job, JobRecord
+from manabot.remote.supervisor import stop_process
+from manabot.training.models import TrainingRun
 
 
 class Attempt(BaseModel):
@@ -268,7 +268,7 @@ def evaluate_exports(
                     [
                         sys.executable,
                         "-m",
-                        "manabot.training.etude_evaluation",
+                        "manabot.arena.benchmark",
                         "--manifest",
                         str(target / "admission.json"),
                     ],

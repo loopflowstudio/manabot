@@ -13,7 +13,7 @@ from manabot.arena.replay import replay_games
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import save_bc_checkpoint
+from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.flat_mc import make_player
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint
 from manabot.verify.competency import SCENARIOS, build_scenario_env
@@ -31,7 +31,7 @@ def _checkpoint(
         ModelConfig(hidden_dim=8, num_attention_heads=2, compound_decisions=compound),
     )
     path = tmp_path / f"{name}.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,

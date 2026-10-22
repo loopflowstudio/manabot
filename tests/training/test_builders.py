@@ -7,7 +7,7 @@ import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import (
+from manabot.recipes.builders import (
     ataraxos_baseline,
     move_checkpoints,
     ppo_checkpoints,

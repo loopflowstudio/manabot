@@ -17,13 +17,9 @@ from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import (
-    LOCAL_RECEIPT_KEY,
-    LOCAL_TARGET_KEY,
-    generate_selfplay_shard,
-    load_shards,
-    save_bc_checkpoint,
-)
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
 from manabot.sim.local_compound import advance_compound, project_compound
 from manabot.sim.local_update import (
     LocalSearchConfig,
@@ -139,7 +135,7 @@ def test_supported_root_rollout_reaching_payment_replays(
         else ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     )
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,
@@ -355,7 +351,7 @@ def test_saved_compound_teacher_replays(
         managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
     ]
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=config)
+    save_checkpoint(agent, space, path, player_configs=config)
     teacher = LocalUpdateTeacher(
         path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
     )
@@ -396,7 +392,7 @@ def test_compound_complete_game_targets_without_fitting(
         space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
+    save_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
     teacher = LocalUpdateTeacher(
         checkpoint,
         file_sha256(checkpoint),
@@ -506,7 +502,7 @@ def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -
 def test_saved_compound_rejects_exact_reference(tmp_path: Path) -> None:
     agent = _agent()
     checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         checkpoint,
@@ -530,7 +526,7 @@ def test_compound_arena_executes_and_replays_saved_policies(
             ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
         )
         checkpoint = directory / "compound.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             agent, original.space, checkpoint, player_configs=env.match.to_rust()
         )
         return LocalUpdateTeacher(

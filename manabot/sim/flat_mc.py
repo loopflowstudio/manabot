@@ -21,23 +21,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import time
-from typing import Any, Literal, Protocol, overload
+from typing import Any, Protocol
 
 from managym.decision import Command, DecisionFrame
 import numpy as np
-import torch
 
-from manabot.belief.encoding import BeliefCheckpointBinding
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.config import (
     MatchConfig,
-    ModelConfig,
-    ObservationConfig,
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.architecture import validate_architecture_receipt
+from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.compound import CompoundPolicy
 from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.util import (
@@ -202,57 +197,6 @@ class AgentMatchupPlayer:
 # -----------------------------------------------------------------------------
 
 
-@overload
-def load_checkpoint_agent(
-    path: str | StoredArtifact,
-) -> tuple[ActorCritic, ObservationSpace]: ...
-
-
-@overload
-def load_checkpoint_agent(
-    path: str | StoredArtifact, *, include_belief_binding: Literal[True]
-) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]: ...
-
-
-def load_checkpoint_agent(
-    path: str | StoredArtifact, *, include_belief_binding: bool = False
-) -> (
-    tuple[ActorCritic, ObservationSpace]
-    | tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]
-):
-    """Load saved hypers and validate world/schema; verify S3 bytes before loading."""
-
-    if isinstance(path, StoredArtifact):
-        path = str(materialize_artifact(path))
-
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
-    config = checkpoint["hypers"]
-    obs_space = ObservationSpace(ObservationConfig(**config["observation_hypers"]))
-    from manabot.model.world import validate_checkpoint_world, validate_policy_input
-
-    world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))
-    value_semantic = checkpoint.get("bc", {}).get("value_semantic")
-    if value_semantic is not None:
-        if value_semantic not in ("signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        if agent.value_semantic is not None and value_semantic != agent.value_semantic:
-            raise ValueError("checkpoint value semantic conflicts with its critic")
-        agent.value_semantic = value_semantic
-    validate_policy_input(agent, world_binding)
-    agent.world_binding = world_binding
-    binding = None
-    if agent.belief_count_buckets > 0:
-        binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
-    if "architecture" in checkpoint:
-        validate_architecture_receipt(agent, checkpoint["architecture"])
-    agent.load_state_dict(checkpoint["model_state_dict"])
-    agent.eval()
-    if include_belief_binding:
-        return agent, obs_space, binding
-    return agent, obs_space
-
-
 def make_player(
     spec: dict[str, Any], seed: int
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
@@ -333,7 +277,7 @@ def make_player(
 
         if str(spec.get("device", "cpu")) != "cpu":
             raise ValueError("agent_puct inference is CPU-only")
-        agent, obs_space = load_checkpoint_agent(spec["checkpoint"])
+        agent, obs_space = load_checkpoint(spec["checkpoint"])
         return (
             DeterminizedPuctPlayer(
                 int(spec["sims"]),
@@ -354,7 +298,7 @@ def make_player(
     if kind == "policy_search":
         from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
 
-        agent, obs_space = load_checkpoint_agent(spec["checkpoint"])
+        agent, obs_space = load_checkpoint(spec["checkpoint"])
         sampler = BatchedSampler(
             agent,
             epsilon=float(spec.get("epsilon", 0.1)),
@@ -439,7 +383,7 @@ def make_player(
     if kind == "checkpoint":
         from manabot.belief.runtime import ManabotPlayer
 
-        agent, obs_space, binding = load_checkpoint_agent(
+        agent, obs_space, binding = load_checkpoint(
             spec["path"], include_belief_binding=True
         )
         if agent.belief_count_buckets > 0:

@@ -9,10 +9,10 @@ runs the four-arm study (smoke by default; see `--help`).
 from typing import Literal
 
 from manabot.arena.match import selected_match
+from manabot.experiment.study import main
 from manabot.infra.config import ModelConfig
-from manabot.training.builders import PACK
+from manabot.recipes.builders import PACK
 from manabot.training.models import Learning, Schedule, TrainCompound, TrainingRegime
-from manabot.training.regime_study import main
 import managym
 
 

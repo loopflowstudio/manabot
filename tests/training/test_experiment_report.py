@@ -7,7 +7,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from manabot.training.report_study import ScientificStudy
+    from manabot.reports.study import ScientificStudy
 
 from etude.run.records import RunDeclaration, RunFile, SourceKey
 from nbclient import NotebookClient
@@ -15,14 +15,15 @@ import nbformat
 from pydantic import ValidationError
 import pytest
 
-from manabot.training.comparison_notebook import write_comparison_notebook
-from manabot.training.experiment_report import (
+from manabot.reports.experiment import (
     load_evidence,
     matched_milestones,
     strength_figures,
     write_dashboard,
 )
+from manabot.reports.notebook import write_comparison_notebook
 from manabot.training.game_errors import GameErrorState
+from manabot.training.models import TrainingRun
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
@@ -267,7 +268,7 @@ def test_missing_observation_times_and_resources_are_unavailable(
 def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
     import math
 
-    from manabot.training.experiment_report import diagnostic_figures
+    from manabot.reports.experiment import diagnostic_figures
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -296,7 +297,7 @@ def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
 
 
 def _scientific_fixture() -> "ScientificStudy":
-    from manabot.training.report_study import ScientificStudy
+    from manabot.reports.study import ScientificStudy
 
     evidence = load_evidence(DEMO)
     monitor = evidence.monitors[0]
@@ -346,7 +347,7 @@ def _scientific_fixture() -> "ScientificStudy":
 
 
 def test_scientific_cohort_matching_and_initialization() -> None:
-    from manabot.training.report_study import study_strength_figures
+    from manabot.reports.study import study_strength_figures
 
     study = _scientific_fixture()
     figure = study_strength_figures(study)[0]
@@ -363,7 +364,7 @@ def test_scientific_cohort_matching_and_initialization() -> None:
 def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None:
     import pytest
 
-    from manabot.training.report_study import study_strength_figures
+    from manabot.reports.study import study_strength_figures
 
     study = _scientific_fixture()
     study.measurements[0].score = 0.123
@@ -380,7 +381,7 @@ def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None
 
 
 def test_missing_retention_is_not_zero_and_run_histories_stay_separate() -> None:
-    from manabot.training.experiment_report import strength_figures
+    from manabot.reports.experiment import strength_figures
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -426,3 +427,16 @@ def test_capacity_reports_match_steps_without_claiming_equal_samples() -> None:
         float(line.get_xdata()[0]) for line in samples.lines if line.get_marker() == "o"
     ) == [16, 32, 48, 64]
     assert strength_figures(evidence, "optimizer_updates") == []
+
+
+def test_retained_recipe_is_readable_but_not_executable() -> None:
+    """Reporting preserves retired parameters without translating learning rules."""
+    source = next((DEMO / "training").glob("**/run.json"))
+    payload = json.loads(source.read_text())
+    record = next(run for run in load_evidence(DEMO).runs if run.id == payload["id"])
+    assert (
+        record.regime.model_dump(mode="json")["stages"] == payload["regime"]["stages"]
+    )
+    with pytest.raises(ValidationError):
+        TrainingRun.model_validate(record.model_dump(mode="json"))
+    assert json.loads(source.read_text()) == payload

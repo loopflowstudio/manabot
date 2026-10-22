@@ -110,7 +110,7 @@ def test_named_treatments_execute_real_optimizer_batches():
     from manabot.env import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
-    from manabot.sim.net_opponent import RolloutBatch
+    from manabot.training.collection import RolloutBatch
     from manabot.training.objectives import update_iteration
 
     torch.set_num_threads(1)
@@ -229,14 +229,14 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     value.stages[0].updates = 1
     value.stages[0].learning.epochs = 1
 
-    load = execution.load_checkpoint_agent
+    load = execution.load_checkpoint
 
     def reject_checkpoint(path: str) -> object:
         if Path(path).name == "policy-0-raw.pt":
             raise ValueError("checkpoint admission failed")
         return load(path)
 
-    monkeypatch.setattr(execution, "load_checkpoint_agent", reject_checkpoint)
+    monkeypatch.setattr(execution, "load_checkpoint", reject_checkpoint)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="admission"):
             execute_regime(value, 197, tmp_path / "run", store)

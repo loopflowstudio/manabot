@@ -14,7 +14,7 @@ from pydantic_core import to_jsonable_python
 from .util import EvaluationArtifacts
 
 if TYPE_CHECKING:
-    from manabot.training.experiment_execution import ExperimentRun
+    from manabot.experiment.execution import ExperimentRun
     from manabot.training.models import TrainingRun
 
 RUN_CONFIG_FIELDS = (
@@ -178,7 +178,7 @@ class VerifyStore:
             )
 
     def experiment_run(self, run_id: str) -> ExperimentRun:
-        from manabot.training.experiment_execution import ExperimentRun
+        from manabot.experiment.execution import ExperimentRun
 
         row = self.con.execute(
             "SELECT payload FROM experiment_runs WHERE id=?", (run_id,)

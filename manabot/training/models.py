@@ -994,7 +994,9 @@ class FixedValidationCohort(Strict):
     source_inputs: dict[str, ArtifactReference]
 
 
-class TrainingRun(Strict):
+class RunRecord[RegimeT](Strict):
+    """Shared measured run state; each reader chooses its recipe admission type."""
+
     game_error_ledgers: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -1007,7 +1009,7 @@ class TrainingRun(Strict):
     schema_version: Literal[1] = 1
     id: str
     regime_digest: str
-    regime: TrainingRegime
+    regime: RegimeT
     seed: int
     seed_streams: dict[str, int]
     identities: dict
@@ -1051,13 +1053,7 @@ class TrainingRun(Strict):
     )
     fixed_validation: FixedValidationCohort | None = None
 
-    def updates_through(self, stage_id: str | None = None) -> int:
-        """Completed learner iterations/epochs; collection records are not updates."""
-        learning = {
-            s.id
-            for s in self.regime.stages
-            if isinstance(s, (TrainSelfPlay, TrainSupervised, TrainCompound))
-        }
+    def _updates_through(self, learning: set[str], stage_id: str | None) -> int:
         total = 0
         for stage in self.stages:
             if stage.id in learning:
@@ -1083,3 +1079,16 @@ class TrainingRun(Strict):
             if stage.id == stage_id:
                 break
         return total
+
+
+class TrainingRun(RunRecord[TrainingRegime]):
+    """A run whose recipe passes current execution admission."""
+
+    def updates_through(self, stage_id: str | None = None) -> int:
+        """Completed learner iterations/epochs; collection records are not updates."""
+        learning = {
+            s.id
+            for s in self.regime.stages
+            if isinstance(s, (TrainSelfPlay, TrainSupervised, TrainCompound))
+        }
+        return self._updates_through(learning, stage_id)

@@ -7,17 +7,18 @@ import subprocess
 
 import pytest
 
-from manabot.training.experiment_report import load_evidence, write_time_profile
-from manabot.training.models import StageRecord, TrainingRun
-from manabot.training.time_cohort import native_cohort, write_cohort_report
-from manabot.training.time_sources import load_time_sources
+from manabot.reports.experiment import load_evidence, write_time_profile
+from manabot.reports.records import RetainedRun
+from manabot.reports.time_cohort import native_cohort, write_cohort_report
+from manabot.reports.time_sources import load_time_sources
+from manabot.training.models import StageRecord
 
 ROOT = Path(__file__).resolve().parents[2]
 DEMO = ROOT / "tests/fixtures/experiment-demo"
-JS = ROOT / "manabot/training/time_cohort.js"
+JS = ROOT / "manabot/reports/time_cohort.js"
 
 
-def _run(identifier: str = "first") -> TrainingRun:
+def _run(identifier: str = "first") -> RetainedRun:
     prototype = load_evidence(DEMO).runs[0]
     stage_id = prototype.regime.stages[0].id
     return prototype.model_copy(
@@ -118,7 +119,7 @@ def test_missing_fields_duplicates_and_native_discovery(tmp_path: Path) -> None:
     conflict = load_time_sources([str(tmp_path)])
     assert not conflict.runs
     assert any("Conflicting native" in w for w in conflict.warnings)
-    absent = native_cohort([TrainingRun.model_validate(payload)]).runs[0]
+    absent = native_cohort([RetainedRun.model_validate(payload)]).runs[0]
     assert absent.active_seconds is None
     assert absent.phases["Unattributed"] > 0
 
@@ -126,7 +127,7 @@ def test_missing_fields_duplicates_and_native_discovery(tmp_path: Path) -> None:
 def test_missing_elapsed_total_does_not_turn_observed_active_time_into_zero() -> None:
     payload = _run().model_dump(exclude_unset=True)
     del payload["seconds"]
-    row = native_cohort([TrainingRun.model_validate(payload)]).runs[0]
+    row = native_cohort([RetainedRun.model_validate(payload)]).runs[0]
     assert row.elapsed_seconds is None
     assert row.active_seconds == 7
 

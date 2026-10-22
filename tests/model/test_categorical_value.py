@@ -11,10 +11,10 @@ import torch.nn.functional as F
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.collection import SeatRoutedCollector
 import managym
 
 
@@ -120,7 +120,7 @@ def test_value_interface_and_collection_likelihoods(
         saved_config.pop("value_aggregation")
         saved_config.pop("attention_layers")
     _save_checkpoint(path, agent, saved_config, agent.state_dict())
-    loaded, _ = load_checkpoint_agent(str(path))
+    loaded, _ = load_checkpoint(str(path))
     assert loaded.config.value_kind == kind
     assert loaded.config.value_aggregation == aggregation
     assert loaded.config.attention_layers == depth
@@ -158,7 +158,7 @@ def test_checkpoint_rejects_incompatible_saved_architecture(
         path, agent, {**agent.config.model_dump(), **fields}, agent.state_dict()
     )
     with pytest.raises((RuntimeError, ValueError), match=error):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 @pytest.mark.parametrize("damage", ["missing_token", "token_shape", "missing_layer"])
@@ -184,7 +184,7 @@ def test_checkpoint_rejects_incompatible_architecture_weights(
     path = tmp_path / "incompatible.pt"
     _save_checkpoint(path, agent, agent.config.model_dump(), weights)
     with pytest.raises(RuntimeError, match=error):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_distributional_supervision_reaches_shared_encoder() -> None:

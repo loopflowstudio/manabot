@@ -18,8 +18,8 @@ from manabot.arena.models import canonical_sha256
 from manabot.env import Match
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 from .admission import copy_verified_artifact
 from .models import (
@@ -191,7 +191,7 @@ def admit_learning_state(
         if role == "optimizer":
             continue
         with torch.random.fork_rng(devices=[]):
-            agent, space = load_checkpoint_agent(copied["path"])
+            agent, space = load_checkpoint(copied["path"])
         # The parent export is bound to the match it trained on; the segment's
         # own exports are bound to the regime's match when they are written.
         validate_agent_setup(agent, Match(source_match).to_rust())

@@ -131,7 +131,7 @@ def test_checkpoint_routes_by_serialized_agent_capability(
             return belief_agent, observation_space, object()
         return belief_agent, observation_space
 
-    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_belief_agent)
+    monkeypatch.setattr(flat_mc, "load_checkpoint", load_belief_agent)
 
     player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
     assert isinstance(player, ManabotPlayer)
@@ -146,7 +146,7 @@ def test_checkpoint_routes_by_serialized_agent_capability(
             return policy_agent, observation_space, None
         return policy_agent, observation_space
 
-    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_policy_agent)
+    monkeypatch.setattr(flat_mc, "load_checkpoint", load_policy_agent)
     player, _ = make_player({"kind": "checkpoint", "path": "policy.pt"}, seed=1)
     assert isinstance(player, AgentMatchupPlayer)
 

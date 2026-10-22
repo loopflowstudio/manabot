@@ -2,8 +2,8 @@
 
 import pytest
 
+from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig
-from manabot.training.attacks import AttackPlan, AttackTarget
 from manabot.training.models import FrozenOpponent, TrainingRegime, TrainSelfPlay
 import managym
 
@@ -42,6 +42,7 @@ def test_attack_ladder_continues_one_optimizer_against_identical_target() -> Non
     assert [stage.updates for stage in stages] == [2, 3, 4]
     assert [stage.initial for stage in stages] == [None, "attack-0", "attack-1"]
     assert all(stage.opponent == plan.targets[0].policy for stage in stages)
+    assert all(stage.learning_seats == "one" for stage in stages)
 
 
 @pytest.mark.parametrize("seed", [17, 10017, 101, 10101, 20201, 30201])

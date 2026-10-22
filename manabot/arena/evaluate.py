@@ -29,13 +29,13 @@ from manabot.arena.models import (
 )
 from manabot.arena.rating import bootstrap_population, fit_population
 from manabot.env import ObservationSpace
-from manabot.sim.flat_search import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
-from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.provenance import (
     REPO_ROOT,
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.sim.flat_search import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
+from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS
 from managym import WORLD_VERSION
 
 

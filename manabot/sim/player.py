@@ -69,9 +69,9 @@ def load_model_from_wandb(
             )
 
         logger.info(f"Loading checkpoint from {checkpoint_path}")
-        from manabot.sim.flat_mc import load_checkpoint_agent
+        from manabot.model.checkpoint import load_checkpoint
 
-        agent, _ = load_checkpoint_agent(checkpoint_path)
+        agent, _ = load_checkpoint(checkpoint_path)
         agent = agent.to(device)
 
         logger.info("Successfully loaded model")

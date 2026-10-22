@@ -1,9 +1,9 @@
 """Small current-world Ataraxos-inspired experiment, not a historical replay."""
 
 from manabot.arena.match import selected_match
+from manabot.experiment.config import Baseline
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.training.builders import PACK, ataraxos_baseline
-from manabot.training.experiments import Baseline
+from manabot.recipes.builders import PACK, ataraxos_baseline
 import managym
 
 

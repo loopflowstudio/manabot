@@ -11,6 +11,7 @@ import json
 import math
 from typing import Callable, Literal, Protocol
 
+from managym.decision import Observation
 import torch
 
 from manabot.belief.sampling import (
@@ -22,7 +23,6 @@ from manabot.belief.sampling import (
 from manabot.belief.sampling_data import _digest, public_sampler_input
 from manabot.belief.state import ViewerHistory
 import managym
-from managym.decision import Observation
 
 
 @dataclass(frozen=True)

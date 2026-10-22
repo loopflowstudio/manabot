@@ -18,7 +18,7 @@ import time
 from typing import TYPE_CHECKING, Callable, Iterator, Literal
 
 if TYPE_CHECKING:
-    from manabot.training.checkpoint_queue import MonitoringBudget
+    from manabot.experiment.evaluation_queue import MonitoringBudget
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid

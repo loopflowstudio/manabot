@@ -1,0 +1,255 @@
+"""Experiment execution intent and receipts, separate from regime learning rules.
+
+ExperimentSchedule declares seeds, placement and monitoring allocation. Hardware
+is explicitly configured, never provisioned. ExperimentRun records every actual
+process attempt; VerifyStore is its persistence owner.
+"""
+
+import hashlib
+import math
+import os
+from pathlib import Path
+import socket
+from typing import Annotated, Literal
+
+from pydantic import ConfigDict, Field, JsonValue, model_validator
+
+from manabot.arena.monitor import MonitorProtocol
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.remote.plan import JobSpec
+from manabot.training.models import (
+    ArtifactReference,
+    CheckpointCadence,
+    Strict,
+    TrainingRegime,
+    TrainingRun,
+    TrainSelfPlay,
+)
+
+
+class StepCalibration(Strict):
+    """Frozen throughput from an admitted completed pilot, not launch authority.
+
+    Convert requested active hours once before authoring targets. Preserve this
+    receipt beside the declaration; execution never consults it or retunes steps.
+    Pilot representativeness and runtime reserves remain experimental judgments.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    source_run: ArtifactReference
+    completed_updates: int = Field(gt=0, strict=True)
+    active_seconds: float = Field(gt=0)
+    learner_transitions: int = Field(gt=0, strict=True)
+
+    @classmethod
+    def from_export(cls, path: Path) -> "StepCalibration":
+        path = path.resolve()
+        payload = path.read_bytes()
+        run = TrainingRun.model_validate_json(payload)
+        if (
+            run.status != "completed"
+            or run.parent_run_id is not None
+            or len(run.stages) != 1
+            or len(run.regime.stages) != 1
+            or not isinstance(run.regime.stages[0], TrainSelfPlay)
+            or run.stages[0].status != "completed"
+            or run.stages[0].learning_state_origin is not None
+        ):
+            raise ValueError("calibration requires one completed fresh self-play stage")
+        stage = run.stages[0]
+        if (
+            not run.identities.get("training_source_sha256")
+            or "raw" not in stage.artifacts
+        ):
+            raise ValueError("calibration requires source and checkpoint receipts")
+        return cls(
+            source_run={
+                "path": str(path),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+            },
+            completed_updates=len(stage.diagnostics),
+            active_seconds=stage.collection_seconds + stage.learning_seconds,
+            learner_transitions=stage.learner_transitions,
+        )
+
+    def updates_for(self, active_hours: float) -> int:
+        """Floor measured throughput to a positive count; no runtime hour trigger."""
+        if not math.isfinite(active_hours) or active_hours <= 0:
+            raise ValueError("requested active hours must be positive and finite")
+        updates = math.floor(
+            active_hours * 3600 * self.completed_updates / self.active_seconds
+        )
+        if updates < 1:
+            raise ValueError("requested active hours project fewer than one update")
+        return updates
+
+
+class PlannedRun(CheckpointCadence):
+    """Bind one resolved case and training seed to allocation and evaluation intent."""
+
+    case: str
+    seed: int = Field(ge=0)
+    spec: JobSpec
+    monitoring: MonitoringBudget
+    validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class Hardware(Strict):
+    name: str
+    host: str
+    backend: Literal["local-cpu"] = "local-cpu"
+    cpu_threads: int = Field(ge=2)
+    # Dollars per occupied host hour, optional and explicitly supplied.
+    dollars_per_hour: float | None = Field(default=None, ge=0)
+
+    def admit(self) -> None:
+        if self.cpu_threads > (os.cpu_count() or 1):
+            raise ValueError("configured CPU capacity exceeds this host")
+        if self.host != socket.gethostname():
+            raise ValueError(
+                "configured hardware is not this host; remote execution is unsupported"
+            )
+
+
+class HardwareInventory(Strict):
+    resources: tuple[Hardware, ...]
+
+    @model_validator(mode="after")
+    def unique(self) -> "HardwareInventory":
+        if len({r.name for r in self.resources}) != len(self.resources):
+            raise ValueError("hardware names must be unique")
+        return self
+
+    def select(self, name: str) -> Hardware:
+        for resource in self.resources:
+            if resource.name == name:
+                resource.admit()
+                return resource
+        raise ValueError(f"hardware is not configured: {name}")
+
+
+class ExperimentSchedule(CheckpointCadence):
+    """Frozen launch intent. Monitoring is exploratory and has its own deals."""
+
+    seeds: tuple[int, ...]
+    hardware: str
+    wall_seconds: float = Field(gt=0)
+    # Additive learner + evaluator process seconds, including overlap.
+    process_seconds: float = Field(gt=0)
+    monitoring: MonitoringBudget
+    checkpoint_updates: (
+        Annotated[int, Field(gt=0, strict=True)]
+        | tuple[Annotated[int, Field(gt=0, strict=True)], ...]
+        | None
+    ) = Field(default=1000, exclude_if=lambda v: v is None or v == ())
+    diagnostic_protocol: MonitorProtocol | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    diagnostic_updates: tuple[int, ...] = Field(default=(), exclude_if=lambda v: not v)
+    # Reserve existing scientific deal families without redefining their protocol.
+    scientific_deal_seeds: tuple[int, ...] = ()
+    # Case indexes per seed; empty means declaration order for every seed.
+    order: tuple[tuple[int, ...], ...] = ()
+    disk_reserve_bytes: int = Field(default=4 * 1024**3, ge=0)
+    active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def one_clock(self) -> "ExperimentSchedule":
+        # The frozen duration cohort uses an explicit milestone list alongside
+        # hourly exports; an integer denotes main's mutually exclusive cadence.
+        if not isinstance(self.checkpoint_updates, tuple):
+            super().one_clock()
+        return self
+
+    def admit_regime(self, regime: TrainingRegime) -> None:
+        if not isinstance(self.checkpoint_updates, tuple):
+            super().admit_regime(regime)
+
+    @model_validator(mode="after")
+    def valid(self) -> "ExperimentSchedule":
+        if not self.seeds or len(set(self.seeds)) != len(self.seeds):
+            raise ValueError("seeds must be nonempty and unique")
+        if any(s < 0 or s >= 100000 for s in self.seeds):
+            raise ValueError("training seeds must be in [0, 100000)")
+        if set(self.scientific_deal_seeds) & {
+            seed
+            for protocol in (
+                self.monitoring.protocol,
+                *self.monitoring.additional_protocols,
+            )
+            for seed in protocol.deal_seeds
+        }:
+            raise ValueError("monitoring and scientific deals must be disjoint")
+        if any(n < 0 for n in self.diagnostic_updates):
+            raise ValueError("diagnostic updates must be nonnegative")
+        if (self.diagnostic_protocol is None) != (not self.diagnostic_updates):
+            raise ValueError(
+                "diagnostic protocol and updates must be declared together"
+            )
+        if self.diagnostic_protocol is not None and set(
+            self.diagnostic_protocol.deal_seeds
+        ) & (
+            set(self.scientific_deal_seeds) | set(self.monitoring.protocol.deal_seeds)
+        ):
+            raise ValueError(
+                "diagnostic, monitoring and scientific deals must be disjoint"
+            )
+        if self.monitoring.seconds >= self.process_seconds:
+            raise ValueError("monitoring must leave a positive learning allocation")
+        if self.monitoring.attempt_seconds > self.monitoring.seconds:
+            raise ValueError("monitoring attempt exceeds its allocation")
+        return self
+
+
+class RegimeAttempt(Strict):
+    ordinal: int
+    case: str
+    seed: int
+    path: str
+    allowance_seconds: float
+    status: Literal["pending", "running", "completed", "failed", "interrupted"] = (
+        "pending"
+    )
+    started_unix: float | None = None
+    finished_unix: float | None = None
+    process_seconds: float = 0
+    run_id: str | None = None
+    error: str | None = None
+    recovery_parent: str | None = None
+
+
+class ExperimentRun(Strict):
+    id: str
+    intent: dict[str, JsonValue]
+    intent_sha256: str
+    hardware: Hardware
+    runtime: dict[str, str]
+    status: Literal["running", "completed", "incomplete"] = "running"
+    attempts: list[RegimeAttempt] = []
+    last_seen_unix: float | None = None
+    elapsed_seconds: float = 0
+    coordinator_cpu_seconds: float = 0
+    host_load: tuple[float, float, float] | None = None
+    evaluator_seconds: float = 0
+    process_seconds: float = 0
+    host_dollars: float | None = None
+    error: str | None = None
+    notebook: str
+    paused: bool = False
+    calendar_seconds: float = 0
+    downtime_seconds: float = 0
+    uncertain_seconds: float = 0
+    boot_identity: str | None = None
+    last_seen_active: float | None = None
+
+    def report(self, directory: Path) -> Path:
+        from manabot.reports.notebook import write_comparison_notebook
+
+        schedule = self.intent.get("schedule")
+        return write_comparison_notebook(
+            directory,
+            Path(self.notebook),
+            individual_progress=isinstance(schedule, dict)
+            and schedule.get("active_runtime") is True,
+        )

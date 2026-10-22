@@ -41,7 +41,7 @@ def candidate_match():
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("seed", [0, 1])
-def test_match_hypers_candidate_finishes_with_complete_native_and_python_encoding(
+def test_match_config_candidate_finishes_with_complete_native_and_python_encoding(
     reverse: bool, seed: int
 ) -> None:
     match = candidate_match()
@@ -49,10 +49,10 @@ def test_match_hypers_candidate_finishes_with_complete_native_and_python_encodin
         match = match.swapped()
     space = ObservationSpace()
     assert space.encoder.permanent_dim == 28
-    assert managym.WORLD_VERSION == "w10"
+    assert managym.WORLD_VERSION == "w13"
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == "w10"
+    assert env.content_pack_manifest()["world_version"] == "w13"
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -138,12 +138,12 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
 def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> (
     None
 ):
-    from manabot.sim.teacher1_evidence import runtime_fingerprints
+    from manabot.infra.provenance import runtime_fingerprints
     from scripts.train_challenger import world_identity
 
     identity = world_identity({})
-    assert identity["version"] == "w10"
-    assert identity["content_manifest"]["world_version"] == "w10"
+    assert identity["version"] == "w13"
+    assert identity["content_manifest"]["world_version"] == "w13"
     assert identity["dims"] == {
         "player": 40,
         "card": 41,

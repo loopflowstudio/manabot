@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.learner import Learner
 from manabot.training.models import DampedPolicyLearning, Learning
 from manabot.training.objectives import update_iteration

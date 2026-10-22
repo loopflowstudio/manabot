@@ -19,7 +19,7 @@ from manabot.model.policy_distribution import NumericalError
 from manabot.training.learner import Learner
 
 if TYPE_CHECKING:
-    from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
+    from manabot.training.collection import RolloutBatch, SeatRoutedCollector
     from manabot.training.models import TrainingRun
 
 EVIDENCE_BYTES = 32 * 1024**2

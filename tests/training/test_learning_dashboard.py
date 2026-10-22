@@ -6,17 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from manabot.training.experiment_report import (
-    RetainedRun,
-    load_evidence,
-    write_dashboard,
-)
-from manabot.training.learning_dashboard import (
-    candidate_deck,
-    checkpoint_panels,
-    deck_results,
-)
-from manabot.training.monitor_evaluation import MonitorResult
+from manabot.arena.monitor import MonitorResult
+from manabot.reports.experiment import RetainedRun, load_evidence, write_dashboard
+from manabot.reports.learning import candidate_deck, checkpoint_panels, deck_results
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
@@ -117,9 +109,9 @@ def test_newer_metadata_is_preserved_only_in_read_only_projection() -> None:
     run["regime"]["recovery"] = {"checkpoint_updates": 128}
     run["regime"]["future_metadata"] = {"producer_version": 2}
     projected = RetainedRun.model_validate(run)
+    # Reading evidence must not add today's execution defaults to its recipe.
     assert projected.model_dump()["regime"]["recovery"] == {
         "checkpoint_updates": 128,
-        "max_game_microsteps": 40000,
     }
     assert projected.model_dump()["regime"]["future_metadata"] == {
         "producer_version": 2
@@ -153,7 +145,7 @@ def test_snapshot_reads_wal_consistently_and_preserves_payloads(tmp_path: Path) 
     import json
     import sqlite3
 
-    from manabot.training.report_snapshot import snapshot_report
+    from manabot.reports.snapshot import snapshot_report
 
     source = tmp_path / "source"
     source.mkdir()

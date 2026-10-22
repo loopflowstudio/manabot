@@ -10,8 +10,8 @@ import pytest
 from experiments.belief_sampler import learned_belief_local_search
 from manabot.belief.likelihood import RulesProviderGap
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.sim.distill import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
 from manabot.sim.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
@@ -120,7 +120,7 @@ def test_complete_games_and_three_distillation_controls(tmp_path: Path) -> None:
             np.testing.assert_allclose(targets[index, :count], expected)
         np.testing.assert_array_equal(dataset[LOCAL_TARGET_KEY], original_targets)
     for record in run.stages[2:]:
-        model, _ = load_checkpoint_agent(record.artifacts["raw"]["path"])
+        model, _ = load_checkpoint(record.artifacts["raw"]["path"])
         assert model.world_binding["world"] == managym.WORLD_VERSION
         assert record.optimizer_exposures > 0
     corrupt = {key: value.copy() for key, value in dataset.items()}
@@ -185,5 +185,5 @@ def test_learned_pipeline_never_enumerates(
                 == run.stages[2].artifacts["sampler"]["sha256"]
             )
             assert receipt["policy_sha256"] == run.stages[0].artifacts["raw"]["sha256"]
-    agent, _ = load_checkpoint_agent(run.stages[4].artifacts["raw"]["path"])
+    agent, _ = load_checkpoint(run.stages[4].artifacts["raw"]["path"])
     assert agent.world_binding["world"] == managym.WORLD_VERSION

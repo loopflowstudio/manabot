@@ -9,13 +9,14 @@ import numpy as np
 import pytest
 import torch
 
+from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.collection import SeatRoutedCollector
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.game_errors import (
     GameAttempt,
@@ -193,9 +194,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
 
 def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     torch.set_num_threads(1)
-    value = json.loads(
-        Path("experiments/regimes/ataraxos-move-scalar.json").read_text()
-    )
+    value = ataraxos_move_scalar().model_dump(mode="json")
     value.update(
         world=managym.WORLD_VERSION,
         id="uniform-cpu-proof",
@@ -205,7 +204,11 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     value["stages"] = value["stages"][:1]
     stage = value["stages"][0]
     stage.update(
-        streams=4, transitions=64, updates=2, matchup_curriculum="elemental-uniform"
+        streams=4,
+        transitions=64,
+        updates=2,
+        matchup_curriculum="elemental-uniform",
+        learning_seats="one",
     )
     stage["execution"]["wall_seconds"] = 180
     stage["learning"].update(min_advantage=0, advantage_quantile=0)
@@ -234,9 +237,9 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     exposure = result.diagnostics[-1]["cumulative_matchup_exposure"]
     assert sum(c["learner_transitions"] for c in exposure.values()) == 512
     assert sum(c["terminal_games"] for c in exposure.values()) == result.games
-    raw, _ = load_checkpoint_agent(result.artifacts["raw"]["path"])
-    ema, _ = load_checkpoint_agent(result.artifacts["ema"]["path"])
-    initial, _ = load_checkpoint_agent(result.artifacts["initial_raw"]["path"])
+    raw, _ = load_checkpoint(result.artifacts["raw"]["path"])
+    ema, _ = load_checkpoint(result.artifacts["ema"]["path"])
+    initial, _ = load_checkpoint(result.artifacts["initial_raw"]["path"])
     assert any(
         not torch.equal(a, b)
         for a, b in zip(raw.parameters(), initial.parameters(), strict=True)

@@ -11,10 +11,12 @@ from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.belief.sampling_data import read_dataset
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.files import atomic_json
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.distill import LOCAL_TARGET_KEY, load_shards, save_bc_checkpoint
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
 from manabot.sim.local_update import LocalSearchConfig
-from manabot.training.execution import atomic_json, execute_regime
+from manabot.training.execution import execute_regime
 from manabot.training.models import (
     ArtifactReference,
     CollectBelief,
@@ -81,7 +83,7 @@ def published_fixture(
         torch.manual_seed(112)
         agent = ActorCritic(space, recipe.agent)
     path = tmp_path / "published.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,

@@ -26,6 +26,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 import torch
 
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import (
     FrozenPolicyLikelihood,
     RulesProviderGap,
@@ -35,7 +36,6 @@ from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling import SamplerInput
 from manabot.belief.sampling_data import _digest
-from manabot.belief.sampling_fit import load_belief_sampler
 from manabot.belief.state import (
     EmptyBeliefSupport,
     ViewerHistory,
@@ -430,7 +430,7 @@ def local_search_source_sha256() -> str:
         "manabot/model/actor_critic.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
-        "manabot/belief/sampling_fit.py",
+        "manabot/belief/checkpoint.py",
     )
     return _digest({path: file_sha256(root / path) for path in paths})
 

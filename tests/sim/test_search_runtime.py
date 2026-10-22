@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.search_runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
     INT7_VALUE_TARGET_RESULT,
@@ -123,7 +123,7 @@ def test_retained_evidence_snapshot_closes_the_full_root() -> None:
 @pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_seed_197_checkpoint_model_abis_match_the_registry() -> None:
     registration = retained_int7_policy_only_checkpoint(197)
-    agent, observation_space = load_checkpoint_agent(str(registration.checkpoint_path))
+    agent, observation_space = load_checkpoint(str(registration.checkpoint_path))
 
     assert sum(parameter.numel() for parameter in agent.parameters()) == 102_722
     assert (

@@ -11,13 +11,17 @@ import time
 
 import pytest
 
+from manabot.experiment.evaluation_queue import (
+    Attempt,
+    CheckpointQueue,
+    MonitoringBudget,
+)
 from manabot.infra.artifacts import StoredArtifact
 from manabot.remote import job_client, supervisor
 from manabot.remote.job_store import cancellation_requested
 from manabot.remote.jobs import CreateClaim, Job, JobRecord, Resource
 from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import ProviderError
-from manabot.training.checkpoint_queue import Attempt, CheckpointQueue, MonitoringBudget
 from manabot.training.models import LearningStateOrigin, TrainingRun
 from manabot.verify.store import VerifyStore
 from tests.remote.job_fixtures import FileStore

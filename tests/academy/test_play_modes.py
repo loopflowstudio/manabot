@@ -173,10 +173,10 @@ def _write_tiny_checkpoint(path) -> None:
     obs_config = ObservationConfig()
     agent_config = ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")
     agent = ActorCritic(ObservationSpace(obs_config), agent_config)
-    from manabot.sim.distill import save_bc_checkpoint
+    from manabot.model.checkpoint import save_checkpoint
     import managym
 
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         path,

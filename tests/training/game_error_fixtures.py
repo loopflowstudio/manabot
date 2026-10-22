@@ -12,7 +12,7 @@ import sys
 from typing import Any
 
 from manabot.infra.config import MatchConfig
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.training.collection import SeatRoutedCollector
 import managym
 
 _NATIVE_ENV = managym.Env

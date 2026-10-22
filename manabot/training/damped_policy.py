@@ -26,12 +26,12 @@ from manabot.model.policy_distribution import (
     require,
     reverse_kl,
 )
-from manabot.model.returns import transition_gae
-from manabot.sim.net_opponent import RolloutBatch
+from manabot.training.collection import RolloutBatch
 from manabot.training.health import OptimizerHealth, batch_health
 from manabot.training.learner import Learner, observation_tensors
 from manabot.training.models import DampedPolicyLearning
 from manabot.training.references import reference_distribution
+from manabot.training.returns import transition_gae
 from manabot.training.selection import (
     UpdateDiagnostics,
     selected_mean,

@@ -15,9 +15,9 @@ from manabot.belief import (
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent, make_player
+from manabot.sim.flat_mc import make_player
 from tests.belief.support import fixture_torch_observation
 
 
@@ -143,7 +143,7 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
         count_buckets=agent.belief_count_buckets,
     )
     checkpoint_path = tmp_path / "belief.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         checkpoint_path,
@@ -192,7 +192,7 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
     )
 
     with pytest.raises(BeliefError, match="missing its schema binding"):
-        load_checkpoint_agent(str(checkpoint_path))
+        load_checkpoint(str(checkpoint_path))
 
 
 def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
@@ -220,4 +220,4 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="max_conditions"):
-        load_checkpoint_agent(str(checkpoint_path))
+        load_checkpoint(str(checkpoint_path))
