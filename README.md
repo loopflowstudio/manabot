@@ -188,7 +188,7 @@ not comparable with today's checkpoints:
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |
-| `academy/`, `frontend/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
+| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
 | `wave/`, `.lf/` | Loopflow Waves, Flows, and skills that organize agent work |
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
@@ -213,7 +213,7 @@ guides are in each package README.
 
 - **manabot**: the bot and the Python library. You train *a* manabot.
 - **managym**: the rules environment the bot lives in.
-- **Academy**: the local bot-testing UI (`academy/`, `frontend/`).
+- **Academy**: the local bot-testing UI (`academy/`, `academy/ui/`).
 - **Etude**: the separate system that launches and records experiments
   ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
   documents also use *Etude* and *Fantasia* for this project.

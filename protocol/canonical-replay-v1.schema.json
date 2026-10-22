@@ -90,7 +90,7 @@
       "type": "object",
       "properties": {
         "help": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "id": {
           "type": "integer",
@@ -101,7 +101,7 @@
           "type": "string"
         },
         "preview": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "value": {
           "$ref": "#/$defs/CandidateValue"
@@ -134,7 +134,7 @@
           "minimum": 0
         },
         "initial": {
-          "$ref": "#/$defs/RequiredNullable5"
+          "$ref": "#/$defs/RequiredNullable7"
         }
       },
       "additionalProperties": false,
@@ -609,6 +609,106 @@
         "answers"
       ]
     },
+    "DecisionContextView": {
+      "description": "Read-only explanation of the current native continuation. This adds no\nchoices, forecasts, or local transaction state to the experience contract.",
+      "type": "object",
+      "properties": {
+        "actor": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "chosen_mode": {
+          "$ref": "#/$defs/RequiredNullable4"
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "mana_cost": {
+          "$ref": "#/$defs/RequiredNullable3"
+        },
+        "recent_facts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reserved_sacrifice": {
+          "$ref": "#/$defs/RequiredNullable2"
+        },
+        "source": {
+          "$ref": "#/$defs/RequiredNullable2"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DecisionTargetView"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "recent_facts",
+        "actor",
+        "stage",
+        "instruction",
+        "source",
+        "targets",
+        "reserved_sacrifice",
+        "mana_cost",
+        "chosen_mode"
+      ]
+    },
+    "DecisionObjectView": {
+      "type": "object",
+      "properties": {
+        "display_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "entity_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string"
+        },
+        "subject": {
+          "$ref": "#/$defs/SubjectRef"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entity_id",
+        "subject",
+        "display_id",
+        "label"
+      ]
+    },
+    "DecisionTargetView": {
+      "type": "object",
+      "properties": {
+        "clause": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "object": {
+          "$ref": "#/$defs/DecisionObjectView"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clause",
+        "object"
+      ]
+    },
     "DeckNames": {
       "type": "object",
       "properties": {
@@ -707,7 +807,7 @@
           "$ref": "#/$defs/StopsConfig"
         },
         "winner": {
-          "$ref": "#/$defs/RequiredNullable6"
+          "$ref": "#/$defs/RequiredNullable8"
         }
       },
       "additionalProperties": false,
@@ -759,7 +859,7 @@
           }
         },
         "help": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "id": {
           "type": "integer",
@@ -770,7 +870,13 @@
           "type": "string"
         },
         "source": {
-          "$ref": "#/$defs/RequiredNullable4"
+          "$ref": "#/$defs/RequiredNullable6"
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OfferSubjectView"
+          }
         },
         "verb": {
           "$ref": "#/$defs/OfferVerb"
@@ -888,6 +994,16 @@
         "agent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "decision_context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionContextView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "definition_names": {
           "type": "object",
           "additionalProperties": {
@@ -899,6 +1015,15 @@
         },
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "stack_objects": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/StackEntryView"
+          }
         },
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
@@ -920,10 +1045,10 @@
       "type": "object",
       "properties": {
         "base_power": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "controller_id": {
           "type": "integer",
@@ -942,8 +1067,14 @@
           "format": "uint32",
           "minimum": 0
         },
+        "is_token": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "name": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "plus1_counters": {
           "type": "integer",
@@ -951,7 +1082,7 @@
           "minimum": 0
         },
         "power": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable5"
         },
         "summoning_sick": {
           "type": "boolean"
@@ -969,7 +1100,17 @@
           "type": "string"
         },
         "toughness": {
-          "$ref": "#/$defs/RequiredNullable3"
+          "$ref": "#/$defs/RequiredNullable5"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCardTypesView"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -995,6 +1136,13 @@
           "items": {
             "$ref": "#/$defs/LegacyPermanentView"
           }
+        },
+        "combat_mana": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
         },
         "exile": {
           "type": "array",
@@ -1027,6 +1175,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "inspected": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
         "is_active": {
           "type": "boolean"
         },
@@ -1041,6 +1195,18 @@
             "minimum": 0
           }
         },
+        "lesson_mana": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
         "library_count": {
           "type": "integer",
           "format": "uint32",
@@ -1049,6 +1215,18 @@
         "life": {
           "type": "integer",
           "format": "int32"
+        },
+        "mana": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 6,
+          "minItems": 6
         },
         "player_index": {
           "type": "integer",
@@ -1163,6 +1341,22 @@
         "incarnation"
       ]
     },
+    "OfferSubjectView": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "$ref": "#/$defs/DecisionObjectView"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "object"
+      ]
+    },
     "OfferVerb": {
       "type": "string",
       "enum": [
@@ -1181,7 +1375,7 @@
       "type": "object",
       "properties": {
         "caused_by": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "from_revision": {
           "type": "integer",
@@ -1205,7 +1399,7 @@
           "minimum": 0
         },
         "sound": {
-          "$ref": "#/$defs/RequiredNullable2"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "suggested_ms": {
           "type": "integer",
@@ -1325,7 +1519,7 @@
               "const": "damage"
             },
             "source": {
-              "$ref": "#/$defs/RequiredNullable4"
+              "$ref": "#/$defs/RequiredNullable6"
             },
             "target": {
               "$ref": "#/$defs/SubjectRef"
@@ -1580,12 +1774,32 @@
     },
     "RequiredNullable2": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DecisionObjectView"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "RequiredNullable3": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "string",
         "null"
       ]
     },
-    "RequiredNullable3": {
+    "RequiredNullable4": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0
+    },
+    "RequiredNullable5": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "integer",
@@ -1593,7 +1807,7 @@
       ],
       "format": "int32"
     },
-    "RequiredNullable4": {
+    "RequiredNullable6": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "anyOf": [
         {
@@ -1604,7 +1818,7 @@
         }
       ]
     },
-    "RequiredNullable5": {
+    "RequiredNullable7": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "array",
@@ -1614,7 +1828,7 @@
         "$ref": "#/$defs/Candidate"
       }
     },
-    "RequiredNullable6": {
+    "RequiredNullable8": {
       "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
       "type": [
         "integer",
@@ -1655,6 +1869,59 @@
         "owner_id",
         "registry_key",
         "name"
+      ]
+    },
+    "StackEntryView": {
+      "type": "object",
+      "properties": {
+        "ability_index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "chosen_mode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "kind": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source_permanent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "controller",
+        "label"
       ]
     },
     "StopsConfig": {

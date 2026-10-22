@@ -32,7 +32,7 @@ Chromium version observed on each run. The hosted runner image may evolve; the
 recorded facts are evidence and are not silently replaced by the label above.
 
 Before timing begins, the checkout must not contain `.venv`, `.cache`,
-`frontend/node_modules`, generated Svelte/Vite/build/test output,
+`academy/ui/node_modules`, generated Svelte/Vite/build/test output,
 `managym/target`, a `managym/_managym*.so` extension, GUI trace JSON, or a
 prior proof browser profile. The proof job restores no uv, npm, Cargo, target,
 or project-install cache. Installing the host tools, browser, and checkout is
@@ -120,7 +120,7 @@ the local authority can run without networking or a local process,
 respectively.
 
 The pack authority remains
-`frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json`. Both the
+`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json`. Both the
 launcher and browser receipt derive `{id, version, manifest_sha256}` from its
 installed bytes. There is no duplicated deck list or expected hash in the
 proof.

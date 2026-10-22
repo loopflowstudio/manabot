@@ -17,6 +17,7 @@ import pytest
 # Local imports
 from academy import server, trace as trace_store
 from academy.server import app
+import managym
 from managym import experience_projection
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
@@ -24,7 +25,7 @@ MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
     (
         Path(__file__).parents[2]
-        / "frontend/src/lib/fixtures/curated-combat-to-turn-w4.json"
+        / "academy/ui/src/lib/fixtures/curated-combat-to-turn-w4.json"
     ).read_text(encoding="utf-8")
 )
 
@@ -333,13 +334,21 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
 
 
 def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
-    isolated_traces,
-):
+    isolated_traces: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """One exact UR-vs-GW position crosses every semantic event consumer."""
 
     from manabot.env.observation import ActionEnum
 
-    def attacking_villain(_env, obs):
+    # Exact retained event revisions bind the original execution preset.
+    native_env = managym.Env
+
+    def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
+        return native_env(seed=seed, skip_trivial=True)
+
+    monkeypatch.setattr(server.managym, "Env", historical_env)
+
+    def attacking_villain(_env: object, obs: managym.Observation) -> int:
         for index, action in enumerate(obs.action_space.actions):
             if (
                 int(action.action_type) == int(ActionEnum.DECLARE_ATTACKER)
@@ -527,7 +536,9 @@ def test_format_action_uses_magic_terms():
         assert experience_projection.format_action(action, names) == expected
 
 
-def test_hero_view_swaps_terminal_villain_perspective_and_redacts(monkeypatch):
+def test_hero_view_swaps_terminal_villain_perspective_and_redacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """At game over the engine observation may be villain-perspective; the
     wire payload must still present the hero as `agent` with villain hand
     hidden."""
@@ -542,13 +553,20 @@ def test_hero_view_swaps_terminal_villain_perspective_and_redacts(monkeypatch):
         "hand": [{"id": 51, "name": "Lightning Bolt"}],
         "zone_counts": {"HAND": 1},
     }
-    serialized = {
+    serialized: dict[str, object] = {
         "game_over": True,
         "won": True,  # villain-perspective: villain won
         "agent": villain_side,
         "opponent": hero_side,
     }
-    monkeypatch.setattr(server, "serialize_observation", lambda obs: serialized)
+
+    def serialize_fixture(
+        _obs: object, *, include_details: bool = False
+    ) -> dict[str, object]:
+        assert not include_details
+        return serialized
+
+    monkeypatch.setattr(server, "serialize_observation", serialize_fixture)
 
     obs = SimpleNamespace(game_over=True, won=True)
     data = server.hero_view(obs)

@@ -1544,6 +1544,96 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
+    "DecisionContextView": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Actor",
+          "type": "integer"
+        },
+        "chosen_mode": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Chosen Mode"
+        },
+        "instruction": {
+          "title": "Instruction",
+          "type": "string"
+        },
+        "mana_cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mana Cost"
+        },
+        "recent_facts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Recent Facts",
+          "type": "array"
+        },
+        "reserved_sacrifice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionObjectView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionObjectView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/DecisionTargetView"
+          },
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "recent_facts",
+        "actor",
+        "stage",
+        "instruction",
+        "source",
+        "targets",
+        "reserved_sacrifice",
+        "mana_cost",
+        "chosen_mode"
+      ],
+      "title": "DecisionContextView",
+      "type": "object"
+    },
     "DecisionEvidence": {
       "additionalProperties": false,
       "properties": {
@@ -1595,6 +1685,77 @@
         "provenance"
       ],
       "title": "DecisionEvidence",
+      "type": "object"
+    },
+    "DecisionObjectView": {
+      "additionalProperties": false,
+      "properties": {
+        "display_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Display Id",
+          "type": "integer"
+        },
+        "entity_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Entity Id",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "subject": {
+          "discriminator": {
+            "mapping": {
+              "object": "#/$defs/ObjectSubject",
+              "player": "#/$defs/PlayerSubject",
+              "stack": "#/$defs/StackSubject"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ObjectSubject"
+            },
+            {
+              "$ref": "#/$defs/StackSubject"
+            },
+            {
+              "$ref": "#/$defs/PlayerSubject"
+            }
+          ],
+          "title": "Subject"
+        }
+      },
+      "required": [
+        "entity_id",
+        "subject",
+        "display_id",
+        "label"
+      ],
+      "title": "DecisionObjectView",
+      "type": "object"
+    },
+    "DecisionTargetView": {
+      "additionalProperties": false,
+      "properties": {
+        "clause": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Clause",
+          "type": "integer"
+        },
+        "object": {
+          "$ref": "#/$defs/DecisionObjectView"
+        }
+      },
+      "required": [
+        "clause",
+        "object"
+      ],
+      "title": "DecisionTargetView",
       "type": "object"
     },
     "DeckNames": {
@@ -1897,6 +2058,13 @@
           ],
           "title": "Source"
         },
+        "subjects": {
+          "items": {
+            "$ref": "#/$defs/OfferSubjectView"
+          },
+          "title": "Subjects",
+          "type": "array"
+        },
         "verb": {
           "$ref": "#/$defs/OfferVerb"
         }
@@ -2036,6 +2204,17 @@
         "agent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "decision_context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionContextView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "definition_names": {
           "additionalProperties": {
             "type": "string"
@@ -2049,6 +2228,21 @@
         },
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "stack_objects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/StackEntryView"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stack Objects"
         },
         "turn": {
           "$ref": "#/$defs/LegacyTurnView"
@@ -2120,6 +2314,18 @@
           "title": "Id",
           "type": "integer"
         },
+        "is_token": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Token"
+        },
         "name": {
           "anyOf": [
             {
@@ -2158,6 +2364,13 @@
           "title": "Tapped",
           "type": "boolean"
         },
+        "temp_subtypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Temp Subtypes",
+          "type": "array"
+        },
         "text_box": {
           "default": "",
           "title": "Text Box",
@@ -2175,6 +2388,17 @@
             }
           ],
           "title": "Toughness"
+        },
+        "types": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCardTypesView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2202,6 +2426,20 @@
           },
           "title": "Battlefield",
           "type": "array"
+        },
+        "combat_mana": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Combat Mana"
         },
         "exile": {
           "items": {
@@ -2244,6 +2482,13 @@
           "title": "Id",
           "type": "integer"
         },
+        "inspected": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Inspected",
+          "type": "array"
+        },
         "is_active": {
           "title": "Is Active",
           "type": "boolean"
@@ -2261,6 +2506,52 @@
           "title": "Known Hand",
           "type": "object"
         },
+        "lesson_mana": {
+          "anyOf": [
+            {
+              "maxItems": 6,
+              "minItems": 6,
+              "prefixItems": [
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lesson Mana"
+        },
         "library_count": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2272,6 +2563,52 @@
           "minimum": -2147483648,
           "title": "Life",
           "type": "integer"
+        },
+        "mana": {
+          "anyOf": [
+            {
+              "maxItems": 6,
+              "minItems": 6,
+              "prefixItems": [
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                },
+                {
+                  "maximum": 2147483647,
+                  "minimum": -2147483648,
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mana"
         },
         "player_index": {
           "maximum": 255,
@@ -2517,6 +2854,24 @@
         "id"
       ],
       "title": "ObjectSubject",
+      "type": "object"
+    },
+    "OfferSubjectView": {
+      "additionalProperties": false,
+      "properties": {
+        "object": {
+          "$ref": "#/$defs/DecisionObjectView"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "object"
+      ],
+      "title": "OfferSubjectView",
       "type": "object"
     },
     "OfferVerb": {
@@ -2898,6 +3253,81 @@
         "name"
       ],
       "title": "SideboardCardView",
+      "type": "object"
+    },
+    "StackEntryView": {
+      "additionalProperties": false,
+      "properties": {
+        "ability_index": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ability Index"
+        },
+        "chosen_mode": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chosen Mode"
+        },
+        "controller": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Controller",
+          "type": "integer"
+        },
+        "id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_permanent": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Permanent"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "controller",
+        "label"
+      ],
+      "title": "StackEntryView",
       "type": "object"
     },
     "StackSubject": {
