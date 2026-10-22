@@ -34,6 +34,7 @@ class Config(BaseModel):
     revision: str
     deadline: float
     cadence: int = 500
+    max_pending_monitor: int = Field(default=2, ge=1)
     monitoring: tuple[dict[str, str | int | bool], ...]
     scoring: tuple[dict[str, str | int | bool], ...]
 
@@ -313,6 +314,14 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
             fresh = [p for p in additions if p.key not in known]
             ledger.points.extend(fresh)
             _save(path, ledger)
+            if (
+                not terminal
+                and sum(
+                    p.cohort == "monitor" and p.phase != "done" for p in ledger.points
+                )
+                > config.max_pending_monitor
+            ):
+                raise RuntimeError("frozen monitoring backlog allowance exhausted")
             for point in ledger.points:
                 binding = (
                     Path(os.environ["ETUDE_HOME"])

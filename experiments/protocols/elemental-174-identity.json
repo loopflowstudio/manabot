@@ -846,13 +846,13 @@
     "uv.lock": "56ae98221b2d6e561299cbfbbd7b6bdfb2f74f46ac5b8a3f77925449dbbc2677",
     "experiments/regimes/elemental-uniform-174-v1.json": "10d1e4b9a58beca2b062d637e4823f53077beaf2458b069848dfe847f12e9fd9",
     "experiments/protocols/elemental-174-cohorts.json": "fa861c722c2b3c2ecb96ed4f01d8c648cde52c96e536fff26942a052a300f4df",
-    "experiments/runners/elemental_eval.py": "13c9fdd49427094322c2929cd07de598cba0dcbfc194d665d0fd32d7dc999acb",
-    "experiments/runners/elemental_games.py": "4e51acc756fc6db61f13cf58e53ea40eb2f4e08ae9f79d6cc6b39989254608d0",
-    "experiments/runners/elemental_live.py": "4bd88fce6b2e2cd34dce07608bd6e45dea56f38a2c15c76ac2661ff1aab2e14e",
+    "experiments/runners/elemental_eval.py": "d27a6c4b71abc8b3bd167d1cd6ef84010538e115b6a264c6e2bb017aaa7b31f0",
+    "experiments/runners/elemental_games.py": "385f2c6fe2dab060466266cf1ddc0921e97b143aa624aa868ebc83890d57fe75",
+    "experiments/runners/elemental_live.py": "4ca68d71f69e2169fa9f841e6d97fb30c6a0950ba105631556f23bccc315221e",
     "experiments/runners/elemental_remote.py": "fe31deeb930c8c249f868198bef2649cc190cea1c65a86b5aed80931187b2f74"
   },
   "seed": 17402,
-  "etude_source": "3929f25b023aaa3289e1cb4a0914a584a5c7873f",
+  "etude_source": "452bd8a84b08d4732e3cfbaca5e9833b502d4380",
   "regime": {
     "schema_version": 1,
     "id": "elemental-uniform-174-v1",
@@ -993,5 +993,13 @@
     "schedule_clock": "iteration_fraction",
     "recovery_max_microsteps": null,
     "selection": "last-complete-raw"
+  },
+  "evaluation_runtime": {
+    "wheel_sha256": "3b46aca22eb1b62fbb3b21e6de24d2313375f8ceb1f74de030932fb24b2228c0",
+    "cadence": 500,
+    "max_pending_monitor": 2,
+    "owner_hours": 24,
+    "monitor_hours": 1,
+    "final_comparison_hours": 2
   }
 }

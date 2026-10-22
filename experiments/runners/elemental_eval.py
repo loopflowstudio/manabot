@@ -147,7 +147,7 @@ def prepare_evaluation(
         workers=2,
         repo=str(root),
         revision=revision,
-        max_hours=1,
+        max_hours=1 if cohort in (None, "monitor") else 2,
         max_usd=Decimal("0.01"),
         max_attempts=1,
         runtime=Runtime(

@@ -200,3 +200,28 @@ def test_uncertain_submission_lookup_stops_without_resubmission(
             config, point, live.Ledger(config_sha256="test"), tmp_path / "ledger.json"
         )
     assert not (tmp_path / "ledger.json").exists()
+
+
+def test_live_backlog_cancels_without_dropping_points(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path).model_copy(update={"cadence": 25})
+    ledger = live.Ledger(config_sha256="test")
+    cancellations: list[bool] = []
+
+    def remote(config: live.Config, *, cancel: bool = False) -> dict[str, Any]:
+        cancellations.append(cancel)
+        observation = _observation(tmp_path)
+        observation["status"] = {
+            "record": {"phase": "running", "updates": 501},
+            "cleanup": None,
+        }
+        return observation
+
+    monkeypatch.setattr(live, "_remote", remote)
+    monkeypatch.setattr(live, "_report", lambda *a: None)
+    with pytest.raises(RuntimeError, match="backlog allowance exhausted"):
+        live.operate(config, ledger, tmp_path / "ledger.json")
+    assert cancellations == [False, True]
+    assert {p.update for p in ledger.points} == {0, 25, 100, 500}
+    assert ledger.error is not None
