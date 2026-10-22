@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 882,
+  "combined_draft_churn_lines": 3864,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -186,5 +186,152 @@
       "docs/rules/audit-2026-10/index.jsonl",
       "docs/rules/audit-2026-10/line-accounting.json"
     ]
+  },
+  "targeting_runtime_increment": {
+    "basis": "Rules working diff against fe76226d after the upstream packaging merge, plus fresh runtime demo fixtures and local helper charge; upstream contributions, audit report/index and conformance receipts excluded. Earlier 882-line draft charge retained once. Runtime demo fixtures count as product inputs.",
+    "files": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "WORLDS.md",
+        "added": 20,
+        "deleted": 4
+      },
+      {
+        "path": "academy/play_demo.py",
+        "added": 3,
+        "deleted": 3
+      },
+      {
+        "path": "docs/rules/optional-payments.md",
+        "added": 2,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/README.md",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/arena/models.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/README.md",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/flow/resolution.rs",
+        "added": 65,
+        "deleted": 84
+      },
+      {
+        "path": "managym/src/flow/target_authority_tests.rs",
+        "added": 191,
+        "deleted": 2
+      },
+      {
+        "path": "managym/src/lib.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/tests/semantic_conformance_tests.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "scripts/audit_rules.py",
+        "added": 4,
+        "deleted": 1
+      },
+      {
+        "path": "tests/academy/test_study_protocol.py",
+        "added": 20,
+        "deleted": 0
+      },
+      {
+        "path": "tests/infra/test_rules_inventory.py",
+        "added": 12,
+        "deleted": 30
+      },
+      {
+        "path": "academy/fixtures/learn-demo-explicit-w12.json",
+        "added": 434,
+        "deleted": 0
+      },
+      {
+        "path": "academy/fixtures/precision-demo-w12.json",
+        "added": 979,
+        "deleted": 0
+      },
+      {
+        "path": "academy/fixtures/precision-mana-demo-w12.json",
+        "added": 1064,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 2974,
+    "excluded_reports": [
+      {
+        "path": "docs/rules/audit-2026-10/README.md",
+        "added": 31,
+        "deleted": 32
+      },
+      {
+        "path": "docs/rules/audit-2026-10/coverage-map.md",
+        "added": 3,
+        "deleted": 3
+      },
+      {
+        "path": "docs/rules/audit-2026-10/index.jsonl",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "docs/rules/audit-2026-10/line-accounting.json",
+        "added": 137,
+        "deleted": 1
+      },
+      {
+        "path": "docs/rules/audit-2026-10/reviews.json",
+        "added": 5,
+        "deleted": 3
+      },
+      {
+        "path": "docs/rules/audit-2026-10/unification.md",
+        "added": 18,
+        "deleted": 12
+      }
+    ],
+    "new_conformance_root": "conformance/semantic-kernel-w12-v1 (new receipts; earlier roots unchanged)",
+    "local_helpers": [
+      {
+        "path": "scratch/refresh_demos.py",
+        "added": 36,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/run_bounded.py",
+        "added": 3,
+        "deleted": 0
+      }
+    ]
+  },
+  "reconciliation_increment": {
+    "basis": "Canonical native install helper repair after fe76226d; additions plus deletions to the previously charged helper, preserving the earlier 3856-line charge. Plan and review guidance remain excluded artifacts.",
+    "files": [
+      {
+        "path": "scratch/install_native.py",
+        "added": 5,
+        "deleted": 3
+      }
+    ],
+    "churn_lines": 8
   }
 }

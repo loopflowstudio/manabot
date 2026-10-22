@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "phase_repository": "https://github.com/phase-rs/phase",
+  "phase_revision": "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d",
+  "comparison_mode": "pinned_source_inspection_not_runtime_differential",
+  "limitations": [
+    "Phase is source-inspected at the pinned revision; it is not built or executed by blocking manabot CI.",
+    "A match means the cited sources establish the same normalized case, not whole-engine or whole-card parity.",
+    "Generated Phase card data and broad non-curated formats are outside this matrix."
+  ],
+  "rows": [
+    {
+      "id": "mana-suki-hybrid",
+      "rule_family": "mana_and_payment",
+      "normalized_assertion": "Suki's two hybrid pips preserve hybrid payment choices.",
+      "manabot_evidence": [
+        "experiments/card-conformance-audit.md#card-conformance-audit-2026-07-09",
+        "managym/tests/conformance_tests.rs::sanctioned_cost_deviations"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/types/card.rs#L128"
+      ],
+      "status": "mismatch",
+      "manabot_outcome": "The admitted runtime registers {2}{G}{W}; one green and one white source are required.",
+      "phase_outcome": "The pinned typed card representation preserves the printed {2}{G/W}{G/W} hybrid cost."
+    },
+    {
+      "id": "activated-ability-case-unavailable",
+      "rule_family": "activated_abilities",
+      "normalized_assertion": "An identical curated activated-ability scenario reaches the same state.",
+      "manabot_evidence": [
+        "managym/tests/rules/cr_602_activated_abilities.rs",
+        "managym/tests/rules/tla_cards.rs"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "No exact pinned Phase scenario receipt for the curated Clue, waterbend, or Cadets activation was available without importing generated Phase card assets."
+    },
+    {
+      "id": "spell-action-reducer",
+      "rule_family": "spells_and_resolution",
+      "normalized_assertion": "A legal spell command is applied to authoritative state before the next external decision.",
+      "manabot_evidence": [
+        "managym/src/flow/tick.rs::Game::step",
+        "managym/tests/rules/cr_405_stack.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/game/engine.rs#L176"
+      ],
+      "status": "match",
+      "manabot_outcome": "Game::step applies the selected action, stabilizes rules state, and publishes the next prompt.",
+      "phase_outcome": "The pinned engine apply entry point mutates authoritative GameState from an actor action."
+    },
+    {
+      "id": "trigger-order-case-unavailable",
+      "rule_family": "triggered_abilities",
+      "normalized_assertion": "An identical curated simultaneous-trigger scenario commits the same order.",
+      "manabot_evidence": [
+        "managym/tests/rules/cr_603_triggers.rs",
+        "managym/tests/rules/cr_704_sba.rs::cr_117_5_equivalent_seeded_stabilization_replay_is_identical"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "Phase trigger support is broad, but no identical pinned two-deck trigger-order trace was extracted for this bounded offline matrix."
+    },
+    {
+      "id": "continuous-suki-and-dragonfly",
+      "rule_family": "continuous_effects_and_keywords",
+      "normalized_assertion": "Printed legendary and characteristic-defining behavior remains active across all relevant zones.",
+      "manabot_evidence": [
+        "experiments/card-conformance-audit.md#per-card-table",
+        "managym/tests/rules/stage3_cards.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/types/card.rs#L128"
+      ],
+      "status": "mismatch",
+      "manabot_outcome": "The curated runtime omits the legend rule and prints Dragonfly's CDA only on the battlefield.",
+      "phase_outcome": "The pinned typed card model retains printed supertypes and characteristic definitions independently of battlefield-only runtime projection."
+    },
+    {
+      "id": "target-filter-case-unavailable",
+      "rule_family": "targets_and_filters",
+      "normalized_assertion": "The same target inventory is legal for an identical curated position.",
+      "manabot_evidence": [
+        "managym/tests/rules/structured_offers.rs",
+        "managym/tests/rules/stage2_cards.rs"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "The engines expose different action and object identifiers, and no normalized pinned Phase target fixture exists for the exact two-deck positions."
+    },
+    {
+      "id": "conditional-cadets-firebending",
+      "rule_family": "conditional_semantics",
+      "normalized_assertion": "Fire Nation Cadets uses the printed attack-trigger timing when a Lesson is in the graveyard.",
+      "manabot_evidence": [
+        "experiments/card-conformance-audit.md#per-card-table",
+        "managym/tests/rules/stage3_cards.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/types/card.rs#L128"
+      ],
+      "status": "mismatch",
+      "manabot_outcome": "The admitted runtime uses a sanctioned on-stack conditional attack-trigger simplification.",
+      "phase_outcome": "The pinned typed card representation retains the printed trigger and condition structure."
+    },
+    {
+      "id": "card-flow-learn-and-bottom-order",
+      "rule_family": "card_flow_and_zone_changes",
+      "normalized_assertion": "Learn and any-order library-bottom choices retain every printed option.",
+      "manabot_evidence": [
+        "experiments/card-conformance-audit.md#per-card-table",
+        "managym/tests/rules/stage2_cards.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/types/card.rs#L128"
+      ],
+      "status": "mismatch",
+      "manabot_outcome": "Learn is discard-then-draw without a Lesson sideboard, and Accumulate Wisdom bottoms the remainder randomly.",
+      "phase_outcome": "The pinned typed card model retains printed zone/choice semantics rather than the two sanctioned curated simplifications."
+    },
+    {
+      "id": "token-case-unavailable",
+      "rule_family": "tokens",
+      "normalized_assertion": "The same Ally and Clue token scenario creates identical objects and abilities.",
+      "manabot_evidence": [
+        "managym/tests/rules/tla_cards.rs",
+        "content/semantic/v1/coverage.evidence.json"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "The matrix does not import Phase's generated token definitions, so object-level token parity is not asserted."
+    },
+    {
+      "id": "counter-case-unavailable",
+      "rule_family": "counters",
+      "normalized_assertion": "The same multi-object +1/+1 counter scenario reaches identical values.",
+      "manabot_evidence": [
+        "managym/tests/rules/tla_cards.rs",
+        "managym/tests/rules/cr_614_replacement.rs"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "No identical pinned Phase counter trace was extracted for Earth King's Lieutenant or earthbend."
+    },
+    {
+      "id": "committed-damage-reducer",
+      "rule_family": "damage",
+      "normalized_assertion": "Committed positive damage changes the affected rules state and emits a factual damage result.",
+      "manabot_evidence": [
+        "managym/src/flow/proposed_event.rs::commit_proposed_event",
+        "managym/tests/rules/cr_614_replacement.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/game/engine.rs#L176"
+      ],
+      "status": "match",
+      "manabot_outcome": "Damage is proposed, replaced, then committed to authoritative state and the event ledger.",
+      "phase_outcome": "Damage effects are reduced through the pinned authoritative action application path."
+    },
+    {
+      "id": "committed-life-reducer",
+      "rule_family": "life",
+      "normalized_assertion": "A committed life delta updates the affected player's authoritative life total exactly once.",
+      "manabot_evidence": [
+        "managym/src/flow/proposed_event.rs::direct_life_change_commits_once_and_emits_the_legacy_fact"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/game/engine.rs#L176"
+      ],
+      "status": "match",
+      "manabot_outcome": "The proposal pipeline applies one life delta and records old/new values.",
+      "phase_outcome": "Life effects reduce through the pinned authoritative action application path."
+    },
+    {
+      "id": "tap-untap-case-unavailable",
+      "rule_family": "tap_and_untap",
+      "normalized_assertion": "The same Tiger-Seal and Fancy Footwork sequence reaches identical tap state.",
+      "manabot_evidence": [
+        "managym/tests/rules/tla_cards.rs",
+        "content/semantic/v1/coverage.evidence.json"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "No identical pinned Phase trace for the two curated cards was extracted."
+    },
+    {
+      "id": "ward-trigger-scope",
+      "rule_family": "countering_and_ward",
+      "normalized_assertion": "Ward triggers for every opponent-controlled spell or ability that targets the permanent.",
+      "manabot_evidence": [
+        "experiments/card-conformance-audit.md#engine-wide-simplifications-touching-many-cards",
+        "managym/tests/rules/stage2_cards.rs"
+      ],
+      "phase_evidence": [
+        "https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/types/card.rs#L128"
+      ],
+      "status": "mismatch",
+      "manabot_outcome": "The admitted runtime triggers ward for opposing spells only.",
+      "phase_outcome": "The pinned typed card representation retains ward's printed spell-or-ability targeting condition."
+    },
+    {
+      "id": "earthbend-case-unavailable",
+      "rule_family": "earthbend",
+      "normalized_assertion": "The same earthbend land animation and delayed return trace reaches identical state.",
+      "manabot_evidence": [
+        "managym/tests/rules/stage3_cards.rs",
+        "managym/tests/rules/cr_400_identity.rs"
+      ],
+      "phase_evidence": [],
+      "status": "excluded",
+      "exclusion_reason": "Phase's generated TLA card assets are intentionally not imported into this offline gate, so exact earthbend parity is unmeasured."
+    }
+  ],
+  "mismatches": [
+    "mana-suki-hybrid",
+    "continuous-suki-and-dragonfly",
+    "conditional-cadets-firebending",
+    "card-flow-learn-and-bottom-order",
+    "ward-trigger-scope"
+  ]
+}

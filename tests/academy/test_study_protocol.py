@@ -150,6 +150,26 @@ def test_precommand_study_address_is_independent_of_command_id():
     RUST_VALIDATOR.validate(artifact)
 
 
+def test_precommand_study_address_is_independent_of_selected_offer() -> None:
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    address = landmark["decision_id"]
+    offer = next(
+        offer
+        for offer in landmark["frame"]["offers"]
+        if offer["id"] != landmark["offer_id"]
+    )
+    landmark["offer_id"] = offer["id"]
+    landmark["offer"] = deepcopy(offer)
+    landmark["played"]["offer_id"] = offer["id"]
+
+    validated = StudyArtifact.model_validate(artifact)
+
+    assert validated.landmarks[0].decision_id == address
+    assert validated.landmarks[0].played.offer_id == offer["id"]
+    RUST_VALIDATOR.validate(artifact)
+
+
 @pytest.mark.parametrize("rebind_command_id", [False, True])
 def test_retained_study_address_binds_command_and_digest(
     rebind_command_id: bool,

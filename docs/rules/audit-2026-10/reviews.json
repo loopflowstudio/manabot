@@ -961,16 +961,18 @@
     },
     "702.11b": {
       "status": "partial",
-      "scope": "Creature/permanent target specs enforce opposing hexproof; SpellOrPermanent permanent branch incorrectly bypasses it.",
+      "scope": "All permanent target specifications share battlefield/hexproof restrictions, including SpellOrPermanent. Own hexproof targets remain legal subject to wording, controller and predicate restrictions.",
       "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
       "dispersion": "shared",
       "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs"
       ],
-      "gap": "Confirmed defect: ignored audit probe explicitly fails. Correction is a separate unvalidated world/admission proposal; see unification.md.",
+      "gap": "Bounded two-controller witnesses cover current supported specifications and response-time invalidation; general keyword variants and interactions are not exhaustively certified.",
       "anchors": [
-        "managym/src/flow/target_authority_tests.rs::audit_spell_or_permanent_must_respect_opponents_hexproof"
+        "managym/src/flow/target_authority_tests.rs::audit_spell_or_permanent_must_respect_opponents_hexproof",
+        "managym/src/flow/target_authority_tests.rs::hexproof_target_wordings_preserve_controller_and_predicate_restrictions",
+        "managym/src/flow/target_authority_tests.rs::response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability"
       ]
     }
   }

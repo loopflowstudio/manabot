@@ -6,7 +6,7 @@ It preserves the original committed inventory and draft; it does not repeat
 the whole-inventory audit or claim full MTG conformance.
 
 Start with the [coverage map](coverage-map.md) for strengths and gaps by kind
-of rule. The concept review below explains the desired experience and next proof.
+of rule. The review below explains the shared targeting contract.
 
 ## Concept review: one rule authority, checks at the right time
 
@@ -16,13 +16,13 @@ is that human and bot choices come from the same native rules model; neither
 consumer needs to learn which internal target branch or payment path was used.
 The existing Academy usage contract already expresses this and needs no rewrite.
 
-**Proposed usage for the hexproof correction:** choose a target from the legal
+**Targeting contract:** choose a target from the legal
 offers, then commit its bound Command. An opponent's hexproof permanent cannot
 be offered merely because the instruction says “spell or permanent.” Your own
 hexproof permanent remains targetable when otherwise legal. If the target gains
 hexproof in response, resolution rechecks the new state. Reconnecting restores
 the actual pending decision; it neither retargets automatically nor refunds
-committed costs. These are intended outcomes, not verified repaired behavior.
+committed costs. The native repair has directed outcome witnesses; consumer checks exercise the existing shared contract.
 
 | Your action | Shared concept | Authority/API responsibility |
 |---|---|---|
@@ -31,26 +31,14 @@ committed costs. These are intended outcomes, not verified repaired behavior.
 | Respond, then resolve | Chosen target in the new game state | Resolution calls `target_is_legal` again; changed legality is an MTG recheck, not a conflicting definition. |
 | Recover after disconnect | Same committed state and actual pending decision | Existing recovery/frame machinery retains identity and choices; the browser does not reconstruct rules. |
 
-The most consequential mismatch is priority within this draft: the completed
-consolidation removes equivalent logic, while the demonstrated hexproof
-disagreement remains unrepaired. The next design direction is to centralize
-permanent-wide targeting restrictions so target-spec branches cannot bypass
-them. Keep spell/permanent distinctions and resolution-time checks; a single
-boolean cached at offer time would be wrong after a response.
-
-No new public targeting concept or competing UI workflow is needed. Preserve
-exact object references, Command binding, persisted choices and historical
-world identities. Behavioral repair must have a newly identified world and
-fresh admission evidence rather than relabeling old receipts. The existing
-draft-work instructions already require rule adjudication and recovery proofs;
-no skill change is needed to express this direction.
-
-**Next proof:** the same permanent under different target wordings, both
-controllers, gaining hexproof in response, and leave/reenter identity; then
-stale Command rejection, reconnect, replay/fork and required admission checks.
-Trigger ordering follows as a separate missing shared choice. No unresolved
-product choice is identified here: faithful choices and recovery were already
-accepted. This design direction does not launch implementation.
+Permanent-wide restrictions now precede the target-spec match in
+`target_is_legal`. Each branch retains its wording-specific restrictions, and
+resolution rechecks current state. Grouping by target kind lets permanent branches
+reuse one validated object and removes repeated presence checks. Both controller orientations, own hexproof,
+response-time grants, mixed/all-invalid targets and leave/reenter identity have
+bounded witnesses. `WORLD_VERSION` advances to w12 with fresh conformance
+receipts. Tensor shapes and authored content are unchanged; earlier worlds,
+checkpoints and `erd1` evidence retain their identities.
 
 ## Concrete change
 
@@ -62,17 +50,14 @@ Mountain (0) witnesses prove choices at five thresholds, rejection of a
 low-value target, successful countering, and failure of the entire ability
 when its only target departs. Candidate order and stage-specific checks remain.
 
-Review [the small native change](../../../managym/src/flow/triggers.rs) and
+Review [target legality](../../../managym/src/flow/resolution.rs),
+[candidate enumeration](../../../managym/src/flow/triggers.rs), and
 [independent witnesses](../../../managym/src/flow/target_authority_tests.rs).
 [Authority adjudication](unification.md) names the competing definitions,
 MTG verdict, chosen authority, removed logic and caller paths.
 
-## Behavioral findings retained as separate proposals
+## Remaining separate finding
 
-- **Hexproof inconsistency:** creature/permanent target branches enforce
-  CR 702.11b, while `SpellOrPermanent` bypasses it. A tiny explicitly failing
-  probe establishes the discrepancy. The correction requires new world and
-  admission evidence; it is not applied to the current world in this draft.
 - **Trigger-order choice:** one ordering implementation exists, with fixed
   APNAP/enqueue order. At 2 life, simultaneous gain-2 and damage-2 triggers
   permit survival or loss depending on the controller's CR 603.3b choice.
@@ -86,6 +71,20 @@ identity, SBA/replacement/movement, combat and static queries. Existing mixed,
 all-invalid and leave/reenter target coverage is retained. Distinct stages and
 legitimate rechecks have not been collapsed into a universal rules engine.
 
+## Validation limits
+
+The w12 repair passes 8 native targeting witnesses and 6 debug conformance
+checks over a fresh 14-case / 3,491-Command corpus. Dependency-blocked play/Study
+protocol (17), Command/recovery (8), repaired decision surface (4), and tooling/
+package-boundary (44) tests pass. All 11 arena admission cases passed across
+bounded chunks. Frozen w11 and protocol fixture bytes are unchanged.
+
+Acceptance remains incomplete: full learnability failed its PPO collector
+training deadline. Study semantic retry, Study branch and four monitor cases
+remain after bounded 120-second timeouts. Partial suites are not reported as
+passes. The [validation receipts](unification-validation.json) retain both the
+failures and repaired fixture results; no training or timeout limits were raised.
+
 ## Ownership, checks and scope
 
 The refreshed MTG-174 reference is stale: it currently identifies an Elemental
@@ -94,12 +93,12 @@ landing failure and merged PR are documented without changing its lifecycle.
 Payment repair remains outside this increment.
 
 [Validation receipts](unification-validation.json) record passing debug checks,
-two intentional failing proposal probes, the corrected initial fixture compile
+historical failing proposal probes, the corrected initial fixture compile
 failure, native rebuild/import, Python checks, cost and coverage limits.
 [Line accounting](line-accounting.json) reconciles the original 621-line draft
 with this bounded increment against the approximate combined 10k-line budget.
-No frozen worlds, decks, experiment evidence, training budgets, CI selection or
-required-check semantics change. No ready publication, merge, auto-merge or
+Earlier frozen worlds, decks, experiment evidence and training budgets remain unchanged.
+CI conformance checks select the new w12 root with unchanged required-check semantics. No ready publication, merge, auto-merge or
 Task completion is selected. The durable draft stops for review.
 
 ## Reference evidence

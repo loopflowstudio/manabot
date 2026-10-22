@@ -1,6 +1,6 @@
 # Worlds
 
-An observation/action-shape change is a **world version**. Checkpoints,
+A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
 shards, and reports are only comparable within a world; cross-world numbers
 never share a table untagged. New worlds are frozen deliberately (batch the
 shape changes), and on each freeze the headline baselines are re-run before
@@ -21,16 +21,17 @@ was dead on arrival in exp-10.)
 | **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
 | **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
+| **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
 
-**Current development world: w11.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w10) are **not comparable** to w11; do not reuse their
+**Current development world: w12.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w11) are **not comparable** to w12; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
 Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
-Update this table in the same PR as any shape change.
+Update this table in the same PR as any rules-meaning or shape change.
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 
@@ -233,3 +234,18 @@ and opcode 65 identify authored payment branches. Tensor dimensions stay fixed.
 Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
 receipts remain unchanged; w10 checkpoints are rejected. See
 [optional payments](docs/rules/optional-payments.md) for ownership and authoring.
+
+## w12: permanent-wide targeting restrictions
+
+CR 702.11b now applies to every permanent target specification, including
+`SpellOrPermanent`. Battlefield presence and opposing hexproof are checked once
+before wording-specific restrictions, at both selection and resolution.
+Own hexproof permanents remain legal when they satisfy the target specification.
+A response that grants hexproof can invalidate a selected target under CR 608.2b;
+a departed permanent slot cannot follow a new incarnation of the same card.
+
+Tensor shapes, compiled authored content and learning schema 7 are unchanged.
+The new [w12 corpus](conformance/semantic-kernel-w12-v1/) records fresh runtime
+receipts; w11 and earlier corpora, checkpoints and `erd1` evidence stay frozen.
+This bounded repair does not supply trigger-order choices, general protection,
+or stack-spell incarnation guarantees. No strength baseline is claimed.

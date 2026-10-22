@@ -37,8 +37,8 @@ claim that the entire predicate is MTG-correct.
 
 ## Confirmed inconsistent rule: hexproof across target specifications
 
-**Definitions:** in `resolution.rs::target_is_legal`, creature/permanent branches
-call `hexproof_blocks`, but the permanent branch of `SpellOrPermanent` checks
+**Original definitions:** in `resolution.rs::target_is_legal`, creature/permanent branches
+called `hexproof_blocks`, but the permanent branch of `SpellOrPermanent` checked
 only battlefield presence and mana value. A 3-mana opposing Gray Ogre with
 temporary hexproof is rejected as `Creature` yet offered and accepted as
 `SpellOrPermanent { min_mana_value: 3 }`.
@@ -49,16 +49,22 @@ branches are faithful on this fact; target wording does not bypass hexproof.
 expected exclusion and was explicitly run to failure. This is a real competing
 definition inside the shared predicate, not offer/resolution disagreement.
 
-**Separate unvalidated correction proposal:** route that permanent branch
-through the same hexproof guard. No behavioral repair is applied here. It would
-change legal offers and resolution in existing worlds; before admission it
-needs a new versioned conformance/world identity, retained historical receipts,
-acceptance and resolution regressions (including gaining hexproof in response),
-Command stale rejection/replay/fork evidence, current-world arena/monitor checks,
-and the full learnability diagnostic required by AGENTS.md. None of that
-admission evidence is supplied by these local synthetic probes. Current w11
-and all frozen evidence remain intact. The ignored probe is explicitly failing
-evidence, never passing conformance or a waived required check.
+**Applied correction:** `target_is_legal` checks battlefield presence and
+opposing hexproof before matching any permanent target specification. The four
+branch-local hexproof guards and redundant battlefield checks are removed;
+controller, type, predicate and mana-value restrictions remain branch-specific.
+Matching target kind first gives the permanent branches one validated object;
+the single-use `hexproof_blocks` helper and repeated object/presence lookups are
+removed. Nontargeted effects retain their own battlefield-presence helpers.
+No offer-time legality cache is introduced. The original distinguishing witness
+is enabled. New bounded witnesses cover both controllers, own targets, predicate
+and threshold rejection, noncreature lands, response-time hexproof, mixed/all
+invalid targets, and leaving/reentering the same physical card.
+
+The live runtime is w12 with a fresh `semantic-kernel-w12-v1` corpus; w11 and
+older receipts, authored content and `erd1` evidence remain frozen. Tensor shapes
+and learning schema are unchanged. See `scratch/plan.md` for current validation
+and limitations; historical receipts below describe the earlier consolidation.
 
 ## Trigger collection/order/placement: missing choice, no duplicate found
 

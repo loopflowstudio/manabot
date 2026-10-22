@@ -5,9 +5,10 @@ use std::collections::BTreeMap;
 use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
-        ability::{Effect, TargetSpec},
+        ability::{Effect, TargetRequirement, TargetSpec},
         game_object::{CardId, PlayerId, Target},
         player::PlayerConfig,
+        predicate::CardPredicate,
         zone::ZoneType,
     },
 };
@@ -218,7 +219,6 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
 }
 
 #[test]
-#[ignore = "CR 702.11b SpellOrPermanent omits hexproof; world-change proposal only"]
 fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     let (mut game, _, _, permanent, _) = fixture();
     let Target::Permanent(id) = permanent else {
@@ -238,4 +238,193 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
         .legal_targets_for_spec(&spec, PlayerId(1))
         .contains(&permanent));
     assert!(!game.target_is_legal(permanent, &spec, PlayerId(1)));
+}
+
+#[test]
+fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
+    for owner in [PlayerId(0), PlayerId(1)] {
+        let (mut game, _, _, _, _) = fixture();
+        let id = game
+            .scenario_force_battlefield(owner, "Gray Ogre", true)
+            .unwrap();
+        let target = Target::Permanent(id);
+        game.state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .temp_keywords
+            .hexproof = true;
+        for controller in [PlayerId(0), PlayerId(1)] {
+            let own = controller == owner;
+            let cases = [
+                (TargetSpec::Creature, own),
+                (TargetSpec::CreatureOrPlayer, own),
+                (TargetSpec::CreatureYouControl, own),
+                (TargetSpec::CreatureOpponentControls, false),
+                (
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate::default(),
+                    },
+                    own,
+                ),
+                (
+                    TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate::default(),
+                    },
+                    own,
+                ),
+                (
+                    TargetSpec::PermanentOpponentControls {
+                        predicate: CardPredicate::default(),
+                    },
+                    false,
+                ),
+                (TargetSpec::SpellOrPermanent { min_mana_value: 3 }, own),
+                (TargetSpec::SpellOrPermanent { min_mana_value: 4 }, false),
+                (TargetSpec::LandYouControl, false),
+                (
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate::subtype("Elf"),
+                    },
+                    false,
+                ),
+            ];
+            for (spec, expected) in cases {
+                assert_eq!(
+                    game.target_is_legal(target, &spec, controller),
+                    expected,
+                    "{owner:?} {controller:?} {spec:?}"
+                );
+                assert_eq!(
+                    game.legal_targets_for_spec(&spec, controller)
+                        .contains(&target),
+                    expected
+                );
+            }
+        }
+        let land = game
+            .scenario_force_battlefield(owner, "Mountain", true)
+            .unwrap();
+        game.state.permanents[land]
+            .as_mut()
+            .unwrap()
+            .temp_keywords
+            .hexproof = true;
+        assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
+        assert!(!game.target_is_legal(
+            Target::Permanent(land),
+            &TargetSpec::SpellOrPermanent { min_mana_value: 0 },
+            PlayerId(1 - owner.0)
+        ));
+    }
+}
+
+#[test]
+fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
+    for controller in [PlayerId(0), PlayerId(1)] {
+        for mixed in [false, true] {
+            let (mut game, source, _, _, _) = fixture();
+            let opponent = PlayerId(1 - controller.0);
+            let first = game
+                .scenario_force_battlefield(opponent, "Gray Ogre", true)
+                .unwrap();
+            let second = game
+                .scenario_force_battlefield(opponent, "Gray Ogre", true)
+                .unwrap();
+            let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
+            let mut pending = trigger(
+                source,
+                vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(spec.clone()),
+                        effects: vec![Effect::ReturnToHand {
+                            target: spec.clone(),
+                        }],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(spec.clone()),
+                        effects: vec![Effect::ReturnToHand { target: spec }],
+                    },
+                    Effect::GainLife { amount: 7 },
+                ],
+                0,
+            );
+            pending.controller = controller;
+            game.state.pending_triggers.push(pending);
+            assert!(game.flush_triggers().is_some());
+            game.choose_trigger_target(controller, Target::Permanent(first))
+                .unwrap();
+            game.choose_trigger_target(controller, Target::Permanent(second))
+                .unwrap();
+            assert!(game.flush_triggers().is_none());
+            let second_card = game.state.permanents[second].as_ref().unwrap().card;
+            // CR 608.2b: gaining hexproof after selection invalidates an opposing
+            // target; remaining legal targets and untargeted instructions survive.
+            game.state.permanents[first]
+                .as_mut()
+                .unwrap()
+                .temp_keywords
+                .hexproof = true;
+            if !mixed {
+                game.state.permanents[second]
+                    .as_mut()
+                    .unwrap()
+                    .temp_keywords
+                    .hexproof = true;
+            }
+            game.resolve_top_of_stack();
+            assert!(game.state.permanents[first].is_some());
+            assert_eq!(
+                game.state.zones.zone_of(second_card),
+                Some(if mixed {
+                    ZoneType::Hand
+                } else {
+                    ZoneType::Battlefield
+                })
+            );
+            assert_eq!(
+                game.state.players[controller.0].life,
+                if mixed { 27 } else { 20 }
+            );
+        }
+    }
+}
+
+#[test]
+fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
+    for controller in [PlayerId(0), PlayerId(1)] {
+        let (mut game, source, _, _, _) = fixture();
+        let owner = PlayerId(1 - controller.0);
+        let id = game
+            .scenario_force_battlefield(owner, "Gray Ogre", true)
+            .unwrap();
+        let card = game.state.permanents[id].as_ref().unwrap().card;
+        let before = game.current_object_ref(card).unwrap();
+        let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
+        let mut pending = trigger(
+            source,
+            vec![
+                Effect::ReturnToHand {
+                    target: spec.clone(),
+                },
+                Effect::GainLife { amount: 7 },
+            ],
+            0,
+        );
+        pending.controller = controller;
+        game.state.pending_triggers.push(pending);
+        assert!(game.flush_triggers().is_some());
+        game.choose_trigger_target(controller, Target::Permanent(id))
+            .unwrap();
+        assert!(game.flush_triggers().is_none());
+        game.move_card(card, ZoneType::Hand);
+        game.move_card(card, ZoneType::Battlefield);
+        let replacement = game.state.card_to_permanent[card].unwrap();
+        assert_ne!(game.current_object_ref(card).unwrap(), before);
+        assert_ne!(replacement, id);
+        assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
+        assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));
+        game.resolve_top_of_stack();
+        assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Battlefield));
+        assert_eq!(game.state.players[controller.0].life, 20);
+    }
 }

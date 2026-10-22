@@ -6,7 +6,7 @@ keywords. The largest gaps are complete player choices, general continuous
 effects, the long tail of mechanics and unsupported formats. We have no basis
 to call an entire CR chapter thoroughly implemented.
 
-This map summarizes inspected code and retained tests through `c514d11b`.
+This map summarizes inspected code and retained tests through the current w12 targeting repair.
 “Strong” means comparatively thorough **within the stated subset**, not full
 family conformance. “Unreviewed” is a knowledge gap, not proof of missing code.
 Test files below are evidence pointers; only the selected checks in the
@@ -19,7 +19,7 @@ Test files below are evidence pointers; only the selected checks in the
 | Mana-pool arithmetic — CR 106/118 | 1,152 finite generic/specific payment cases with an independent counting oracle, plus 12 restricted-mana contexts. | Pool arithmetic is stronger than end-to-end payment. The retained Prism/Treasure failure prevents calling the whole payment system sound. |
 | Lethal state-based actions — CR 704 | 192 toughness/damage/deathtouch/indestructible cases across both controllers; existing simultaneous-death and stabilization tests. | Does not cover every SBA, regeneration, poison or all replacement combinations. |
 | Object identity — CR 400.7 | Leaving/reentering invalidates incarnations; source last-known information and an old target not following a returned creature have directed witnesses. | Stack targets using CardId and the full list of identity exceptions remain unproved. |
-| Common combat keywords — CR 702 | Positive/negative cases for flying/reach, haste, vigilance, defender, trample, deathtouch, lifelink, menace, first/double strike; selected cross-keyword interactions. | This is a small keyword subset, not most of CR 702. Hexproof is inconsistent across target wordings. |
+| Common combat keywords — CR 702 | Positive/negative cases for flying/reach, haste, vigilance, defender, trample, deathtouch, lifelink, menace, first/double strike; selected cross-keyword interactions. | This is a small keyword subset, not most of CR 702. Permanent target wordings now share hexproof enforcement; general variants remain unproved. |
 
 Evidence: [mana tests](../../../managym/tests/rules/cr_106_mana.rs),
 [SBA tests](../../../managym/tests/rules/cr_704_sba.rs),
@@ -33,7 +33,7 @@ Evidence: [mana tests](../../../managym/tests/rules/cr_106_mana.rs),
 |---|---|---|
 | Priority, turn steps and lands — CR 117/305/500–514 | Ordinary two-player priority, passing, main-phase land timing, land allowance reset, cleanup exceptions. | Broader special actions, extra/skipped turns and duration interactions are not established. |
 | Casting and activated abilities — CR 601/602/605 | Staged modes/targets/payment, stacked activations and resumable optional costs. | Payment offer/execution disagreement remains retained evidence; unusual cost symbols and general mana-ability classification need review. Payment repair stays with existing owners. |
-| Targets and resolution — CR 115/608 | Shared predicate, explicit mana-value boundaries, mixed/all-invalid targets and leave/reenter examples. | Confirmed hexproof bypass in `SpellOrPermanent`; not all targeting exceptions are reviewed. |
+| Targets and resolution — CR 115/608 | Shared predicate, explicit mana-value boundaries, mixed/all-invalid targets and leave/reenter examples. | Hexproof bypass repaired with two-controller and response-time witnesses; not all targeting exceptions are reviewed. |
 | Combat — CR 508–510 | Attacker subsets beyond a small flat list, multiple blockers, damage and strike steps. | General attack taxes, requirements/restrictions, all damage assignments and nonplayer defenders remain unresolved. |
 | Trigger processing — CR 603 | Event matching, source snapshots, stack/response window, targets and APNAP ordering. | Confirmed absence of same-controller ordering choice; a survival-versus-loss witness shows its strategic consequence. |
 | Replacements/prevention — CR 614–616 | Proposed-event pipeline; entry modifiers and selected prevention/doubling outcomes. | Deterministic replacement ordering is narrower than MTG's affected-player choices. General ordering/composition is not established. |

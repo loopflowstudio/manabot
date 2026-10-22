@@ -166,10 +166,13 @@ def validate(rows: list[Row], metadata: Metadata, reviews: Reviews) -> None:
         if row["status"] == "implemented" and not row["tests"]:
             raise ValueError(f"implemented without behavioral evidence: {row['id']}")
     # Reviewed anchors must continue to exist, including specific function names.
+    sources: dict[str, str] = {}
     for review in [*reviews["profiles"].values(), *reviews["rules"].values()]:
         for ref in review.get("anchors", []):
             path, needle = ref.split("::", 1)
-            if needle not in (ROOT / path).read_text():
+            if path not in sources:
+                sources[path] = (ROOT / path).read_text()
+            if needle not in sources[path]:
                 raise ValueError(f"stale evidence anchor: {ref}")
 
 

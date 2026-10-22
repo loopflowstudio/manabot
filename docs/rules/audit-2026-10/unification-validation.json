@@ -322,5 +322,509 @@
       "exit_code": 0,
       "result": "Optional-payment delivery commit already in history."
     }
-  ]
+  ],
+  "targeting_repair": {
+    "base_revision": "a15a4502e1dd7fb41680c5fab3b88f7e239548b8",
+    "world": "w12",
+    "acceptance": "incomplete: full learnability error and remaining bounded runtime/monitor timeouts",
+    "receipts": [
+      {
+        "label": "targeting-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 56.292,
+        "exit_code": 101,
+        "log": "scratch/targeting-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-debug-fixed",
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 77.662,
+        "exit_code": 0,
+        "log": "scratch/targeting-debug-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-native-wheel",
+        "command": [
+          "uv",
+          "run",
+          "maturin",
+          "build",
+          "--release",
+          "-i",
+          ".venv/bin/python",
+          "-m",
+          "managym/Cargo.toml",
+          "-o",
+          "managym/target/wheels"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 81.419,
+        "exit_code": 0,
+        "log": "scratch/targeting-native-wheel.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": false
+      },
+      {
+        "label": "targeting-tooling",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "pytest",
+          "tests/infra/test_rules_inventory.py",
+          "tests/infra/test_ci_selection.py",
+          "tests/test_package_boundaries.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 17.329,
+        "exit_code": 0,
+        "log": "scratch/targeting-tooling.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-academy",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "tests/academy/test_study_runtime.py",
+          "tests/academy/test_study_branch.py",
+          "tests/academy/test_semantic_boundary.py",
+          "tests/academy/test_optional_payment_recovery.py",
+          "tests/academy/test_decision_surface.py",
+          "tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry",
+          "tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.011,
+        "exit_code": 124,
+        "log": "scratch/targeting-academy.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_models.py",
+          "tests/arena/test_mirror_admission.py",
+          "tests/training/test_monitor_evaluation.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.014,
+        "exit_code": 124,
+        "log": "scratch/targeting-admission.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-command-recovery",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_semantic_boundary.py",
+          "tests/academy/test_optional_payment_recovery.py",
+          "tests/academy/test_decision_surface.py",
+          "tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry",
+          "tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 53.596,
+        "exit_code": 1,
+        "log": "scratch/targeting-command-recovery.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-protocol",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 26.168,
+        "exit_code": 0,
+        "log": "scratch/targeting-study-protocol.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-demo-record",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "play",
+          "python",
+          "scratch/refresh_demos.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 76.919,
+        "exit_code": 0,
+        "log": "scratch/targeting-demo-record.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-decision-surface-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_decision_surface.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 20.089,
+        "exit_code": 0,
+        "log": "scratch/targeting-decision-surface-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-conformance-record",
+        "command": [
+          "cargo",
+          "run",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--bin",
+          "semantic_conformance",
+          "--",
+          "record",
+          "--root",
+          "conformance/semantic-kernel-w12-v1"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 397.451,
+        "exit_code": 0,
+        "log": "scratch/targeting-conformance-record.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-conformance-check",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--test",
+          "semantic_conformance_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 230.334,
+        "exit_code": 0,
+        "log": "scratch/targeting-conformance-check.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-arena",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_models.py",
+          "tests/arena/test_mirror_admission.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.121,
+        "exit_code": 124,
+        "log": "scratch/targeting-arena.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-monitor",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.053,
+        "exit_code": 124,
+        "log": "scratch/targeting-monitor.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-runtime",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_runtime.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.035,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-runtime.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-branch",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.059,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-branch.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_runtime.py",
+          "-k",
+          "not normal_runtime",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.02,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[all]",
+          "tests/arena/test_mirror_admission.py::test_mirror_checkpoint_requires_explicit_admission",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[1-checkpoint-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 6.36,
+        "exit_code": 4,
+        "log": "scratch/targeting-admission-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission-remaining-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[all]",
+          "tests/arena/test_mirror_admission.py::test_mirror_checkpoint_requires_explicit_admission",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.084,
+        "exit_code": 124,
+        "log": "scratch/targeting-admission-remaining-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-branch-final",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.02,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-branch-final.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      }
+    ],
+    "learnability": {
+      "status": "error",
+      "source": "a15a4502e1dd7fb41680c5fab3b88f7e239548b8",
+      "source_digest": "48ac1b5da6222c7d4f570bcf379d21424879095c0d75786aa76aa912bdb81044",
+      "world": "w12",
+      "native_sha256": "1c2ef2f709d818a1d8c8c5dd786c32ba6cd7bd82b26406dd02acf8c0762468ac",
+      "wall_seconds": 384.32169620899367,
+      "cpu_seconds": 76.239706,
+      "errors": [
+        "TimeoutError: collector exceeded training deadline"
+      ],
+      "config": {
+        "version": "learnability-2",
+        "seeds": [
+          17,
+          29,
+          43
+        ],
+        "updates": 240,
+        "learning_rate": 0.003,
+        "hidden_dim": 32,
+        "probability": 0.9,
+        "invariance_tolerance": 0.0001,
+        "timeout_seconds": 480,
+        "ppo_timeout_seconds": 300,
+        "ppo": true
+      }
+    },
+    "learnability_path": ".runs/learnability/rules-targeting-w12",
+    "bounded_results": {
+      "targeting_debug": "8 passed; separate trigger-order proposal ignored",
+      "conformance_debug": "6 passed; new 14-case/3491-Command/15-Phase-row corpus",
+      "dependency_blocked_play_and_study_protocol": "17 passed",
+      "command_recovery": "8 passed; initial 3 demo identity failures repaired",
+      "decision_surface": "4 passed after fresh w12 demo recording",
+      "tooling_and_boundaries": "44 passed",
+      "arena_models_and_mirror_admission": "11 individual cases passed across bounded chunks",
+      "study_runtime": "3/4 cases passed before timeout; semantic retry remains",
+      "study_branch": "7 cases remain after first case timed out",
+      "monitor": "16/20 cases passed before timeout; random, explicit matrix, saved admission failure and dashboard remain"
+    },
+    "frozen_evidence": "git diff --exit-code HEAD -- conformance/semantic-kernel-w11-v1 protocol/fixtures academy/fixtures/*w11.json passed",
+    "lint_and_inventory": "Ruff, cargo fmt --check, git diff --check and exact 3322-row source agreement pass",
+    "limitations": [
+      "No full conformance or strength certification.",
+      "Learnability captured the targeting runtime before the later Academy demo fixture refresh; native/training behavior did not change afterward.",
+      "Timeouts remain failures; no timeout increase or assertion weakening.",
+      "Payment and missing trigger-order choice remain separate findings."
+    ]
+  }
 }
