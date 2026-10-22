@@ -108,3 +108,7 @@ def test_invalid_evaluation_retains_failure_and_cancels(
     assert retained.points[0].valid == 3
     assert retained.error is not None
     assert cancellations == [False, True]
+    live.operate(config, retained, tmp_path / "ledger.json")
+    assert cancellations == [False, True, True]
+    assert not retained.settled
+    assert retained.error is not None

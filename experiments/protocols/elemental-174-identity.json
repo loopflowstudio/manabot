@@ -848,7 +848,7 @@
     "experiments/protocols/elemental-174-cohorts.json": "fa861c722c2b3c2ecb96ed4f01d8c648cde52c96e536fff26942a052a300f4df",
     "experiments/runners/elemental_eval.py": "13c9fdd49427094322c2929cd07de598cba0dcbfc194d665d0fd32d7dc999acb",
     "experiments/runners/elemental_games.py": "4e51acc756fc6db61f13cf58e53ea40eb2f4e08ae9f79d6cc6b39989254608d0",
-    "experiments/runners/elemental_live.py": "a0153c97e8fb95a0a5406025d3ea60f7455170b58f9a4e70029104589305644f",
+    "experiments/runners/elemental_live.py": "17d38225e3878a78b225bcc4ba08a5e8a443bb90313cc9736d4d2f22e3b9395f",
     "experiments/runners/elemental_remote.py": "fe31deeb930c8c249f868198bef2649cc190cea1c65a86b5aed80931187b2f74"
   },
   "seed": 17402,

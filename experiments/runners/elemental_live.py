@@ -189,6 +189,20 @@ def _refresh(config: Config, point: Point) -> None:
 
 
 def operate(config: Config, ledger: Ledger, path: Path) -> None:
+    if ledger.error is not None:
+        # A service restart cannot turn a retained failed evaluation into a
+        # successful campaign by skipping it and launching later checkpoints.
+        observation = _remote(config, cancel=True)
+        remote = observation["status"]
+        ledger.observed_at = observation["observed_at"]
+        ledger.cleanup_confirmed = remote["cleanup"] is not None
+        if remote["cleanup"]:
+            ledger.inclusive_cost = remote["cleanup"]["estimated_dollars"]
+        _save(path, ledger)
+        _report(config, ledger)
+        if not ledger.cleanup_confirmed:
+            raise RuntimeError("failed campaign cancellation awaits confirmed cleanup")
+        return
     while time.time() < config.deadline and not ledger.settled:
         try:
             observation = _remote(config)
@@ -264,8 +278,12 @@ def operate(config: Config, ledger: Ledger, path: Path) -> None:
             ledger.settled = (
                 terminal
                 and ledger.cleanup_confirmed
+                and initial is not None
                 and bool(ledger.points)
                 and all(p.phase == "done" for p in ledger.points)
+                and {"final-initial", "final-greedy", "initial-greedy"}.issubset(
+                    {p.cohort for p in ledger.points}
+                )
             )
             ledger.error = None
         except Exception as error:
