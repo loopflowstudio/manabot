@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
+import sys
 
 import pytest
 
@@ -72,3 +75,37 @@ def test_committed_inventory_is_complete_unique_and_evidence_is_honest() -> None
 def test_source_digest_change_is_rejected() -> None:
     with pytest.raises(ValueError, match="source digest"):
         audit_rules.build(b"different bytes", {"sha256": "0" * 64}, {})
+
+
+def test_write_rejects_stale_evidence_before_replacing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = _source("704. State-Based Actions")
+    source = tmp_path / "rules.txt"
+    source.write_bytes(raw)
+    metadata: audit_rules.Metadata = {
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "numbered_entries": 2,
+        "ordered_ids_sha256": hashlib.sha256(b"1\n704").hexdigest(),
+    }
+    reviews: audit_rules.Reviews = {
+        "profiles": {
+            "unresolved": {"scope": "unreviewed", "anchors": ["rules.txt::absent"]}
+        },
+        "families": {},
+        "rules": {},
+    }
+    (tmp_path / "source.json").write_text(json.dumps(metadata))
+    (tmp_path / "reviews.json").write_text(json.dumps(reviews))
+    target = tmp_path / "index.jsonl"
+    target.write_text("retained inventory\n")
+    monkeypatch.setattr(audit_rules, "ROOT", tmp_path)
+    monkeypatch.setattr(audit_rules, "DIRECTORY", tmp_path)
+    monkeypatch.setattr(
+        sys, "argv", ["audit_rules", "--source", str(source), "--write"]
+    )
+
+    with pytest.raises(ValueError, match="stale evidence anchor"):
+        audit_rules.main()
+
+    assert target.read_text() == "retained inventory\n"

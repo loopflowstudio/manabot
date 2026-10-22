@@ -63,9 +63,10 @@ percentage would be misleading.
 
 ## What this suggests doing next
 
-Repair the demonstrated shared-targeting inconsistency first, with new-world
-and admission evidence. Then restore missing player choices for trigger and
-replacement ordering through the shared native decision surface. Continue
+Finish the targeting repair's remaining Study and monitor acceptance checks;
+the w12 correction and full learnability diagnostic are already retained. Then
+restore missing player choices for trigger and replacement ordering through the
+shared native decision surface. Continue
 reviewing current-card interactions before expanding formats or building a
 general engine for unused mechanics. Keep closing evidence gaps in strong
 subsets too: agreement between consumers cannot rule out a shared rules bug.

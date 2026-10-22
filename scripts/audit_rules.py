@@ -181,6 +181,8 @@ def main() -> None:
     parser.add_argument("--source", type=Path, help="exact downloaded Wizards TXT")
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
+    if args.write and args.source is None:
+        parser.error("--write requires --source")
     # JSON is untyped at this local artifact boundary; validate structure and
     # evidence below, then compare all generated rows when source is supplied.
     metadata = cast(Metadata, json.loads((DIRECTORY / "source.json").read_text()))
@@ -188,6 +190,11 @@ def main() -> None:
     target = DIRECTORY / "index.jsonl"
     if args.source:
         rows = build(args.source.read_bytes(), metadata, reviews)
+    else:
+        rows = [cast(Row, json.loads(line)) for line in target.read_text().splitlines()]
+    # Validate before replacing the committed inventory, including its anchors.
+    validate(rows, metadata, reviews)
+    if args.source:
         output = "".join(
             json.dumps(row, ensure_ascii=True, separators=(",", ":")) + "\n"
             for row in rows
@@ -196,11 +203,6 @@ def main() -> None:
             target.write_text(output)
         elif target.read_text() != output:
             raise ValueError("index differs from pinned source and authored reviews")
-    elif args.write:
-        parser.error("--write requires --source")
-    else:
-        rows = [cast(Row, json.loads(line)) for line in target.read_text().splitlines()]
-    validate(rows, metadata, reviews)
     print(
         json.dumps(
             {
