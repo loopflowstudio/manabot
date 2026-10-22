@@ -400,3 +400,12 @@ needed. Inputlayout retained-N/{track,evaluations,ledger.json}; datareceiptarchi
 hashreadbackusualS3ArtifactStore. `publish-correction.py` isone-offforfirstthree
 points; donotrerunfuturevalidnativepointsthroughlegacybenchmark. `correct-labels.py`
 isretainedreproducibleprojectionproof, notnewtrainingorinference.
+
+
+Publication verified: PR330head901c7752df0e047f5bb680736a6f45141ae20c62 includes
+allthreepointsandexplicitcorrection. Follow-upreviewcaught final-endpoint explicit
+retryneededclearing settled_jobs cursor; fixed in901c7752. Idle queueconfirmed
+(all600gamesfinished, noactiveeval) beforeONLYevaluationobserverwasbootedoutand
+updatedto901c7752. Policy/tablecode remains9467dd9, so correctedEtudebenchmark
+identitiesstaystable. Sourceworkerfabb/controller4ffandcohortPID76098 untouched.
+Goalstillactive; final$50 endpoint/cleanup/costreportnotachieved.

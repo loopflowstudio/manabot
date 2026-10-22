@@ -279,7 +279,8 @@ with byte-verified readback at SHA-256
 The prior Etude cross-deck subgroup labels are superseded; the original monitor
 comparison earlier in this report used the correct deck assignments.
 
-The Mini observer is now pinned to `9467dd9d0`. Besides regular milestones, it
+The Mini observer now runs `901c7752d`, including the corrected evaluator
+introduced at `9467dd9d0`. Besides regular milestones, it
 queues committed final raw exports from paused/completed training stages,
 including budget endpoints between milestones. It refreshes small training
 observations during evaluations and shows their age separately from page time.
