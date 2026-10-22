@@ -484,7 +484,9 @@ def evaluate_checkpoint(
     process = psutil.Process()
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
-        result = checkpoint_manifest(run, artifact, coordinates, protocol or MonitorProtocol())
+        result = checkpoint_manifest(
+            run, artifact, coordinates, protocol or MonitorProtocol()
+        )
     except Exception as exc:
         atomic_json(
             output_dir / "admission-failure.json",
