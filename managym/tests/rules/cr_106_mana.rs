@@ -75,3 +75,63 @@ fn cr_106_negative_spell_not_available_without_mana() {
 
     s.assert_action_not_available(ActionType::PriorityCastSpell);
 }
+
+/// CR 107.4b/c and 118.3: a generic cost accepts any mana; C requires
+/// colorless. Exhaust all 0/1 six-type pools against one fixed pip and 0..2
+/// generic. The oracle is integer resource counting, independent of payment.
+#[test]
+fn audit_generic_and_specific_mana_boundary_matrix() {
+    use managym::state::mana::{Mana, ManaCost};
+
+    for bits in 0_u8..64 {
+        let pool = Mana {
+            mana: std::array::from_fn(|slot| (bits >> slot) & 1),
+            ..Mana::default()
+        };
+        for (slot, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
+            for generic in 0..=2 {
+                let cost = ManaCost::parse(&format!("{generic}{symbol}"));
+                let expected = pool.mana[slot] == 1 && bits.count_ones() >= generic + 1;
+                assert_eq!(
+                    pool.can_pay(&cost),
+                    expected,
+                    "bits={bits}, cost={generic}{symbol}"
+                );
+                if expected {
+                    let mut remaining = pool.clone();
+                    remaining.pay(&cost);
+                    assert_eq!(remaining.total(), pool.total() - generic as u16 - 1);
+                    assert_eq!(remaining.mana[slot], 0);
+                    assert!(remaining
+                        .mana
+                        .iter()
+                        .zip(pool.mana)
+                        .all(|(left, before)| *left <= before));
+                }
+            }
+        }
+    }
+}
+
+/// CR 106.6: spending restrictions survive storage and cannot pay an
+/// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
+#[test]
+fn audit_restricted_mana_never_pays_unrelated_costs() {
+    use managym::state::mana::{Mana, ManaCost};
+
+    for slot in 0..6 {
+        for eligible in [false, true] {
+            let mut pool = Mana::default();
+            pool.lesson[slot] = 1;
+            let mut cost = ManaCost::parse("1");
+            cost.spend_on_lesson = eligible;
+            assert_eq!(pool.can_pay(&cost), eligible);
+            if eligible {
+                pool.pay(&cost);
+                assert_eq!(pool.total(), 0);
+            }
+            pool.clear();
+            assert_eq!(pool, Mana::default());
+        }
+    }
+}

@@ -100,7 +100,8 @@ impl Game {
                 zones.move_card(card, player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
-            // CR 103.4, 103.5 — Each player shuffles then draws an opening hand of seven cards.
+            // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
+            // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
                 if let Some(card) = zones.top(ZoneType::Library, player) {
                     zones.move_card(card, player, ZoneType::Hand);

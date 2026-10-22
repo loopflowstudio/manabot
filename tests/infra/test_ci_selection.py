@@ -29,6 +29,8 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
 
 @pytest.mark.parametrize(('path', 'expected'), [
     ('docs/design.md', set()),
+    ('docs/rules/audit-2026-10/index.jsonl', {'python_unit'}),
+    ('scripts/audit_rules.py', {'python_unit'}),
     ('docs/rules/elemental/decks.json', {'academy_integration'}),
     ('academy/README.md', set()),
     ('scratch/notes.md', set()),

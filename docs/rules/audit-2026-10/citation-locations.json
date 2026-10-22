@@ -1,0 +1,447 @@
+{
+  "warning": "Mechanical exact-number retrieval only from the draft checkout; may be stale, wrong or overly broad. NEVER used to assign status or ownership. Reviewed anchors live in reviews.json.",
+  "locations": {
+    "508": [
+      "managym/src/agent/structured_offer.rs:398",
+      "managym/src/agent/structured_offer.rs:1156"
+    ],
+    "702.21": [
+      "managym/src/cardsets/alpha.rs:174",
+      "managym/src/flow/event.rs:86",
+      "managym/src/flow/play.rs:564",
+      "managym/src/state/card.rs:315"
+    ],
+    "605.1b": [
+      "managym/src/cardsets/tla.rs:385",
+      "managym/src/flow/zones.rs:163",
+      "managym/src/state/card.rs:106"
+    ],
+    "603.4": [
+      "managym/src/cardsets/tla.rs:499",
+      "managym/src/flow/triggers.rs:527",
+      "managym/src/state/ability.rs:81"
+    ],
+    "508.1f": [
+      "managym/src/flow/combat_actions.rs:52"
+    ],
+    "608.2m": [
+      "managym/src/flow/decision.rs:22",
+      "managym/src/flow/resolution.rs:59"
+    ],
+    "701.26": [
+      "managym/src/flow/decision.rs:167",
+      "managym/src/state/ability.rs:316"
+    ],
+    "704.5j": [
+      "managym/src/flow/decision.rs:202"
+    ],
+    "117.3b": [
+      "managym/src/flow/decision.rs:315"
+    ],
+    "701.26b": [
+      "managym/src/flow/decision.rs:974"
+    ],
+    "508.1": [
+      "managym/src/flow/event.rs:93",
+      "managym/src/flow/tick.rs:190",
+      "managym/src/flow/tick.rs:258",
+      "managym/src/state/ability.rs:49",
+      "managym/tests/rules/cr_508_attackers.rs:5",
+      "managym/tests/rules/cr_508_attackers.rs:44"
+    ],
+    "400.7": [
+      "managym/src/flow/game.rs:38",
+      "managym/src/state/game_object.rs:44",
+      "managym/tests/rules/cr_603_triggers.rs:200",
+      "managym/tests/rules/cr_704_sba.rs:282"
+    ],
+    "601.2b": [
+      "managym/src/flow/game.rs:105",
+      "managym/src/flow/play.rs:187",
+      "managym/src/state/card.rs:397"
+    ],
+    "601.2c": [
+      "managym/src/flow/game.rs:113"
+    ],
+    "106.3": [
+      "managym/src/flow/mana.rs:411",
+      "managym/tests/rules/cr_106_mana.rs:9"
+    ],
+    "106.4": [
+      "managym/src/flow/mana.rs:472",
+      "managym/src/flow/tick.rs:160",
+      "managym/src/state/mana.rs:370",
+      "managym/tests/rules/cr_106_mana.rs:50"
+    ],
+    "117.1a": [
+      "managym/src/flow/play.rs:33",
+      "managym/src/flow/play.rs:41",
+      "managym/src/flow/turn.rs:106",
+      "managym/src/state/card.rs:392",
+      "managym/tests/rules/cr_601_casting.rs:46",
+      "managym/tests/rules/cr_601_casting.rs:69"
+    ],
+    "307.1": [
+      "managym/src/flow/play.rs:33",
+      "managym/src/flow/turn.rs:106",
+      "managym/tests/rules/cr_601_casting.rs:46",
+      "managym/tests/rules/cr_601_casting.rs:69"
+    ],
+    "305.1": [
+      "managym/src/flow/play.rs:46",
+      "managym/tests/rules/cr_305_lands.rs:9",
+      "managym/tests/rules/cr_305_lands.rs:37"
+    ],
+    "305.2": [
+      "managym/src/flow/play.rs:46",
+      "managym/src/flow/play.rs:136",
+      "managym/src/flow/turn.rs:136",
+      "managym/tests/rules/cr_305_lands.rs:25",
+      "managym/tests/rules/cr_305_lands.rs:47"
+    ],
+    "601.2f": [
+      "managym/src/flow/play.rs:75"
+    ],
+    "601.2i": [
+      "managym/src/flow/play.rs:558",
+      "managym/tests/rules/cr_601_casting.rs:22"
+    ],
+    "601.2h": [
+      "managym/src/flow/play.rs:1127"
+    ],
+    "602.2b": [
+      "managym/src/flow/play.rs:1127"
+    ],
+    "614.1a": [
+      "managym/src/flow/proposed_event.rs:76",
+      "managym/tests/rules/ur_lessons_increment.rs:371"
+    ],
+    "608.2b": [
+      "managym/src/flow/resolution.rs:80",
+      "managym/tests/rules/cr_603_triggers.rs:167",
+      "managym/tests/rules/cr_603_triggers.rs:200"
+    ],
+    "113.7a": [
+      "managym/src/flow/resolution.rs:130"
+    ],
+    "704.5c": [
+      "managym/src/flow/resolution.rs:604",
+      "managym/tests/rules/interaction_spells.rs:41"
+    ],
+    "704.5g": [
+      "managym/src/flow/resolution.rs:616",
+      "managym/src/flow/sba.rs:100",
+      "managym/src/flow/sba.rs:130",
+      "managym/src/flow/statics.rs:182",
+      "managym/tests/rules/cr_704_sba.rs:95",
+      "managym/tests/rules/cr_704_sba.rs:174",
+      "managym/tests/rules/tla_cards.rs:290"
+    ],
+    "603.7": [
+      "managym/src/flow/resolution.rs:817",
+      "managym/src/flow/trigger.rs:28",
+      "managym/tests/rules/cr_704_sba.rs:282"
+    ],
+    "603.6e": [
+      "managym/src/flow/resolution.rs:852",
+      "managym/src/flow/trigger.rs:47",
+      "managym/src/state/ability.rs:383",
+      "managym/tests/rules/stage3_cards.rs:502"
+    ],
+    "702.11": [
+      "managym/src/flow/resolution.rs:1020",
+      "managym/src/state/card.rs:129"
+    ],
+    "704.3": [
+      "managym/src/flow/sba.rs:35",
+      "managym/src/flow/sba.rs:123",
+      "managym/src/flow/stabilization.rs:3",
+      "managym/src/flow/stabilization.rs:11",
+      "managym/src/flow/stabilization.rs:26",
+      "managym/src/flow/triggers.rs:17",
+      "managym/tests/rules/cr_603_triggers.rs:244",
+      "managym/tests/rules/cr_704_sba.rs:127",
+      "managym/tests/rules/cr_704_sba.rs:155",
+      "managym/tests/rules/cr_704_sba.rs:174",
+      "managym/tests/rules/cr_704_sba.rs:228",
+      "managym/tests/rules/cr_704_sba.rs:328"
+    ],
+    "704.5a": [
+      "managym/src/flow/sba.rs:72",
+      "managym/tests/rules/cr_704_sba.rs:67",
+      "managym/tests/rules/cr_704_sba.rs:155"
+    ],
+    "704.5b": [
+      "managym/src/flow/sba.rs:72",
+      "managym/tests/rules/cr_704_sba.rs:81"
+    ],
+    "704.5f": [
+      "managym/src/flow/sba.rs:95",
+      "managym/src/flow/sba.rs:134",
+      "managym/tests/rules/cr_704_sba.rs:174",
+      "managym/tests/rules/cr_704_sba.rs:356",
+      "managym/tests/rules/stage3_cards.rs:368"
+    ],
+    "704.5d": [
+      "managym/src/flow/sba.rs:151",
+      "managym/src/flow/zones.rs:190",
+      "managym/src/state/card.rs:328",
+      "managym/src/state/zone.rs:154",
+      "managym/tests/rules/tla_cards.rs:484"
+    ],
+    "103.3": [
+      "managym/src/flow/setup.rs:103",
+      "managym/tests/rules/cr_103_game_start.rs:7"
+    ],
+    "103.5": [
+      "managym/src/flow/setup.rs:103",
+      "managym/tests/rules/cr_103_game_start.rs:7"
+    ],
+    "117.5": [
+      "managym/src/flow/stabilization.rs:3",
+      "managym/src/flow/stabilization.rs:11",
+      "managym/tests/rules/cr_603_triggers.rs:244",
+      "managym/tests/rules/cr_704_sba.rs:127",
+      "managym/tests/rules/cr_704_sba.rs:328"
+    ],
+    "603.3": [
+      "managym/src/flow/stabilization.rs:46",
+      "managym/tests/rules/cr_603_triggers.rs:104",
+      "managym/tests/rules/cr_603_triggers.rs:244",
+      "managym/tests/rules/cr_704_sba.rs:127",
+      "managym/tests/rules/tla_cards.rs:135"
+    ],
+    "603.3b": [
+      "managym/src/flow/stabilization.rs:46",
+      "managym/tests/rules/cr_603_triggers.rs:121"
+    ],
+    "613.4": [
+      "managym/src/flow/statics.rs:5"
+    ],
+    "613.4a": [
+      "managym/src/flow/statics.rs:6"
+    ],
+    "613.4c": [
+      "managym/src/flow/statics.rs:15"
+    ],
+    "514.3a": [
+      "managym/src/flow/tick.rs:147",
+      "managym/src/flow/turn.rs:114",
+      "managym/tests/rules/ur_lessons_increment.rs:323"
+    ],
+    "507.1": [
+      "managym/src/flow/tick.rs:185"
+    ],
+    "509.1": [
+      "managym/src/flow/tick.rs:198",
+      "managym/tests/rules/cr_509_blockers.rs:16"
+    ],
+    "511.3": [
+      "managym/src/flow/tick.rs:211"
+    ],
+    "502.2": [
+      "managym/src/flow/tick.rs:236"
+    ],
+    "504.1": [
+      "managym/src/flow/tick.rs:243"
+    ],
+    "510.1": [
+      "managym/src/flow/tick.rs:358"
+    ],
+    "514.2": [
+      "managym/src/flow/tick.rs:381",
+      "managym/tests/rules/cr_514_cleanup.rs:44",
+      "managym/tests/rules/cr_514_cleanup.rs:51"
+    ],
+    "608.2": [
+      "managym/src/flow/tick.rs:393"
+    ],
+    "117.4": [
+      "managym/src/flow/tick.rs:413",
+      "managym/tests/rules/cr_117_priority.rs:20"
+    ],
+    "405.2": [
+      "managym/src/flow/tick.rs:413"
+    ],
+    "603.6c": [
+      "managym/src/flow/triggers.rs:17",
+      "managym/src/flow/triggers.rs:431",
+      "managym/tests/rules/cr_704_sba.rs:228"
+    ],
+    "702.21a": [
+      "managym/src/flow/triggers.rs:631"
+    ],
+    "500.1": [
+      "managym/src/flow/turn.rs:8",
+      "managym/src/flow/turn.rs:35"
+    ],
+    "501": [
+      "managym/src/flow/turn.rs:19"
+    ],
+    "514": [
+      "managym/src/flow/turn.rs:19"
+    ],
+    "502.4": [
+      "managym/src/flow/turn.rs:114"
+    ],
+    "701.21": [
+      "managym/src/flow/zones.rs:20"
+    ],
+    "603.10": [
+      "managym/src/flow/zones.rs:140"
+    ],
+    "508.4a": [
+      "managym/src/flow/zones.rs:219"
+    ],
+    "603.1": [
+      "managym/src/state/ability.rs:21"
+    ],
+    "700.4": [
+      "managym/src/state/ability.rs:44"
+    ],
+    "702.33": [
+      "managym/src/state/ability.rs:353",
+      "managym/src/state/card.rs:313",
+      "managym/src/state/stack_object.rs:20"
+    ],
+    "702.8": [
+      "managym/src/state/card.rs:119",
+      "managym/src/state/card.rs:392"
+    ],
+    "604.3": [
+      "managym/src/state/card.rs:157"
+    ],
+    "613.3c": [
+      "managym/src/state/card.rs:181"
+    ],
+    "614": [
+      "managym/src/state/card.rs:193"
+    ],
+    "616": [
+      "managym/src/state/card.rs:193"
+    ],
+    "614.1c": [
+      "managym/src/state/card.rs:207",
+      "managym/src/state/card.rs:209",
+      "managym/tests/rules/cr_614_replacement.rs:155"
+    ],
+    "702.177": [
+      "managym/src/state/card.rs:263"
+    ],
+    "111.7": [
+      "managym/src/state/card.rs:328"
+    ],
+    "122": [
+      "managym/src/state/permanent.rs:18"
+    ],
+    "103.4": [
+      "managym/tests/rules/cr_103_game_start.rs:16"
+    ],
+    "107.4b": [
+      "managym/tests/rules/cr_106_mana.rs:79"
+    ],
+    "118.3": [
+      "managym/tests/rules/cr_106_mana.rs:79",
+      "managym/tests/rules/temur_cards.rs:582"
+    ],
+    "106.6": [
+      "managym/tests/rules/cr_106_mana.rs:116"
+    ],
+    "117.3a": [
+      "managym/tests/rules/cr_117_priority.rs:9"
+    ],
+    "405.1": [
+      "managym/tests/rules/cr_405_stack.rs:12"
+    ],
+    "405.5": [
+      "managym/tests/rules/cr_405_stack.rs:44"
+    ],
+    "405": [
+      "managym/tests/rules/cr_405_stack.rs:63",
+      "managym/tests/rules/interaction_spells.rs:106"
+    ],
+    "510.1c": [
+      "managym/tests/rules/cr_510_combat_damage.rs:5"
+    ],
+    "510.1a": [
+      "managym/tests/rules/cr_510_combat_damage.rs:18"
+    ],
+    "514.1": [
+      "managym/tests/rules/cr_514_cleanup.rs:51"
+    ],
+    "601.2": [
+      "managym/tests/rules/cr_601_casting.rs:9"
+    ],
+    "608.3": [
+      "managym/tests/rules/cr_601_casting.rs:22"
+    ],
+    "602": [
+      "managym/tests/rules/cr_602_activated_abilities.rs:26"
+    ],
+    "603.6a": [
+      "managym/tests/rules/cr_603_triggers.rs:86"
+    ],
+    "117.3d": [
+      "managym/tests/rules/cr_603_triggers.rs:104",
+      "managym/tests/rules/tla_cards.rs:135"
+    ],
+    "615.1": [
+      "managym/tests/rules/cr_614_replacement.rs:81"
+    ],
+    "616.1": [
+      "managym/tests/rules/cr_614_replacement.rs:103"
+    ],
+    "702.9": [
+      "managym/tests/rules/cr_702_keywords.rs:20",
+      "managym/tests/rules/cr_702_keywords.rs:46"
+    ],
+    "702.17": [
+      "managym/tests/rules/cr_702_keywords.rs:69"
+    ],
+    "702.10": [
+      "managym/tests/rules/cr_702_keywords.rs:115"
+    ],
+    "702.20": [
+      "managym/tests/rules/cr_702_keywords.rs:143"
+    ],
+    "702.3": [
+      "managym/tests/rules/cr_702_keywords.rs:179"
+    ],
+    "702.19": [
+      "managym/tests/rules/cr_702_keywords.rs:243"
+    ],
+    "702.2": [
+      "managym/tests/rules/cr_702_keywords.rs:302"
+    ],
+    "702.15": [
+      "managym/tests/rules/cr_702_keywords.rs:343"
+    ],
+    "702.111": [
+      "managym/tests/rules/cr_702_keywords.rs:373"
+    ],
+    "509.1b": [
+      "managym/tests/rules/cr_702_keywords.rs:373"
+    ],
+    "702.7": [
+      "managym/tests/rules/cr_702_keywords.rs:419"
+    ],
+    "702.4": [
+      "managym/tests/rules/cr_702_keywords.rs:461"
+    ],
+    "702.12b": [
+      "managym/tests/rules/cr_704_sba.rs:356"
+    ],
+    "121.1": [
+      "managym/tests/rules/interaction_spells.rs:15"
+    ],
+    "603.3d": [
+      "managym/tests/rules/stage3_cards.rs:228"
+    ],
+    "605.3a": [
+      "managym/tests/rules/temur_cards.rs:582"
+    ],
+    "608.2h": [
+      "managym/tests/rules/ur_lessons_increment.rs:192"
+    ]
+  }
+}

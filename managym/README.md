@@ -80,6 +80,19 @@ uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
 
+The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+inventories every numbered entry, with explicit unknowns and scoped evidence.
+Card-shell checks and replay agreement do not independently prove rules
+correctness. Prefer directed tests with independently specified outcomes and
+small bounded combinations before adding longer random-game cohorts.
+
+Check the committed inventory offline from the repository root with
+`uv run python scripts/audit_rules.py`. Supplying `--source <downloaded-txt>`
+also checks the pinned byte digest and exact source inventory. Do not upgrade
+child rules merely because their family has a test or a matching citation.
+The explicitly ignored Prism/Treasure audit probe records an unresolved
+MTG-174 payment defect; it is not passing conformance evidence.
+
 ## Style
 
 ```rust

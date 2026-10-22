@@ -1,0 +1,456 @@
+{
+  "scope": "Local bounded checks, not a whole-repository pass. Rust dev optimization 1 retains debug assertions. Release native rebuilds are separately labeled.",
+  "limits": {
+    "cold_build_seconds": 900,
+    "warm_rust_seconds": 180,
+    "python_seconds": 120,
+    "cargo_build_jobs_per_command": 2,
+    "mana_matrix_cases": 1152,
+    "restricted_mana_contexts": 12,
+    "sba_matrix_cases": 192
+  },
+  "receipts": [
+    {
+      "label": "final-checks",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "pytest",
+        "tests/infra/test_rules_inventory.py",
+        "tests/infra/test_ci_selection.py",
+        "tests/test_package_boundaries.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 7.456,
+      "exit_code": 0,
+      "log": "scratch/final-checks.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "............................................                             [100%]\n44 passed in 5.20s\n"
+    },
+    {
+      "label": "final-diff-whitespace",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.021,
+      "exit_code": 0,
+      "log": "scratch/final-diff-whitespace.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": ""
+    },
+    {
+      "label": "final-inventory-integrity",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.074,
+      "exit_code": 0,
+      "log": "scratch/final-inventory-integrity.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "{\"numbered_entries\": 3322, \"statuses\": {\"implemented\": 3, \"missing\": 2, \"not_applicable\": 322, \"partial\": 21, \"unknown\": 2974}}\n"
+    },
+    {
+      "label": "final-native-import",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scratch/install_native.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.288,
+      "exit_code": 0,
+      "log": "scratch/final-native-import.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "Native import succeeded: /Users/jack/src/manabot.rules-audit/managym/__init__.py\n"
+    },
+    {
+      "label": "final-python-lint",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "ruff",
+        "check",
+        "scripts/audit_rules.py",
+        "tests/infra/test_rules_inventory.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.143,
+      "exit_code": 0,
+      "log": "scratch/final-python-lint.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "All checks passed!\n"
+    },
+    {
+      "label": "final-rust-format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--check"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.545,
+      "exit_code": 0,
+      "log": "scratch/final-rust-format.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": ""
+    },
+    {
+      "label": "final-selector-syntax",
+      "command": [
+        "bash",
+        "-n",
+        ".github/ci/select-tests.sh"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.005,
+      "exit_code": 0,
+      "log": "scratch/final-selector-syntax.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": ""
+    },
+    {
+      "label": "final-source-index",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.146,
+      "exit_code": 0,
+      "log": "scratch/final-source-index.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "{\"numbered_entries\": 3322, \"statuses\": {\"implemented\": 3, \"missing\": 2, \"not_applicable\": 322, \"partial\": 21, \"unknown\": 2974}}\n"
+    },
+    {
+      "label": "native-final-comments",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "play",
+        "maturin",
+        "build",
+        "--release",
+        "-i",
+        ".venv/bin/python",
+        "-m",
+        "managym/Cargo.toml",
+        "-o",
+        "managym/target/wheels"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 69.628,
+      "exit_code": 0,
+      "log": "scratch/native-final-comments.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": false,
+      "output_tail": "\ud83c\udf79 Building a mixed python/rust project\n\ud83d\udc0d Found CPython 3.12 at /Users/jack/src/manabot.rules-audit/.venv/bin/python\n\ud83d\udd17 Found pyo3 bindings\n\ud83d\udce1 Using build options features from pyproject.toml\n\ud83d\udcbb Using `MACOSX_DEPLOYMENT_TARGET=11.0` for aarch64-apple-darwin by default\n   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `release` profile [optimized] target(s) in 1m 09s\n\u26a0\ufe0f Warning: A file was excluded from the archive by the target path in the archive\n\u26a0\ufe0f instead of the source path on the filesystem. This behavior is deprecated and\n\u26a0\ufe0f will be removed in future versions of maturin.\n\ud83d\udce6 Built wheel for CPython 3.12 to managym/target/wheels/managym-0.2.0-cp312-cp312-macosx_11_0_arm64.whl\n"
+    },
+    {
+      "label": "native-wheel-with-play",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "play",
+        "maturin",
+        "build",
+        "--release",
+        "-i",
+        ".venv/bin/python",
+        "-m",
+        "managym/Cargo.toml",
+        "-o",
+        "managym/target/wheels"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 78.495,
+      "exit_code": 0,
+      "log": "scratch/native-wheel-with-play.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": false,
+      "note": "Release wheel rebuild required after comment-only Rust edits; debug rules validation is separate.",
+      "output_tail": "Installed 1 package in 5ms\n\ud83c\udf79 Building a mixed python/rust project\n\ud83d\udc0d Found CPython 3.12 at /Users/jack/src/manabot.rules-audit/.venv/bin/python\n\ud83d\udd17 Found pyo3 bindings\n\ud83d\udce1 Using build options features from pyproject.toml\n\ud83d\udcbb Using `MACOSX_DEPLOYMENT_TARGET=11.0` for aarch64-apple-darwin by default\n   Compiling target-lexicon v0.12.16\n   Compiling proc-macro2 v1.0.106\n   Compiling unicode-ident v1.0.24\n   Compiling quote v1.0.46\n   Compiling pyo3-build-config v0.22.6\n   Compiling once_cell v1.21.4\n   Compiling syn v2.0.119\n   Compiling libc v0.2.186\n   Compiling version_check v0.9.5\n   Compiling cfg-if v1.0.4\n   Compiling generic-array v0.14.7\n   Compiling typenum v1.20.1\n   Compiling serde_core v1.0.228\n   Compiling zerocopy v0.8.54\n   Compiling pyo3-macros-backend v0.22.6\n   Compiling pyo3-ffi v0.22.6\n   Compiling autocfg v1.5.1\n   Compiling find-msvc-tools v0.1.9\n   Compiling shlex v2.0.1\n   Compiling zmij v1.0.23\n   Compiling memoffset v0.9.1\n   Compiling cc v1.2.67\n   Compiling getrandom v0.2.17\n   Compiling ref-cast v1.0.25\n   Compiling serde_json v1.0.150\n   Compiling serde v1.0.228\n   Compiling heck v0.5.0\n   Compiling ppv-lite86 v0.2.21\n   Compiling rand_core v0.6.4\n   Compiling blake3 v1.8.5\n   Compiling crypto-common v0.1.7\n   Compiling block-buffer v0.10.4\n   Compiling serde_derive v1.0.228\n   Compiling ref-cast-impl v1.0.25\n   Compiling serde_derive_internals v0.29.1\n   Compiling pyo3 v0.22.6\n   Compiling itoa v1.0.18\n   Compiling memchr v2.8.3\n   Compiling schemars_derive v1.2.1\n   Compiling pyo3-macros v0.22.6\n   Compiling digest v0.10.7\n   Compiling rand_chacha v0.3.1\n   Compiling cpufeatures v0.2.17\n   Compiling arrayref v0.3.9\n   Compiling constant_time_eq v0.4.2\n   Compiling arrayvec v0.7.8\n   Compiling dyn-clone v1.0.20\n   Compiling indoc v2.0.7\n   Compiling unindent v0.2.4\n   Compiling schemars v1.2.1\n   Compiling sha2 v0.10.9\n   Compiling rand v0.8.7\n   Compiling base64 v0.22.1\n   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `release` profile [optimized] target(s) in 1m 16s\n\u26a0\ufe0f Warning: A file was excluded from the archive by the target path in the archive\n\u26a0\ufe0f instead of the source path on the filesystem. This behavior is deprecated and\n\u26a0\ufe0f will be removed in future versions of maturin.\n\ud83d\udce6 Built wheel for CPython 3.12 to managym/target/wheels/managym-0.2.0-cp312-cp312-macosx_11_0_arm64.whl\n"
+    },
+    {
+      "label": "native-wheel",
+      "command": [
+        "uv",
+        "run",
+        "maturin",
+        "build",
+        "--release",
+        "-i",
+        ".venv/bin/python",
+        "-m",
+        "managym/Cargo.toml",
+        "-o",
+        "managym/target/wheels"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 0.089,
+      "exit_code": 2,
+      "log": "scratch/native-wheel.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": false,
+      "output_tail": "error: Failed to spawn: `maturin`\n  cause: No such file or directory (os error 2)\n",
+      "interpretation": "Provisioning failure: maturin absent; repaired with play extra. Retained as failed cost."
+    },
+    {
+      "label": "prism-known-failure",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "audit_prism_treasure_empty_pool_activation",
+        "--",
+        "--ignored",
+        "--exact"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 15.335,
+      "exit_code": 0,
+      "log": "scratch/prism-known-failure.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [optimized + debuginfo] target(s) in 14.91s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.00s\n\n",
+      "interpretation": "Zero-test exact-name filter mistake; no behavioral evidence. Corrected full-path invocations follow."
+    },
+    {
+      "label": "prism-reproduced",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "rules::temur_cards::audit_prism_treasure_empty_pool_activation",
+        "--",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.14,
+      "exit_code": 101,
+      "log": "scratch/prism-reproduced.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 1 test\n\nthread 'rules::temur_cards::audit_prism_treasure_empty_pool_activation' (91909141) panicked at tests/rules/helpers.rs:250:31:\nscenario step should succeed: AgentError(\"illegal mana activation\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ntest rules::temur_cards::audit_prism_treasure_empty_pool_activation ... FAILED\n\nfailures:\n\nfailures:\n    rules::temur_cards::audit_prism_treasure_empty_pool_activation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 300 filtered out; finished in 0.01s\n\nerror: test failed, to rerun pass `--test rules_tests`\n",
+      "interpretation": "Expected known supported-play defect reproduced; not passing coverage."
+    },
+    {
+      "label": "prism-tiny-fixture",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "rules::temur_cards::audit_prism_treasure_empty_pool_activation",
+        "--",
+        "--ignored",
+        "--exact",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 15.184,
+      "exit_code": 101,
+      "log": "scratch/prism-tiny-fixture.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [optimized + debuginfo] target(s) in 14.29s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 1 test\n\nthread 'rules::temur_cards::audit_prism_treasure_empty_pool_activation' (92034119) panicked at tests/rules/helpers.rs:250:31:\nscenario step should succeed: AgentError(\"illegal mana activation\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ntest rules::temur_cards::audit_prism_treasure_empty_pool_activation ... FAILED\n\nfailures:\n\nfailures:\n    rules::temur_cards::audit_prism_treasure_empty_pool_activation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 300 filtered out; finished in 0.01s\n\nerror: test failed, to rerun pass `--test rules_tests`\n",
+      "interpretation": "Expected known supported-play defect reproduced; not passing coverage."
+    },
+    {
+      "label": "python-audit-final",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "pytest",
+        "tests/infra/test_rules_inventory.py",
+        "tests/infra/test_ci_selection.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 2.953,
+      "exit_code": 0,
+      "log": "scratch/python-audit-final.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "..........................................                               [100%]\n42 passed in 0.74s\n"
+    },
+    {
+      "label": "python-audit",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "pytest",
+        "tests/infra/test_rules_inventory.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 15.241,
+      "exit_code": 0,
+      "log": "scratch/python-audit.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null,
+      "output_tail": "Installed 6 packages in 10ms\n.....                                                                    [100%]\n5 passed in 0.07s\n"
+    },
+    {
+      "label": "rust-audit",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "audit_",
+        "--",
+        "--nocapture"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 140.487,
+      "exit_code": 0,
+      "log": "scratch/rust-audit.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "   Compiling proc-macro2 v1.0.106\n   Compiling unicode-ident v1.0.24\n   Compiling quote v1.0.46\n   Compiling libc v0.2.186\n   Compiling syn v2.0.119\n   Compiling version_check v0.9.5\n   Compiling generic-array v0.14.7\n   Compiling cfg-if v1.0.4\n   Compiling zerocopy v0.8.54\n   Compiling typenum v1.20.1\n   Compiling serde_core v1.0.228\n   Compiling zmij v1.0.23\n   Compiling find-msvc-tools v0.1.9\n   Compiling shlex v2.0.1\n   Compiling cc v1.2.67\n   Compiling getrandom v0.2.17\n   Compiling serde_json v1.0.150\n   Compiling serde v1.0.228\n   Compiling ref-cast v1.0.25\n   Compiling rand_core v0.6.4\n   Compiling ppv-lite86 v0.2.21\n   Compiling blake3 v1.8.5\n   Compiling block-buffer v0.10.4\n   Compiling crypto-common v0.1.7\n   Compiling serde_derive v1.0.228\n   Compiling ref-cast-impl v1.0.25\n   Compiling serde_derive_internals v0.29.1\n   Compiling memchr v2.8.3\n   Compiling itoa v1.0.18\n   Compiling schemars_derive v1.2.1\n   Compiling digest v0.10.7\n   Compiling rand_chacha v0.3.1\n   Compiling cpufeatures v0.2.17\n   Compiling arrayref v0.3.9\n   Compiling constant_time_eq v0.4.2\n   Compiling arrayvec v0.7.8\n   Compiling dyn-clone v1.0.20\n   Compiling schemars v1.2.1\n   Compiling sha2 v0.10.9\n   Compiling rand v0.8.7\n   Compiling base64 v0.22.1\n   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [optimized + debuginfo] target(s) in 2m 19s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 4 tests\ntest rules::temur_cards::audit_prism_treasure_empty_pool_activation ... ignored, MTG-174: offered Prism activation rejects Treasure-funded cost at audited revision\ntest rules::cr_106_mana::audit_restricted_mana_never_pays_unrelated_costs ... ok\ntest rules::cr_106_mana::audit_generic_and_specific_mana_boundary_matrix ... ok\ntest rules::cr_704_sba::audit_sba_toughness_damage_indestructible_boundary_matrix ... ok\n\ntest result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.02s\n\n"
+    },
+    {
+      "label": "rust-rules",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 92.623,
+      "exit_code": 0,
+      "log": "scratch/rust-rules.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "ases_to_exist ... ok\ntest rules::tla_cards::jeong_jeongs_deserters_targeted_counter_and_lethal_sba ... ok\ntest rules::tla_cards::invasion_reinforcements_flash_cast_on_opponents_turn ... ok\ntest rules::tla_cards::kyoshi_warriors_etb_creates_ally_token_via_stack ... ok\ntest rules::tla_cards::observation_encodes_counters_tokens_and_type_tags ... ok\ntest rules::tla_cards::one_or_more_attack_trigger_fires_once ... ok\ntest rules::tla_cards::otter_penguin_ignores_opponent_draws ... ok\ntest rules::tla_cards::otter_penguin_buffs_on_second_draw_only_and_resets ... ok\ntest rules::tla_cards::south_pole_voyager_second_resolution_draws ... ok\ntest rules::tla_cards::tapped_for_mana_trigger ... ok\ntest rules::tla_cards::vigilance_attacker_does_not_become_tapped ... ok\ntest rules::tla_cards::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw ... ok\ntest rules::ur_lessons_increment::cleanup_sba_grants_priority_and_then_repeats_mandatory_discard ... ok\ntest rules::ur_lessons_increment::combustion_damage_counts_own_lessons_excludes_resolving_spell_and_exiles_later_death ... ok\ntest rules::ur_lessons_increment::combustion_invalid_target_does_not_damage_or_mark_new_incarnation ... ok\ntest rules::ur_lessons_increment::combustion_is_an_owned_learn_candidate ... ok\ntest rules::ur_lessons_increment::combustion_lethal_damage_exiles_without_a_graveyard_move ... ok\ntest rules::ur_lessons_increment::combustion_replacement_expires_at_cleanup_and_does_not_follow_reentry ... ok\ntest rules::ur_lessons_increment::gran_gran_reduction_threshold_noncreature_and_generic_floor ... ok\ntest rules::ur_lessons_increment::gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card ... ok\ntest rules::ur_lessons_increment::legend_choice_and_lethal_damage_share_one_sba_batch ... ok\ntest rules::ur_lessons_increment::legend_rule_recognizes_existing_lowercase_supertypes ... ok\ntest rules::ur_lessons_increment::proft_combat_requires_two_draws_and_own_turn ... ok\ntest rules::ur_lessons_increment::proft_etb_draw_and_combat_counts_at_resolution ... ok\ntest rules::ur_lessons_increment::proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types ... ok\ntest rules::ur_lessons_increment::proft_has_no_effect_if_its_only_target_leaves ... ok\ntest rules::ur_lessons_increment::combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage ... ok\ntest rules::sacrifice_cards::treasure_completes_an_announced_cost_without_a_priority_window ... ok\ntest rules::temur_cards::optional_lesson_without_resources_only_declines_then_discards_one_drawn_card ... ok\ntest rules::temur_cards::iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce ... ok\ntest rules::temur_cards::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution ... ok\ntest rules::temur_cards::optional_decline_retains_mana_activation_costs_and_chosen_output ... ok\ntest rules::temur_cards::waterbend_lesson_draws_before_optional_payment_and_taps_without_mana ... ok\ntest rules::temur_cards::committed_optional_payment_resumes_after_granted_chosen_color_mana ... ok\ntest rules::temur_cards::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities ... ok\ntest rules::elemental_cards::elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks ... ok\ntest rules::temur_cards::optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation ... ok\ntest rules::structured_attacker_offers::structured_attacker_offer_exhausts_two_deck_declarations_past_32 ... ok\ntest rules::structured_attacker_offers::compound_lowering_preserves_root_and_all_attacker_subsets ... ok\ntest rules::sacrifice_cards::fetch_land_counts_the_found_land_and_triggers_tracker_twice ... ok\ntest rules::structured_attacker_offers::structured_attacker_adapter_matches_seeded_two_deck_traces ... ok\ntest rules::ur_lessons_increment::revised_forty_card_deck_completes_and_replays_every_command_exactly ... ok\n\ntest result: ok. 300 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 15.47s\n\n"
+    },
+    {
+      "label": "rust-setup",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "rules::cr_103_game_start"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 10.032,
+      "exit_code": 0,
+      "log": "scratch/rust-setup.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "   Compiling managym v0.1.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [optimized + debuginfo] target(s) in 9.59s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 3 tests\ntest rules::cr_103_game_start::cr_103_4_players_start_at_twenty_life ... ok\ntest rules::cr_103_game_start::cr_103_5_opening_hands_have_seven_cards ... ok\ntest rules::cr_103_game_start::cr_103_negative_rejects_non_two_player_game - should panic ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 0.01s\n\n"
+    },
+    {
+      "label": "warm-new-rules",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "audit_"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.193,
+      "exit_code": 0,
+      "log": "scratch/warm-new-rules.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true,
+      "output_tail": "    Finished `test` profile [optimized + debuginfo] target(s) in 0.11s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-d2eb85e332aacbb8)\n\nrunning 4 tests\ntest rules::temur_cards::audit_prism_treasure_empty_pool_activation ... ignored, MTG-174: offered Prism activation rejects Treasure-funded cost at audited revision\ntest rules::cr_106_mana::audit_restricted_mana_never_pays_unrelated_costs ... ok\ntest rules::cr_106_mana::audit_generic_and_specific_mana_boundary_matrix ... ok\ntest rules::cr_704_sba::audit_sba_toughness_damage_indestructible_boundary_matrix ... ok\n\ntest result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 297 filtered out; finished in 0.02s\n\n"
+    }
+  ],
+  "summed_command_seconds": 449.078,
+  "timing_note": "Sum of command elapsed times, including cold/warm compilation, local provisioning, failed and zero-test invocations. Commands sometimes overlap; this is not session wall time, CPU time, cloud runner time or an invoice. Initial read-only inspection, generation, untimed format/lint attempts and initial atomic install are not included.",
+  "untimed_checks": [
+    {
+      "command": "cargo fmt --manifest-path managym/Cargo.toml --check",
+      "result": "Initially failed on formatting of new test lines; cargo fmt repaired it and timed final check passed."
+    },
+    {
+      "command": "uv run --extra dev ruff format --check scripts/audit_rules.py tests/infra/test_rules_inventory.py",
+      "result": "2 files already formatted"
+    },
+    {
+      "command": "uv run --extra dev ruff check scripts/audit_rules.py tests/infra/test_rules_inventory.py",
+      "result": "All checks passed after TypedDict annotations."
+    }
+  ],
+  "not_run": [
+    "whole Rust suite",
+    "broad Python integration",
+    "learnability diagnostic",
+    "new fuzz or arena cohorts",
+    "new GitHub Actions run",
+    "paid compute",
+    "training"
+  ],
+  "known_failures": [
+    "Offered Prism/Treasure activation rejects with illegal mana activation. New ignored probe is explicitly run as red evidence."
+  ],
+  "coverage_limits": [
+    "2,974 inventory entries remain unknown; family evidence does not certify child rules.",
+    "No general layer/dependency, regeneration, arbitrary replacement or all symbolic-cost coverage is established.",
+    "No configured repository-wide static type check was run."
+  ]
+}
