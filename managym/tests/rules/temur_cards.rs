@@ -102,6 +102,23 @@ fn prism_consumes_generic_before_adding_chosen_color() {
 }
 
 #[test]
+fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
+    let mut s = setup(&["Prophetic Prism", "Tireless Provisioner"]);
+    enter(&mut s, "Prophetic Prism");
+    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.set_player_mana_pool(0, "0");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let prism = permanent(&s, "Prophetic Prism");
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == prism))
+        .expect("Prism is offered when Treasure can fund its upfront cost");
+    s.step_action(index);
+}
+
+#[test]
 fn guide_grants_tap_mana_with_sickness_and_removes_it_on_departure() {
     let mut s = setup(&["Great Divide Guide", "Hermitic Herbalist"]);
     let guide = enter(&mut s, "Great Divide Guide");
