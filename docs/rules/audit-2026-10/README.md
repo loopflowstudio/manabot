@@ -79,11 +79,19 @@ protocol (17), Command/recovery (8), repaired decision surface (4), and tooling/
 package-boundary (44) tests pass. All 11 arena admission cases passed across
 bounded chunks. Frozen w11 and protocol fixture bytes are unchanged.
 
-Acceptance remains incomplete: full learnability failed its PPO collector
-training deadline. Study semantic retry, Study branch and four monitor cases
-remain after bounded 120-second timeouts. Partial suites are not reported as
-passes. The [validation receipts](unification-validation.json) retain both the
-failures and repaired fixture results; no training or timeout limits were raised.
+The canonical full [learnability diagnostic](learnability-w12-canonical.json)
+now passes in 99.6s, including all three capacity seeds and reward-driven PPO
+with checkpoint reload (65,536 transitions; after 1.0 versus no-update 0.640625).
+The focused canonical dependency-blocked play/Study protocol check passes all
+17 tests. Earlier debug, conformance and consumer counts above are retained
+historical receipts, not newly rerun suites after the packaging merge.
+
+Acceptance remains incomplete: Study semantic retry, Study branch and four
+monitor cases remain with gate/CI after bounded 120-second timeouts. Partial
+suites are not passes. The earlier collector deadline failure remains in the
+[validation receipts](unification-validation.json). A bounded two-update profile
+completed normally; no collector defect was reproduced. Host contention is
+plausible but unproved. No training budgets, timeouts or assertions changed.
 
 ## Ownership, checks and scope
 

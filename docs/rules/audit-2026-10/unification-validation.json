@@ -826,5 +826,54 @@
       "Timeouts remain failures; no timeout increase or assertion weakening.",
       "Payment and missing trigger-order choice remain separate findings."
     ]
+  },
+  "canonical_runtime_validation": {
+    "draft_checkpoint": "202416a8",
+    "source_note": "Diagnostic started on fe76226d with the working draft subsequently committed as 202416a8; source_digest and native SHA identify the tested bytes. Later report/helper edits are not training changes.",
+    "learnability_result": "learnability-w12-canonical.json",
+    "learnability_path": ".runs/learnability/rules-targeting-w12-canonical",
+    "collector_profile": {
+      "label": "collector-profile",
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "scratch/profile_collector.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 9.047,
+      "exit_code": 0,
+      "log": "scratch/collector-profile.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    "collector_diagnosis": "Two unchanged PPO updates completed in 9.047s including startup/evaluation. The old 384.3s run consumed 76.2 CPU seconds. Host contention/scheduling is plausible but not proved; no collector defect was reproduced and no production repair was made.",
+    "focused_protocol": {
+      "label": "canonical-study-protocol",
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "pytest",
+        "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+        "tests/academy/test_study_protocol.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 4.903,
+      "exit_code": 0,
+      "log": "scratch/canonical-study-protocol.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    "focused_protocol_result": "17 passed, including dependency-blocked play and selected-offer-independent ed2 plus command-bound erd1 checks.",
+    "budget_note": "Unchanged 480s total watchdog, 300s PPO deadline, 64 updates x 128 steps x 8 streams, 64 evaluation games per arm, capacity thresholds and PPO assertions.",
+    "remaining_gate_ci": [
+      "Study runtime semantic retry",
+      "Seven Study branch cases",
+      "Four monitor cases: random/explicit-matrix outcomes, checkpoint-admission failure persistence, saved dashboard"
+    ],
+    "evidence_scope": "Earlier bounded consumer/debug/conformance receipts remain historical; this adds current canonical protocol and full learnability evidence only. No full conformance or strength certification."
   }
 }

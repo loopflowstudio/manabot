@@ -1,0 +1,45 @@
+completed update 1
+completed update 2
+         4765339 function calls (4006111 primitive calls) in 6.672 seconds
+
+   Ordered by: cumulative time
+   List reduced from 4870 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       38    0.001    0.000   23.583    0.621 _ops.py:349(fallthrough)
+       89    0.002    0.000    3.517    0.040 __init__.py:1(<module>)
+       22    0.000    0.000    3.290    0.150 _ops.py:292(py_impl)
+     4251    0.011    0.000    3.040    0.001 agent.py:220(forward)
+     4251    0.078    0.000    3.024    0.001 agent.py:235(forward_distribution)
+225849/45006    0.187    0.000    2.221    0.000 module.py:1772(_wrapped_call_impl)
+225849/45006    0.235    0.000    2.183    0.000 module.py:1780(_call_impl)
+        3    0.000    0.000    2.178    0.726 _ops.py:156(py_functionalize_impl)
+     4251    0.190    0.000    1.809    0.000 agent.py:419(_gather_object_embeddings)
+    42510    0.101    0.000    1.495    0.000 container.py:248(forward)
+    34008    0.024    0.000    1.238    0.000 agent.py:671(forward)
+        3    0.000    0.000    1.116    0.372 _ops.py:264(__init__)
+        1    0.000    0.000    1.068    1.068 triton_kernel_wrap.py:1(<module>)
+        1    0.000    0.000    1.064    1.064 triton_kernel_wrap.py:1033(__init__)
+        2    0.000    0.000    0.933    0.466 profile_collector.py:18(update)
+        2    0.093    0.046    0.932    0.466 objectives.py:50(update_iteration)
+    89271    0.063    0.000    0.841    0.000 linear.py:130(forward)
+    89271    0.733    0.000    0.733    0.000 {built-in method torch._C._nn.linear}
+     4251    0.043    0.000    0.679    0.000 agent.py:402(_gather_informed_actions)
+       32    0.000    0.000    0.647    0.020 health.py:88(step)
+       32    0.003    0.000    0.647    0.020 health.py:96(_step)
+        7    0.001    0.000    0.627    0.090 utils.py:1(<module>)
+        2    0.000    0.000    0.616    0.308 exc.py:1(<module>)
+       32    0.000    0.000    0.573    0.018 _tensor.py:575(backward)
+        1    0.000    0.000    0.573    0.573 symbolic_shapes.py:1(<module>)
+       32    0.000    0.000    0.573    0.018 __init__.py:252(backward)
+       32    0.000    0.000    0.572    0.018 graph.py:856(_engine_run_backward)
+       32    0.571    0.018    0.571    0.018 {method 'run_backward' of 'torch._C._EngineBase' objects}
+     2118    0.431    0.000    0.431    0.000 {method 'step_into_buffers' of 'builtins.VectorEnv' objects}
+     1030    0.011    0.000    0.419    0.000 inference.py:77(check)
+     8502    0.016    0.000    0.319    0.000 agent.py:542(_generic_definitions)
+      514    0.025    0.000    0.311    0.001 net_opponent.py:399(_slice_obs_tensors)
+     1032    0.015    0.000    0.311    0.000 inference.py:71(_state)
+        1    0.000    0.000    0.308    0.308 _fully_shard.py:1(<module>)
+        1    0.000    0.000    0.307    0.307 _fsdp_init.py:1(<module>)
+
+

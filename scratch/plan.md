@@ -76,7 +76,7 @@ that receipt alone does not verify the new canonical module location.
 The full learnability diagnostic uses its own 480-second watchdog because the
 explicit acceptance requires its PPO path; ordinary Python checks retain 120s.
 
-Current validation: 17 dependency-blocked play/Study protocol passes; 44
+Retained pre-packaging validation: 17 dependency-blocked play/Study protocol passes; 44
 inventory/CI-selection/package-boundary passes. Eight Command/recovery checks
 passed, including viewer safety, stale rejection, duplicate retry, lost-response
 reconnect and actual pending optional-cost/color recovery. Three decision-surface
@@ -113,12 +113,12 @@ suite results are not suite passes. Native replay/clone and shared Command/
 recovery proofs passed, but the full requested runtime/admission acceptance is
 incomplete. The existing failed receipts remain authoritative for those attempts;
 reconciliation adds no broad rerun or changed budget. Conservative charged draft
-churn: 3,864 lines, including the corrected native install helper.
+churn: 3,953 lines, including native install and diagnosis helpers.
 
 Retained `scratch/compress-targeting.log` records 8 passing debug witnesses and
 1 ignored separate trigger-order proposal (73.4s). Earlier conformance/Command/
-recovery evidence is retained; full PPO failure and runtime/monitor timeouts
-remain with gate/CI as named above.
+recovery evidence is retained; the historical PPO failure is retained; runtime/monitor timeouts
+remain with gate/CI as named above. The canonical full PPO pass is recorded below.
 No full conformance or strength claim follows from these bounded witnesses.
 
 ## Separate findings and ownership limits
@@ -160,9 +160,19 @@ draft; final accounting includes the current Academy/tooling/targeting diff and
 local helpers, excluding upstream packaging contributions. CI topology remains
 unchanged by this repair. `pr-review.html` describes the w12 behavior and its
 limits. Gate/CI still owns unfinished Study runtime/branch and four monitor cases,
-plus a successful full learnability diagnostic including reward-driven PPO.
-The collector deadline failure needs diagnosis before another full attempt;
-its cause is not established by the observed timeout. No product decision is
+while full canonical learnability is now verified below.
+A bounded two-update profile of the unchanged positive control completed in
+9.047s on the canonical native installation (scratch/collector-profile.log).
+The old run used 76.2 CPU seconds over 384.3 wall seconds; host scheduling or
+contention is plausible but not proved. No collector defect was reproduced.
+The one full canonical diagnostic passed in 99.6s (86.5 CPU seconds), with
+144 passing capacity assertions and PPO checkpoint reload: 65,536 transitions,
+1,541 games, after 1.0 versus no-update 0.640625. The 480s total/300s PPO
+deadlines, sample counts and assertions are unchanged. No production training
+repair was warranted. Full result is retained at
+docs/rules/audit-2026-10/learnability-w12-canonical.json; the old failure remains.
+Canonical dependency-blocked play/Study protocol also passes all 17 tests in
+2.28s. No timed-out broad suite was replayed. No product decision is
 needed for the bounded targeting correction. Trigger/replacement choice design
 and payment ownership remain separate unresolved work.
 
@@ -177,4 +187,4 @@ Validation constraints remain two Cargo jobs, 900 seconds per cold Rust command,
 Rust required. No stress loops, random load searches or repeated broad suites.
 The approximate combined 10k-line ceiling excludes reports/index artifacts.
 
-Check: `uv run --no-sync python scratch/run_bounded.py realign-native-import 120 uv run --no-sync python scratch/install_native.py` — canonical native install/alias identity passed; preceding root wheel build passed (58.4s); `uv run --no-sync python scripts/audit_rules.py --source scratch/MagicCompRules-20260925.txt` matched all 3,322 rows; `git diff --check` passed. Full PPO and unfinished Study/monitor acceptance remain with gate/CI.
+Check: `uv run --no-sync python scratch/run_bounded.py realign-native-import 120 uv run --no-sync python scratch/install_native.py` — canonical native install/alias identity passed; preceding root wheel build passed (58.4s); `uv run --no-sync python scripts/audit_rules.py --source scratch/MagicCompRules-20260925.txt` matched all 3,322 rows; `git diff --check` passed. Full canonical PPO now passes; unfinished Study/monitor acceptance remains with gate/CI. Draft checkpoint: 202416a8; no publication or lifecycle change.

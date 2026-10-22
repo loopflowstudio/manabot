@@ -167,5 +167,17 @@ current shared-payment owner is still required before any future payment work.
 
 Exact checks, failed probes, toolchain failure and incremental cost are in
 [unification-validation.json](unification-validation.json). No paid compute,
-CI selection/required-check change, training/deck/experiment change, publication,
+required-check weakening, training-recipe/deck/experiment change, publication,
 merge, auto-merge request or Task completion belongs to this increment.
+
+## Canonical runtime validation
+
+The full [w12 diagnostic](learnability-w12-canonical.json) passes in 99.6s
+with all 144 capacity assertions and reward-driven production PPO/checkpoint
+reload. PPO collected 65,536 learner transitions; after/no-update scores are
+1.0/0.640625. The unchanged two-update profile completed in 9.047s; no collector
+defect was reproduced. Earlier low CPU-to-wall utilization suggests contention
+but cannot prove the old timeout cause. No production training code, budget or
+assertion changed. Canonical dependency-blocked play/Study protocol passes
+17 tests. Historical receipts remain unchanged; Study runtime semantic retry,
+seven Study branch cases and four monitor cases remain with gate/CI.

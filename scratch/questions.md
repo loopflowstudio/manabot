@@ -8,3 +8,5 @@
 - The latest implement feedback explicitly selects the targeting repair as well as the Academy runtime regression. Use w12 for the changed rules meaning, retain w11 authored content and learning schema unchanged, and generate a new conformance corpus from the existing bounded case manifest. Frozen receipts remain untouched.
 
 - A new runtime manifest also requires fresh play demo prefixes: old w11 demos correctly reject w12. Record new w12 fixtures through the ordinary Command path and move only runtime selectors; keep old fixture bytes frozen. Full-match consumer/arena checks that exceed the retained 120-second ceiling remain open for gate/CI, without weakening their assertions.
+
+- Collector diagnosis (2026-10-21 local): inspect the unchanged production PPO/collector before treating elapsed wall time as a code defect. The failed run used 76.2 CPU seconds over 384.3 wall seconds; a two-update profile now completes in 9.047 seconds. Host scheduling/contention is a hypothesis, not a proved root cause. Keep budgets and acceptance fixed; retain prior timeout evidence and make only a demonstrated repair.
