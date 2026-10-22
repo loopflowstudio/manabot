@@ -9,7 +9,7 @@ from manabot.env import Match, ObservationSpace
 from manabot.env.observation import ACTION_DECLARED_INDEX, ACTION_TYPE_DIM
 from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
-from manabot.model.world import checkpoint_world
+from manabot.model.world import WORLD, checkpoint_world
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.experiments import Experiment
@@ -83,7 +83,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
 ) -> None:
     space = ObservationSpace()
     binding = checkpoint_world(Match().to_rust(), space)
-    assert binding["world"] == "w10"
+    assert binding["world"] == WORLD
     binding["world"] = old_world
     binding["input_schema"]["actions"]["shape"][-1] = width
     path = tmp_path / "w4.pt"
@@ -98,7 +98,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
         },
         path,
     )
-    with pytest.raises(ValueError, match="compatible w10 world binding"):
+    with pytest.raises(ValueError, match=f"compatible {WORLD} world binding"):
         load_checkpoint_agent(str(path))
 
 

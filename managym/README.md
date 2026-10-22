@@ -71,7 +71,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w10-v1](../conformance/semantic-kernel-w10-v1/).
+[semantic-kernel-w11-v1](../conformance/semantic-kernel-w11-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -126,3 +126,7 @@ cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
+
+Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
+Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+covers both ordinary mana and waterbend without a card-specific decision.

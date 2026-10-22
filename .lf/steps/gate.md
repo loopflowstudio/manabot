@@ -81,6 +81,10 @@ Classify a new prompt family as excluded only after the browser scenarios show
 it is unreached; a new turn-based rule can reach it in either seeded game. A
 world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
 checked Learn demo fixture pins the content manifest and state digests.
+Run `uv run --extra dev pytest tests/model/ -q` after a world-version change
+to exercise checkpoint loading and historical-world rejection. Tests that
+construct a current checkpoint should use the runtime world version; retain
+explicit historical versions for incompatible checkpoints.
 
 ## Required checks for Rust managym work
 

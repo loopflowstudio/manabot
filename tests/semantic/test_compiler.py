@@ -208,6 +208,7 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "DISCARD": 62,
         "EXILE_IF_DIES": 63,
         "ADD_SUBTYPE": 64,
+        "OPTIONAL_PAYMENT": 65,
     }
 
 

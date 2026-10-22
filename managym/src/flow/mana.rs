@@ -168,13 +168,16 @@ impl Game {
                     .with_generic(*remaining_generic);
                 probe.can_pay_with_waterbend(player, &cost)
             }
-            _ => match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
-                Some(crate::flow::decision::Decision::WaterbendOrDiscard {
-                    remaining,
-                    started: true,
-                    ..
-                }) => probe
-                    .can_pay_with_waterbend(player, &ManaCost::default().with_generic(*remaining)),
+            _ => match self
+                .state
+                .suspended_decision
+                .as_ref()
+                .and_then(|s| s.decision.payment())
+            {
+                // Only a waterbend contribution commits an optional payment.
+                Some(payment) if !payment.can_decline() => {
+                    probe.can_pay_with_waterbend(player, &payment.remaining.mana_cost())
+                }
                 _ => true,
             },
         }

@@ -15,6 +15,7 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
 WORLD = managym.WORLD_VERSION
 POLICY_INPUT_VERSION = 1
+_ROSTER_PACKS = {"elemental-world-v1", "elemental-world-v2"}
 
 
 def _digest(value: Any) -> str:
@@ -48,7 +49,7 @@ def validate_agent_setup(
     actual = _setups(player_configs)
     compiled = binding["content_manifest"].get("compiled_semantics")
     pack_key = compiled["pack_key"] if compiled is not None else None
-    roster_world = pack_key == "elemental-world-v1"
+    roster_world = pack_key in _ROSTER_PACKS
     if not roster_world and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
@@ -91,7 +92,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     engine.reset(configs)
     manifest = engine.content_pack_manifest()
     compiled = manifest.get("compiled_semantics")
-    if compiled is not None and compiled["pack_key"] == "elemental-world-v1":
+    if compiled is not None and compiled["pack_key"] in _ROSTER_PACKS:
         # The authored world admits every pair, including mirrors. Bind the
         # complete native roster, while collection still uses its actual pair.
         setups = _setups(
@@ -106,8 +107,6 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         key: {"shape": list(shape), "dtype": str(observation_space.encoder.dtypes[key])}
         for key, shape in observation_space.shapes.items()
     }
-    manifest = engine.content_pack_manifest()
-    compiled = manifest.get("compiled_semantics")
     schema_path = learning_schema_path(compiled["pack_key"] if compiled else None)
     return {
         "world": WORLD,
@@ -121,7 +120,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         "input_schema": schema,
         "learning_schema_sha256": (
             _digest(BoundSemanticPack.bind(manifest).schema.raw)
-            if compiled is not None and compiled["pack_key"] == "elemental-world-v1"
+            if compiled is not None and compiled["pack_key"] in _ROSTER_PACKS
             else hashlib.sha256(schema_path.read_bytes()).hexdigest()
         ),
     }
