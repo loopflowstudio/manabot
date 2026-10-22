@@ -116,8 +116,8 @@ manabot already owns the domain accounting and an offline report:
 
 The public [Etude client](https://github.com/loopflowstudio/etude) already owns
 log discovery, columnar metric reading, clocks, attempts and continuation rules.
-Relevant interfaces are `etude.track.read.runs`, `read_all`, `RunData`, and
-`etude.track.storage.storage_from_uri`. Its report has run checkboxes and URL
+Relevant interfaces are `etude.run.listing.runs`, `etude.train.read.read_all`,
+`RunData`, and `etude.run.storage.storage_from_uri`. Its report has run checkboxes and URL
 state. Reuse its reader rather than implementing a second Etude storage format.
 
 Etude owns generic logging, discovery and general report capabilities. manabot

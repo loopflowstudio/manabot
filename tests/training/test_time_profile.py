@@ -14,7 +14,7 @@ from manabot.training.time_profile import (
     training_time_report,
 )
 
-DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 
 
 def _run() -> TrainingRun:

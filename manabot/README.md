@@ -8,7 +8,7 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
-uv run manabot train --regime-name batched-baseline --out .runs/batched/run  # batched GPU baseline
+uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -45,7 +45,7 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
-For GPU training, start from `batched_baseline()` in `experiments/recipes.py`. It is the
+For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
@@ -173,14 +173,14 @@ Declare training comparisons with [typed Python experiments](../docs/training-ex
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
-Experiment-specific driver scripts live in
-[experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
-only reusable instruments. The experiment discipline and ledger are in
+Each current experiment is one module in [experiments/](../experiments/), holding
+its recipes and anything only it needs to run and report; `manabot/` keeps
+the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
 Study records retain viewer-safe target source names and target controller sides.
 Audit retained Allies/Lessons records without starting games with
-`uv run python -m experiments.runners.greedy_targeting --games games.jsonl.gz --label greedy`.
+`uv run python -m manabot.study.allies_lessons.targeting_audit --games games.jsonl.gz --label greedy`.
 The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
 seat, including absent cohorts, unfinished records, declined targets and unknown
 identities. Target offers list player 0's objects first, so a first-offer
@@ -323,22 +323,6 @@ the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural
 policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
-
-`manabot.training.etude_evaluation.publish_saved_evaluation(tracker, path)`
-publishes a retained `monitor.json` through the public Etude evaluation API. It
-checks exact checkpoint bytes and recomputes cohort completeness/intervals before
-recording outcomes. It does not rerun games or replay, and cannot certify an
-untrusted report's historical claims. Successful estimates use the saved
-whole-deal bootstrap: `n` counts deals, not games or training seeds. Incomplete
-cohorts remain failed evaluations without strength estimates.
-
-Only whitelisted outcome, timing and coordinate fields enter SDK episode rows;
-private Commands and arbitrary arena extras do not. Episode counts include failed
-attempts, with validity explicit. Each publication has its own key containing the
-source result SHA-256. Re-publication is not new evidence: comparison readers must
-deduplicate identical result digests. The caller owns tracker flushing. Admission
-failures without a MonitorResult remain in their original failure files; remote
-archival and campaign-level reporting are not supplied by this publisher.
 
 The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and

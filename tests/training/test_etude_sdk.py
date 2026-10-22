@@ -8,10 +8,10 @@ import hashlib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from etude.track.read import read_all
-from etude.track.records import Step
-from etude.track.report import page_data, write
-from etude.track.run import init
+from etude.train.read import read_all
+from etude.train.records import Step
+from etude.train.report import page_data, write
+from etude.train.run import track
 import pytest
 
 from manabot.infra.experiment import Experiment
@@ -23,7 +23,7 @@ def test_public_sdk_records_checkpoint_and_renders_offline(tmp_path: Path) -> No
     payload = b"mtg122-sdk-admission-no-training"
     artifact.write_bytes(payload)
     directory = tmp_path / "records"
-    run = init(
+    run = track(
         experiment="mtg122-sdk-admission",
         clocks=[Step("updates", "completed collect/update iterations")],
         directory=directory,

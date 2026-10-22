@@ -6,8 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+import typer
 
-from experiments.recipes import REGIMES, regime
+from experiments.direct_self_play import direct_self_play
+from manabot.cli import named_regime, regime_names
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
 from manabot.training.references import reference_distribution
@@ -18,16 +20,16 @@ from managym import WORLD_VERSION
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def recipe(name: str = "direct-self-play") -> TrainingRegime:
-    value = regime(name)
+def recipe() -> TrainingRegime:
+    value = direct_self_play()
     value.world = WORLD_VERSION
     value.agent.semantic_pack = "ur-lessons-vs-gw-allies"
     return value
 
 
 def test_all_recipes_validate_and_reject_future_references():
-    for build in REGIMES.values():
-        frozen = build()
+    for name in regime_names():
+        frozen = named_regime(name)
         if frozen.world == WORLD_VERSION:
             validate_regime(frozen)
         else:
@@ -148,8 +150,8 @@ def test_named_treatments_execute_real_optimizer_batches():
         optimizer=torch.optim.Adam(agent.parameters()),
         _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
     )
-    for build in REGIMES.values():
-        stage = build().stages[0]
+    for name in regime_names():
+        stage = named_regime(name).stages[0]
         if stage.operation != "train_self_play":
             continue
         result = update_iteration(
@@ -226,9 +228,9 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     closed = []
     close = execution.Experiment.close
 
-    def track_close(experiment):
+    def track_close(experiment, state="finished"):
         closed.append(experiment)
-        close(experiment)
+        close(experiment, state)
 
     monkeypatch.setattr(execution.Experiment, "close", track_close)
     value = recipe()
@@ -403,8 +405,8 @@ def test_saved_diagnostics_follow_rewrites_truncation_and_old_layout(
 
 
 def test_editing_one_stage_of_a_named_regime_changes_nothing_else() -> None:
-    for build in REGIMES.values():
-        edited = build()
+    for name in regime_names():
+        edited = named_regime(name)
         before = [stage.model_dump() for stage in edited.stages]
         first = edited.stages[0]
         first.execution.wall_seconds = 1
@@ -412,4 +414,17 @@ def test_editing_one_stage_of_a_named_regime_changes_nothing_else() -> None:
         if learning is not None:
             learning.max_grad_norm = 0.123
         assert [s.model_dump() for s in edited.stages[1:]] == before[1:]
-        assert build().stages[0].model_dump() == before[0]
+        assert named_regime(name).stages[0].model_dump() == before[0]
+
+
+def test_regime_names_say_file_and_recipe() -> None:
+    names = regime_names()
+    assert {"batched_baseline", "batched_baseline:scale_ladder"} <= set(names)
+    assert "ataraxos_ablation:rl_control" in names
+    # A file without a recipe named like it has no bare name.
+    assert "ataraxos_ablation" not in names
+    assert len({named_regime(name).id for name in names}) == len(names)
+    scale = named_regime("batched_baseline:scale_ladder")
+    assert scale.id == "scale-ladder-allies-lessons-v1"
+    with pytest.raises(typer.BadParameter, match="batched_baseline:scale_ladder"):
+        named_regime("scale-ladder")

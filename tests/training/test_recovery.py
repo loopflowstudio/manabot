@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.recipes import regime
+from experiments.direct_self_play import direct_self_play
 from manabot.training import execution
 from manabot.training.models import (
     AtaraxosMoveLearning,
@@ -42,7 +42,7 @@ def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> 
 
 
 def recipe() -> TrainingRegime:
-    value = regime("direct-self-play")
+    value = direct_self_play()
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]

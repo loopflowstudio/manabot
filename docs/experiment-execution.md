@@ -68,33 +68,6 @@ native peak memory or correct throughput for contention.
 
 ## History and depth are declarations
 
-The first real consumers are
-[`experiment_history.py`](../experiments/runners/experiment_history.py) and
-[`experiment_depth.py`](../experiments/runners/experiment_depth.py). They share
-entry-point admission and the same runner, queue, persistence and notebook.
-They resolve to the original calibrated regime digests, seeds and balanced order.
-Their existing `ResolvedStudy` admission retains scientific protocol ownership;
-this software does not redefine historical plans or reopen seed families.
-
-For a separately authorized **future** comparison with a newly admitted plan:
-
-```bash
-uv run --extra notebook python -m experiments.runners.experiment_depth \
-  --plan /path/to/current-source-resolved-plan.json \
-  --schedule /path/to/approved-execution-schedule.json \
-  --hardware /path/to/configured-hardware.json --out .runs/depth-comparison
-```
-
-Use `experiment_history` for the history declaration. The schedule must match the
-plan's seeds/order, reserve all its scientific deals, and fit training plus
-monitoring inside the original training envelope. Plan admission verifies the
-calibration artifacts and exact clean source/runtime bindings before execution.
-This entry point does not run calibration or grant another allocation. Existing
-live ETU-103/106 campaigns continue under their frozen sources; do not attach this
-runner to those output directories. Historical launch scripts remain for their
-frozen evidence. Their scientific scoring remains separate from live monitoring;
-these new entry points do not silently consume scientific endpoint deals.
-
 ## Milestones and evidence
 
 The queue discovers completed stage raw checkpoints and admitted periodic exports
@@ -169,14 +142,20 @@ improvement, challenger strength or completion of Trained Challengers.
 
 ### Editable demo
 
-[`experiment_demo.py`](../experiments/runners/experiment_demo.py) contains the full
-small declaration: two model widths, two seeds, one stage per run, one reserved
-four-leg monitoring deal per checkpoint and a 750-second maximum allocation.
-Configure a local CPU resource named `fixture`, then run:
+`demo_declaration()` in
+[`tests/training/test_experiment_runner.py`](../tests/training/test_experiment_runner.py)
+is the full small declaration: two model widths, two seeds, one stage per run,
+one reserved four-leg monitoring deal per checkpoint and a 750-second maximum
+allocation. Configure a local CPU resource named `fixture`, then run it:
 
 ```bash
-uv run --extra notebook python -m experiments.runners.experiment_demo \
-  --hardware /path/to/configured-hardware.json --out .runs/experiment-demo
+uv run --extra notebook python -c "
+from pathlib import Path
+from manabot.training.experiment_execution import HardwareInventory
+from manabot.training.experiment_runner import run_experiment
+from tests.training.test_experiment_runner import demo_declaration
+hardware = HardwareInventory.model_validate_json(Path('hardware.json').read_text())
+print(run_experiment(demo_declaration(), hardware, Path('.runs/experiment-demo')).status)"
 uv run --extra notebook jupyter lab .runs/experiment-demo/comparison.ipynb
 ```
 
@@ -184,10 +163,10 @@ The notebook is the editable report generator; `comparison.html` is the default
 read-only viewing surface. Headless execution checks HTML figures and absence of
 inline notebook plots. Refresh preserves existing notebook bytes and edits.
 
-The [revised retained generator](../experiments/study/experiment-demo/report-generator.ipynb)
-writes the [HTML demo](../experiments/study/experiment-demo/comparison.html).
+The [revised retained generator](../tests/fixtures/experiment-demo/report-generator.ipynb)
+writes the [HTML demo](../tests/fixtures/experiment-demo/comparison.html).
 Jack Heart's original edited notebook and checkpoint copy remain unchanged.
-The [evidence note](../experiments/study/experiment-demo/README.md) records the
+The [evidence note](../tests/fixtures/experiment-demo/README.md) records the
 original fixture costs, failures and limits. This revision reruns reporting only.
 
 The default dashboard now starts with measured progress, latest deck-specific

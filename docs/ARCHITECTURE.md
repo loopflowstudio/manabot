@@ -52,7 +52,7 @@ Search and belief models are policy-improvement steps on top of it, not the
 main engine. The loop is declared as data and executed by one runner:
 
 ```text
- TrainingRegime (experiments/recipes.py)
+ TrainingRegime (experiments/<experiment>.py)
    world, match + decks, AgentSpec, ordered stages, per-stage hardware limits
         │
         v

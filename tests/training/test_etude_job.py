@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 import subprocess
 
-from etude.track.read import read_all
+from etude.train.read import read_all
 import pytest
 
-from experiments.recipes import ataraxos_move_scalar
+from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.etude_job import TrainingJob, run_worker
 from manabot.training.execution import execute_regime

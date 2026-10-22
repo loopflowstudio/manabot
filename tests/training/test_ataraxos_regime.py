@@ -1,12 +1,13 @@
 """Bounded real-engine recipe execution, admission and iteration contracts."""
 
+from collections.abc import Callable
 from pathlib import Path
 
-from etude.track.read import read_all
+from etude.train.read import read_all
 import pytest
 import torch
 
-from experiments.recipes import regime
+from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
@@ -16,8 +17,8 @@ import managym
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _recipe(name: str = "ataraxos-move") -> TrainingRegime:
-    recipe = regime(name)
+def _recipe(build: Callable[[], TrainingRegime] = ataraxos_move) -> TrainingRegime:
+    recipe = build()
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     return recipe
@@ -38,15 +39,17 @@ def test_iteration_schedule_and_invalid_config() -> None:
     bad["stages"][0]["learning"] = {"gradient": "ppo"}
     with pytest.raises(ValueError, match="categorical"):
         validate_regime(bad)
-    bad = _recipe("ataraxos-move-scalar").model_dump()
+    bad = _recipe(ataraxos_move_scalar).model_dump()
     bad["stages"][1]["learning"] = {"gradient": "ppo", "ema": 0.999}
     with pytest.raises(ValueError, match="gradient"):
         validate_regime(bad)
 
 
-@pytest.mark.parametrize("name", ["ataraxos-move", "ataraxos-move-scalar"])
-def test_real_collection_update_export_reload(name: str, tmp_path: Path) -> None:
-    recipe = _recipe(name)
+@pytest.mark.parametrize("build", [ataraxos_move, ataraxos_move_scalar])
+def test_real_collection_update_export_reload(
+    build: Callable[[], TrainingRegime], tmp_path: Path
+) -> None:
+    recipe = _recipe(build)
     recipe.agent.hidden_dim = 8
     for stage in recipe.stages:
         assert isinstance(stage, TrainSelfPlay)
@@ -83,7 +86,7 @@ def test_real_collection_update_export_reload(name: str, tmp_path: Path) -> None
 
 
 def test_sdk_retains_initialization_and_exact_update_milestones(tmp_path: Path) -> None:
-    recipe = _recipe("ataraxos-move-scalar")
+    recipe = _recipe(ataraxos_move_scalar)
     recipe.agent.hidden_dim = 8
     recipe.stages = recipe.stages[:1]
     stage = recipe.stages[0]

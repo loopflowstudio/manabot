@@ -203,7 +203,7 @@ def test_superseded_contract_rejects_the_current_runtime() -> None:
 
     repo_root = Path(__file__).resolve().parents[2]
     contract = json.loads(
-        (repo_root / "experiments/contracts/w2-234-teacher1-pilot-v1.json").read_text()
+        (repo_root / "tests/fixtures/w2-234-teacher1-pilot-v1.json").read_text()
     )
     runtime = runtime_fingerprints(seed=int(contract["seeds"]["runtime"]))
 
