@@ -27,7 +27,12 @@ def _source() -> dict:
 def _named_product_decks() -> dict[str, dict[str, int]]:
     manifest_path = (
         ROOT
+<<<<<<< HEAD
         / "frontend"
+=======
+        / "academy"
+        / "ui"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         / "src"
         / "lib"
         / "packs"
@@ -207,6 +212,10 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "DISCARD": 62,
         "EXILE_IF_DIES": 63,
         "ADD_SUBTYPE": 64,
+<<<<<<< HEAD
+=======
+        "OPTIONAL_PAYMENT": 65,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     }
 
 

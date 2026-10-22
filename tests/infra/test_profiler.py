@@ -1,22 +1,6 @@
-"""
-test_profiler.py
-Tests for hierarchical performance tracking semantics and percentage calculations.
+"""Hierarchical profiler semantics: labels, nesting, percentages, accumulation and samples.
 
-This suite verifies:
-(1) Label Enforcement:
-    - A valid nested sequence using the context manager with relative labels works as expected.
-    - An invalid nested sequence (using an empty label) raises a ValueError.
-(2) Percentage Calculations:
-    - Build a multi-level hierarchy with simulated sleep durations and verify that each node's percentages are roughly as expected.
-(3) Accumulated Timing:
-    - Repeated context-managed calls for the same cached node accumulate time.
-    - While a node is still running, its effective total time is higher than the stored total.
-(4) Statistical Metrics:
-    - The profiler computes detailed statistics (min, max, mean, p5, p95) for each node.
-(5) Max Samples:
-    - The durations list respects the max_samples limit.
-(6) Nested Relative Labels:
-    - Deeply nested calls using relative labels produce the correct hierarchical paths.
+Time comes from a controlled clock, so each expected duration and percentage is exact.
 """
 
 import random
@@ -24,10 +8,36 @@ import time
 
 import numpy as np
 import pytest
+<<<<<<< HEAD
 
 # Local imports
 from manabot.infra.profiler import Profiler  # Adjust the import as needed
 
+=======
+
+from manabot.infra.profiler import Profiler
+
+
+class Clock:
+    """Stands in for `time.perf_counter`; `advance` is the work being timed."""
+
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    clock = Clock()
+    monkeypatch.setattr(time, "perf_counter", clock)
+    return clock
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_profiling_preserves_training_random_stream(enabled: bool) -> None:
@@ -49,33 +59,31 @@ def test_profiling_preserves_training_random_stream(enabled: bool) -> None:
         random.setstate(saved)
 
 
+<<<<<<< HEAD
 # --- Label Enforcement Tests ---
 def test_label_enforcement():
     profiler = Profiler(enabled=True)
     profiler.reset()  # Reset the profiler
 
     # Valid sequence using relative labels.
+=======
+def test_labels_nest_relative_to_the_running_node(clock: Clock) -> None:
+    profiler = Profiler(enabled=True)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     with profiler.track("a"):
-        with profiler.track("b"):  # This is relative to "a" → full path "a/b"
-            pass
-
-    stats = profiler.get_stats()
-    assert "a/b" in stats, "Missing stats for node 'a/b'"
-
-    # Valid sequence at the root.
+        with profiler.track("b"):
+            clock.advance(1)
     with profiler.track("z"):
-        pass
+        clock.advance(1)
+    assert set(profiler.get_stats()) == {"a", "a/b", "z"}
 
-    # Now test an invalid sequence:
-    profiler.reset()
     with profiler.track("a"):
-        with pytest.raises(ValueError) as exc_info:
-            # Empty label is not allowed
+        with pytest.raises(ValueError, match="Empty label is not allowed"):
             with profiler.track(""):
                 pass
-        assert "Empty label is not allowed" in str(exc_info.value)
 
 
+<<<<<<< HEAD
 # --- Hierarchy Percentage Calculations ---
 def test_hierarchy_percentages():
     """
@@ -108,10 +116,35 @@ def test_hierarchy_percentages():
             time.sleep(0.002)
 
     # Get stats and print for debugging
-    stats = profiler.get_stats()
-    for path, data in stats.items():
-        print(f"{path}: {data}")
+=======
+def test_hierarchy_percentages(clock: Clock) -> None:
+    profiler = Profiler(enabled=True)
+    with profiler.track("group1"):
+        with profiler.track("a"):
+            with profiler.track("alpha"):
+                clock.advance(0.01)
+            with profiler.track("beta"):
+                clock.advance(0.01)
+    with profiler.track("group2"):
+        with profiler.track("x"):
+            clock.advance(0.018)
+        with profiler.track("y"):
+            clock.advance(0.002)
 
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
+    stats = profiler.get_stats()
+    percent = {
+        path: (s["pct_of_parent"], s["pct_of_total"]) for path, s in stats.items()
+    }
+    assert percent["group1"] == pytest.approx((50, 50))
+    assert percent["group2"] == pytest.approx((50, 50))
+    assert percent["group1/a"][0] == pytest.approx(100)
+    assert percent["group1/a/alpha"][0] == pytest.approx(50)
+    assert percent["group1/a/beta"][0] == pytest.approx(50)
+    assert percent["group2/x"][0] == pytest.approx(90)
+    assert percent["group2/y"][0] == pytest.approx(10)
+
+<<<<<<< HEAD
     # Check overall split: group1 and group2 should be roughly 50% each.
     group1_stats = stats.get("group1")
     group2_stats = stats.get("group2")
@@ -159,14 +192,14 @@ def test_hierarchy_percentages():
         f"'group2/y' pct_of_parent not ~10: {y_stats['pct_of_parent']}"
     )
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
-# --- Accumulated Timing Tests ---
-def test_accumulated_timing():
-    """
-    Verify that repeated context-managed calls for the same cached node accumulate time,
-    and that get_stats() correctly reports effective times when nodes are no longer active.
-    """
+def test_repeated_calls_accumulate_and_a_running_node_counts_its_time(
+    clock: Clock,
+) -> None:
     profiler = Profiler(enabled=True)
+<<<<<<< HEAD
     profiler.reset()
 
     rollout_times = [0.002, 0.001, 0.0015]
@@ -175,15 +208,22 @@ def test_accumulated_timing():
     accumulated_gradient = 0.0
 
     for i in range(len(rollout_times)):
+=======
+    rollout, gradient = 0.0, 0.0
+    for rollout_seconds, gradient_seconds in [
+        (0.002, 0.0005),
+        (0.001, 0.0003),
+        (0.0015, 0.0004),
+    ]:
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         with profiler.track("rollout"):
-            time.sleep(rollout_times[i])
-        accumulated_rollout += rollout_times[i]
-
+            clock.advance(rollout_seconds)
         with profiler.track("gradient"):
-            time.sleep(gradient_times[i])
-        accumulated_gradient += gradient_times[i]
-
+            clock.advance(gradient_seconds)
+        rollout += rollout_seconds
+        gradient += gradient_seconds
         stats = profiler.get_stats()
+<<<<<<< HEAD
         rollout_stats = stats.get("rollout")
         gradient_stats = stats.get("gradient")
         print(f"Iteration {i} - rollout_stats: {rollout_stats}")
@@ -194,9 +234,13 @@ def test_accumulated_timing():
         assert abs(gradient_stats["total_time"] - accumulated_gradient) < 0.005, (
             f"Iteration {i}: gradient time incorrect"
         )
+=======
+        assert stats["rollout"]["total_time"] == pytest.approx(rollout)
+        assert stats["gradient"]["total_time"] == pytest.approx(gradient)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
-    # Test live stats: start "rollout" without finishing immediately.
     with profiler.track("rollout"):
+<<<<<<< HEAD
         time.sleep(0.002)
         stats_running = profiler.get_stats()
         running_rollout = stats_running.get("rollout", {}).get("total_time", 0)
@@ -205,14 +249,17 @@ def test_accumulated_timing():
             "Effective time for running node not greater than accumulated time"
         )
 
+=======
+        clock.advance(0.002)
+        assert profiler.get_stats()["rollout"]["total_time"] == pytest.approx(
+            rollout + 0.002
+        )
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
-# --- Statistical Metrics Tests ---
-def test_statistical_metrics():
-    """
-    Verify that the profiler correctly computes detailed statistics (min, max, mean, p5, p95)
-    for a node's call durations.
-    """
+
+def test_statistical_metrics(clock: Clock) -> None:
     profiler = Profiler(enabled=True, max_samples=100)
+<<<<<<< HEAD
     profiler.reset()
     durations = []
 
@@ -287,18 +334,47 @@ def test_max_samples():
         "p5 should be less than or equal to p95"
     )
 
+=======
+    durations = [0.002 + (i % 5) * 0.0005 for i in range(20)]
+    for seconds in durations:
+        with profiler.track("test_node"):
+            clock.advance(seconds)
 
-# --- Nested Relative Labels Test ---
-def test_nested_relative_labels():
-    """Test deeply nested relative labels to ensure proper hierarchy."""
+    stats = profiler.get_stats()["test_node"]
+    assert stats["min"] == pytest.approx(min(durations))
+    assert stats["max"] == pytest.approx(max(durations))
+    assert stats["mean"] == pytest.approx(float(np.mean(durations)))
+    assert stats["p5"] == pytest.approx(float(np.percentile(durations, 5)))
+    assert stats["p95"] == pytest.approx(float(np.percentile(durations, 95)))
+
+
+def test_samples_are_capped_while_every_call_is_counted(clock: Clock) -> None:
+    profiler = Profiler(enabled=True, max_samples=10)
+    for i in range(20):
+        with profiler.track("sampled_node"):
+            clock.advance(0.001 * (i + 1))
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
+
+    stats = profiler.get_stats()["sampled_node"]
+    assert stats["count"] == 20
+    assert len(profiler.node_cache["sampled_node"].durations) == 10
+    assert stats["min"] < stats["mean"] < stats["max"]
+    assert stats["p5"] <= stats["p95"]
+
+
+def test_nested_relative_labels(clock: Clock) -> None:
     profiler = Profiler(enabled=True)
+<<<<<<< HEAD
     profiler.reset()
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     with profiler.track("level1"):
         with profiler.track("level2"):
             with profiler.track("level3"):
                 with profiler.track("level4"):
                     with profiler.track("level5"):
+<<<<<<< HEAD
                         time.sleep(0.01)
 
     stats = profiler.get_stats()
@@ -337,3 +413,19 @@ def test_nested_relative_labels():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+=======
+                        clock.advance(0.01)
+
+    stats = profiler.get_stats()
+    paths = [
+        "level1",
+        "level1/level2",
+        "level1/level2/level3",
+        "level1/level2/level3/level4",
+        "level1/level2/level3/level4/level5",
+    ]
+    assert list(stats) == paths
+    for path in paths[1:]:
+        assert stats[path]["pct_of_parent"] == pytest.approx(100)
+    assert stats["level1"]["pct_of_total"] == pytest.approx(100)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

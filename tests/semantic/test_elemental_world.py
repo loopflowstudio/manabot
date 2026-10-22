@@ -38,8 +38,13 @@ import managym
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
 
+<<<<<<< HEAD
 PACK = "elemental-world-v1"
 BASE = Path("content/semantic/v1")
+=======
+PACK = "elemental-world-v2"
+BASE = Path("content/semantic/w11")
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 def test_exact_accepted_lists_inventory_and_compiled_closure() -> None:
@@ -122,7 +127,11 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
         validate_checkpoint_world({"world_binding": drifted}, space)
     stale = deepcopy(binding)
     stale["world"] = "w9"
+<<<<<<< HEAD
     with pytest.raises(ValueError, match="compatible w10"):
+=======
+    with pytest.raises(ValueError, match="compatible w11"):
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         validate_checkpoint_world({"world_binding": stale}, space)
 
 
@@ -145,7 +154,11 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     )
     pack = BoundSemanticPack.from_env(native)
     assert len(pack.ir.definitions) == 100
+<<<<<<< HEAD
     assert pack.schema.raw["schema_version"] == 6
+=======
+    assert pack.schema.raw["schema_version"] == 7
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
@@ -373,6 +386,7 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
     pytest.fail(
         f"{left}/{right} did not terminate within the 5000-action encoder smoke cap"
     )
+<<<<<<< HEAD
 
 
 def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
@@ -444,3 +458,5 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
         assert env.state_digest() == root
         digests.append(branch.state_digest())
     assert digests[0] == digests[1]
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

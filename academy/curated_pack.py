@@ -13,7 +13,12 @@ import managym
 
 PACK_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
+<<<<<<< HEAD
     / "frontend"
+=======
+    / "academy"
+    / "ui"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     / "src"
     / "lib"
     / "packs"
@@ -23,7 +28,12 @@ PACK_MANIFEST_PATH = (
 )
 JEONG_INCREMENT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
+<<<<<<< HEAD
     / "frontend"
+=======
+    / "academy"
+    / "ui"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     / "src"
     / "lib"
     / "packs"
@@ -33,7 +43,11 @@ JEONG_INCREMENT_MANIFEST_PATH = (
 )
 ELEMENTAL_WORLD_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
+<<<<<<< HEAD
     / "frontend/src/lib/packs/elemental-world/v1/manifest.json"
+=======
+    / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 )
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 REMOTE_PREFIXES = ("http://", "https://", "//")

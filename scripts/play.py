@@ -30,7 +30,11 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parent.parent
+<<<<<<< HEAD
 FRONTEND = ROOT / "frontend"
+=======
+FRONTEND = ROOT / "academy" / "ui"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 FRONTEND_LOCK = FRONTEND / "package-lock.json"
 FRONTEND_INSTALL_MARKER = FRONTEND / "node_modules" / ".academy-package-lock.sha256"
 FRONTEND_REQUIRED_PATHS = (
@@ -233,7 +237,11 @@ def lock_sha256(path: Path | None = None) -> str:
         return hashlib.sha256(target.read_bytes()).hexdigest()
     except OSError as error:
         raise PlayError(
+<<<<<<< HEAD
             "lock.frontend", "frontend/package-lock.json is unavailable", str(error)
+=======
+            "lock.frontend", "academy/ui/package-lock.json is unavailable", str(error)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         ) from error
 
 
@@ -561,7 +569,13 @@ def build_ready_payload(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+<<<<<<< HEAD
         "--demo", choices=["learn"], help="start at a checked Learn decision"
+=======
+        "--demo",
+        choices=["learn", "precision", "precision-mana"],
+        help="start at a checked legal decision prefix",
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     )
     parser.add_argument("--port", type=int, default=8000, help="backend port")
     parser.add_argument("--frontend-port", type=int, default=5173, help="frontend port")

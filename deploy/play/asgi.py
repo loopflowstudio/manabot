@@ -17,7 +17,11 @@ from starlette.responses import RedirectResponse, Response
 
 from academy.server import app
 
+<<<<<<< HEAD
 BUILD_DIR = Path(os.environ.get("ACADEMY_FRONTEND_BUILD", "/app/frontend/build"))
+=======
+BUILD_DIR = Path(os.environ.get("ACADEMY_FRONTEND_BUILD", "/app/academy/ui/build"))
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 class PlayDomainMiddleware(BaseHTTPMiddleware):

@@ -6,7 +6,11 @@ Never add "Co-Authored by:" tags in commits
   The repository is `loopflowstudio/manabot` (renamed at Jack Heart's request
   on 2026-10-15).
 - **Academy** — the browser UI for inspecting bots and replays: the `academy`
+<<<<<<< HEAD
   package, the frontend, and their service namespaces. It is a client of
+=======
+  package, its Svelte frontend in `academy/ui`, and their service namespaces. It is a client of
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   manabot and secondary to training. The project website uses Manabot.
 - **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
@@ -43,6 +47,25 @@ the name of the visual language.
 Package dependencies flow academy → manabot → managym: manabot never imports
 academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
 
+<<<<<<< HEAD
+=======
+## Academy's shared decision surface
+
+Jack Heart's direction (2026-10-21): Academy should make the acting agent's
+viewer-safe observations and complete legal action space understandable to a
+human. Navigation, grouping and labels may clarify that shared contract; they
+must not hide strategic choices, silently select actions, reveal unavailable
+information or introduce human-only game semantics. Evaluate awkward decisions
+at the shared observation/action authority rather than disguising them in the
+browser. Preserve Command binding, stale rejection, actual pending decisions on
+reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
+explicit shared action and cannot erase committed costs or revealed information.
+Configured priority-stop automation must remain identifiable as automation,
+separate from deliberate human decisions.
+This direction does not approve a particular redesign or change frozen worlds,
+checkpoints or experiment evidence.
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ## Style
 
 - Package style guides live in each package README (`manabot/README.md`,
@@ -103,7 +126,13 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
+<<<<<<< HEAD
   `managym/_managym.cpython-312-darwin.so`.
+=======
+  `managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
+  file, then rename); overwriting a mapped extension in place can trigger macOS
+  code-signature termination on subsequent imports.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
@@ -130,3 +159,10 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   it `debug_assert!`s that the name resolves to a token definition, so passing
   an ordinary card name is release-silent and debug-fatal. Clippy does not
   catch this either.
+<<<<<<< HEAD
+=======
+- Finish frontend generation/check/build commands before starting Playwright's
+  Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
+  can reload active pages and destroy in-page revision probes; use isolated
+  ports and stable generated files for concurrent headless runs.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

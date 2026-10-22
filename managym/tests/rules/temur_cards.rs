@@ -102,6 +102,7 @@ fn prism_consumes_generic_before_adding_chosen_color() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
     let mut s = setup(&["Prophetic Prism", "Tireless Provisioner"]);
     enter(&mut s, "Prophetic Prism");
@@ -116,6 +117,62 @@ fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
         .position(|action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == prism))
         .expect("Prism is offered when Treasure can fund its upfront cost");
     s.step_action(index);
+=======
+fn prism_payment_preserves_the_spells_required_green_mana() {
+    for lands in [
+        ["Forest", "Island", "Island", "Mountain"],
+        ["Island", "Island", "Mountain", "Forest"],
+    ] {
+        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        for land in lands {
+            enter(&mut s, land);
+        }
+        enter(&mut s, "Prophetic Prism");
+        s.set_player_mana_pool(0, "0");
+        cast(&mut s, "Gnarled Professor");
+        activate(&mut s, "Prophetic Prism", 0);
+        assert!(
+            !s.game().state.permanents[permanent(&s, "Forest")]
+                .as_ref()
+                .unwrap()
+                .tapped
+        );
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        // Green is the only output that leaves the announced GG spell payable.
+        assert_eq!(s.action_space().actions.len(), 1);
+        choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        assert!(s.game().state.stack_objects.iter().any(|object| matches!(
+            object,
+            managym::state::stack_object::StackObject::Spell(spell)
+                if s.game().state.cards[spell.card].name == "Gnarled Professor"
+        )));
+    }
+}
+
+#[test]
+fn prism_payment_preserves_required_blue_already_in_the_pool() {
+    let mut s = setup(&["Prophetic Prism", "Gnarled Professor", "Counterspell"]);
+    enter(&mut s, "Forest");
+    enter(&mut s, "Prophetic Prism");
+    let professor = cast(&mut s, "Gnarled Professor");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    s.set_player_mana_pool(0, "U");
+    cast(&mut s, "Counterspell");
+    choose(&mut s, |a| {
+        matches!(a, Action::ChooseTarget {
+        target: managym::state::game_object::Target::StackSpell(id), ..
+    } if *id == professor)
+    });
+    activate(&mut s, "Prophetic Prism", 0);
+    // Spend the Forest's G on Prism, retaining the pooled U for Counterspell.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 }
 
 #[test]
@@ -391,6 +448,7 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
 
+<<<<<<< HEAD
 #[test]
 fn prism_upfront_payment_preserves_professors_second_green() {
     for sources in [
@@ -427,10 +485,59 @@ fn prism_upfront_payment_preserves_professors_second_green() {
         assert!(!s
             .battlefield_permanents_named(0, "Gnarled Professor")
             .is_empty());
+=======
+fn lesson_payment(names: &[&str], pool: &str) -> (Scenario, CardId, usize) {
+    let mut s = setup(names);
+    for name in names.iter().filter(|name| **name != "Waterbending Lesson") {
+        enter(&mut s, name);
+        if *name == "Great Divide Guide" {
+            ready(&mut s, name);
+        }
+    }
+    let before = s.zone_size(0, ZoneType::Hand);
+    let spell = cast(&mut s, "Waterbending Lesson");
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    s.set_player_mana_pool(0, pool);
+    pass_until(&mut s, ActionSpaceKind::Waterbend);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
+    (s, spell, before)
+}
+
+#[test]
+fn optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation() {
+    for taps in 0..=2 {
+        let (mut s, spell, before) = lesson_payment(
+            &[
+                "Waterbending Lesson",
+                "Prophetic Prism",
+                "Hermitic Herbalist",
+            ],
+            ["2", "1", "0"][taps],
+        );
+        super::elemental_cards::assert_choice_contract(&s);
+        for name in ["Prophetic Prism", "Hermitic Herbalist"].iter().take(taps) {
+            let source = permanent(&s, name);
+            choose(
+                &mut s,
+                |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == source),
+            );
+            super::elemental_cards::assert_choice_contract(&s);
+        }
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
+        assert_eq!(
+            s.game().state.zones.zone_of(spell),
+            Some(ZoneType::Graveyard)
+        );
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     }
 }
 
 #[test]
+<<<<<<< HEAD
 fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
     use managym::{
         search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
@@ -511,10 +618,34 @@ fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
     assert_eq!(
         s.game().state.zones.zone_of(professor),
         Some(ZoneType::Stack)
+=======
+fn optional_lesson_without_resources_only_declines_then_discards_one_drawn_card() {
+    let (mut s, spell, before) = lesson_payment(&["Waterbending Lesson"], "0");
+    assert_eq!(
+        s.action_space().actions,
+        vec![Action::Decline {
+            player: PlayerId(0)
+        }]
+    );
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+    super::elemental_cards::assert_choice_contract(&s);
+    let other = managym::agent::observation::Observation::for_player(s.game(), PlayerId(1));
+    assert!(!other
+        .opponent_cards
+        .iter()
+        .any(|c| c.zone == ZoneType::Hand));
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    assert_eq!(s.zone_size(0, ZoneType::Hand), before + 2);
+    assert_eq!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Graveyard)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     );
 }
 
 #[test]
+<<<<<<< HEAD
 fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
     let mut s = setup(&["Prophetic Prism", "Serra Angel"]);
     enter(&mut s, "Prophetic Prism");
@@ -526,4 +657,75 @@ fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(s.game().state.zones.zone_of(angel), Some(ZoneType::Stack));
+=======
+fn optional_lesson_does_not_offer_a_tap_without_a_complete_payment() {
+    let (s, _, _) = lesson_payment(&["Waterbending Lesson", "Prophetic Prism"], "0");
+    assert_eq!(
+        s.action_space().actions,
+        vec![Action::Decline {
+            player: PlayerId(0)
+        }]
+    );
+}
+
+#[test]
+fn committed_optional_payment_resumes_after_granted_chosen_color_mana() {
+    let (mut s, spell, before) = lesson_payment(
+        &[
+            "Waterbending Lesson",
+            "Great Divide Guide",
+            "Prophetic Prism",
+        ],
+        "0",
+    );
+    let prism = permanent(&s, "Prophetic Prism");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == prism),
+    );
+    activate(&mut s, "Great Divide Guide", 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    super::elemental_cards::assert_choice_contract(&s);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    super::elemental_cards::assert_choice_contract(&s);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
+    assert_eq!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Graveyard)
+    );
+    for name in ["Prophetic Prism", "Great Divide Guide"] {
+        assert!(
+            s.game().state.permanents[permanent(&s, name)]
+                .as_ref()
+                .unwrap()
+                .tapped
+        );
+    }
+}
+
+#[test]
+fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
+    let (mut s, _, before) = lesson_payment(&["Waterbending Lesson", "Prophetic Prism"], "1");
+    activate(&mut s, "Prophetic Prism", 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    super::elemental_cards::assert_choice_contract(&s);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    assert_eq!(s.zone_size(0, ZoneType::Hand), before + 2);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
+    assert!(
+        s.game().state.permanents[permanent(&s, "Prophetic Prism")]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 }

@@ -5,6 +5,11 @@ Measure how decklist changes move the Allies versus Lessons win rate
     uv run python -m manabot.study.allies_lessons.balance \\
         --ur "+2 Tiger-Seal, -2 Pop Quiz" --deals 100
     uv run python -m manabot.study.allies_lessons.balance --sweep --deals 50
+<<<<<<< HEAD
+=======
+    uv run python -m manabot.study.allies_lessons.balance \\
+        --candidates w4-combined --deals 150 --seed 96000
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 An edit is a signed count and a card name. Every candidate plays the same deal
 seeds in both deck orders, so differences between candidates are paired. The
@@ -20,6 +25,12 @@ from pathlib import Path
 import re
 from typing import Iterable
 
+<<<<<<< HEAD
+=======
+# Third-party imports
+from pydantic import BaseModel, ConfigDict
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 # Local imports
 from ..measures import Rate, win_rates
 from ..record import GameRecord, record_games
@@ -29,6 +40,56 @@ LANDS = {"Island", "Mountain", "Plains", "Forest"}
 FILLER = {"ur_lessons": "Island", "gw_allies": "Plains"}
 
 
+<<<<<<< HEAD
+=======
+class Candidate(BaseModel):
+    """A named pair of edits to the authored lists; empty edits keep a list."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    ur: str = ""
+    gw: str = ""
+
+
+REVISED_LESSONS = (
+    "-2 It'll Quench Ya!, -2 First-Time Flyer, -1 Pop Quiz, -1 Igneous Inspiration, "
+    "+2 Combustion Technique, +1 Proft's Eidetic Memory, +1 Gran-Gran, "
+    "+1 Accumulate Wisdom"
+)
+LORD_AND_SUKI_TO_LANDS = (
+    "-2 White Lotus Reinforcements, -1 Suki, Kyoshi Warrior, +2 Forest, +1 Plains"
+)
+
+# Candidate sets `--candidates` selects by name. Every candidate in a set plays
+# the same deals, so the set is the unit of comparison.
+CANDIDATE_SETS: dict[str, tuple[Candidate, ...]] = {
+    # The revised Lessons list against the strongest Allies cuts (ETU-87).
+    "w4-combined": (
+        Candidate(
+            name="w4: Jack's list vs Suki to land",
+            ur=REVISED_LESSONS,
+            gw="-1 Suki, Kyoshi Warrior, +1 Plains",
+        ),
+        Candidate(
+            name="w4: Jack's list vs one lord to land",
+            ur=REVISED_LESSONS,
+            gw="-1 White Lotus Reinforcements, +1 Forest",
+        ),
+        Candidate(
+            name="w4: Jack's list vs lord and Suki to lands",
+            ur=REVISED_LESSONS,
+            gw=LORD_AND_SUKI_TO_LANDS,
+        ),
+        Candidate(
+            name="w4: authored Lessons vs lord and Suki to lands",
+            gw=LORD_AND_SUKI_TO_LANDS,
+        ),
+    ),
+}
+
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 def parse_edits(text: str) -> list[tuple[int, str]]:
     """'+2 Tiger-Seal, -2 Pop Quiz' -> [(2, 'Tiger-Seal'), (-2, 'Pop Quiz')]"""
     edits = []
@@ -183,8 +244,13 @@ def main() -> None:
     parser.add_argument("--sweep", action="store_true", help="remove each card in turn")
     parser.add_argument(
         "--candidates",
+<<<<<<< HEAD
         type=Path,
         help='JSON list of {"name", "ur", "gw"} edits to evaluate in order',
+=======
+        choices=CANDIDATE_SETS,
+        help="named candidate set to evaluate in order",
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     )
     parser.add_argument("--player", default="search", choices=sorted(PLAYERS))
     parser.add_argument("--deals", type=int, default=50)
@@ -212,6 +278,7 @@ def main() -> None:
     if args.candidates:
         candidates = [
             (
+<<<<<<< HEAD
                 entry["name"],
                 edited(
                     edited(lists, "ur_lessons", parse_edits(entry.get("ur", ""))),
@@ -220,6 +287,16 @@ def main() -> None:
                 ),
             )
             for entry in json.loads(args.candidates.read_text())
+=======
+                entry.name,
+                edited(
+                    edited(lists, "ur_lessons", parse_edits(entry.ur)),
+                    "gw_allies",
+                    parse_edits(entry.gw),
+                ),
+            )
+            for entry in CANDIDATE_SETS[args.candidates]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         ]
     elif args.sweep:
         candidates = removals(lists)

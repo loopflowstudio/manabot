@@ -23,6 +23,10 @@ import numpy as np
 import torch
 from torch import Tensor
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import gpu_training_profile
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.etude_progress import ProgressStore
 from experiments.runners.inference_preparation import state_digest
 from experiments.runners.learner_witnesses import learner_witnesses
@@ -70,9 +74,13 @@ MILESTONES = (128, 512, 1024, 2048)
 def recipe(
     size: Size, updates: int, streams: int, device: str, seconds: float
 ) -> TrainingRegime:
+<<<<<<< HEAD
     result = TrainingRegime.model_validate_json(
         Path("experiments/regimes/gpu-training-profile.json").read_text()
     )
+=======
+    result = gpu_training_profile()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     result.id = f"size-frontier-{size.name}"
     result.agent.hidden_dim = size.width
     result.agent.attention_layers = size.depth

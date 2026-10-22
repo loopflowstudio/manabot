@@ -15,6 +15,10 @@ from academy.replay_index import CanonicalReplayV1
 from academy.server import GameSession, SessionRecord, app
 from academy.study_protocol import StudyArtifact
 from academy.study_runtime import HistoricalStudyEvidenceRequest
+<<<<<<< HEAD
+=======
+from managym.experience import ExperienceFrame, InteractionOffer
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 class ExactFixtureEvidenceProvider:
@@ -134,6 +138,29 @@ class ExactFixtureEvidenceProvider:
         )
 
 
+<<<<<<< HEAD
+=======
+def _source_offer(frame: ExperienceFrame) -> InteractionOffer:
+    """A deterministic test controller finishes through ordinary legal offers."""
+    if frame.action_space == "PRIORITY":
+        creatures = {
+            card.name for card in frame.projection.agent.hand if card.types.is_creature
+        }
+        for offer in frame.offers:
+            if offer.action_type == "PRIORITY_PLAY_LAND":
+                return offer
+        for offer in frame.offers:
+            if offer.action_type == "PRIORITY_CAST_SPELL" and any(
+                subject.object.label in creatures for subject in offer.subjects
+            ):
+                return offer
+        return next(
+            offer for offer in frame.offers if offer.verb.value == "pass_priority"
+        )
+    return frame.offers[0]
+
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 def _completed_session(
     trace_dir: Path,
     *,
@@ -148,6 +175,7 @@ def _completed_session(
         allow_fixture_study_evidence=allow_fixture,
     )
     session.attempt_owner = server.participant_id("study-resume")
+<<<<<<< HEAD
     session.new_game(
         {
             "villain_type": "passive",
@@ -157,10 +185,25 @@ def _completed_session(
             "auto_pass": False,
         }
     )
+=======
+    # Seeded early creatures and configured priority automation keep complete
+    # match setup economical; every non-priority decision still uses Commands.
+    initial = session.new_game(
+        {
+            "villain_type": "passive",
+            "seed": 9,
+            "hero_deck": "ur_lessons",
+            "villain_deck": "gw_allies",
+            "auto_pass": True,
+        }
+    )
+    frame = ExperienceFrame.model_validate(initial["frame"])
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     for index in range(2_000):
         assert session.obs is not None
         if session.obs.game_over:
             break
+<<<<<<< HEAD
         frame = session._experience_frame()
         outcome = session.hero_command(
             {
@@ -169,10 +212,24 @@ def _completed_session(
                 "expected_revision": frame["revision"],
                 "prompt_id": frame["prompt"]["id"],
                 "offer_id": frame["offers"][0]["id"],
+=======
+        offer = _source_offer(frame)
+        outcome = session.hero_command(
+            {
+                "command_id": f"study-source-{index}",
+                "match_id": frame.match_id,
+                "expected_revision": frame.revision,
+                "prompt_id": frame.prompt.id,
+                "offer_id": offer.id,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 "answers": [],
             }
         )
         assert outcome["status"] == "accepted"
+<<<<<<< HEAD
+=======
+        frame = ExperienceFrame.model_validate(outcome["update"]["frame"])
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     else:
         pytest.fail("deterministic Study source match did not terminate")
     session.close("game_over")
@@ -322,7 +379,13 @@ def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
         assert repeated.status_code == 200
         assert repeated.json()["projection"] == previews["policy"]["projection"]
         assert repeated.json()["presentation"] == previews["policy"]["presentation"]
+<<<<<<< HEAD
         assert previews["played"]["presentation"]
+=======
+        # A surfaced priority pass need not emit narrated facts. Preserve the
+        # recorded continuation instead of inventing a beat for an empty step.
+        assert previews["played"]["presentation"] == restored["continuation"]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
         returned = client.post(f"/api/study-attempts/{retry['attempt_id']}/return")
         assert returned.json() == restored
@@ -380,7 +443,11 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
         )
 
 
+<<<<<<< HEAD
 def test_invalid_or_unstructured_retry_never_creates_an_attempt(
+=======
+def test_semantic_retry_supports_land_and_rejects_drift(
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -423,8 +490,16 @@ def test_invalid_or_unstructured_retry_never_creates_an_attempt(
             f"/api/traces/{session.trace_id}/decisions/{row['address']}/retry",
             json={"command": command},
         )
+<<<<<<< HEAD
         assert unsupported.status_code == 409
         assert unsupported.json()["detail"] == "study_command_not_structured"
+=======
+        assert unsupported.status_code == 200
+        attempt = unsupported.json()["attempt_id"]
+        returned = client.post(f"/api/study-attempts/{attempt}/return", json={})
+        assert returned.status_code == 200
+        assert returned.json()["frame"] == restored["frame"]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
         drifted = deepcopy(command)
         drifted["expected_revision"] += 1

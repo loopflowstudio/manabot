@@ -5,7 +5,21 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+<<<<<<< HEAD
       - 'manabot/**'
+=======
+      - 'manabot/agent/**'
+      - 'manabot/env/**'
+      - 'manabot/model/**'
+      - 'manabot/verify/**'
+      - 'manabot/conf/**'
+      - 'manabot/infra/**'
+      - 'manabot/semantic/**'
+      - 'manabot/belief/**'
+      - 'manabot/arena/**'
+      - 'manabot/sim/player.py'
+      - 'manabot/sim/structured_policy.py'
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
       - 'managym/**'
       - 'content/**'
       - 'tests/model/**'

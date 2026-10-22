@@ -28,7 +28,11 @@ evaluation complete the recipe, which adapts
 [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y). Each piece is a
 switch we test on Magic rather than adopt by default. Many games step in
 lockstep so inference is batched; the GPU baseline is
+<<<<<<< HEAD
 `experiments/regimes/batched-baseline.json`.
+=======
+`batched_baseline()` in `experiments/recipes.py`.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 ### Current questions
 

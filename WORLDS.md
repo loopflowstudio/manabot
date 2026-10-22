@@ -20,9 +20,16 @@ was dead on arrival in exp-10.)
 | **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
 | **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
 | **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
+<<<<<<< HEAD
 
 **Current development world: w10.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w9) are **not comparable** to w10; do not reuse their
+=======
+| **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
+
+**Current development world: w11.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w10) are **not comparable** to w11; do not reuse their
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -223,3 +230,15 @@ The current conformance corpus is `conformance/semantic-kernel-w10-v1`.
 Native all-pairs smoke and a predeclared 14-game same-Command cohort cover
 integration. World freeze, full diagnostic, release-browser certification and
 strength evaluation remain distinct outcomes.
+<<<<<<< HEAD
+=======
+
+## w11: shared optional payment continuations
+
+Ordinary optional mana and waterbend share typed progress and outcome effects.
+Match-state hash 8 identifies the changed serialized state; learning schema 7
+and opcode 65 identify authored payment branches. Tensor dimensions stay fixed.
+Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
+receipts remain unchanged; w10 checkpoints are rejected. See
+[optional payments](docs/rules/optional-payments.md) for ownership and authoring.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

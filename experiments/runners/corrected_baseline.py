@@ -17,6 +17,10 @@ from etude.track.records import Step
 from etude.track.run import init
 from pydantic import Field, model_validator
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import ataraxos_mini
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.complexity_campaign import (
     Anchor,
     allocation_stop,
@@ -37,7 +41,10 @@ from manabot.training.monitor_evaluation import (
 from manabot.verify.store import VerifyStore
 import managym
 
+<<<<<<< HEAD
 ROOT = Path(__file__).resolve().parents[2]
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 SEEDS = (12261, 12262, 12263)
 CALIBRATION_SEED = 12260
 MATCHUP = AuthoredMatchup(
@@ -46,12 +53,19 @@ MATCHUP = AuthoredMatchup(
 
 
 def recipe(updates: int, seconds: float) -> TrainingRegime:
+<<<<<<< HEAD
     """Explicit new-world derivative; original w4 recipe bytes remain untouched."""
     if managym.WORLD_VERSION != "w6":
         raise ValueError("corrected baseline requires w6 native runtime")
     base = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
+=======
+    """`ataraxos_mini` on the Allies/Lessons matchup with a cross-balanced curriculum."""
+    if managym.WORLD_VERSION != "w6":
+        raise ValueError("corrected baseline requires w6 native runtime")
+    base = ataraxos_mini()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     base.id = "mtg122-w6-baseline"
     base.world = "w6"
     base.match = MATCHUP.match()

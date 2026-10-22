@@ -55,6 +55,19 @@ def _bolt_scenario(trace_dir) -> GameSession:
     return session
 
 
+<<<<<<< HEAD
+=======
+def _resolve_bolt(session: GameSession) -> dict[str, Any]:
+    for index in range(12):
+        result = _command(session, "Pass priority", f"response-pass.{index}")
+        if any(
+            event["kind"]["kind"] == "resolved" for event in session.presentation_events
+        ):
+            return result
+    raise AssertionError("Bolt did not resolve after explicit priority responses")
+
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     session = _bolt_scenario(tmp_path)
 
@@ -64,7 +77,16 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     recovery_cursor = session.presentation.next_seq
     target_command = _command_payload(session, "Target Gray Ogre", "command-target")
     target = session.hero_command(target_command)
+<<<<<<< HEAD
     live_events = target["update"]["presentation"]
+=======
+    assert [event["kind"]["kind"] for event in target["update"]["presentation"]] == [
+        "cast",
+        "targeted",
+    ]
+    latest = _resolve_bolt(session)
+    live_events = list(session.presentation_events)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
     bolt_events = live_events[:5]
     assert [event["kind"]["kind"] for event in bolt_events] == [
@@ -75,9 +97,16 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
         "died",
     ]
     assert [event["seq"] for event in live_events] == list(range(len(live_events)))
+<<<<<<< HEAD
     assert all(event["from_revision"] == 1 for event in bolt_events)
     assert all(event["to_revision"] == 2 for event in bolt_events)
     assert all(event["caused_by"] == "command-target" for event in bolt_events)
+=======
+    assert all(event["from_revision"] == 1 for event in bolt_events[:2])
+    assert all(event["to_revision"] == 2 for event in bolt_events[:2])
+    assert all(event["caused_by"] == "command-target" for event in bolt_events[:2])
+    assert all(event["from_revision"] >= 2 for event in bolt_events[2:])
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     assert all(
         1 <= event["from_revision"] < event["to_revision"] <= session.revision
         for event in live_events
@@ -86,7 +115,11 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
 
     target_id = bolt_events[1]["kind"]["target"]["id"]
     assert bolt_events[4]["kind"]["objects"] == [target_id]
+<<<<<<< HEAD
     battlefield = target["update"]["frame"]["projection"]["opponent"]["battlefield"]
+=======
+    battlefield = latest["update"]["frame"]["projection"]["opponent"]["battlefield"]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     assert all(permanent["id"] != target_id["entity"] for permanent in battlefield)
 
     # Simulate an authority commit whose WebSocket response was lost. Reconnect
@@ -97,7 +130,11 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     recovered = session.current_message(recovery_cursor)["recovery"]
     assert recovered["presentation_cursor"] == recovery_cursor
     assert recovered["presentation_tail"] == live_events
+<<<<<<< HEAD
     assert recovered["frame"]["frame_hash"] == target["update"]["frame"]["frame_hash"]
+=======
+    assert recovered["frame"]["frame_hash"] == latest["update"]["frame"]["frame_hash"]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
     duplicate = session.hero_command(target_command)
     assert duplicate["status"] == "duplicate"
@@ -125,8 +162,14 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
 def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
     session = _bolt_scenario(tmp_path)
     _command(session, "Cast Lightning Bolt", "command-cast")
+<<<<<<< HEAD
     target = _command(session, "Target Gray Ogre", "command-target")
     events = target["update"]["presentation"]
+=======
+    _command(session, "Target Gray Ogre", "command-target")
+    latest = _resolve_bolt(session)
+    events = list(session.presentation_events)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     assert session.presentation_events == events
     head = session.presentation.next_seq
 
@@ -143,7 +186,11 @@ def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
     # A cursor beyond the authority head is a gap. The complete frame remains
     # canonical and the semantic tail restarts at the oldest retained address.
     gap = session.current_recovery("reconnect", presentation_cursor=99)
+<<<<<<< HEAD
     assert gap["frame"]["frame_hash"] == target["update"]["frame"]["frame_hash"]
+=======
+    assert gap["frame"]["frame_hash"] == latest["update"]["frame"]["frame_hash"]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     assert gap["presentation_cursor"] == 0
     assert gap["presentation_tail"] == events
 

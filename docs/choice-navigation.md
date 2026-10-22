@@ -57,7 +57,11 @@ Run from the repository root (choose unused ports):
 ```bash
 ACADEMY_REVIEW_CHOICE=CHOOSE_TARGET ACADEMY_API_PORT=8147 ACADEMY_FRONTEND_PORT=5347 \
   ACADEMY_TRACES_DIR=/tmp/academy-choice-review ACADEMY_PLAY_RECORD_ORIGIN=automated_validation \
+<<<<<<< HEAD
   npm --prefix frontend run test:e2e -- choice-navigation.spec.ts --headed -g 'live retained'
+=======
+  npm --prefix academy/ui run test:e2e -- choice-navigation.spec.ts --headed -g 'live retained'
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ```
 
 The test replays the retained prefix through the real server and pauses with the

@@ -1,8 +1,11 @@
+<<<<<<< HEAD
 //! Batched games with native reset-seed ownership and optional exact Elemental sampling.
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 use crate::{
     agent::{action::AgentError, env::Env, observation::Observation, opponent::OpponentPolicy},
     infra::profiler::InfoDict,
@@ -27,7 +30,10 @@ pub struct VectorEnv {
     opponent_policy: OpponentPolicy,
     next_seeds: Vec<u64>,
     seed_stride: u64,
+<<<<<<< HEAD
     uniform_roster: Vec<PlayerConfig>,
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 }
 
 impl VectorEnv {
@@ -50,6 +56,7 @@ impl VectorEnv {
             opponent_policy,
             next_seeds,
             seed_stride: num_envs.max(1) as u64,
+<<<<<<< HEAD
             uniform_roster: Vec::new(),
         }
     }
@@ -98,6 +105,11 @@ impl VectorEnv {
             .collect()
     }
 
+=======
+        }
+    }
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub fn len(&self) -> usize {
         self.envs.len()
     }
@@ -167,7 +179,10 @@ impl VectorEnv {
         let player_configs = &self.player_configs;
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
+<<<<<<< HEAD
         let roster = &self.uniform_roster;
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
         let mut results = Vec::with_capacity(self.envs.len());
         for (index, (env, next_seed)) in self
@@ -177,7 +192,10 @@ impl VectorEnv {
             .enumerate()
         {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
+<<<<<<< HEAD
                 roster,
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 next_seed,
                 &player_configs[index],
@@ -196,7 +214,10 @@ impl VectorEnv {
         let player_configs = &self.player_configs;
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
+<<<<<<< HEAD
         let roster = &self.uniform_roster;
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
         let mut results = Vec::with_capacity(self.envs.len());
         for (index, ((env, next_seed), action)) in self
@@ -207,7 +228,10 @@ impl VectorEnv {
             .enumerate()
         {
             let out = Self::step_with_autoreset_on_env(
+<<<<<<< HEAD
                 roster,
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 next_seed,
                 *action,
@@ -250,9 +274,14 @@ impl VectorEnv {
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
+<<<<<<< HEAD
         self.for_each_env(|env_index, env, next_seed, configs, roster| {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
                 roster,
+=======
+        self.for_each_env(|env_index, env, next_seed, configs| {
+            let (obs, info) = Self::reset_to_hero_turn_on_env(
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 next_seed,
                 configs,
@@ -282,13 +311,20 @@ impl VectorEnv {
         if let Some(mask) = active {
             self.validate_actions_len(mask.len())?;
         }
+<<<<<<< HEAD
         self.for_each_env(|env_index, env, next_seed, configs, roster| {
+=======
+        self.for_each_env(|env_index, env, next_seed, configs| {
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             if active.is_some_and(|mask| !mask[env_index]) {
                 return Ok(InfoDict::new());
             }
             let action = actions[env_index];
             let result = Self::step_with_autoreset_on_env(
+<<<<<<< HEAD
                 roster,
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 next_seed,
                 action,
@@ -309,7 +345,11 @@ impl VectorEnv {
 
     fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
     where
+<<<<<<< HEAD
         F: Fn(usize, &mut Env, &mut u64, &[PlayerConfig], &[PlayerConfig]) -> Result<R, AgentError>,
+=======
+        F: Fn(usize, &mut Env, &mut u64, &[PlayerConfig]) -> Result<R, AgentError>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     {
         // Setups are immutable between resets. Borrow each stream's setup while
         // mutating its environment/seed, including when most streams are paused.
@@ -321,6 +361,7 @@ impl VectorEnv {
             .zip(self.next_seeds.iter_mut())
             .enumerate()
             .map(|(env_index, (env, next_seed))| {
+<<<<<<< HEAD
                 work(
                     env_index,
                     env,
@@ -328,6 +369,9 @@ impl VectorEnv {
                     &configs[env_index],
                     &self.uniform_roster,
                 )
+=======
+                work(env_index, env, next_seed, &configs[env_index])
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             })
             .collect()
     }
@@ -361,7 +405,10 @@ impl VectorEnv {
     }
 
     fn step_with_autoreset_on_env(
+<<<<<<< HEAD
         roster: &[PlayerConfig],
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         env: &mut Env,
         next_seed: &mut u64,
         action: i64,
@@ -378,7 +425,10 @@ impl VectorEnv {
             let terminal_info = out.info;
 
             let (reset_obs, _) = Self::reset_to_hero_turn_on_env(
+<<<<<<< HEAD
                 roster,
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 next_seed,
                 player_configs,
@@ -441,7 +491,10 @@ impl VectorEnv {
     }
 
     fn skip_opponent_turns_until_hero_on_env(
+<<<<<<< HEAD
         roster: &[PlayerConfig],
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         env: &mut Env,
         mut obs: Observation,
         next_seed: &mut u64,
@@ -463,7 +516,11 @@ impl VectorEnv {
             obs = next_obs;
             if terminated || truncated {
                 let (reset_obs, _) =
+<<<<<<< HEAD
                     Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
+=======
+                    Self::reset_env_on_env(env, next_seed, seed_stride, player_configs)?;
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 obs = reset_obs;
                 steps = 0;
             }
@@ -472,7 +529,10 @@ impl VectorEnv {
     }
 
     fn reset_env_on_env(
+<<<<<<< HEAD
         roster: &[PlayerConfig],
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         env: &mut Env,
         next_seed: &mut u64,
         seed_stride: u64,
@@ -481,6 +541,7 @@ impl VectorEnv {
         let seed = *next_seed;
         *next_seed = seed.saturating_add(seed_stride);
         env.set_seed(seed);
+<<<<<<< HEAD
         let configs = if roster.is_empty() {
             player_configs.to_vec()
         } else {
@@ -492,17 +553,29 @@ impl VectorEnv {
 
     fn reset_to_hero_turn_on_env(
         roster: &[PlayerConfig],
+=======
+        env.reset(player_configs.to_vec())
+    }
+
+    fn reset_to_hero_turn_on_env(
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         env: &mut Env,
         next_seed: &mut u64,
         player_configs: &[PlayerConfig],
         opponent_policy: OpponentPolicy,
         seed_stride: u64,
     ) -> Result<(Observation, InfoDict), AgentError> {
+<<<<<<< HEAD
         let (mut obs, info) =
             Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
         if opponent_policy != OpponentPolicy::None {
             obs = Self::skip_opponent_turns_until_hero_on_env(
                 roster,
+=======
+        let (mut obs, info) = Self::reset_env_on_env(env, next_seed, seed_stride, player_configs)?;
+        if opponent_policy != OpponentPolicy::None {
+            obs = Self::skip_opponent_turns_until_hero_on_env(
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                 env,
                 obs,
                 next_seed,
@@ -519,6 +592,7 @@ impl VectorEnv {
     }
 }
 
+<<<<<<< HEAD
 /// Separate domain from shuffling and policy RNG; rejection sampling avoids modulo bias.
 fn uniform_pair(seed: u64, size: usize) -> (usize, usize) {
     assert!(size > 0);
@@ -526,6 +600,8 @@ fn uniform_pair(seed: u64, size: usize) -> (usize, usize) {
     (rng.gen_range(0..size), rng.gen_range(0..size))
 }
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
@@ -558,6 +634,7 @@ mod tests {
         ]
     }
 
+<<<<<<< HEAD
     fn elemental_roster() -> Vec<PlayerConfig> {
         let pack = crate::semantic::SemanticPack::elemental_world().unwrap();
         pack.decks
@@ -642,6 +719,8 @@ mod tests {
         assert!(terminals > 0 && changed > 0);
     }
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     #[test]
     fn reset_all_and_step_batch() {
         let mut env = VectorEnv::new(3, 7, true, OpponentPolicy::None);

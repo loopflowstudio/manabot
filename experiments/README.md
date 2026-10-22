@@ -53,11 +53,14 @@ history.
 
 ## Index
 
+<<<<<<< HEAD
 [MTG-174 uniform Elemental baseline](elemental-uniform-baseline.md):
 the single paid run failed on native mana activation after four updates;
 $0.05183 inclusive estimated cost, confirmed cleanup, no updated checkpoint or
 scientific learning curve. Task remains incomplete; immutable failure receipts published.
 
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 [ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
 actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
 training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.

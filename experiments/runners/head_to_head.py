@@ -1,7 +1,11 @@
 """Head-to-head arena between frozen trained policies on shared deals.
 
 Every experiment so far scored a policy against scripted greedy. This runner
+<<<<<<< HEAD
 plays a built-in or JSON-declared tournament of checkpoints against each other
+=======
+plays a built-in or named (`TOURNAMENTS`) tournament of checkpoints against each other
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 and against greedy on shared deals, so the two measures can be compared
 directly. See `experiments/head-to-head.md` for the protocol and reading rule.
 
@@ -32,7 +36,11 @@ player), so only the deal is shared between pairings, not the action noise.
 """
 
 import argparse
+<<<<<<< HEAD
 from collections.abc import Sequence
+=======
+from collections.abc import Callable, Sequence
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, field, replace
@@ -341,6 +349,69 @@ def default_tournament() -> Tournament:
     )
 
 
+<<<<<<< HEAD
+=======
+def size_floor_grid() -> Tournament:
+    """Greedy and three final raw grid checkpoints in a full round robin."""
+    return Tournament(
+        entrants=(
+            Entrant(id=GREEDY, label="scripted greedy", origin="code anchor"),
+            Entrant(
+                id="w64-floor010",
+                label="width 64, floor 0.01",
+                origin="etu103-recovery-v3-science-0 final raw",
+                file="small-26000-raw.pt",
+                sha256="3a3c65cbbc90231d9f96c5619b9bbc1b8ea88ac4711e1b1752fe2e99e33cb0da",
+                bytes=822901,
+                training_seed=10351,
+                updates=26000,
+            ),
+            Entrant(
+                id="w64-floor003",
+                label="width 64, floor 0.003",
+                origin="size-floor-grid-20261009b-0 final raw",
+                file="w64-d2-floor003-26000-raw.pt",
+                sha256="b838dae96342fc97d91760a93700be043a36d56978abf6c7cb2b51c7b43d3ecc",
+                bytes=822901,
+                training_seed=10351,
+                updates=26000,
+            ),
+            Entrant(
+                id="w32-floor010",
+                label="width 32, floor 0.01",
+                origin="size-floor-grid-20261010c-0 final raw",
+                file="w32-d2-floor010-26000-raw.pt",
+                sha256="d405b49d66656b7df0ea73684ac129f760406a94767b5fba7368be77035b7e5d",
+                bytes=277941,
+                training_seed=10351,
+                updates=26000,
+            ),
+        ),
+        core=(GREEDY, "w64-floor010", "w64-floor003", "w32-floor010"),
+        extra=(),
+        contrasts=(
+            ("w64-floor003", "w64-floor010"),
+            ("w32-floor010", "w64-floor010"),
+        ),
+        reference="w64-floor010",
+        training_caveat=(
+            "These checkpoints trained on cross-deck Lessons vs Allies; mirrors "
+            "are outside their training matchups. All three checkpoints use "
+            "training seed 10351 and 26,000 updates, not independent training "
+            "replicates. Equal updates do not imply equal samples or cost. "
+            "Scripted greedy is a code anchor. Intervals describe "
+            "frozen-checkpoint deal uncertainty, not training-seed uncertainty."
+        ),
+    )
+
+
+# Tournaments `--tournament` selects by name; omitting it plays the default.
+TOURNAMENTS: dict[str, Callable[[], Tournament]] = {
+    "size-floor-grid": size_floor_grid,
+}
+
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 def pairings() -> tuple[tuple[str, str], ...]:
     """Frozen default meetings, preserving their orientation and order."""
     return default_tournament().pairings()
@@ -1243,7 +1314,11 @@ def main() -> None:
         command = commands.add_parser(name)
         command.add_argument("out", type=Path)
         command.add_argument("--models", type=Path, required=True)
+<<<<<<< HEAD
         command.add_argument("--tournament", type=Path)
+=======
+        command.add_argument("--tournament", choices=TOURNAMENTS)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         command.add_argument(
             "--matchups", choices=("cross", "mirrors"), default="cross"
         )
@@ -1266,11 +1341,15 @@ def main() -> None:
         atomic_json(args.out / "report.json", asdict(found))
         print(render(found))
         return
+<<<<<<< HEAD
     tournament = (
         Tournament.model_validate_json(args.tournament.read_text())
         if args.tournament
         else None
     )
+=======
+    tournament = TOURNAMENTS[args.tournament]() if args.tournament else None
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     status = run(
         args.out,
         args.models,

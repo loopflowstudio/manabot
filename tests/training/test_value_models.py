@@ -20,6 +20,7 @@ from manabot.training.models import (
 def test_value_factorial_protocol() -> None:
     plan = smoke_plan()
     assert ResolvedStudy.model_validate_json(plan.model_dump_json()) == plan
+<<<<<<< HEAD
     # ETU-106 admitted recipes and cohort survive Python-authoring migration.
     assert plan.protocol.regime_digests == (
         "d8edc13e39529beda851acd23ca1fa079bf29de9c1ed4e555fdc5df768972c70",
@@ -31,6 +32,8 @@ def test_value_factorial_protocol() -> None:
         "997114b6661dfd886f9daa9346cc63d51fd68ea7be3377e658ee03a2c99abae4",
         "4538a605eafbf580f19bc1bb2e1561145172620136445041d17ad8455d5f4661",
     )
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     recipes = [TrainingRegime.model_validate(row) for row in plan.recipes]
     assert {
         (r.agent.value_aggregation, r.agent.attention_layers, r.agent.value_kind)

@@ -8,7 +8,11 @@ training, and verification. You train *a* manabot; this package is how.
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
+<<<<<<< HEAD
 uv run manabot train --regime experiments/regimes/batched-baseline.json  # batched GPU baseline
+=======
+uv run manabot train --regime-name batched-baseline --out .runs/batched/run  # batched GPU baseline
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -45,7 +49,11 @@ directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--regime` and `--preset` routes retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
+<<<<<<< HEAD
 For GPU training, start from `experiments/regimes/batched-baseline.json`. It is the
+=======
+For GPU training, start from `batched_baseline()` in `experiments/recipes.py`. It is the
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
 iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
@@ -105,12 +113,21 @@ recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.
 
 An observation/action-shape or rules-meaning change is a world version.
+<<<<<<< HEAD
 The current development world is **w10** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
 including w9 artifacts, are not compatible with w10. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
 `elemental-world-v1`; release certification remains unfinished. The local
+=======
+The current development world is **w11** (`managym.WORLD_VERSION`); its rules, tensor shape,
+and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
+including w10 artifacts, are not compatible with w11. Elemental combat,
+[sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
+[ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
+`elemental-world-v2`; release certification remains unfinished. The local
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
@@ -344,6 +361,7 @@ The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and
 checks reward-driven production PPO plus checkpoint reload. Its credential-free
 CPU runner and failure reports are separate from full-game strength evidence.
+<<<<<<< HEAD
 
 ### Uniform Elemental self-play
 
@@ -366,3 +384,5 @@ environment-decision, learner-transition, terminal-game and truncated-game count
 hash the exact main deck and Lesson pool (`training.self_play.deck_identity`).
 Game roots are the sampling unit; finite counts fluctuate, and game length can
 skew transition exposure. Existing fixed/cross/mirror modes retain their setups.
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

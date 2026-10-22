@@ -84,6 +84,11 @@ impl ReplayDecision {
         }
         if !self.frame.projection.opponent.hand.is_empty()
             || !self.frame.projection.opponent.sideboard.is_empty()
+<<<<<<< HEAD
+=======
+            || !self.frame.projection.opponent.inspected.is_empty()
+            || self.frame.projection.exposes_other_private_context()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         {
             return Err(
                 "decision frame exposes opponent-private hand identities or sideboard candidates"

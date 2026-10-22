@@ -292,6 +292,11 @@ fn validate_recorded_decision(decision: &RecordedDecision) -> Result<(), String>
     }
     if !decision.frame.projection.opponent.hand.is_empty()
         || !decision.frame.projection.opponent.sideboard.is_empty()
+<<<<<<< HEAD
+=======
+        || !decision.frame.projection.opponent.inspected.is_empty()
+        || decision.frame.projection.exposes_other_private_context()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     {
         return Err(format!(
             "{context}: opponent-private hand identities or sideboard candidates are forbidden"
@@ -324,7 +329,14 @@ fn validate_index_decision(
             return Err(format!("{context}: frame asset pack identity drifted"));
         }
     }
+<<<<<<< HEAD
     if !frame.projection.opponent.hand.is_empty() || !frame.projection.opponent.sideboard.is_empty()
+=======
+    if !frame.projection.opponent.hand.is_empty()
+        || !frame.projection.opponent.sideboard.is_empty()
+        || !frame.projection.opponent.inspected.is_empty()
+        || frame.projection.exposes_other_private_context()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     {
         return Err(format!(
             "{context}: opponent-private hand identities or sideboard candidates are forbidden"
@@ -500,6 +512,11 @@ impl StudyArtifact {
         }
         if !frame.projection.opponent.hand.is_empty()
             || !frame.projection.opponent.sideboard.is_empty()
+<<<<<<< HEAD
+=======
+            || !frame.projection.opponent.inspected.is_empty()
+            || frame.projection.exposes_other_private_context()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         {
             return Err(format!(
                 "{context}: opponent-private hand identities or sideboard candidates are forbidden"

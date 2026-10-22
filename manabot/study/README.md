@@ -57,15 +57,25 @@ holds the parameters. Keep committed notebooks free of outputs.
 uv run python -m manabot.study.allies_lessons.balance \
     --gw "-2 Badgermole Cub, +2 Plains" --deals 100
 
+<<<<<<< HEAD
 # Several candidates from a file, saved and rendered
 uv run python -m manabot.study.allies_lessons.balance \
     --candidates experiments/study/gw-allies-weaken-2026-09-29.json \
+=======
+# A named candidate set, saved and rendered
+uv run python -m manabot.study.allies_lessons.balance \
+    --candidates w4-combined \
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     --out .runs/study/balance.jsonl --html .runs/study/balance.html
 ```
 
 The rate is UR Lessons' share of wins with one player in both seats.
 Candidates run on the same deal seeds, so they can be compared with each other.
+<<<<<<< HEAD
 Candidate files live in `experiments/study/`; results stay under `.runs/`.
+=======
+Candidate sets are `CANDIDATE_SETS` in `balance.py`; results stay under `.runs/`.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 ## Layout
 

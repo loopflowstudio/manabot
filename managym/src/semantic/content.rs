@@ -816,7 +816,19 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
             subtype: subtype.clone(),
         },
+<<<<<<< HEAD
         Step::WaterbendOrDiscard { generic } => Effect::WaterbendOrDiscard { generic: *generic },
+=======
+        Step::OptionalPayment {
+            cost,
+            if_paid,
+            if_declined,
+        } => Effect::OptionalPayment {
+            cost: cost.clone(),
+            if_paid: lower_steps(pack, program, if_paid)?,
+            if_declined: lower_steps(pack, program, if_declined)?,
+        },
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         Step::UnblockableIf { .. } => {
             return unsupported(program, "unblockable_if requires static program")
         }

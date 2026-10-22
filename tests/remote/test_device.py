@@ -6,18 +6,29 @@ from pathlib import Path
 import pytest
 import torch
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import direct_self_play
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime
 from manabot.verify.store import VerifyStore
 import managym
+<<<<<<< HEAD
 from tests.remote.test_compile import ROOT
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 def test_unavailable_cuda_never_falls_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+<<<<<<< HEAD
     data = json.loads((ROOT / "experiments/regimes/direct-self-play.json").read_text())
+=======
+    data = direct_self_play().model_dump()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     for stage in data["stages"]:
         stage["execution"]["device"] = "cuda"
     regime = TrainingRegime.model_validate(data)
@@ -34,7 +45,11 @@ def test_unavailable_cuda_never_falls_back(
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA host")
 def test_cuda_continuation_exports_cpu_loadable_raw_and_ema(tmp_path: Path) -> None:
+<<<<<<< HEAD
     data = json.loads((ROOT / "experiments/regimes/direct-self-play.json").read_text())
+=======
+    data = direct_self_play().model_dump()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     for stage in data["stages"]:
         stage["execution"]["device"] = "cuda"
         stage["learning"]["ema"] = 0.9

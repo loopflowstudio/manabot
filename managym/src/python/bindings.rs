@@ -2903,6 +2903,37 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+<<<<<<< HEAD
+=======
+    /// Public event identities used to explain a committed transition.
+    fn presentation_subjects_json(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.presentation_subjects().map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_offer_subjects_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.decision_offer_subjects(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let context = env.decision_context(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&context).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     /// Composite viewer-safe Observation for `viewer`, as canonical JSON.
     fn semantic_observation_json(&self, viewer: usize) -> PyResult<String> {
         let env = self

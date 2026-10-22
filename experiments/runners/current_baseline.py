@@ -13,8 +13,13 @@ import time
 
 import torch
 
+<<<<<<< HEAD
 from experiments.runners.current_baseline_evidence import Attempt, Result, Score
 from experiments.runners.run_value_models import smoke_baseline
+=======
+from experiments.recipes import value_model_baseline
+from experiments.runners.current_baseline_evidence import Attempt, Result, Score
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.arena.models import file_sha256
 from manabot.env import Match
 from manabot.env.target_practice import resolve_target, target_root
@@ -39,7 +44,11 @@ DEALS = tuple(range(1_911_180_000, 1_911_180_064))
 
 
 def declaration(*, frozen: bool = False, full_game: bool = False) -> Experiment:
+<<<<<<< HEAD
     base = smoke_baseline()
+=======
+    base = value_model_baseline()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     base.id = "lethal-target-frozen" if frozen else "lethal-target-learning"
     base.agent.value_aggregation = "masked_mean"
     base.wall_seconds = 780

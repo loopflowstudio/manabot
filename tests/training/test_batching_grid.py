@@ -1,15 +1,22 @@
 """Keep grid contrasts on the baseline and bind budgets to actual experience."""
 
+<<<<<<< HEAD
 from pathlib import Path
 
 import pytest
 
+=======
+import pytest
+
+from experiments.recipes import regime
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.batching_grid import (
     CAPACITIES,
     STREAMS,
     recipe,
     transition_checkpoints,
 )
+<<<<<<< HEAD
 from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
 
 
@@ -17,13 +24,24 @@ def test_grid_preserves_baseline_model_and_learning_at_four_streams() -> None:
     original = TrainingRegime.model_validate_json(
         Path("experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
+=======
+from manabot.training.models import AtaraxosMoveLearning, TrainSelfPlay
+
+
+def test_grid_preserves_baseline_model_and_learning_at_four_streams() -> None:
+    original = regime("ataraxos-mini")
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     actual = recipe(CAPACITIES[0], 4, 131_072)
     assert actual.agent == original.agent
     assert actual.match == original.match
     assert actual.observation == original.observation
     assert actual.stages[0].learning == original.stages[0].learning
     assert actual.stages[0].matchup_curriculum == "cross-balanced"
+<<<<<<< HEAD
     assert actual.world == "w6"
+=======
+    assert actual.world == original.world
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 def test_all_grid_cells_have_equal_experience_and_schedule_endpoints() -> None:
@@ -78,9 +96,13 @@ def test_checkpoint_milestones_cannot_silently_change_experience(
 
 
 def test_batched_baseline_is_the_tested_small_64_stream_recipe() -> None:
+<<<<<<< HEAD
     checked_in = TrainingRegime.model_validate_json(
         Path("experiments/regimes/batched-baseline.json").read_text()
     ).model_dump()
+=======
+    checked_in = regime("batched-baseline").model_dump()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     rebuilt = recipe(CAPACITIES[0], 64, 524_288, seconds=1740).model_dump()
     assert checked_in == rebuilt
     stage = checked_in["stages"][0]

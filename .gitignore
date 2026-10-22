@@ -14,12 +14,23 @@ target/
 .uv-cache/
 academy/traces/*.json
 academy/traces/*.sqlite*
+<<<<<<< HEAD
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/
 frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/
+=======
+academy/ui/node_modules/
+academy/ui/test-results/
+academy/ui/playwright-report/
+academy/ui/.svelte-kit/
+academy/ui/build/
+academy/ui/.vite/
+academy/ui/src/lib/card-art/*.jpg
+academy/ui/src/lib/card-art/credits.json
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 .runs/
 
 # claude-code session worktrees (local harness artifacts)

@@ -6,7 +6,11 @@ records current behavior and catches regressions; it is not a Phase-parity or
 release-readiness claim.
 
 The machine-readable source of truth is
+<<<<<<< HEAD
 [`frontend/e2e/experience-proof-baseline.ts`](../frontend/e2e/experience-proof-baseline.ts).
+=======
+[`academy/ui/e2e/experience-proof-baseline.ts`](../academy/ui/e2e/experience-proof-baseline.ts).
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 It pins the reference profile, sample counts, initial measurements, regression
 budgets, and explicit exclusions. Each proof run attaches its full observed
 distribution as `experience-proof.json`.
@@ -17,17 +21,28 @@ Prepare the repository's pinned CPython 3.12 extension as described in
 `AGENTS.md`, then run:
 
 ```bash
+<<<<<<< HEAD
 npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+=======
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ```
 
 The complete scoped verification is:
 
 ```bash
 uv run pytest tests/academy
+<<<<<<< HEAD
 npm --prefix frontend run check
 npm --prefix frontend test
 npm --prefix frontend run build
 npm --prefix frontend run test:e2e -- experience-proof.spec.ts
+=======
+npm --prefix academy/ui run check
+npm --prefix academy/ui test
+npm --prefix academy/ui run build
+npm --prefix academy/ui run test:e2e -- experience-proof.spec.ts
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 ```
 
 All Python entry points remain behind `uv` (or the uv-managed interpreter path
@@ -87,6 +102,7 @@ replay stepping, priority stops/F6, and at least one encountered
 mid-resolution choice. Those tests do not yet deterministically cover all nine
 families; absence is reported rather than inferred from frontend support.
 
+<<<<<<< HEAD
 ## Terminal release-build matrix
 
 The deterministic follow-on gate is defined by
@@ -183,6 +199,20 @@ set. A screenshot-ignored local run does not validate an intentional appearance
 change: inspect the pinned Linux expected/actual/diff images and complete the
 versioned-reference workflow before arming delivery. A pure pinned-runner or browser recapture may keep the visual version only
 when review confirms that the intended appearance did not change.
+=======
+## Focused browser checks
+
+`npm --prefix academy/ui run test:e2e:release` builds the application and runs
+focused decision, Learn, combat, navigation and Elemental-selector tests against
+Vite preview and uvicorn. These checks retain keyboard interaction, reconnect,
+explicit Command submission and automated accessibility coverage without
+playing two complete matches or comparing screenshot baselines.
+
+CI selects this suite for browser code and the backend/rules paths it consumes.
+Training, remote-runner, website and documentation changes do not select it.
+The former full-match visual suite and its update workflow have been removed;
+older committed reference corpora remain historical evidence, not active gates.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 ## Boundaries and next evidence
 

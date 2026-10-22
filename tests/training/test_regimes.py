@@ -7,6 +7,10 @@ import numpy as np
 import pytest
 import torch
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import REGIMES, regime
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
 from manabot.training.references import reference_distribution
@@ -18,20 +22,29 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def recipe(name: str = "direct-self-play") -> TrainingRegime:
+<<<<<<< HEAD
     value = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes" / f"{name}.json").read_text()
     )
+=======
+    value = regime(name)
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     value.world = WORLD_VERSION
     value.agent.semantic_pack = "ur-lessons-vs-gw-allies"
     return value
 
 
 def test_all_recipes_validate_and_reject_future_references():
+<<<<<<< HEAD
     for path in (ROOT / "experiments/regimes").glob("*.json"):
         payload = json.loads(path.read_text())
         if "recipes" in payload:  # Frozen study plans are not TrainingRegimes.
             continue
         frozen = TrainingRegime.model_validate(payload)
+=======
+    for build in REGIMES.values():
+        frozen = build()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         if frozen.world == WORLD_VERSION:
             validate_regime(frozen)
         else:
@@ -152,11 +165,16 @@ def test_named_treatments_execute_real_optimizer_batches():
         optimizer=torch.optim.Adam(agent.parameters()),
         _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
     )
+<<<<<<< HEAD
     for path in (ROOT / "experiments/regimes").glob("*.json"):
         payload = json.loads(path.read_text())
         if "recipes" in payload:
             continue
         stage = TrainingRegime.model_validate(payload).stages[0]
+=======
+    for build in REGIMES.values():
+        stage = build().stages[0]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         if stage.operation != "train_self_play":
             continue
         result = update_iteration(
@@ -407,3 +425,19 @@ def test_saved_diagnostics_follow_rewrites_truncation_and_old_layout(
         old.stages[0].diagnostics.append({"update": 4})
         store.save_training_run(old)
         assert store.training_run(old.id) == old
+<<<<<<< HEAD
+=======
+
+
+def test_editing_one_stage_of_a_named_regime_changes_nothing_else() -> None:
+    for build in REGIMES.values():
+        edited = build()
+        before = [stage.model_dump() for stage in edited.stages]
+        first = edited.stages[0]
+        first.execution.wall_seconds = 1
+        learning = getattr(first, "learning", None)
+        if learning is not None:
+            learning.max_grad_norm = 0.123
+        assert [s.model_dump() for s in edited.stages[1:]] == before[1:]
+        assert build().stages[0].model_dump() == before[0]
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f

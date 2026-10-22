@@ -16,6 +16,10 @@ from typing import Literal
 
 import torch
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import ataraxos_mini
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
@@ -29,7 +33,10 @@ from manabot.training.monitor_evaluation import MonitorProtocol, evaluate_checkp
 from manabot.verify.store import VerifyStore
 import managym
 
+<<<<<<< HEAD
 ROOT = Path(__file__).resolve().parents[2]
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 Pool = Literal["l1", "l2", "l3"]
 PACK = "mtg122-complexity-v1"
 
@@ -58,12 +65,19 @@ def regime(
     reference run (MTG-135 protocol017); omitting it keeps historical recipes.
     Declarations remain readable on later runtimes; execution admits the world.
     """
+<<<<<<< HEAD
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
     if device == "cuda":
         # Freeze the corrected-world GPU cohort independently of the reader's
         # native runtime, retaining the separate historical CPU recipes.
+=======
+    recipe = ataraxos_mini()
+    if device == "cuda":
+        # Freeze the corrected-world GPU cohort independently of the reader's
+        # native runtime; CPU recipes target the native world.
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         recipe.world = "w6"
     recipe.id = f"mtg122-{pool}"
     recipe.agent.semantic_pack = PACK

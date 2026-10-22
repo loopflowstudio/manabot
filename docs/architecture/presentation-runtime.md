@@ -116,7 +116,11 @@ control changes an offer, Command or authoritative frame.
 At base `3f2975334e6fa2f1a36683d3686a7ecc2d68ffe9`, finishing either
 `bolt-kills-ally-v1` (revisions 42–43, sequences 900–904) or
 `ur-lessons-vs-gw-allies-combat-v1` (the checked-in
+<<<<<<< HEAD
 `frontend/src/lib/fixtures/curated-combat-to-turn.json`) removed all visible
+=======
+`academy/ui/src/lib/fixtures/curated-combat-to-turn.json`) removed all visible
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 semantic beat text; reduced motion allotted just 100 ms per beat. These are
 reproducible fixture positions, not identified recordings of Jack Heart's report.
 The regression tests retain Bolt casting/targeting/resolution/damage/death and

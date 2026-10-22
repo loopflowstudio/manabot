@@ -25,7 +25,11 @@ use std::sync::OnceLock;
 use serde_json::Value;
 
 use crate::cardsets::alpha::ContentPack;
+<<<<<<< HEAD
 use crate::state::card::CardDefId;
+=======
+use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
@@ -110,6 +114,10 @@ pub enum Opcode {
     Discard = 62,
     ExileIfDies = 63,
     AddSubtype = 64,
+<<<<<<< HEAD
+=======
+    OptionalPayment = 65,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 }
 
 impl Opcode {
@@ -179,6 +187,10 @@ impl Opcode {
             62 => Opcode::Discard,
             63 => Opcode::ExileIfDies,
             64 => Opcode::AddSubtype,
+<<<<<<< HEAD
+=======
+            65 => Opcode::OptionalPayment,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -283,8 +295,15 @@ pub enum Step {
         power: i64,
         toughness: i64,
     },
+<<<<<<< HEAD
     WaterbendOrDiscard {
         generic: u8,
+=======
+    OptionalPayment {
+        cost: PaymentCost,
+        if_paid: Vec<Step>,
+        if_declined: Vec<Step>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     },
 
     SearchBasicLands {
@@ -668,6 +687,10 @@ impl SemanticPack {
                     Self::sacrifice()?,
                     Self::temur()?,
                     Self::elemental_world()?,
+<<<<<<< HEAD
+=======
+                    Self::optional_payments()?,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
                     Self::complexity()?,
                 ])
             })
@@ -675,6 +698,15 @@ impl SemanticPack {
             .map_err(Clone::clone)
     }
 
+<<<<<<< HEAD
+=======
+    pub fn optional_payments() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/w11/generated/elemental_world.ir.json"
+        ))
+    }
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub fn elemental_world() -> Result<Self, IrError> {
         Self::from_json(include_str!(
             "../../../content/semantic/v1/generated/elemental_world.ir.json"
@@ -996,7 +1028,11 @@ impl<'a> BoundPack<'a> {
             | Step::GrantMana { .. }
             | Step::CreateNonlegendaryCopy
             | Step::ModifyControlled { .. }
+<<<<<<< HEAD
             | Step::WaterbendOrDiscard { .. }
+=======
+            | Step::OptionalPayment { .. }
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1139,9 +1175,43 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: i64_field(value, "power")?,
             toughness: i64_field(value, "toughness")?,
         },
+<<<<<<< HEAD
         Opcode::WaterbendOrDiscard => Step::WaterbendOrDiscard {
             generic: u8::try_from(u64_field(value, "generic")?)
                 .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+=======
+        Opcode::OptionalPayment => {
+            let cost = object_field(value, "cost")?;
+            // object_field has already checked the JSON type; exactly one key
+            // selects the payment method, so extra or mixed fields are invalid.
+            let fields = cost.as_object().unwrap();
+            let cost = match (fields.len(), fields.get("mana"), fields.get("waterbend")) {
+                (1, Some(_), None) => PaymentCost::Mana(ManaCost::parse(str_field(cost, "mana")?)),
+                (1, None, Some(_)) => PaymentCost::Waterbend {
+                    generic: u8::try_from(u64_field(cost, "waterbend")?)
+                        .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+                },
+                _ => {
+                    return Err(IrError::Malformed(
+                        "payment cost requires exactly one of mana or waterbend".into(),
+                    ))
+                }
+            };
+            Step::OptionalPayment {
+                cost,
+                if_paid: parse_steps(array_field(value, "if_paid")?)?,
+                if_declined: parse_steps(array_field(value, "if_declined")?)?,
+            }
+        }
+        // Frozen opcode 61 enters the shared representation at the read boundary.
+        Opcode::WaterbendOrDiscard => Step::OptionalPayment {
+            cost: PaymentCost::Waterbend {
+                generic: u8::try_from(u64_field(value, "generic")?)
+                    .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+            },
+            if_paid: Vec::new(),
+            if_declined: vec![Step::Discard],
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
         },
         Opcode::AddMana => Step::AddMana {
             mana: str_field(value, "mana")?.to_owned(),

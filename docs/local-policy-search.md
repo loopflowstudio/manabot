@@ -10,7 +10,11 @@ capabilities; no strength, bluffing or human-play result is established.
 Run the bounded mechanism proof in a fresh output directory:
 
 ```bash
+<<<<<<< HEAD
 uv run manabot train --regime experiments/regimes/frozen-policy-local-update.json \
+=======
+uv run manabot train --regime-name frozen-policy-local-update \
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   --seed 715 --out .runs/etu95-local-proof
 ```
 
@@ -223,7 +227,11 @@ and retained failure on unsupported exact history.
 ## Learned joint-hand search
 
 ```bash
+<<<<<<< HEAD
 uv run manabot train --regime experiments/regimes/learned-belief-local-search.json \
+=======
+uv run manabot train --regime-name learned-belief-local-search \
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   --seed 718 --out .runs/etu95-learned-search
 ```
 

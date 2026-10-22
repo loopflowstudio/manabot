@@ -210,6 +210,11 @@ pub enum ChoiceStep {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InteractionOffer {
+<<<<<<< HEAD
+=======
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subjects: Vec<OfferSubjectView>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,
@@ -313,6 +318,13 @@ pub struct LegacyCardView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+<<<<<<< HEAD
+=======
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub types: Option<LegacyCardTypesView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_token: Option<bool>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -351,6 +363,17 @@ pub struct SideboardCardView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
+<<<<<<< HEAD
+=======
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mana: Option<[i32; 6]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lesson_mana: Option<[i32; 6]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub combat_mana: Option<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inspected: Vec<LegacyCardView>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     pub player_index: u8,
     pub id: u32,
     pub is_active: bool,
@@ -387,7 +410,73 @@ pub struct LegacyTurnView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+<<<<<<< HEAD
 pub struct LegacyHeroObservation {
+=======
+pub struct OfferSubjectView {
+    pub role: String,
+    pub object: DecisionObjectView,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionTargetView {
+    pub clause: u32,
+    pub object: DecisionObjectView,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StackEntryView {
+    pub id: u64,
+    pub kind: String,
+    pub controller: u8,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_permanent: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ability_index: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen_mode: Option<u32>,
+}
+
+/// Read-only explanation of the current native continuation. This adds no
+/// choices, forecasts, or local transaction state to the experience contract.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionContextView {
+    pub recent_facts: Vec<String>,
+    pub actor: u8,
+    pub stage: String,
+    pub instruction: String,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub source: RequiredNullable<DecisionObjectView>,
+    pub targets: Vec<DecisionTargetView>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub reserved_sacrifice: RequiredNullable<DecisionObjectView>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub mana_cost: RequiredNullable<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub chosen_mode: RequiredNullable<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionObjectView {
+    pub entity_id: u32,
+    pub subject: SubjectRef,
+    pub display_id: u32,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyHeroObservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stack_objects: Option<Vec<StackEntryView>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_context: Option<DecisionContextView>,
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub definition_names: BTreeMap<String, String>,
     pub game_over: bool,
@@ -397,6 +486,24 @@ pub struct LegacyHeroObservation {
     pub opponent: LegacyPlayerView,
 }
 
+<<<<<<< HEAD
+=======
+impl LegacyHeroObservation {
+    /// Cross-viewer explanations may contain public ownership and kind, but
+    /// never the other player's private continuation or selected objects.
+    pub fn exposes_other_private_context(&self) -> bool {
+        self.decision_context.as_ref().is_some_and(|context| {
+            context.actor != self.agent.player_index
+                && (context.source.0.is_some()
+                    || !context.targets.is_empty()
+                    || context.reserved_sacrifice.0.is_some()
+                    || context.mana_cost.0.is_some()
+                    || context.chosen_mode.0.is_some())
+        })
+    }
+}
+
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StopsConfig {

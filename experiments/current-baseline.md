@@ -352,7 +352,11 @@ service. Daily-test derivation and independent validation follow sustained evide
 
 ### Implementation boundary
 
+<<<<<<< HEAD
 The runner now consumes `regimes/current-baseline-mini-source.json`, extracted
+=======
+The runner now consumes `sustained_baseline_source()` in `experiments/recipes.py`, extracted
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 unchanged from all three retained actor-critic recipes. It fixes 10000 updates,
 620/1240 linked early boundaries, explicit 400/800 exports, separate live random
 monitoring and 24 final cells. The 7200-second calibration amendment is implemented.

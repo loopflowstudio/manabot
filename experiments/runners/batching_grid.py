@@ -13,6 +13,10 @@ import signal
 
 import torch
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import ataraxos_mini
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from experiments.runners.size_frontier import admit_source, train
 from manabot.arena.models import file_sha256
 from manabot.model.agent import Agent
@@ -61,7 +65,13 @@ def transition_checkpoints(
     if tuple(sorted(set(milestones))) != milestones or any(
         n <= 0 or n > transitions or n % stride for n in milestones
     ):
+<<<<<<< HEAD
         raise ValueError("Checkpoint transitions must increase on exact update boundaries")
+=======
+        raise ValueError(
+            "Checkpoint transitions must increase on exact update boundaries"
+        )
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     return tuple(n // stride for n in milestones if n < transitions)
 
 
@@ -77,11 +87,16 @@ def recipe(
         raise ValueError("Grid budget must contain whole iterations for every cell")
     if transitions < streams * TRANSITIONS_PER_STREAM:
         raise ValueError("Grid budget must contain at least one iteration")
+<<<<<<< HEAD
     result = TrainingRegime.model_validate_json(
         Path("experiments/regimes/early-learning-rate-mini-source.json").read_text()
     )
     result.id = f"batching-grid-{capacity.name}-s{streams}"
     result.world = "w6"
+=======
+    result = ataraxos_mini()
+    result.id = f"batching-grid-{capacity.name}-s{streams}"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     result.agent.hidden_dim = capacity.width
     result.agent.attention_layers = capacity.depth
     # The baseline omits FF width: four attention heads imply 4*hidden_dim.

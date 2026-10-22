@@ -14,6 +14,7 @@ proof_error() {
 }
 
 [ ! -e .venv ] || proof_error proof.dirty ".venv exists before the clean proof"
+<<<<<<< HEAD
 [ ! -e frontend/node_modules ] || \
   proof_error proof.dirty "frontend/node_modules exists before the clean proof"
 [ ! -e frontend/.svelte-kit ] || \
@@ -24,6 +25,18 @@ proof_error() {
   proof_error proof.dirty "frontend/.vite exists before the clean proof"
 [ ! -e frontend/test-results ] || \
   proof_error proof.dirty "frontend/test-results exists before the clean proof"
+=======
+[ ! -e academy/ui/node_modules ] || \
+  proof_error proof.dirty "academy/ui/node_modules exists before the clean proof"
+[ ! -e academy/ui/.svelte-kit ] || \
+  proof_error proof.dirty "academy/ui/.svelte-kit exists before the clean proof"
+[ ! -e academy/ui/build ] || \
+  proof_error proof.dirty "academy/ui/build exists before the clean proof"
+[ ! -e academy/ui/.vite ] || \
+  proof_error proof.dirty "academy/ui/.vite exists before the clean proof"
+[ ! -e academy/ui/test-results ] || \
+  proof_error proof.dirty "academy/ui/test-results exists before the clean proof"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 [ ! -e .cache ] || proof_error proof.dirty ".cache exists before the clean proof"
 [ ! -e managym/target ] || proof_error proof.dirty "managym/target exists before the clean proof"
 if find managym -maxdepth 1 -name '_managym*.so' -print -quit | grep -q .; then
@@ -42,9 +55,16 @@ start_ms=$(uv run --no-project --python 3.12 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
   proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
 
+<<<<<<< HEAD
 # Keep the 90-second gate without starting a new uv and Python process on every
 # readiness poll and competing with the cold Cargo/npm build.
 sleep 90 &
+=======
+# A hang guard, not the 90-second budget: a cold Cargo/npm build's duration
+# depends on the hosted runner, so the browser proof records the budget in its
+# receipt. A timer process avoids starting uv and Python on every poll.
+sleep 600 &
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 readiness_timer_pid=$!
 ./scripts/play --port "$api_port" --frontend-port "$frontend_port" >"$log" 2>&1 &
 launcher_pid=$!
@@ -57,7 +77,11 @@ start_browser_proof() {
   ACADEMY_CLEAN_START_MS=$start_ms \
   ACADEMY_CLEAN_RECEIPT=$receipt \
   ACADEMY_LAUNCH_LOG=$log \
+<<<<<<< HEAD
     npm --prefix frontend run test:e2e -- clean-machine.spec.ts &
+=======
+    npm --prefix academy/ui run test:e2e -- clean-machine.spec.ts &
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   proof_pid=$!
 }
 
@@ -92,12 +116,20 @@ while ! grep -q '^ACADEMY_PLAY_READY ' "$log" 2>/dev/null; do
   fi
   if ! kill -0 "$readiness_timer_pid" 2>/dev/null; then
     cat "$log" >&2
+<<<<<<< HEAD
     proof_error proof.timeout "./scripts/play did not become ready within 90 seconds"
+=======
+    proof_error proof.timeout "./scripts/play did not become ready within 600 seconds"
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
   fi
   # npm's locked install completes independently of the native build. Prepare
   # Chromium now; the browser scenario waits for the launcher's ready record.
   if [ -z "$proof_pid" ] && \
+<<<<<<< HEAD
       [ -f frontend/node_modules/.academy-package-lock.sha256 ]; then
+=======
+      [ -f academy/ui/node_modules/.academy-package-lock.sha256 ]; then
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     start_browser_proof
   fi
   sleep 0.1

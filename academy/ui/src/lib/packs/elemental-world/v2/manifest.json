@@ -1,0 +1,2467 @@
+{
+  "fallback": {
+    "algorithm": "fnv1a-32-utf8",
+    "motifs": [
+      "current",
+      "ember",
+      "canopy",
+      "constellation",
+      "dawn",
+      "stone"
+    ],
+    "palettes": [
+      [
+        "#0f172a",
+        "#1d4ed8",
+        "#67e8f9"
+      ],
+      [
+        "#1c1917",
+        "#b45309",
+        "#fbbf24"
+      ],
+      [
+        "#052e16",
+        "#15803d",
+        "#86efac"
+      ],
+      [
+        "#2e1065",
+        "#7e22ce",
+        "#e879f9"
+      ],
+      [
+        "#3f0d12",
+        "#be123c",
+        "#fda4af"
+      ],
+      [
+        "#172554",
+        "#0f766e",
+        "#99f6e4"
+      ]
+    ],
+    "rights_ref": "authored-treatment-v1",
+    "version": "fallback-v1"
+  },
+  "identities": {
+    "Abandon Attachments": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.abandon_attachments",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 662289876
+      }
+    },
+    "Accumulate Wisdom": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "a63eb744-71c4-447d-9372-c3a734f022c5",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/44/accumulate-wisdom"
+      },
+      "treatment": {
+        "motif": "wisdom",
+        "palette": [
+          "#11183a",
+          "#4338ca",
+          "#c7d2fe"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 114
+      }
+    },
+    "Allies at Last": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "c15e5e93-2eff-407d-ae75-437e36ef85ba",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/164/allies-at-last"
+      },
+      "treatment": {
+        "motif": "unity",
+        "palette": [
+          "#12301d",
+          "#3f8b45",
+          "#dff0ad"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 127
+      }
+    },
+    "Ally": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "tla-token:Ally@1",
+        "provider": "managym",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/src/cardsets/tla.rs"
+      },
+      "treatment": {
+        "motif": "kinship",
+        "palette": [
+          "#203324",
+          "#719052",
+          "#fff1c0"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 130
+      }
+    },
+    "Azula Always Lies": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.azula_always_lies",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1051258174
+      }
+    },
+    "Badgermole Cub": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "2b0afb89-0944-4861-b9c3-e909e2ac215e",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/167/badgermole-cub"
+      },
+      "treatment": {
+        "motif": "burrow",
+        "palette": [
+          "#13291b",
+          "#3f7f45",
+          "#c9e7a8"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 124
+      }
+    },
+    "Bastion of Remembrance": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.bastion_of_remembrance",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2311762617
+      }
+    },
+    "Boomerang Basics": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.boomerang_basics",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2736334630
+      }
+    },
+    "Callous Inspector": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.callous_inspector",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3747479943
+      }
+    },
+    "Cat-Gator": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.cat_gator",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 886059827
+      }
+    },
+    "Clue": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "core-token:Clue@1",
+        "provider": "managym",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/src/cardsets/tla.rs"
+      },
+      "treatment": {
+        "motif": "clue",
+        "palette": [
+          "#182b35",
+          "#3b8292",
+          "#f9d98c"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 131
+      }
+    },
+    "Combustion Technique": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.combustion_technique",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2209398968
+      }
+    },
+    "Compassionate Healer": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "6ef464bd-2ed0-4f99-af4a-ebf276f55384",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/13/compassionate-healer"
+      },
+      "treatment": {
+        "motif": "halo",
+        "palette": [
+          "#312e2a",
+          "#b79b57",
+          "#fff8d9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 119
+      }
+    },
+    "Corrupt Court Official": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.corrupt_court_official",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2562111590
+      }
+    },
+    "Curious Farm Animals": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.curious_farm_animals",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3280626558
+      }
+    },
+    "Cycle of Renewal": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.cycle_of_renewal",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 4201811010
+      }
+    },
+    "Dai Li Agents": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.dai_li_agents",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1873204558
+      }
+    },
+    "Deadly Dispute": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.deadly_dispute",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1287807008
+      }
+    },
+    "Deadly Precision": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.deadly_precision",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1623058484
+      }
+    },
+    "Deserter's Disciple": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.deserter_s_disciple",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3650563500
+      }
+    },
+    "Divide by Zero": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "7b1c1a0c-f443-4eb5-a430-9eea886361ca",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/stx/41/divide-by-zero"
+      },
+      "treatment": {
+        "motif": "divide",
+        "palette": [
+          "#081a2e",
+          "#0369a1",
+          "#a5f3fc"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 112
+      }
+    },
+    "Dragonfly Swarm": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "83abf1d0-04e4-49e5-bf63-59f77829ffd1",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/215/dragonfly-swarm"
+      },
+      "treatment": {
+        "motif": "swarm",
+        "palette": [
+          "#231038",
+          "#a54267",
+          "#8be7f5"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 108
+      }
+    },
+    "Earth Kingdom Jailer": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "1b799c30-4a43-403d-b822-0555bd513913",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/16/earth-kingdom-jailer"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#29261d",
+          "#88743e",
+          "#e9ddae"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 120
+      }
+    },
+    "Enter the Avatar State": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.enter_the_avatar_state",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1419137430
+      }
+    },
+    "Enthusiastic Study": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.enthusiastic_study",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 78810742
+      }
+    },
+    "Epic Downfall": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.epic_downfall",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1439813381
+      }
+    },
+    "Eyetwitch": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.eyetwitch",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2319357129
+      }
+    },
+    "Fabled Passage": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.fabled_passage",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 4037491123
+      }
+    },
+    "Fancy Footwork": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "c5648a32-98b0-4625-aae1-ae56e0ef0197",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/19/fancy-footwork"
+      },
+      "treatment": {
+        "motif": "step",
+        "palette": [
+          "#2f2d24",
+          "#ab914e",
+          "#fff2c2"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 129
+      }
+    },
+    "Field Trip": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.field_trip",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3224617578
+      }
+    },
+    "Fire Nation Cadets": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "5ebfa3f5-f80a-4845-bba7-75c4ddb88682",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/134/fire-nation-cadets"
+      },
+      "treatment": {
+        "motif": "formation",
+        "palette": [
+          "#310c09",
+          "#c23a1b",
+          "#ffd166"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 105
+      }
+    },
+    "Firebending Lesson": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "a9282f91-638e-414b-8b3d-9a99e30aec96",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/138/firebending-lesson"
+      },
+      "treatment": {
+        "motif": "flame",
+        "palette": [
+          "#35100a",
+          "#d4431c",
+          "#ffe08a"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 109
+      }
+    },
+    "Fists of Flame": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.fists_of_flame",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1767050370
+      }
+    },
+    "Foggy Swamp Spirit Keeper": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.foggy_swamp_spirit_keeper",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3406301222
+      }
+    },
+    "Food": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "sacrifice.food",
+        "provider": "managym",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "content/semantic/v1/elemental_world.source.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3179069417
+      }
+    },
+    "Forecasting Fortune Teller": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "a5a05edd-2a30-414b-b766-f0651d5783f5",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/51/forecasting-fortune-teller"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#101b3c",
+          "#3859a8",
+          "#d8e4ff"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 107
+      }
+    },
+    "Forest": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/search?q=oracleid%3Ab34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#09291b",
+          "#287a43",
+          "#b7efb0"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 116
+      }
+    },
+    "Gather the White Lotus": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.gather_the_white_lotus",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 562569695
+      }
+    },
+    "Giant Cindermaw": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.giant_cindermaw",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 544126066
+      }
+    },
+    "Gnarled Professor": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.gnarled_professor",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 4184527765
+      }
+    },
+    "Gran-Gran": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.gran_gran",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1064913364
+      }
+    },
+    "Great Divide Guide": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.great_divide_guide",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 175226843
+      }
+    },
+    "Haru, Hidden Talent": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.haru_hidden_talent",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3209267375
+      }
+    },
+    "Hermitic Herbalist": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.hermitic_herbalist",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2954255516
+      }
+    },
+    "Human Soldier": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "sacrifice.human_soldier",
+        "provider": "managym",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "content/semantic/v1/elemental_world.source.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 916339024
+      }
+    },
+    "Igneous Inspiration": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "2e31af8f-5e94-4888-857d-911253eac2cd",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/stx/107/igneous-inspiration"
+      },
+      "treatment": {
+        "motif": "burst",
+        "palette": [
+          "#2c0909",
+          "#b91c1c",
+          "#fdba74"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 110
+      }
+    },
+    "Invasion Reinforcements": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "185316ff-6fb7-4b5c-8a60-3238674562a6",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/24/invasion-reinforcements"
+      },
+      "treatment": {
+        "motif": "formation",
+        "palette": [
+          "#322f27",
+          "#9c7f42",
+          "#fff1b8"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 118
+      }
+    },
+    "Iroh's Demonstration": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.iroh_s_demonstration",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1777886908
+      }
+    },
+    "Iroh, Grand Lotus": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.iroh_grand_lotus",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3569440030
+      }
+    },
+    "Island": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "b2c6aa39-2d2a-459c-a555-fb48ba993373",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/search?q=oracleid%3Ab2c6aa39-2d2a-459c-a555-fb48ba993373"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#071a36",
+          "#155e9b",
+          "#9ce8ff"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 101
+      }
+    },
+    "It'll Quench Ya!": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "cb184995-700f-4900-994a-4ce7fd12f942",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/58/itll-quench-ya!"
+      },
+      "treatment": {
+        "motif": "splash",
+        "palette": [
+          "#09243a",
+          "#0e7490",
+          "#cffafe"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 113
+      }
+    },
+    "Jeong Jeong's Deserters": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "tla.jeong_jeongs_deserters",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3527749662
+      }
+    },
+    "Jet, Freedom Fighter": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.jet_freedom_fighter",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3462442615
+      }
+    },
+    "June, Bounty Hunter": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.june_bounty_hunter",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 762135324
+      }
+    },
+    "Knowledge Seeker": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.knowledge_seeker",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1298932606
+      }
+    },
+    "Lightning Strike": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.lightning_strike",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1049106533
+      }
+    },
+    "Lotus Cobra": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.lotus_cobra",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 88429049
+      }
+    },
+    "Master Piandao": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.master_piandao",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 4033680015
+      }
+    },
+    "Mayhem Devil": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.mayhem_devil",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1412316642
+      }
+    },
+    "Messenger Hawk": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.messenger_hawk",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3611923025
+      }
+    },
+    "Momo, Friendly Flier": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.momo_friendly_flier",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3813520748
+      }
+    },
+    "Monastery Swiftspear": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.monastery_swiftspear",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2889204777
+      }
+    },
+    "Mountain": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "a3fb7228-e76b-4e96-a40e-20b5fed75685",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/search?q=oracleid%3Aa3fb7228-e76b-4e96-a40e-20b5fed75685"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#2b0b08",
+          "#b8321b",
+          "#ffb34d"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 102
+      }
+    },
+    "Octopus Form": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.octopus_form",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1021996636
+      }
+    },
+    "Origin of Metalbending": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.origin_of_metalbending",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2242968512
+      }
+    },
+    "Ostrich-Horse": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.ostrich_horse",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2560894895
+      }
+    },
+    "Otter-Penguin": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "e2171c48-a816-41b2-aa55-e0ba2503fd6a",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/67/otter-penguin"
+      },
+      "treatment": {
+        "motif": "glide",
+        "palette": [
+          "#091827",
+          "#256b8f",
+          "#bdefff"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 104
+      }
+    },
+    "Ozai's Cruelty": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.ozai_s_cruelty",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1623395754
+      }
+    },
+    "Plains": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/search?q=oracleid%3Abc71ebf6-2056-41f7-be35-b2e5c34afa99"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#3b3224",
+          "#c9a85e",
+          "#fff4c7"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 115
+      }
+    },
+    "Pop Quiz": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "dda9ac6c-1ab2-4f77-b499-f03d587163d8",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/stx/49/pop-quiz"
+      },
+      "treatment": {
+        "motif": "ripple",
+        "palette": [
+          "#0b1c35",
+          "#2563a8",
+          "#bae6fd"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 111
+      }
+    },
+    "Power Word Kill": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.power_word_kill",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 813561414
+      }
+    },
+    "Pretending Poxbearers": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.pretending_poxbearers",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1116722572
+      }
+    },
+    "Prismatic Vista": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.prismatic_vista",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2914129158
+      }
+    },
+    "Professor of Symbology": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.professor_of_symbology",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2528803970
+      }
+    },
+    "Prophetic Prism": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.prophetic_prism",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2321998372
+      }
+    },
+    "Ran and Shaw": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.ran_and_shaw",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2014622122
+      }
+    },
+    "Savor": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.savor",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2421848268
+      }
+    },
+    "Sazh's Chocobo": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.sazh_s_chocobo",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1064576852
+      }
+    },
+    "Shared Roots": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.shared_roots",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3537359885
+      }
+    },
+    "Sokka's Haiku": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.sokka_s_haiku",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1844983624
+      }
+    },
+    "South Pole Voyager": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "c5173332-68ad-456e-ad85-dd7475464d94",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/35/south-pole-voyager"
+      },
+      "treatment": {
+        "motif": "voyage",
+        "palette": [
+          "#18313c",
+          "#5f94a3",
+          "#f3f0d3"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 126
+      }
+    },
+    "Spectral Sailor": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.spectral_sailor",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3032014883
+      }
+    },
+    "Spirit": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "token.spirit",
+        "provider": "managym",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "content/semantic/v1/elemental_world.source.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 948067592
+      }
+    },
+    "Swamp": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.swamp",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3011080367
+      }
+    },
+    "Tiger-Dillo": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.tiger_dillo",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1012497789
+      }
+    },
+    "Tireless Provisioner": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.tireless_provisioner",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2471972198
+      }
+    },
+    "Tireless Tracker": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.tireless_tracker",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#3f0d12",
+          "#be123c",
+          "#fda4af"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1032869242
+      }
+    },
+    "Tolls of War": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.tolls_of_war",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 289876244
+      }
+    },
+    "Toph, the Blind Bandit": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.toph_the_blind_bandit",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3948022706
+      }
+    },
+    "Treasure": {
+      "kind": "token",
+      "provenance": {
+        "local_identity": "sacrifice.treasure",
+        "provider": "managym",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "content/semantic/v1/elemental_world.source.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#0f172a",
+          "#1d4ed8",
+          "#67e8f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 3343741764
+      }
+    },
+    "True Ancestry": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.true_ancestry",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "current",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1112142890
+      }
+    },
+    "Uncle Iroh": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.uncle_iroh",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#052e16",
+          "#15803d",
+          "#86efac"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 4246812236
+      }
+    },
+    "Unlucky Cabbage Merchant": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.unlucky_cabbage_merchant",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "canopy",
+        "palette": [
+          "#2e1065",
+          "#7e22ce",
+          "#e879f9"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1240862667
+      }
+    },
+    "Wartime Protestors": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.wartime_protestors",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "stone",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1114815955
+      }
+    },
+    "Water Tribe Rallier": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "64acb083-a0a3-46ec-9c93-b2ac36878703",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/42/water-tribe-rallier"
+      },
+      "treatment": {
+        "motif": "banner",
+        "palette": [
+          "#142638",
+          "#4c91a8",
+          "#f3f0d0"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 117
+      }
+    },
+    "Waterbending Lesson": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "temur.waterbending_lesson",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "ember",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1607183179
+      }
+    },
+    "Weaponize the Monsters": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "sacrifice.weaponize_the_monsters",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "dawn",
+        "palette": [
+          "#172554",
+          "#0f766e",
+          "#99f6e4"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 1998585245
+      }
+    },
+    "White Lotus Reinforcements": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "c55a4b25-ccc4-49de-9f98-a829c547a64d",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/251/white-lotus-reinforcements"
+      },
+      "treatment": {
+        "motif": "lotus",
+        "palette": [
+          "#173322",
+          "#6b8f51",
+          "#fff4ce"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 121
+      }
+    },
+    "Yip Yip!": {
+      "kind": "card",
+      "provenance": {
+        "oracle_id": "5453550f-9136-4568-baf8-c3d20e33fbb6",
+        "provider": "scryfall-oracle-cards",
+        "retrieved_at": "2026-07-15",
+        "rights_ref": "card-identity-data",
+        "source_uri": "https://scryfall.com/card/tla/43/yip-yip!"
+      },
+      "treatment": {
+        "motif": "bison",
+        "palette": [
+          "#25313b",
+          "#8294a3",
+          "#fff1c2"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 128
+      }
+    },
+    "Zuko's Exile": {
+      "kind": "card",
+      "provenance": {
+        "local_identity": "elemental.zuko_s_exile",
+        "provider": "retained-scryfall-fixture",
+        "retrieved_at": "2026-10-21",
+        "rights_ref": "card-identity-data",
+        "source_uri": "managym/tests/fixtures/scryfall_cards.json"
+      },
+      "treatment": {
+        "motif": "constellation",
+        "palette": [
+          "#1c1917",
+          "#b45309",
+          "#fbbf24"
+        ],
+        "rights_ref": "authored-treatment-v1",
+        "seed": 2848592467
+      }
+    }
+  },
+  "matchup": {
+    "hero": {
+      "card_count": 40,
+      "cards": {
+        "Abandon Attachments": 2,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Deserter's Disciple": 1,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 2,
+        "Fabled Passage": 2,
+        "Fire Nation Cadets": 4,
+        "Firebending Lesson": 3,
+        "Gran-Gran": 1,
+        "Igneous Inspiration": 2,
+        "Island": 7,
+        "Lightning Strike": 1,
+        "Monastery Swiftspear": 1,
+        "Mountain": 8,
+        "Octopus Form": 1,
+        "Pop Quiz": 1
+      },
+      "deck_id": "elemental_ur",
+      "display_name": "Elemental UR — Spells",
+      "sideboard": {
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "reachable_tokens": [
+      "Ally",
+      "Clue",
+      "Food",
+      "Human Soldier",
+      "Spirit",
+      "Treasure"
+    ],
+    "villain": {
+      "card_count": 40,
+      "cards": {
+        "Allies at Last": 2,
+        "Compassionate Healer": 2,
+        "Earth Kingdom Jailer": 2,
+        "Enter the Avatar State": 1,
+        "Fabled Passage": 2,
+        "Fancy Footwork": 1,
+        "Forest": 7,
+        "Haru, Hidden Talent": 1,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Plains": 8,
+        "Professor of Symbology": 1,
+        "South Pole Voyager": 1,
+        "True Ancestry": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 1,
+        "Yip Yip!": 1
+      },
+      "deck_id": "elemental_gw",
+      "display_name": "Elemental GW — Allies",
+      "sideboard": {
+        "Enter the Avatar State": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    }
+  },
+  "pack": {
+    "id": "elemental-world",
+    "title": "Elemental — ten decks",
+    "version": "2.0.0"
+  },
+  "rights": {
+    "authored-treatment-v1": {
+      "asset_kind": "authored_treatment_data",
+      "contains_third_party_art": false,
+      "copyright_notice": "Copyright status is not asserted; see NOTICE.md.",
+      "creator": "manabot contributors",
+      "license": "NOASSERTION"
+    },
+    "card-identity-data": {
+      "asset_kind": "card_identity_metadata",
+      "contains_third_party_art": false,
+      "copyright_notice": "Magic card identities are property of Wizards of the Coast and respective licensors; see NOTICE.md.",
+      "creator": "Scryfall and manabot contributors",
+      "license": "NOASSERTION"
+    }
+  },
+  "roster": [
+    {
+      "card_count": 40,
+      "cards": {
+        "Badgermole Cub": 1,
+        "Deserter's Disciple": 1,
+        "Enthusiastic Study": 1,
+        "Fabled Passage": 2,
+        "Field Trip": 1,
+        "Firebending Lesson": 2,
+        "Fists of Flame": 2,
+        "Forest": 8,
+        "Giant Cindermaw": 1,
+        "Gnarled Professor": 1,
+        "Igneous Inspiration": 1,
+        "Lightning Strike": 2,
+        "Monastery Swiftspear": 1,
+        "Mountain": 7,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Shared Roots": 1,
+        "Tiger-Dillo": 2,
+        "Toph, the Blind Bandit": 1,
+        "Uncle Iroh": 1,
+        "Wartime Protestors": 1
+      },
+      "deck_id": "elemental_gr",
+      "display_name": "Elemental GR — 4 power / pump and cheese",
+      "sideboard": {
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Allies at Last": 2,
+        "Compassionate Healer": 2,
+        "Earth Kingdom Jailer": 2,
+        "Enter the Avatar State": 1,
+        "Fabled Passage": 2,
+        "Fancy Footwork": 1,
+        "Forest": 7,
+        "Haru, Hidden Talent": 1,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Plains": 8,
+        "Professor of Symbology": 1,
+        "South Pole Voyager": 1,
+        "True Ancestry": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 1,
+        "Yip Yip!": 1
+      },
+      "deck_id": "elemental_gw",
+      "display_name": "Elemental GW — Allies",
+      "sideboard": {
+        "Enter the Avatar State": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Abandon Attachments": 2,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Deserter's Disciple": 1,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 2,
+        "Fabled Passage": 2,
+        "Fire Nation Cadets": 4,
+        "Firebending Lesson": 3,
+        "Gran-Gran": 1,
+        "Igneous Inspiration": 2,
+        "Island": 7,
+        "Lightning Strike": 1,
+        "Monastery Swiftspear": 1,
+        "Mountain": 8,
+        "Octopus Form": 1,
+        "Pop Quiz": 1
+      },
+      "deck_id": "elemental_ur",
+      "display_name": "Elemental UR — Spells",
+      "sideboard": {
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Abandon Attachments": 1,
+        "Accumulate Wisdom": 1,
+        "Deadly Dispute": 1,
+        "Epic Downfall": 1,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Foggy Swamp Spirit Keeper": 1,
+        "Forecasting Fortune Teller": 3,
+        "Gran-Gran": 1,
+        "Island": 8,
+        "It'll Quench Ya!": 2,
+        "June, Bounty Hunter": 1,
+        "Knowledge Seeker": 2,
+        "Otter-Penguin": 3,
+        "Pop Quiz": 1,
+        "Power Word Kill": 2,
+        "Savor": 1,
+        "Swamp": 7
+      },
+      "deck_id": "elemental_ub",
+      "display_name": "Elemental UB — Draw-two control",
+      "sideboard": {
+        "Accumulate Wisdom": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Boomerang Basics": 2,
+        "Compassionate Healer": 2,
+        "Divide by Zero": 2,
+        "Earth Kingdom Jailer": 2,
+        "Enter the Avatar State": 1,
+        "Fabled Passage": 2,
+        "Forecasting Fortune Teller": 3,
+        "Island": 7,
+        "It'll Quench Ya!": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Messenger Hawk": 2,
+        "Momo, Friendly Flier": 1,
+        "Plains": 8,
+        "Pop Quiz": 1,
+        "Professor of Symbology": 2,
+        "Spectral Sailor": 1,
+        "Yip Yip!": 1
+      },
+      "deck_id": "elemental_uw",
+      "display_name": "Elemental UW — Tempo",
+      "sideboard": {
+        "Accumulate Wisdom": 1,
+        "Fancy Footwork": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Abandon Attachments": 1,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Cycle of Renewal": 1,
+        "Fabled Passage": 3,
+        "Field Trip": 1,
+        "Firebending Lesson": 1,
+        "Forest": 5,
+        "Gnarled Professor": 1,
+        "Gran-Gran": 1,
+        "Great Divide Guide": 1,
+        "Hermitic Herbalist": 2,
+        "Iroh, Grand Lotus": 1,
+        "Island": 5,
+        "Mountain": 3,
+        "Ostrich-Horse": 2,
+        "Prismatic Vista": 2,
+        "Prophetic Prism": 1,
+        "Ran and Shaw": 1,
+        "Shared Roots": 1,
+        "Toph, the Blind Bandit": 1,
+        "True Ancestry": 1,
+        "Unlucky Cabbage Merchant": 1,
+        "Waterbending Lesson": 1,
+        "Zuko's Exile": 1
+      },
+      "deck_id": "elemental_ug",
+      "display_name": "Elemental UG — Temur Lessons",
+      "sideboard": {
+        "Iroh's Demonstration": 1,
+        "Origin of Metalbending": 1,
+        "Sokka's Haiku": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Compassionate Healer": 2,
+        "Deserter's Disciple": 1,
+        "Enthusiastic Study": 1,
+        "Fabled Passage": 2,
+        "Fancy Footwork": 1,
+        "Firebending Lesson": 1,
+        "Gather the White Lotus": 1,
+        "Igneous Inspiration": 1,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "Jet, Freedom Fighter": 1,
+        "Lightning Strike": 3,
+        "Master Piandao": 1,
+        "Mountain": 7,
+        "Plains": 8,
+        "Professor of Symbology": 2,
+        "South Pole Voyager": 1,
+        "Wartime Protestors": 1,
+        "Water Tribe Rallier": 1,
+        "Yip Yip!": 1
+      },
+      "deck_id": "elemental_wr",
+      "display_name": "Elemental WR — Go-wide Allies",
+      "sideboard": {
+        "Enter the Avatar State": 1,
+        "Firebending Lesson": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Bastion of Remembrance": 1,
+        "Callous Inspector": 1,
+        "Corrupt Court Official": 2,
+        "Curious Farm Animals": 1,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "June, Bounty Hunter": 1,
+        "Plains": 8,
+        "Power Word Kill": 1,
+        "Pretending Poxbearers": 2,
+        "Professor of Symbology": 2,
+        "Savor": 1,
+        "Swamp": 7,
+        "Tolls of War": 1,
+        "Yip Yip!": 1
+      },
+      "deck_id": "elemental_wb",
+      "display_name": "Elemental WB — Go-wide sacrifice",
+      "sideboard": {
+        "Enter the Avatar State": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Callous Inspector": 1,
+        "Cat-Gator": 1,
+        "Corrupt Court Official": 4,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Deserter's Disciple": 1,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Fire Nation Cadets": 1,
+        "Firebending Lesson": 3,
+        "Igneous Inspiration": 1,
+        "June, Bounty Hunter": 1,
+        "Lightning Strike": 2,
+        "Mayhem Devil": 1,
+        "Mountain": 7,
+        "Savor": 1,
+        "Swamp": 8,
+        "Weaponize the Monsters": 1
+      },
+      "deck_id": "elemental_rb",
+      "display_name": "Elemental RB — Sacrifice control",
+      "sideboard": {
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    {
+      "card_count": 40,
+      "cards": {
+        "Badgermole Cub": 1,
+        "Callous Inspector": 1,
+        "Corrupt Court Official": 2,
+        "Cycle of Renewal": 1,
+        "Dai Li Agents": 1,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Fabled Passage": 3,
+        "Field Trip": 1,
+        "Forest": 6,
+        "June, Bounty Hunter": 1,
+        "Lotus Cobra": 1,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Power Word Kill": 1,
+        "Prismatic Vista": 2,
+        "Savor": 1,
+        "Sazh's Chocobo": 1,
+        "Swamp": 6,
+        "Tireless Provisioner": 1,
+        "Tireless Tracker": 1,
+        "Toph, the Blind Bandit": 1,
+        "True Ancestry": 1,
+        "Unlucky Cabbage Merchant": 1
+      },
+      "deck_id": "elemental_bg",
+      "display_name": "Elemental BG — Landfall and sacrifice",
+      "sideboard": {
+        "Azula Always Lies": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    }
+  ],
+  "schema_version": 2,
+  "semantic_pack_key": "elemental-world-v2",
+  "setup_schema_version": 1
+}

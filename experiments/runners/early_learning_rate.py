@@ -26,6 +26,10 @@ from pathlib import Path
 import socket
 import statistics
 
+<<<<<<< HEAD
+=======
+from experiments.recipes import ataraxos_mini
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.execution import atomic_json
 from manabot.training.experiment_execution import (
@@ -69,9 +73,12 @@ WALL_SECONDS = 16 * 3600.0
 # Accounting reserve for evaluator process time; it overlaps learning.
 MONITOR_SECONDS = 21600.0
 MONITOR_ATTEMPT_SECONDS = 900.0
+<<<<<<< HEAD
 SOURCE = Path(__file__).resolve().parents[1] / (
     "regimes/early-learning-rate-mini-source.json"
 )
+=======
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +90,11 @@ def recipe(
     updates: int = UPDATES, allowance: float = ATTEMPT_SECONDS
 ) -> TrainingRegime:
     """The ETU-118 mini recipe as one fresh self-play stage of `updates`."""
+<<<<<<< HEAD
     base = TrainingRegime.model_validate_json(SOURCE.read_text())
+=======
+    base = ataraxos_mini()
+>>>>>>> 20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f
     (stage,) = base.stages
     if not isinstance(stage, TrainSelfPlay):
         raise ValueError("source recipe must be one self-play stage")
