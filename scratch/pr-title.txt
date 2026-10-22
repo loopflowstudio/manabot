@@ -1,0 +1,1 @@
+Preserve spell colors when paying mana-filter activation costs
