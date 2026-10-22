@@ -37,9 +37,9 @@ these at full scale; divergence in learner decisions per update is reported.
 
 Seeds 64001–64004; up to 2,700 updates (about 70M learner decisions at the
 calibrated rate); raw exports every 20 updates. One L4 job per arm and seed, each
-an independent single-job cohort, 11.9-hour lifetime and $7.27 limit. A run
-that pauses at its deadline before 64M continues as a new segment; collector
-and RNG streams restart there, identically for both arms.
+an independent job, 11.9-hour lifetime and $7.27 limit, submitted one after
+another. A run that pauses at its rental deadline keeps its exports; matched
+comparisons extend only to the learner decisions every run reached.
 
 ## Evaluation
 
