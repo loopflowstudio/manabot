@@ -22,9 +22,10 @@ was dead on arrival in exp-10.)
 | **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
+| **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
 
-**Current development world: w12.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w11) are **not comparable** to w12; do not reuse their
+**Current development world: w13.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w12) are **not comparable** to w13; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -256,3 +257,18 @@ The new [w12 corpus](conformance/semantic-kernel-w12-v1/) records fresh runtime
 receipts; w11 and earlier corpora, checkpoints and `erd1` evidence stay frozen.
 This bounded repair does not supply trigger-order choices, general protection,
 or stack-spell incarnation guarantees. No strength baseline is claimed.
+
+## w13: combined targeting and shared-payment repairs
+
+The w12 targeting repair and the separately landed shared-payment repair now
+execute together. The latter changes payment transitions and event ordering:
+the `temur-164` checkpoint after command 10 matches the payment corpus, but
+differs from the earlier w12 targeting-only corpus. Neither historical receipt
+describes the combined source. w13 identifies this combined runtime; it adds no
+new tensor shape, learning schema, authored cards or payment implementation.
+
+[Fresh conformance evidence](conformance/semantic-kernel-w13-v1/) uses the same
+bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
+ordinary Command path. All earlier corpora and demo files retain their bytes.
+Current-world admission, monitoring and full learnability must validate this
+combined runtime; historical w12 passes are scoped to their recorded sources.

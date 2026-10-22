@@ -54,7 +54,7 @@ World w11 and match-state hash version 8 identify changed serialized payment
 state and content. Old checkpoints are rejected; historical receipts, `erd1`
 addresses and previous conformance corpora are retained without rewriting.
 The original optional-payment replay evidence belongs to `conformance/semantic-kernel-w11-v1`;
-current-runtime replay evidence belongs to `conformance/semantic-kernel-w12-v1`.
+current-runtime replay evidence belongs to `conformance/semantic-kernel-w13-v1`.
 Native clone/undo and Command replay include payment progress, nested mana
 choices and contributed-object evidence. Recovery replays the ordinary Commands;
 it does not reconstruct payment by interpreting the card's text.

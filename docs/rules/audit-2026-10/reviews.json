@@ -69,7 +69,7 @@
         "managym/tests/rules/cr_106_mana.rs",
         "managym/tests/rules/temur_cards.rs"
       ],
-      "gap": "MTG-174 owns shared offers/execution payment model. Known offered Prism/Treasure failure; no GPU root-cause identity inferred. Phyrexian, snow, variable and two-brid coverage unresolved.",
+      "gap": "The separately landed shared-payment repair is integrated in w13. The Prism/Treasure regression passes through explicit nested choices; no GPU root-cause identity inferred. Phyrexian, snow, variable and two-brid coverage unresolved.",
       "ownership": "dispersed",
       "comments": "Inspect individual entry before claiming comment adequacy.",
       "anchors": [
@@ -300,7 +300,7 @@
         "managym/tests/rules/temur_cards.rs",
         "managym/tests/rules/cr_106_mana.rs"
       ],
-      "gap": "Prism/Treasure execution fails; arbitrary mana ability classification (especially library-moving costs) unresolved.",
+      "gap": "Prism/Treasure execution passes through explicit nested payment choices in w13; arbitrary mana ability classification (especially library-moving costs) remains unresolved.",
       "ownership": "dispersed",
       "comments": "Inspect individual entry before claiming comment adequacy.",
       "anchors": []
@@ -720,7 +720,7 @@
       "tests": [
         "managym/tests/rules/temur_cards.rs"
       ],
-      "gap": "Payment graph known failure; full locked-cost ordering, taxes and alternate costs unresolved.",
+      "gap": "The bounded Prism/Treasure case passes after shared-payment integration; full locked-cost ordering, taxes and alternate costs remain unresolved.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": []
@@ -747,9 +747,9 @@
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
         "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation (explicit known-failure probe)"
+        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
       ],
-      "gap": "Offered Treasure-funded Prism activation rejects at audited SHA; MTG-174 owns fix. Probe asserts independent final U pool, consumed Treasure and no stack object.",
+      "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
@@ -763,9 +763,9 @@
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
         "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation (explicit known-failure probe)"
+        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
       ],
-      "gap": "Offered Treasure-funded Prism activation rejects at audited SHA; MTG-174 owns fix. Probe asserts independent final U pool, consumed Treasure and no stack object.",
+      "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [

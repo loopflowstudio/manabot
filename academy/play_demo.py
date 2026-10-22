@@ -30,9 +30,9 @@ class PlayDemo(BaseModel):
 
 def load_play_demo(name: str) -> PlayDemo:
     filenames = {
-        "learn": "learn-demo-explicit-w12.json",
-        "precision": "precision-demo-w12.json",
-        "precision-mana": "precision-mana-demo-w12.json",
+        "learn": "learn-demo-explicit-w13.json",
+        "precision": "precision-demo-w13.json",
+        "precision-mana": "precision-mana-demo-w13.json",
     }
     if name not in filenames:
         raise ValueError(f"Unknown play demo: {name}")

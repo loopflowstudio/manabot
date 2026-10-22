@@ -136,7 +136,7 @@ checkpoints or experiment evidence.
   the local files. Verify with
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
-  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
   and run the full diagnostic with
   `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
   The `--pr` subset omits reward-driven PPO and cannot verify that path.

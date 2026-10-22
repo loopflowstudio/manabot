@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from managym.experience import LegacyPermanentView
+from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 import torch
@@ -35,8 +37,6 @@ from manabot.semantic.learning import BoundSemanticPack
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 import managym
-from managym.experience import LegacyPermanentView
-from managym.experience_projection import describe_actions, serialize_observation
 
 PACK = "elemental-world-v2"
 BASE = Path("content/semantic/w11")
@@ -122,7 +122,7 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
         validate_checkpoint_world({"world_binding": drifted}, space)
     stale = deepcopy(binding)
     stale["world"] = "w9"
-    with pytest.raises(ValueError, match="compatible w11"):
+    with pytest.raises(ValueError, match=f"compatible {managym.WORLD_VERSION}"):
         validate_checkpoint_world({"world_binding": stale}, space)
 
 

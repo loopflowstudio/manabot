@@ -581,9 +581,7 @@ fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
 
 /// CR 605.3a/b, 118.3: one Treasure can pay Prism's activation cost;
 /// sacrifice precedes the chosen-color output, and neither uses the stack.
-/// Kept as an explicit known-failure probe for the separate payment work.
 #[test]
-#[ignore = "known payment defect: offered Prism activation rejects Treasure-funded cost"]
 fn audit_prism_treasure_empty_pool_activation() {
     let deck = BTreeMap::from([
         ("Mountain".to_string(), 8),
@@ -596,6 +594,12 @@ fn audit_prism_treasure_empty_pool_activation() {
     s.game_mut().create_token("Treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
     activate(&mut s, "Prophetic Prism", 0);
+    // Paying the upfront cost exposes the nested Treasure/color decisions.
+    activate(&mut s, "Treasure", 0);
+    choose(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 4, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     choose(&mut s, |action| {
         matches!(action, Action::ChooseMode { mode: 1, .. })
     });

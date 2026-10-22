@@ -36,8 +36,9 @@ Permanent-wide restrictions now precede the target-spec match in
 resolution rechecks current state. Grouping by target kind lets permanent branches
 reuse one validated object and removes repeated presence checks. Both controller orientations, own hexproof,
 response-time grants, mixed/all-invalid targets and leave/reenter identity have
-bounded witnesses. `WORLD_VERSION` advances to w12 with fresh conformance
-receipts. Tensor shapes and authored content are unchanged; earlier worlds,
+bounded witnesses. The targeting repair originally advanced to w12. Shipping
+integration with the separately landed shared-payment repair uses w13 and fresh
+combined-runtime receipts. Tensor shapes and authored content are unchanged; earlier worlds,
 checkpoints and `erd1` evidence retain their identities.
 
 ## Concrete change
@@ -73,7 +74,23 @@ legitimate rechecks have not been collapsed into a universal rules engine.
 
 ## Validation limits
 
-The enumeration cleanup now has fresh checks against its rebuilt, atomically
+Shipping integration uses **w13** after merging the independently owned payment
+repair. The initial combined-source CI run exposed a stale w12 replay checkpoint
+and a hard-coded w11 admission error assertion. The checkpoint matches the
+payment repair's corpus exactly. Fresh w13 receipts preserve both older corpora
+and all older demos; the error assertion now uses the runtime world version.
+
+The combined source passes 6 conformance checks, 315 debug rules tests, 11
+targeting witnesses, 51 world/admission/monitor tests, 31 Command/recovery/Study
+runtime cases, all 7 Study branch cases and 43 inventory/selection tests. The
+Prism/Treasure audit regression also passes after following the explicit nested
+payment choices; it is no longer ignored. The separate trigger-order proposal
+remains ignored. [Full w13 learnability](learnability-w13-integration.json) passes
+in 39.4s, including 65,536 PPO transitions and checkpoint reload under unchanged
+budgets. [Integration receipts](shipping-integration.json) retain failures,
+source hashes and the repair's checks. New-head CI remains the landing gate.
+
+The pre-sync enumeration cleanup has checks against its rebuilt, atomically
 installed native extension: 11 debug targeting witnesses, 300 debug rules cases,
 6 w12 conformance checks, 11 Command/recovery and decision-surface cases, and
 21 dependency-blocked play/Study protocol/runtime cases. The known payment and
@@ -138,7 +155,7 @@ failure, native rebuild/import, Python checks, cost and coverage limits.
 [Line accounting](line-accounting.json) reconciles the original 621-line draft
 with this bounded increment against the approximate combined 10k-line budget.
 Earlier frozen worlds, decks, experiment evidence and training budgets remain unchanged.
-CI conformance checks select the w12 root with unchanged required-check semantics.
+CI conformance checks select the w13 root with unchanged required-check semantics.
 On 2026-10-22, Jack Heart reviewed the walkthrough and approved shipping this
 bounded increment, superseding older draft-only holds. Gate prepares this checkout;
 the parent conversation owns publication and landing. MTG-177 remains open for the
