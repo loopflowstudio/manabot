@@ -15,6 +15,11 @@ use crate::{
 type ManaChoices = Vec<(ManaCost, Mana)>;
 type PaymentSearchState = (Vec<usize>, [u8; 6], [u8; 6]);
 
+struct ManaAbilityPayment {
+    sources: Vec<PermanentId>,
+    remaining: Mana,
+}
+
 impl Game {
     /// Printed abilities followed by currently granted abilities, in source order.
     pub(crate) fn activated_abilities_for(
@@ -219,15 +224,117 @@ impl Game {
         permanent: PermanentId,
         ability: &ActivatedAbilityDefinition,
     ) -> Result<(), AgentError> {
+        // Reserve the activating source before searching. The printed upfront
+        // cost must be paid without its output and without consuming the only
+        // continuation of an already announced parent cost.
+        let mut probe = self.clone();
+        if ability.tap_source {
+            probe.tap_permanent(permanent, true);
+        }
+        let sacrifice = match &self.pending_choice {
+            Some(crate::flow::game::PendingChoice::ManaPayment { sacrifice, .. }) => *sacrifice,
+            _ => None,
+        };
+        let sources: Vec<_> = probe
+            .battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| {
+                Some(*id) != sacrifice
+                    && Some(*id) != probe.pending_mana_source()
+                    && *id != permanent
+                    && probe.fixed_source_mana(*id).total() > 0
+            })
+            .collect();
+        let plan = (0..=sources.len())
+            .find_map(|limit| {
+                probe.mana_ability_payment_plan(player, permanent, ability, &sources, limit)
+            })
+            .ok_or_else(|| AgentError("no completing upfront mana payment".into()))?;
         if ability.tap_source {
             self.tap_permanent(permanent, true);
         }
-        self.produce_mana(player, &ability.mana_cost)?;
-        self.spend_mana(player, &ability.mana_cost)?;
+        for source in plan.sources {
+            self.produce_fixed_source_mana(player, source);
+        }
+        self.spend_to_mana_remainder(player, &plan.remaining);
         if ability.sacrifice_source {
             self.sacrifice_permanent(permanent);
         }
         Ok(())
+    }
+
+    /// Search finite subsets of automatic fixed sources, fewest taps first,
+    /// considering concrete pool payments as well. Chosen outputs remain
+    /// decisions; only the automatic upfront payment is planned.
+    fn mana_ability_payment_plan(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability: &ActivatedAbilityDefinition,
+        sources: &[PermanentId],
+        remaining_taps: usize,
+    ) -> Option<ManaAbilityPayment> {
+        for remaining in self.pooled_mana(player).payment_options(&ability.mana_cost) {
+            let mut paid = self.clone();
+            paid.spend_to_mana_remainder(player, &remaining);
+            if ability.sacrifice_source {
+                paid.sacrifice_permanent(permanent);
+            }
+            if ability
+                .mana_choices()?
+                .iter()
+                .any(|output| paid.mana_choice_completes_payment(player, output))
+            {
+                return Some(ManaAbilityPayment {
+                    sources: Vec::new(),
+                    remaining,
+                });
+            }
+        }
+        if remaining_taps == 0 {
+            return None;
+        }
+        // Optimistic completion before spending safely prunes impossible
+        // branches. Source identities stay distinct (e.g. waterbend taps).
+        if !ability
+            .mana_choices()?
+            .iter()
+            .any(|output| self.mana_choice_completes_payment(player, output))
+        {
+            return None;
+        }
+        // Each source is visited at most once along a branch.
+        for (index, source) in sources.iter().enumerate() {
+            let mut next = self.clone();
+            next.produce_fixed_source_mana(player, *source);
+            if let Some(mut plan) = next.mana_ability_payment_plan(
+                player,
+                permanent,
+                ability,
+                &sources[index + 1..],
+                remaining_taps - 1,
+            ) {
+                plan.sources.insert(0, *source);
+                return Some(plan);
+            }
+        }
+        None
+    }
+
+    /// Execute fixed output at the same tap/event authority used by payment
+    /// probes, including triggered tap-for-mana bonuses.
+    fn produce_fixed_source_mana(&mut self, player: PlayerId, permanent: PermanentId) {
+        let source = self.state.permanents[permanent].as_ref().unwrap();
+        let produced: Vec<_> = self.state.cards[source.card]
+            .mana_abilities
+            .iter()
+            .map(|ability| ability.mana.clone())
+            .collect();
+        self.tap_permanent(permanent, true);
+        self.journal_player(player);
+        for mana in produced {
+            self.state.players[player.0].mana_pool.add(&mana);
+        }
     }
 
     /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
@@ -318,19 +425,8 @@ impl Game {
             if permanent.tapped || card.mana_abilities.is_empty() || !permanent.can_tap(card) {
                 continue;
             }
-            let produced: Vec<_> = card
-                .mana_abilities
-                .iter()
-                .map(|ability| ability.mana.clone())
-                .collect();
-
-            // CR 106.3 — Activate mana abilities to add mana to the mana pool.
-            // Tapping for mana emits a PermanentTapped { for_mana: true } event.
-            self.tap_permanent(permanent_id, true);
-            self.journal_player(player);
-            for mana in &produced {
-                self.state.players[player.0].mana_pool.add(mana);
-            }
+            // CR 106.3 — tapping for mana emits the normal rules event.
+            self.produce_fixed_source_mana(player, permanent_id);
         }
 
         if !self.pooled_mana(player).can_pay(cost) {
@@ -354,6 +450,12 @@ impl Game {
         let mut remaining = combined;
         remaining.pay(cost);
 
+        self.spend_to_mana_remainder(player, &remaining);
+        Ok(())
+    }
+
+    /// Commit a searched payment without reselecting its generic colors.
+    fn spend_to_mana_remainder(&mut self, player: PlayerId, remaining: &Mana) {
         // Rebuild the pools by restriction class and color, consuming the
         // expiring combat pool before the regular pool within each class.
         self.journal_player(player);
@@ -372,7 +474,6 @@ impl Game {
             player_state.combat_mana_pool.mana[slot] -= combat;
             player_state.mana_pool.mana[slot] -= spent - combat;
         }
-        Ok(())
     }
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
@@ -422,16 +523,13 @@ fn can_cover_cost(
             continue;
         }
         for (activation, output) in choices {
-            if !pool.can_pay(activation) {
-                continue;
-            }
-            let mut next = pool.clone();
-            next.pay(activation);
-            next.add(output);
-            let mut remaining = counts.clone();
-            remaining[index] -= 1;
-            if can_cover_cost(groups, remaining, next, cost, visited) {
-                return true;
+            for mut next in pool.payment_options(activation) {
+                next.add(output);
+                let mut remaining = counts.clone();
+                remaining[index] -= 1;
+                if can_cover_cost(groups, remaining, next, cost, visited) {
+                    return true;
+                }
             }
         }
     }

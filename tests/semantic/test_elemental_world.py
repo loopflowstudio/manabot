@@ -373,3 +373,74 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
     pytest.fail(
         f"{left}/{right} did not terminate within the 5000-action encoder smoke cap"
     )
+
+
+def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
+    # MTG-174 retained admission root: WB vs UG, no altered deck or seed.
+    prefix = [
+        2,
+        2,
+        0,
+        0,
+        4,
+        3,
+        3,
+        5,
+        2,
+        0,
+        2,
+        2,
+        2,
+        6,
+        2,
+        3,
+        1,
+        2,
+        1,
+        0,
+        4,
+        0,
+        0,
+        8,
+        0,
+        0,
+        1,
+        4,
+        6,
+        2,
+        2,
+        5,
+        1,
+        1,
+    ]
+    digests: list[str] = []
+    for _ in range(2):
+        env = managym.Env(seed=2165384, skip_trivial=True)
+        obs, _ = env.reset(
+            [
+                managym.authored_deck_setup(PACK, key)
+                for key in ("elemental_wb", "elemental_ug")
+            ]
+        )
+        for action in prefix:
+            obs, _, _, _, _ = env.step(action)
+        assert len(obs.action_space.actions) == 8
+        assert "Gnarled Professor" in describe_actions(obs)[4]["description"]
+        root = env.state_digest()
+        branch = env.clone_env()
+        obs, _, _, _, _ = branch.step(4)
+        # The production wrapper skips forced payment and priority steps,
+        # reaching the resolved Professor's player-visible Learn decision.
+        # Directed native regressions exercise each explicit payment step.
+        assert any(
+            c.name == "Gnarled Professor" and c.zone == 2 for c in obs.agent_cards
+        )
+        decline = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if action.action_type == 10
+        )
+        branch.step(decline)
+        assert env.state_digest() == root
+        digests.append(branch.state_digest())
+    assert digests[0] == digests[1]
