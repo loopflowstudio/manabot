@@ -637,3 +637,36 @@ write leaves services stopped for journal reconciliation. This was a one-off
 operational repair, not a general repricing/retry API. Original scientific learning
 contracts and completed attempts remain unchanged; the operational cohort identity
 changes. See the [capacity record](../experiments/model-capacity.md#queued-price-admission-recovery-2026-10-08).
+
+### Live Etude evaluation on an owned controller
+
+Install the `evaluation` and `artifacts` extras in a separate controller runtime
+(Python 3.12). `evaluation` pins Etude's public Eval API to an exact source commit;
+legacy `reports` uses an older Etude reader and is a separate, conflicting extra.
+The native engine and checkpoint admission must match the frozen training world.
+
+```sh
+uv run --extra evaluation --extra artifacts -m manabot.remote.live_evaluation \
+  --cohort mtg165-two-seat-50 --directory /Users/jack/.manabot/mtg165-two-seat-50/evaluation
+```
+
+This observer reads verified raw exports every minute and holds an Etude benchmark
+for each new absolute 250-update checkpoint, serially on the controller CPU. It
+cannot rent, extend or restart training. Each checkpoint has a one-hour evaluation
+limit, a durable intent, console output, arena traces/replay receipts and Etude
+match/Parquet records. Failures and interruptions stay visible without automatic
+replay; a still-live old evaluator PID blocks a replacement observer.
+
+The benchmark repeats deals 1590100000–1590100024, all eight deck/seat legs against
+the heuristic, retaining one complete deal as Etude's scheduling/resampling unit.
+These are development monitors, not held-out evidence. Etude's intervals use its
+own default bootstrap (2,000 draws, seed 0), distinct from the earlier monitor
+report's 4,000 draws/seed 17. Scores use the same games and original arena seed
+derivation. Native on-play seats are distinct from Etude's candidate/anchor seats.
+
+`public/index.html`, `eval.html`, `curves.json` and `status.json` refresh from saved
+Etude results every 30 seconds during evaluation. Serve only `public/` from the
+Mini for a live page; checkpoint inputs, credentials and command traces stay
+outside that served directory. The observer exits after terminal cohort discovery
+and draining its exported checkpoint queue, or one hour beyond the cohort's
+absolute deadline. It holds a filesystem owner lock independently of training.

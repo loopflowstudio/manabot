@@ -92,7 +92,7 @@ def test_cli_uses_evaluator_result_and_stops_incomplete_panel(
     ) -> monitor.MonitorResult:
         # Exercise actual checkpoint admission and the public result type; only
         # the expensive games and their already-tested cohort scoring are stubbed.
-        result = monitor._manifest(run, artifact, coordinates, protocol)
+        result = monitor.checkpoint_manifest(run, artifact, coordinates, protocol)
         observed.append(coordinates.learner_transitions)
         assert output_dir == output / f"transitions-{coordinates.learner_transitions}"
         assert concurrent_activity.startswith("post-training panel")

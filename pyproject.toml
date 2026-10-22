@@ -46,6 +46,9 @@ notebook = [
     "matplotlib>=3.9",
     "wandb-workspaces>=0.4.13",
 ]
+evaluation = [
+    "etude-sdk[eval] ; python_full_version >= '3.12'",
+]
 
 [dependency-groups]
 training-runtime = [
@@ -68,6 +71,7 @@ play-runtime = [
 [tool.uv]
 default-groups = ["training-runtime"]
 conflicts = [
+    [{ extra = "reports" }, { extra = "evaluation" }],
     [
         { group = "training-runtime" },
         { group = "play-runtime" },
@@ -95,6 +99,7 @@ torch = [
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
     { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "1ee96ffb0a077cc83953b2806e99d8c8fb92b4e3", extra = "evaluation" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["manabot", "academy"]
