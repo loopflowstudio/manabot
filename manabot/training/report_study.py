@@ -13,8 +13,8 @@ from matplotlib.figure import Figure
 from pydantic import BaseModel, ConfigDict
 
 from manabot.arena.models import canonical_sha256
+from manabot.training.analysis import paired_uncertainty
 from manabot.training.monitor_evaluation import ArenaRow
-from manabot.training.study_statistics import paired_uncertainty
 
 
 class _Saved(BaseModel):

@@ -60,7 +60,7 @@ API, fixtures and curated pack metadata. Optional extras:
 - `manabot[notebook]`: interactive notebook tooling.
 
 Core library calls, built-in training presets, simulation and JSON `--regime`
-inputs are package interfaces. `--regime-name` loads `experiments/recipes.py`
+inputs are package interfaces. `--regime-name` loads `experiments/<experiment>.py`
 and requires a source checkout. Experiment drivers, source-bundle remote
 submission, research receipt generation and repository/data-ledger utilities
 also require their source tree and retained artifacts. Never change a running
