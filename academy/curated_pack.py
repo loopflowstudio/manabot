@@ -33,7 +33,7 @@ JEONG_INCREMENT_MANIFEST_PATH = (
 )
 ELEMENTAL_WORLD_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
-    / "frontend/src/lib/packs/elemental-world/v1/manifest.json"
+    / "frontend/src/lib/packs/elemental-world/v2/manifest.json"
 )
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 REMOTE_PREFIXES = ("http://", "https://", "//")

@@ -93,7 +93,7 @@ impl Orientation {
     fn source_bytes(self) -> &'static [u8] {
         match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => {
-                include_bytes!("../../content/semantic/v1/elemental_world.source.json")
+                include_bytes!("../../content/semantic/w11/elemental_world.source.json")
             }
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => {
                 include_bytes!("../../content/semantic/v1/temur.source.json")
@@ -113,7 +113,7 @@ impl Orientation {
     fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
         match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
-                crate::semantic::SemanticPack::elemental_world()
+                crate::semantic::SemanticPack::optional_payments()
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),

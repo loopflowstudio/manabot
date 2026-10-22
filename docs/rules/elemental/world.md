@@ -5,12 +5,15 @@ The exact [40-card lists and outside-game Lesson pools](decks.md),
 [machine-readable selection](decks.json), and [cube snapshot](cube-snapshot.csv)
 are retained here. Cube counts apply independently to each main deck plus its
 Lesson pool; basic lands are unlimited and reuse between decks is allowed.
-This is development world **w10**, with one `elemental-world-v1` compiled pack.
-It does not freeze a strength baseline or certify balance.
+The original delivery is world **w10**, with `elemental-world-v1`. Current
+play and training use **w11** and `elemental-world-v2` after the
+[optional-payment generalization](../optional-payments.md). The ten exact
+setups are unchanged. Neither world freezes a strength baseline or certifies balance.
 
 ## Setup and runtime authority
 
-The compiled source is `content/semantic/v1/elemental_world.source.json`.
+The current compiled source is `content/semantic/w11/elemental_world.source.json`.
+The original source remains in `content/semantic/v1/elemental_world.source.json`.
 Its ten keys are `elemental_gr`, `elemental_gw`, `elemental_ur`, `elemental_ub`,
 `elemental_uw`, `elemental_ug`, `elemental_wr`, `elemental_wb`, `elemental_rb`,
 and `elemental_bg`. UG is the accepted Temur Lessons list, including Iroh,
@@ -43,9 +46,9 @@ Training uses the ordinary APIs, for example:
 from manabot.infra.hypers import AgentSpec, MatchHypers
 
 match = MatchHypers.authored(
-    "elemental-world-v1", "elemental_ug", "elemental_bg"
+    "elemental-world-v2", "elemental_ug", "elemental_bg"
 )
-agent = AgentSpec(semantic_pack="elemental-world-v1", policy_film=True)
+agent = AgentSpec(semantic_pack="elemental-world-v2", policy_film=True)
 ```
 
 These values go into the existing environment/model/trainer configuration.
@@ -54,11 +57,11 @@ The semantic policy joins all admitted definitions to complete typed programs;
 it does not rely on transport IDs as card meaning.
 
 An Elemental checkpoint binds all ten exact setups, the full compiled manifest,
-input shapes and learning schema 6. The ordinary catalog and loader reconstruct
+input shapes and learning schema 7. The ordinary catalog and loader reconstruct
 an explicitly bound representative root and validate that roster before loading
 weights. Execution admits any pair or mirror from it and rejects a foreign or
 modified setup. Compatibility does not claim that a policy trained on one pair
-has learned the other pairs. Earlier checkpoints fail w10 world admission.
+has learned the other pairs. Earlier checkpoints fail w11 world admission.
 
 ## Complete-card audit and ownership
 
@@ -123,7 +126,7 @@ UR→GW and GW→UR. Each uses game seed 164, uniform legal-offer selection from
 `random.Random(164)`, and a cap of 30,000 Commands. The runner is:
 
 ```bash
-uv run python -m scripts.verify_elemental_world --out conformance/elemental-world-w10-v1/command-cohort.json
+uv run python -m scripts.verify_elemental_world --out conformance/elemental-world-w11-v1/command-cohort.json
 ```
 
 The [retained result](../../../conformance/elemental-world-w10-v1/command-cohort.json)
@@ -149,8 +152,9 @@ missing explicit identity and older worlds are rejected.
 The w10 semantic conformance corpus adds both GR/UG seat orders to the retained
 validation orientations. Its normalized and optimized executors share native
 rules primitives; it does not establish agreement with an independent engine.
-The inherited Phase table is pinned source evidence. Current Academy authority,
-Learn and navigation fixtures have separate w10 paths; earlier artifacts are
+The inherited Phase table is pinned source evidence. The original Academy authority,
+Learn and navigation fixtures have separate w10 paths. Their current w11
+replacements have distinct paths; earlier artifacts are
 not rewritten to appear current.
 
 Full affected suites, the prescribed learnability diagnostic, release browser

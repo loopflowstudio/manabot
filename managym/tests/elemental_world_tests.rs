@@ -3,33 +3,37 @@ use managym::{cardsets::alpha::ContentPack, semantic::SemanticPack, Game};
 
 #[test]
 fn selected_world_compiles_every_card_without_reduced_native_rules() {
-    let semantic = SemanticPack::elemental_world().unwrap();
-    assert_eq!(semantic.definitions.len(), 100);
-    assert_eq!(semantic.decks.len(), 10);
-    let compiled = semantic.compile_content_pack().unwrap();
-    let native = ContentPack::default();
-    for definition in &semantic.definitions {
-        let name = &definition.registry_name;
-        let mut actual = compiled
-            .definition(compiled.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        let mut expected = native
-            .definition(native.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        if expected.targeting.is_empty() {
-            actual.targeting.clear();
+    for semantic in [
+        SemanticPack::elemental_world().unwrap(),
+        SemanticPack::optional_payments().unwrap(),
+    ] {
+        assert_eq!(semantic.definitions.len(), 100);
+        assert_eq!(semantic.decks.len(), 10);
+        let compiled = semantic.compile_content_pack().unwrap();
+        let native = ContentPack::default();
+        for definition in &semantic.definitions {
+            let name = &definition.registry_name;
+            let mut actual = compiled
+                .definition(compiled.definition_id(name).unwrap())
+                .unwrap()
+                .clone();
+            let mut expected = native
+                .definition(native.definition_id(name).unwrap())
+                .unwrap()
+                .clone();
+            if expected.targeting.is_empty() {
+                actual.targeting.clear();
+            }
+            actual.abilities.sort_by_key(|a| format!("{a:?}"));
+            expected.abilities.sort_by_key(|a| format!("{a:?}"));
+            assert_eq!(actual, expected, "compiled rules drift for {name}");
         }
-        actual.abilities.sort_by_key(|a| format!("{a:?}"));
-        expected.abilities.sort_by_key(|a| format!("{a:?}"));
-        assert_eq!(actual, expected, "compiled rules drift for {name}");
     }
 }
 
 #[test]
 fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
-    let semantic = SemanticPack::elemental_world().unwrap();
+    let semantic = SemanticPack::optional_payments().unwrap();
     for (left, first) in semantic.decks.iter().enumerate() {
         for (right, second) in semantic.decks.iter().enumerate() {
             let mut configs = vec![
