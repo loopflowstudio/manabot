@@ -1,3 +1,6 @@
+# Historical family-level evidence map; not a numbered-rule conformance claim.
+# The pinned complete inventory and unresolved findings live in
+# docs/rules/audit-2026-10/README.md. Read each entry's subset notes.
 - rule: "CR 103 — Game Start and Opening Hands"
   status: implemented_tested
   code_refs:

@@ -1,0 +1,83 @@
+{
+  "failed_head": "749e9caec8e05b58e1ac8825db6728c76fd0c547",
+  "ci_run": "https://github.com/loopflowstudio/manabot/actions/runs/39838399655",
+  "repair_base": "a408472cf5650b4fc192843d8b0f17a17e6b0241",
+  "world": "w13",
+  "diagnosis": "temur-164 command 10 matches the upstream payment corpus state hash exactly; targeting-only w12 evidence predates the payment repair. Academy admission had a hard-coded w11 regex.",
+  "repair": "Preserve old corpora; bind combined targeting/payment runtime to w13 with fresh bounded conformance and ordinary Command demo receipts; use runtime world in stale-checkpoint assertion.",
+  "payment_probe": "The upstream repair now exposes explicit nested Treasure/color choices. The old ignored probe failed because it skipped them; the updated nonignored probe retains final U, consumed Treasure, tapped Prism and empty stack assertions. Historical failure retained below.",
+  "runtime_files_sha256": {
+    "managym/src/lib.rs": "f38a4f4aa436cb1ce3d401d4597389341c33954130fee398d1521a961c5e2fc4",
+    "managym/src/flow/mana.rs": "f92e3a861f433f1f3eb06193d4fcbbe290802206529366b3ecb0bd487c17a4e7",
+    "managym/src/flow/triggers.rs": "a8f40e190fa9ef8c5003e63850eaa680859eb631dbecdff4c1d4ca20052b72b1",
+    "managym/src/flow/resolution.rs": "2bd6b9b518044a6a8ad824be631c5164503f453e406121cbc136abe246f686bf",
+    "managym/tests/rules/temur_cards.rs": "e1af4480dbf9965ae0f390fc98ddbdcc5141c4937b4747b23063a571cc773773",
+    "tests/semantic/test_elemental_world.py": "feb903868d8ff5f11c6168f8f3b69c3fddebd1d99abcd072f03a3766b2e33d5c",
+    "academy/play_demo.py": "81706279496b94d900194d1d33086fdfb2624e2e922cfa3275b154898fc5b433"
+  },
+  "checks": [
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests checked_semantic_conformance_evidence_reproduces",
+      "log_sha256": "f7f1db48d8d49b0d08a4dee89f08fa7fcccaf084342f8af67237a94138f7b35e",
+      "result_excerpt": "running 1 test\ntest checked_semantic_conformance_evidence_reproduces ... FAILED\n\nfailures:\n\n---- checked_semantic_conformance_evidence_reproduces stdout ----\n\nthread 'checked_semantic_conformance_evidence_reproduces' (90710) panicked at tests/semantic_conformance_tests.rs:18:47:\nchecked conformance evidence: \"temur-164 checkpoint drift after command 10\\nexpected=Checkpoint {\\n    state_hash: \\\"v8:7bc2b0c5a42ef40f5fa497622aac36a81688b851061b87b89342e01c5404edf8\\\",\\n    action_space_digest: \\\"970be7ae7a5f788e35103f50f3dd46968e0bd937c6865e90de7eed181201686f\\\",\\n    pending_choice_digest: \\\"03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a\\\",\\n    event_boundary: [\\n        108,\\n        0,\\n        108,\\n    ],\\n    game_over: false,\\n    winner: None,\\n}\\nactual=Checkpoint {\\n    state_hash: \\\"v8:51111950658400829e71344a3c5c1bcaf54d75888ea4238f16f8b46586e4c209\\\",\\n    action_space_digest: \\\"970be7ae7a5f788e35103f50f3dd46968e0bd937c6865e90de7eed181201686f\\\",\\n    pending_choice_digest: \\\"03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a\\\",\\n    event_boundary: [\\n        108,\\n        0,\\n        108,\\n    ],\\n    game_over: false,\\n    winner: None,\\n}\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    checked_semantic_conformance_evidence_reproduces\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 19.90s\n\nerror: test failed, to rerun pass `--test semantic_conformance_tests`"
+    },
+    {
+      "command": "cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- record --root conformance/semantic-kernel-w13-v1",
+      "log_sha256": "68eeb35e2d710e5f033ccc8b5dd879b14f6499c78f7eca30eb10efa48aa7ff13",
+      "result_excerpt": "   Compiling managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.33s\n     Running `managym/target/debug/semantic_conformance record --root conformance/semantic-kernel-w13-v1`\nrecorded 14 replay cases / 3491 commands and 15 Phase rows"
+    },
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests",
+      "log_sha256": "0dce743c4a0d40f68c8c498f4e7ac7cf9cce48bc02ecd68a1393c8814798e612",
+      "result_excerpt": "   Compiling managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s\n     Running tests/semantic_conformance_tests.rs (managym/target/debug/deps/semantic_conformance_tests-bf6fd5e577d9ed75)\n\nrunning 6 tests\ntest phase_matrix_is_exactly_pinned_and_explicit ... ok\ntest compatibility_names_and_content_allocations_are_metamorphic ... ok\ntest checked_receipt_replays_through_the_public_handoff ... ok\ntest seeded_semantic_tapes_are_deterministic_and_isolated ... ok\ntest compiled_elemental_tapes_preserve_seeded_replay_and_exact_clone_isolation ... ok\ntest checked_semantic_conformance_evidence_reproduces ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.21s\n"
+    },
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --test rules_tests",
+      "log_sha256": "39b187efdf50268cd2670a21ead8acd71c1b67b0837eb681696a53b397462b8a",
+      "result_excerpt": "test rules::temur_cards::prism_payment_offers_execute_and_undo_without_mutating_sibling_forks ... ok\ntest rules::temur_cards::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution ... ok\ntest rules::temur_cards::committed_optional_payment_resumes_after_granted_chosen_color_mana ... ok\ntest rules::temur_cards::optional_decline_retains_mana_activation_costs_and_chosen_output ... ok\ntest rules::temur_cards::waterbend_lesson_draws_before_optional_payment_and_taps_without_mana ... ok\ntest rules::temur_cards::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities ... ok\ntest rules::elemental_cards::elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks ... ok\ntest rules::temur_cards::optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation ... ok\ntest rules::temur_cards::nested_mana_every_offer_completes_replays_and_rolls_back ... ok\ntest rules::structured_attacker_offers::compound_lowering_preserves_root_and_all_attacker_subsets ... ok\ntest rules::structured_attacker_offers::structured_attacker_offer_exhausts_two_deck_declarations_past_32 ... ok\ntest rules::sacrifice_cards::fetch_land_counts_the_found_land_and_triggers_tracker_twice ... ok\ntest rules::structured_attacker_offers::structured_attacker_adapter_matches_seeded_two_deck_traces ... ok\ntest rules::ur_lessons_increment::revised_forty_card_deck_completes_and_replays_every_command_exactly ... ok\n\ntest result: ok. 315 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 50.90s\n\nelapsed_seconds=52.658"
+    },
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --lib target_authority_tests",
+      "log_sha256": "ae13b0f748675686b3e164e59746193e8ef4b969f8d4ad9865793778e532718c",
+      "result_excerpt": "\nrunning 12 tests\ntest flow::triggers::target_authority_tests::audit_same_controller_triggers_require_an_order_choice ... ignored, CR 603.3b missing same-controller trigger-order decision; proposal only\ntest flow::triggers::target_authority_tests::player_and_graveyard_targets_preserve_scope_and_order ... ok\ntest flow::triggers::target_authority_tests::audit_spell_or_permanent_must_respect_opponents_hexproof ... ok\ntest flow::triggers::target_authority_tests::stack_target_mana_value_boundaries_have_explicit_expected_choices ... ok\ntest flow::triggers::target_authority_tests::departed_only_target_prevents_even_untargeted_gain_life ... ok\ntest flow::triggers::target_authority_tests::trigger_target_distinctness_is_enforced_per_clause_at_submission ... ok\ntest flow::triggers::target_authority_tests::recast_spell_resolves_before_the_old_targeted_ability ... ok\ntest flow::triggers::target_authority_tests::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell ... ok\ntest flow::triggers::target_authority_tests::hexproof_target_wordings_preserve_controller_and_predicate_restrictions ... ok\ntest flow::triggers::target_authority_tests::simultaneous_trigger_orders_have_distinct_rules_outcomes ... ok\ntest flow::triggers::target_authority_tests::spell_or_permanent_target_does_not_follow_a_reentered_card ... ok\ntest flow::triggers::target_authority_tests::response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability ... ok\n\ntest result: ok. 11 passed; 0 failed; 1 ignored; 0 measured; 77 filtered out; finished in 0.02s\n\nelapsed_seconds=6.260"
+    },
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --test rules_tests audit_prism_treasure_empty_pool_activation -- --ignored",
+      "log_sha256": "f359e774ad962d95f4c92c4ff387a14fca478f838a62221220d80f1c1999bce2",
+      "result_excerpt": "test rules::temur_cards::audit_prism_treasure_empty_pool_activation ... FAILED\n\nfailures:\n\n---- rules::temur_cards::audit_prism_treasure_empty_pool_activation stdout ----\n\nthread 'rules::temur_cards::audit_prism_treasure_empty_pool_activation' (104245) panicked at tests/rules/temur_cards.rs:24:28:\nmissing action: ActionSpace { player: Some(PlayerId(0)), kind: PayOrNot, actions: [ActivateAbility { player: PlayerId(0), permanent: PermanentId(1), ability_index: 0 }], focus: [] }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    rules::temur_cards::audit_prism_treasure_empty_pool_activation\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 315 filtered out; finished in 0.02s\n\nerror: test failed, to rerun pass `--test rules_tests`\nelapsed_seconds=0.074"
+    },
+    {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --test rules_tests audit_prism_treasure_empty_pool_activation",
+      "log_sha256": "89a0c5a42b289611164ac245d74bd9faa771848d4c8a38a901bf2915e55a9bfd",
+      "result_excerpt": "   Compiling managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.28s\n     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-07e004f6799edcb6)\n\nrunning 1 test\ntest rules::temur_cards::audit_prism_treasure_empty_pool_activation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 315 filtered out; finished in 0.02s\n\nelapsed_seconds=1.631"
+    },
+    {
+      "command": "uv run --no-sync --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q",
+      "log_sha256": "497447ba4aaa7b0e51ade7ead9337c6244dce17890d9c43a6b225f34b9abf1ce",
+      "result_excerpt": "...................................................                      [100%]\n51 passed in 37.72s\nelapsed_seconds=39.279"
+    },
+    {
+      "command": "uv run --no-sync pytest tests/academy/test_semantic_boundary.py tests/academy/test_optional_payment_recovery.py tests/academy/test_decision_surface.py tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command tests/academy/test_study_protocol.py tests/academy/test_study_runtime.py -q",
+      "log_sha256": "2bc83bd1e83316c63f6bc7dfc1f66741bc52f03d6cafbae759fb74bc593cf89f",
+      "result_excerpt": "...............................                                          [100%]\n31 passed in 37.74s\nelapsed_seconds=39.418"
+    },
+    {
+      "command": "uv run --no-sync pytest tests/infra/test_rules_inventory.py tests/infra/test_ci_selection.py -q",
+      "log_sha256": "5c26b55573279949ec4959f79e969150214b31272bb06effbd1a412983b853e0",
+      "result_excerpt": "...........................................                              [100%]\n43 passed in 0.37s\nelapsed_seconds=1.366"
+    },
+    {
+      "command": "uv run --no-sync pytest tests/academy/test_study_branch.py -q -o faulthandler_timeout=45",
+      "log_sha256": "b441934b5a09c50b28bafd60263466f678d83a3087381d8a2f8bc915823b9233",
+      "result_excerpt": ".......                                                                  [100%]\n7 passed in 62.04s (0:01:02)\nelapsed_seconds=62.892"
+    },
+    {
+      "command": "cargo clippy --locked --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings",
+      "log_sha256": "ddeaaffcca5580b12bd3128de32183a158a14c04bf8d470da45feff570d49349",
+      "result_excerpt": "    Checking unindent v0.2.4\n    Checking arrayref v0.3.9\n    Checking blake3 v1.8.5\n    Checking schemars v1.2.1\n    Checking sha2 v0.10.9\n    Checking rand v0.8.7\n    Checking base64 v0.22.1\n    Checking managym v0.2.0 (/Users/jack/src/manabot.rules-audit/managym)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.78s\nelapsed_seconds=7.866"
+    }
+  ],
+  "learnability": "learnability-w13-integration.json",
+  "limits": "Original whole-rules audit remains open; 2965 entries unknown. Trigger-order probe remains ignored. No old corpus, demo, checkpoint or experiment is relabeled.",
+  "static_checks": "cargo fmt, changed Python Ruff and git diff --check passed; old w12/w11-payment conformance and w12 demo bytes unchanged."
+}

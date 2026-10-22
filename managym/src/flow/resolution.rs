@@ -1017,20 +1017,6 @@ impl Game {
             })
     }
 
-    /// Hexproof (CR 702.11): a permanent with hexproof can't be targeted
-    /// by spells/abilities controlled by opponents of its controller.
-    fn hexproof_blocks(&self, permanent_id: PermanentId, targeter: PlayerId) -> bool {
-        let Some(permanent) = self
-            .state
-            .permanents
-            .get(permanent_id.0)
-            .and_then(|p| p.as_ref())
-        else {
-            return false;
-        };
-        permanent.controller != targeter && self.effective_keywords(permanent_id).hexproof
-    }
-
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
@@ -1061,80 +1047,75 @@ impl Game {
         spec: &TargetSpec,
         controller: PlayerId,
     ) -> bool {
-        match (target, spec) {
-            (Target::Permanent(id), TargetSpec::PermanentYouControl { predicate }) => {
-                self.permanent_on_battlefield(id)
-                    && self.state.permanents[id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller == controller)
-                    && self.permanent_matches_predicate(id, predicate)
-            }
-            (Target::GraveyardCard(object), TargetSpec::GraveyardCardYouOwn { predicate }) => {
-                let card = CardId::from(object.entity);
-                self.current_object_ref(card) == Some(object)
-                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
-                    && self.state.cards[card].owner == controller
-                    && predicate.matches_card(&self.state.cards[card])
-            }
-            (Target::Player(_), TargetSpec::Player) => true,
-            (Target::Player(player), TargetSpec::Opponent) => player != controller,
-            (Target::Permanent(id), TargetSpec::Permanent { predicate }) => {
-                self.permanent_on_battlefield(id)
-                    && self.permanent_matches_predicate(id, predicate)
-                    && !self.hexproof_blocks(id, controller)
-            }
-            (Target::Player(_), TargetSpec::CreatureOrPlayer) => true,
-            (Target::Permanent(perm_id), TargetSpec::CreatureOrPlayer | TargetSpec::Creature) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::CreatureYouControl) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller == controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::CreatureOpponentControls) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller != controller)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::LandYouControl) => {
-                self.permanent_on_battlefield(perm_id)
-                    && self.state.permanents[perm_id].as_ref().is_some_and(|p| {
-                        p.controller == controller && self.state.cards[p.card].types.is_land()
-                    })
-            }
-            (Target::Permanent(perm_id), TargetSpec::PermanentOpponentControls { predicate }) => {
-                self.permanent_on_battlefield(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller != controller)
-                    && self.permanent_matches_predicate(perm_id, predicate)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::StackSpell(card_id), TargetSpec::Spell) => {
-                self.find_spell_on_stack_index(card_id).is_some()
-            }
-            (Target::StackSpell(card_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
-                self.find_spell_on_stack_index(card_id).is_some()
-                    && self.card_mana_value(card_id) >= *min_mana_value
-            }
-            (Target::Permanent(perm_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
-                let Some(permanent) = self
-                    .state
-                    .permanents
-                    .get(perm_id.0)
-                    .and_then(|p| p.as_ref())
+        match target {
+            Target::Permanent(id) => {
+                let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref())
                 else {
                     return false;
                 };
-                self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-                    && self.card_mana_value(permanent.card) >= *min_mana_value
+                // CR 702.11b applies regardless of target wording. Recheck live
+                // presence and hexproof at selection and resolution (608.2b).
+                if self.state.zones.zone_of(permanent.card) != Some(ZoneType::Battlefield)
+                    || (permanent.controller != controller && self.effective_keywords(id).hexproof)
+                {
+                    return false;
+                }
+                match spec {
+                    TargetSpec::Permanent { predicate } => {
+                        self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentYouControl { predicate } => {
+                        permanent.controller == controller
+                            && self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentOpponentControls { predicate } => {
+                        permanent.controller != controller
+                            && self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
+                        self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureYouControl => {
+                        permanent.controller == controller && self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureOpponentControls => {
+                        permanent.controller != controller && self.permanent_is_creature(id)
+                    }
+                    TargetSpec::LandYouControl => {
+                        permanent.controller == controller
+                            && self.state.cards[permanent.card].types.is_land()
+                    }
+                    TargetSpec::SpellOrPermanent { min_mana_value } => {
+                        self.card_mana_value(permanent.card) >= *min_mana_value
+                    }
+                    _ => false,
+                }
             }
-            _ => false,
+            Target::Player(player) => match spec {
+                TargetSpec::Player | TargetSpec::CreatureOrPlayer => true,
+                TargetSpec::Opponent => player != controller,
+                _ => false,
+            },
+            Target::StackSpell(card) => {
+                self.find_spell_on_stack_index(card).is_some()
+                    && match spec {
+                        TargetSpec::Spell => true,
+                        TargetSpec::SpellOrPermanent { min_mana_value } => {
+                            self.card_mana_value(card) >= *min_mana_value
+                        }
+                        _ => false,
+                    }
+            }
+            Target::GraveyardCard(object) => match spec {
+                TargetSpec::GraveyardCardYouOwn { predicate } => {
+                    let card = CardId::from(object.entity);
+                    self.current_object_ref(card) == Some(object)
+                        && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                        && self.state.cards[card].owner == controller
+                        && predicate.matches_card(&self.state.cards[card])
+                }
+                _ => false,
+            },
         }
     }
 

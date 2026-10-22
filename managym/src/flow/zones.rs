@@ -17,7 +17,9 @@ use crate::{
 };
 
 impl Game {
-    /// A sacrifice is a committed event distinct from destruction (CR 701.17).
+    /// A sacrifice is a committed event distinct from destruction (CR 701.21
+    /// and 701.8 in the September 25, 2026 rules). Indestructible does not
+    /// prevent it; the departing object's controller pays this cost.
     /// Match its triggers against the pre-departure battlefield, including the
     /// sacrificed source, before replacement effects can change its destination.
     pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) {

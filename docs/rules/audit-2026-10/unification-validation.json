@@ -1,0 +1,1689 @@
+{
+  "base_revision": "ededb325",
+  "rules_source": "source.json",
+  "receipts": [
+    {
+      "label": "unify-target-debug",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests",
+        "--",
+        "--nocapture"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 3.014,
+      "exit_code": 101,
+      "log": "scratch/unify-target-debug.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-target-debug-fixed",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests",
+        "--",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 19.731,
+      "exit_code": 0,
+      "log": "scratch/unify-target-debug-fixed.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-proposals",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests::audit_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.075,
+      "exit_code": 101,
+      "log": "scratch/unify-proposals.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-trigger-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "cr_603_triggers"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 29.677,
+      "exit_code": 0,
+      "log": "scratch/unify-trigger-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-replacement-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "cr_614_replacement"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 15.629,
+      "exit_code": 0,
+      "log": "scratch/unify-replacement-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-mixed-target-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.087,
+      "exit_code": 0,
+      "log": "scratch/unify-mixed-target-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-graveyard-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.082,
+      "exit_code": 0,
+      "log": "scratch/unify-graveyard-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-native-wheel",
+      "command": [
+        "uv",
+        "run",
+        "maturin",
+        "build",
+        "--release",
+        "-i",
+        ".venv/bin/python",
+        "-m",
+        "managym/Cargo.toml",
+        "-o",
+        "managym/target/wheels"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 22.907,
+      "exit_code": 0,
+      "log": "scratch/unify-native-wheel.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": false
+    },
+    {
+      "label": "unify-native-import",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scratch/install_native.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.927,
+      "exit_code": 0,
+      "log": "scratch/unify-native-import.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-index-update",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt",
+        "--write"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.071,
+      "exit_code": 0,
+      "log": "scratch/unify-index-update.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-python-checks",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "pytest",
+        "tests/infra/test_rules_inventory.py",
+        "tests/infra/test_ci_selection.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 2.918,
+      "exit_code": 0,
+      "log": "scratch/unify-python-checks.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-rust-format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.402,
+      "exit_code": 0,
+      "log": "scratch/unify-rust-format.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-index-final",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.124,
+      "exit_code": 0,
+      "log": "scratch/unify-index-final.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    }
+  ],
+  "result": {
+    "debug_rust_passed": 17,
+    "new_debug_tests_passed": 4,
+    "new_ignored_proposal_probes": 2,
+    "explicitly_reproduced_proposal_failures": 2,
+    "python_passed": 42,
+    "numbered_entries": 3322,
+    "statuses": {
+      "implemented": 3,
+      "partial": 25,
+      "missing": 2,
+      "not_applicable": 322,
+      "unknown": 2970
+    }
+  },
+  "failures": [
+    {
+      "label": "unify-target-debug",
+      "cause": "Initial fixture compile failure: two push_spell_to_stack calls had reversed CardId/PlayerId and an extra mode argument; two Player arrays were indexed by PlayerId rather than usize.",
+      "resolution": "Fixed fixture calls/indices; focused warm rerun passed four tests with two explicitly ignored proposals."
+    },
+    {
+      "label": "unify-proposals",
+      "cause": "Both proposal probes intentionally run with --ignored. Trigger flush returned no ordering decision; opposing hexproof permanent was present in SpellOrPermanent offers.",
+      "resolution": "Not repaired or counted as passing. Separate world/admission proposals in unification.md. No existing test was disabled."
+    }
+  ],
+  "incremental_cost": {
+    "paid_compute_dollars": 0,
+    "timed_command_seconds_sum": 95.644,
+    "interpretation": "Sum of measured command durations, not elapsed session time; overlapping build-lock wait is included. Read-only lf/rg/file inspection and initial cargo fmt edits were not individually timed. No stress loop, random-game cohort, broad repeated suite or remote job."
+  },
+  "limits": [
+    "Two Cargo jobs; opt-level 1 debug tests retain debug assertions. First debug attempt had 900-second cold ceiling; repaired warm check and regression commands had 180-second ceilings. Native release build used 900 seconds. Python wrappers/checks limited to 120 seconds.",
+    "Only the listed focused tests were rerun. No full Rust, browser, Command/replay/fork or full learnability/arena suite was run; unchanged legal semantics are intended for the consolidation, not established for every game state.",
+    "Release wheel build is native import validation, not a substitute for debug tests; cp312 extension was installed by write-new-then-rename.",
+    "World-changing hexproof repair and trigger-order decision are not implemented or admitted. Historical source-location index remains the original snapshot; new findings have symbol/test anchors in reviews.json.",
+    "CI topology, selection and required-check definitions remain unchanged. Existing CI-selection tests passed."
+  ],
+  "ownership": {
+    "MTG-174": {
+      "resolved_task": "task_f721516493004baa9b5a9025b1ef81c8",
+      "title": "Train the ten-deck Elemental world for $10 and compare the $10 baseline",
+      "state": "started",
+      "execution": "idle after completed Flow",
+      "owner": "Jack Heart",
+      "wave": "intelligence",
+      "conclusion": "Historical payment reference stale. Current shared-payment Task ownership unresolved; no payment repair attempted."
+    },
+    "4ba5dd": {
+      "resolved_task": "task_4ba5dd5356464ae0ad02232a42cecd87",
+      "state": "started",
+      "execution": "Recorded stopped landing Flow blocked: no auto-merge request",
+      "owner": "Jack Heart",
+      "wave": "rules",
+      "pr": 344,
+      "recorded_merge_commit": "43d807036ed86e1899ca6ffc1bc2e54fe559dfdd",
+      "conclusion": "Commit already in checkout history. Do not restart landing or infer Task completion from PR state."
+    }
+  },
+  "additional_checks": [
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "43d807036ed86e1899ca6ffc1bc2e54fe559dfdd",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "result": "Optional-payment delivery commit already in history."
+    }
+  ],
+  "targeting_repair": {
+    "base_revision": "a15a4502e1dd7fb41680c5fab3b88f7e239548b8",
+    "world": "w12",
+    "acceptance": "incomplete: full learnability error and remaining bounded runtime/monitor timeouts",
+    "receipts": [
+      {
+        "label": "targeting-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 56.292,
+        "exit_code": 101,
+        "log": "scratch/targeting-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-debug-fixed",
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 77.662,
+        "exit_code": 0,
+        "log": "scratch/targeting-debug-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-native-wheel",
+        "command": [
+          "uv",
+          "run",
+          "maturin",
+          "build",
+          "--release",
+          "-i",
+          ".venv/bin/python",
+          "-m",
+          "managym/Cargo.toml",
+          "-o",
+          "managym/target/wheels"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 81.419,
+        "exit_code": 0,
+        "log": "scratch/targeting-native-wheel.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": false
+      },
+      {
+        "label": "targeting-tooling",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "pytest",
+          "tests/infra/test_rules_inventory.py",
+          "tests/infra/test_ci_selection.py",
+          "tests/test_package_boundaries.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 17.329,
+        "exit_code": 0,
+        "log": "scratch/targeting-tooling.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-academy",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "tests/academy/test_study_runtime.py",
+          "tests/academy/test_study_branch.py",
+          "tests/academy/test_semantic_boundary.py",
+          "tests/academy/test_optional_payment_recovery.py",
+          "tests/academy/test_decision_surface.py",
+          "tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry",
+          "tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.011,
+        "exit_code": 124,
+        "log": "scratch/targeting-academy.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_models.py",
+          "tests/arena/test_mirror_admission.py",
+          "tests/training/test_monitor_evaluation.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.014,
+        "exit_code": 124,
+        "log": "scratch/targeting-admission.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-command-recovery",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_semantic_boundary.py",
+          "tests/academy/test_optional_payment_recovery.py",
+          "tests/academy/test_decision_surface.py",
+          "tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry",
+          "tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 53.596,
+        "exit_code": 1,
+        "log": "scratch/targeting-command-recovery.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-protocol",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 26.168,
+        "exit_code": 0,
+        "log": "scratch/targeting-study-protocol.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-demo-record",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "play",
+          "python",
+          "scratch/refresh_demos.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 76.919,
+        "exit_code": 0,
+        "log": "scratch/targeting-demo-record.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-decision-surface-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_decision_surface.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 20.089,
+        "exit_code": 0,
+        "log": "scratch/targeting-decision-surface-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-conformance-record",
+        "command": [
+          "cargo",
+          "run",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--bin",
+          "semantic_conformance",
+          "--",
+          "record",
+          "--root",
+          "conformance/semantic-kernel-w12-v1"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 397.451,
+        "exit_code": 0,
+        "log": "scratch/targeting-conformance-record.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-conformance-check",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--test",
+          "semantic_conformance_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 230.334,
+        "exit_code": 0,
+        "log": "scratch/targeting-conformance-check.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "targeting-arena",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_models.py",
+          "tests/arena/test_mirror_admission.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.121,
+        "exit_code": 124,
+        "log": "scratch/targeting-arena.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-monitor",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.053,
+        "exit_code": 124,
+        "log": "scratch/targeting-monitor.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-runtime",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_runtime.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.035,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-runtime.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-branch",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.059,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-branch.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_runtime.py",
+          "-k",
+          "not normal_runtime",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.02,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[all]",
+          "tests/arena/test_mirror_admission.py::test_mirror_checkpoint_requires_explicit_admission",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[1-checkpoint-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 6.36,
+        "exit_code": 4,
+        "log": "scratch/targeting-admission-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-admission-remaining-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "notebook",
+          "--extra",
+          "artifacts",
+          "--extra",
+          "reports",
+          "pytest",
+          "tests/arena/test_mirror_admission.py::test_mirror_arena_plays_all_seats_and_replays[all]",
+          "tests/arena/test_mirror_admission.py::test_mirror_checkpoint_requires_explicit_admission",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.084,
+        "exit_code": 124,
+        "log": "scratch/targeting-admission-remaining-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "targeting-study-branch-final",
+        "command": [
+          "uv",
+          "run",
+          "--extra",
+          "dev",
+          "--extra",
+          "play",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.02,
+        "exit_code": 124,
+        "log": "scratch/targeting-study-branch-final.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      }
+    ],
+    "learnability": {
+      "status": "error",
+      "source": "a15a4502e1dd7fb41680c5fab3b88f7e239548b8",
+      "source_digest": "48ac1b5da6222c7d4f570bcf379d21424879095c0d75786aa76aa912bdb81044",
+      "world": "w12",
+      "native_sha256": "1c2ef2f709d818a1d8c8c5dd786c32ba6cd7bd82b26406dd02acf8c0762468ac",
+      "wall_seconds": 384.32169620899367,
+      "cpu_seconds": 76.239706,
+      "errors": [
+        "TimeoutError: collector exceeded training deadline"
+      ],
+      "config": {
+        "version": "learnability-2",
+        "seeds": [
+          17,
+          29,
+          43
+        ],
+        "updates": 240,
+        "learning_rate": 0.003,
+        "hidden_dim": 32,
+        "probability": 0.9,
+        "invariance_tolerance": 0.0001,
+        "timeout_seconds": 480,
+        "ppo_timeout_seconds": 300,
+        "ppo": true
+      }
+    },
+    "learnability_path": ".runs/learnability/rules-targeting-w12",
+    "bounded_results": {
+      "targeting_debug": "8 passed; separate trigger-order proposal ignored",
+      "conformance_debug": "6 passed; new 14-case/3491-Command/15-Phase-row corpus",
+      "dependency_blocked_play_and_study_protocol": "17 passed",
+      "command_recovery": "8 passed; initial 3 demo identity failures repaired",
+      "decision_surface": "4 passed after fresh w12 demo recording",
+      "tooling_and_boundaries": "44 passed",
+      "arena_models_and_mirror_admission": "11 individual cases passed across bounded chunks",
+      "study_runtime": "3/4 cases passed before timeout; semantic retry remains",
+      "study_branch": "7 cases remain after first case timed out",
+      "monitor": "16/20 cases passed before timeout; random, explicit matrix, saved admission failure and dashboard remain"
+    },
+    "frozen_evidence": "git diff --exit-code HEAD -- conformance/semantic-kernel-w11-v1 protocol/fixtures academy/fixtures/*w11.json passed",
+    "lint_and_inventory": "Ruff, cargo fmt --check, git diff --check and exact 3322-row source agreement pass",
+    "limitations": [
+      "No full conformance or strength certification.",
+      "Learnability captured the targeting runtime before the later Academy demo fixture refresh; native/training behavior did not change afterward.",
+      "Timeouts remain failures; no timeout increase or assertion weakening.",
+      "Payment and missing trigger-order choice remain separate findings."
+    ]
+  },
+  "canonical_runtime_validation": {
+    "draft_checkpoint": "202416a8",
+    "source_note": "Diagnostic started on fe76226d with the working draft subsequently committed as 202416a8; source_digest and native SHA identify the tested bytes. Later report/helper edits are not training changes.",
+    "learnability_result": "learnability-w12-canonical.json",
+    "learnability_path": ".runs/learnability/rules-targeting-w12-canonical",
+    "collector_profile": {
+      "label": "collector-profile",
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "scratch/profile_collector.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 9.047,
+      "exit_code": 0,
+      "log": "scratch/collector-profile.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    "collector_diagnosis": "Two unchanged PPO updates completed in 9.047s including startup/evaluation. The old 384.3s run consumed 76.2 CPU seconds. Host contention/scheduling is plausible but not proved; no collector defect was reproduced and no production repair was made.",
+    "focused_protocol": {
+      "label": "canonical-study-protocol",
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "pytest",
+        "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+        "tests/academy/test_study_protocol.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 4.903,
+      "exit_code": 0,
+      "log": "scratch/canonical-study-protocol.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    "focused_protocol_result": "17 passed, including dependency-blocked play and selected-offer-independent ed2 plus command-bound erd1 checks.",
+    "budget_note": "Unchanged 480s total watchdog, 300s PPO deadline, 64 updates x 128 steps x 8 streams, 64 evaluation games per arm, capacity thresholds and PPO assertions.",
+    "remaining_gate_ci": [
+      "Study runtime semantic retry",
+      "Seven Study branch cases",
+      "Four monitor cases: random/explicit-matrix outcomes, checkpoint-admission failure persistence, saved dashboard"
+    ],
+    "evidence_scope": "Earlier bounded consumer/debug/conformance receipts remain historical; this adds current canonical protocol and full learnability evidence only. No full conformance or strength certification."
+  },
+  "integrated_runtime_validation": {
+    "base_revision": "dae5b8f9e99cf5705ac0d843a7d5924fcdba855c",
+    "tested_working_changes": [
+      "managym/src/flow/target_authority_tests.rs",
+      "tests/academy/test_study_branch.py"
+    ],
+    "source_scope": "All tracked .py/.rs files under academy, manabot and managym/src, sorted by path; SHA256 updates path bytes then contents. Final report-only edits do not change this digest.",
+    "runtime_source_sha256": "67d4885d18c547fbda32759b4b71dead99ae3eff1b03d6e9d8fd3ea0c6ee2ef4",
+    "native_sha256": "8117551ab85c998e3374dc2cafb3d1eaacab9d05aee9863fcc261a6b5350b82d",
+    "receipts": [
+      {
+        "label": "integrated-study",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_study_runtime.py::test_semantic_retry_supports_land_and_rejects_drift",
+          "tests/academy/test_study_branch.py",
+          "-vv",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 120.006,
+        "exit_code": 124,
+        "log": "scratch/integrated-study.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-study-branch-fixed",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-vv",
+          "--durations=7",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 69.178,
+        "exit_code": 0,
+        "log": "scratch/integrated-study-branch-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-monitor",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-vv",
+          "--durations=4",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 26.094,
+        "exit_code": 0,
+        "log": "scratch/integrated-monitor.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-monitor-remaining",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-random-False]",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_real_arena_checkpoint_outcomes[10000-scripted_greedy-True]",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved",
+          "--deselect",
+          "tests/training/test_monitor_evaluation.py::test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 14.831,
+        "exit_code": 0,
+        "log": "scratch/integrated-monitor-remaining.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-target-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 19.402,
+        "exit_code": 0,
+        "log": "scratch/integrated-target-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true
+      },
+      {
+        "label": "integrated-native-wheel",
+        "command": [
+          "uv",
+          "run",
+          "maturin",
+          "build",
+          "--release",
+          "-i",
+          ".venv/bin/python",
+          "-m",
+          "managym/Cargo.toml",
+          "-o",
+          "managym/target/wheels"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 76.619,
+        "exit_code": 0,
+        "log": "scratch/integrated-native-wheel.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": false
+      },
+      {
+        "label": "integrated-native-import",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "scratch/install_native.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.338,
+        "exit_code": 0,
+        "log": "scratch/integrated-native-import.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-protocol",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 2.69,
+        "exit_code": 0,
+        "log": "scratch/integrated-protocol.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      },
+      {
+        "label": "integrated-inventory",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/infra/test_rules_inventory.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 1.414,
+        "exit_code": 0,
+        "log": "scratch/integrated-inventory.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null
+      }
+    ],
+    "results": {
+      "native_debug": "10 passed; one pre-existing known trigger-order proposal ignored",
+      "study_runtime": "Semantic retry passed in the initial bounded run; the other three unchanged cases retain their prior passing receipts.",
+      "study_branch": "All 7 cases passed after fixture repair, 69.178s including startup.",
+      "monitor": "All 20 cases passed across two nonoverlapping bounded runs, 40.925s total.",
+      "dependency_blocked_play_and_study_protocol": "17 passed against rebuilt extension; ed2 pre-command independence and command-bound erd1 preserved.",
+      "inventory": "6 integrity tests passed; exact pinned source reconstruction has 3322 entries: 3 implemented, 30 partial, 2 missing, 322 not_applicable, 2965 unknown."
+    },
+    "failure_diagnosis": {
+      "receipt": "integrated-study",
+      "outcome": "120s limit expired after semantic retry and first branch case passed, while creating the next complete-match fixture.",
+      "stack_sample": "At 45s the first branch fixture was in academy/attempts.py:save, called by GameSession._experience_frame -> _persist_attempt. It later passed before the total limit expired.",
+      "repair": "Reuse returned authoritative frames and enable existing recorded priority automation in test_study_branch._completed_session. Same seed, decks, complete-match requirement and assertions; no production persistence or rule change.",
+      "limit": "This identifies work consuming the new fixture run, not the cause of every older timeout."
+    },
+    "learnability": {
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "-m",
+        "manabot.verify.learnability",
+        "--out",
+        ".runs/learnability/rules-targeting-w12-integrated"
+      ],
+      "result": "learnability-w12-integrated.json",
+      "status": "passed",
+      "wall_seconds": 43.492039625009056,
+      "cpu_seconds": 42.239298000000005,
+      "source_digest": "443a9867f4672f31c65db7cb99514564e2f6d06d6245d76d5281b05fe27db191",
+      "capacity_assertions": 144,
+      "ppo_transitions": 65536,
+      "after": 1.0,
+      "no_update": 0.640625,
+      "limits": "Unchanged 480s total / 300s PPO watchdogs, capacity assertions and production PPO recipe."
+    },
+    "reused_evidence": {
+      "reference": "202416a8",
+      "reason": "git diff 202416a8 HEAD -- academy managym/src manabot/arena tests/academy tests/arena is empty. This follow-up changes only test code plus audit artifacts. Native production rules, Academy consumers, arena owners and frozen fixtures are unchanged. Upstream monitor rename was inspected and all monitor cases rerun; collector integration is covered by fresh full learnability.",
+      "receipts": [
+        "6 debug w12 conformance checks",
+        "11 arena admission cases",
+        "8 Command/recovery cases",
+        "4 decision-surface cases",
+        "3 Study runtime cases"
+      ],
+      "selection": ".github/workflows/ci.yml and semantic_conformance_tests.rs select semantic-kernel-w12-v1; no new runtime identity in this test-only follow-up."
+    },
+    "additional_checks": [
+      "cargo fmt --manifest-path managym/Cargo.toml -- --check passed",
+      "ruff check tests/academy/test_study_branch.py passed",
+      "git diff --check passed",
+      "git diff --exit-code 202416a8 -- conformance/semantic-kernel-w11-v1 protocol/fixtures academy/fixtures/*w11.json passed"
+    ],
+    "incremental_cost": {
+      "timed_command_seconds_sum": 374.064,
+      "paid_compute_dollars": 0,
+      "scope": "Measured command durations including the retained timeout and native build, not session wall time. Read-only inspection, formatting, lint and report edits not timed. No CI topology change or measured sharding claim."
+    },
+    "acceptance": "Targeting increment acceptance closed using fresh checks and explicitly justified unchanged-source receipts. Whole-rules audit unfinished; no publication, merge or Task completion."
+  },
+  "enumeration_cleanup_validation": {
+    "date": "2026-10-22",
+    "base_revision": "6756acb0a",
+    "source_changes": [
+      "managym/src/flow/triggers.rs",
+      "managym/src/flow/target_authority_tests.rs"
+    ],
+    "evidence_scope": "Reconciled from retained logs and the prior step plan; these checks were not rerun during realign. Production enumeration changed after integrated acceptance; that earlier source/native digest does not identify this cleanup.",
+    "debug_targeting": {
+      "command": "cargo test --locked --manifest-path managym/Cargo.toml --lib target_authority_tests",
+      "log": "scratch/compress-target-candidates.log",
+      "result": "11 passed, 0 failed, 1 known trigger-order proposal ignored; 18.80s build and 0.01s tests reported by Cargo.",
+      "new_witness": "player_and_graveyard_targets_preserve_scope_and_order"
+    },
+    "native_rebuild": {
+      "command": "uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels",
+      "log": "scratch/compress-candidates-wheel.log",
+      "result": "manabot 0.2.0 cp312 wheel built; 22.38s build reported by Cargo."
+    },
+    "native_install": {
+      "command": "uv run python scratch/install_native.py",
+      "log": "scratch/compress-native-import.log",
+      "result": "Atomic installation and successful native import recorded by prior step; import success retained in log."
+    },
+    "remaining": "Closed by enumeration_cleanup_gate below; prior focused receipts remain historical and unchanged.",
+    "cost_limit": "Build/test times above are tool-reported components, not measured CI runner-minutes or complete incremental wall cost; no sharding saving demonstrated."
+  },
+  "enumeration_cleanup_gate": {
+    "date": "2026-10-22",
+    "status": "passed",
+    "source": {
+      "base_revision": "6756acb0a729c2445d9812d02fbfb8b95233d7bc",
+      "runtime_and_test_source_sha256": "650770b6d09d6f0b1e672511a88ff73e44aaed78025daaf8dbe4a808c9de501e",
+      "source_scope": "Sorted tracked .py/.rs under academy, manabot, managym and tests; path bytes then contents.",
+      "native_sha256": "1670c9346d44962f1f988b3b9d433266b1694e82fbcb02521a95ff1fe0f74873",
+      "tested_working_changes": [
+        "managym/src/flow/triggers.rs",
+        "managym/src/flow/target_authority_tests.rs",
+        "managym/tests/rules/temur_cards.rs",
+        "managym/tests/rules/cr_106_mana.rs"
+      ],
+      "test_only_metadata_edit": "Payment probe drops stale Task attribution; clippy rewrites the mana oracle count >= generic + 1 to count > generic. Native production and tested cases unchanged."
+    },
+    "scope": "Fresh affected validation for the uncommitted legal_targets_for_spec cleanup against 6756acb0a, plus two test-only gate edits. Previous acceptance/failures retain their original source scopes. No test budget, runtime identity or frozen evidence changed.",
+    "receipts": [
+      {
+        "label": "gate-native-wheel",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "maturin",
+          "build",
+          "--release",
+          "-i",
+          ".venv/bin/python",
+          "-m",
+          "managym/Cargo.toml",
+          "-o",
+          "managym/target/wheels"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 25.91,
+        "exit_code": 0,
+        "log": "scratch/gate-native-wheel.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": false,
+        "result": "cp312 release wheel built with two Cargo jobs.",
+        "log_sha256": "45833091ea53e7730ff2d0016106efc1c609ae6569b3ac7ec16b3945341120e9"
+      },
+      {
+        "label": "gate-native-import",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "scratch/install_native.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.443,
+        "exit_code": 0,
+        "log": "scratch/gate-native-import.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "Atomic native installation and canonical/compatibility import passed.",
+        "log_sha256": "9afacc46452e75e931ceca21f503857fdff5719df2dc0f34a2fe1b4c21385d5c"
+      },
+      {
+        "label": "gate-target-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--lib",
+          "target_authority_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 20.923,
+        "exit_code": 0,
+        "log": "scratch/gate-target-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "11 passed; 1 known trigger-order probe ignored.",
+        "log_sha256": "1f93f4ecc0212b0ebb716926d74c9d8ba12f3f943c077faf7d4390ed03e3dbba"
+      },
+      {
+        "label": "gate-rules-debug",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--test",
+          "rules_tests"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 13.043,
+        "exit_code": 0,
+        "log": "scratch/gate-rules-debug.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "300 passed; 1 known payment probe ignored. The later lint-only mana comparison was rechecked separately.",
+        "log_sha256": "ab9a69a5800309f7020e8be2cbb7ec1d2395b810c47958adb1f629464707ae4b"
+      },
+      {
+        "label": "gate-conformance",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--test",
+          "semantic_conformance_tests",
+          "--",
+          "--nocapture"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 29.124,
+        "exit_code": 0,
+        "log": "scratch/gate-conformance.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "6 passed; checked w12 replay corpus, metamorphic/property checks and phase evidence reproduced.",
+        "log_sha256": "8631813c554851c41bf614a5ab73745ef3e16f9750910eca55f15a67e42a1a91"
+      },
+      {
+        "label": "gate-tooling",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/infra/test_rules_inventory.py",
+          "tests/infra/test_ci_selection.py",
+          "tests/test_package_boundaries.py",
+          "-q"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 4.594,
+        "exit_code": 0,
+        "log": "scratch/gate-tooling.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "46 passed: inventory, CI selection and package boundaries.",
+        "log_sha256": "60eb0db85368896144c8cedd972fc2001af669bd8653322f9954f8330e70df13"
+      },
+      {
+        "label": "gate-command-recovery",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_semantic_boundary.py",
+          "tests/academy/test_optional_payment_recovery.py",
+          "tests/academy/test_decision_surface.py",
+          "tests/academy/test_server.py::test_protocol_v1_rejects_stale_and_dedupes_retry",
+          "tests/academy/test_server.py::test_disconnect_after_acceptance_recovers_without_replaying_command",
+          "-q",
+          "--durations=5"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 8.146,
+        "exit_code": 0,
+        "log": "scratch/gate-command-recovery.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "11 passed: semantic boundary, payment recovery, decision surface, stale rejection and lost-response recovery.",
+        "log_sha256": "3c9bcffb60205bebaa70a6e248d065445290512a4a6e9771d22749c0e89a6a8e"
+      },
+      {
+        "label": "gate-study-runtime",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies",
+          "tests/academy/test_study_protocol.py",
+          "tests/academy/test_study_runtime.py",
+          "-q",
+          "--durations=5"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 43.644,
+        "exit_code": 0,
+        "log": "scratch/gate-study-runtime.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "21 passed: dependency-blocked play import, Study protocol and all 4 Study runtime cases.",
+        "log_sha256": "e15d098b87949411e5c348d74767440cde796b623ee8568cffba5f8de686c3d4"
+      },
+      {
+        "label": "gate-study-branch",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/academy/test_study_branch.py",
+          "-q",
+          "--durations=7",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 75.84,
+        "exit_code": 0,
+        "log": "scratch/gate-study-branch.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "7 passed, all assertions and complete-match fixtures retained.",
+        "log_sha256": "b82f83c55c760432349cda8f685efa530bc2bb7bb15feccca05a0b4a16910533"
+      },
+      {
+        "label": "gate-arena",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/arena/test_models.py",
+          "tests/arena/test_mirror_admission.py",
+          "-q",
+          "--durations=5",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 14.875,
+        "exit_code": 0,
+        "log": "scratch/gate-arena.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "11 passed, current-world admission and mirror replay.",
+        "log_sha256": "608756181a8268b6768f1b34c435168bc583e72cf058ae105dcecc7a26f0433e"
+      },
+      {
+        "label": "gate-monitor",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "pytest",
+          "tests/training/test_monitor_evaluation.py",
+          "-q",
+          "--durations=5",
+          "-o",
+          "faulthandler_timeout=45"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 31.833,
+        "exit_code": 0,
+        "log": "scratch/gate-monitor.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "20 passed, including all 4 real arena outcome cases.",
+        "log_sha256": "944a89436d8a684a3ad21e3b70bdd8a34485ad086031a26326b1b861dc15e4ca"
+      },
+      {
+        "label": "gate-rust-format",
+        "command": [
+          "cargo",
+          "fmt",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--",
+          "--check"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 0.404,
+        "exit_code": 0,
+        "log": "scratch/gate-rust-format.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "Passed before the gate test-only edits.",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "gate-rust-format-final",
+        "command": [
+          "cargo",
+          "fmt",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--",
+          "--check"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 0.401,
+        "exit_code": 0,
+        "log": "scratch/gate-rust-format-final.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "Passed after the gate test-only edits.",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "gate-python-lint",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "ruff",
+          "check",
+          "academy/play_demo.py",
+          "manabot/arena/models.py",
+          "scripts/audit_rules.py",
+          "tests/academy/test_study_branch.py",
+          "tests/academy/test_study_protocol.py",
+          "tests/infra/test_ci_selection.py",
+          "tests/infra/test_rules_inventory.py"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.243,
+        "exit_code": 0,
+        "log": "scratch/gate-python-lint.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "All changed Python files passed Ruff.",
+        "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      },
+      {
+        "label": "gate-source-index",
+        "command": [
+          "uv",
+          "run",
+          "--no-sync",
+          "python",
+          "scripts/audit_rules.py",
+          "--source",
+          "scratch/MagicCompRules-20260925.txt"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.078,
+        "exit_code": 0,
+        "log": "scratch/gate-source-index.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "3322 pinned entries reconstructed exactly; 2965 unknown.",
+        "log_sha256": "14400adb9ff4439ecb7a694b6898743500b286544310546d23a21d7b670ed957"
+      },
+      {
+        "label": "gate-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "limit_seconds": 900,
+        "elapsed_seconds": 13.373,
+        "exit_code": 101,
+        "log": "scratch/gate-clippy.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "Failed on clippy::int_plus_one in the new mana matrix: count >= generic + 1.",
+        "log_sha256": "6ac82e806518068433eab18d512c5f0fbd4dc0726d047253057a56fbca8e4a9a",
+        "failure_excerpt": " `>= y + 1` or `x - 1 >=`\n  --> tests/rules/cr_106_mana.rs:94:56\n   |\n94 |                 let expected = pool.mana[slot] == 1 && bits.count_ones() >= generic + 1;\n   |                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: change it to: `bits.count_ones() > generic`\n   |\n   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#int_plus_one\n   = note: `-D clippy::int-plus-one` implied by `-D warnings`\n   = help: to override `-D warnings` add `#[allow(clippy::int_plus_one)]`\n\nerror: could not compile `managym` (test \"rules_tests\") due to 1 previous error\nwarning: build failed, waiting for other jobs to finish...\n"
+      },
+      {
+        "label": "gate-clippy-fixed",
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 0.708,
+        "exit_code": 0,
+        "log": "scratch/gate-clippy-fixed.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "Passed all targets/all features with warnings denied after equivalent count > generic rewrite.",
+        "log_sha256": "6bf71f6fa3acc8606dc8fd3443df7ca32de09b0336abcd12e7b34ab987d0f255"
+      },
+      {
+        "label": "gate-mana-lint-regression",
+        "command": [
+          "cargo",
+          "test",
+          "--locked",
+          "--manifest-path",
+          "managym/Cargo.toml",
+          "--test",
+          "rules_tests",
+          "audit_generic_and_specific_mana_boundary_matrix"
+        ],
+        "limit_seconds": 180,
+        "elapsed_seconds": 5.323,
+        "exit_code": 0,
+        "log": "scratch/gate-mana-lint-regression.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": true,
+        "result": "1 passed; unchanged 1152 finite oracle cases after lint fix.",
+        "log_sha256": "3092d7f38a2b37d6fc37868a53c5a7fddf00c966162cfdbe7817a7c57d253a89"
+      },
+      {
+        "label": "gate-frozen-evidence",
+        "command": [
+          "git",
+          "diff",
+          "--exit-code",
+          "0d9814995",
+          "--",
+          "conformance",
+          "protocol/fixtures",
+          "academy/fixtures",
+          ":!conformance/semantic-kernel-w12-v1",
+          ":!academy/fixtures/*w12.json"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.019,
+        "exit_code": 0,
+        "log": "scratch/gate-frozen-evidence.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "Pre-w12 conformance, protocol and Academy fixture bytes unchanged from upstream base.",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "gate-w12-identity",
+        "command": [
+          "git",
+          "diff",
+          "--exit-code",
+          "202416a8",
+          "--",
+          "WORLDS.md",
+          "managym/src/lib.rs",
+          "conformance/semantic-kernel-w12-v1",
+          "academy/fixtures/*w12.json"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.021,
+        "exit_code": 0,
+        "log": "scratch/gate-w12-identity.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "w12 identity, conformance and runtime demos unchanged from the accepted repair.",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "label": "gate-selector-syntax",
+        "command": [
+          "bash",
+          "-n",
+          ".github/ci/select-tests.sh"
+        ],
+        "limit_seconds": 120,
+        "elapsed_seconds": 0.007,
+        "exit_code": 0,
+        "log": "scratch/gate-selector-syntax.log",
+        "cargo_build_jobs": 2,
+        "debug_assertions": null,
+        "result": "Bash syntax passed.",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "learnability": {
+      "command": [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "-m",
+        "manabot.verify.learnability",
+        "--out",
+        ".runs/learnability/rules-targeting-w12-gate"
+      ],
+      "result": "learnability-w12-gate.json",
+      "status": "passed",
+      "wall_seconds": 42.99038116700831,
+      "cpu_seconds": 42.331117000000006,
+      "source_digest": "ffaf7f9b385b9690df010945b6b68c4eaa0ff9578f7a5c7ce3a21881453fa5c1",
+      "native_sha256": "1670c9346d44962f1f988b3b9d433266b1694e82fbcb02521a95ff1fe0f74873",
+      "capacity_assertions": 144,
+      "ppo": {
+        "before": 0.59375,
+        "after": 1.0,
+        "no_update": 0.640625,
+        "seconds": 31.706722625007387,
+        "transitions": 65536,
+        "training_seconds": 29.547614832990803,
+        "games": 1541,
+        "checkpoint": "ppo-policy.pt",
+        "passed": true
+      },
+      "limits": "Unchanged default 480s total / 300s PPO watchdogs; full diagnostic, not --pr.",
+      "digest_note": "Diagnostic source_digest includes report bytes at launch. Final documentation/receipt edits do not change the separately recorded runtime/test digest."
+    },
+    "failure_resolution": "Clippy alone failed. Applied its algebraically equivalent count > generic form, reran Clippy, the affected mana matrix and formatting. No behavioral check failed; no broad suite was replayed.",
+    "comparisons": {
+      "study_branch_seconds": {
+        "prior_integrated": 69.178,
+        "current": 75.84
+      },
+      "learnability_seconds": {
+        "prior_integrated": 43.492039625009056,
+        "current": 42.99038116700831
+      },
+      "interpretation": "Uncontrolled local host timings, not a performance regression/speedup claim. All unchanged budgets passed; no CI sharding savings claimed."
+    },
+    "ci_scope": "No required affected check deferred. The full Linux/platform, frontend/cross-language and configured fuzz CI matrix was not duplicated locally; CI still owns those results. No frontend production code changed.",
+    "incremental_cost": {
+      "timed_command_seconds_sum": 331.942,
+      "paid_compute_dollars": 0,
+      "scope": "Sum of measured command durations plus the full diagnostic wall time, including failed Clippy and its targeted rechecks. Not session wall time or CI runner-minutes; read-only review and report edits excluded."
+    },
+    "delivery": "Ready for parent lf land --wait-and-fix after checkpointing this exact tree. Gate did not publish, merge, arm auto-merge or complete MTG-177. Preserve supplied .lf contributions. Whole-rules audit and known payment/trigger/replacement limits remain open.",
+    "additional_checks": [
+      "git diff --check passed after gate documentation edits.",
+      "Runtime/test source SHA256 and native SHA256 rechecked unchanged at handoff.",
+      "Durable receipts, diagnostic status/assertions/watchdogs and 4274-line accounting checked at handoff."
+    ]
+  }
+}

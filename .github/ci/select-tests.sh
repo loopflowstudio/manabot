@@ -18,6 +18,8 @@ else
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
+      scripts/audit_rules.py|docs/rules/audit-2026-10/*)
+        select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
       content/*|conformance/*|manabot/managym/*|managym/src/*|managym/*.py|managym/*.pyi)
         all ;;
