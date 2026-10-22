@@ -725,15 +725,19 @@
     },
     "603.3b": {
       "status": "partial",
-      "scope": "APNAP rank correct for two players, then fixed enqueue order.",
+      "scope": "Two-player APNAP placement retained; same-controller fixed enqueue order has no order choice. Two injected orders independently prove survival versus loss at 2 life.",
       "authority": "managym/src/flow/triggers.rs:Game::pop_next_pending_trigger",
       "tests": [
-        "managym/tests/rules/cr_603_triggers.rs"
+        "managym/tests/rules/cr_603_triggers.rs",
+        "managym/src/flow/target_authority_tests.rs"
       ],
-      "gap": "Supported-play semantic gap: controller cannot choose simultaneous trigger order. Requires shared decision, not UI-only sorting.",
+      "gap": "Missing shared controller-order decision, not competing implementations. Ignored probe explicitly fails; two-part CR 603.3b process, Command/stale/replay/fork and admission proof remain proposals in unification.md.",
       "comments": "Stabilization documents deterministic APNAP/enqueue order, which is narrower than CR choice contract.",
       "dispersion": "dispersed",
-      "anchors": []
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::simultaneous_trigger_orders_have_distinct_rules_outcomes",
+        "managym/src/flow/target_authority_tests.rs::audit_same_controller_triggers_require_an_order_choice"
+      ]
     },
     "605.3a": {
       "status": "partial",
@@ -910,6 +914,64 @@
       "comments": "No ante implementation to document.",
       "dispersion": "single zone enumeration",
       "anchors": []
+    },
+    "202.3": {
+      "status": "partial",
+      "scope": "Printed-cost subset: Bolt 1, Gray Ogre 3, Mountain 0 at five minimum-value boundaries.",
+      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
+      "dispersion": "shared",
+      "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs"
+      ],
+      "gap": "No proof of X, alternate faces, copies or other mana-value exceptions.",
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::stack_target_mana_value_boundaries_have_explicit_expected_choices"
+      ]
+    },
+    "601.2c": {
+      "status": "partial",
+      "scope": "Restricted stack/permanent target offers and trigger acceptance; one shared mana-value predicate.",
+      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
+      "dispersion": "shared",
+      "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs"
+      ],
+      "gap": "Not complete announcement legality; target cardinality, modes, exceptional choices and payment remain separate.",
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell"
+      ]
+    },
+    "608.2b": {
+      "status": "partial",
+      "scope": "Restricted stack target resolves when legal; departing sole target prevents all instructions, including untargeted life gain. Existing trigger, Sokka mixed-target and graveyard-incarnation evidence retained.",
+      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
+      "dispersion": "shared",
+      "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs",
+        "managym/tests/rules/cr_603_triggers.rs",
+        "managym/tests/rules/elemental_cards.rs"
+      ],
+      "gap": "Not exhaustive effect/target-clause/identity proof; stack CardId incarnation review remains open.",
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life"
+      ]
+    },
+    "702.11b": {
+      "status": "partial",
+      "scope": "Creature/permanent target specs enforce opposing hexproof; SpellOrPermanent permanent branch incorrectly bypasses it.",
+      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
+      "dispersion": "shared",
+      "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs"
+      ],
+      "gap": "Confirmed defect: ignored audit probe explicitly fails. Correction is a separate unvalidated world/admission proposal; see unification.md.",
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::audit_spell_or_permanent_must_respect_opponents_hexproof"
+      ]
     }
   }
 }

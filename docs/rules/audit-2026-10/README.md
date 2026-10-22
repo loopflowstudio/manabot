@@ -1,151 +1,65 @@
-# Rules audit: proposed next work
+# Rules unification: draft review guide
 
-Use the audit to find competing definitions of the same game rule and align
-them around the implementation most faithful to MTG. Prioritize disagreements
-that affect legal choices or executed outcomes. Payment repairs already have
-owners; apply that lesson to other boundaries without duplicating their work.
+This draft follows the accepted plan to find competing definitions of a rule,
+adjudicate them against the pinned MTG rules, and share the faithful authority.
+It preserves the original committed inventory and draft; it does not repeat
+the whole-inventory audit or claim full MTG conformance.
 
-This is a proposed sequence for review, not a launch of those changes. The
-first draft built a complete inventory, but most entries received only broad
-triage: **2,974 remain unknown**. That gives us a map for investigation, not
-enough evidence to rank every missing mechanic or claim a complete audit.
+## Concrete change
 
-## 1. Find competing rules authorities and choose by MTG behavior
+Stack-target offers independently enforced minimum mana value while acceptance
+and resolution enforced it in `target_is_legal`. Both were faithful for the
+inspected printed-cost subset. Offers now use that shared predicate; the
+independent threshold comparison is removed. Explicit Bolt (1), Ogre (3) and
+Mountain (0) witnesses prove choices at five thresholds, rejection of a
+low-value target, successful countering, and failure of the entire ability
+when its only target departs. Candidate order and stage-specific checks remain.
 
-Trace where the same fact is defined more than once: action offers versus
-execution, target selection versus resolution, trigger collection versus
-stack placement, and event/replacement handling versus committed zone changes.
-These are investigation candidates, not established duplicate systems. Distinct
-stages can legitimately apply different rules: a target legal when chosen can
-be illegal at resolution because the state changed.
+Review [the small native change](../../../managym/src/flow/triggers.rs) and
+[independent witnesses](../../../managym/src/flow/target_authority_tests.rs).
+[Authority adjudication](unification.md) names the competing definitions,
+MTG verdict, chosen authority, removed logic and caller paths.
 
-For each actual overlap, identify the entry points and callers, then write a
-small case that distinguishes their behavior. Derive the expected legal choices
-and outcome from the pinned Comprehensive Rules, including exceptions, before
-using either implementation as an oracle. Prefer the existing implementation
-that matches those expectations; document which rule and witness justify that
-choice. Neither age, number of callers nor agreement between consumers proves
-correctness. If neither path is faithful, repair the common authority first.
+## Behavioral findings retained as separate proposals
 
-Route consumers through that authority and remove the competing rule definition.
-Keep stage-specific checks, viewer-safe projections and optimized paths only
-where their separate responsibilities are explicit and they preserve the same
-semantics. A shared helper that leaves independent decision logic in callers
-does not finish the consolidation.
+- **Hexproof inconsistency:** creature/permanent target branches enforce
+  CR 702.11b, while `SpellOrPermanent` bypasses it. A tiny explicitly failing
+  probe establishes the discrepancy. The correction requires new world and
+  admission evidence; it is not applied to the current world in this draft.
+- **Trigger-order choice:** one ordering implementation exists, with fixed
+  APNAP/enqueue order. At 2 life, simultaneous gain-2 and damage-2 triggers
+  permit survival or loss depending on the controller's CR 603.3b choice.
+  Both outcomes are verified; a separate failing probe shows that the shared
+  action surface cannot offer the ordering choice. This remains a missing
+  choice, not proved duplication. No browser-only workaround or new ABI is added.
 
-**Checkpoint:** each confirmed duplication has both owners, a distinguishing
-witness, the rule-based verdict, the chosen authority and its caller migration.
-Bounded tests must establish the MTG outcome as well as agreement across callers.
-Preserve complete legal choices, stale rejection, hidden information boundaries,
-replay identity and fork isolation. Land small consolidations separately; report
-larger redesigns as proposals. Review the following areas through this lens.
+The [detailed review](unification.md) gives exact remaining implementation and
+validation obligations, along with inspected negative findings for target
+identity, SBA/replacement/movement, combat and static queries. Existing mixed,
+all-invalid and leave/reenter target coverage is retained. Distinct stages and
+legitimate rechecks have not been collapsed into a universal rules engine.
 
-## 2. Establish the trigger-ordering gap
+## Ownership, checks and scope
 
-CR 603.3b lets a player choose the order of simultaneous triggers they control.
-The inspected implementation instead orders pending triggers by APNAP rank
-and enqueue order. It offers target choices, but has no trigger-order decision.
-This is the strongest independent implementation gap identified so far; a
-small behavioral example should establish its effect before a redesign.
-This finding currently establishes a missing choice, not two competing systems.
-Trace collection, ordering and stack placement to determine whether an actual
-duplicate definition also exists; do not invent one to fit the consolidation.
+The refreshed MTG-174 reference is stale: it currently identifies an Elemental
+training Task. Task `4ba5dd` still owns composable optional payments; its recorded
+landing failure and merged PR are documented without changing its lifecycle.
+Payment repair remains outside this increment.
 
-Start with two distinguishable triggers controlled by one player whose order
-changes the result. Specify both legal orders and their expected outcomes from
-the rules, then check what the shared action surface can express. Add a second
-case with triggers controlled by both players to separate APNAP ordering from
-each player's choice. First check current Task ownership to avoid duplicating
-a newer effort.
+[Validation receipts](unification-validation.json) record passing debug checks,
+two intentional failing proposal probes, the corrected initial fixture compile
+failure, native rebuild/import, Python checks, cost and coverage limits.
+[Line accounting](line-accounting.json) reconciles the original 621-line draft
+with this bounded increment against the approximate combined 10k-line budget.
+No frozen worlds, decks, experiment evidence, training budgets, CI selection or
+required-check semantics change. No ready publication, merge, auto-merge or
+Task completion is selected. The durable draft stops for review.
 
-**Checkpoint:** a tiny failing witness, exact native owner, and a bounded repair
-proposal. If confirmed, implement the choice in the shared native decision
-model and exercise human and bot actions, target selection, stale rejection,
-replay and fork restoration. Academy should expose that same decision.
+## Reference evidence
 
-## 3. Review target validity across zone changes
-
-Work through CR 115, 400.7 and 608.2b together. These rules meet at a common
-failure boundary: an object can leave and return while a spell or ability is
-waiting to resolve. Passing replay tests alone cannot prove the MTG result.
-The current audit has not established a defect here.
-
-Use small cases for one invalid target, all targets invalid, mixed valid and
-invalid targets, and a target leaving and returning before resolution. Read
-existing tests first and add only missing distinctions. Write expected effects
-and object identities before checking engine output.
-Compare the predicates used to offer targets, accept actions and resolve effects.
-Share the underlying target and identity rules where duplicated, while retaining
-the checks each stage requires against its own current state.
-
-**Checkpoint:** each reviewed rule has an exact owner and behavioral evidence,
-or a specific unresolved question. Any failure gets a minimal regression and
-a focused fix; passing cases close evidence gaps without prompting a refactor.
-
-## 4. Check state-based actions against replacements
-
-Extend the draft's cheap toughness/damage/indestructible matrix into selected
-CR 704 and 614–616 interactions supported by authored cards. Prioritize a
-simultaneous death batch, a replacement affecting a zone move, and competing
-applicable replacements where current content permits them. The existing
-matrix does not establish these interactions.
-
-Keep ownership visible: stabilization determines the batch, proposed events
-apply replacements, and zones commit movement. Document the invariant at the
-authority that enforces it. Propose consolidation only when a failing example
-shows that dispersed ownership is causing trouble.
-Check whether any direct movement path independently decides replacements or
-death consequences. Where it competes with the event authority, adjudicate both
-against the rules and route movement through the faithful implementation.
-
-**Checkpoint:** independent expected outcomes for each selected interaction,
-bounded fixtures, and an explicit distinction between supported-play defects
-and mechanics the admitted world cannot yet express.
-
-## 5. Continue the audit in useful batches
-
-After those boundaries, review supported combat restrictions and P/T effects
-under CR 508–510 and 613. The inspected P/T implementation is additive and
-does not establish general timestamp/dependency behavior. Determine which
-current cards require more before proposing a general layer engine.
-Look for combat offers and execution independently deciding legality, or callers
-recomputing characteristics outside the static-query authority. Confirm actual
-semantic overlap before merging responsibilities.
-
-Keep every numbered rule in the inventory, including unsupported formats.
-Upgrade entries individually as code, intent comments and tests are reviewed.
-For each batch, produce a short account of confirmed defects, closed evidence
-gaps and remaining uncertainty. Missing mulligans, poison, ante and variants
-remain admission/product decisions; their absence alone does not select them
-for implementation.
-
-## Existing work and validation budget
-
-MTG-174 owns the shared payment model for offers and execution. Optional-payment
-Task `4ba5dd` owns composable costs and continuations. Retain the Prism/Treasure
-counterexample as evidence for that work; do not create another payment rewrite
-here. The original audit's ownership observations are historical snapshots and
-must be refreshed before any implementation starts.
-
-Keep fixtures deterministic and small. Use debug Rust tests, uv-managed Python
-checks, two Cargo build jobs and the recorded per-command time limits. No paid
-compute, stress loops or coverage removal. Keep CI topology unchanged while
-the added duration reporting gathers evidence. The sampled runs spent
-35–46 runner-minutes for 9–11 minutes of wall time; more shards are not yet a
-demonstrated improvement. [CI analysis](ci.md) explains the tradeoffs.
-
-## Draft already available
-
-Commit `2b6e2b1b7` adds bounded mana and state-based-action tests, corrected rule
-comments, inventory tooling and CI duration reporting. Retained validation has
-300 passing debug rules tests, one new ignored payment probe separately
-reproduced as failing, and 44 passing final Python checks. Production edits
-change comments only. The original draft accounts for 621 lines including
-local helpers, separately from report/index artifacts.
-
-The [detailed evidence report](evidence.md) preserves the original findings,
-source pin and validation limits. The [rule index](index.jsonl),
-[authored reviews](reviews.json), [validation receipts](validation.json) and
-[line accounting](line-accounting.json) are reference material for the work
-above. No additional implementation Flow, publication or merge is selected
-by this plan.
+The [original evidence](evidence.md), [source pin](source.json),
+[rule index](index.jsonl), [authored reviews](reviews.json),
+[original validation](validation.json) and [CI analysis](ci.md) remain available.
+The four individually reviewed target-related entries receive scoped partial
+findings in this increment; unknown rules do not inherit those results.
+The original report's counts describe its original snapshot.

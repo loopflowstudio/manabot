@@ -1,0 +1,326 @@
+{
+  "base_revision": "ededb325",
+  "rules_source": "source.json",
+  "receipts": [
+    {
+      "label": "unify-target-debug",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests",
+        "--",
+        "--nocapture"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 3.014,
+      "exit_code": 101,
+      "log": "scratch/unify-target-debug.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-target-debug-fixed",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests",
+        "--",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 19.731,
+      "exit_code": 0,
+      "log": "scratch/unify-target-debug-fixed.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-proposals",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--lib",
+        "target_authority_tests::audit_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.075,
+      "exit_code": 101,
+      "log": "scratch/unify-proposals.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-trigger-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "cr_603_triggers"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 29.677,
+      "exit_code": 0,
+      "log": "scratch/unify-trigger-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-replacement-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "cr_614_replacement"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 15.629,
+      "exit_code": 0,
+      "log": "scratch/unify-replacement-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-mixed-target-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.087,
+      "exit_code": 0,
+      "log": "scratch/unify-mixed-target-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-graveyard-regression",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--test",
+        "rules_tests",
+        "ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.082,
+      "exit_code": 0,
+      "log": "scratch/unify-graveyard-regression.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": true
+    },
+    {
+      "label": "unify-native-wheel",
+      "command": [
+        "uv",
+        "run",
+        "maturin",
+        "build",
+        "--release",
+        "-i",
+        ".venv/bin/python",
+        "-m",
+        "managym/Cargo.toml",
+        "-o",
+        "managym/target/wheels"
+      ],
+      "limit_seconds": 900,
+      "elapsed_seconds": 22.907,
+      "exit_code": 0,
+      "log": "scratch/unify-native-wheel.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": false
+    },
+    {
+      "label": "unify-native-import",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scratch/install_native.py"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.927,
+      "exit_code": 0,
+      "log": "scratch/unify-native-import.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-index-update",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt",
+        "--write"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.071,
+      "exit_code": 0,
+      "log": "scratch/unify-index-update.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-python-checks",
+      "command": [
+        "uv",
+        "run",
+        "--extra",
+        "dev",
+        "pytest",
+        "tests/infra/test_rules_inventory.py",
+        "tests/infra/test_ci_selection.py",
+        "-q"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 2.918,
+      "exit_code": 0,
+      "log": "scratch/unify-python-checks.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-rust-format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "managym/Cargo.toml",
+        "--",
+        "--check"
+      ],
+      "limit_seconds": 180,
+      "elapsed_seconds": 0.402,
+      "exit_code": 0,
+      "log": "scratch/unify-rust-format.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    },
+    {
+      "label": "unify-index-final",
+      "command": [
+        "uv",
+        "run",
+        "python",
+        "scripts/audit_rules.py",
+        "--source",
+        "scratch/MagicCompRules-20260925.txt"
+      ],
+      "limit_seconds": 120,
+      "elapsed_seconds": 0.124,
+      "exit_code": 0,
+      "log": "scratch/unify-index-final.log",
+      "cargo_build_jobs": 2,
+      "debug_assertions": null
+    }
+  ],
+  "result": {
+    "debug_rust_passed": 17,
+    "new_debug_tests_passed": 4,
+    "new_ignored_proposal_probes": 2,
+    "explicitly_reproduced_proposal_failures": 2,
+    "python_passed": 42,
+    "numbered_entries": 3322,
+    "statuses": {
+      "implemented": 3,
+      "partial": 25,
+      "missing": 2,
+      "not_applicable": 322,
+      "unknown": 2970
+    }
+  },
+  "failures": [
+    {
+      "label": "unify-target-debug",
+      "cause": "Initial fixture compile failure: two push_spell_to_stack calls had reversed CardId/PlayerId and an extra mode argument; two Player arrays were indexed by PlayerId rather than usize.",
+      "resolution": "Fixed fixture calls/indices; focused warm rerun passed four tests with two explicitly ignored proposals."
+    },
+    {
+      "label": "unify-proposals",
+      "cause": "Both proposal probes intentionally run with --ignored. Trigger flush returned no ordering decision; opposing hexproof permanent was present in SpellOrPermanent offers.",
+      "resolution": "Not repaired or counted as passing. Separate world/admission proposals in unification.md. No existing test was disabled."
+    }
+  ],
+  "incremental_cost": {
+    "paid_compute_dollars": 0,
+    "timed_command_seconds_sum": 95.644,
+    "interpretation": "Sum of measured command durations, not elapsed session time; overlapping build-lock wait is included. Read-only lf/rg/file inspection and initial cargo fmt edits were not individually timed. No stress loop, random-game cohort, broad repeated suite or remote job."
+  },
+  "limits": [
+    "Two Cargo jobs; opt-level 1 debug tests retain debug assertions. First debug attempt had 900-second cold ceiling; repaired warm check and regression commands had 180-second ceilings. Native release build used 900 seconds. Python wrappers/checks limited to 120 seconds.",
+    "Only the listed focused tests were rerun. No full Rust, browser, Command/replay/fork or full learnability/arena suite was run; unchanged legal semantics are intended for the consolidation, not established for every game state.",
+    "Release wheel build is native import validation, not a substitute for debug tests; cp312 extension was installed by write-new-then-rename.",
+    "World-changing hexproof repair and trigger-order decision are not implemented or admitted. Historical source-location index remains the original snapshot; new findings have symbol/test anchors in reviews.json.",
+    "CI topology, selection and required-check definitions remain unchanged. Existing CI-selection tests passed."
+  ],
+  "ownership": {
+    "MTG-174": {
+      "resolved_task": "task_f721516493004baa9b5a9025b1ef81c8",
+      "title": "Train the ten-deck Elemental world for $10 and compare the $10 baseline",
+      "state": "started",
+      "execution": "idle after completed Flow",
+      "owner": "Jack Heart",
+      "wave": "intelligence",
+      "conclusion": "Historical payment reference stale. Current shared-payment Task ownership unresolved; no payment repair attempted."
+    },
+    "4ba5dd": {
+      "resolved_task": "task_4ba5dd5356464ae0ad02232a42cecd87",
+      "state": "started",
+      "execution": "Recorded stopped landing Flow blocked: no auto-merge request",
+      "owner": "Jack Heart",
+      "wave": "rules",
+      "pr": 344,
+      "recorded_merge_commit": "43d807036ed86e1899ca6ffc1bc2e54fe559dfdd",
+      "conclusion": "Commit already in checkout history. Do not restart landing or infer Task completion from PR state."
+    }
+  },
+  "additional_checks": [
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "result": "No whitespace errors."
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "43d807036ed86e1899ca6ffc1bc2e54fe559dfdd",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "result": "Optional-payment delivery commit already in history."
+    }
+  ]
+}

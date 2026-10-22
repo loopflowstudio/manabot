@@ -253,8 +253,8 @@ impl Game {
                     TargetSpec::CreatureOrPlayer => {
                         vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
                     }
-                    TargetSpec::SpellOrPermanent { min_mana_value } => {
-                        self.stack_spell_targets(*min_mana_value)
+                    TargetSpec::SpellOrPermanent { .. } => {
+                        self.stack_spell_targets(target_spec, controller)
                     }
                     _ => Vec::new(),
                 };
@@ -271,21 +271,22 @@ impl Game {
                 }
                 out
             }
-            TargetSpec::Spell => self.stack_spell_targets(0),
+            TargetSpec::Spell => self.stack_spell_targets(target_spec, controller),
         }
     }
 
-    fn stack_spell_targets(&self, min_mana_value: u8) -> Vec<Target> {
+    // Enumeration supplies candidates in stack order; the shared predicate
+    // owns restrictions both when choosing (CR 601.2c) and rechecking (608.2b).
+    fn stack_spell_targets(&self, spec: &TargetSpec, controller: PlayerId) -> Vec<Target> {
         self.state
             .stack_objects
             .iter()
             .rev()
             .filter_map(|object| match object {
-                StackObject::Spell(spell) if self.card_mana_value(spell.card) >= min_mana_value => {
-                    Some(Target::StackSpell(spell.card))
-                }
+                StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
                 _ => None,
             })
+            .filter(|target| self.target_is_legal(*target, spec, controller))
             .collect()
     }
 
@@ -733,3 +734,7 @@ impl Game {
             .is_some_and(|permanent| permanent.card != source_card)
     }
 }
+
+#[cfg(test)]
+#[path = "target_authority_tests.rs"]
+mod target_authority_tests;

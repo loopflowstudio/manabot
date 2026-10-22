@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 621,
+  "combined_draft_churn_lines": 882,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -151,5 +151,35 @@
     }
   ],
   "self_accounting": "This accounting file is itself an audit report artifact, excluded from draft budget.",
-  "untracked_official_source": "scratch/MagicCompRules-20260925.txt is retained input from Wizards, not authored draft lines. Task snapshots, CI API reads and raw local logs also remain in scratch. No source text is republished in the committed index."
+  "untracked_official_source": "scratch/MagicCompRules-20260925.txt is retained input from Wizards, not authored draft lines. Task snapshots, CI API reads and raw local logs also remain in scratch. No source text is republished in the committed index.",
+  "original_combined_draft_churn_lines": 621,
+  "unification_increment": {
+    "basis": "Additions plus deletions since ededb325; report/index artifacts excluded, original draft and local helper charge retained.",
+    "files": [
+      {
+        "path": "managym/src/flow/triggers.rs",
+        "added": 12,
+        "deleted": 7
+      },
+      {
+        "path": "managym/src/flow/target_authority_tests.rs",
+        "added": 241,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 1,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 261,
+    "excluded_reports": [
+      "docs/rules/audit-2026-10/README.md",
+      "docs/rules/audit-2026-10/unification.md",
+      "docs/rules/audit-2026-10/unification-validation.json",
+      "docs/rules/audit-2026-10/reviews.json",
+      "docs/rules/audit-2026-10/index.jsonl",
+      "docs/rules/audit-2026-10/line-accounting.json"
+    ]
+  }
 }
