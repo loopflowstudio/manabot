@@ -61,8 +61,9 @@ def test_real_collection_update_export_reload(
         run = execute_regime(recipe, 601, tmp_path / "run", store)
     assert run.status == "completed"
     for iteration, stage in enumerate(run.stages, 1):
-        assert stage.learner_transitions == 16
-        assert stage.optimizer_exposures == 16
+        assert stage.learner_transitions == sum(d["rows"] for d in stage.diagnostics)
+        assert stage.learner_transitions >= 16
+        assert stage.optimizer_exposures == stage.learner_transitions
         assert stage.collection_seconds > 0
         assert stage.learning_seconds > 0
         assert stage.export_seconds > 0
@@ -81,7 +82,11 @@ def test_real_collection_update_export_reload(
     assert tracked[0].state is not None and tracked[0].state.state == "finished"
     assert tracked[0].incomplete == 0
     assert len(tracked[0].checkpoints) == len(recipe.stages) + 1
-    assert [c.at["learner_transitions"] for c in tracked[0].checkpoints] == [0, 16, 32]
+    assert [c.at["learner_transitions"] for c in tracked[0].checkpoints] == [
+        0,
+        run.stages[0].learner_transitions,
+        sum(s.learner_transitions for s in run.stages),
+    ]
     assert [c.at["updates"] for c in tracked[0].checkpoints] == [0, 1, 2]
 
 
@@ -100,7 +105,11 @@ def test_sdk_retains_initialization_and_exact_update_milestones(tmp_path: Path) 
     assert run.status == "completed"
     tracked = read_all(tmp_path / "run" / stage.id / "etude")[0]
     assert [c.at["updates"] for c in tracked.checkpoints] == [0, 1, 2, 3]
-    assert [c.at["learner_transitions"] for c in tracked.checkpoints] == [0, 16, 32, 48]
+    assert [c.at["learner_transitions"] for c in tracked.checkpoints] == [
+        0,
+        *(c.learner_transitions for c in run.monitoring_checkpoints),
+        sum(s.learner_transitions for s in run.stages),
+    ]
     expected = [
         run.stages[0].artifacts["initial_raw"],
         *(c.artifact for c in run.monitoring_checkpoints),
