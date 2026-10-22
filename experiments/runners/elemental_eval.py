@@ -17,7 +17,7 @@ from etude.eval.match import Tables, agent, environment
 from etude.eval.records import Agent, Match, RoundRobin, digest
 from etude.jobs import evaluation
 from etude.launch.client import launch
-from etude.launch.records import Runtime
+from etude.launch.records import Run, Runtime
 from etude.reports import Evaluation, record
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef, Clock
@@ -91,7 +91,7 @@ def play(match: Match) -> Tables:
     }
 
 
-def launch_evaluation(
+def prepare_evaluation(
     root: Path,
     checkpoint: Path,
     opponent: Path | None,
@@ -105,7 +105,9 @@ def launch_evaluation(
     update: int | None = None,
     cohort: str | None = None,
     experiment: str = "mtg174-elemental",
-) -> str:
+) -> Run:
+    """Build the typed run and register its prospective training-report link."""
+
     def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
             label,
@@ -218,4 +220,36 @@ def launch_evaluation(
                 subject=candidate.identity,
             ),
         )
+    return run
+
+
+def launch_evaluation(
+    root: Path,
+    checkpoint: Path,
+    opponent: Path | None,
+    *,
+    name: str,
+    conditions: tuple[dict[str, str | int | bool], ...],
+    revision: str,
+    pool: str = "local",
+    run_id: str | None = None,
+    training_run: str | None = None,
+    update: int | None = None,
+    cohort: str | None = None,
+    experiment: str = "mtg174-elemental",
+) -> str:
+    run = prepare_evaluation(
+        root,
+        checkpoint,
+        opponent,
+        name=name,
+        conditions=conditions,
+        revision=revision,
+        pool=pool,
+        run_id=run_id,
+        training_run=training_run,
+        update=update,
+        cohort=cohort,
+        experiment=experiment,
+    )
     return launch(run, pool=pool)

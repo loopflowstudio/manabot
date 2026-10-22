@@ -51,6 +51,8 @@ def test_endpoint_and_initialization_remain_required(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = _config(tmp_path)
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path))
+    monkeypatch.setattr(live, "prepare_evaluation", lambda *a, **kw: None)
     monkeypatch.setattr(
         live,
         "status",
@@ -93,6 +95,8 @@ def test_invalid_evaluation_retains_failure_and_cancels(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = _config(tmp_path)
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path))
+    monkeypatch.setattr(live, "prepare_evaluation", lambda *a, **kw: None)
     monkeypatch.setattr(
         live,
         "status",
