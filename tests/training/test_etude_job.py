@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 
-from etude.track.read import read_all
+from etude.train.read import read_all
 import pytest
 
 from experiments.recipes import ataraxos_move_scalar

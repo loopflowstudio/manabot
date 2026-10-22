@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from manabot.training.report_study import ScientificStudy
 
-from etude.track.records import RunDeclaration, RunFile, SourceKey
+from etude.run.records import RunDeclaration, RunFile, SourceKey
 from nbclient import NotebookClient
 import nbformat
 from pydantic import ValidationError

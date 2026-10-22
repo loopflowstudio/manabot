@@ -324,22 +324,6 @@ protocol serialization. A native authored roster does not itself admit a neural
 policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
 
-`manabot.training.etude_evaluation.publish_saved_evaluation(tracker, path)`
-publishes a retained `monitor.json` through the public Etude evaluation API. It
-checks exact checkpoint bytes and recomputes cohort completeness/intervals before
-recording outcomes. It does not rerun games or replay, and cannot certify an
-untrusted report's historical claims. Successful estimates use the saved
-whole-deal bootstrap: `n` counts deals, not games or training seeds. Incomplete
-cohorts remain failed evaluations without strength estimates.
-
-Only whitelisted outcome, timing and coordinate fields enter SDK episode rows;
-private Commands and arbitrary arena extras do not. Episode counts include failed
-attempts, with validity explicit. Each publication has its own key containing the
-source result SHA-256. Re-publication is not new evidence: comparison readers must
-deduplicate identical result digests. The caller owns tracker flushing. Admission
-failures without a MonitorResult remain in their original failure files; remote
-archival and campaign-level reporting are not supplied by this publisher.
-
 The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and
 checks reward-driven production PPO plus checkpoint reload. Its credential-free

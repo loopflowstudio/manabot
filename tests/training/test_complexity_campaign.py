@@ -208,7 +208,6 @@ def test_fetched_fit_is_scored_once_and_never_overwrites_failures(
             cells,
             "l3",
             digest,
-            None,
             lambda: False,
             training=fetched,
         )
@@ -225,7 +224,6 @@ def test_fetched_fit_is_scored_once_and_never_overwrites_failures(
             cells,
             "l3",
             digest,
-            None,
             lambda: False,
             training=fetched,
             anchors=("heuristic",),
@@ -248,7 +246,6 @@ def test_fetched_fit_is_scored_once_and_never_overwrites_failures(
             cells,
             "l3",
             "0" * 64,
-            None,
             lambda: False,
             training=fetched,
         )
