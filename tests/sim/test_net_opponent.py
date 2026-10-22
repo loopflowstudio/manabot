@@ -34,6 +34,7 @@ def _make_collector(
         num_envs=num_envs,
         seed=seed,
         opponent_mode=opponent_mode,
+        learning_seats="one",
         opponent_agent=opponent_agent,
         recovery_max_game_microsteps=recovery_max_game_microsteps,
     )

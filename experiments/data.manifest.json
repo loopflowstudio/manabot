@@ -2042,6 +2042,30 @@
    "sha256": "e5a814f023df969c36b2f181577ec3bf8c3f311695c341948c2821c203864ba7",
    "bytes": 4509
   },
+  "experiments/data/two-seat-ladder/2026-10-21-interim.json": {
+   "sha256": "4c00c75e69aa86c1d209cae595b850c50fa66d86c485e3acf9dbe638e1c2f909",
+   "bytes": 4276
+  },
+  "experiments/data/two-seat-ladder/250-update-etude.json": {
+   "sha256": "7a84efbcd000440a5306449e72b6d6feea51ae39525b26aee21cc96988de7c0b",
+   "bytes": 60324
+  },
+  "experiments/data/two-seat-ladder/250-update-heuristic.json": {
+   "sha256": "5b3dae5204b205debeaf06dd7f45a11a5f48bee64e10519b206deef7166c0cdf",
+   "bytes": 91746
+  },
+  "experiments/data/two-seat-ladder/500-update-etude.json": {
+   "sha256": "3b60e2a55d4bfd7896bede8e76f8353af21151eb78a03c3420a74a7e3dd5a92b",
+   "bytes": 57942
+  },
+  "experiments/data/two-seat-ladder/750-update-etude.json": {
+   "sha256": "b1e86590688ee322b8992cde6575abc87b62f621cc74fc3aa69962dc438b33a5",
+   "bytes": 57957
+  },
+  "experiments/data/two-seat-ladder/frozen-regime.json": {
+   "sha256": "8bc112eeafb01bbf8c6bd60b37152383eadadcc3059bc017e914267159154172",
+   "bytes": 3168
+  },
   "experiments/data/value-token-screen-result.json": {
    "sha256": "a4d75fddfcea27554c51ff28a615548ef362789400d89e649f3056266d01cb5b",
    "bytes": 42860

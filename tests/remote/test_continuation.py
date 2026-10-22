@@ -1,6 +1,7 @@
 """Continuation keeps scientific job identities, costs and creation fences intact."""
 
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -195,9 +196,17 @@ def test_insert_lost_cas_cannot_overwrite_admission(
     assert harness.restart().state.insertion is None
 
 
-def test_manifest_binds_all_four_inputs(harness: Harness, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "phase,iteration", [("completed", 1), ("paused", "last-complete")]
+)
+def test_manifest_binds_all_four_inputs(
+    harness: Harness,
+    tmp_path: Path,
+    phase: Literal["completed", "paused"],
+    iteration: int | Literal["last-complete"],
+) -> None:
     first = harness.launch()
-    harness.finish(first)
+    harness.finish(first, "paused" if phase == "paused" else "completed")
     status = harness.observe(first)
     assert status.record is not None
     status = status.model_copy(
@@ -234,7 +243,15 @@ def test_manifest_binds_all_four_inputs(harness: Harness, tmp_path: Path) -> Non
             for i in range(4)
         ),
     )
-    entry = insertion_for(harness).entries[0]
+    entry = (
+        insertion_for(harness)
+        .entries[0]
+        .model_copy(
+            update={
+                "continuation": Continuation(job_id=first.job_id, iteration=iteration)
+            }
+        )
+    )
     spec = bind_continuation(entry, status, tmp_path, manifest=manifest)
     assert spec.plan.regime.stages[0].learning_state is not None
     assert spec.learning_inputs["optimizer"].version_id == "version-3"
@@ -311,3 +328,48 @@ def test_explicit_deadline_extension_keeps_admitted_job_deadline(
     assert harness.cohort.deadline == 100000
     with pytest.raises(ValueError, match="access lifetime"):
         CohortInsertion.model_validate({**insertion.model_dump(), "deadline": 200000})
+
+
+@pytest.mark.parametrize("boundary", [True, False])
+def test_paused_predecessor_requires_explicit_budget_continuation(
+    harness: Harness, boundary: bool
+) -> None:
+    first = harness.launch()
+    insertion = insertion_for(harness)
+    if boundary:
+        entry = insertion.entries[0].model_copy(
+            update={
+                "continuation": Continuation(
+                    job_id=first.job_id, iteration="last-complete"
+                )
+            }
+        )
+        insertion = insertion.model_copy(update={"entries": (entry,)})
+    insert_cohort(harness.cohort, insertion, store=harness.store)
+    harness.finish(first, "paused")
+    supervisor = harness.restart()
+    supervisor.bind = lambda entry, status, cache: entry.job(harness.clock.now)
+    state = supervisor.tick()
+    assert len(state.attempts) == (2 if boundary else 1)
+    assert state.phase == ("pending" if boundary else "paused")
+    assert harness.provider.created == 1
+
+
+def test_last_complete_cannot_continue_failed_export(
+    harness: Harness, tmp_path: Path
+) -> None:
+    first = harness.launch()
+    harness.finish(first, "failed")
+    entry = (
+        insertion_for(harness)
+        .entries[0]
+        .model_copy(
+            update={
+                "continuation": Continuation(
+                    job_id=first.job_id, iteration="last-complete"
+                )
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="finalized"):
+        bind_continuation(entry, harness.observe(first), tmp_path)

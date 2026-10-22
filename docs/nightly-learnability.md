@@ -130,7 +130,7 @@ authored decisions (choice-corpus rounds 0–2, ten families, each at life 5 and
 35) at the production baseline's model size, 1 of 12 additive seeds stayed
 at chance on 85 of the 96 decisions; all 12 FiLM seeds fit every decision.
 New training runs therefore train the FiLM policy too (`new_agent_spec()`,
-baseline recipe `baseline-v2`), so this gate tests the policy that is trained.
+baseline recipe `baseline-v3`), so this gate tests the policy that is trained.
 
 ## Broader choice separability
 

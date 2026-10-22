@@ -73,6 +73,12 @@ history.
 
 ## Index
 
+[MTG-165 two-seat scale ladder](two-seat-ladder.md): **running, interim report** —
+20.9M learner/environment decisions retained in a verified 704-update snapshot.
+Early heuristic score at 250 updates: 51.5% [48.5, 54.5], versus one-seat 47.5%;
+paired delta +4 points [−1, +8.5], with unequal training cost. The $50 endpoint
+is pending; $4.01 estimated incurred at the retained cost observation.
+
 [ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
 actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
 training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.

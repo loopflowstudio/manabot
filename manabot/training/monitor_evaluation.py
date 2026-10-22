@@ -356,12 +356,13 @@ def _opponent_source_sha256(opponent: str) -> str:
     return source_bundle_sha256([Path(path) for path in heuristic_source_paths()])
 
 
-def _manifest(
+def checkpoint_manifest(
     run: TrainingRun,
     artifact: ArtifactReference,
     coordinates: TrainingCoordinates,
     protocol: MonitorProtocol,
 ) -> MonitorResult:
+    """Admit exact checkpoint bytes and runtime identities before playing games."""
     path = Path(artifact["path"]).resolve()
     if (
         path.stat().st_size != artifact["bytes"]
@@ -483,7 +484,9 @@ def evaluate_checkpoint(
     process = psutil.Process()
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
-        result = _manifest(run, artifact, coordinates, protocol or MonitorProtocol())
+        result = checkpoint_manifest(
+            run, artifact, coordinates, protocol or MonitorProtocol()
+        )
     except Exception as exc:
         atomic_json(
             output_dir / "admission-failure.json",

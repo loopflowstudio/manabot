@@ -146,6 +146,7 @@ def test_named_treatments_execute_real_optimizer_batches():
 
     trainer = SimpleNamespace(
         agent=agent,
+        collector=SimpleNamespace(num_envs=1),
         experiment=SimpleNamespace(device="cpu"),
         optimizer=torch.optim.Adam(agent.parameters()),
         _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
@@ -329,9 +330,14 @@ def test_self_play_continuation_keeps_adam_and_exports_each_stage(
         for stage in run.stages:
             state = torch.load(stage.artifacts["optimizer"]["path"], weights_only=True)
             steps.append(max(int(item["step"]) for item in state["state"].values()))
-            assert stage.learner_transitions == 16
+            assert stage.learner_transitions == sum(
+                d["rows"] for d in stage.diagnostics
+            )
+            assert stage.learner_transitions >= 16
         assert steps[0] > 0
-        assert steps[1] == 2 * steps[0]
+        assert steps[1] - steps[0] == sum(
+            d["numerical"]["optimizer_steps"] for d in run.stages[1].diagnostics
+        )
         assert [stage.cumulative_seconds for stage in run.stages] == admitted
         assert admitted[0] >= run.setup_seconds + run.stages[0].seconds
         assert admitted[1] >= admitted[0] + 5.0 + run.stages[1].seconds

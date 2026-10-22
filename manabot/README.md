@@ -37,7 +37,8 @@ Override any hyperparameter with `--set dotted.path=value`; presets live in
 `--recipe baseline` selects a complete ordinary training run above the regime
 layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
 checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
-collection/update iterations (four streams × 64 transitions each), not optimizer
+collection/update iterations (four streams, at least 64 combined seat decisions
+each, finishing current games before updating), not optimizer
 calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
@@ -77,6 +78,14 @@ New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
 default 1,000); freeze targets and shared intervals before launch. Operational
 lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training-monitoring.md#new-training-and-live-dashboards).
 
+New self-play training learns from both seats by default (`baseline-v3`).
+Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
+saved schema-1 recipes retain their historical one-seat behavior.
+Use `games_per_stream` on both arms to match complete-game budgets. Distinct
+learning models can use `PairedLearners` to update both independent optimizers
+from their own seat trajectories. See [both-seat learning](../docs/training-regimes.md#learning-from-both-seats)
+for collection boundaries, accounting and measurement limits.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from
@@ -99,7 +108,7 @@ semantic transfer; no previous checkpoint is relabeled compatible.
 `AgentSpec(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
 learnable from any start. New runs train it: `new_agent_spec()` is the
-`manabot train` default, and the ordinary baseline recipe is `baseline-v2`.
+`manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.

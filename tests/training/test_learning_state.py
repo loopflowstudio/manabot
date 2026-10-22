@@ -151,8 +151,15 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     final_checkpoint = stage_checkpoint(third, "fit")
     assert final_checkpoint is not None
     assert final_checkpoint.coordinates.updates == 5
-    assert final_checkpoint.coordinates.learner_transitions == 5 * 16 * 2
-    assert initial.coordinates.learner_transitions == 2 * 16 * 2
+    # Complete-game two-seat batches overshoot the decision floor. Continuation
+    # must accumulate recorded rows rather than reconstruct them from quotas.
+    assert final_checkpoint.coordinates.learner_transitions == sum(
+        run.stages[0].learner_transitions for run in (producer, second, third)
+    )
+    assert (
+        initial.coordinates.learner_transitions
+        == producer.stages[0].learner_transitions
+    )
     assert second.updates_through() == 4 and third.updates_through() == 5
     assert [d["iteration"] for d in second.stages[0].diagnostics] == [3, 4]
     assert [d["iteration"] for d in third.stages[0].diagnostics] == [5]

@@ -393,13 +393,33 @@ class TrainSelfPlay(Stage):
     )
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
+    games_per_stream: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
+    learning_seats: Literal["one", "both"] = "both"
     matchup_curriculum: Literal["fixed", "cross-balanced", "mirrors-balanced"] = Field(
         default="fixed", exclude_if=lambda value: value == "fixed"
     )
     learning: Learning | AtaraxosMoveLearning = Learning()
 
+    @model_validator(mode="before")
+    @classmethod
+    def default_learning_seats(cls, value: object) -> object:
+        if (
+            isinstance(value, dict)
+            and "learning_seats" not in value
+            and value.get("behavior") in ("random", "frozen")
+        ):
+            return {**value, "learning_seats": "one"}
+        return value
+
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.learning_seats == "both" and self.behavior not in (
+            "current-self",
+            "ema-self",
+        ):
+            raise ValueError("both learning seats require self-play behavior")
         if self.execution.workers > self.streams:
             raise ValueError("producer count cannot exceed streams")
         if self.execution.workers != 1 and self.root is not None:
@@ -558,7 +578,7 @@ class RecoveryPolicy(Strict):
 
 
 class TrainingRegime(Strict):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     id: str
     world: str
     match: MatchHypers
@@ -578,6 +598,40 @@ class TrainingRegime(Strict):
         default=1, ge=1, le=1000, exclude_if=lambda value: value == 1
     )
     selection: Literal["last-complete-raw"] = "last-complete-raw"
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_one_seat_regime(cls, value: object) -> object:
+        """Schema 1 omitted the one-seat choice; never relabel frozen evidence."""
+        if isinstance(value, dict) and value.get("schema_version") == 1:
+            stages = value.get("stages")
+            if isinstance(stages, list):
+                return {
+                    **value,
+                    "stages": [
+                        {**stage, "learning_seats": stage.get("learning_seats", "one")}
+                        if isinstance(stage, dict)
+                        and stage.get("operation") == "train_self_play"
+                        else stage
+                        for stage in stages
+                    ],
+                }
+        return value
+
+    @model_serializer(mode="wrap")
+    def retain_one_seat_regime(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        values: dict[str, object] = handler(self)
+        if self.schema_version == 1:
+            # Old hashes include omitted defaults. Two-seat treatments are always
+            # explicit, including when authored from a schema-1 experiment.
+            stages = values.get("stages")
+            if isinstance(stages, list):
+                for stage in stages:
+                    if isinstance(stage, dict) and stage.get("learning_seats") == "one":
+                        stage.pop("learning_seats")
+        return values
 
     @property
     def recoverable(self) -> bool:
@@ -776,6 +830,8 @@ class TrainingRegime(Strict):
                     or parent.execution.workers != stage.execution.workers
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
+                    or parent.learning_seats != stage.learning_seats
+                    or parent.games_per_stream != stage.games_per_stream
                     or parent.matchup_curriculum != stage.matchup_curriculum
                     or parent.learning.ema != stage.learning.ema
                     or parent.opponent != stage.opponent
