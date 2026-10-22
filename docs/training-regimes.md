@@ -6,8 +6,8 @@ ETU-89 owns this infrastructure. ETU-90 owns its direct-RL treatment correctness
 ETU-91 owns the comparison/ablation protocols and analysis.
 
 ```bash
-uv run manabot train --regime experiments/regimes/direct-self-play.json --seed 197 --out .runs/direct-pilot
-uv run manabot train --regime experiments/regimes/search-distillation.json --seed 197 --out .runs/search-pilot
+uv run manabot train --regime-name direct-self-play --seed 197 --out .runs/direct-pilot
+uv run manabot train --regime-name search-distillation --seed 197 --out .runs/search-pilot
 ```
 
 The supplied recipes are bounded pilots, not the proposed week-long experiment.
