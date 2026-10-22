@@ -11,13 +11,12 @@ import os
 from pathlib import Path
 import time
 
-from etude.track.records import Step
-from etude.track.run import init
+from etude.train.records import Step
+from etude.train.run import track
 import torch
 
 from experiments.runners.baseline_monitoring import DiagnosticMonitor
 from experiments.runners.corrected_baseline import MATCHUP, recipe
-from manabot.training.etude_evaluation import publish_saved_evaluation
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.models import TrainingRegime
 from manabot.training.monitor_evaluation import (
@@ -131,7 +130,7 @@ def run() -> None:
             },
         )
     else:
-        tracker = init(
+        tracker = track(
             experiment="mtg122-gpu-evaluation",
             clocks=[Step("evaluations", "Diagnostic cohorts")],
             run=os.environ["ETUDE_RUN"] + "-diagnostics",
@@ -142,8 +141,6 @@ def run() -> None:
             paths = sorted(
                 (output / "diagnostics").glob("attempt-*/evaluation/monitor.json")
             )
-            for path in paths:
-                publish_saved_evaluation(tracker, path)
             tracker.log(evaluations=len(paths))
         finally:
             tracker.finish()

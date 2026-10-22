@@ -207,11 +207,11 @@ console.log(JSON.stringify({initial,cleared,restored:chart()}));
 def test_etude_written_logs_are_selectable_without_invented_phases(
     tmp_path: Path,
 ) -> None:
-    from etude.track.records import Step, Time
-    from etude.track.run import init
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     for seed, seconds in [(1, 10.0), (2, 100.0)]:
-        run = init(
+        run = track(
             experiment="real-training",
             run=f"seed-{seed}",
             job="recipe",
@@ -329,19 +329,19 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
 def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from etude.track.records import Step, Time
-    from etude.track.run import init
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
         Step("learner_transitions", "retained rows"),
     ]
-    first = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    first = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     first.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     first.finish()
     monkeypatch.setenv("ETUDE_UNTIL_CLOCK", "training_seconds")
     monkeypatch.setenv("ETUDE_FROM_VALUE", "8")
-    second = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    second = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     second.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
     second.finish()
     run = load_time_sources([str(tmp_path)]).runs[0]
@@ -349,7 +349,7 @@ def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
     monkeypatch.delenv("ETUDE_FROM_VALUE")
-    third = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    third = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     third.log({"loss": 0.4}, training_seconds=14, learner_transitions=140)
     third.finish()
     assert load_time_sources([str(tmp_path)]).runs[0].active_seconds is None
@@ -392,22 +392,23 @@ def test_cli_creates_report_from_saved_native_records(tmp_path: Path) -> None:
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
     tmp_path: Path,
 ) -> None:
-    from etude.track.read import read_all
-    from etude.track.records import Continuation, Step, Time
-    from etude.track.run import init
+    from etude.run.records import Continuation
+    from etude.train.read import read_all
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
         Step("learner_transitions", "absolute retained rows"),
     ]
-    parent = init(
+    parent = track(
         experiment="continuation", run="parent", directory=tmp_path, clocks=clocks
     )
     parent.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     parent.finish()
     declaration = read_all(tmp_path)[0].file
     assert declaration is not None
-    child = init(
+    child = track(
         experiment="continuation",
         run="child",
         directory=tmp_path,
@@ -426,13 +427,13 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
 
 
 def test_mixed_record_schemas_and_phase_coverage(tmp_path: Path) -> None:
-    from etude.track.records import Step
-    from etude.track.run import init
+    from etude.train.records import Step
+    from etude.train.run import track
 
     native_dir = tmp_path / "native"
     native_dir.mkdir()
     (native_dir / "run.json").write_text(_run().model_dump_json(exclude_unset=True))
-    tracked = init(
+    tracked = track(
         experiment="smoke",
         run="logged",
         kind="smoke",

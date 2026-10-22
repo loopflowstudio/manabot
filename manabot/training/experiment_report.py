@@ -17,7 +17,7 @@ import re
 from statistics import mean
 from typing import Literal
 
-from etude.track.records import RunFile as EtudeRunFile
+from etude.run.records import RunFile as EtudeRunFile
 from matplotlib.figure import Figure
 from pydantic import ConfigDict, JsonValue, TypeAdapter
 

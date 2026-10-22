@@ -24,8 +24,8 @@ import socket
 import time
 from typing import Annotated, Literal, Protocol
 
-from etude.track.records import Step
-from etude.track.run import Run as TrackerRun, init
+from etude.train.records import Step
+from etude.train.run import track
 from pydantic import Field, TypeAdapter, model_validator
 import torch
 
@@ -35,7 +35,6 @@ from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
 from manabot.model import Agent
 from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.training.etude_evaluation import publish_saved_evaluation
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.experiments import Baseline, Case, Environment, Experiment
 from manabot.training.models import (
@@ -423,7 +422,6 @@ def evaluate_fit(
     directory: Path,
     pool: Pool,
     expected_digest: str,
-    evaluation_tracker: TrackerRun | None,
     should_stop: Callable[[], bool],
     *,
     training: Path | None = None,
@@ -469,8 +467,6 @@ def evaluate_fit(
                     cell,
                     protocol=protocol,
                 )
-                if evaluation_tracker is not None:
-                    publish_saved_evaluation(evaluation_tracker, cell / "monitor.json")
                 if result.status != "completed":
                     raise RuntimeError(
                         f"{run.seed}/{milestone}/{anchor}/{variant} incomplete"
@@ -519,7 +515,6 @@ def evaluate_retained(
                 directory,
                 pool,
                 expected[str(seed)],
-                None,
                 lambda: False,
                 training=directory / "training",
                 anchors=anchors,
@@ -579,7 +574,7 @@ def execute(
     evaluation_tracker = (
         None
         if split
-        else init(
+        else track(
             experiment="mtg122-evaluation",
             clocks=[
                 Step(
@@ -658,13 +653,6 @@ def execute(
                 finally:
                     if monitor is not None:
                         monitor.finish()
-                if frequent_diagnostics and evaluation_tracker is not None:
-                    for evidence in sorted(
-                        (directory / "diagnostics").glob(
-                            "attempt-*/evaluation/monitor.json"
-                        )
-                    ):
-                        publish_saved_evaluation(evaluation_tracker, evidence)
                 if run.status != "completed":
                     raise RuntimeError(f"{key} failed: {run.error}")
                 if split:
@@ -677,7 +665,6 @@ def execute(
                         directory,
                         pool,
                         expected[seed],
-                        evaluation_tracker,
                         allocation_stop(deadline),
                     )
                 completed.append(key)

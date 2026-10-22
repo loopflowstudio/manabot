@@ -13,8 +13,8 @@ import socket
 import time
 from typing import Literal
 
-from etude.track.records import Step
-from etude.track.run import init
+from etude.train.records import Step
+from etude.train.run import track
 from pydantic import Field, model_validator
 
 from experiments.recipes import ataraxos_mini
@@ -162,7 +162,7 @@ def complete_retained_first(plan: BaselinePlan, source: Path, output: Path) -> N
     target = output / "l3-12261"
     target.mkdir(parents=True, exist_ok=False)
     atomic_json(target / "training/run.json", run.model_dump(mode="json"))
-    tracker = init(
+    tracker = track(
         experiment="mtg122-evaluation",
         run=os.environ["ETUDE_RUN"] + "-retained-first",
         directory=Path(os.environ["ETUDE_TRACK_DIR"]) / "retained-first",

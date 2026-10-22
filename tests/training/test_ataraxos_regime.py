@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from etude.track.read import read_all
+from etude.train.read import read_all
 import pytest
 import torch
 

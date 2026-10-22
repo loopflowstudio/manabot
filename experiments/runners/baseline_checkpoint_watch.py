@@ -12,12 +12,11 @@ from pathlib import Path
 import socket
 import time
 
-from etude.track.records import Step
-from etude.track.run import init
+from etude.train.records import Step
+from etude.train.run import track
 
 from experiments.runners.corrected_baseline import MATCHUP
 from manabot.training.checkpoint_queue import CheckpointQueue, MonitoringBudget
-from manabot.training.etude_evaluation import publish_saved_evaluation
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRun
 from manabot.training.monitor_evaluation import MonitorProtocol
@@ -54,7 +53,7 @@ def diagnostic(snapshot: Path, output: Path) -> None:
         protocol=protocols[0],
         additional_protocols=(protocols[1],),
     )
-    tracker = init(
+    tracker = track(
         experiment="mtg122-evaluation",
         run="335bd645dafe-5000-diagnostic",
         directory=output / "etude",
@@ -70,12 +69,7 @@ def diagnostic(snapshot: Path, output: Path) -> None:
                 break  # exhausted budget, settled queue or failed launch; retain all
             while queue.process is not None and queue.process.poll() is None:
                 time.sleep(2)
-        count = 0
-        for path in sorted(
-            (output / "queue").glob("attempt-*/evaluation/monitor.json")
-        ):
-            publish_saved_evaluation(tracker, path)
-            count += 1
+        count = len(list((output / "queue").glob("attempt-*/evaluation/monitor.json")))
         tracker.log(evaluations=count)
     finally:
         queue.close()
