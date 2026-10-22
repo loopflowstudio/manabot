@@ -104,6 +104,7 @@ def launch_evaluation(
     training_run: str | None = None,
     update: int | None = None,
     cohort: str | None = None,
+    experiment: str = "mtg174-elemental",
 ) -> str:
     def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
@@ -149,7 +150,7 @@ def launch_evaluation(
         max_usd=Decimal("0.01"),
         max_attempts=1,
         runtime=Runtime(
-            python=str(root / ".runs/mtg174-eval-worker/bin/python"),
+            python=str(root / ".runs/mtg174-report-worker/bin/python"),
             python_version="3.12",
             packages={"etude-sdk": "0.1.2"},
         ),
@@ -162,7 +163,7 @@ def launch_evaluation(
             raise ValueError("training link requires absolute update and frozen cohort")
         track = Path(os.environ["ETUDE_HOME"]) / "track"
         declared = declare(
-            experiment="mtg174-elemental",
+            experiment=experiment,
             run=training_run,
             namespace="manabot",
             clocks=[
