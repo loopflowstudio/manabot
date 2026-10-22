@@ -75,6 +75,7 @@ def play(request: Request) -> list[dict[str, object]]:
                     player_spec={
                         "kind": "checkpoint",
                         "device": "cpu",
+                        "batch_size": 1,
                         "deterministic": False,
                         "allow_deck_repetition": True,
                     },

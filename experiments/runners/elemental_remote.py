@@ -8,6 +8,7 @@ import argparse
 from datetime import UTC, datetime
 import json
 from pathlib import Path, PurePosixPath
+import time
 
 from manabot.remote.job_client import (
     cancel_job,
@@ -16,6 +17,8 @@ from manabot.remote.job_client import (
     job_status,
     load_job,
 )
+from manabot.remote.job_store import S3JobStore
+from manabot.remote.jobs import Deletion, Resource
 from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.models import TrainingRun
 
@@ -23,11 +26,28 @@ from manabot.training.models import TrainingRun
 def observe(job_id: str, cache: Path) -> dict[str, object]:
     spec = load_job(job_id)
     status = job_status(spec)
+    store = S3JobStore(spec.prefix)
+    cumulative = 0.0
+    for purpose in ("guardian", "training"):
+        resource = store.read(f"{purpose}.json")
+        if resource is None:
+            continue
+        deletion = store.read(f"{purpose}-deletion.json")
+        if deletion is not None:
+            cumulative += Deletion.model_validate_json(deletion.data).estimated_dollars
+        else:
+            rented = Resource.model_validate_json(resource.data)
+            cumulative += (
+                (time.time() - rented.claim.intent_time)
+                * (rented.pod.rate + spec.plan.spec.machine.storage_hourly_allowance)
+                / 3600
+            )
     result: dict[str, object] = {
         "observed_at": datetime.now(UTC).isoformat(),
         "source": spec.plan.source.model_dump(),
         "status": status.model_dump(mode="json"),
         "checkpoints": [],
+        "estimated_cumulative_dollars": cumulative,
     }
     record = status.record
     if record is None or record.manifest is None:
