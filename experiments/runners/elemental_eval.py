@@ -24,6 +24,7 @@ from etude.run.records import ArtifactRef
 def play(match: Match) -> Tables:
     root = Path(str(match.agents[0].config["root"]))
     output = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+    output.parent.mkdir(parents=True, exist_ok=True)
     players = []
     for member in match.agents:
         if member.kind == "checkpoint":
@@ -137,7 +138,7 @@ def launch_evaluation(
         workers=2,
         repo=str(root),
         revision=revision,
-        max_hours=0.5,
+        max_hours=1,
         max_usd=Decimal("0.01"),
         max_attempts=1,
         runtime=Runtime(
