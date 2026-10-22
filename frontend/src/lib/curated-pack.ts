@@ -1,5 +1,5 @@
 import manifestData from './packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json';
-import elementalData from './packs/elemental-world/v1/manifest.json';
+import elementalData from './packs/elemental-world/v2/manifest.json';
 
 export interface PackDeck {
   deck_id: string;

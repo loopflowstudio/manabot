@@ -25,7 +25,7 @@ use std::sync::OnceLock;
 use serde_json::Value;
 
 use crate::cardsets::alpha::ContentPack;
-use crate::state::card::CardDefId;
+use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
@@ -110,6 +110,7 @@ pub enum Opcode {
     Discard = 62,
     ExileIfDies = 63,
     AddSubtype = 64,
+    OptionalPayment = 65,
 }
 
 impl Opcode {
@@ -179,6 +180,7 @@ impl Opcode {
             62 => Opcode::Discard,
             63 => Opcode::ExileIfDies,
             64 => Opcode::AddSubtype,
+            65 => Opcode::OptionalPayment,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -283,8 +285,10 @@ pub enum Step {
         power: i64,
         toughness: i64,
     },
-    WaterbendOrDiscard {
-        generic: u8,
+    OptionalPayment {
+        cost: PaymentCost,
+        if_paid: Vec<Step>,
+        if_declined: Vec<Step>,
     },
 
     SearchBasicLands {
@@ -668,11 +672,18 @@ impl SemanticPack {
                     Self::sacrifice()?,
                     Self::temur()?,
                     Self::elemental_world()?,
+                    Self::optional_payments()?,
                     Self::complexity()?,
                 ])
             })
             .as_deref()
             .map_err(Clone::clone)
+    }
+
+    pub fn optional_payments() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/w11/generated/elemental_world.ir.json"
+        ))
     }
 
     pub fn elemental_world() -> Result<Self, IrError> {
@@ -996,7 +1007,7 @@ impl<'a> BoundPack<'a> {
             | Step::GrantMana { .. }
             | Step::CreateNonlegendaryCopy
             | Step::ModifyControlled { .. }
-            | Step::WaterbendOrDiscard { .. }
+            | Step::OptionalPayment { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1139,9 +1150,37 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: i64_field(value, "power")?,
             toughness: i64_field(value, "toughness")?,
         },
-        Opcode::WaterbendOrDiscard => Step::WaterbendOrDiscard {
-            generic: u8::try_from(u64_field(value, "generic")?)
-                .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+        Opcode::OptionalPayment => {
+            let cost = object_field(value, "cost")?;
+            // object_field has already checked the JSON type; exactly one key
+            // selects the payment method, so extra or mixed fields are invalid.
+            let fields = cost.as_object().unwrap();
+            let cost = match (fields.len(), fields.get("mana"), fields.get("waterbend")) {
+                (1, Some(_), None) => PaymentCost::Mana(ManaCost::parse(str_field(cost, "mana")?)),
+                (1, None, Some(_)) => PaymentCost::Waterbend {
+                    generic: u8::try_from(u64_field(cost, "waterbend")?)
+                        .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+                },
+                _ => {
+                    return Err(IrError::Malformed(
+                        "payment cost requires exactly one of mana or waterbend".into(),
+                    ))
+                }
+            };
+            Step::OptionalPayment {
+                cost,
+                if_paid: parse_steps(array_field(value, "if_paid")?)?,
+                if_declined: parse_steps(array_field(value, "if_declined")?)?,
+            }
+        }
+        // Frozen opcode 61 enters the shared representation at the read boundary.
+        Opcode::WaterbendOrDiscard => Step::OptionalPayment {
+            cost: PaymentCost::Waterbend {
+                generic: u8::try_from(u64_field(value, "generic")?)
+                    .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+            },
+            if_paid: Vec::new(),
+            if_declined: vec![Step::Discard],
         },
         Opcode::AddMana => Step::AddMana {
             mana: str_field(value, "mana")?.to_owned(),

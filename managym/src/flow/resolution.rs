@@ -6,13 +6,13 @@ use std::collections::VecDeque;
 
 use crate::{
     flow::{
-        decision::{Decision, EffectFrame, FrameFinalize},
+        decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress},
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
-        ability::{Ability, Effect, EffectValue, TargetSpec},
+        ability::{Ability, Effect, EffectValue, PaymentCost, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -520,11 +520,16 @@ impl Game {
                 }
                 None
             }
-            Effect::WaterbendOrDiscard { generic } => Some(Decision::WaterbendOrDiscard {
-                player: frame.controller,
-                remaining: *generic,
-                started: false,
-            }),
+            Effect::OptionalPayment {
+                cost,
+                if_paid,
+                if_declined,
+            } => Some(Decision::Payment(PaymentProgress::new(
+                frame.controller,
+                cost.clone(),
+                if_paid.clone(),
+                if_declined.clone(),
+            ))),
             Effect::ModifyUntilEot {
                 power_delta,
                 toughness_delta,
@@ -731,14 +736,14 @@ impl Game {
                 // countered in response) — the effect does nothing.
                 self.find_spell_on_stack_index(target_spell)?;
                 let spell_controller = self.spell_controller(target_spell)?;
-                Some(Decision::PayOrNot {
-                    player: spell_controller,
-                    cost: cost.clone(),
-                    if_paid: Vec::new(),
-                    if_declined: vec![Effect::CounterSpell {
+                Some(Decision::Payment(PaymentProgress::new(
+                    spell_controller,
+                    PaymentCost::Mana(cost.clone()),
+                    Vec::new(),
+                    vec![Effect::CounterSpell {
                         target: TargetSpec::Spell,
                     }],
-                })
+                )))
             }
             Effect::IfKicked { then, otherwise } => {
                 let branch = if frame.kicked { then } else { otherwise };

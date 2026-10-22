@@ -225,3 +225,51 @@ fn executable_ir_has_no_card_name_dispatch_or_unresolved_definition_refs() {
         }
     }
 }
+
+#[test]
+fn authored_optional_payment_lowers_both_methods_and_continuations() {
+    use managym::{
+        semantic::SemanticPack,
+        state::ability::{Effect, PaymentCost},
+    };
+    let original: Value = serde_json::from_str(include_str!(
+        "../../content/semantic/w11/generated/elemental_world.ir.json"
+    ))
+    .unwrap();
+    for (cost, expected) in [
+        (
+            serde_json::json!({"mana": "{2}{U}"}),
+            PaymentCost::Mana(ManaCost::parse("{2}{U}")),
+        ),
+        (
+            serde_json::json!({"waterbend": 2}),
+            PaymentCost::Waterbend { generic: 2 },
+        ),
+    ] {
+        let mut ir = original.clone();
+        let program = ir["programs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|p| p["semantic_key"] == "temur.waterbending_lesson.p0")
+            .unwrap();
+        let payment = &mut program["instructions"][1];
+        payment["cost"] = cost;
+        payment["if_paid"] =
+            serde_json::json!([{"opcode": 2, "op_name": "draw_cards", "count": 1}]);
+        payment["if_declined"] = serde_json::json!([{"opcode": 53, "op_name": "deal_damage_to_controller", "amount": 2}]);
+        let semantic = SemanticPack::from_json(&ir.to_string()).unwrap();
+        let content = semantic.compile_content_pack().unwrap();
+        let lesson = content
+            .definition(content.definition_id("Waterbending Lesson").unwrap())
+            .unwrap();
+        assert_eq!(
+            lesson.spell_effects[1],
+            Effect::OptionalPayment {
+                cost: expected,
+                if_paid: vec![Effect::DrawCards { count: 1 }],
+                if_declined: vec![Effect::DealDamageToController { amount: 2 }],
+            }
+        );
+    }
+}
