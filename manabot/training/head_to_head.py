@@ -216,7 +216,7 @@ def evaluate(path: Path) -> None:
     benchmark = Benchmark(
         name="two-seat-vs-one-seat-equal-updates",
         environment=Environment(
-            name="w6-direct-development",
+            name=f"{duel.two_seat.key.world}-direct-development",
             files=canonical_sha256(duel.two_seat.evaluation_identities),
             config={"purpose": "repeated-development-comparison"},
         ),

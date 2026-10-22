@@ -71,7 +71,7 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     return Benchmark(
         name=BENCHMARK,
         environment=Environment(
-            name="w6-allies-lessons-development",
+            name=f"{manifest.key.world}-allies-lessons-development",
             files=canonical_sha256(manifest.evaluation_identities),
             config={"purpose": "repeated-development-monitoring"},
         ),
