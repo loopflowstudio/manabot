@@ -304,3 +304,29 @@ module collection skips cleanly without eval extra. New tampered-byte admission
 check passed (4 Etude adapter checks total). PR330 has source commits adc10393,
 a40f801e and33054b34; final PR copy/report notes still need publication after
 this activation verification. Keep goal active for final experiment report.
+
+
+### Etude activation fully verified and published
+
+Normal-scheduling resume fixed throughput to16–18seconds/deal. Third observer
+attempt PID89126 started1792629324.551751, completed1792629710.4152782, exit0.
+Etude result played23/skipped2;25unique done MatchRecords,200unique valid terminal
+replayed native rows. Every (deal,leg) score equals the original monitor's200
+rows. Etude curve score.515 [.485,.545],200rows/25matches. CPU-only next500
+checkpoint launched automatically PID90603, at least3matches already complete.
+Source33054b34 and saved no-retry plist remain stable; do not restart.
+
+Copied all250evidence, both interrupted attempts and Etude track to
+`.runs/mtg165-two-seat-50/live-evaluation/retained`. Verified all trace receipt
+hashes and complete originalscore equivalence. Archive4,518,522bytes published
+using ordinary S3ArtifactStore with full byte-verified readback:
+s3://etudefantasia/manabot/cohorts/mtg165-two-seat-50/evaluations/sha256/c18e4cefe8440182d3b88313634dda91b2f93d36c857ddf40d71517deb3874ca
+Version7BT325KA4NoxTcGnsXrNJ42qUAzVuBhd. Machine-readablepublicreceipt
+`experiments/data/two-seat-ladder/250-update-etude.json` includes deckbreakdowns,
+Etude result, attempts and per-fileinventory. No credentialvalues included.
+
+PR330 was published withliveevalcode/instructions atHEAD43ac2028; final full250
+receipt/report publication follows. Latestfreshtraining860updates, heartbeat4.87s,
+cohortrunning. Keepgoalactiveforfinal$50report; live250cadence+CPUserver now work
+withoutthisconversation/laptop. Futurecheckpoint evidence remains onMini; publish
+verifiedreceipt/report snapshots at meaningfulmilestones, retainingfailures.

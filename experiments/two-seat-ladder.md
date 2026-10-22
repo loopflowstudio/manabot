@@ -214,4 +214,22 @@ was stopped to remove macOS Background scheduling, while preserving its complete
 Etude matches. An explicit resume reads those completed records rather than
 replaying them. Training and paid rental deadlines were unaffected. At the latest
 activation check, the original GPU job was running at 831 updates with a fresh
-controller heartbeat. The complete 200-game Etude result was still pending.
+controller heartbeat. The complete Etude result is now verified below.
+
+
+The first full Etude checkpoint evaluation completed **25/25 deals, 200/200 valid
+terminal and replayed games**, scoring **51.5% [48.5%, 54.5%]**. Every deal/leg score
+matches the original monitor above. Etude resumed two saved blocks and played the
+remaining 23, without double counting. The 500-update evaluation started
+automatically after completion. Training was freshly confirmed running at 860
+updates with a controller heartbeat under five seconds old.
+
+[The Etude receipt](data/two-seat-ladder/250-update-etude.json) records the complete
+curve, deck-matchup breakdowns, attempt history, source/checkpoint identities and
+a per-file evidence inventory. All referenced native trace shard hashes were
+verified after transfer. The 4,518,522-byte evidence archive is retained in the
+existing private S3 cohort prefix, SHA-256
+`c18e4cefe8440182d3b88313634dda91b2f93d36c857ddf40d71517deb3874ca`;
+publication included a full byte-verified readback. This closes evaluation
+activation, while final budget-limited training and later checkpoint results
+remain pending.
