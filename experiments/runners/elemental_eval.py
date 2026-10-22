@@ -95,6 +95,7 @@ def launch_evaluation(
     name: str,
     conditions: tuple[dict[str, str | int | bool], ...],
     revision: str,
+    pool: str = "local",
 ) -> str:
     def checkpoint_agent(path: Path, label: str) -> Agent:
         return agent(
@@ -145,4 +146,4 @@ def launch_evaluation(
             packages={"etude-sdk": "0.1.2"},
         ),
     )
-    return launch(job, pool="local")
+    return launch(job, pool=pool)
