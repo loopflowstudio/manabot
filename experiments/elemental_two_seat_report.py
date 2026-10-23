@@ -8,7 +8,7 @@ spread at shared cadence updates and at each endpoint. It plays no games and
 rents nothing.
 
     uv run --extra artifacts python -m experiments.elemental_two_seat_report \
-        --directory .runs/mtg181/follow --out .runs/mtg181/summary.json
+        --directory .runs/mtg181/follow --out experiments/data/mtg181/summary.json
 """
 
 import argparse
@@ -239,6 +239,7 @@ def main() -> None:
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(summarize(args.directory).model_dump_json(indent=2) + "\n")
 
 
