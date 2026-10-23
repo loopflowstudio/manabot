@@ -3,10 +3,10 @@
 Frozen protocol: `experiments/protocols/elemental-181.md` (commit 9e47a7d6, amended
 0e9c4427 for the 18101 retry). It stays the authority; this note tracks state.
 
-## Exists (observed 2026-10-23 18:12 UTC)
+## Exists (observed 2026-10-23 18:20 UTC; latest check at end)
 
-- Three jobs running on L4 (direct job_status): `-18101-r2` update 82, `-18102`
-  78, `-18103` 92; 18101-r2 has left not-accepted. ≈115–145 updates/hour →
+- Three jobs running on L4 (direct job_status): `-18101-r2` update 103,
+  `-18102` 91, `-18103` 107; no failures in the ledger. ≈115–145 updates/hour →
   ≈600–700 updates by the 5 h deadline (≈22:30 UTC), inside the 300–700
   prediction. Conservative cost ≈ $0.18 including the
   $0.05 failed 18101 probe.
@@ -16,7 +16,8 @@ Frozen protocol: `experiments/protocols/elemental-181.md` (commit 9e47a7d6, amen
   grid (18103 update 0) at ≈74 min per grid versus the 45–55 min calibration.
   Its ledger refreshes job state only between grids (last 17:31), so ledger job
   state lags between grids. At 18:10 the first grid had started 112/200 groups
-  after 39 min, consistent with ≈70 min per grid. Expected
+  after 39 min and 151/200 at 18:26 (56 min), consistent with ≈74 min per grid;
+  no grid has completed yet. Expected
   cadence 0/200/400/600 + endpoint ≈ 5 grids/seed ≈ 15 grids ≈ 18.5 h, inside
   the 48 h window; protocol predicted 3–6 evaluations per seed.
 - Report script committed (7a75f9cc7, 53afcf4b1): pydantic `Report`/`SeedRecord`/
@@ -52,4 +53,4 @@ Frozen protocol: `experiments/protocols/elemental-181.md` (commit 9e47a7d6, amen
   sharing the machine) projected 45–55 min. The production grid with ten workers
   is running at about 74 min. The cause has not been diagnosed.
 
-Check (18:20 UTC): follower pid 23706 alive; report script dry run → 18101-r2 u103, 18102 u91, 18103 u107, all running, $0.18 inclusive.
+Latest check (18:31 UTC, direct job_status + `ps -p 23706`): 18101-r2 running u124, 18102 u108, 18103 u127; none terminal. Follower alive (59 min), first grid in progress, 0 grids complete. Inclusive ≈ $1.93 of $10 (pods $1.88 + $0.05 probe). Read-only helper: /tmp/mtg181tools/status.py.
