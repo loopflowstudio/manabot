@@ -57,3 +57,17 @@ They do not select current work or authorize paid execution.
   remains authoritative. Attempt limits here mean the existing permanent provider
   claim, one recovery child per parent, and no checkpoint-evaluation retries within
   the retained cumulative allowance; no new numeric process-retry policy is added.
+
+# MTG-182 assumptions (2026-10-23)
+
+- Any exception raised by the run's own supervision inside collection (deadline,
+  wall allowance, cancellation, process memory limit) settles in-progress games
+  as run interruptions: `deadline` for TimeoutError, `abandoned` otherwise. They
+  count in `attempted`/`abandoned`/`abandoned_samples`, never in the error window,
+  `crashed`, `discarded_samples` or replacement debt. Strict-path failure capture
+  remains TimeoutError-only, as before.
+- Existing `deadline` receipts in parent ledgers (e.g. MTG-181) now settle as
+  abandoned on resume. Frozen run.json states are not rewritten.
+- The report names a paused run's stop reason `allocation_deadline` and a
+  TimeoutError-interrupted run's `deadline`; a real `game_error_rate_exceeded`
+  still wins.

@@ -2,8 +2,11 @@
 
 GameErrorPolicy declares prospective tolerance. GameErrorLedger fsyncs every
 settled attempt independently of optimizer snapshots, so an interrupted update
-cannot erase its error allowance. The replay CLI executes only retained actions;
-it never samples a policy, trains, submits a job or overwrites failure evidence.
+cannot erase its error allowance. Games cut off by the run itself (allocation
+deadline, wall allowance, cancellation) are retained as abandoned attempts; they
+are not game errors and never enter the error window. The replay CLI executes
+only retained actions; it never samples a policy, trains, submits a job or
+overwrites failure evidence.
 """
 
 import argparse
@@ -32,8 +35,11 @@ from manabot.training.rollout.self_play import deck_identity
 import managym
 
 GameOutcome = Literal[
-    "completed", "engine_error", "truncated", "action_limit", "deadline"
+    "completed", "engine_error", "truncated", "action_limit", "deadline", "abandoned"
 ]
+# Run-level interruptions: the game did not fail, the run stopped playing it.
+# "deadline" is a deadline or wall allowance; "abandoned" any other run stop.
+_RUN_INTERRUPTIONS: frozenset[GameOutcome] = frozenset({"deadline", "abandoned"})
 
 
 class GameErrorPolicy(BaseModel):
@@ -71,11 +77,17 @@ class GameAttempt(BaseModel):
 
 
 class GameErrorState(BaseModel):
-    """Lifetime attempts plus the ordered rolling window of settled attempts."""
+    """Lifetime attempts plus the ordered rolling window of settled attempts.
+
+    attempted = completed + crashed + abandoned. Abandoned attempts and their
+    samples are counted apart from errors, discards and replacement debt.
+    """
 
     attempted: int = 0
     completed: int = 0
     crashed: int = 0
+    abandoned: int = 0
+    abandoned_samples: int = 0
     discarded_samples: int = 0
     replacement_samples: int = 0
     window: list[bool] = []
@@ -83,13 +95,22 @@ class GameErrorState(BaseModel):
     stop_reason: str | None = None
 
     def settle(self, attempt: GameAttempt, policy: GameErrorPolicy) -> None:
-        failed = attempt.outcome != "completed"
         self.attempted += 1
+        self._count_cell(attempt)
+        if attempt.outcome in _RUN_INTERRUPTIONS:
+            self.abandoned += 1
+            self.abandoned_samples += attempt.discarded_samples
+            return
+        failed = attempt.outcome != "completed"
         self.completed += int(not failed)
         self.crashed += int(failed)
         self.discarded_samples += attempt.discarded_samples
         self.replacement_samples += min(self.replacement_debt, attempt.valid_samples)
         self.window = [*self.window, failed][-policy.window :]
+        if len(self.window) >= policy.warmup and self.error_rate > policy.threshold:
+            self.stop_reason = "game_error_rate_exceeded"
+
+    def _count_cell(self, attempt: GameAttempt) -> None:
         match = attempt.matchup
         cell = ":".join(
             (
@@ -100,8 +121,6 @@ class GameErrorState(BaseModel):
         )
         counts = self.by_cell.setdefault(cell, {})
         counts[attempt.outcome] = counts.get(attempt.outcome, 0) + 1
-        if len(self.window) >= policy.warmup and self.error_rate > policy.threshold:
-            self.stop_reason = "game_error_rate_exceeded"
 
     @computed_field
     @property
