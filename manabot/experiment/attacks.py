@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from manabot.training.models import (
+from manabot.training.regime import (
     FrozenOpponent,
     Strict,
     TrainingRegime,

@@ -56,7 +56,7 @@ Replay a failed receipt by its one-based ledger line, using the retained source
 and built native extension:
 
 ```sh
-uv run python -m manabot.training.game_errors .runs/example/game-attempts.jsonl --attempt 1 --seconds 30
+uv run python -m manabot.training.state.game_errors .runs/example/game-attempts.jsonl --attempt 1 --seconds 30
 ```
 
 This launches a bounded local replay subprocess, without training or a rental.
@@ -229,7 +229,7 @@ seed and opponent policy reproduce automatic opponent decisions inside that call
 Replay any automatic failure file with the existing command:
 
 ```sh
-uv run python -m manabot.training.game_errors .runs/example/failures/ID.jsonl --attempt 1 --seconds 30
+uv run python -m manabot.training.state.game_errors .runs/example/failures/ID.jsonl --attempt 1 --seconds 30
 ```
 
 The subprocess bound covers reconstruction and the attempted failing call. New

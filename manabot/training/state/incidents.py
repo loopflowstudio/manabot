@@ -16,11 +16,11 @@ import torch
 from torch import Tensor
 
 from manabot.model.policy_distribution import NumericalError
-from manabot.training.learner import Learner
+from manabot.training.learning.learner import Learner
 
 if TYPE_CHECKING:
-    from manabot.training.collection import RolloutBatch, SeatRoutedCollector
-    from manabot.training.models import TrainingRun
+    from manabot.training.records import TrainingRun
+    from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 
 EVIDENCE_BYTES = 32 * 1024**2
 STATE_BYTES = 512 * 1024**2

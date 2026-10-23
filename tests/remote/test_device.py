@@ -9,7 +9,7 @@ import torch
 from experiments.direct_self_play import direct_self_play
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
 import managym
 

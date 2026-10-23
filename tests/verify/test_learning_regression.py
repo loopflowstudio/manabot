@@ -12,7 +12,7 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.recipes.baseline import baseline
-from manabot.training.models import TrainingCoordinates, TrainingRun
+from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.verify.action_cases import decision_case
 from manabot.verify.choice_corpus import Case
 from manabot.verify.learning_regression import (

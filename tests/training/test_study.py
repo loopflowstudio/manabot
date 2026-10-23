@@ -352,7 +352,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
 ):
     import torch
 
-    from manabot.training.models import StageRecord, TrainingRun
+    from manabot.training.records import StageRecord, TrainingRun
 
     runner = regime_study
 

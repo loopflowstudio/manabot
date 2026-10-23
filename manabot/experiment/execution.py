@@ -17,12 +17,12 @@ from pydantic import ConfigDict, Field, JsonValue, model_validator
 from manabot.arena.monitor import MonitorProtocol
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.remote.plan import JobSpec
-from manabot.training.models import (
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
     CheckpointCadence,
     Strict,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
 )
 

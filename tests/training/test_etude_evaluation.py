@@ -17,13 +17,8 @@ from manabot.arena.match import selected_decks, selected_match
 from manabot.arena.models import file_sha256
 from manabot.arena.monitor import MonitorProtocol, MonitorResult
 from manabot.remote.live_evaluation import Ledger, _checkpoints, report
-from manabot.training.models import (
-    MonitoringCheckpoint,
-    StageRecord,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-)
+from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 

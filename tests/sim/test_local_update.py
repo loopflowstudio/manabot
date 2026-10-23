@@ -35,7 +35,7 @@ from manabot.sim.search.local_update import (
     SamplerArtifact,
     regularized_update,
 )
-from manabot.training.belief import fit_belief_sampler, save_belief_sampler
+from manabot.training.supervised.belief import fit_belief_sampler, save_belief_sampler
 
 
 def small_match() -> MatchConfig:

@@ -8,8 +8,9 @@ from typing import Any
 from manabot.arena.models import file_sha256
 from manabot.infra.files import atomic_json
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.models import CollectSelection, TrainingRun
-from manabot.training.selection_data import SelectionDataset
+from manabot.training.records import TrainingRun
+from manabot.training.regime import CollectSelection
+from manabot.training.rollout.selection_data import SelectionDataset
 
 
 def valid_game(row):

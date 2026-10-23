@@ -70,7 +70,7 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
 builtins.__import__ = guarded
 import manabot.sim.search.conditional
 assert 'manabot.training.execution' not in sys.modules
-assert 'manabot.training.learner' not in sys.modules
+assert 'manabot.training.learning.learner' not in sys.modules
 assert 'manabot.sim.search.flat_mc' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True)

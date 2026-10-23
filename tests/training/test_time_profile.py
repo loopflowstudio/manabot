@@ -13,7 +13,7 @@ from manabot.reports.time_profile import (
     training_profiles,
     training_time_report,
 )
-from manabot.training.models import PhaseTiming, StageRecord
+from manabot.training.records import PhaseTiming, StageRecord
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 

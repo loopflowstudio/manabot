@@ -20,7 +20,7 @@ from manabot.sim.rollout import (
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
-from manabot.training.data import soft_targets_from_scores
+from manabot.training.supervised.data import soft_targets_from_scores
 from manabot.verify.util import INTERACTIVE_DECK
 
 

@@ -296,7 +296,7 @@ into the ordinary stage graph. It uses the existing VerifyStore and run export;
 no training stage, model registry or separate runner is needed. For example:
 
 ```python
-from manabot.training.models import CollectBelief, ImportPolicy
+from manabot.training.regime import CollectBelief, ImportPolicy
 
 # References come from the retained publication manifest. Paths may relocate;
 # sha256 and bytes must identify the original published bytes.
@@ -352,7 +352,7 @@ never masquerades as raw or changes `last-complete-raw` selection.
 instead of random weights, under a recipe of its own:
 
 ```python
-from manabot.training.models import PretrainedPolicy
+from manabot.training.regime import PretrainedPolicy
 
 stage.pretrained = PretrainedPolicy(
     source_run={"path": "/artifacts/producer/run.json",
@@ -454,7 +454,7 @@ run for this change; the default was selected by Jack Heart on 2026-10-20 and
 does not establish a strength or cost gain. Existing
 schedule clocks retain their meanings; no decisions-clock ladder is implied.
 
-Two distinct live models use `manabot.training.paired.PairedLearners`. Construct
+Two distinct live models use `manabot.training.learning.paired.PairedLearners`. Construct
 one `SeatRoutedCollector` with `opponent_mode="learning"`,
 `learning_seats="both"` and `opponent_agent=second_agent`; build two
 `Learner`s with independent agents/optimizers and `minibatch_rows=collector.num_envs`.

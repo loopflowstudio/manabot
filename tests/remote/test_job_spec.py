@@ -25,7 +25,7 @@ from manabot.remote.plan import (
 )
 from manabot.remote.provider import Pod
 from manabot.remote.transport import job_startup
-from manabot.training.models import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE
 from tests.remote.test_jobs import admitted, published

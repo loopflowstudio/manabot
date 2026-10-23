@@ -33,8 +33,9 @@ from manabot.infra.files import atomic_json
 from manabot.infra.provenance import source_bundle_sha256
 from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingRegime, TrainingRun
-from manabot.training.recovery import attempt_lock
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime
+from manabot.training.state.recovery import attempt_lock
 from manabot.verify.store import VerifyStore
 import managym
 

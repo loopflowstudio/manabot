@@ -4,7 +4,7 @@ from typing import Literal
 
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import gray_ogre_match
-from manabot.training.models import (
+from manabot.training.regime import (
     CollectLocalUpdate,
     Learning,
     LocalSearchConfig,

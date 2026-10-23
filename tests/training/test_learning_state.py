@@ -14,16 +14,16 @@ from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
-from manabot.training.learning_state import admit_learning_state
-from manabot.training.models import (
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
     DampedPolicyLearning,
     Execution,
     LearningStateImport,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
 )
+from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
 from tests.remote.test_job_spec import job_spec

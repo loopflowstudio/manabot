@@ -18,15 +18,14 @@ from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Match
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-
-from .models import (
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
     ImportPolicy,
     PretrainedPolicy,
     ProducerCost,
     TrainCompound,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
     TrainSupervised,
 )

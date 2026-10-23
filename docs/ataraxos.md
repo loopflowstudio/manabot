@@ -38,7 +38,7 @@ human games, strength, or equilibrium.
 
 ## Objective and data ownership
 
-`manabot/training/damped_policy.py` owns the damped policy objective and targets. Reusable APIs use
+`manabot/training/learning/damped_policy.py` owns the damped policy objective and targets. Reusable APIs use
 `DampedPolicyLearning(gradient="damped_policy")`; Ataraxos names identify method
 provenance and experiments. Historical `ataraxos_move` inputs decode at the
 compatibility boundary and retain their serialized tag/digest. For each

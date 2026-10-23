@@ -12,7 +12,7 @@ from manabot.arena.match import selected_match
 from manabot.experiment.study import main
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
-from manabot.training.models import Learning, Schedule, TrainingRegime
+from manabot.training.regime import Learning, Schedule, TrainingRegime
 import managym
 
 

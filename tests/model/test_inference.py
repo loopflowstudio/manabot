@@ -12,7 +12,7 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
-from manabot.training.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from tests.training.test_recovery import recipe
 
 

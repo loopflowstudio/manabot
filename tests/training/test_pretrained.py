@@ -7,12 +7,8 @@ import torch
 
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
-from manabot.training.models import (
-    PretrainedPolicy,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-)
+from manabot.training.records import TrainingRun
+from manabot.training.regime import PretrainedPolicy, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 from tests.training.test_learning_state import continuation, producer, reference
 

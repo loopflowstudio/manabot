@@ -26,18 +26,18 @@ from manabot.model.policy_distribution import (
     require,
     reverse_kl,
 )
-from manabot.training.collection import RolloutBatch
-from manabot.training.health import OptimizerHealth, batch_health
-from manabot.training.learner import Learner, observation_tensors
-from manabot.training.models import DampedPolicyLearning
-from manabot.training.references import reference_distribution
-from manabot.training.returns import transition_gae
-from manabot.training.selection import (
+from manabot.training.learning.health import OptimizerHealth, batch_health
+from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.references import reference_distribution
+from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.selection import (
     UpdateDiagnostics,
     selected_mean,
     selection_diagnostics,
     selection_mask,
 )
+from manabot.training.regime import DampedPolicyLearning
+from manabot.training.rollout.collection import RolloutBatch
 
 
 def damped_policy_loss(

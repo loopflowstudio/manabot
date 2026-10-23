@@ -421,7 +421,7 @@ from manabot.remote.plan import AccessScope, JobSpec, Machine, Source
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.experiment.execution import PlannedRun
 from manabot.experiment.config import Baseline, Experiment
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 
 regime = TrainingRegime.model_validate_json(Path("ops/examples/step-target.json").read_text())
 # One ordinary self-play stage; its authored updates remain the learning target.

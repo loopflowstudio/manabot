@@ -29,7 +29,8 @@ from manabot.infra.files import atomic_json
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import valid_game
 from manabot.training.execution import execute_regime
-from manabot.training.models import Strict, TrainingRun
+from manabot.training.records import TrainingRun
+from manabot.training.regime import Strict
 from manabot.verify.scenario_validation import validate_scenarios
 from manabot.verify.store import VerifyStore
 

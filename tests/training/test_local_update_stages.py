@@ -14,14 +14,14 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
 from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     CollectLocalUpdate,
     Learning,
     TrainingRegime,
     TrainSelfPlay,
     TrainSupervised,
 )
-from manabot.training.supervised import _validate_dataset
+from manabot.training.supervised.search import _validate_dataset
 from manabot.verify.store import VerifyStore
 import managym
 

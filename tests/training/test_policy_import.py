@@ -17,17 +17,16 @@ from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
 from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
     CollectBelief,
     CollectLocalUpdate,
     ImportPolicy,
     Learning,
     ProducerCost,
-    StageRecord,
     TrainCompound,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
     TrainSupervised,
 )

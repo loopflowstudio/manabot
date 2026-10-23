@@ -20,16 +20,14 @@ from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-
-from .admission import copy_verified_artifact
-from .models import (
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
-    StageRecord,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
 )
+from manabot.training.state.admission import copy_verified_artifact
 
 
 @dataclass(frozen=True)

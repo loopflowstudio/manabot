@@ -21,15 +21,14 @@ from manabot.reports.training import (
 from manabot.sim.data import VISIT_COUNT_KEY, load_shards
 from manabot.training import execution
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import (
     CollectSearch,
-    StageRecord,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
     TrainSupervised,
 )
-from manabot.training.supervised import (
+from manabot.training.supervised.search import (
     CHOSEN_ACTION_TARGET,
     SearchSupervisedEpochStats,
     evaluate_search_supervised,
@@ -360,7 +359,7 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
     tmp_path: Path,
 ) -> None:
     from manabot.reports.experiment import ReportEvidence, write_dashboard
-    from manabot.training.models import NumericalFailure
+    from manabot.training.records import NumericalFailure
 
     run = TrainingRun(
         id="numerical-fixture",

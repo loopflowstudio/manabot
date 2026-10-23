@@ -12,7 +12,8 @@ import pytest
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.arena.monitor import stage_checkpoint
 from manabot.training import execution
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 from tests.training.test_ataraxos_regime import _recipe
 

@@ -33,7 +33,7 @@ from manabot.sim.search.sampling import (
     PhysicalHandSampler,
     PreparedHands,
 )
-from manabot.training.supervised import _validate_dataset
+from manabot.training.supervised.search import _validate_dataset
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher, small_match
 

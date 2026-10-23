@@ -20,7 +20,7 @@ from manabot.remote.job_client import (
 )
 from manabot.remote.job_store import S3JobStore
 from manabot.remote.jobs import Deletion, Resource
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 
 
 def observe(job_id: str, cache: Path) -> dict[str, object]:

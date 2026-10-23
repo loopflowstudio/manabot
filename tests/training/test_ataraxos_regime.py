@@ -10,7 +10,7 @@ import torch
 from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.models import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 import managym
 

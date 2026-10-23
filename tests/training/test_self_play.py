@@ -8,7 +8,7 @@ import pytest
 
 from manabot.reports.experiment import load_evidence
 from manabot.reports.self_play import self_play_figures, self_play_points
-from manabot.training.self_play import SelfPlayCounter, deck_identity
+from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
 
 
 def test_both_seats_deck_swaps_and_drawn_games() -> None:

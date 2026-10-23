@@ -22,7 +22,8 @@ from manabot.remote.job_store import cancellation_requested
 from manabot.remote.jobs import CreateClaim, Job, JobRecord, Resource
 from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import ProviderError
-from manabot.training.models import LearningStateOrigin, TrainingRun
+from manabot.training.records import TrainingRun
+from manabot.training.regime import LearningStateOrigin
 from manabot.verify.store import VerifyStore
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE

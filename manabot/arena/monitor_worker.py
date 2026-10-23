@@ -16,8 +16,8 @@ from manabot.arena.monitor import (
 )
 from manabot.infra.files import atomic_json
 from manabot.reports.training import evaluation_dashboard, publish_dashboard
-from manabot.training.models import TrainingRun
-from manabot.training.recovery import attempt_lock
+from manabot.training.records import TrainingRun
+from manabot.training.state.recovery import attempt_lock
 
 
 def follow_checkpoints(

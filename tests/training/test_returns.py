@@ -2,7 +2,7 @@
 
 import torch
 
-from manabot.training.returns import transition_gae
+from manabot.training.learning.returns import transition_gae
 
 
 class TestGAE:

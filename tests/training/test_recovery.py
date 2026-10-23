@@ -11,14 +11,9 @@ import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.training import execution
-from manabot.training.models import (
-    DampedPolicyLearning,
-    StageRecord,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-)
-from manabot.training.recovery import attempt_lock, load_update
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.state.recovery import attempt_lock, load_update
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -253,7 +248,7 @@ import os
 import sys
 from pathlib import Path
 from manabot.training import execution
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
 execution.PROGRESS_EXPORT_SECONDS = 0.0
 execution.PROGRESS_EXPORT_SHARE = float('inf')

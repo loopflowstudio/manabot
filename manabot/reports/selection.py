@@ -15,14 +15,14 @@ from pydantic import Field
 import torch
 
 from manabot.arena.models import canonical_sha256
-from manabot.training.models import CollectSelection, DampedPolicyLearning, Strict
-from manabot.training.returns import transition_gae
-from manabot.training.selection import (
+from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.selection import (
     SelectionGroup,
     selection_diagnostics,
     selection_mask,
 )
-from manabot.training.selection_data import FrozenRecord, SelectionDataset
+from manabot.training.regime import CollectSelection, DampedPolicyLearning, Strict
+from manabot.training.rollout.selection_data import FrozenRecord, SelectionDataset
 
 
 class AnalyzedDecision(FrozenRecord):

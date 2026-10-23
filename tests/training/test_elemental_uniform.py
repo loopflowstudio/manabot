@@ -16,17 +16,17 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.collection import SeatRoutedCollector
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.game_errors import (
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.self_play import deck_identity
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorPolicy,
     replay_attempt,
 )
-from manabot.training.matchups import elemental_roster
-from manabot.training.models import TrainingRegime, TrainSelfPlay
-from manabot.training.self_play import deck_identity
 from manabot.verify.store import VerifyStore
 import managym
 

@@ -11,7 +11,7 @@ from manabot.belief.sampling_data import read_dataset
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     CollectBelief,
     DampedPolicyLearning,
     Execution,

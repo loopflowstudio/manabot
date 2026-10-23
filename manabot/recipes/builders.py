@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from typing import Literal
 
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.training.models import (
+from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     IterationSchedule,

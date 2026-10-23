@@ -10,7 +10,7 @@ from manabot import cli
 from manabot.recipes.baseline import baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, local_smoke
 from manabot.reports.notebook import write_comparison_notebook
-from manabot.training.models import (
+from manabot.training.regime import (
     DampedPolicyLearning,
     IterationSchedule,
     TrainSelfPlay,

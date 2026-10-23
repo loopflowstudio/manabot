@@ -13,7 +13,7 @@ from pydantic import Field, model_validator
 
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.infra.artifacts import StoredArtifact, split_s3_uri
-from manabot.training.models import CheckpointCadence
+from manabot.training.regime import CheckpointCadence
 
 from .plan import MAX_JOB_SECONDS, Allocation, DeploymentPlan, Frozen, digest
 from .provider import Pod
@@ -60,7 +60,7 @@ class Job(CheckpointCadence, Frozen):
             # pretrained weights have no such grant yet, so fail before renting.
             raise ValueError("remote jobs cannot stage pretrained weights")
         if self.learning_inputs:
-            from manabot.training.models import TrainSelfPlay
+            from manabot.training.regime import TrainSelfPlay
 
             stage = self.plan.regime.stages[0]
             if not isinstance(stage, TrainSelfPlay) or stage.learning_state is None:

@@ -16,7 +16,7 @@ from manabot.experiment.artifacts import retained_artifacts
 from manabot.experiment.evaluation_queue import Attempt
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
 from manabot.reports.training import training_dashboard
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 from manabot.verify.store import VerifyStore
 
 from .bundle import Bundle, BundleFile

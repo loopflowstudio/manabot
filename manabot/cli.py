@@ -14,7 +14,7 @@ from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False

@@ -40,44 +40,52 @@ from manabot.remote.plan import Allocation
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.sim.data import load_shards
 from manabot.sim.datagen import generate_selfplay_shard
-from manabot.training.belief import fit_belief_sampler, save_belief_sampler
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.learner import Learner
-from manabot.training.matchups import elemental_roster
-from manabot.training.supervised import (
-    SearchSupervisedEpochStats,
-    train_search_supervised,
+from manabot.training.learning.compound import optimize_games
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.records import (
+    FixedValidationCohort,
+    MonitoringCheckpoint,
+    NumericalFailure,
+    PhaseTiming,
+    StageRecord,
+    TrainingRun,
 )
-import managym
-
-from .admission import admit_policy
-from .clock import boot_identity, watchdog_seconds
-from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
-from .game_errors import GameAttempt, GameErrorLedger, GameErrorLimit, GameErrorState
-from .incidents import save_incident
-from .learning_state import admit_learning_state, validate_adam
-from .models import (
+from manabot.training.regime import (
     ArtifactReference,
     CheckpointCadence,
     CollectBelief,
     CollectLocalUpdate,
     CollectSearch,
     CollectSelection,
-    FixedValidationCohort,
     ImportPolicy,
-    MonitoringCheckpoint,
-    NumericalFailure,
-    PhaseTiming,
-    StageRecord,
     TrainBelief,
     TrainCompound,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
     TrainSupervised,
 )
-from .objectives import update_ema, update_iteration
-from .recovery import (
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.compound import (
+    CompoundStatistics,
+    collect_game,
+    replay_game,
+)
+from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.selection_data import (
+    SelectionDataset,
+    collect_selection_game,
+)
+from manabot.training.state.admission import admit_policy
+from manabot.training.state.game_errors import (
+    GameAttempt,
+    GameErrorLedger,
+    GameErrorLimit,
+    GameErrorState,
+)
+from manabot.training.state.incidents import save_incident
+from manabot.training.state.learning_state import admit_learning_state, validate_adam
+from manabot.training.state.recovery import (
     TrainingPaused,
     UpdateSnapshot,
     admit_recovery_identities,
@@ -87,7 +95,14 @@ from .recovery import (
     save_update,
     settle_orphan,
 )
-from .selection_data import SelectionDataset, collect_selection_game
+from manabot.training.supervised.belief import fit_belief_sampler, save_belief_sampler
+from manabot.training.supervised.search import (
+    SearchSupervisedEpochStats,
+    train_search_supervised,
+)
+import managym
+
+from .clock import boot_identity, watchdog_seconds
 
 if TYPE_CHECKING:
     from manabot.verify.store import VerifyStore

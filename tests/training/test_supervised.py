@@ -12,7 +12,7 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.sim.data import OBS_KEYS, ROOT_VALUE_KEY, SCORE_KEY, VISIT_COUNT_KEY
-from manabot.training.supervised import (
+from manabot.training.supervised.search import (
     BLENDED_VALUE_TARGET,
     CHOSEN_ACTION_TARGET,
     ROOT_VALUE_TARGET,

@@ -23,7 +23,7 @@ from manabot.belief.population import (
 from manabot.belief.range import BeliefError
 from manabot.belief.state import ViewerHistory, ViewerHistoryEvent
 from manabot.recipes.belief import run_demo
-from manabot.training.belief_population import train_bounded_population
+from manabot.training.supervised.population import train_bounded_population
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 

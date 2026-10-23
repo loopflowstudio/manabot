@@ -21,8 +21,8 @@ from pydantic import Field
 
 from manabot.infra.files import atomic_json
 from manabot.training.clock import watchdog_seconds
-from manabot.training.models import Strict
-from manabot.training.recovery import attempt_lock
+from manabot.training.regime import Strict
+from manabot.training.state.recovery import attempt_lock
 
 
 class LocalAllocation(Strict):

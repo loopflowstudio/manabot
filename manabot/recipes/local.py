@@ -6,7 +6,8 @@ from typing import Literal
 
 from manabot.recipes.baseline import baseline
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 LOCAL_STEPS = 2

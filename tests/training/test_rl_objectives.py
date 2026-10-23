@@ -6,16 +6,16 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.training.collection import RolloutBatch
-from manabot.training.learner import Learner
-from manabot.training.models import Learning, Schedule
-from manabot.training.objectives import (
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import (
     reference_distribution,
     update_ema,
     update_iteration,
 )
-from manabot.training.returns import transition_gae
-from manabot.training.selection import selected_rows
+from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.selection import selected_rows
+from manabot.training.regime import Learning, Schedule
+from manabot.training.rollout.collection import RolloutBatch
 
 
 class TinyPolicy(torch.nn.Module):

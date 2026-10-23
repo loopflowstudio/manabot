@@ -11,8 +11,8 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.matchups import stream_matches
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.matchups import stream_matches
 import managym
 
 

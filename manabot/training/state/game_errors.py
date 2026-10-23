@@ -28,7 +28,7 @@ from manabot.env.replay import (
     run_bounded_replay,
 )
 from manabot.infra.config import MatchConfig
-from manabot.training.self_play import deck_identity
+from manabot.training.rollout.self_play import deck_identity
 import managym
 
 GameOutcome = Literal[
@@ -238,7 +238,7 @@ def main() -> None:
     if args.attempt < 1 or not 0 < args.seconds <= 300:
         parser.error("attempt must be positive and seconds in (0, 300]")
     if not args.worker:
-        run_bounded_replay("manabot.training.game_errors", args.seconds)
+        run_bounded_replay("manabot.training.state.game_errors", args.seconds)
     with args.ledger.open() as stream:
         line = next(islice(stream, args.attempt - 1, args.attempt), None)
     if line is None:

@@ -17,7 +17,8 @@ from etude.launch.records import Job
 from pydantic import Field, model_validator
 
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.models import Strict, TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.records import TrainingRun
+from manabot.training.regime import Strict, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 

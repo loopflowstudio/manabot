@@ -26,15 +26,15 @@ from manabot.model.policy_distribution import (
     policy_logs,
 )
 from manabot.training import execution
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.damped_policy import damped_policy_loss, update_damped_iteration
-from manabot.training.health import NumericalHealth, OptimizerHealth
-from manabot.training.learner import Learner
-from manabot.training.models import (
-    DampedPolicyLearning,
-    TrainingRun,
-    TrainSelfPlay,
+from manabot.training.learning.damped_policy import (
+    damped_policy_loss,
+    update_damped_iteration,
 )
+from manabot.training.learning.health import NumericalHealth, OptimizerHealth
+from manabot.training.learning.learner import Learner
+from manabot.training.records import TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 

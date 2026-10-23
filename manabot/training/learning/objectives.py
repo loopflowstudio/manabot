@@ -16,19 +16,19 @@ from manabot.model.policy_distribution import (
     require,
     reverse_kl,
 )
-from manabot.training.collection import RolloutBatch
-from manabot.training.damped_policy import update_damped_iteration
-from manabot.training.health import OptimizerHealth, batch_health
-from manabot.training.learner import Learner, observation_tensors
-from manabot.training.models import DampedPolicyLearning, Learning
-from manabot.training.references import reference_distribution
-from manabot.training.returns import transition_gae
-from manabot.training.selection import (
+from manabot.training.learning.damped_policy import update_damped_iteration
+from manabot.training.learning.health import OptimizerHealth, batch_health
+from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.references import reference_distribution
+from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.selection import (
     UpdateDiagnostics,
     selected_mean,
     selected_rows,
     selection_diagnostics,
 )
+from manabot.training.regime import DampedPolicyLearning, Learning
+from manabot.training.rollout.collection import RolloutBatch
 
 
 @torch.no_grad()

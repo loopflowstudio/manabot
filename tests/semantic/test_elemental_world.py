@@ -34,7 +34,7 @@ from manabot.model.world import (
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.training.execution import execute_regime
-from manabot.training.models import Learning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 import managym
 

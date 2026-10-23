@@ -15,7 +15,7 @@ from .util import EvaluationArtifacts
 
 if TYPE_CHECKING:
     from manabot.experiment.execution import ExperimentRun
-    from manabot.training.models import TrainingRun
+    from manabot.training.records import TrainingRun
 
 RUN_CONFIG_FIELDS = (
     "experiment",
@@ -248,7 +248,7 @@ class VerifyStore:
             )
 
     def training_run(self, run_id: str) -> TrainingRun:
-        from manabot.training.models import TrainingRun
+        from manabot.training.records import TrainingRun
 
         row = self.con.execute(
             "SELECT payload FROM training_runs WHERE id=?", (run_id,)

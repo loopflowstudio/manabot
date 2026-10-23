@@ -43,12 +43,8 @@ from manabot.arena.models import (
 from manabot.infra.files import atomic_json
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.checkpoint import load_checkpoint
-from manabot.training.models import (
-    ArtifactReference,
-    Strict,
-    TrainingCoordinates,
-    TrainingRun,
-)
+from manabot.training.records import TrainingCoordinates, TrainingRun
+from manabot.training.regime import ArtifactReference, Strict
 
 EvaluationPurpose = Literal[
     "monitoring-not-scientific-evaluation",

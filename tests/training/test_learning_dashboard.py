@@ -179,7 +179,7 @@ def test_snapshot_reads_wal_consistently_and_preserves_payloads(tmp_path: Path) 
 def test_supervised_epoch_plans_are_not_reported_as_zero_updates(
     tmp_path: Path,
 ) -> None:
-    from manabot.training.models import TrainSupervised
+    from manabot.training.regime import TrainSupervised
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]

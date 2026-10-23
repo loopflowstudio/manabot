@@ -11,7 +11,7 @@ from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     FrozenOpponent,
     Learning,
     TrainingRegime,

@@ -24,14 +24,15 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim import datagen, rollout
 from manabot.sim.pooled_datagen import _GameStream
-from manabot.training import compound, execution, selection_data
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.models import (
+from manabot.training import execution
+from manabot.training.regime import (
     Learning,
     SelectionGameSpec,
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.rollout import compound, selection_data
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.game_error_fixtures import (
@@ -61,7 +62,7 @@ def _bounded(path: Path) -> dict[str, Any]:
         [
             sys.executable,
             "-m",
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             str(path),
             "--attempt",
             "1",
@@ -427,12 +428,16 @@ def test_distillation_failure_uses_scalar_capture(
         )
     assert read_failure(scope.paths[0]).context["producer"] == "distill"
     result = _bounded_fixture_replay(
-        "manabot.training.game_errors", scope.paths[0], "--attempt", 1
+        "manabot.training.state.game_errors", scope.paths[0], "--attempt", 1
     )
     assert result["results"][0]["matches_error"]
     original = scope.paths[0].read_bytes()
     repaired = _bounded_fixture_replay(
-        "manabot.training.game_errors", scope.paths[0], "--attempt", 1, repaired=True
+        "manabot.training.state.game_errors",
+        scope.paths[0],
+        "--attempt",
+        1,
+        repaired=True,
     )["results"][0]
     assert repaired["status"] == "advanced"
     assert repaired["matches_binding"] and repaired["at_retained_failure"]

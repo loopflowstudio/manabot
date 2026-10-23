@@ -12,7 +12,7 @@ from manabot.remote.continuation import Continuation, bind_continuation
 from manabot.remote.job_store import worker_policy
 from manabot.remote.plan import compile_plan
 from manabot.remote.snapshots import JobManifest
-from manabot.training.models import DampedPolicyLearning
+from manabot.training.regime import DampedPolicyLearning
 from tests.remote.test_cohort import Harness
 
 

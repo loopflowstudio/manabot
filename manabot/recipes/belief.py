@@ -32,7 +32,7 @@ from manabot.belief.population import (
 )
 from manabot.belief.range import BeliefState
 from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
-from manabot.training.belief_population import train_bounded_population
+from manabot.training.supervised.population import train_bounded_population
 
 SCRIPTED_POPULATION = BehaviorPopulationProvenance(
     policy="scripted-most-held-land-then-pass",

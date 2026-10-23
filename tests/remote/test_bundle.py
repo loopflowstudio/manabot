@@ -8,7 +8,7 @@ from experiments.direct_self_play import direct_self_play
 import manabot.remote.bundle as bundles
 from manabot.remote.bundle import Bundle, BundleFile, make_bundle
 from manabot.remote.plan import digest
-from manabot.training.models import StageRecord, TrainingRun
+from manabot.training.records import StageRecord, TrainingRun
 from manabot.verify.store import VerifyStore
 
 

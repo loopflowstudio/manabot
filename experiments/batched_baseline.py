@@ -3,7 +3,7 @@
 from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
-from manabot.training.models import (
+from manabot.training.regime import (
     Execution,
     IterationSchedule,
     TrainingRegime,

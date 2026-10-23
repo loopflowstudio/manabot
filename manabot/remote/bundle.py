@@ -13,7 +13,7 @@ import tarfile
 from pydantic import Field, model_validator
 
 from manabot.model.checkpoint import load_checkpoint
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 from manabot.verify.store import VerifyStore
 
 from .plan import Frozen, digest

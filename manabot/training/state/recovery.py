@@ -25,13 +25,13 @@ import torch
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.clock import boot_identity
-from manabot.training.collection import (
+from manabot.training.learning.learner import Learner
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.rollout.collection import (
     CollectorSnapshot,
     CollectorStats,
     SeatRoutedCollector,
 )
-from manabot.training.learner import Learner
-from manabot.training.models import StageRecord, TrainingRun
 
 if TYPE_CHECKING:
     from manabot.verify.store import VerifyStore

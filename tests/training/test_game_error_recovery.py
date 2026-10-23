@@ -25,20 +25,20 @@ from manabot.remote.jobs import JobPhase, JobRecord, Resource
 from manabot.remote.plan import Allocation, JobSpec
 from manabot.remote.provider import ProviderError
 from manabot.training import execution
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.game_errors import (
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
+    Learning,
+    RecoveryPolicy,
+    TrainingRegime,
+    TrainSelfPlay,
+)
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorPolicy,
     GameErrorState,
     replay_attempt,
-)
-from manabot.training.models import (
-    Learning,
-    RecoveryPolicy,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
 )
 from manabot.verify.store import VerifyStore
 import managym
@@ -231,7 +231,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             patch.setattr(managym, "Env", PaymentMismatchEnv)
             assert replay_attempt(retained)["status"] == "advanced"
         bounded = _bounded_fixture_replay(
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             Path(parent.game_error_ledgers[0]),
             "--attempt",
             line_index,
@@ -240,7 +240,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert bounded["matches_binding"] and bounded["matches_error"]
         allowance = parent.game_errors.model_dump()
         repaired = _bounded_fixture_replay(
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             Path(parent.game_error_ledgers[0]),
             "--attempt",
             line_index,

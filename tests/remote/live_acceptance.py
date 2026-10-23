@@ -15,7 +15,8 @@ from manabot.remote.bundle import Bundle, verify_training_bundle
 from manabot.remote.deploy import Receipt, current_source, deploy
 from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import RunPod
-from manabot.training.models import TrainingCoordinates, TrainingRegime, TrainingRun
+from manabot.training.records import TrainingCoordinates, TrainingRun
+from manabot.training.regime import TrainingRegime
 
 
 def main() -> None:

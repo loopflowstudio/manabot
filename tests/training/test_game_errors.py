@@ -29,8 +29,12 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.game_errors import (
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.learning.returns import transition_gae
+from manabot.training.regime import Learning
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorLimit,
@@ -38,12 +42,6 @@ from manabot.training.game_errors import (
     GameErrorState,
     replay_attempt,
 )
-from manabot.training.learner import Learner
-from manabot.training.models import (
-    Learning,
-)
-from manabot.training.objectives import update_iteration
-from manabot.training.returns import transition_gae
 import managym
 from tests.training.game_error_fixtures import (
     PaymentMismatchEnv,
@@ -364,7 +362,7 @@ def test_original_failure_is_immutable_and_cli_replays(
         [
             sys.executable,
             "-m",
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             str(ledger.path),
             "--attempt",
             "1",

@@ -204,7 +204,7 @@ def train(out: Path, recipe: dict) -> None:
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.model.checkpoint import load_checkpoint, save_checkpoint
     from manabot.sim.data import load_shards
-    from manabot.training.supervised import train_search_supervised
+    from manabot.training.supervised.search import train_search_supervised
     import managym
 
     torch.set_num_threads(1)

@@ -360,7 +360,7 @@ Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
 experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
 The regime’s search-supervised fitting and evaluation live in
-`training/supervised.py`; search-data generation remains in `sim`. The standalone exp-10 BC/value fitting loops and launcher are retired; replaying
+`training/supervised/search.py`; search-data generation remains in `sim`. The standalone exp-10 BC/value fitting loops and launcher are retired; replaying
 that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.
 
@@ -379,7 +379,16 @@ with those packages blocked.
   `sim.data` owns shard formats/loading; `sim.datagen` generates examples.
 - `training/`: regime execution, seat-routed collection, learning rules,
   supervised/belief fitting, numerical health and optimizer/collector recovery.
-  `training.data` owns whole-game partitions and supervised target transforms.
+  `regime.py` declares recipes; `records.py` holds measured run records.
+  `execution.py` sequences stages and owns the run lifecycle.
+- `training/rollout/`: on-policy collection, stream producers, matchups and
+  complete-game accounting. Compound collection and replay live here.
+- `training/learning/`: Learner, optimization rules, per-seat returns, sample
+  selection and numerical health. Compound credit and parameter updates live here.
+- `training/supervised/`: search and belief fitting, whole-game validation
+  partitions and target transforms.
+- `training/state/`: policy admission, exact learning snapshots, recovery and
+  retained game-failure state.
 - `recipes/`: packaged local/baseline/belief recipes and composition helpers.
 - `experiment/`: authored comparisons, local scheduling, Etude job adapters,
   checkpoint evaluation scheduling and artifact publication.

@@ -16,7 +16,7 @@ from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.training.models import (
+from manabot.training.regime import (
     FrozenOpponent,
     Learning,
     TrainingRegime,

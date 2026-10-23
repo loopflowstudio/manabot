@@ -16,11 +16,11 @@ from torch import Tensor
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.collection import RolloutBatch, SeatRoutedCollector
-from manabot.training.damped_policy import _targets
-from manabot.training.learner import Learner
-from manabot.training.models import DampedPolicyLearning
-from manabot.training.objectives import update_iteration
+from manabot.training.learning.damped_policy import _targets
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.regime import DampedPolicyLearning
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 
 Kind = Literal["scalar", "categorical_wdl"]
 Seats = Literal["one", "both"]

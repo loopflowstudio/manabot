@@ -22,8 +22,8 @@ from manabot.env.failures import ScalarCapture
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
-from manabot.training.models import SelectionGameSpec, Strict
-from manabot.training.references import reference_distribution
+from manabot.training.learning.references import reference_distribution
+from manabot.training.regime import SelectionGameSpec, Strict
 import managym
 
 

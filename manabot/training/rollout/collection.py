@@ -48,16 +48,20 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
-from manabot.training.game_errors import (
+from manabot.training.rollout.matchups import (
+    Curriculum,
+    elemental_roster,
+    stream_matches,
+)
+from manabot.training.rollout.producers import ShardedVectorEnv
+from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
     GameErrorPolicy,
     GameErrorState,
     GameOutcome,
 )
-from manabot.training.matchups import Curriculum, elemental_roster, stream_matches
-from manabot.training.producers import ShardedVectorEnv
-from manabot.training.self_play import SelfPlayCounter, deck_identity
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 

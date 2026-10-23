@@ -8,7 +8,7 @@ share RunRecord validation with live training; original exports remain unchanged
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 from manabot.infra.config import ModelConfig
-from manabot.training.models import RunRecord, TrainingRun
+from manabot.training.records import RunRecord, TrainingRun
 
 
 class RecordedStage(BaseModel):

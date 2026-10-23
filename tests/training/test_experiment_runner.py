@@ -197,7 +197,8 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
 ) -> None:
     from manabot.experiment import runner as runner
     from manabot.infra.files import atomic_json
-    from manabot.training.models import TrainingRegime, TrainingRun
+    from manabot.training.records import TrainingRun
+    from manabot.training.regime import TrainingRegime
 
     launched: list[str] = []
 
@@ -279,7 +280,7 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
 
 def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) -> None:
     from manabot.experiment.config import Baseline, Experiment
-    from manabot.training.models import TrainingRun
+    from manabot.training.records import TrainingRun
     from tests.training.test_recovery import recipe
 
     value = recipe()

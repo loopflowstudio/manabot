@@ -17,7 +17,7 @@ from manabot.remote.jobs import Job
 from manabot.remote.snapshots import snapshot_evidence
 from manabot.remote.transport import job_startup
 from manabot.remote.validation import ValidationReceipt, validation_command
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import SOURCE
 from tests.remote.test_jobs import admitted, published, specification

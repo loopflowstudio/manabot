@@ -11,11 +11,11 @@ from collections.abc import Iterator
 import pytest
 import torch
 
-from manabot.training.damped_policy import (
+from manabot.training.learning.damped_policy import (
     categorical_lambda_returns,
     damped_policy_loss,
 )
-from manabot.training.selection import selected_moves
+from manabot.training.learning.selection import selected_moves
 
 
 @pytest.fixture(autouse=True)

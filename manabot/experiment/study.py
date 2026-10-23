@@ -43,12 +43,11 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import (
     CollectSearch,
-    StageRecord,
     TrainCompound,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
 )
 from manabot.verify.store import VerifyStore

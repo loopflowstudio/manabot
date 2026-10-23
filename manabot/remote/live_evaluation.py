@@ -36,7 +36,7 @@ from manabot.remote.job_client import fetch_job_file, job_manifest
 from manabot.remote.job_store import S3JobStore
 from manabot.remote.jobs import Job, JobRecord
 from manabot.remote.supervisor import stop_process
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 
 
 class Attempt(BaseModel):

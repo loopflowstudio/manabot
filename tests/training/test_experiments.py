@@ -25,7 +25,7 @@ from manabot.experiment.config import (
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.recipes.ataraxos import ataraxos
-from manabot.training.models import (
+from manabot.training.regime import (
     CollectSearch,
     DampedPolicyLearning,
     Execution,

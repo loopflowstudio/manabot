@@ -11,9 +11,10 @@ import typer
 from experiments.direct_self_play import direct_self_play
 from manabot.cli import named_regime, regime_names
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
-from manabot.training.references import reference_distribution
-from manabot.training.selection import selected_rows
+from manabot.training.learning.references import reference_distribution
+from manabot.training.learning.selection import selected_rows
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
 
@@ -110,8 +111,8 @@ def test_named_treatments_execute_real_optimizer_batches():
     from manabot.env import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
-    from manabot.training.collection import RolloutBatch
-    from manabot.training.objectives import update_iteration
+    from manabot.training.learning.objectives import update_iteration
+    from manabot.training.rollout.collection import RolloutBatch
 
     torch.set_num_threads(1)
     space = ObservationSpace()
@@ -141,7 +142,7 @@ def test_named_treatments_execute_real_optimizer_batches():
         .log_softmax(-1)
         .numpy()[:, None],
     )
-    from manabot.training.learner import Learner
+    from manabot.training.learning.learner import Learner
 
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 
@@ -424,7 +425,7 @@ def test_regime_names_say_file_and_recipe() -> None:
 
 
 def test_legacy_learning_discriminator_is_rejected() -> None:
-    from manabot.training.models import DampedPolicyLearning
+    from manabot.training.regime import DampedPolicyLearning
 
     with pytest.raises(ValueError):
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})

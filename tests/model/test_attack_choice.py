@@ -14,7 +14,7 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import WORLD, checkpoint_world
 from manabot.recipes.ataraxos import ataraxos
 from manabot.training.execution import execute_regime
-from manabot.training.references import reference_distribution
+from manabot.training.learning.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
     decision_case,

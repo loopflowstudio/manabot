@@ -11,7 +11,7 @@ from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.training.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import SeatRoutedCollector
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])

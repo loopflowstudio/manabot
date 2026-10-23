@@ -4,7 +4,7 @@ import pytest
 
 from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig
-from manabot.training.models import FrozenOpponent, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
 import managym
 
 

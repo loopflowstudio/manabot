@@ -16,7 +16,7 @@ from manabot.recipes.builders import (
     with_capacity,
     with_value_aggregation,
 )
-from manabot.training.models import Learning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
 
 ROOT = Path(__file__).resolve().parents[2]
 

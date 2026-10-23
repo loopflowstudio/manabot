@@ -22,10 +22,10 @@ from manabot.infra.runtime import seed_random
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.sim.rollout import BatchedSampler, run_vector_games
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.learner import Learner
-from manabot.training.models import Learning, Schedule
-from manabot.training.objectives import update_iteration
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.regime import Learning, Schedule
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.learnability.schema import PPOResult
 
 _DECK = {"Mountain": 20, "Gray Ogre": 20}

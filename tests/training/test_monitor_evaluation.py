@@ -17,7 +17,8 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.reports.training import evaluation_dashboard
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 

@@ -33,7 +33,8 @@ from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.remote.live_evaluation import Ledger
 from manabot.remote.supervisor import stop_process
-from manabot.training.models import ArtifactReference, TrainingCoordinates
+from manabot.training.records import TrainingCoordinates
+from manabot.training.regime import ArtifactReference
 
 
 class ScoreGroup(BaseModel):

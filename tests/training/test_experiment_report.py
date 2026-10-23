@@ -22,8 +22,8 @@ from manabot.reports.experiment import (
     write_dashboard,
 )
 from manabot.reports.notebook import write_comparison_notebook
-from manabot.training.game_errors import GameErrorState
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
+from manabot.training.state.game_errors import GameErrorState
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
 

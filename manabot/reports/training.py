@@ -25,7 +25,7 @@ from manabot.experiment.artifacts import ArtifactManifest
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.reports.records import ReportRun, RetainedRun
-from manabot.training.recovery import attempt_lock
+from manabot.training.state.recovery import attempt_lock
 from manabot.verify.store import VerifyStore
 
 Scalar = int | float | str | bool

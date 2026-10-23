@@ -109,10 +109,10 @@ unresolved algorithm change.
 
 ## Local system model and reusable seams
 
-* `manabot/training/models.py`: `TrainingRegime` owns resolved ModelConfig, world,
+* `manabot/training/regime.py`: `TrainingRegime` owns resolved ModelConfig, world,
   match, observation and stage configuration. `Execution` admits CPU float32
   and one worker here. Do not add a remote device string to bypass validation.
-* `manabot/training/collection.py`: `SeatRoutedCollector.collect` emits
+* `manabot/training/rollout/collection.py`: `SeatRoutedCollector.collect` emits
   `RolloutBatch` with `[time, stream, ...]` observations, actions, logprobs,
   behavior distributions, values, end markers and exact next observations.
   Only learner-seat decisions train; opponent decisions and native microsteps

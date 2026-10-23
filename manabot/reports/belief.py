@@ -22,7 +22,7 @@ import torch
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import Split, read_dataset
 from manabot.infra.torch import deterministic_cpu
-from manabot.training.belief import (
+from manabot.training.supervised.belief import (
     CalibrationBin,
     SamplerArmMetrics,
     calibration_error,
@@ -256,7 +256,7 @@ def report_saved_sampler(
                 Path(__file__).resolve().parents[2].joinpath(name).read_bytes()
                 for name in (
                     "manabot/reports/belief.py",
-                    "manabot/training/belief.py",
+                    "manabot/training/supervised/belief.py",
                     "manabot/belief/sampling.py",
                     "manabot/belief/sampling_data.py",
                     "manabot/belief/population.py",

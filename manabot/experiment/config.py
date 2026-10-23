@@ -21,7 +21,7 @@ from manabot.remote.job_client import prepare_experiment_job
 from manabot.remote.jobs import Job
 from manabot.remote.plan import DeploymentPlan, Source, compile_plan
 from manabot.training.execution import validate_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     Learning,

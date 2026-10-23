@@ -33,12 +33,8 @@ from manabot.arena.monitor import (
 from manabot.infra.files import atomic_json
 from manabot.reports.training import evaluation_dashboard, training_dashboard
 from manabot.training.clock import arm_worker_deadline
-from manabot.training.models import (
-    ArtifactReference,
-    Strict,
-    TrainingCoordinates,
-    TrainingRun,
-)
+from manabot.training.records import TrainingCoordinates, TrainingRun
+from manabot.training.regime import ArtifactReference, Strict
 
 
 class MonitoringBudget(Strict):

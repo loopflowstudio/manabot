@@ -10,11 +10,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.training.collection import SeatRoutedCollector
-from manabot.training.learner import Learner
-from manabot.training.models import DampedPolicyLearning, Learning
-from manabot.training.objectives import update_iteration
-from manabot.training.selection import UpdateDiagnostics
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.learning.selection import UpdateDiagnostics
+from manabot.training.regime import DampedPolicyLearning, Learning
+from manabot.training.rollout.collection import SeatRoutedCollector
 
 
 @dataclass

@@ -12,9 +12,11 @@ from manabot.experiment.config import Baseline, Experiment
 from manabot.experiment.evaluation_queue import CheckpointQueue, MonitoringBudget
 from manabot.experiment.execution import ExperimentSchedule, Hardware, HardwareInventory
 from manabot.experiment.runner import run_experiment
-from manabot.training import execution, recovery
-from manabot.training.models import RecoveryPolicy, TrainingRun, TrainSelfPlay
-from manabot.training.recovery import TrainingPaused, load_update
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import RecoveryPolicy, TrainSelfPlay
+from manabot.training.state import recovery
+from manabot.training.state.recovery import TrainingPaused, load_update
 from manabot.verify.store import VerifyStore
 from tests.training import test_recovery as proof
 from tests.training.test_recovery import (

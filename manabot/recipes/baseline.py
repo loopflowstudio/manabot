@@ -26,7 +26,7 @@ from manabot.experiment.execution import (
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK
-from manabot.training.models import (
+from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     IterationSchedule,

@@ -14,7 +14,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
-from manabot.training.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import SeatRoutedCollector
 import managym
 
 

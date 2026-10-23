@@ -6,7 +6,7 @@ import numpy as np
 
 from manabot.sim.data import META_KEYS, OBS_KEYS, load_shards
 from manabot.sim.datagen import generate_selfplay_shard
-from manabot.training.data import split_by_game
+from manabot.training.supervised.data import split_by_game
 
 
 def _tiny_dataset(tmp_path: Path, num_games: int = 3) -> dict[str, np.ndarray]:

@@ -11,9 +11,9 @@ from manabot.env import ObservationSpace
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.model.actor_critic import ActorCritic
 from manabot.training import execution
-from manabot.training.collection import RolloutBatch, SeatRoutedCollector
-from manabot.training.models import TrainingRun
-from manabot.training.recovery import load_update
+from manabot.training.records import TrainingRun
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.state.recovery import load_update
 from manabot.verify.store import VerifyStore
 from tests.remote.test_job_spec import job_spec
 from tests.training.test_recovery import (

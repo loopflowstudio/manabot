@@ -10,7 +10,7 @@ from manabot.arena.monitor import ArenaRow, _summarize
 from manabot.experiment import evaluation_queue as queue
 from manabot.infra.files import atomic_json
 from manabot.recipes.ataraxos import ataraxos
-from manabot.training.models import MonitoringCheckpoint, StageRecord, TrainingRun
+from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
 from tests.training.test_monitor_evaluation import _manifest, _rows
 
 

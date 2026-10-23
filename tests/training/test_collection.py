@@ -6,7 +6,7 @@ import pytest
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.util import INTERACTIVE_DECK
 
 
@@ -106,7 +106,7 @@ def test_collector_requires_opponent_agent_for_frozen():
 def test_terminal_credit_and_bootstrap():
     import torch
 
-    from manabot.training.returns import transition_gae
+    from manabot.training.learning.returns import transition_gae
 
     rewards = torch.tensor([[0.0], [1.0], [-1.0], [0.0]])
     advantages, returns = transition_gae(

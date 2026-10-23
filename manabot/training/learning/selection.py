@@ -11,8 +11,8 @@ from typing import Literal, TypedDict
 import torch
 from torch import Tensor
 
-from manabot.training.health import NumericalHealth
-from manabot.training.self_play import SelfPlayOutcome
+from manabot.training.learning.health import NumericalHealth
+from manabot.training.rollout.self_play import SelfPlayOutcome
 
 
 class SelectionGroup(TypedDict):

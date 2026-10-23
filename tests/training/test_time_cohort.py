@@ -11,7 +11,7 @@ from manabot.reports.experiment import load_evidence, write_time_profile
 from manabot.reports.records import RetainedRun
 from manabot.reports.time_cohort import native_cohort, write_cohort_report
 from manabot.reports.time_sources import load_time_sources
-from manabot.training.models import StageRecord
+from manabot.training.records import StageRecord
 
 ROOT = Path(__file__).resolve().parents[2]
 DEMO = ROOT / "tests/fixtures/experiment-demo"

@@ -16,19 +16,19 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.training.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.execution import execute_regime
-from manabot.training.learner import Learner, observation_tensors
-from manabot.training.models import (
+from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.learning.paired import LearningPlayer, PairedLearners
+from manabot.training.learning.returns import transition_gae
+from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
     Schedule,
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.objectives import update_iteration
-from manabot.training.paired import LearningPlayer, PairedLearners
-from manabot.training.returns import transition_gae
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 

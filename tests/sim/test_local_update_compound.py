@@ -26,8 +26,8 @@ from manabot.sim.search.local_update import (
     LocalUpdateReceipt,
     LocalUpdateTeacher,
 )
-from manabot.training.models import CollectLocalUpdate, TrainCompound, TrainingRegime
-from manabot.training.supervised import _validate_dataset
+from manabot.training.regime import CollectLocalUpdate, TrainCompound, TrainingRegime
+from manabot.training.supervised.search import _validate_dataset
 import managym
 from tests.sim import test_local_update as local_fixtures
 from tests.sim.test_local_update import small_match
