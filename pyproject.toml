@@ -123,6 +123,8 @@ zip64 = true
 include = [
     { path = "content/semantic/**/*.json", format = ["sdist", "wheel"] },
     { path = "docs/experiment-metrics.md", format = ["sdist", "wheel"] },
+    { path = "protocol/experience-v1.schema.json", format = ["sdist", "wheel"] },
+    { path = ".manabot-source.json", format = ["sdist", "wheel"] },
     { path = "README.md", format = "sdist" },
 ]
 exclude = [

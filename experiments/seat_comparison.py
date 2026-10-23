@@ -14,10 +14,10 @@ parallel as independent single-job cohorts.
 from typing import Literal
 
 from experiments.batched_baseline import seat_comparison
+from manabot.experiment.config import Baseline, Case, Experiment, Pipeline
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.execution import PlannedRun
 from manabot.remote.plan import JobSpec, Machine
-from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.experiment_execution import PlannedRun
-from manabot.training.experiments import Baseline, Case, Experiment, Pipeline
 
 SEEDS = (64001, 64002, 64003, 64004)
 # L4 calibration (seed 64000, 60 updates): about 27k learner decisions per
