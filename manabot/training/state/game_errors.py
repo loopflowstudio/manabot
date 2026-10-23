@@ -96,7 +96,16 @@ class GameErrorState(BaseModel):
 
     def settle(self, attempt: GameAttempt, policy: GameErrorPolicy) -> None:
         self.attempted += 1
-        self._count_cell(attempt)
+        match = attempt.matchup
+        cell = ":".join(
+            (
+                deck_identity(match.hero_deck, match.hero_sideboard),
+                deck_identity(match.villain_deck, match.villain_sideboard),
+                str(attempt.seat),
+            )
+        )
+        counts = self.by_cell.setdefault(cell, {})
+        counts[attempt.outcome] = counts.get(attempt.outcome, 0) + 1
         if attempt.outcome in _RUN_INTERRUPTIONS:
             self.abandoned += 1
             self.abandoned_samples += attempt.discarded_samples
@@ -109,18 +118,6 @@ class GameErrorState(BaseModel):
         self.window = [*self.window, failed][-policy.window :]
         if len(self.window) >= policy.warmup and self.error_rate > policy.threshold:
             self.stop_reason = "game_error_rate_exceeded"
-
-    def _count_cell(self, attempt: GameAttempt) -> None:
-        match = attempt.matchup
-        cell = ":".join(
-            (
-                deck_identity(match.hero_deck, match.hero_sideboard),
-                deck_identity(match.villain_deck, match.villain_sideboard),
-                str(attempt.seat),
-            )
-        )
-        counts = self.by_cell.setdefault(cell, {})
-        counts[attempt.outcome] = counts.get(attempt.outcome, 0) + 1
 
     @computed_field
     @property
