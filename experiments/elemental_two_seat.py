@@ -22,6 +22,10 @@ SPEC = ROOT / "experiments/protocols/elemental-181-job.json"
 
 SEEDS = (18101, 18102, 18103)
 JOBS = {seed: f"mtg181-elemental-two-seat-{seed}" for seed in SEEDS}
+# Seed 18101's first job never rented: its guardian-probe create returned
+# RunPod HTTP 500 and stays an unresolved ambiguous claim (protocol amendment).
+FAILED_JOBS = {18101: "mtg181-elemental-two-seat-18101"}
+JOBS[18101] = "mtg181-elemental-two-seat-18101-r2"
 # Raw exports and grid evaluations every 200 absolute updates, plus the
 # initialization and the actual endpoint.
 CADENCE = 200

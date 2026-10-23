@@ -294,6 +294,9 @@
       }
     }
   },
+  "failed_jobs": {
+    "18101": "mtg181-elemental-two-seat-18101"
+  },
   "grid": {
     "decks": [
       "elemental_bg",
@@ -313,7 +316,7 @@
     "seed": 18190001
   },
   "jobs": {
-    "18101": "mtg181-elemental-two-seat-18101",
+    "18101": "mtg181-elemental-two-seat-18101-r2",
     "18102": "mtg181-elemental-two-seat-18102",
     "18103": "mtg181-elemental-two-seat-18103"
   },
@@ -340,8 +343,8 @@
   ],
   "sha256": {
     "experiments/elemental_grid.py": "f601ac9566403ed78af06037f7d0fb04d818c2d1b5e7e48872005dc390690e83",
-    "experiments/elemental_two_seat.py": "9e9539e595cdec10ad0ccd502dc66906aaee63491ff64ee6b10eab8cc2dc9ffc",
-    "experiments/elemental_two_seat_follow.py": "ae16f0c525ce574802ee5dd09b2bdd5c5a7cc8f43cabbfa7a4a26260ec49bb86",
+    "experiments/elemental_two_seat.py": "09d4787bed4a4e9add52681005161b9ec74d56602e269c3f6ce4c1fdc6c2057d",
+    "experiments/elemental_two_seat_follow.py": "6d7894ee455ef25f9844c1b131985fd6a555b33b7f3ec4fe0b4762b27f5343f0",
     "experiments/protocols/elemental-181-job.json": "b4f01c0ec3c39ba99907a209e54930af032ad6aa99049e938240bb51114a6780",
     "experiments/regimes/elemental-two-seat-181-v1.json": "dbf9a7ac93699ad524aaa809531b0d1f8eacda41a5c5758997a38d733408ecec",
     "manabot/arena/heuristic.py": "9c96d71c4decba15883646fd7b3764f0574f6a92fb4576f4ac3742e30a3d21db",

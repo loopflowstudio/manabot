@@ -151,3 +151,27 @@ Refutation, safe early stop, a failed seed and no useful effect are reportable
 outcomes. Kill criteria are the job's own: non-finite values, illegal offered
 action, identity mismatch, game-error rate above 10%, or exhausted time/cost
 allowance. Stop rather than tune or substitute.
+
+## Amendment, 2026-10-23 17:40 UTC, before the retry's allocation
+
+The three jobs were submitted concurrently from `9e47a7d6`. The first attempt
+stopped before any rental for all three: a shell quoting slip truncated the
+worker role ARN, so STS refused issuance ("no rental created"). The same job
+IDs were then resubmitted, as documented for uncertain submissions.
+`mtg181-elemental-two-seat-18102` and `-18103` were accepted and are training.
+For `mtg181-elemental-two-seat-18101`, RunPod answered the **guardian probe's**
+create request with HTTP 500. That claim stays ambiguous; no pod with its name
+remained after the probe's 90-second self-deletion deadline, and no training
+rental was ever requested under that ID. Its conservative charge (the probe's
+reservation, at most $0.05) counts against the cap.
+
+The "not replaced" rule above assumed a failed training allocation, which would
+leave no room under the cap. Here no training was allocated, and the brief
+permits retried segments inside the inclusive cap. Seed 18101 is therefore
+retried once, unchanged, as `mtg181-elemental-two-seat-18101-r2`: same regime
+bytes, seed, job spec, cadence and evaluation. Projected inclusive total:
+two accepted jobs $6.20 + their guardian proofs + the ambiguous probe + the
+retry $3.10 and its proof ≈ **$9.41** of $10. The retry's source commit adds
+only this amendment and the follower's job-ID mapping; learning and evaluation
+code are unchanged. If the retry fails, seed 18101 is reported and not retried
+again.

@@ -49,6 +49,7 @@ from manabot.remote.jobs import JobRecord
 from manabot.verify.learnability.elemental_remote import observe
 
 EXPERIMENT = "mtg181-elemental-grid"
+FAILED_PROBE_DOLLARS = 0.05
 TERMINAL = ("completed", "paused", "failed", "cancelled", "deadline")
 
 
@@ -322,14 +323,18 @@ def _training(ledger: Ledger) -> str:
             f"<td>${view.estimated_dollars:.3f}{'' if view.cleanup_confirmed else ' (running)'}</td>"
             "</tr>"
         )
-    total = sum(v.estimated_dollars for v in ledger.jobs.values())
+    # The failed 18101 attempt's ambiguous guardian probe, at its full reservation.
+    total = (
+        sum(v.estimated_dollars for v in ledger.jobs.values()) + FAILED_PROBE_DOLLARS
+    )
     return (
         "<h2>Training</h2><table><tr><th>Seed</th><th>Phase</th><th>Updates</th>"
         "<th>Learner decisions</th><th>Environment decisions</th><th>Games</th>"
         "<th>Collection h</th><th>Learning h</th><th>Quarantined / attempted games</th>"
         "<th>Estimated cost</th></tr>"
         + "".join(rows)
-        + f"</table><p>Estimated inclusive cost ${total:.3f} of the ${CAP_DOLLARS:.0f} cap "
+        + f"</table><p>Estimated inclusive cost ${total:.3f} of the ${CAP_DOLLARS:.0f} cap, "
+        f"including ${FAILED_PROBE_DOLLARS:.2f} for the failed first 18101 attempt's probe "
         "(intent through observed deletion; not an invoice). Counters come from the "
         "latest committed TrainingRun and lag the live job.</p>"
     )
