@@ -77,3 +77,10 @@ They do not select current work or authorize paid execution.
   (BaseException) inside collection still settles nothing, as before.
   Remaining: PR #359 CI and landing.
 - Check: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_experiment_report.py tests/training/test_allocation.py -q` → 44 passed.
+- Concept review (2026-10-23): no change. "Run interruption" is one concept
+  with two receipt labels (`deadline`, `abandoned`) and one counter
+  (`abandoned`), matching the brief's explicit outcomes. The broadened `except`
+  wraps only `check()` and the deadline test, so engine/agent failures cannot
+  reach it. `paused` is set only when the allocation ends
+  (`training/execution.py`), so `allocation_deadline` is accurate. No open
+  product choice.
