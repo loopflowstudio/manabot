@@ -1,5 +1,7 @@
 # W2-214 structural semantic katas
 
+> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
+
 Status: **REDESIGN**
 
 Decision: **`REDESIGN optimization_or_capacity_unresolved`**

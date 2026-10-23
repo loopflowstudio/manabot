@@ -129,6 +129,9 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+Read [validation by change area](docs/development/validation.md) for the
+checks required by the affected package and workflow.
+
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
   exposes `PyAgentError` / `PanicException`. Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and

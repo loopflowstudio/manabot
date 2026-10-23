@@ -1,5 +1,7 @@
 # W2-266 structural encoder discriminator
 
+> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
+
 Status: **REDESIGN**
 
 Decision: **`KILL_REDESIGN structural_capacity`**

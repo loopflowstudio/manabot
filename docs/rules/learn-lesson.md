@@ -57,7 +57,7 @@ interaction approval remains accepted with its original proof limits.
 
 A confirmed gate blocker is the frozen checkpoint-advice fixture: it records
 action ABI 3 and possible-world ABI 1, whereas the current request uses 6 and 2,
-with different content, replay and observation identities. `.lf/steps/gate.md`
+with different content, replay and observation identities. `docs/development/validation.md`
 explicitly requires preserving failures in frozen advice as blockers. Neither
 historical fixtures nor checkpoint validation were rewritten to conceal that
 mismatch. The broad Python gate returned 813 passed and 30 failed. Ten failures

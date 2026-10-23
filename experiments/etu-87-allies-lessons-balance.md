@@ -1,5 +1,7 @@
 # ETU-87 — Which cards decide Allies versus Lessons?
 
+> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
+
 **Status: exploratory.** No prediction was committed before these runs, so by
 the discipline in [README](README.md) the numbers below are a map for choosing
 the next decklists, not evidence for a claim. Runs: 2026-09-29 to 2026-10-04.
@@ -98,7 +100,7 @@ on its own.
 ### Both levers together (w4)
 
 Candidates: the `w4-combined` set in
-[`balance.py`](../manabot/study/allies_lessons/balance.py),
+[`balance.py`](https://github.com/loopflowstudio/manabot/blob/62d2aa9ada5c0184ccbf24705dccd956a233a972/manabot/study/allies_lessons/balance.py),
 150 deals from seed 96000, the same deals as the two rows above.
 
 **Not yet run.** The first attempt (2026-09-30) crashed at startup on a card
