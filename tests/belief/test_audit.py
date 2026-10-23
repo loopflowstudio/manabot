@@ -11,7 +11,7 @@ from manabot.belief.audit import (
     viewer_equivalence_audit,
 )
 from manabot.belief.tracker import BeliefTracker
-from manabot.sim.teacher1_evidence import _fresh_env
+from manabot.sim.search.teacher1_evidence import _fresh_env
 
 
 def test_authority_truth_is_scored_outside_the_tracker_boundary() -> None:

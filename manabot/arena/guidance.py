@@ -11,8 +11,8 @@ import torch
 from manabot.env import ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.flat_mc import MatchupPlayer
-from manabot.sim.mcts import (
+from manabot.sim.search.flat_mc import MatchupPlayer
+from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     LeafEvaluation,
     UniformRandomLeafEvaluator,

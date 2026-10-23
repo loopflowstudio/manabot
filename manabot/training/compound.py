@@ -24,7 +24,7 @@ from manabot.env import Match
 from manabot.env.failures import ScalarCapture
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.compound import CompoundDecision, sample_compound
+from manabot.sim.action.compound import CompoundDecision, sample_compound
 from manabot.training.returns import transition_gae
 import managym
 

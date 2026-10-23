@@ -12,7 +12,7 @@ from manabot.belief.likelihood import RulesProviderGap
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
-from manabot.sim.local_update import LocalSearchConfig
+from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectLocalUpdate,

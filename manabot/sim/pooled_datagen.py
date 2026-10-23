@@ -25,8 +25,8 @@ from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.data import OBS_KEYS, SCORE_KEY
 from manabot.sim.datagen import _git_commit
-from manabot.sim.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, spec_name
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
+from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
 

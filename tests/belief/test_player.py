@@ -17,8 +17,8 @@ from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.flat_mc import play_games
-from manabot.sim.teacher1_evidence import _fresh_env
+from manabot.sim.search.flat_mc import play_games
+from manabot.sim.search.teacher1_evidence import _fresh_env
 
 
 class NeutralLikelihood:

@@ -23,7 +23,7 @@ from manabot.env.replay import (
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world
-from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.competency import SCENARIOS, build_scenario_env
 from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.util import INTERACTIVE_DECK

@@ -26,7 +26,7 @@ local proof, not a portable scientific artifact.
 
 ## Contracts
 
-`manabot.sim.local_update.LocalUpdateTeacher` admits one checkpoint by exact
+`manabot.sim.search.local_update.LocalUpdateTeacher` admits one checkpoint by exact
 SHA-256 through the ordinary world/setup loader. Compound checkpoints use their
 decoder's signed-outcome prefix critic, never the unrelated flat head. Ordinary
 categorical heads return signed expected outcomes; ordinary scalar artifacts must declare
@@ -117,7 +117,7 @@ The existing `visit_distribution` trainer remains available for its own teacher.
 `make_player` also exposes `kind="agent_puct"` over the same saved policy:
 
 ```python
-from manabot.sim.flat_mc import make_player
+from manabot.sim.search.flat_mc import make_player
 
 player, space = make_player(
     {
@@ -163,7 +163,7 @@ retain the projection owner's explicit failures.
 
 Arena accepts `agent_puct` as a checkpoint registration with all search parameters
 explicit, plus `batch_size=1`, `branch_driver_id`, `branch_audit`, and
-`implementation_source_sha256=puct_source_sha256()` from `manabot.sim.mcts`.
+`implementation_source_sha256=puct_source_sha256()` from `manabot.sim.search.puct`.
 The registered spec omits the checkpoint path; the arena binds verified bytes.
 Use search-call seed identity `mcts-mix-player-seed-decision-v1`, root prior
 `checkpoint-canonical-policy/v1`, and leaf evaluator
@@ -296,7 +296,7 @@ merge.
 
 ## Search-facing sampler interface
 
-`manabot.sim.local_sampling.SearchHandSampler` separates native public-constraint
+`manabot.sim.search.sampling.SearchHandSampler` separates native public-constraint
 preparation from seeded sampling. `PreparedHands` binds distribution, viewer
 history, vocabulary and native snapshot; `HandBatch` retains ordered counts and
 joint log probabilities. `LocalUpdateTeacher(hand_sampler=...)` accepts an
@@ -324,7 +324,7 @@ complete a forced prefix; existing `tokens=` still requires a complete tape.
 No parameters or serialized checkpoint fields were added. The decoder exposes an
 end-prefix value for optionless roles as well as the existing per-factor values.
 
-`manabot.sim.local_compound` projects a complete next-Command distribution and
+`manabot.sim.search.compound` projects a complete next-Command distribution and
 checks every route through native lowering. It supports attacker include/exclude
 factors, native single-target casts, independent blocker roles (one optional
 attacker per blocker), and ordinary action-aligned fallback offers. Small joint

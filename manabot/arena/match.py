@@ -25,9 +25,9 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
-from manabot.sim.local_update import LocalUpdatePlayer
-from manabot.sim.mcts import DeterminizedPuctPlayer
-from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.sim.search.local_update import LocalUpdatePlayer
+from manabot.sim.search.puct import DeterminizedPuctPlayer
+from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 

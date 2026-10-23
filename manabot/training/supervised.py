@@ -30,7 +30,7 @@ from manabot.sim.data import (
     VISIT_COUNT_KEY,
     dataset_observation_space,
 )
-from manabot.sim.local_update import LocalUpdateReceipt
+from manabot.sim.search.local_update import LocalUpdateReceipt
 from manabot.training.data import soft_targets_from_scores, split_by_game
 
 SCORE_SOFTMAX_TARGET = "score_softmax"

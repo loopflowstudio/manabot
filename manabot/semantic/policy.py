@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import json
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
-from manabot.sim.structured_policy import (
+from manabot.sim.action.structured import (
     DecodedSubmission,
     RaggedOfferBatch,
     StructuredPolicyError,
@@ -515,7 +515,7 @@ class SemanticDecisionAdapter:
         from managym.experience import ExperienceFrame  # noqa: PLC0415
 
         from manabot.infra.provenance import canonical_sha256
-        from manabot.sim.teacher1_evidence import build_viewer_frame
+        from manabot.sim.search.teacher1_evidence import build_viewer_frame
 
         frame = build_viewer_frame(
             observation,

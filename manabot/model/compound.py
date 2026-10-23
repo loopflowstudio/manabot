@@ -15,7 +15,7 @@ import torch
 from torch import Tensor, nn
 from torch.distributions import Categorical
 
-from manabot.sim.structured_policy import (
+from manabot.sim.action.structured import (
     DecodedSubmission,
     RaggedOfferBatch,
     StructuredPolicyError,

@@ -8,9 +8,9 @@ from typing import Any
 import numpy as np
 
 from manabot.env import Env, ObservationSpace
-from manabot.sim.flat_mc import MatchupPlayer, make_player
-from manabot.sim.flat_search import FlatSearchPolicy
-from manabot.sim.mcts import puct_source_sha256
+from manabot.sim.search.flat import FlatSearchPolicy
+from manabot.sim.search.flat_mc import MatchupPlayer, make_player
+from manabot.sim.search.puct import puct_source_sha256
 import managym
 
 from .models import file_sha256
@@ -84,7 +84,7 @@ def build_player(
                 raise ValueError("agent PUCT checkpoint byte identity drift")
             spec["checkpoint"] = checkpoint_path
         if spec["kind"] == "local_update":
-            from manabot.sim import local_update
+            from manabot.sim.search import local_update
 
             if (
                 local_update.local_search_source_sha256()

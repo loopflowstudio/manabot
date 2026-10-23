@@ -116,7 +116,7 @@ def build_player(spec: dict[str, Any], seed: int):
     """Build a player and its observation space from an arena player spec."""
     from manabot.arena.heuristic import HeuristicPlayer
     from manabot.arena.players import DemoSearchPlayer, ScriptedGreedyPlayer
-    from manabot.sim.flat_mc import make_player
+    from manabot.sim.search.flat_mc import make_player
 
     if spec["kind"] == "demo_search":
         return DemoSearchPlayer(spec, seed), None
@@ -227,7 +227,7 @@ def record_game(spec: GameSpec) -> GameRecord:
     from manabot.env import Env, Match, ObservationSpace, Reward
     from manabot.infra.config import RewardConfig
     from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
-    from manabot.sim.teacher1_evidence import build_viewer_frame
+    from manabot.sim.search.teacher1_evidence import build_viewer_frame
 
     torch.set_num_threads(1)
     record = GameRecord(spec.game_id, spec.labels, spec.decks, spec.seed)

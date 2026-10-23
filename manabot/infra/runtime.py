@@ -2,8 +2,8 @@
 
 RunContext owns seeding and the learner's tracking lifetime, not scheduling or
 scientific evaluation. Etude owns metric storage, checkpoint copies and reports.
-Experiment definitions live in training.experiments; this module owns only
-per-run setup and tracking. Historical W&B readers live elsewhere.
+Experiment definitions live in experiment.config; this module owns only
+per-run setup and tracking.
 """
 
 from collections.abc import Mapping

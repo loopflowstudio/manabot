@@ -1,9 +1,8 @@
-"""Read-only TrainingRun projection and resumable W&B dashboard delivery.
+"""Read retained training facts into Etude metric runs and portable dashboards.
 
-VerifyStore (or a retained run.json export) owns training facts. This module
-never trains, evaluates, edits a recipe or rewrites historical coordinates.
-Offline mode writes portable JSON; later online backfill uses the same run ID
-and W&B's acknowledged next step rather than a speculative local upload cursor.
+VerifyStore or a retained run.json owns training facts. Settled rows are appended
+once, checked against Etude's durable row digests on retry. In-progress evaluation
+stays in the summary until settled. Etude owns metric storage and delivery.
 """
 
 import argparse
@@ -12,10 +11,13 @@ import json
 import math
 from pathlib import Path
 import time
-from typing import Literal, Protocol
+from typing import Literal
 
+from etude.run.storage import storage_from_uri
+from etude.train.read import read
+from etude.train.records import Step
+from etude.train.run import seal_runs, track
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
-import wandb
 
 from manabot.arena.models import canonical_sha256
 from manabot.arena.monitor import MonitorResult
@@ -29,20 +31,6 @@ from manabot.verify.store import VerifyStore
 Scalar = int | float | str | bool
 
 
-def _flatten_config(
-    cfg: Mapping[str, object], parent_key: str = "", sep: str = "/"
-) -> dict[str, object]:
-    """Flatten named configuration for historical reporting consumers."""
-    items: dict[str, object] = {}
-    for key, value in cfg.items():
-        name = f"{parent_key}{sep}{key}" if parent_key else key
-        if isinstance(value, dict):
-            items.update(_flatten_config(value, name, sep))
-        else:
-            items[name] = value
-    return items
-
-
 class Dashboard(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal[1] = 1
@@ -50,110 +38,6 @@ class Dashboard(BaseModel):
     config: dict[str, JsonValue]
     summary: dict[str, JsonValue]
     rows: list[dict[str, Scalar]] = Field(default_factory=list)
-
-
-class HistorySink(Protocol):
-    @property
-    def step(self) -> int: ...
-
-    def log(self, data: dict[str, object], *, step: int) -> None: ...
-
-
-def append_history(
-    dashboard: Dashboard, sink: HistorySink, panels: dict[str, object] | None = None
-) -> None:
-    """Publish only the suffix not already acknowledged by the remote run."""
-    start = sink.step
-    if start > len(dashboard.rows):
-        raise ValueError("remote history is longer than this retained snapshot")
-    for index in range(start, len(dashboard.rows)):
-        payload: dict[str, object] = dict(dashboard.rows[index])
-        if index == len(dashboard.rows) - 1:
-            payload.update(panels or {})
-        sink.log(payload, step=index)
-
-
-def default_panels(dashboard: Dashboard) -> dict[str, object]:
-    """Ready-to-use W&B panels containing measured samples, never invented zeros."""
-    groups = {
-        "Teacher cross-entropy (nats)": [
-            f"distillation/{name}_cross_entropy"
-            for name in ("train", "growing", "fixed")
-        ],
-        "Teacher KL (nats)": [
-            f"distillation/{name}_teacher_kl" for name in ("train", "growing", "fixed")
-        ],
-        "RL clipped policy objective (not log loss)": ["rl/policy_loss"],
-        "RL value loss": ["rl/value_loss"],
-        "RL regularization KL": ["rl/collection_kl", "rl/reference_kl"],
-        "RL entropy": ["rl/entropy"],
-        "Legal logit gap": ["numerical/legal_logit_gap_max"],
-        "Probability underflow": ["numerical/legal_underflow_count"],
-        "Nonfinite failures": ["numerical/nonfinite_failure"],
-        "Gradient and parameter effect": [
-            "numerical/gradient_norm_before",
-            "numerical/gradient_norm_after",
-            "numerical/parameter_delta_l2",
-        ],
-        "Missing and zero gradients": [
-            "numerical/gradient_missing_tensors",
-            "numerical/gradient_zero_tensors",
-        ],
-        "Selected samples": [
-            "numerical/actor_rows",
-            "numerical/critic_rows",
-            "numerical/forced_rows",
-            "numerical/zero_advantage_rows",
-        ],
-        "Optimizer steps": [
-            "numerical/optimizer_steps",
-            "numerical/skipped_steps",
-            "numerical/rejected_steps",
-            "numerical/rejected_updates",
-        ],
-        "Advantage retention": ["rl/retained_fraction"],
-        "Lambda value residual": ["rl/value_residual_abs_mean"],
-        "Learning rate": ["rl/learning_rate"],
-        "Regularization schedules": ["rl/tau", "rl/collection_kl_coefficient"],
-    }
-    panels: dict[str, object] = {}
-    for title, metrics in groups.items():
-        series = [
-            (
-                metric,
-                [
-                    (r["progress/observation"], r[metric])
-                    for r in dashboard.rows
-                    if isinstance(r.get(metric), (int, float))
-                ],
-            )
-            for metric in metrics
-        ]
-        series = [(metric, points) for metric, points in series if points]
-        if series:
-            panels["dashboard/" + title] = wandb.plot.line_series(
-                xs=[[p[0] for p in points] for _, points in series],
-                ys=[[p[1] for p in points] for _, points in series],
-                keys=[metric for metric, _ in series],
-                title=title,
-                xname="Recorded epoch/update ordinal",
-            )
-    for axis in ("updates", "training_seconds"):
-        for name in ("win", "draw", "score"):
-            complete = [r for r in dashboard.rows if f"monitor/{name}/mean" in r]
-            if complete:
-                title = f"Monitoring {name} and deal-cluster 95% interval vs {axis}"
-                panels["dashboard/" + title] = wandb.plot.line_series(
-                    xs=[r[f"progress/{axis}"] for r in complete],
-                    ys=[
-                        [r[f"monitor/{name}/{bound}"] for r in complete]
-                        for bound in ("mean", "lower", "upper")
-                    ],
-                    keys=["mean", "lower", "upper"],
-                    title=title,
-                    xname=axis,
-                )
-    return panels
 
 
 def _scalars(value: Mapping[str, object], prefix: str = "") -> dict[str, Scalar]:
@@ -311,84 +195,98 @@ def training_dashboard(run: ReportRun) -> Dashboard:
     )
 
 
+def _recorded_rows(directory: Path, experiment: str, run_id: str) -> dict[int, str]:
+    """Read acknowledged row identities from Etude, including sealed crash tails."""
+    recorded: dict[int, str] = {}
+    for table in read(directory, experiment, run_id).tables:
+        for index in range(table.rows):
+            row = table.row(index)
+            values, clocks = row["values"], row["clocks"]
+            if not isinstance(values, dict) or not isinstance(clocks, dict):
+                raise ValueError("invalid Etude projection row")
+            digest = values.get("projection/row_sha256")
+            if digest is None:
+                continue  # Summary observations are not settled history rows.
+            ordinal = clocks.get("observation")
+            if not isinstance(digest, str) or not isinstance(ordinal, (int, float)):
+                raise ValueError("invalid Etude projection identity")
+            if not math.isfinite(ordinal) or ordinal < 0 or int(ordinal) != ordinal:
+                raise ValueError("invalid Etude projection ordinal")
+            position = int(ordinal)
+            if position in recorded and recorded[position] != digest:
+                raise ValueError("Etude projection has conflicting row identities")
+            recorded[position] = digest
+    if set(recorded) != set(range(len(recorded))):
+        raise ValueError("Etude projection history is not a contiguous prefix")
+    return recorded
+
+
 def publish_dashboard(
     dashboard: Dashboard,
     out: Path,
     *,
-    project: str = "manabot",
-    entity: str | None = None,
-    job_type: str = "training-monitor",
-) -> str | None:
-    """Resume one remote projection. Caller holds a single publisher lease.
+    experiment: str = "manabot-monitoring",
+    destination: str | None = None,
+) -> str:
+    """Append a retained projection to Etude and return its local run URI.
 
-    Network failure leaves local JSON intact. There is no offline W&B resume
-    assumption: offline JSON is backfilled online using the remote step cursor.
+    A settled row cannot be rewritten. Retry reads Etude's actual durable rows;
+    no speculative local cursor advances before persistence. A destination is
+    an explicit Etude directory or S3 prefix, never an implicit cloud upload.
     """
-    # Evaluation rows grow in place until their attempt settles. Retain that
-    # progress in the local Dashboard and remote summary, but publish only the
-    # settled prefix into append-only history. Failed attempts remain evidence.
-    for index, row in enumerate(dashboard.rows):
-        if row.get("monitor/status") == "running":
-            dashboard = dashboard.model_copy(update={"rows": dashboard.rows[:index]})
-            break
-    tracked = wandb.init(
-        project=project,
-        entity=entity,
-        id=dashboard.run_id,
-        resume="allow",
-        group=str(dashboard.config.get("regime_digest", dashboard.run_id)),
-        name=f"{dashboard.config.get('training_run_id', dashboard.run_id)}",
-        job_type=job_type,
-        dir=str(out),
-        config=_flatten_config(dashboard.config),
-        mode="online",
-        settings=wandb.Settings(init_timeout=30),
-    )
-    try:
-        acknowledged = tracked.summary.get("projection_rows", 0)
-        digest = tracked.summary.get("projection_sha256")
-        if digest is not None and (
-            acknowledged > len(dashboard.rows)
-            or canonical_sha256(dashboard.rows[:acknowledged]) != digest
+    directory = out / "etude"
+    # Separate per-projection locks also cover callers without a publisher lease.
+    with attempt_lock(out / "etude-projection.lock"):
+        seal_runs(directory)
+        recorded = _recorded_rows(directory, experiment, dashboard.run_id)
+        rows = dashboard.rows
+        for index, row in enumerate(rows):
+            if row.get("monitor/status") == "running":
+                rows = rows[:index]
+                break
+        if len(recorded) > len(rows) or any(
+            canonical_sha256(rows[index]) != digest
+            for index, digest in recorded.items()
         ):
             raise ValueError("retained projection changed an already published prefix")
-        # Default workspace sections are generated by metric prefixes. Each
-        # metric also has an elapsed-time copy for comparison across recipes.
-        tracked.define_metric("progress/observation", hidden=True)
-        tracked.define_metric("progress/training_seconds")
-        for family in ("distillation/*", "rl/*", "progress/*", "throughput/*"):
-            tracked.define_metric(family, step_metric="progress/observation")
-        tracked.define_metric("numerical/*", step_metric="progress/observation")
-        tracked.define_metric("monitor/*", step_metric="progress/updates")
-        tracked.define_metric("elapsed/*", step_metric="progress/training_seconds")
-        tracked.define_metric("availability/*", hidden=True)
-        rows = []
-        for source in dashboard.rows:
-            row = dict(source)
-            if "progress/training_seconds" in row:
-                row.update(
+        tracked = track(
+            experiment=experiment,
+            run=dashboard.run_id,
+            kind="retained-monitoring",
+            clocks=[Step("observation", "retained epoch/update ordinal")],
+            config=dashboard.config,
+            directory=directory,
+            storages=[storage_from_uri(destination)] if destination else (),
+            strict=True,
+        )
+        try:
+            for index in range(len(recorded), len(rows)):
+                tracked.log(
                     {
-                        f"elapsed/{k}": v
-                        for k, v in source.items()
-                        if k.startswith(("distillation/", "rl/", "monitor/"))
-                    }
+                        **rows[index],
+                        "projection/row_sha256": canonical_sha256(rows[index]),
+                    },
+                    observation=index,
                 )
-            rows.append(row)
-        append_history(
-            dashboard.model_copy(update={"rows": rows}),
-            tracked,
-            default_panels(dashboard) if tracked.step < len(rows) else None,
-        )
-        tracked.summary.update(dashboard.summary)
-        tracked.summary.update(
-            {
-                "projection_rows": len(dashboard.rows),
-                "projection_sha256": canonical_sha256(dashboard.rows),
-            }
-        )
-        return tracked.url
-    finally:
+            tracked.log(
+                {
+                    "projection/summary_json": json.dumps(
+                        dashboard.summary, sort_keys=True
+                    )
+                },
+                observation=max(0, len(rows) - 1),
+            )
+        except Exception:
+            tracked.finish("failed")
+            raise
         tracked.finish()
+        if tracked.dropped or tracked.incomplete or tracked.problems:
+            raise RuntimeError(
+                "Etude delivery incomplete; retained files can be retried"
+            )
+        if len(_recorded_rows(directory, experiment, dashboard.run_id)) != len(rows):
+            raise RuntimeError("Etude did not retain every projection row")
+        return tracked.files.root.resolve().as_uri()
 
 
 def evaluation_dashboard(results: list[MonitorResult]) -> Dashboard:
@@ -476,11 +374,8 @@ def main() -> None:
     )
     parser.add_argument("--store", type=Path)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument(
-        "--online", action="store_true", help="Upload; default is local/offline"
-    )
-    parser.add_argument("--project", default="manabot")
-    parser.add_argument("--entity")
+    parser.add_argument("--experiment", default="manabot-monitoring")
+    parser.add_argument("--destination", help="Etude directory or s3://bucket/prefix")
     parser.add_argument(
         "--artifact-manifest",
         type=Path,
@@ -527,24 +422,30 @@ def main() -> None:
                     )
                 dashboard.summary["artifact_storage"] = manifest.model_dump(mode="json")
             atomic_json(args.out / "dashboard.json", dashboard.model_dump(mode="json"))
-            if args.online:
-                try:
-                    url = publish_dashboard(
-                        dashboard, args.out, project=args.project, entity=args.entity
-                    )
-                    atomic_json(
-                        args.out / "delivery.json", {"status": "uploaded", "url": url}
-                    )
-                except Exception as error:
-                    # Do not dump SDK errors, which can contain credential URLs.
-                    atomic_json(
-                        args.out / "delivery.json",
-                        {"status": "failed", "error_type": type(error).__name__},
-                    )
-                    if not args.watch_seconds:
-                        raise SystemExit(
-                            "W&B upload failed; local dashboard retained (see delivery.json)"
-                        ) from None
+            try:
+                url = publish_dashboard(
+                    dashboard,
+                    args.out,
+                    experiment=args.experiment,
+                    destination=args.destination,
+                )
+                atomic_json(
+                    args.out / "delivery.json",
+                    {
+                        "status": "delivered" if args.destination else "recorded",
+                        "url": url,
+                    },
+                )
+            except Exception as error:
+                # Do not dump SDK errors, which can contain credential URLs.
+                atomic_json(
+                    args.out / "delivery.json",
+                    {"status": "failed", "error_type": type(error).__name__},
+                )
+                if not args.watch_seconds:
+                    raise SystemExit(
+                        "Etude delivery failed; local dashboard retained (see delivery.json)"
+                    ) from None
             print(
                 json.dumps(
                     {

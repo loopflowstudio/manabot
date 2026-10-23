@@ -10,7 +10,7 @@ uv run manabot train              # bounded CPU production-path smoke
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --learning-seats one  # explicit exact-quota control
-uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
+uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
@@ -134,6 +134,11 @@ challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
 
+`manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
+Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
+exact digest-bound local/S3 artifacts before normal world and architecture
+admission. Simulation results are recorded locally through Etude.
+
 `train_search_supervised` takes the `observation_config` the
 shards were encoded with and rejects a dataset of any other shape.
 
@@ -148,8 +153,11 @@ world. The cross-package contracts and convergence status are in
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
    `manabot.training` owns the regime executor and `Learner`
-3. **`manabot.sim`**: search, teacher data generation, and game simulation
-   (`Player`, `Sim`, determinized PUCT, Teacher-1 evidence)
+3. **`manabot.sim`**: players, game runners and teacher data generation.
+   `sim/action` owns structured offers and compound-action execution.
+   `sim/search` owns frozen-policy planning, world sampling and search evidence:
+   `puct.py` implements tree search; `conditional.py` compares its action estimates
+   under different hidden-information assumptions at the same decision.
 4. **`manabot.semantic`**: semantic-program encoders and structural
    representation experiments
 5. **`manabot.verify`**: competency scenarios, behavioral probes, and the
@@ -262,7 +270,7 @@ ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
 [compound decisions](../docs/training-regimes.md#compound-decisions).
 
-TrainingRun diagnostics can be followed live or backfilled into W&B without
+TrainingRun diagnostics can be followed live or backfilled into Etude without
 retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
 operation, fixed distillation validation and separate checkpoint monitoring.
 

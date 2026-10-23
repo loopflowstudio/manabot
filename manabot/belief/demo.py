@@ -25,7 +25,7 @@ from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim.flat_mc import make_player
+from manabot.sim.search.flat_mc import make_player
 from manabot.verify.util import INTERACTIVE_DECK
 
 

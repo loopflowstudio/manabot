@@ -2,8 +2,8 @@
 
 import json
 from pathlib import Path
-from unittest.mock import Mock
 
+from etude.train.read import read
 import numpy as np
 import pytest
 import torch
@@ -16,8 +16,6 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
-    append_history,
-    default_panels,
     training_dashboard,
 )
 from manabot.sim.data import VISIT_COUNT_KEY, load_shards
@@ -60,20 +58,9 @@ def _recipe() -> TrainingRegime:
     return value
 
 
-class RetainedSink:
-    def __init__(self) -> None:
-        self.rows: list[dict[str, object]] = []
-
-    @property
-    def step(self) -> int:
-        return len(self.rows)
-
-    def log(self, data: dict[str, object], *, step: int) -> None:
-        assert step == len(self.rows)
-        self.rows.append(data)
-
-
-def test_backfill_preserves_missing_coordinates_and_resumes_suffix() -> None:
+def test_backfill_preserves_missing_coordinates_and_resumes_suffix(
+    tmp_path: Path,
+) -> None:
     run = TrainingRun(
         id="saved-fixture",
         regime=_recipe(),
@@ -88,15 +75,24 @@ def test_backfill_preserves_missing_coordinates_and_resumes_suffix() -> None:
     assert "progress/training_seconds" not in dashboard.rows[0]
     assert dashboard.rows[0]["rl/policy_loss"] == -0.4
     assert dashboard.rows[0]["availability/rl/value_loss"] is False
-    sink = RetainedSink()
-    append_history(dashboard, sink)
-    append_history(dashboard, sink)
-    assert len(sink.rows) == 1
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    assert len(_history(tmp_path, dashboard.run_id)) == 1
     run.stages[0].diagnostics.append({"policy_loss": -0.3})
-    append_history(training_dashboard(run), sink)
-    assert len(sink.rows) == 2
-    with pytest.raises(ValueError, match="longer"):
-        append_history(dashboard, sink)
+    monitoring.publish_dashboard(training_dashboard(run), tmp_path)
+    assert len(_history(tmp_path, dashboard.run_id)) == 2
+    with pytest.raises(ValueError, match="published prefix"):
+        monitoring.publish_dashboard(dashboard, tmp_path)
+
+
+def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
+
+    return [
+        table.row(index)["values"]
+        for table in read(directory / "etude", "manabot-monitoring", run_id).tables
+        for index in range(table.rows)
+        if "projection/row_sha256" in table.row(index)["values"]
+    ]
 
 
 def test_fixed_validation_callback_and_leak_rejection() -> None:
@@ -159,7 +155,7 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
     assert dashboard.rows[0]["availability/rl/policy_loss"] is True
 
 
-def test_default_wandb_panels_and_offline_roundtrip() -> None:
+def test_dashboard_offline_roundtrip() -> None:
     dashboard = Dashboard(
         run_id="offline-fixture",
         config={},
@@ -175,9 +171,6 @@ def test_default_wandb_panels_and_offline_roundtrip() -> None:
     )
     reloaded = Dashboard.model_validate_json(dashboard.model_dump_json())
     assert reloaded == dashboard
-    panels = default_panels(reloaded)
-    assert len(panels) == 1
-    assert "dashboard/Teacher cross-entropy (nats)" in panels
 
 
 def test_global_game_ids_preserve_fixed_membership_as_shards_grow(
@@ -264,61 +257,33 @@ def test_executor_streams_fixed_and_growing_validation(
     assert training_dashboard(run).summary["history_incomplete"] is False
 
 
-def test_publisher_uses_remote_prefix_and_rejects_rewritten_history(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_publisher_reads_etude_prefix_and_rejects_rewritten_history(
+    tmp_path: Path,
 ) -> None:
-    class Remote(RetainedSink):
-        url = "https://wandb.invalid/fixture"
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.summary: dict[str, object] = {}
-
-        def define_metric(self, name: str, **kwargs: object) -> None:
-            pass
-
-        def finish(self) -> None:
-            pass
-
-    remote = Remote()
-
-    def initialize(**kwargs: object) -> Remote:
-        assert kwargs["resume"] == "allow"
-        assert kwargs["mode"] == "online"
-        return remote
-
-    monkeypatch.setattr(monitoring.wandb, "init", initialize)
     dashboard = Dashboard(
         run_id="fixture",
         config={},
         summary={},
         rows=[{"progress/observation": 0, "rl/entropy": 0.5}],
     )
-    monitoring.publish_dashboard(dashboard, tmp_path)
-    monitoring.publish_dashboard(dashboard, tmp_path)
-    assert remote.step == 1
-    assert any(name.startswith("dashboard/") for name in remote.rows[0])
+    destination = tmp_path / "destination"
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    assert len(_history(tmp_path, dashboard.run_id)) == 1
     dashboard.rows.append({"progress/observation": 1, "rl/entropy": 0.4})
-    monitoring.publish_dashboard(dashboard, tmp_path)
-    assert remote.step == 2
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    assert len(_history(tmp_path, dashboard.run_id)) == 2
+
+    copied = read(destination, "manabot-monitoring", dashboard.run_id)
+    assert list(copied.points("rl/entropy", "observation").y) == [0.5, 0.4]
     dashboard.rows[0]["rl/entropy"] = 0.6
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
 
 
 def test_publisher_waits_for_evaluation_completion_without_losing_local_progress(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    remote = Mock(step=0, summary={}, url="https://wandb.invalid/evaluation")
-    published: list[dict[str, object]] = []
-
-    def log(row: dict[str, object], step: int) -> None:
-        assert step == remote.step
-        published.append(row)
-        remote.step += 1
-
-    remote.log.side_effect = log
-    monkeypatch.setattr(monitoring.wandb, "init", Mock(return_value=remote))
     dashboard = Dashboard(
         run_id="monitor-fixture",
         config={},
@@ -335,9 +300,17 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
     dashboard.rows[0]["monitor/attempted_games"] = 8
     dashboard.summary["attempted_games"] = 8
     monitoring.publish_dashboard(dashboard, tmp_path)
-    assert not published
-    assert remote.summary["attempted_games"] == 8
+    assert not _history(tmp_path, dashboard.run_id)
     assert dashboard.rows[0]["monitor/attempted_games"] == 8
+
+    summaries = [
+        table.row(index)["values"]["projection/summary_json"]
+        for table in read(
+            tmp_path / "etude", "manabot-monitoring", dashboard.run_id
+        ).tables
+        for index in range(table.rows)
+    ]
+    assert any(json.loads(summary)["attempted_games"] == 8 for summary in summaries)
     dashboard.rows[0]["monitor/status"] = "completed"
     monitoring.publish_dashboard(dashboard, tmp_path)
     dashboard.rows.append(
@@ -348,10 +321,12 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
         }
     )
     monitoring.publish_dashboard(dashboard, tmp_path)
-    assert len(published) == 1
+    assert len(_history(tmp_path, dashboard.run_id)) == 1
     dashboard.rows[1]["monitor/status"] = "incomplete"
     monitoring.publish_dashboard(dashboard, tmp_path)
-    assert [row["monitor/status"] for row in published] == ["completed", "incomplete"]
+    assert sorted(
+        row["monitor/status"] for row in _history(tmp_path, dashboard.run_id)
+    ) == ["completed", "incomplete"]
     dashboard.rows[0]["monitor/attempted_games"] = 7
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
@@ -432,9 +407,6 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
     assert dashboard.rows[-1]["progress/updates"] == 2
     assert dashboard.rows[-1]["numerical/rejected_steps"] == 1
     assert dashboard.rows[-1]["failure/invariant"] == "nonfinite_gradients"
-    panels = default_panels(dashboard)
-    assert "dashboard/Probability underflow" in panels
-    assert "dashboard/Optimizer steps" in panels
     evidence = ReportEvidence(tmp_path, (run,), (), (), (), ())
     path = write_dashboard(
         evidence,

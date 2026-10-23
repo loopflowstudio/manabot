@@ -1,35 +1,34 @@
-"""
-evaluate.py
-Simplified and consolidated evaluation package for manabot.
+"""Scalar game simulation and evaluation statistics recorded through Etude.
 
-This module provides:
-1. Loading models from wandb
-2. Player abstractions for model inference
-3. Basic game simulation and statistics tracking
-4. Action distribution and decision analysis
+load_player admits local policies or exact Etude checkpoint records. run_simulation
+owns the evaluation tracking lifetime; game statistics never fit a model.
 """
 
 import argparse
 from collections import Counter, defaultdict
 from enum import Enum
+import logging
+import os
+from pathlib import Path
 import threading
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from etude.train.records import Step
+from etude.train.run import track
 import numpy as np
-import wandb
 
 # Local imports
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import RuntimeConfig, SimulationConfig
-from manabot.infra.log import getLogger
-from manabot.infra.runtime import RunContext
+from manabot.infra.log import getLogger, setGlobalLogLevel
+from manabot.infra.runtime import seed_random
+from manabot.model.checkpoint import load_checkpoint, load_etude_checkpoint
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
     Player,
     RandomPlayer,
-    load_model_from_wandb,
 )
 
 # -----------------------------------------------------------------------------
@@ -361,62 +360,6 @@ class GameStats:
                     else:
                         logger.info(f"  {key}: {value}")
 
-    def log_to_wandb(self, run) -> None:
-        """Log summary statistics and visualizations to wandb."""
-        summary = self.get_summary()
-
-        # Basic metrics
-        metrics = {
-            "eval/hero_win_rate": summary["hero_win_rate"],
-            "eval/villain_win_rate": summary["villain_win_rate"],
-            "eval/timeout_rate": summary["timeouts"] / summary["total_games"],
-            "eval/avg_steps": summary["avg_steps"],
-            "eval/avg_duration": summary["avg_duration"],
-        }
-
-        if self.steps_to_win:
-            metrics["eval/avg_steps_to_win"] = summary["avg_steps_to_win"]
-
-        run.log(metrics)
-
-        # Game records table
-        games_table = wandb.Table(
-            columns=["outcome", "steps", "duration"],
-            data=[[g["outcome"].value, g["steps"], g["duration"]] for g in self.games],
-        )
-        run.log({"eval/games": games_table})
-
-        # Turn distribution histogram
-        if self.games:
-            turn_counts = [g["steps"] for g in self.games]
-            turn_histogram = np.histogram(turn_counts, bins=20)
-            run.log(
-                {"eval/turn_distribution": wandb.Histogram(np_histogram=turn_histogram)}
-            )
-
-            # Win rates by turn
-            detailed = self.get_detailed_analysis()
-            run.log(
-                {
-                    "eval/early_game_win_rate": detailed["early_game_win_rate"],
-                    "eval/mid_game_win_rate": detailed["mid_game_win_rate"],
-                    "eval/late_game_win_rate": detailed["late_game_win_rate"],
-                }
-            )
-
-            # Log behavior metrics
-            behavior_summary = self.get_behavior_summary()
-
-            # Hero behavior metrics
-            for key, value in behavior_summary["hero"].items():
-                if isinstance(value, (int, float)):
-                    run.log({f"eval/hero_{key}": value})
-
-            # Villain behavior metrics
-            for key, value in behavior_summary["villain"].items():
-                if isinstance(value, (int, float)):
-                    run.log({f"eval/villain_{key}": value})
-
 
 # -----------------------------------------------------------------------------
 # Outcome Determination
@@ -707,10 +650,12 @@ def load_player(model_str: str) -> Player:
     if model_name == "default":
         return DefaultPlayer("DefaultPlayer")
 
-    model, version = model_str.split(":") if ":" in model_str else (model_str, "latest")
-    return ModelPlayer(
-        f"Model_{model_str}", load_model_from_wandb(model, version, device="cpu")
-    )
+    path = Path(model_str).expanduser()
+    if path.suffix == ".json":
+        agent, _ = load_etude_checkpoint(path)
+    else:
+        agent, _ = load_checkpoint(str(path))
+    return ModelPlayer(f"Model_{path.stem}", agent)
 
 
 # -----------------------------------------------------------------------------
@@ -720,7 +665,20 @@ def load_player(model_str: str) -> Player:
 
 def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) -> None:
     """Run a simulation sweep for hero/villain model specs."""
-    with RunContext(runtime_config):
+    setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
+    seed_random(
+        runtime_config.seed, torch_deterministic=runtime_config.torch_deterministic
+    )
+    with track(
+        experiment=runtime_config.name,
+        clocks=[Step("games", "completed evaluation games")],
+        seed=runtime_config.seed,
+        config=sim_config.model_dump(mode="json"),
+        directory=None
+        if os.environ.get("ETUDE_TRACK_DIR")
+        else runtime_config.runs_dir / runtime_config.name / "etude",
+        strict=True,
+    ) as tracked:
         logger = getLogger("manabot.sim.sim")
         logger.info(
             "Simulation config: "
@@ -734,7 +692,17 @@ def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) 
         hero_player = load_player(sim_config.hero)
         villain_player = load_player(sim_config.villain)
 
-        simulate_models(hero_player, villain_player, sim_config)
+        stats = simulate_models(hero_player, villain_player, sim_config)
+        for index, game in enumerate(stats.games, start=1):
+            tracked.log(
+                {
+                    "game/outcome": game["outcome"].value,
+                    "game/steps": game["steps"],
+                    "game/duration": game["duration"],
+                },
+                games=index,
+            )
+        tracked.log({"evaluation": stats.get_summary()}, games=len(stats.games))
 
 
 def main(argv: Sequence[str] | None = None) -> None:

@@ -20,7 +20,7 @@ from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.ataraxos import ataraxos
 from manabot.recipes.builders import with_recent_events
-from manabot.sim.flat_mc import AgentMatchupPlayer, make_player
+from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.collection import SeatRoutedCollector
 
 PACK = "ur-lessons-vs-gw-allies"

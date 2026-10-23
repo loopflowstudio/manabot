@@ -15,7 +15,7 @@ on:
       - 'manabot/belief/**'
       - 'manabot/arena/**'
       - 'manabot/sim/player.py'
-      - 'manabot/sim/structured_policy.py'
+      - 'manabot/sim/action/structured.py'
       - 'managym/**'
       - 'manabot/managym/**'
       - 'content/**'

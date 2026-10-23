@@ -12,8 +12,8 @@ from manabot.belief import ManabotPlayer
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
-import manabot.sim.flat_mc as flat_mc
-from manabot.sim.flat_mc import (
+import manabot.sim.search.flat_mc as flat_mc
+from manabot.sim.search.flat_mc import (
     AgentMatchupPlayer,
     FlatMCPlayer,
     GameRecord,

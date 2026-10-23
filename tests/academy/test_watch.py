@@ -133,7 +133,7 @@ def test_watch_roots_fork_both_seats_without_mutating_match(
 
 def test_search_captures_actual_scores(watch: WatchCreated) -> None:
     from academy.villain import choose_bot
-    from manabot.sim.flat_search import FlatSearchPolicy
+    from manabot.sim.search.flat import FlatSearchPolicy
 
     game = server._live_record_for_trace(watch["id"]).game
     outputs = choose_bot(FlatSearchPolicy(sims=1, max_steps=2), game.env, game.obs)

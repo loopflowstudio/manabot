@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from managym.decision import SemanticTransition
 
-from manabot.sim.search_runtime import (
+from manabot.sim.search.runtime import (
     RetainedCheckpointRegistration,
     retained_int7_policy_only_checkpoint,
 )

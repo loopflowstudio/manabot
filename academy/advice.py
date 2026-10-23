@@ -62,7 +62,7 @@ from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmar
 
 if TYPE_CHECKING:
     from manabot.belief.range import BeliefState
-    from manabot.sim.conditional_search import (
+    from manabot.sim.search.conditional import (
         ConditionalStrategyResult,
         ConditionResult,
     )
@@ -552,7 +552,7 @@ def int13_condition_to_decision_evidence(
     """INT-13 seam: map one ``ConditionResult`` to the ``DecisionEvidence`` shape.
 
     This is the explicit binding point where INT-13's determinized-PUCT search
-    evidence (``manabot.sim.conditional_search.ConditionResult``) becomes the
+    evidence (``manabot.sim.search.conditional.ConditionResult``) becomes the
     per-action ``DecisionEvidence`` the shared live/Study surface renders. The
     prototype serves checked conditional-PUCT evidence from the static fixture
     at runtime. When INT-13's live search publishes, the ``POST /api/advice``
@@ -1002,8 +1002,8 @@ class RegisteredAdvisor:
             raise AdvisorUnavailable("evaluator_mismatch")
 
         from manabot.model.checkpoint import load_checkpoint
-        from manabot.sim.mcts import AgentLeafEvaluator
-        from manabot.sim.search_runtime import (
+        from manabot.sim.search.puct import AgentLeafEvaluator
+        from manabot.sim.search.runtime import (
             model_action_abi_sha256,
             model_observation_abi_sha256,
         )
@@ -1026,7 +1026,7 @@ class RegisteredAdvisor:
         )
 
     def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
-        from manabot.sim.search_runtime import (
+        from manabot.sim.search.runtime import (
             RetainedCheckpointMismatchError,
             RetainedCheckpointUnavailableError,
             retained_int7_policy_only_checkpoint,
@@ -1323,7 +1323,7 @@ class AdviceProvider:
             receipts[scenario.id] = receipt
         normalization_finished = time.perf_counter_ns()
 
-        from manabot.sim.conditional_search import (
+        from manabot.sim.search.conditional import (
             conditional_determinized_puct_beliefs,
             project_viewer_safe_result,
             validate_result,

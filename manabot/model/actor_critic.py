@@ -19,7 +19,7 @@ from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
-from manabot.sim.structured_policy import RaggedOfferBatch
+from manabot.sim.action.structured import RaggedOfferBatch
 import managym
 
 

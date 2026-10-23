@@ -33,8 +33,8 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.compound import CompoundPolicy
-from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
+from manabot.sim.action.compound import CompoundPolicy
+from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.util import (
     INTERACTIVE_DECK,
     _select_agent_action,
@@ -226,7 +226,7 @@ def make_player(
     if kind == "local_update":
         from pathlib import Path
 
-        from manabot.sim.local_update import (
+        from manabot.sim.search.local_update import (
             LocalSearchConfig,
             LocalUpdatePlayer,
             LocalUpdateTeacher,
@@ -255,8 +255,8 @@ def make_player(
             None,
         )
     if kind == "determinized_puct":
-        from manabot.sim.mcts import DeterminizedPuctPlayer
-        from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
+        from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
+        from manabot.sim.search.puct import DeterminizedPuctPlayer
 
         return (
             DeterminizedPuctPlayer(
@@ -272,8 +272,8 @@ def make_player(
             None,
         )
     if kind == "agent_puct":
-        from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
-        from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
+        from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
+        from manabot.sim.search.puct import AgentLeafEvaluator, DeterminizedPuctPlayer
 
         if str(spec.get("device", "cpu")) != "cpu":
             raise ValueError("agent_puct inference is CPU-only")
@@ -319,7 +319,7 @@ def make_player(
             obs_space,
         )
     if kind == "value_greedy":
-        from manabot.sim.value import VGreedyPlayer, load_value_scorer
+        from manabot.sim.search.value import VGreedyPlayer, load_value_scorer
 
         scorer = load_value_scorer(
             spec["checkpoint"], device=str(spec.get("device", "cpu"))
@@ -333,7 +333,7 @@ def make_player(
             None,
         )
     if kind == "value_search":
-        from manabot.sim.value import ValueSearchPlayer, load_value_scorer
+        from manabot.sim.search.value import ValueSearchPlayer, load_value_scorer
 
         scorer = load_value_scorer(
             spec["checkpoint"], device=str(spec.get("device", "cpu"))

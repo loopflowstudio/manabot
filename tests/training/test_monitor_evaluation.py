@@ -16,7 +16,7 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.reports.training import default_panels, evaluation_dashboard
+from manabot.reports.training import evaluation_dashboard
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 import managym
 
@@ -407,7 +407,6 @@ def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     assert dashboard.rows[0]["monitor/score/lower"] == 0
     assert dashboard.rows[1]["availability/monitor_rates"] is False
     assert "monitor/score/mean" not in dashboard.rows[1]
-    assert len(default_panels(dashboard)) == 6
     changed = complete.model_copy(deep=True)
     changed.protocol.deal_seeds = (200,)
     with pytest.raises(ValueError, match="same run"):

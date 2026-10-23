@@ -15,7 +15,7 @@ from manabot.infra.files import atomic_json
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
-from manabot.sim.local_update import LocalSearchConfig
+from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     ArtifactReference,

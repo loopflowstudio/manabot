@@ -75,8 +75,8 @@ def engine_source_paths() -> list[Path]:
     paths.extend(
         [
             REPO_ROOT / "managym" / "Cargo.lock",
-            REPO_ROOT / "manabot" / "sim" / "mcts.py",
-            REPO_ROOT / "manabot" / "sim" / "flat_mc.py",
+            REPO_ROOT / "manabot" / "sim" / "search" / "puct.py",
+            REPO_ROOT / "manabot" / "sim" / "search" / "flat_mc.py",
         ]
     )
     return paths

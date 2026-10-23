@@ -41,7 +41,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
-from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
+from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectSearch,

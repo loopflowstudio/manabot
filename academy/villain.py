@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Callable
 
 from managym.enums import ActionEnum
 
-from manabot.sim.flat_search import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
+from manabot.sim.search.flat import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 
 # Local imports
 import managym
@@ -86,7 +86,7 @@ class CheckpointVillain:
         from manabot.model.world import validate_agent_setup
 
         # Keep the optional Torch/model stack behind checkpoint construction.
-        from manabot.sim.compound import CompoundPolicy
+        from manabot.sim.action.compound import CompoundPolicy
 
         self.agent, self.obs_space = load_checkpoint(path)
         if player_configs is not None:

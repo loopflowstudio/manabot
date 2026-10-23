@@ -497,7 +497,7 @@ def test_value_search_failure_keeps_sampled_pool_actions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from manabot.sim import value
+    from manabot.sim.search import value
 
     class Scorer:
         agent = None

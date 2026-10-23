@@ -12,7 +12,7 @@ import torch
 
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.sim.teacher1_evidence import _fresh_env
+from manabot.sim.search.teacher1_evidence import _fresh_env
 import managym
 
 

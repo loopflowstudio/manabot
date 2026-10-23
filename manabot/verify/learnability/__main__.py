@@ -78,7 +78,6 @@ def supervise(out: Path, config: Config) -> int:
             start_new_session=True,
             env={
                 **os.environ,
-                "WANDB_MODE": "disabled",
                 "OMP_NUM_THREADS": "1",
                 "MKL_NUM_THREADS": "1",
             },

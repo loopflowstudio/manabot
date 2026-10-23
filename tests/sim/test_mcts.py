@@ -12,8 +12,8 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.data import ROOT_VALUE_KEY, VISIT_COUNT_KEY, load_shards
 from manabot.sim.datagen import generate_selfplay_shard
-from manabot.sim.flat_mc import make_player
-from manabot.sim.mcts import (
+from manabot.sim.search.flat_mc import make_player
+from manabot.sim.search.puct import (
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
     determinized_puct,

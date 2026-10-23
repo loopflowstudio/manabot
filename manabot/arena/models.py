@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.sim.search_branch import branch_backend
+from manabot.sim.search.branch import branch_backend
 
 
 def canonical_json(value: Any) -> bytes:
@@ -140,7 +140,10 @@ class PlayerRegistration(StrictModel):
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "local_update":
-                from manabot.sim.local_update import LocalSearchConfig, SamplerArtifact
+                from manabot.sim.search.local_update import (
+                    LocalSearchConfig,
+                    SamplerArtifact,
+                )
 
                 config = LocalSearchConfig.model_validate(
                     self.player_spec.get("config", {})

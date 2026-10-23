@@ -7,7 +7,7 @@ import json
 import pytest
 
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.search_runtime import (
+from manabot.sim.search.runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
     INT7_VALUE_TARGET_RESULT,
     RetainedCheckpointMismatchError,
@@ -54,7 +54,7 @@ def test_retained_registry_missing_manifest_is_typed_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    import manabot.sim.search_runtime as runtime
+    import manabot.sim.search.runtime as runtime
 
     monkeypatch.setattr(runtime, "INT7_VALUE_TARGET_MANIFEST", tmp_path / "missing")
     with pytest.raises(RetainedCheckpointUnavailableError, match="unavailable"):
@@ -66,7 +66,7 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    import manabot.sim.search_runtime as runtime
+    import manabot.sim.search.runtime as runtime
 
     manifest = json.loads(runtime.INT7_VALUE_TARGET_MANIFEST.read_text())
     assert retained_int7_manifest_digest(manifest) == INT7_VALUE_TARGET_MANIFEST_SHA256

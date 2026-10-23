@@ -106,10 +106,10 @@ def test_same_shapes_do_not_admit_another_matchup():
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
 def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     from manabot.env import Env, Reward
-    from manabot.sim.flat_mc import AgentMatchupPlayer
-    from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
-    from manabot.sim.value import ValueScorer, VGreedyPlayer
+    from manabot.sim.search.flat_mc import AgentMatchupPlayer
+    from manabot.sim.search.puct import AgentLeafEvaluator, DeterminizedPuctPlayer
+    from manabot.sim.search.value import ValueScorer, VGreedyPlayer
 
     path = tmp_path / "policy.pt"
     torch.save(checkpoint(), path)

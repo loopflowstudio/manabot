@@ -15,7 +15,7 @@ import numpy as np
 
 from manabot.belief.tracker import ActionLikelihood, BeliefTracker
 from manabot.env import Env
-from manabot.sim.flat_mc import (
+from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     DEFAULT_ROLLOUTS_PER_WORLD,
     SearchStats,

@@ -12,9 +12,9 @@ from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.compound import CompoundDecoder
-from manabot.sim.compound import CompoundPolicy, sample_compound
-from manabot.sim.flat_mc import make_player
-from manabot.sim.structured_policy import StructuredPolicyError, flatten_projection
+from manabot.sim.action.compound import CompoundPolicy, sample_compound
+from manabot.sim.action.structured import StructuredPolicyError, flatten_projection
+from manabot.sim.search.flat_mc import make_player
 from manabot.training.compound import (
     collect_game,
     episode_credit,

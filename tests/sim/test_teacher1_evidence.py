@@ -13,8 +13,8 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     validate_runtime_fingerprints,
 )
-from manabot.sim.mcts import determinized_puct
-from manabot.sim.teacher1_evidence import (
+from manabot.sim.search.puct import determinized_puct
+from manabot.sim.search.teacher1_evidence import (
     _fresh_env,
     build_command,
     build_viewer_frame,

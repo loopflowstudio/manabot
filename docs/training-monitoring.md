@@ -1,8 +1,8 @@
 # TrainingRun dashboards
 
 The training monitor projects existing TrainingRun diagnostics and arena receipts
-into the `manabot` W&B project. VerifyStore remains the training authority;
-`run.json`, `dashboard.json` and W&B are exports. No W&B account is needed to
+into Etude metric runs. VerifyStore remains the training authority;
+`run.json`, `dashboard.json` and Etude metrics are exports. No account is needed to
 train or retain diagnostics. These commands do not modify a running trainer,
 its checkout, or its frozen recipe.
 
@@ -54,7 +54,7 @@ numerical step counts once without rewriting the producer's bytes.
 
 See [freezing targets from calibration](training-calibration.md#freeze-prospective-step-targets).
 New comparison notebooks lead with exact matched steps, then sample exposure
-and recorded active time. Existing edited notebooks remain unchanged. W&B is a
+and recorded active time. Existing edited notebooks remain unchanged. Etude is a
 projection of these same recorded coordinates; tracker arrival time is not the
 learning clock.
 
@@ -73,29 +73,29 @@ uv run python -m manabot.reports.training \
   --run .runs/example/run.json --out .runs/example-dashboard --watch-seconds 30
 ```
 
-Add `--online --entity TEAM` to upload using existing W&B credentials. Alternatively
-read the authoritative store with `--store .runs/training.sqlite --run-id ID`.
-Default operation writes local `dashboard.json` only. W&B network/auth failures
-retain this file and a `delivery.json` failure type; they cannot stop training.
-Run the same command later with `--online` to sync. This is JSON backfill, not an
-assumption that the W&B SDK can resume an offline run.
+Every invocation writes local `dashboard.json` and an Etude run under
+`OUT/etude`. Add `--destination s3://YOUR-BUCKET/tracking` (or a directory) for
+SDK-managed delivery. `--experiment` selects the Etude comparison name;
+`--store .runs/training.sqlite --run-id ID` reads the authoritative store.
+Delivery failure retains both JSON and SDK files with a `delivery.json` error
+type. Repeating the command retries without rewriting settled rows.
 
-Each TrainingRun has a stable W&B ID, grouped by resolved regime digest. Run
-configuration retains regime/stages, seeds, resolved hyperparameters, hardware,
-source/runtime/world identities. Stage summaries retain status, admitted and
-rejected checkpoint digests, errors and actual device/thread counts. W&B resumes
-at its acknowledged next history step. A changed published prefix or an older,
-shorter export is rejected. Keep one publisher per run; the output directory has
-a local writer lease. Recovery attempts retain separate run identities rather
-than pretending an interrupted attempt never happened.
+Each TrainingRun has a stable projection ID. Etude keeps the regime, seeds and
+source/runtime/world identities as configuration. A summary observation retains
+current status, errors, checkpoint references and incomplete evaluation counts.
+The adapter reads row digests from Etude's durable metric blocks before appending
+new observations. Changed prefixes and shorter exports are rejected. One local
+publisher lease protects the output directory; keep that directory for retries.
+Recovery attempts retain distinct run identities.
 
-The default workspace includes ready-made `dashboard/` panels for teacher CE/KL,
-RL objectives, regularization, entropy, retention, residuals and schedules.
-Scalar sections also provide `elapsed/` copies against original training seconds,
-`progress/` counters and `throughput/` rates. Missing metrics have explicit
-`availability/` flags and summary explanations, not fabricated zeros. W&B's
-[custom metric axes](https://docs.wandb.ai/ref/python/experiments/run/) and
-[line-series charts](https://docs.wandb.ai/guides/track/log/plots/) own rendering.
+Etude supplies charts for the recorded scalar metrics. `progress/` and
+`throughput/` retain measured coordinates and rates. Missing values remain absent
+with `availability/` flags; no zero values are fabricated. Inspect locally with:
+
+```bash
+uv run etude reports write --source .runs/example-dashboard/etude
+```
+
 
 ## Reading the curves
 
@@ -120,9 +120,9 @@ Scalar sections also provide `elapsed/` copies against original training seconds
   elapsed run cost. Teacher generation remains on the cost axis. RSS, process CPU
   time and host load are resource observations, not evidence of learning quality.
   Throughput is cumulative work divided by observed elapsed cost. Checkpoint age
-  appears only when an earlier admitted monitoring export exists. W&B automatic
-  system charts describe the publisher process; use the recorded progress fields
-  for learner resource observations.
+  appears only when an earlier admitted monitoring export exists. Use the
+  recorded progress fields for learner resource observations; the projection
+  does not infer them from its own publisher process.
 
 ## Fixed-competitor checkpoint monitoring
 
@@ -131,7 +131,7 @@ Run evaluation in a separate process, explicitly accounting for its compute:
 ```bash
 uv run python -m manabot.arena.monitor_worker \
   --run .runs/example/run.json --out .runs/example-monitor --watch-seconds 30 \
-  --concurrent-activity 'training running concurrently' --online --entity TEAM
+  --concurrent-activity 'training running concurrently' --entity TEAM
 ```
 
 The follower evaluates each newly admitted monitoring export once, sequentially.
@@ -161,8 +161,9 @@ leg, admission failure or replay failure remains inspectable. Aggregate win/draw
 score rates are unavailable for incomplete cohorts. Complete cohorts report 95%
 percentile bootstrap intervals resampling entire four-leg deals. These intervals
 measure uncertainty conditional on a checkpoint; they do not quantify variation
-across training seeds. The W&B monitoring stream has ready-made rate/interval
-panels against update count and training seconds, separate from training history.
+across training seeds. The Etude monitoring stream retains rate/interval metrics and their original
+update/time coordinates, separate from training history. Projection charts use
+the recorded observation ordinal; no missing historical clock is synthesized.
 
 `monitor.json` records evaluation wall time, coordinator CPU/RSS, reaped-child CPU,
 host load before/after and declared concurrent activity. Replay is included in
@@ -176,10 +177,10 @@ No retraining or new evaluation is needed to publish saved diagnostics:
 
 ```bash
 uv run python -m manabot.reports.training \
-  --run /path/to/saved/run.json --out .runs/historical-dashboard --online
+  --run /path/to/saved/run.json --out .runs/historical-dashboard
 uv run python -m manabot.reports.training \
   --evaluations /path/to/checkpoint-0/monitor.json /path/to/checkpoint-1/monitor.json \
-  --out .runs/historical-monitor-dashboard --online
+  --out .runs/historical-monitor-dashboard
 ```
 
 Supply evaluation attempts in immutable append order, including failures. Runs,
@@ -226,7 +227,7 @@ uv run --extra artifacts python -m manabot.experiment.artifacts publish \
   --out .runs/storage/run-artifacts.json
 uv run python -m manabot.reports.training \
   --run /path/to/run.json --artifact-manifest .runs/storage/run-artifacts.json \
-  --out .runs/storage/dashboard --online --entity loopflow-studio --project etude
+  --out .runs/storage/dashboard --experiment manabot-monitoring
 ```
 
 The publisher validates all retained stage exports, including rejected artifacts,
@@ -245,10 +246,9 @@ The implementation uses conditional single PUT with SHA-256 and full readback;
 artifacts over 5 GiB fail explicitly. Transfer costs are separate from historical
 training costs. Bucket encryption and access policies are managed outside this CLI.
 
-W&B receives only the manifest metadata through the run summary. Model, optimizer
-and dataset bytes stay out of W&B. Its chart tables remain part of visualization.
-The older trainer also stops uploading model artifacts; its existing local save
-and historical W&B reader remain intact.
+Etude records manifest metadata in the projection summary. Training policy
+exports also use Etude checkpoint retention. The artifact manifest remains a
+separate archive of exact historical producer bytes; no old result is rewritten.
 
 Fetch a named role from the manifest (use its exact `artifacts` key):
 

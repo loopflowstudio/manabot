@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from manabot.belief.range import BeliefError, BeliefState
-from manabot.sim.teacher1_evidence import _fresh_env
+from manabot.sim.search.teacher1_evidence import _fresh_env
 
 
 def _space(

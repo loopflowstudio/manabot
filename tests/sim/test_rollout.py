@@ -12,7 +12,6 @@ from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim.flat_mc import aggregate_records
 from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
@@ -20,6 +19,7 @@ from manabot.sim.rollout import (
     _allocate_buffers,
     run_vector_games,
 )
+from manabot.sim.search.flat_mc import aggregate_records
 from manabot.training.data import soft_targets_from_scores
 from manabot.verify.util import INTERACTIVE_DECK
 

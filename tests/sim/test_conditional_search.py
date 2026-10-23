@@ -17,7 +17,8 @@ from managym.possible_worlds import PossibleWorldSpace
 import pytest
 
 from manabot.belief import CompatibleDealBeliefModel, ViewerHistory
-from manabot.sim.conditional_search import (
+from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
+from manabot.sim.search.conditional import (
     CONDITION_TRUE,
     ConditionalSearchError,
     ConditionalStrategyResult,
@@ -36,7 +37,6 @@ from manabot.sim.conditional_search import (
     serialize_result,
     validate_result,
 )
-from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
 
@@ -68,10 +68,10 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
     return real_import(name, globals, locals, fromlist, level)
 
 builtins.__import__ = guarded
-import manabot.sim.conditional_search
+import manabot.sim.search.conditional
 assert 'manabot.training.execution' not in sys.modules
 assert 'manabot.training.learner' not in sys.modules
-assert 'manabot.sim.flat_mc' not in sys.modules
+assert 'manabot.sim.search.flat_mc' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True)
 

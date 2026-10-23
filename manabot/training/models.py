@@ -12,7 +12,7 @@ from pydantic import (
 )
 
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.sim.local_update import LocalSearchConfig
+from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.game_errors import GameErrorPolicy, GameErrorState
 
 

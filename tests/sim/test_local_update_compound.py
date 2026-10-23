@@ -20,8 +20,8 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
 from manabot.sim.datagen import generate_selfplay_shard
-from manabot.sim.local_compound import advance_compound, project_compound
-from manabot.sim.local_update import (
+from manabot.sim.search.compound import advance_compound, project_compound
+from manabot.sim.search.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,

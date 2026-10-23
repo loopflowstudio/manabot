@@ -33,7 +33,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.flat_mc import AgentMatchupPlayer
+from manabot.sim.search.flat_mc import AgentMatchupPlayer
 import managym
 
 Split = Literal["train", "validation", "test"]

@@ -27,8 +27,8 @@ from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim import local_update
-from manabot.sim.local_update import (
+from manabot.sim.search import local_update
+from manabot.sim.search.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,

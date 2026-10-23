@@ -10,7 +10,7 @@ from manabot.semantic import (
     SemanticDecisionError,
     UnadmittedDefinitionError,
 )
-from manabot.sim.structured_policy import (
+from manabot.sim.action.structured import (
     DecodedSubmission,
     PolicyScores,
     RaggedPolicyDecoder,

@@ -64,7 +64,7 @@ _INDEPENDENCE_PROBE = textwrap.dedent(
     import manabot.arena.players
     import manabot.arena.replay
     import manabot.semantic.policy
-    import manabot.sim.teacher1_evidence
+    import manabot.sim.search.teacher1_evidence
 
     assert not any(name.split(".")[0] == "academy" for name in sys.modules)
     """
@@ -159,7 +159,7 @@ def test_simulation_imports_and_plays_without_training() -> None:
         from manabot.infra.config import ModelConfig, RewardConfig
         from manabot.model import ActorCritic
         from manabot.model.checkpoint import save_checkpoint
-        from manabot.sim.flat_mc import make_player
+        from manabot.sim.search.flat_mc import make_player
         match, space = Match(), ObservationSpace()
         model = ActorCritic(space, ModelConfig())
         with tempfile.TemporaryDirectory() as directory:

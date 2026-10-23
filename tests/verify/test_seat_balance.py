@@ -24,7 +24,7 @@ MOUNTAIN_ONLY = {"Mountain": 40}
 @pytest.mark.parametrize("probed", [False, True])
 @pytest.mark.parametrize("game_offset", [0, 1])
 def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
-    from manabot.sim.flat_mc import play_games
+    from manabot.sim.search.flat_mc import play_games
     from manabot.verify.competency import play_probed_games
 
     # The eight-card library loses to the sixteen-card library from either seat.

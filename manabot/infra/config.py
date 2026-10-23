@@ -202,7 +202,7 @@ class RewardConfig(BaseConfig):
 class SimulationConfig(BaseConfig):
     """Hyperparameters for model simulation."""
 
-    hero: str = "simple"
+    hero: str = "random"
     villain: str = "default"
     num_games: int = 100
     num_threads: int = 4

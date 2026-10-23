@@ -90,10 +90,10 @@ and allocation, including the earlier dollars.
 
 Only completed jobs with confirmed cleanup and a verified final manifest admit
 the next entry. The service reads small control records and final manifests; it
-never downloads checkpoint bundles or runs notebooks/W&B inside the scheduling
+never downloads checkpoint bundles or runs notebooks/Etude inside the scheduling
 loop. `deploy fetch/report` remain independent, reconnectable consumers of durable
 worker snapshots. An optional independent report service is described below; scheduling never
-waits for its downloads or W&B acknowledgements.
+waits for its downloads or Etude delivery.
 Cancellation records the cohort request first and forwards it to the current job
 even if the supervisor is offline. A returning supervisor also forwards it before
 provider reads. Worker cancellation acknowledgement, final artifacts and provider
@@ -118,28 +118,29 @@ a versioned attempt, live-price admission and all earlier charges within $100.
 ## Reports while clients are offline
 
 Add `--reports` when installing the cohort to create a separate OS-managed
-companion. Add both W&B selectors for native graphs in the declared workspace:
+companion. Add an Etude destination to deliver metric runs to a directory or bucket:
 
 ```bash
 uv run --extra artifacts manabot deploy cohort start \
   --plan cohort.json --state-dir /absolute/private/cohort-state --doppler \
-  --reports --wandb-project etude --wandb-entity loopflow-studio
+  --reports --report-experiment manabot-monitoring \
+  --report-destination s3://YOUR-BUCKET/tracking
 ```
 
 The companion reads the current job's exact published generation and retrieves
 only existing training/monitoring Dashboard JSON exports. It saves those bytes and
 writes `projection/report.json` and a compact `projection/report.html` before
-attempting W&B. The report shows the intended versus admitted job count, phases,
+recording Etude metrics. The report shows the intended versus admitted job count, phases,
 updates, evaluations, generations, heartbeat timestamps and charged/reserved
-cost. Its links expose the saved Dashboard exports; W&B owns the metric graphs.
+cost. Its links expose the saved Dashboard exports; Etude owns the metric graphs.
 Full editable notebook analysis still uses the ordinary `deploy fetch/report` path.
 Unpublished data is unavailable, not a zero, and a saved timestamp is not a live
 heartbeat. A network outage retains the earlier local evidence.
 
 The queue index at `monitoring/dashboard.json` is not a Dashboard export. The
 projector reads the per-run files, including protocol-specific dashboard names.
-In-progress evaluation counts remain visible in local exports and W&B summaries;
-only settled evaluation rows enter W&B's append-only history. A later completed
+In-progress evaluation counts remain visible in local exports and Etude summary observations;
+only settled evaluation rows enter Etude's settled metric history. A later completed
 or failed attempt appends once, while rewriting a published result still fails.
 
 The report service has its own process/host lock and cannot submit training.
@@ -149,7 +150,7 @@ Reservations are persisted before starting children; interruption cannot reset
 consumed allowance. Each child owns an absolute process-group deadline even if
 its parent disappears. A restart can conservatively charge the full reservation.
 Failed attempts and telemetry error types are retained; credential-bearing error
-responses are omitted. W&B retries use its existing acknowledged history cursor;
+responses are omitted. Etude retries read durable metric-row digests and use SDK file delivery;
 a confirmed publication of unchanged Dashboard bytes is skipped.
 
 Both services stop after settled outcomes; reporting stops only after a successful
@@ -160,9 +161,9 @@ projection configuration is frozen on installation; a different owner/configurat
 fails rather than creating competing publishers. Renewing a reporting allowance or
 moving a lost host requires explicit recovery, not deleting its ledger.
 
-Local fake-provider/telemetry checks cover retained reports during W&B failure,
+Local fake-provider/telemetry checks cover retained reports during delivery failure,
 idempotent publication, interrupted allowance accounting and the child's deadline.
-No live W&B service or cloud cohort was exercised by those checks.
+No live cloud cohort or remote bucket was exercised by those checks.
 
 ## Submit, disconnect and reconnect
 

@@ -25,7 +25,7 @@ from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import ACTION_SPACE_KIND_NAMES
+from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.models import Strict, TrainingRun, TrainSelfPlay
 from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions

@@ -17,7 +17,7 @@ from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world
-from manabot.sim.flat_mc import make_player
+from manabot.sim.search.flat_mc import make_player
 from tests.belief.support import fixture_torch_observation
 
 

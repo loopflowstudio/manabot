@@ -16,7 +16,8 @@ import json
 from pathlib import Path
 import sys
 
-from manabot.sim.conditional_search import (
+from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
+from manabot.sim.search.conditional import (
     ConditionalStrategyResult,
     HasCard,
     ScenarioWorldSpace,
@@ -29,7 +30,6 @@ from manabot.sim.conditional_search import (
     serialize_result,
     validate_result,
 )
-from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
 

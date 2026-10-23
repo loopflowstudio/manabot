@@ -30,7 +30,7 @@ from manabot.env.failures import CapturedVector
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import (
+from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     GameRecord,
     SearchStats,

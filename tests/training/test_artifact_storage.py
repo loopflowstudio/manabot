@@ -224,10 +224,14 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
     published: list[monitoring.Dashboard] = []
 
     def publish(
-        dashboard: monitoring.Dashboard, out: Path, *, project: str, entity: str | None
+        dashboard: monitoring.Dashboard,
+        out: Path,
+        *,
+        experiment: str,
+        destination: str | None,
     ) -> str:
         published.append(dashboard)
-        return "https://wandb.invalid/run"
+        return "file:///retained/etude/run"
 
     monkeypatch.setattr(monitoring, "publish_dashboard", publish)
     monkeypatch.setattr(
@@ -241,7 +245,6 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
             str(path),
             "--out",
             str(tmp_path / "dashboard"),
-            "--online",
         ],
     )
     monitoring.main()

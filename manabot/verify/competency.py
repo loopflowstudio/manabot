@@ -34,7 +34,6 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 import json
 import multiprocessing as mp
-import os
 from pathlib import Path
 import time
 from typing import Any, Callable, Protocol
@@ -43,7 +42,7 @@ import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.sim.flat_mc import (
+from manabot.sim.search.flat_mc import (
     make_player,
     spec_name,
     wilson_interval,
@@ -988,7 +987,7 @@ def play_probed_games(
 ) -> dict[str, Any]:
     """Seat-balanced matchup loop with per-decision hero behavior probes.
 
-    Mirrors manabot.sim.flat_mc.play_games (game i puts the hero in seat
+    Mirrors manabot.sim.search.flat_mc.play_games (game i puts the hero in seat
     i % 2) and adds a BehaviorProbe on every hero decision.
     """
 
@@ -1295,7 +1294,6 @@ def main() -> None:
     micro.add_argument("--out", type=str, default="experiments/data/exp-09-micro.json")
 
     args = parser.parse_args()
-    os.environ.setdefault("WANDB_MODE", "disabled")
 
     if args.command == "scenarios":
         out_path = Path(args.out)

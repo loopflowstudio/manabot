@@ -111,7 +111,7 @@ uv sync --python 3.12 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train          # small CPU training run, under a minute, no W&B
+uv run manabot train          # small CPU training run, under a minute, local Etude tracking
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to

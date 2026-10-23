@@ -1,97 +1,18 @@
+"""Inference players for scalar simulation; model admission lives in model.checkpoint."""
+
 from collections import Counter
 from enum import Enum
-import os
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 import torch
-import wandb
 
 # Local imports
-from manabot.infra.log import getLogger
 from manabot.model.actor_critic import ActorCritic
 
 # -----------------------------------------------------------------------------
 # Model Loading
 # -----------------------------------------------------------------------------
-
-
-def load_model_from_wandb(
-    model: str,
-    version: str = "latest",
-    project: Optional[str] = None,
-    device: str = "cpu",
-) -> ActorCritic:
-    """
-    Load a trained model from wandb artifacts with minimal wandb interaction.
-
-    Args:
-        model: Name of the model (e.g. "quick_train")
-        version: Version string (e.g. "v3" or "latest")
-        project: Wandb project name
-        device: Device to load model on ("cpu" or "cuda")
-
-    Returns:
-        Loaded agent model ready for inference
-    """
-    logger = getLogger(__name__).getChild("load_model_from_wandb")
-    try:
-        # Force online mode to ensure artifact can be fetched
-        os.environ["WANDB_MODE"] = "online"
-
-        # Use a silent API object without starting a run
-        api = wandb.Api()
-        artifact_path = f"{project or 'manabot'}/{model}:{version}"
-        logger.info(f"Loading artifact: {artifact_path}")
-        artifact = api.artifact(artifact_path)
-        artifact_dir = artifact.download("/tmp")
-
-        # Directly use the expected filename pattern based on the save method
-        potential_paths = [
-            os.path.join(artifact_dir, f"{model}.pt"),
-            os.path.join(artifact_dir, f"{model}_latest.pt"),
-        ]
-
-        # Also look for any .pt files
-        pt_files = [f for f in os.listdir(artifact_dir) if f.endswith(".pt")]
-        potential_paths.extend([os.path.join(artifact_dir, f) for f in pt_files])
-
-        # Find the first valid checkpoint file
-        checkpoint_path = None
-        for path in potential_paths:
-            if os.path.exists(path):
-                checkpoint_path = path
-                break
-
-        if checkpoint_path is None:
-            raise FileNotFoundError(
-                f"No .pt files found in the artifact at {artifact_dir}"
-            )
-
-        logger.info(f"Loading checkpoint from {checkpoint_path}")
-        from manabot.model.checkpoint import load_checkpoint
-
-        agent, _ = load_checkpoint(checkpoint_path)
-        agent = agent.to(device)
-
-        logger.info("Successfully loaded model")
-        return agent
-    except Exception as e:
-        logger.error(f"Error loading model from wandb: {e}")
-        # If the exception relates to artifact not found, show clear message
-        if "not found" in str(e).lower():
-            logger.error(
-                f"Could not find artifact '{model}:{version}'. Check if the name is correct and the artifact exists."
-            )
-        # If the exception relates to model loading, print more details
-        elif "state dictionary" in str(e) or "state_dict" in str(e):
-            logger.error(
-                "The model file was found but its structure doesn't match expectations."
-            )
-            logger.error(
-                "This could happen if the model was saved with a different format or version."
-            )
-        raise
 
 
 # -----------------------------------------------------------------------------

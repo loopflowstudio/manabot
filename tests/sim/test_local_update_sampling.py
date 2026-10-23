@@ -21,17 +21,17 @@ from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
 from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
 from manabot.sim.datagen import generate_selfplay_shard
-from manabot.sim.local_sampling import (
-    HandBatch,
-    HandSample,
-    PhysicalHandSampler,
-    PreparedHands,
-)
-from manabot.sim.local_update import (
+from manabot.sim.search.local_update import (
     LocalUpdatePlayer,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
     SamplerArtifact,
+)
+from manabot.sim.search.sampling import (
+    HandBatch,
+    HandSample,
+    PhysicalHandSampler,
+    PreparedHands,
 )
 from manabot.training.supervised import _validate_dataset
 from tests.sim import test_local_update as fixtures
@@ -275,6 +275,8 @@ def test_deadline_after_injected_sampling(
             env._engine.semantic_observation_json(env._engine.current_agent_index())
         )
     )
-    monkeypatch.setattr("manabot.sim.local_update.time.perf_counter", lambda: clock[0])
+    monkeypatch.setattr(
+        "manabot.sim.search.local_update.time.perf_counter", lambda: clock[0]
+    )
     with pytest.raises(TimeoutError, match="target unavailable"):
         teacher.search(env._engine, history, seed=4)

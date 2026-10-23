@@ -32,7 +32,7 @@ from manabot.sim.data import (
     SCORE_KEY,
     VISIT_COUNT_KEY,
 )
-from manabot.sim.flat_mc import make_player, spec_name
+from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
 # -----------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def generate_selfplay_shard(
     """Play teacher-vs-teacher self-play games, recording every decision.
 
     The teacher is any search player spec accepted by
-    manabot.sim.flat_mc.make_player (flat search, policy search, or
+    manabot.sim.search.flat_mc.make_player (flat search, policy search, or
     determinized PUCT); passing ``sims`` alone is shorthand for the exp-03
     random-rollout teacher. Every decision records the encoded observation,
     chosen action, and raw per-action values. Tree teachers additionally emit

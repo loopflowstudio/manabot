@@ -21,14 +21,14 @@ from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.sim.local_compound import advance_compound, project_compound
-from manabot.sim.mcts import (
+from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
+from manabot.sim.search.compound import advance_compound, project_compound
+from manabot.sim.search.puct import (
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
     determinized_puct,
     puct_source_sha256,
 )
-from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
 import managym
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
