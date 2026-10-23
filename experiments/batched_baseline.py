@@ -1,5 +1,7 @@
 """The batched GPU baseline from the size and batching study, and its scale ladder."""
 
+from typing import Literal
+
 from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
@@ -62,6 +64,26 @@ def scale_ladder() -> TrainingRegime:
     )
     regime.wall_seconds = 400_000
     regime.schedule_clock = "iteration_fraction"
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
+def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegime:
+    """`scale_ladder` from scratch with complete games, matched per learner decision.
+
+    Two-seat learns from one whole game per stream per update; one-seat from two,
+    so both arms take about the same learner decisions per update. The absolute
+    iteration LR/tau schedule and EMA therefore sit at about the same position at
+    equal learner decisions, and Ataraxos minibatches of `streams` rows give the
+    same optimizer steps per learner decision. Only `learning_seats` and
+    `games_per_stream` differ between arms; recorded counters verify the rest.
+    """
+    regime = scale_ladder()
+    regime.id = f"seat-comparison-{seats}-v1"
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = updates
+    stage.learning_seats = seats
+    stage.games_per_stream = 1 if seats == "both" else 2
     return TrainingRegime.model_validate(regime.model_dump())
 
 
