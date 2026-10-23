@@ -191,7 +191,7 @@ jobs:
 
       - name: Check semantic coverage evidence
         run: |
-          uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py tests/semantic/test_opcode_alignment.py -q
+          uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
           uv run scripts/generate_coverage_gaps.py --check
           uv run python scripts/compile_semantic_content.py --check \
             --source content/semantic/v1/elemental_world.source.json \

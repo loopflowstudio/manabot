@@ -193,7 +193,7 @@ not comparable with today's checkpoints:
 | `manabot/` | Agents: models, training, search, beliefs, arena, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Card and deck definitions compiled to a typed IR |
-| `conformance/` | Rules conformance fixtures |
+| `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/repository-archive.md) |
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |

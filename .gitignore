@@ -36,3 +36,9 @@ scratch/*.json
 # Experiment data lives in S3, recorded by experiments/data.manifest.json.
 # Fetch it with `uv run --extra artifacts python -m manabot.data fetch`.
 experiments/data/
+
+# Machine-local Loopflow runtime output and debug symbols are not source.
+.lf/logs/
+.lf/metrics/
+.lf/scratch-stash/
+*.dSYM/

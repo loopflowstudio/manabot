@@ -158,15 +158,12 @@ world. The cross-package contracts and convergence status are in
    `sim/search` owns frozen-policy planning, world sampling and search evidence:
    `puct.py` implements tree search; `conditional.py` compares its action estimates
    under different hidden-information assumptions at the same decision.
-4. **`manabot.semantic`**: semantic-program encoders and structural
-   representation experiments
+4. **`manabot.semantic`**: semantic-program projection and production encoders
 5. **`manabot.verify`**: competency scenarios, behavioral probes, and the
    run-provenance store
 6. **`manabot.infra`**: shared configuration, runtime setup, provenance and profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
    exact-world inference, and the `ManabotPlayer` lifecycle
-8. **`manabot.study`**: behavioral study of recorded games (`record_games`,
-   `measures`, `report`), with one subpackage per matchup
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.
@@ -204,19 +201,12 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
-Study records retain viewer-safe target source names and target controller sides.
-Audit retained Allies/Lessons records without starting games with
-`uv run python -m manabot.study.allies_lessons.targeting_audit --games games.jsonl.gz --label greedy`.
-The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
-seat, including absent cohorts, unfinished records, declined targets and unknown
-identities. Target offers list player 0's objects first, so a first-offer
-policy's target side depends on its seat.
-Older records remain readable and count as unmeasured target prompts; source-less
-trigger choices remain unknown. Labels identify recorded seats, not a verified
-policy implementation. Own-side targeting alone does not establish a misplay,
-and these dependent choice counts are not game-level strength estimates.
+The retired behavioral-study and structural/opcode experiment tools are retained
+in Git history. Their archived inputs and receipts are indexed in
+[repository archive](../docs/repository-archive.md). Shared target inspection
+now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/arena/heuristic.py`, Study label `heuristic`) is a
+`heuristic` (`manabot/arena/heuristic.py`) is a
 separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
 removal held for a kill, counters held for an opponent's spell, effect polarity
 derived from the semantic card source, attacks unless a blocker kills and

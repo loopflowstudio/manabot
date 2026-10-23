@@ -75,7 +75,7 @@ Before adding the inventory tool, this audit inspected:
   [coverage authority](../../../manabot/semantic/coverage.py): authored-card
   compiler/evidence coverage, not a whole-CR inventory.
 - [Semantic conformance authority](../../../managym/src/conformance.rs) and
-  [w11 corpus](../../../conformance/semantic-kernel-w11-v1/): replay,
+  [w11 corpus](../../../experiments/data/archive/conformance/semantic-kernel-w11-v1/): replay,
   optimization, metamorphic and property evidence. Reference and optimized
   paths share low-level rules primitives. Agreement is valuable and cannot
   independently prove an MTG outcome.
