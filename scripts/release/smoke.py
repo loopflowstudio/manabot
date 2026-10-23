@@ -9,6 +9,7 @@ import torch
 
 import manabot
 from manabot import managym
+from manabot.model.checkpoint import load_checkpoint
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym as legacy_managym
 
@@ -30,22 +31,17 @@ def main() -> None:
     value = torch.tensor([1.0], requires_grad=True)
     value.square().sum().backward()
     assert value.grad is not None and value.grad.item() == 2.0
-    subprocess.run(["manabot", "--help"], check=True)
-    subprocess.run(["manabot", "train", "--help"], check=True)
+    command = ["uv", "run", "--no-project", "--python", sys.executable, "manabot"]
+    subprocess.run([*command, "--help"], check=True)
+    subprocess.run([*command, "train", "--help"], check=True)
+    output = Path.cwd() / "release-smoke"
     subprocess.run(
-        [
-            "manabot",
-            "train",
-            "--set",
-            "train.total_timesteps=32",
-            "--set",
-            "train.num_envs=2",
-            "--set",
-            "train.num_steps=16",
-        ],
+        [*command, "train", "--recipe", "local", "--out", str(output)],
         check=True,
         timeout=180,
     )
+    policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
+    assert not policy.training
     print(
         f"release smoke passed: manabot {version('manabot')}, torch {torch.__version__}"
     )

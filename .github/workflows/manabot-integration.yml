@@ -66,7 +66,7 @@ jobs:
             tests/training/test_local_service.py \
             tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
-            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
+            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_monitoring.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \

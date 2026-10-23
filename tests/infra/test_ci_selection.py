@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -122,3 +123,15 @@ def test_aggregate_rejects_unexpected_skips_and_missing_selection(
         text=True,
     )
     assert (completed.returncode == 0) == passes, completed.stdout + completed.stderr
+
+
+def test_workflow_test_files_exist() -> None:
+    """A renamed test must not prevent an entire CI shard from collecting."""
+    missing = []
+    for workflow in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        for path in re.findall(
+            r"tests/(?:[\w.-]+/)*[\w.-]+\.py\b", workflow.read_text()
+        ):
+            if not (ROOT / path).is_file():
+                missing.append(f"{workflow.name}: {path}")
+    assert not missing, "\n".join(missing)

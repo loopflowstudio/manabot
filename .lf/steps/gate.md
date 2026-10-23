@@ -17,6 +17,16 @@ when changing tracking or report discovery. The live tiny-comparison test writes
 both TrainingRun exports and Etude tracker declarations named `run.json`; saved
 report fixtures alone do not exercise their coexistence.
 
+## Required checks for Python package and CLI moves
+
+When moving modules, tests or CLI entry points, collect the exact test paths in
+`.github/workflows/manabot-integration.yml` and run
+`uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
+For training CLI changes, build and install the release wheel into an isolated
+environment and run `scripts/release/smoke.py` outside the checkout, following
+`.github/workflows/release.yml`. A source-tree training smoke cannot verify the
+installed entry point or catch stale release-smoke arguments.
+
 ## Required checks for new Python test modules
 
 Use unique test module basenames across unpackaged test directories. Collect new
@@ -69,7 +79,7 @@ extension imports and mocked service startup alone cannot prove cold ordering.
 Run `uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q`
 for Elemental roster or training admission changes, including after syncing
 training infrastructure changes. The PPO smoke must reload the final checkpoint
-written by `Trainer.train()`, which closes its experiment before returning.
+written by the recipe’s `execute_regime` run after tracking has closed.
 
 Run the complete debug Rust suite, including checked conformance receipts, and
 focused browser interactions. Also run
