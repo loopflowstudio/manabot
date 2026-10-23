@@ -9,6 +9,8 @@ decisions is interpolated linearly in log environment decisions between its
 scored checkpoints; the hypothesis predicts a zero difference there too.
 
     uv run python -m experiments.seat_comparison_report --directory DIR
+    uv run --extra reports python -m experiments.seat_comparison_report \
+        --directory DIR --figure curves.svg
 """
 
 from __future__ import annotations
@@ -69,7 +71,8 @@ def _interpolate(
     return None
 
 
-def report(directory: Path) -> str:
+def _scored(directory: Path) -> dict[tuple[int, str, str], dict]:
+    """(seed, arm, milestone label) -> ledger attempt with its per-deal `scores`."""
     ledger = json.loads((directory / "ledger.json").read_text())
     done = {k: v for k, v in ledger["attempts"].items() if v["phase"] == "completed"}
     scored: dict[tuple[int, str, str], dict] = {}
@@ -84,7 +87,10 @@ def report(directory: Path) -> str:
             continue
         seed, arm = int(item["job"].split("-")[-2]), item["job"].split("-")[-1]
         scored[(seed, arm, item["label"])] = dict(item, scores=scores)
+    return scored
 
+
+def report(scored: dict[tuple[int, str, str], dict]) -> str:
     lines = [
         "Score vs heuristic (mean over seeds; seed SD; seeds scored)"
         " and mean training hours to the scored checkpoint",
@@ -170,10 +176,71 @@ def report(directory: Path) -> str:
     return "\n".join(lines)
 
 
+def figure(scored: dict[tuple[int, str, str], dict], path: Path) -> None:
+    """Score against learner decisions and against training hours, both log x.
+
+    Points are seed means at each milestone; vertical lines span the seeds.
+    """
+    # matplotlib comes with the `reports` extra; the tables need only the stdlib.
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
+    labels = [f"{m // 1_000_000}M" for m in MILESTONES]
+    for arm, name, color in (
+        ("one", "One-seat", "#9a9a9a"),
+        ("both", "Two-seat", "#2f6fd0"),
+    ):
+        points = [
+            [scored[(s, arm, label)] for s in SEEDS if (s, arm, label) in scored]
+            for label in labels
+        ]
+        points = [p for p in points if p]
+        means = [statistics.mean(_mean(v["scores"]) for v in p) for p in points]
+        spans = [
+            (min(_mean(v["scores"]) for v in p), max(_mean(v["scores"]) for v in p))
+            for p in points
+        ]
+        clocks = (
+            [statistics.mean(v["learner_decisions"] for v in p) / 1e6 for p in points],
+            [statistics.mean(v["training_seconds"] for v in p) / 3600 for p in points],
+        )
+        for axis, xs in zip(axes, clocks):
+            axis.plot(xs, means, marker="o", color=color, label=name)
+            axis.vlines(
+                xs,
+                [lo for lo, _ in spans],
+                [hi for _, hi in spans],
+                color=color,
+                alpha=0.5,
+            )
+    axes[0].set_xlabel("Learner decisions (millions, log scale)")
+    axes[1].set_xlabel("Training hours (log scale)")
+    axes[0].set_ylabel("Score against the heuristic")
+    for axis in axes:
+        axis.set_xscale("log")
+        axis.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        axis.grid(alpha=0.3)
+    axes[0].legend()
+    fig.suptitle("Seed mean per milestone; vertical lines span the four seeds")
+    fig.tight_layout()
+    fig.savefig(path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
-    print(report(parser.parse_args().directory.resolve()))
+    parser.add_argument(
+        "--figure", type=Path, help="also write learning curves (SVG/PNG)"
+    )
+    args = parser.parse_args()
+    scored = _scored(args.directory.resolve())
+    print(report(scored))
+    if args.figure is not None:
+        figure(scored, args.figure)
 
 
 if __name__ == "__main__":

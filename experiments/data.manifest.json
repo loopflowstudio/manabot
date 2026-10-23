@@ -2638,6 +2638,10 @@
    "sha256": "ce26391450805414156519e8a735d0c322207d6027fbc9eef875ce80e3e08a0b",
    "bytes": 6737
   },
+  "experiments/data/seat-comparison-v1/curves.svg": {
+   "sha256": "964876ffe00c14e7817d5763ed659c1370993c653383155ed4520e968af25b11",
+   "bytes": 57340
+  },
   "experiments/data/seat-comparison-v1/evaluations/64001-initial/admission.json": {
    "sha256": "dfa6a6cd53b87378f2d310f9d68f0d7146f1b7b9f60bf4cccb333774d2660d1b",
    "bytes": 7268
@@ -9121,6 +9125,14 @@
   "experiments/data/seat-comparison-v1/ledger.json": {
    "sha256": "386c991bdcbf586752f3b3b012809a9f7876f9a3444a345d22e9f8c7d2e84009",
    "bytes": 30822
+  },
+  "experiments/data/seat-comparison-v1/report.md": {
+   "sha256": "c4fe9ed5c835d63dd884a8a4662143c3f706211d59dda8991ede0612bdb864e0",
+   "bytes": 2684
+  },
+  "experiments/data/seat-comparison-v1/report.txt": {
+   "sha256": "7f6817b3ec4cc8827b2613b52239fd10135f7570250926a56716d45f4048bfb3",
+   "bytes": 6452
   },
   "experiments/data/structural-semantic-katas-v1-discriminator.json": {
    "sha256": "80310051bd32ba0efc98d549b347607ba2efc91c6a714edfb9be3a125746115d",
