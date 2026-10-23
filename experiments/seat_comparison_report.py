@@ -85,9 +85,14 @@ def report(directory: Path) -> str:
         seed, arm = int(item["job"].split("-")[-2]), item["job"].split("-")[-1]
         scored[(seed, arm, item["label"])] = dict(item, scores=scores)
 
-    lines = ["Score vs heuristic (mean over seeds; seed SD; seeds scored)", ""]
+    lines = [
+        "Score vs heuristic (mean over seeds; seed SD; seeds scored)"
+        " and mean training hours to the scored checkpoint",
+        "",
+    ]
     lines.append(
-        f"{'milestone':>9} | {'one-seat':>18} | {'two-seat':>18} | two minus one, per seed [95% deal interval]"
+        f"{'milestone':>9} | {'one-seat':>18} | {'two-seat':>18} | {'one h':>7} | {'two h':>7}"
+        " | two minus one, per seed [95% deal interval]"
     )
     for label in ["0", *(f"{m // 1_000_000}M" for m in MILESTONES)]:
         cells = []
@@ -103,6 +108,13 @@ def report(directory: Path) -> str:
                 if values
                 else "—"
             )
+        for arm in ("one", "both"):
+            hours = [
+                scored[(s, arm, label)]["training_seconds"] / 3600
+                for s in SEEDS
+                if (s, arm, label) in scored
+            ]
+            cells.append(f"{statistics.mean(hours):.2f} h" if hours else "—")
         diffs = []
         for s in SEEDS:
             a, b = scored.get((s, "both", label)), scored.get((s, "one", label))
@@ -115,7 +127,8 @@ def report(directory: Path) -> str:
                 lo, hi = _interval(d)
                 diffs.append(f"{_mean(d):+.3f} [{lo:+.2f},{hi:+.2f}]")
         lines.append(
-            f"{label:>9} | {cells[0]:>18} | {cells[1]:>18} | {'  '.join(diffs)}"
+            f"{label:>9} | {cells[0]:>18} | {cells[1]:>18} | {cells[2]:>7} | {cells[3]:>7}"
+            f" | {'  '.join(diffs)}"
         )
 
     lines += [
