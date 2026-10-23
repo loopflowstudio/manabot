@@ -112,7 +112,7 @@ def current_source(root: Path) -> Source:
 def verify_public_source(source: Source) -> None:
     request = Request(
         f"https://api.github.com/repos/loopflowstudio/manabot/git/commits/{source.commit}",
-        headers={"User-ActorCritic": "manabot/0.1"},
+        headers={"User-Agent": "manabot/0.1"},
     )
     try:
         with urlopen(request, timeout=15) as response:

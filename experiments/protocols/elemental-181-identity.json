@@ -1,0 +1,1194 @@
+{
+  "cadence_updates": 200,
+  "cap_dollars": 10.0,
+  "decks": {
+    "elemental_bg": {
+      "deck": {
+        "Badgermole Cub": 1,
+        "Callous Inspector": 1,
+        "Corrupt Court Official": 2,
+        "Cycle of Renewal": 1,
+        "Dai Li Agents": 1,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Fabled Passage": 3,
+        "Field Trip": 1,
+        "Forest": 6,
+        "June, Bounty Hunter": 1,
+        "Lotus Cobra": 1,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Power Word Kill": 1,
+        "Prismatic Vista": 2,
+        "Savor": 1,
+        "Sazh's Chocobo": 1,
+        "Swamp": 6,
+        "Tireless Provisioner": 1,
+        "Tireless Tracker": 1,
+        "Toph, the Blind Bandit": 1,
+        "True Ancestry": 1,
+        "Unlucky Cabbage Merchant": 1
+      },
+      "lesson_pool": {
+        "Azula Always Lies": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_gr": {
+      "deck": {
+        "Badgermole Cub": 1,
+        "Deserter's Disciple": 1,
+        "Enthusiastic Study": 1,
+        "Fabled Passage": 2,
+        "Field Trip": 1,
+        "Firebending Lesson": 2,
+        "Fists of Flame": 2,
+        "Forest": 8,
+        "Giant Cindermaw": 1,
+        "Gnarled Professor": 1,
+        "Igneous Inspiration": 1,
+        "Lightning Strike": 2,
+        "Monastery Swiftspear": 1,
+        "Mountain": 7,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Shared Roots": 1,
+        "Tiger-Dillo": 2,
+        "Toph, the Blind Bandit": 1,
+        "Uncle Iroh": 1,
+        "Wartime Protestors": 1
+      },
+      "lesson_pool": {
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_gw": {
+      "deck": {
+        "Allies at Last": 2,
+        "Compassionate Healer": 2,
+        "Earth Kingdom Jailer": 2,
+        "Enter the Avatar State": 1,
+        "Fabled Passage": 2,
+        "Fancy Footwork": 1,
+        "Forest": 7,
+        "Haru, Hidden Talent": 1,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "Origin of Metalbending": 1,
+        "Ostrich-Horse": 2,
+        "Plains": 8,
+        "Professor of Symbology": 1,
+        "South Pole Voyager": 1,
+        "True Ancestry": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 1,
+        "Yip Yip!": 1
+      },
+      "lesson_pool": {
+        "Enter the Avatar State": 1,
+        "Origin of Metalbending": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_rb": {
+      "deck": {
+        "Callous Inspector": 1,
+        "Cat-Gator": 1,
+        "Corrupt Court Official": 4,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Deserter's Disciple": 1,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Fire Nation Cadets": 1,
+        "Firebending Lesson": 3,
+        "Igneous Inspiration": 1,
+        "June, Bounty Hunter": 1,
+        "Lightning Strike": 2,
+        "Mayhem Devil": 1,
+        "Mountain": 7,
+        "Savor": 1,
+        "Swamp": 8,
+        "Weaponize the Monsters": 1
+      },
+      "lesson_pool": {
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_ub": {
+      "deck": {
+        "Abandon Attachments": 1,
+        "Accumulate Wisdom": 1,
+        "Deadly Dispute": 1,
+        "Epic Downfall": 1,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Foggy Swamp Spirit Keeper": 1,
+        "Forecasting Fortune Teller": 3,
+        "Gran-Gran": 1,
+        "Island": 8,
+        "It'll Quench Ya!": 2,
+        "June, Bounty Hunter": 1,
+        "Knowledge Seeker": 2,
+        "Otter-Penguin": 3,
+        "Pop Quiz": 1,
+        "Power Word Kill": 2,
+        "Savor": 1,
+        "Swamp": 7
+      },
+      "lesson_pool": {
+        "Accumulate Wisdom": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_ug": {
+      "deck": {
+        "Abandon Attachments": 1,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Cycle of Renewal": 1,
+        "Fabled Passage": 3,
+        "Field Trip": 1,
+        "Firebending Lesson": 1,
+        "Forest": 5,
+        "Gnarled Professor": 1,
+        "Gran-Gran": 1,
+        "Great Divide Guide": 1,
+        "Hermitic Herbalist": 2,
+        "Iroh, Grand Lotus": 1,
+        "Island": 5,
+        "Mountain": 3,
+        "Ostrich-Horse": 2,
+        "Prismatic Vista": 2,
+        "Prophetic Prism": 1,
+        "Ran and Shaw": 1,
+        "Shared Roots": 1,
+        "Toph, the Blind Bandit": 1,
+        "True Ancestry": 1,
+        "Unlucky Cabbage Merchant": 1,
+        "Waterbending Lesson": 1,
+        "Zuko's Exile": 1
+      },
+      "lesson_pool": {
+        "Iroh's Demonstration": 1,
+        "Origin of Metalbending": 1,
+        "Sokka's Haiku": 1
+      }
+    },
+    "elemental_ur": {
+      "deck": {
+        "Abandon Attachments": 2,
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Deserter's Disciple": 1,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 2,
+        "Fabled Passage": 2,
+        "Fire Nation Cadets": 4,
+        "Firebending Lesson": 3,
+        "Gran-Gran": 1,
+        "Igneous Inspiration": 2,
+        "Island": 7,
+        "Lightning Strike": 1,
+        "Monastery Swiftspear": 1,
+        "Mountain": 8,
+        "Octopus Form": 1,
+        "Pop Quiz": 1
+      },
+      "lesson_pool": {
+        "Accumulate Wisdom": 1,
+        "Combustion Technique": 1,
+        "Firebending Lesson": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_uw": {
+      "deck": {
+        "Boomerang Basics": 2,
+        "Compassionate Healer": 2,
+        "Divide by Zero": 2,
+        "Earth Kingdom Jailer": 2,
+        "Enter the Avatar State": 1,
+        "Fabled Passage": 2,
+        "Forecasting Fortune Teller": 3,
+        "Island": 7,
+        "It'll Quench Ya!": 2,
+        "Jeong Jeong's Deserters": 1,
+        "Messenger Hawk": 2,
+        "Momo, Friendly Flier": 1,
+        "Plains": 8,
+        "Pop Quiz": 1,
+        "Professor of Symbology": 2,
+        "Spectral Sailor": 1,
+        "Yip Yip!": 1
+      },
+      "lesson_pool": {
+        "Accumulate Wisdom": 1,
+        "Fancy Footwork": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_wb": {
+      "deck": {
+        "Bastion of Remembrance": 1,
+        "Callous Inspector": 1,
+        "Corrupt Court Official": 2,
+        "Curious Farm Animals": 1,
+        "Deadly Dispute": 1,
+        "Deadly Precision": 2,
+        "Eyetwitch": 2,
+        "Fabled Passage": 2,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "June, Bounty Hunter": 1,
+        "Plains": 8,
+        "Power Word Kill": 1,
+        "Pretending Poxbearers": 2,
+        "Professor of Symbology": 2,
+        "Savor": 1,
+        "Swamp": 7,
+        "Tolls of War": 1,
+        "Yip Yip!": 1
+      },
+      "lesson_pool": {
+        "Enter the Avatar State": 1,
+        "Ozai's Cruelty": 1,
+        "Zuko's Exile": 1
+      }
+    },
+    "elemental_wr": {
+      "deck": {
+        "Compassionate Healer": 2,
+        "Deserter's Disciple": 1,
+        "Enthusiastic Study": 1,
+        "Fabled Passage": 2,
+        "Fancy Footwork": 1,
+        "Firebending Lesson": 1,
+        "Gather the White Lotus": 1,
+        "Igneous Inspiration": 1,
+        "Invasion Reinforcements": 3,
+        "Jeong Jeong's Deserters": 1,
+        "Jet, Freedom Fighter": 1,
+        "Lightning Strike": 3,
+        "Master Piandao": 1,
+        "Mountain": 7,
+        "Plains": 8,
+        "Professor of Symbology": 2,
+        "South Pole Voyager": 1,
+        "Wartime Protestors": 1,
+        "Water Tribe Rallier": 1,
+        "Yip Yip!": 1
+      },
+      "lesson_pool": {
+        "Enter the Avatar State": 1,
+        "Firebending Lesson": 1,
+        "Zuko's Exile": 1
+      }
+    }
+  },
+  "grid": {
+    "decks": [
+      "elemental_bg",
+      "elemental_gr",
+      "elemental_gw",
+      "elemental_rb",
+      "elemental_ub",
+      "elemental_ug",
+      "elemental_ur",
+      "elemental_uw",
+      "elemental_wb",
+      "elemental_wr"
+    ],
+    "games_per_cell": 50,
+    "opponent": "heuristic",
+    "schedule_sha256": "ecc487e4708a8565b9c787068ff676f62b0c35420b179204fbbf72056f436264",
+    "seed": 18190001
+  },
+  "jobs": {
+    "18101": "mtg181-elemental-two-seat-18101",
+    "18102": "mtg181-elemental-two-seat-18102",
+    "18103": "mtg181-elemental-two-seat-18103"
+  },
+  "note": "Darwin native bytes bind local evaluation; Linux pod build/native digests are retained per TrainingRun.",
+  "runtime_fingerprints": {
+    "action_abi_sha256": "ad72f0ec79da3bf4e4f9fed7c8c730f5d41c3fea7af4d42d9a3c3559fc8f3c73",
+    "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+    "content_digest": "3fe5da0e7b0573ff6e8fabc8b1a1f80a557c129f729882ce09cc7ece908b3a48",
+    "content_manifest_sha256": "cdee6b88909438f71ec3f8082b18645f989d161556ce02e876d6f1e4297600be",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "0a4af2106f8b36a7cf9dd4dfe2bd17001020599e84c58caf74963f13323fedad",
+    "engine_source_sha256": "dbe63807731be0c520d6ff50c9868e60740b9a20ad1d2a040087e03a07ff72eb",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "ef09b08b8f57110a794a77a95f6bbbfc095bdd93ac3a0497d4601a37ca6cc30c",
+    "matchup_sha256": "4c0c6b99d1f0b56c8ec6a1083d146320d08a90a04b66e3ac9bfed9d74e7f3693",
+    "observation_abi_sha256": "aa59dbb4959a379911d8ba1e631c71a3d945dc34a456a7259589fa9f03af5e5c",
+    "world": "w13"
+  },
+  "seeds": [
+    18101,
+    18102,
+    18103
+  ],
+  "sha256": {
+    "experiments/elemental_grid.py": "f601ac9566403ed78af06037f7d0fb04d818c2d1b5e7e48872005dc390690e83",
+    "experiments/elemental_two_seat.py": "9e9539e595cdec10ad0ccd502dc66906aaee63491ff64ee6b10eab8cc2dc9ffc",
+    "experiments/elemental_two_seat_follow.py": "ae16f0c525ce574802ee5dd09b2bdd5c5a7cc8f43cabbfa7a4a26260ec49bb86",
+    "experiments/protocols/elemental-181-job.json": "b4f01c0ec3c39ba99907a209e54930af032ad6aa99049e938240bb51114a6780",
+    "experiments/regimes/elemental-two-seat-181-v1.json": "dbf9a7ac93699ad524aaa809531b0d1f8eacda41a5c5758997a38d733408ecec",
+    "manabot/arena/heuristic.py": "9c96d71c4decba15883646fd7b3764f0574f6a92fb4576f4ac3742e30a3d21db",
+    "manabot/arena/match.py": "395a5579c802bef7284424b644658c950c22749f7b83e5a260e3f2e485bac7db",
+    "manabot/managym/_managym.cpython-312-darwin.so": "0a4af2106f8b36a7cf9dd4dfe2bd17001020599e84c58caf74963f13323fedad",
+    "uv.lock": "ae579b2e4f56bb86aa753682bf4cdc5c2363be22e8db9810f379c6fa7eb6c12c"
+  },
+  "world_binding": {
+    "content_manifest": {
+      "compiled_semantics": {
+        "ir_hash": "0dafcb4a271e6c1768eeafb53e569d29f0c5afc75e8ec729e92d2299f9bcf9ac",
+        "pack_key": "elemental-world-v2",
+        "source_hash": "52f73eab9fddc3f533817efe4a58cc1f728b650e1e6f01aaa33af96b7871b77d"
+      },
+      "content_digest": "3fe5da0e7b0573ff6e8fabc8b1a1f80a557c129f729882ce09cc7ece908b3a48",
+      "definitions": [
+        {
+          "card_def_id": 0,
+          "registry_name": "Abandon Attachments"
+        },
+        {
+          "card_def_id": 1,
+          "registry_name": "Azula Always Lies"
+        },
+        {
+          "card_def_id": 2,
+          "registry_name": "Boomerang Basics"
+        },
+        {
+          "card_def_id": 3,
+          "registry_name": "Cat-Gator"
+        },
+        {
+          "card_def_id": 4,
+          "registry_name": "Combustion Technique"
+        },
+        {
+          "card_def_id": 5,
+          "registry_name": "Corrupt Court Official"
+        },
+        {
+          "card_def_id": 6,
+          "registry_name": "Dai Li Agents"
+        },
+        {
+          "card_def_id": 7,
+          "registry_name": "Deserter's Disciple"
+        },
+        {
+          "card_def_id": 8,
+          "registry_name": "Enter the Avatar State"
+        },
+        {
+          "card_def_id": 9,
+          "registry_name": "Enthusiastic Study"
+        },
+        {
+          "card_def_id": 10,
+          "registry_name": "Epic Downfall"
+        },
+        {
+          "card_def_id": 11,
+          "registry_name": "Eyetwitch"
+        },
+        {
+          "card_def_id": 12,
+          "registry_name": "Field Trip"
+        },
+        {
+          "card_def_id": 13,
+          "registry_name": "Fists of Flame"
+        },
+        {
+          "card_def_id": 14,
+          "registry_name": "Foggy Swamp Spirit Keeper"
+        },
+        {
+          "card_def_id": 15,
+          "registry_name": "Gather the White Lotus"
+        },
+        {
+          "card_def_id": 16,
+          "registry_name": "Giant Cindermaw"
+        },
+        {
+          "card_def_id": 17,
+          "registry_name": "Gnarled Professor"
+        },
+        {
+          "card_def_id": 18,
+          "registry_name": "Gran-Gran"
+        },
+        {
+          "card_def_id": 19,
+          "registry_name": "Haru, Hidden Talent"
+        },
+        {
+          "card_def_id": 20,
+          "registry_name": "Iroh's Demonstration"
+        },
+        {
+          "card_def_id": 21,
+          "registry_name": "Jet, Freedom Fighter"
+        },
+        {
+          "card_def_id": 22,
+          "registry_name": "Knowledge Seeker"
+        },
+        {
+          "card_def_id": 23,
+          "registry_name": "Lightning Strike"
+        },
+        {
+          "card_def_id": 24,
+          "registry_name": "Master Piandao"
+        },
+        {
+          "card_def_id": 25,
+          "registry_name": "Messenger Hawk"
+        },
+        {
+          "card_def_id": 26,
+          "registry_name": "Momo, Friendly Flier"
+        },
+        {
+          "card_def_id": 27,
+          "registry_name": "Monastery Swiftspear"
+        },
+        {
+          "card_def_id": 28,
+          "registry_name": "Octopus Form"
+        },
+        {
+          "card_def_id": 29,
+          "registry_name": "Origin of Metalbending"
+        },
+        {
+          "card_def_id": 30,
+          "registry_name": "Ostrich-Horse"
+        },
+        {
+          "card_def_id": 31,
+          "registry_name": "Ozai's Cruelty"
+        },
+        {
+          "card_def_id": 32,
+          "registry_name": "Power Word Kill"
+        },
+        {
+          "card_def_id": 33,
+          "registry_name": "Pretending Poxbearers"
+        },
+        {
+          "card_def_id": 34,
+          "registry_name": "Professor of Symbology"
+        },
+        {
+          "card_def_id": 35,
+          "registry_name": "Savor"
+        },
+        {
+          "card_def_id": 36,
+          "registry_name": "Shared Roots"
+        },
+        {
+          "card_def_id": 37,
+          "registry_name": "Sokka's Haiku"
+        },
+        {
+          "card_def_id": 38,
+          "registry_name": "Spectral Sailor"
+        },
+        {
+          "card_def_id": 39,
+          "registry_name": "Tiger-Dillo"
+        },
+        {
+          "card_def_id": 40,
+          "registry_name": "Toph, the Blind Bandit"
+        },
+        {
+          "card_def_id": 41,
+          "registry_name": "True Ancestry"
+        },
+        {
+          "card_def_id": 42,
+          "registry_name": "Uncle Iroh"
+        },
+        {
+          "card_def_id": 43,
+          "registry_name": "Wartime Protestors"
+        },
+        {
+          "card_def_id": 44,
+          "registry_name": "Zuko's Exile"
+        },
+        {
+          "card_def_id": 45,
+          "registry_name": "Ally"
+        },
+        {
+          "card_def_id": 46,
+          "registry_name": "Bastion of Remembrance"
+        },
+        {
+          "card_def_id": 47,
+          "registry_name": "Callous Inspector"
+        },
+        {
+          "card_def_id": 48,
+          "registry_name": "Clue"
+        },
+        {
+          "card_def_id": 49,
+          "registry_name": "Curious Farm Animals"
+        },
+        {
+          "card_def_id": 50,
+          "registry_name": "Cycle of Renewal"
+        },
+        {
+          "card_def_id": 51,
+          "registry_name": "Deadly Dispute"
+        },
+        {
+          "card_def_id": 52,
+          "registry_name": "Deadly Precision"
+        },
+        {
+          "card_def_id": 53,
+          "registry_name": "Fabled Passage"
+        },
+        {
+          "card_def_id": 54,
+          "registry_name": "Food"
+        },
+        {
+          "card_def_id": 55,
+          "registry_name": "Human Soldier"
+        },
+        {
+          "card_def_id": 56,
+          "registry_name": "June, Bounty Hunter"
+        },
+        {
+          "card_def_id": 57,
+          "registry_name": "Lotus Cobra"
+        },
+        {
+          "card_def_id": 58,
+          "registry_name": "Mayhem Devil"
+        },
+        {
+          "card_def_id": 59,
+          "registry_name": "Plains"
+        },
+        {
+          "card_def_id": 60,
+          "registry_name": "Prismatic Vista"
+        },
+        {
+          "card_def_id": 61,
+          "registry_name": "Sazh's Chocobo"
+        },
+        {
+          "card_def_id": 62,
+          "registry_name": "Swamp"
+        },
+        {
+          "card_def_id": 63,
+          "registry_name": "Tireless Provisioner"
+        },
+        {
+          "card_def_id": 64,
+          "registry_name": "Tireless Tracker"
+        },
+        {
+          "card_def_id": 65,
+          "registry_name": "Tolls of War"
+        },
+        {
+          "card_def_id": 66,
+          "registry_name": "Treasure"
+        },
+        {
+          "card_def_id": 67,
+          "registry_name": "Unlucky Cabbage Merchant"
+        },
+        {
+          "card_def_id": 68,
+          "registry_name": "Weaponize the Monsters"
+        },
+        {
+          "card_def_id": 69,
+          "registry_name": "Divide by Zero"
+        },
+        {
+          "card_def_id": 70,
+          "registry_name": "Igneous Inspiration"
+        },
+        {
+          "card_def_id": 71,
+          "registry_name": "Pop Quiz"
+        },
+        {
+          "card_def_id": 72,
+          "registry_name": "Forest"
+        },
+        {
+          "card_def_id": 73,
+          "registry_name": "Great Divide Guide"
+        },
+        {
+          "card_def_id": 74,
+          "registry_name": "Hermitic Herbalist"
+        },
+        {
+          "card_def_id": 75,
+          "registry_name": "Iroh, Grand Lotus"
+        },
+        {
+          "card_def_id": 76,
+          "registry_name": "Island"
+        },
+        {
+          "card_def_id": 77,
+          "registry_name": "Mountain"
+        },
+        {
+          "card_def_id": 78,
+          "registry_name": "Prophetic Prism"
+        },
+        {
+          "card_def_id": 79,
+          "registry_name": "Ran and Shaw"
+        },
+        {
+          "card_def_id": 80,
+          "registry_name": "Waterbending Lesson"
+        },
+        {
+          "card_def_id": 81,
+          "registry_name": "Accumulate Wisdom"
+        },
+        {
+          "card_def_id": 82,
+          "registry_name": "Allies at Last"
+        },
+        {
+          "card_def_id": 83,
+          "registry_name": "Badgermole Cub"
+        },
+        {
+          "card_def_id": 84,
+          "registry_name": "Compassionate Healer"
+        },
+        {
+          "card_def_id": 85,
+          "registry_name": "Dragonfly Swarm"
+        },
+        {
+          "card_def_id": 86,
+          "registry_name": "Earth Kingdom Jailer"
+        },
+        {
+          "card_def_id": 87,
+          "registry_name": "Fancy Footwork"
+        },
+        {
+          "card_def_id": 88,
+          "registry_name": "Fire Nation Cadets"
+        },
+        {
+          "card_def_id": 89,
+          "registry_name": "Firebending Lesson"
+        },
+        {
+          "card_def_id": 90,
+          "registry_name": "Forecasting Fortune Teller"
+        },
+        {
+          "card_def_id": 91,
+          "registry_name": "Invasion Reinforcements"
+        },
+        {
+          "card_def_id": 92,
+          "registry_name": "It'll Quench Ya!"
+        },
+        {
+          "card_def_id": 93,
+          "registry_name": "Jeong Jeong's Deserters"
+        },
+        {
+          "card_def_id": 94,
+          "registry_name": "Otter-Penguin"
+        },
+        {
+          "card_def_id": 95,
+          "registry_name": "South Pole Voyager"
+        },
+        {
+          "card_def_id": 96,
+          "registry_name": "Water Tribe Rallier"
+        },
+        {
+          "card_def_id": 97,
+          "registry_name": "White Lotus Reinforcements"
+        },
+        {
+          "card_def_id": 98,
+          "registry_name": "Yip Yip!"
+        },
+        {
+          "card_def_id": 99,
+          "registry_name": "Spirit"
+        }
+      ],
+      "schema_version": 1,
+      "world_version": "w13"
+    },
+    "input_schema": {
+      "action_focus": {
+        "dtype": "<class 'numpy.int32'>",
+        "shape": [
+          64,
+          2
+        ]
+      },
+      "actions": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          64,
+          20
+        ]
+      },
+      "actions_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          64
+        ]
+      },
+      "agent_cards": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          60,
+          41
+        ]
+      },
+      "agent_cards_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          60
+        ]
+      },
+      "agent_permanents": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          40,
+          28
+        ]
+      },
+      "agent_permanents_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          40
+        ]
+      },
+      "agent_player": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          1,
+          40
+        ]
+      },
+      "agent_player_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          1
+        ]
+      },
+      "events": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          32,
+          7
+        ]
+      },
+      "events_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          32
+        ]
+      },
+      "known_hand": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          2,
+          60,
+          2
+        ]
+      },
+      "opponent_cards": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          60,
+          41
+        ]
+      },
+      "opponent_cards_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          60
+        ]
+      },
+      "opponent_permanents": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          40,
+          28
+        ]
+      },
+      "opponent_permanents_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          40
+        ]
+      },
+      "opponent_player": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          1,
+          40
+        ]
+      },
+      "opponent_player_valid": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          1
+        ]
+      },
+      "semantic_cards": {
+        "dtype": "<class 'numpy.float32'>",
+        "shape": [
+          2,
+          60
+        ]
+      }
+    },
+    "learning_schema_sha256": "3297c06538c766a2aa5c9ff1935c7bc39e3a1beebf7660924ce35d3ccb8ac35b",
+    "policy_input_version": 1,
+    "rules": {
+      "decision_version": 6,
+      "possible_world_version": 2
+    },
+    "setups": [
+      {
+        "deck": {
+          "Compassionate Healer": 2,
+          "Deserter's Disciple": 1,
+          "Enthusiastic Study": 1,
+          "Fabled Passage": 2,
+          "Fancy Footwork": 1,
+          "Firebending Lesson": 1,
+          "Gather the White Lotus": 1,
+          "Igneous Inspiration": 1,
+          "Invasion Reinforcements": 3,
+          "Jeong Jeong's Deserters": 1,
+          "Jet, Freedom Fighter": 1,
+          "Lightning Strike": 3,
+          "Master Piandao": 1,
+          "Mountain": 7,
+          "Plains": 8,
+          "Professor of Symbology": 2,
+          "South Pole Voyager": 1,
+          "Wartime Protestors": 1,
+          "Water Tribe Rallier": 1,
+          "Yip Yip!": 1
+        },
+        "sideboard": {
+          "Enter the Avatar State": 1,
+          "Firebending Lesson": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Badgermole Cub": 1,
+          "Deserter's Disciple": 1,
+          "Enthusiastic Study": 1,
+          "Fabled Passage": 2,
+          "Field Trip": 1,
+          "Firebending Lesson": 2,
+          "Fists of Flame": 2,
+          "Forest": 8,
+          "Giant Cindermaw": 1,
+          "Gnarled Professor": 1,
+          "Igneous Inspiration": 1,
+          "Lightning Strike": 2,
+          "Monastery Swiftspear": 1,
+          "Mountain": 7,
+          "Origin of Metalbending": 1,
+          "Ostrich-Horse": 2,
+          "Shared Roots": 1,
+          "Tiger-Dillo": 2,
+          "Toph, the Blind Bandit": 1,
+          "Uncle Iroh": 1,
+          "Wartime Protestors": 1
+        },
+        "sideboard": {
+          "Combustion Technique": 1,
+          "Firebending Lesson": 1,
+          "Origin of Metalbending": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Bastion of Remembrance": 1,
+          "Callous Inspector": 1,
+          "Corrupt Court Official": 2,
+          "Curious Farm Animals": 1,
+          "Deadly Dispute": 1,
+          "Deadly Precision": 2,
+          "Eyetwitch": 2,
+          "Fabled Passage": 2,
+          "Invasion Reinforcements": 3,
+          "Jeong Jeong's Deserters": 1,
+          "June, Bounty Hunter": 1,
+          "Plains": 8,
+          "Power Word Kill": 1,
+          "Pretending Poxbearers": 2,
+          "Professor of Symbology": 2,
+          "Savor": 1,
+          "Swamp": 7,
+          "Tolls of War": 1,
+          "Yip Yip!": 1
+        },
+        "sideboard": {
+          "Enter the Avatar State": 1,
+          "Ozai's Cruelty": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Allies at Last": 2,
+          "Compassionate Healer": 2,
+          "Earth Kingdom Jailer": 2,
+          "Enter the Avatar State": 1,
+          "Fabled Passage": 2,
+          "Fancy Footwork": 1,
+          "Forest": 7,
+          "Haru, Hidden Talent": 1,
+          "Invasion Reinforcements": 3,
+          "Jeong Jeong's Deserters": 1,
+          "Origin of Metalbending": 1,
+          "Ostrich-Horse": 2,
+          "Plains": 8,
+          "Professor of Symbology": 1,
+          "South Pole Voyager": 1,
+          "True Ancestry": 1,
+          "Water Tribe Rallier": 2,
+          "White Lotus Reinforcements": 1,
+          "Yip Yip!": 1
+        },
+        "sideboard": {
+          "Enter the Avatar State": 1,
+          "Origin of Metalbending": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Abandon Attachments": 1,
+          "Accumulate Wisdom": 1,
+          "Deadly Dispute": 1,
+          "Epic Downfall": 1,
+          "Eyetwitch": 2,
+          "Fabled Passage": 2,
+          "Foggy Swamp Spirit Keeper": 1,
+          "Forecasting Fortune Teller": 3,
+          "Gran-Gran": 1,
+          "Island": 8,
+          "It'll Quench Ya!": 2,
+          "June, Bounty Hunter": 1,
+          "Knowledge Seeker": 2,
+          "Otter-Penguin": 3,
+          "Pop Quiz": 1,
+          "Power Word Kill": 2,
+          "Savor": 1,
+          "Swamp": 7
+        },
+        "sideboard": {
+          "Accumulate Wisdom": 1,
+          "Ozai's Cruelty": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Callous Inspector": 1,
+          "Cat-Gator": 1,
+          "Corrupt Court Official": 4,
+          "Deadly Dispute": 1,
+          "Deadly Precision": 2,
+          "Deserter's Disciple": 1,
+          "Eyetwitch": 2,
+          "Fabled Passage": 2,
+          "Fire Nation Cadets": 1,
+          "Firebending Lesson": 3,
+          "Igneous Inspiration": 1,
+          "June, Bounty Hunter": 1,
+          "Lightning Strike": 2,
+          "Mayhem Devil": 1,
+          "Mountain": 7,
+          "Savor": 1,
+          "Swamp": 8,
+          "Weaponize the Monsters": 1
+        },
+        "sideboard": {
+          "Combustion Technique": 1,
+          "Firebending Lesson": 1,
+          "Ozai's Cruelty": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Boomerang Basics": 2,
+          "Compassionate Healer": 2,
+          "Divide by Zero": 2,
+          "Earth Kingdom Jailer": 2,
+          "Enter the Avatar State": 1,
+          "Fabled Passage": 2,
+          "Forecasting Fortune Teller": 3,
+          "Island": 7,
+          "It'll Quench Ya!": 2,
+          "Jeong Jeong's Deserters": 1,
+          "Messenger Hawk": 2,
+          "Momo, Friendly Flier": 1,
+          "Plains": 8,
+          "Pop Quiz": 1,
+          "Professor of Symbology": 2,
+          "Spectral Sailor": 1,
+          "Yip Yip!": 1
+        },
+        "sideboard": {
+          "Accumulate Wisdom": 1,
+          "Fancy Footwork": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Badgermole Cub": 1,
+          "Callous Inspector": 1,
+          "Corrupt Court Official": 2,
+          "Cycle of Renewal": 1,
+          "Dai Li Agents": 1,
+          "Deadly Dispute": 1,
+          "Deadly Precision": 2,
+          "Fabled Passage": 3,
+          "Field Trip": 1,
+          "Forest": 6,
+          "June, Bounty Hunter": 1,
+          "Lotus Cobra": 1,
+          "Origin of Metalbending": 1,
+          "Ostrich-Horse": 2,
+          "Power Word Kill": 1,
+          "Prismatic Vista": 2,
+          "Savor": 1,
+          "Sazh's Chocobo": 1,
+          "Swamp": 6,
+          "Tireless Provisioner": 1,
+          "Tireless Tracker": 1,
+          "Toph, the Blind Bandit": 1,
+          "True Ancestry": 1,
+          "Unlucky Cabbage Merchant": 1
+        },
+        "sideboard": {
+          "Azula Always Lies": 1,
+          "Ozai's Cruelty": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Abandon Attachments": 2,
+          "Accumulate Wisdom": 1,
+          "Combustion Technique": 1,
+          "Deserter's Disciple": 1,
+          "Divide by Zero": 2,
+          "Dragonfly Swarm": 2,
+          "Fabled Passage": 2,
+          "Fire Nation Cadets": 4,
+          "Firebending Lesson": 3,
+          "Gran-Gran": 1,
+          "Igneous Inspiration": 2,
+          "Island": 7,
+          "Lightning Strike": 1,
+          "Monastery Swiftspear": 1,
+          "Mountain": 8,
+          "Octopus Form": 1,
+          "Pop Quiz": 1
+        },
+        "sideboard": {
+          "Accumulate Wisdom": 1,
+          "Combustion Technique": 1,
+          "Firebending Lesson": 1,
+          "Zuko's Exile": 1
+        }
+      },
+      {
+        "deck": {
+          "Abandon Attachments": 1,
+          "Accumulate Wisdom": 1,
+          "Combustion Technique": 1,
+          "Cycle of Renewal": 1,
+          "Fabled Passage": 3,
+          "Field Trip": 1,
+          "Firebending Lesson": 1,
+          "Forest": 5,
+          "Gnarled Professor": 1,
+          "Gran-Gran": 1,
+          "Great Divide Guide": 1,
+          "Hermitic Herbalist": 2,
+          "Iroh, Grand Lotus": 1,
+          "Island": 5,
+          "Mountain": 3,
+          "Ostrich-Horse": 2,
+          "Prismatic Vista": 2,
+          "Prophetic Prism": 1,
+          "Ran and Shaw": 1,
+          "Shared Roots": 1,
+          "Toph, the Blind Bandit": 1,
+          "True Ancestry": 1,
+          "Unlucky Cabbage Merchant": 1,
+          "Waterbending Lesson": 1,
+          "Zuko's Exile": 1
+        },
+        "sideboard": {
+          "Iroh's Demonstration": 1,
+          "Origin of Metalbending": 1,
+          "Sokka's Haiku": 1
+        }
+      }
+    ],
+    "world": "w13"
+  }
+}
