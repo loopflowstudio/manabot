@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 import statistics
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from experiments.elemental_grid import Score, Summary
 from experiments.elemental_two_seat import CADENCE, FAILED_JOBS, JOBS
@@ -125,23 +125,46 @@ def _point(directory: Path, point: Point) -> PointRecord:
     )
 
 
+class _Stage(BaseModel):
+    """The TrainingRun stage counters the report reads, narrowed once."""
+
+    status: str | None = None
+    seconds: float | None = None
+    collection_seconds: float | None = None
+    learning_seconds: float | None = None
+    learner_transitions: int = 0
+    environment_decisions: int = 0
+    games: int = 0
+    optimizer_exposures: object = None
+    optimizer_updates: object = None
+    error: object = None
+
+    @field_validator(
+        "learner_transitions", "environment_decisions", "games", mode="before"
+    )
+    @classmethod
+    def _count(cls, value: int | None) -> int:
+        return value or 0
+
+
 def _seed(directory: Path, ledger: Ledger, seed: int, job: str) -> SeedRecord:
     status = job_status(load_job(job))
     record = status.record
     view = ledger.jobs.get(job)
     run = (view.run if view else None) or {}
-    stage = next(iter(run.get("stages", [])), {})  # type: ignore[call-overload]
-    learner = int(stage.get("learner_transitions") or 0)
-    active = float(stage.get("collection_seconds") or 0) + float(
-        stage.get("learning_seconds") or 0
+    stages = run.get("stages")
+    stage = _Stage.model_validate(
+        stages[0] if isinstance(stages, list) and stages else {}
     )
+    active = (stage.collection_seconds or 0) + (stage.learning_seconds or 0)
     points = sorted(
         (p for p in ledger.points.values() if p.seed == seed), key=lambda p: p.updates
     )
+    training_run = run.get("id")
     return SeedRecord(
         seed=seed,
         job=job,
-        training_run=run.get("id"),  # type: ignore[arg-type]
+        training_run=training_run if isinstance(training_run, str) else None,
         phase=record.phase if record else None,
         updates=record.updates if record else None,
         counters_observed_at=view.observed_at if view else None,
@@ -150,20 +173,20 @@ def _seed(directory: Path, ledger: Ledger, seed: int, job: str) -> SeedRecord:
         estimated_dollars=status.cleanup.estimated_dollars
         if status.cleanup is not None
         else (view.estimated_dollars if view else None),
-        learner_decisions=learner,
-        environment_decisions=int(stage.get("environment_decisions") or 0),
-        games=int(stage.get("games") or 0),
-        optimizer_exposures=stage.get("optimizer_exposures"),
-        optimizer_updates=stage.get("optimizer_updates"),
-        training_seconds=stage.get("seconds")
-        if stage.get("status") != "running"
-        else None,
-        collection_seconds=stage.get("collection_seconds"),
-        learning_seconds=stage.get("learning_seconds"),
+        learner_decisions=stage.learner_transitions,
+        environment_decisions=stage.environment_decisions,
+        games=stage.games,
+        optimizer_exposures=stage.optimizer_exposures,
+        optimizer_updates=stage.optimizer_updates,
+        training_seconds=stage.seconds if stage.status != "running" else None,
+        collection_seconds=stage.collection_seconds,
+        learning_seconds=stage.learning_seconds,
         active_seconds=active or None,
-        learner_decisions_per_active_hour=learner / active * 3600 if active else None,
+        learner_decisions_per_active_hour=stage.learner_transitions / active * 3600
+        if active
+        else None,
         game_errors=run.get("game_errors"),
-        error=stage.get("error"),
+        error=stage.error,
         points=[_point(directory, p) for p in points],
     )
 
