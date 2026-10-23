@@ -11,11 +11,11 @@ from manabot.env import (
     RandomPolicy,
     Reward,
 )
-from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
+from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.verify.step0_env_sanity import _run_matchup
 from manabot.verify.util import (
     TRUNCATION_INFO_KEYS,
-    build_hypers,
+    build_verification_config,
     winner_from_info_or_obs,
 )
 
@@ -35,7 +35,7 @@ NUM_GAMES = 200
 
 def _obs_space() -> ObservationSpace:
     return ObservationSpace(
-        ObservationSpaceHypers(
+        ObservationConfig(
             max_cards_per_player=60,
             max_permanents_per_player=30,
             max_actions=20,
@@ -51,10 +51,10 @@ def _run_random_matchup(
     seed: int = 42,
 ) -> dict:
     """Run a random-vs-random matchup and return detailed results."""
-    hypers = MatchHypers(hero_deck=hero_deck, villain_deck=villain_deck)
-    match = Match(hypers)
+    config = MatchConfig(hero_deck=hero_deck, villain_deck=villain_deck)
+    match = Match(config)
     obs_space = _obs_space()
-    reward = Reward(RewardHypers())
+    reward = Reward(RewardConfig())
     env = Env(match, obs_space, reward, seed=seed, auto_reset=False)
 
     hero_wins = 0
@@ -109,10 +109,10 @@ def _run_random_matchup(
 def test_step0_matchups_have_no_aborts_or_truncations():
     np.random.seed(1234)
 
-    hypers = build_hypers()
-    obs_space = ObservationSpace(hypers.observation)
-    match = Match(hypers.match)
-    reward = Reward(hypers.reward)
+    config = build_verification_config()
+    obs_space = ObservationSpace(config.observation)
+    match = Match(config.match)
+    reward = Reward(config.reward)
 
     num_games = 200
     random_vs_random = _run_matchup(
@@ -236,10 +236,10 @@ def test_loss_reasons_reported():
 def test_winner_index_matches_observation():
     """winner_index in info dict should agree with life-total inference."""
     np.random.seed(800)
-    hypers = MatchHypers(hero_deck=DECKS["mixed"], villain_deck=DECKS["mixed"])
-    match = Match(hypers)
+    config = MatchConfig(hero_deck=DECKS["mixed"], villain_deck=DECKS["mixed"])
+    match = Match(config)
     obs_space = _obs_space()
-    reward = Reward(RewardHypers())
+    reward = Reward(RewardConfig())
     env = Env(match, obs_space, reward, seed=800, auto_reset=False)
 
     try:

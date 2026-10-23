@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from manabot.arena.match import MatchupMode, play_cell, selected_decks, selected_match
+from manabot.arena.monitor import ArenaRow
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.monitor_evaluation import ArenaRow
 from managym import Env
 from tests.arena.test_match import selected_players
 
@@ -18,13 +18,13 @@ def test_selected_leg_layout_preserves_cross_setups() -> None:
     match = Match(selected_match())
     for leg in range(8):
         decks = selected_decks(leg)
-        actual = MatchHypers.authored(
+        actual = MatchConfig.authored(
             "ur-lessons-vs-gw-allies", *decks, hero=match.hero, villain=match.villain
         )
         if leg < 4:
             expected = match if leg < 2 else match.swapped()
             actual.hero, actual.villain = expected.hero, expected.villain
-            assert actual.model_dump() == expected.hypers.model_dump()
+            assert actual.model_dump() == expected.config.model_dump()
         else:
             deck = "ur_lessons" if leg < 6 else "gw_allies"
             assert decks == (deck, deck)
@@ -42,7 +42,7 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
     engine.reset(base.to_rust())
     expected = engine.content_pack_manifest()
     for deck in ("ur_lessons", "gw_allies"):
-        mirror = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
+        mirror = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
         with pytest.raises(ValueError, match="setup differs"):
             validate_agent_setup(agent, mirror.to_rust())
         validate_agent_setup(agent, mirror.to_rust(), allow_deck_repetition=True)
@@ -58,14 +58,14 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
         with pytest.raises(ValueError, match="explicit content pack"):
             validate_agent_setup(agent, configs, allow_deck_repetition=True)
 
-        changed = mirror.hypers.model_copy(deep=True)
+        changed = mirror.config.model_copy(deep=True)
         changed.hero_deck["Island"] = changed.hero_deck.get("Island", 0) + 1
         with pytest.raises(ValueError, match="outside checkpoint"):
             validate_agent_setup(
                 agent, Match(changed).to_rust(), allow_deck_repetition=True
             )
         if deck == "ur_lessons":
-            changed = mirror.hypers.model_copy(deep=True)
+            changed = mirror.config.model_copy(deep=True)
             changed.hero_sideboard = {}
             with pytest.raises(ValueError, match="outside checkpoint"):
                 validate_agent_setup(

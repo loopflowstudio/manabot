@@ -19,7 +19,7 @@ from typing import Literal
 from pydantic import Field
 import torch
 
-from manabot.training.execution import atomic_json
+from manabot.infra.files import atomic_json
 from managym import _managym
 
 from .deploy import current_source

@@ -33,7 +33,7 @@ OBSERVATION = {
 }
 
 
-def test_world_identity_binds_lesson_pool_and_tensor_shape():
+def test_world_identity_binds_lesson_pool_and_tensor_shape() -> None:
     world = train_challenger.world_identity(OBSERVATION)
     assert world["lesson_pool"] == {
         "ur_lessons": {
@@ -43,7 +43,7 @@ def test_world_identity_binds_lesson_pool_and_tensor_shape():
         },
         "gw_allies": {"Fancy Footwork": 1, "Yip Yip!": 1},
     }
-    assert world["observation_action_abi"]["shapes"]["actions"] == [128, 18]
+    assert world["observation_action_abi"]["shapes"]["actions"] == [128, 20]
     assert "LEARN_TAKE_LESSON" in world["observation_action_abi"]["action_types"]
     assert world["content_manifest"]["compiled_semantics"]["pack_key"] == (
         train_challenger.PACK_KEY
@@ -59,7 +59,7 @@ def test_world_identity_binds_lesson_pool_and_tensor_shape():
 
 def test_admission_covers_learn_and_rejects_omitted_or_unbound_data(tmp_path):
     from manabot.env.observation import ActionSpaceEnum
-    from manabot.sim.distill import load_shards
+    from manabot.sim.data import load_shards
 
     recipe = {
         "seed": 81,

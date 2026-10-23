@@ -27,10 +27,10 @@ import torch
 
 from manabot.env import Env, Match, ObservationSpace
 from manabot.env.failures import CapturedVector
-from manabot.infra.hypers import MatchHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import (
+from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     GameRecord,
     SearchStats,
@@ -54,7 +54,7 @@ class BatchedSampler:
 
     def __init__(
         self,
-        agent: Agent,
+        agent: ActorCritic,
         *,
         deterministic: bool = False,
         temperature: float = 1.0,
@@ -166,7 +166,7 @@ def run_vector_games(
     deck = dict(deck or INTERACTIVE_DECK)
     obs_space = ObservationSpace()
     match = Match(
-        MatchHypers(hero="hero", villain="villain", hero_deck=deck, villain_deck=deck)
+        MatchConfig(hero="hero", villain="villain", hero_deck=deck, villain_deck=deck)
     )
     for controller in (hero, villain):
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())

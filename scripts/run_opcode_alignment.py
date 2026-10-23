@@ -25,7 +25,7 @@ from manabot.semantic.transfer import (
     robustness_controls,
     run_arm,
 )
-from manabot.sim.structured_benchmark import run_frontiers
+from manabot.sim.action.benchmark import run_frontiers
 from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
 import managym
 

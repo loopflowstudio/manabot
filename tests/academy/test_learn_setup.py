@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+from managym.experience import ExperienceFrame
 import pytest
 
 from academy import server
@@ -11,9 +12,8 @@ from academy.play_demo import load_play_demo
 from academy.server import viewer_view
 from academy.trace import GameConfig, load_trace
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.infra.config import MatchConfig, RewardConfig
 import managym
-from managym.experience import ExperienceFrame
 
 
 def test_session_reveal_evidence_uses_definition_identity(tmp_path: Path) -> None:
@@ -79,11 +79,11 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     assert sum(config.villain_sideboard.values()) == (3 if reverse else 2)
 
     match = Match(
-        MatchHypers.authored(
+        MatchConfig.authored(
             CURATED_PACK.semantic_pack_key, *decks, hero="Hero", villain="Villain"
         )
     )
-    env = Env(match, ObservationSpace(), Reward(RewardHypers()), seed=0)
+    env = Env(match, ObservationSpace(), Reward(RewardConfig()), seed=0)
     env.reset(seed=0)
     witness = session.env.search_witness_json()
     training_witness = env._engine.search_witness_json()

@@ -13,8 +13,8 @@ import tempfile
 import time
 from typing import TYPE_CHECKING, Callable, Literal
 
+from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.infra.artifacts import S3ArtifactStore
-from manabot.training.checkpoint_queue import MonitoringBudget
 
 from .deploy import current_source, verify_public_source
 from .job_store import JobStore, S3JobStore, cancellation_requested, worker_credentials
@@ -33,7 +33,7 @@ from .provider import ProviderError, RunPod
 from .transport import job_startup, startup
 
 if TYPE_CHECKING:
-    from manabot.training.experiments import ResolvedCase
+    from manabot.experiment.config import ResolvedCase
 
     from .plan import JobSpec, Source
     from .snapshots import JobManifest

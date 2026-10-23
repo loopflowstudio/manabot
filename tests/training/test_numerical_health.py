@@ -8,8 +8,6 @@ from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import numpy as np
 import pytest
@@ -18,8 +16,8 @@ from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -27,15 +25,16 @@ from manabot.model.policy_distribution import (
     legal_mask,
     policy_logs,
 )
-from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
 from manabot.training import execution
-from manabot.training.ataraxos import damped_policy_loss, update_move_iteration
-from manabot.training.health import NumericalHealth, OptimizerHealth
-from manabot.training.models import (
-    AtaraxosMoveLearning,
-    TrainingRun,
-    TrainSelfPlay,
+from manabot.training.learning.damped_policy import (
+    damped_policy_loss,
+    update_damped_iteration,
 )
+from manabot.training.learning.health import NumericalHealth, OptimizerHealth
+from manabot.training.learning.learner import Learner
+from manabot.training.records import TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -275,7 +274,7 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
 
-class ExtremeAgent(Agent):
+class ExtremeAgent(ActorCritic):
     def forward_distribution(self, obs: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         logits, values = super().forward_distribution(obs)
         # Keep real game/observation/learner flow, make one legal alternative
@@ -286,33 +285,25 @@ class ExtremeAgent(Agent):
 
 def test_extreme_real_collector_to_learner() -> None:
     space = ObservationSpace()
-    agent = ExtremeAgent(space, AgentSpec(hidden_dim=8, num_attention_heads=2)).to(
+    agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
     )
     collector = SeatRoutedCollector(
         space,
-        Match(MatchHypers()),
-        Reward(RewardHypers()),
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
     assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
-    trainer = cast(
-        NetOpponentTrainer,
-        SimpleNamespace(
-            agent=agent,
-            collector=collector,
-            optimizer=torch.optim.Adam(agent.parameters()),
-            experiment=SimpleNamespace(device=DEVICE),
-            _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
-        ),
+    trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
+
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", advantage_quantile=0, min_advantage=0
     )
-    learning = AtaraxosMoveLearning(
-        gradient="ataraxos_move", advantage_quantile=0, min_advantage=0
-    )
-    result = update_move_iteration(trainer, batch, learning, 1)
+    result = update_damped_iteration(trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
     assert (
         result["numerical"]["optimizer_steps"]
@@ -431,7 +422,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content
-    initial_agent, _ = execution.load_checkpoint_agent(str(initial_path))
+    initial_agent, _ = execution.load_checkpoint(str(initial_path))
     assert all(
         torch.isfinite(value).all() for value in initial_agent.state_dict().values()
     )

@@ -19,16 +19,15 @@ from managym.experience import UNVERSIONED_CONTENT_HASH
 import numpy as np
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import MatchHypers
-from manabot.sim.local_update import LocalUpdatePlayer
-from manabot.sim.mcts import DeterminizedPuctPlayer
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.config import MatchConfig
+from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
-    build_command,
-    build_viewer_frame,
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.sim.search.local_update import LocalUpdatePlayer
+from manabot.sim.search.puct import DeterminizedPuctPlayer
+from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
@@ -59,8 +58,8 @@ def selected_decks(leg: int) -> tuple[str, str]:
     return deck_pairs[leg // 2]
 
 
-def selected_match() -> MatchHypers:
-    return MatchHypers.authored(
+def selected_match() -> MatchConfig:
+    return MatchConfig.authored(
         "ur-lessons-vs-gw-allies",
         "ur_lessons",
         "gw_allies",
@@ -128,11 +127,11 @@ def _execute_game(
         if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
-        game["observation_hypers"] = space.encoder.hypers.model_dump()
+        game["observation_hypers"] = space.encoder.config.model_dump()
         send(("observation", game["observation_hypers"]))
         game["runtime_identities"] = runtime_fingerprints(
             game["deal_seed"],
-            match_hypers=MatchHypers.model_validate(game["match_hypers"])
+            match_config=MatchConfig.model_validate(game["match_hypers"])
             if "match_hypers" in game
             else None,
             observation_space=space,
@@ -408,7 +407,7 @@ def play_cell(
         if authored_matchup is not None
         else selected_match()
         if selected
-        else MatchHypers(
+        else MatchConfig(
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
@@ -471,7 +470,7 @@ def play_cell(
             setup = (
                 authored_matchup.match(leg)
                 if authored_matchup is not None
-                else MatchHypers.authored("ur-lessons-vs-gw-allies", *seat_decks)
+                else MatchConfig.authored("ur-lessons-vs-gw-allies", *seat_decks)
                 if selected
                 else match.model_copy(deep=True)
             )

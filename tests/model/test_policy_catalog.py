@@ -8,13 +8,13 @@ import torch
 
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
@@ -71,20 +71,20 @@ def test_research_checkpoint_binds_common_catalog(
     roster = AuthoredMatchup(pack_key=key, role_a=roles[0], role_b=roles[1])
     space = ObservationSpace()
     torch.manual_seed(12251)
-    agent = Agent(
-        space, AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=key)
+    agent = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=key)
     )
     payload = {
         "model_state_dict": agent.state_dict(),
         "hypers": {
-            "agent_hypers": agent.hypers.model_dump(),
-            "observation_hypers": space.encoder.hypers.model_dump(),
+            "agent_hypers": agent.config.model_dump(),
+            "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),
     }
     path = tmp_path / "research.pt"
     torch.save(payload, path)
-    loaded, _ = load_checkpoint_agent(str(path))
+    loaded, _ = load_checkpoint(str(path))
     assert loaded.world_binding == payload["world_binding"]
     for name, tensor in agent.state_dict().items():
         assert torch.equal(tensor, loaded.state_dict()[name])

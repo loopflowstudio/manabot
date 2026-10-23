@@ -5,6 +5,7 @@ the public Torch version instead, leaving backend selection to installers.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -31,7 +32,12 @@ def prepare(destination: Path) -> None:
             "academy",
             "content",
             "managym",
-        } and name not in {"pyproject.toml", "README.md", "docs/experiment-metrics.md"}:
+        } and name not in {
+            "pyproject.toml",
+            "README.md",
+            "docs/experiment-metrics.md",
+            "protocol/experience-v1.schema.json",
+        }:
             continue
         if name.startswith("academy/ui/") and not name.startswith(
             "academy/ui/src/lib/packs/"
@@ -42,6 +48,22 @@ def prepare(destination: Path) -> None:
         target = destination / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / path, target)
+    # Installed training has no Git checkout. Bind its Python and protocol bytes;
+    # runtime fingerprints separately record the compiled engine and world assets.
+    source_paths = sorted((destination / "manabot").rglob("*.py"))
+    source_paths.append(destination / "protocol/experience-v1.schema.json")
+    source = {
+        "commit": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip(),
+        "files": {
+            str(path.relative_to(destination)): hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
+            for path in source_paths
+        },
+    }
+    (destination / ".manabot-source.json").write_text(json.dumps(source, indent=2))
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     dependencies = config["tool"]["manabot"]["release"]["runtime-dependencies"]
     metadata = (

@@ -11,14 +11,9 @@ import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.training import execution
-from manabot.training.models import (
-    AtaraxosMoveLearning,
-    StageRecord,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-)
-from manabot.training.recovery import attempt_lock, load_update
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.state.recovery import attempt_lock, load_update
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -118,19 +113,22 @@ def interrupt(
     return store.training_run(row[0])
 
 
-@pytest.mark.parametrize("gradient", ["ppo", "ataraxos_move"])
+@pytest.mark.parametrize("gradient", ["ppo", "damped_policy"])
+@pytest.mark.parametrize("seats", ["one", "both"])
 def test_real_interruption_restores_complete_learning_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    gradient: Literal["ppo", "ataraxos_move"],
+    gradient: Literal["ppo", "damped_policy"],
+    seats: Literal["one", "both"],
 ) -> None:
     value = recipe()
-    if gradient == "ataraxos_move":
-        stage = value.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
+    stage = value.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning_seats = seats
+    if gradient == "damped_policy":
         value.agent.value_kind = "categorical_wdl"
-        stage.learning = AtaraxosMoveLearning(
-            gradient="ataraxos_move", ema=0.9, min_advantage=0, advantage_quantile=0
+        stage.learning = DampedPolicyLearning(
+            gradient="damped_policy", ema=0.9, min_advantage=0, advantage_quantile=0
         )
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
@@ -163,7 +161,16 @@ def test_real_interruption_restores_complete_learning_state(
         assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
         assert whole.stages[0].games == resumed.stages[0].games
         assert whole.stages[0].games > 0
-        assert whole.stages[0].learner_transitions == 192
+        transitions = whole.stages[0].learner_transitions
+        assert transitions == resumed.stages[0].learner_transitions
+        if seats == "one":
+            assert transitions == 192  # 3 updates x 2 streams x 32 decisions
+        else:
+            # Both seats finish their games past the quota; every native
+            # decision becomes exactly one learner row, including the overshoot.
+            assert transitions >= 192
+            assert transitions == a.collector.stats.micro_steps
+            assert a.collector.stats.opponent_decisions == 0
         assert whole.stages[0].optimizer_exposures > 0
         with pytest.raises(ValueError, match="already has a recovery child"):
             execution.execute_regime(
@@ -241,7 +248,7 @@ import os
 import sys
 from pathlib import Path
 from manabot.training import execution
-from manabot.training.models import TrainingRegime
+from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
 execution.PROGRESS_EXPORT_SECONDS = 0.0
 execution.PROGRESS_EXPORT_SHARE = float('inf')

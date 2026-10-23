@@ -45,12 +45,12 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import numpy as np
 
 from manabot.env import Env
 from manabot.study.targeting import inspect_target
 import managym
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 
 from .players import ScriptedGreedyPlayer
 

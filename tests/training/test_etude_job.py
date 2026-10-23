@@ -9,10 +9,11 @@ from etude.train.read import read_all
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.training.etude_job import TrainingJob, run_worker
+from manabot.experiment.job import TrainingJob, run_worker
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import TrainingRun, TrainSelfPlay
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -73,7 +74,7 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
 ) -> None:
     worker_environment(tmp_path, monkeypatch)
     subprocess.run(
-        ["uv", "run", "--locked", "python", "-m", "manabot.training.etude_job"],
+        ["uv", "run", "--locked", "python", "-m", "manabot.experiment.job"],
         cwd=ROOT,
         check=True,
         timeout=30,
@@ -86,7 +87,7 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
     assert run.status == "completed"
     result = json.loads((tmp_path / "output/etude-result.json").read_text())
     assert result["clocks"] == {"updates": 2}
-    load_checkpoint_agent(str(tmp_path / "output" / result["checkpoint"]))
+    load_checkpoint(str(tmp_path / "output" / result["checkpoint"]))
     tracked = read_all(tmp_path / "tracking")
     assert len(tracked) == 1
     assert tracked[0].name == "sdk-worker-fixture"

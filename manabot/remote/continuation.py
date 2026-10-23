@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field
 
-from manabot.training.models import LearningStateImport, TrainSelfPlay
+from manabot.training.regime import LearningStateImport, TrainSelfPlay
 
 from .job_client import job_manifest
 from .jobs import Job, JobStatus

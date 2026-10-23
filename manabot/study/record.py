@@ -20,7 +20,7 @@ import time
 from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 # First-party imports
-from manabot.infra.hypers import MatchHypers
+from manabot.infra.config import MatchConfig
 
 from .targeting import TargetChoice, inspect_target
 
@@ -116,7 +116,7 @@ def build_player(spec: dict[str, Any], seed: int):
     """Build a player and its observation space from an arena player spec."""
     from manabot.arena.heuristic import HeuristicPlayer
     from manabot.arena.players import DemoSearchPlayer, ScriptedGreedyPlayer
-    from manabot.sim.flat_mc import make_player
+    from manabot.sim.search.flat_mc import make_player
 
     if spec["kind"] == "demo_search":
         return DemoSearchPlayer(spec, seed), None
@@ -221,15 +221,13 @@ def _decision(
 
 def record_game(spec: GameSpec) -> GameRecord:
     """Play one game to the end. Failures are kept as records, never dropped."""
+    from managym.experience import UNVERSIONED_CONTENT_HASH
     import torch
 
     from manabot.env import Env, Match, ObservationSpace, Reward
-    from manabot.infra.hypers import RewardHypers
-    from manabot.sim.teacher1_evidence import (
-        RECORDED_ASSET_MANIFEST_HASH,
-        build_viewer_frame,
-    )
-    from managym.experience import UNVERSIONED_CONTENT_HASH
+    from manabot.infra.config import RewardConfig
+    from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
+    from manabot.sim.search.teacher1_evidence import build_viewer_frame
 
     torch.set_num_threads(1)
     record = GameRecord(spec.game_id, spec.labels, spec.decks, spec.seed)
@@ -243,9 +241,9 @@ def record_game(spec: GameSpec) -> GameRecord:
         if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
             raise ValueError("players have different observation ABIs")
         env = Env(
-            Match(MatchHypers.model_validate(spec.match)),
+            Match(MatchConfig.model_validate(spec.match)),
             spaces[0] if spaces else ObservationSpace(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             seed=spec.seed,
             auto_reset=False,
         )

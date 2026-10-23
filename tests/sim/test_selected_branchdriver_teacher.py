@@ -7,11 +7,11 @@ import json
 import numpy as np
 import pytest
 
-from manabot.sim.mcts import determinized_puct
-from manabot.sim.search_branch import (
+from manabot.sim.search.branch import (
     REFERENCE_BRANCH_DRIVER_ID,
     SELECTED_BRANCH_DRIVER_ID,
 )
+from manabot.sim.search.puct import determinized_puct
 from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
 import managym
 

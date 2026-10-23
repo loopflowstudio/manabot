@@ -8,11 +8,10 @@ import pytest
 
 pytest.importorskip("etude.eval.match")
 
-from test_etude_evaluation import _admission, _play_rows
-
-from manabot.training import head_to_head as duel_eval
-from manabot.training.execution import atomic_json
-from manabot.training.monitor_evaluation import MonitorProtocol
+from manabot.arena import duel as duel_eval
+from manabot.arena.monitor import MonitorProtocol
+from manabot.infra.files import atomic_json
+from tests.training.test_etude_evaluation import _admission, _play_rows
 
 
 def _duel(tmp_path: Path) -> duel_eval.Duel:

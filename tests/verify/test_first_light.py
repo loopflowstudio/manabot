@@ -7,8 +7,6 @@ import shutil
 
 from manabot.verify.first_light import (
     recommend_next_step,
-    resolve_run_config,
-    run_first_light,
     write_report,
 )
 from manabot.verify.store import VerifyStore
@@ -167,7 +165,9 @@ def test_verify_store_round_trip_and_report(tmp_path):
         store.close()
 
 
-def test_verify_store_runs_dir_env_survives_removed_current_directory(monkeypatch, tmp_path):
+def test_verify_store_runs_dir_env_survives_removed_current_directory(
+    monkeypatch, tmp_path
+):
     original_cwd = os.getcwd()
     removed_cwd = tmp_path / "removed"
     removed_cwd.mkdir()
@@ -204,28 +204,3 @@ def test_recommend_next_step_blocks_weak_win_signal():
         recommendation == "Stay in first-light: random-opponent win signal is too weak"
     )
     assert heuristic["win_signal_ok"] is False
-
-
-def test_run_first_light_eval_only_records_completed_run(tmp_path):
-    config = resolve_run_config(
-        db=tmp_path / "verify.sqlite",
-        seed=5,
-        mode="dev",
-        label="eval-only",
-        opponent_policy="passive",
-        num_envs=1,
-        num_steps=8,
-        total_timesteps=0,
-        eval_interval=None,
-        eval_num_games=1,
-        baseline=False,
-        report=False,
-        report_path=None,
-    )
-
-    summary = run_first_light(config)
-
-    assert summary["run_id"] > 0
-    assert summary["run"]["status"] == "completed"
-    assert summary["final"]["num_games"] == 1
-    assert summary["baseline"] is None

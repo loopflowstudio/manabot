@@ -11,9 +11,10 @@ import typer
 from experiments.direct_self_play import direct_self_play
 from manabot.cli import named_regime, regime_names
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
-from manabot.training.references import reference_distribution
-from manabot.training.selection import selected_rows
+from manabot.training.learning.references import reference_distribution
+from manabot.training.learning.selection import selected_rows
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
 
@@ -106,17 +107,16 @@ def test_deadline_retains_failed_attempt(tmp_path):
 
 
 def test_named_treatments_execute_real_optimizer_batches():
-    from types import SimpleNamespace
 
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec
-    from manabot.model.agent import Agent
-    from manabot.sim.net_opponent import RolloutBatch
-    from manabot.training.objectives import update_iteration
+    from manabot.infra.config import ModelConfig
+    from manabot.model.actor_critic import ActorCritic
+    from manabot.training.learning.objectives import update_iteration
+    from manabot.training.rollout.collection import RolloutBatch
 
     torch.set_num_threads(1)
     space = ObservationSpace()
-    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     obs = space.encoder.allocate(2)
     obs["actions_valid"][:, :2] = 1
     obs["agent_player_valid"][:] = 1
@@ -142,15 +142,10 @@ def test_named_treatments_execute_real_optimizer_batches():
         .log_softmax(-1)
         .numpy()[:, None],
     )
-    from manabot.sim.net_opponent import NetOpponentTrainer
+    from manabot.training.learning.learner import Learner
 
-    trainer = SimpleNamespace(
-        agent=agent,
-        collector=SimpleNamespace(num_envs=1),
-        experiment=SimpleNamespace(device="cpu"),
-        optimizer=torch.optim.Adam(agent.parameters()),
-        _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
-    )
+    trainer = Learner(agent, "cpu", minibatch_rows=1)
+
     for name in regime_names():
         stage = named_regime(name).stages[0]
         if stage.operation != "train_self_play":
@@ -202,7 +197,7 @@ def test_modified_models_are_revalidated_before_execution():
         validate_regime(value)
 
 
-def test_cli_rejects_ambiguous_regimes_and_keeps_presets(monkeypatch):
+def test_cli_rejects_retired_training_overrides() -> None:
     from typer.testing import CliRunner
 
     from manabot import cli
@@ -213,27 +208,20 @@ def test_cli_rejects_ambiguous_regimes_and_keeps_presets(monkeypatch):
             cli.app, ["train", "--regime", "unused.json", "--out", "unused", *flags]
         )
         assert result.exit_code != 0
-        assert "cannot be combined" in result.output
-    assert runner.invoke(cli.app, ["train", "--seed", "2"]).exit_code != 0
-    calls = []
-    monkeypatch.setattr(
-        cli, "_run_train", lambda preset, overrides: calls.append((preset, overrides))
-    )
-    assert runner.invoke(cli.app, ["train"]).exit_code == 0
-    assert calls == [(cli.DEFAULT_TRAIN_PRESET, [])]
+        assert "retired" in result.output
 
 
 def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch):
     from manabot.training import execution
 
     closed = []
-    close = execution.Experiment.close
+    close = execution.RunContext.close
 
     def track_close(experiment, state="finished"):
         closed.append(experiment)
         close(experiment, state)
 
-    monkeypatch.setattr(execution.Experiment, "close", track_close)
+    monkeypatch.setattr(execution.RunContext, "close", track_close)
     value = recipe()
     value.agent.hidden_dim = 8
     value.agent.num_attention_heads = 2
@@ -242,14 +230,14 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     value.stages[0].updates = 1
     value.stages[0].learning.epochs = 1
 
-    load = execution.load_checkpoint_agent
+    load = execution.load_checkpoint
 
     def reject_checkpoint(path: str) -> object:
         if Path(path).name == "policy-0-raw.pt":
             raise ValueError("checkpoint admission failed")
         return load(path)
 
-    monkeypatch.setattr(execution, "load_checkpoint_agent", reject_checkpoint)
+    monkeypatch.setattr(execution, "load_checkpoint", reject_checkpoint)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="admission"):
             execute_regime(value, 197, tmp_path / "run", store)
@@ -434,3 +422,12 @@ def test_regime_names_say_file_and_recipe() -> None:
     assert scale.id == "scale-ladder-allies-lessons-v1"
     with pytest.raises(typer.BadParameter, match="batched_baseline:scale_ladder"):
         named_regime("scale-ladder")
+
+
+def test_legacy_learning_discriminator_is_rejected() -> None:
+    from manabot.training.regime import DampedPolicyLearning
+
+    with pytest.raises(ValueError):
+        DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
+    rule = DampedPolicyLearning(gradient="damped_policy")
+    assert rule.model_dump()["gradient"] == "damped_policy"

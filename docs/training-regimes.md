@@ -11,13 +11,13 @@ uv run manabot train --regime-name direct_self_play:search_distillation --seed 1
 ```
 
 Each current experiment is one module, `experiments/<experiment>.py`, next to
-its write-up. It composes parts from `manabot.training.builders` into one
+its write-up. It composes parts from `manabot.recipes.builders` into one
 canonical recipe, the function named like the module, plus explicit variants,
 and holds whatever else that experiment needs to run and report.
 `--regime-name <experiment>` selects the canonical recipe and
 `<experiment>:<variant>` any other; `manabot.cli.regime_names()` lists them.
 Experiments with an arena study run with `python -m experiments.<experiment>`;
-shared study plumbing is `manabot.training.regime_study`. Write a regime file
+shared study plumbing is `manabot.experiment.study`. Write a regime file
 for `--regime` or `manabot deploy` from Python:
 
 ```bash
@@ -53,8 +53,8 @@ and do not turn an observation-only policy into a belief-enabled player.
 The [belief sampler guide](belief-sampler.md) describes the bounded pilot,
 physical-deal baseline, history-dropout treatment and scientific limits.
 
-The recipe reuses `AgentSpec`, `ObservationSpaceHypers`, and authored
-`MatchHypers`, including both sideboards. Architecture and match binding live
+The recipe reuses `ModelConfig`, `ObservationConfig`, and authored
+`MatchConfig`, including both sideboards. Architecture and match binding live
 once per regime. Every stage declares its device, float32 precision, worker
 count, Torch thread count, wall and memory limits. Learning settings independently
 select estimators, filtering, regularization reference, schedules, and EMA.
@@ -99,8 +99,8 @@ Training comparisons use [declarative typed-Python experiments](training-experim
 named components, frozen baselines/versioned presets, explicit overrides and ordered
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
-identities. `manabot.training.builders` holds the reusable composition helpers.
-`AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
+identities. `manabot.recipes.builders` holds the reusable composition helpers.
+`ModelConfig` remains the model type; checkpoints retain the `agent_hypers` dictionary
 and existing field meanings. Resolution never allocates compute or starts training.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
@@ -153,14 +153,14 @@ owns final RL acceptance and ETU-91 owns final replayed study/notebook evidence.
 ETU-75 remains open for its unmet empirical evidence; shared delivery does not
 close those claims. No scientific experiment ran in this infrastructure pass.
 
-The separate `ataraxos_move` gradient selector follows the final supplement's
+The separate `damped_policy` gradient selector follows the final supplement's
 move recipe, including categorical outcome targets and iteration schedules.
 See [its source fidelity table and bounded commands](ataraxos.md). Existing PPO
 recipes remain controls; the new recipe does not alter a frozen study.
 
 ## Compound decisions
 
-`AgentSpec.compound_decisions=true` selects the learned ragged policy, and
+`ModelConfig.compound_decisions=true` selects the learned ragged policy, and
 `train_compound` collects complete self-play games before each optimizer update.
 Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
 are separate from the frozen ETU-91 campaign. Their defaults are bounded proof
@@ -296,7 +296,7 @@ into the ordinary stage graph. It uses the existing VerifyStore and run export;
 no training stage, model registry or separate runner is needed. For example:
 
 ```python
-from manabot.training.models import CollectBelief, ImportPolicy
+from manabot.training.regime import CollectBelief, ImportPolicy
 
 # References come from the retained publication manifest. Paths may relocate;
 # sha256 and bytes must identify the original published bytes.
@@ -318,7 +318,7 @@ histories = CollectBelief(
 # Resolution only declares work; execute_regime / manabot train --regime executes it.
 ```
 
-The regime's AgentSpec, observation contract and world must match the producer
+The regime's ModelConfig, observation contract and world must match the producer
 and checkpoint. Ordinary checkpoint loading validates model weights, architecture,
 native world/content/input bindings and the actual execution setup. The selected
 producer stage must be completed; a later failure in the producer run does not
@@ -352,7 +352,7 @@ never masquerades as raw or changes `last-complete-raw` selection.
 instead of random weights, under a recipe of its own:
 
 ```python
-from manabot.training.models import PretrainedPolicy
+from manabot.training.regime import PretrainedPolicy
 
 stage.pretrained = PretrainedPolicy(
     source_run={"path": "/artifacts/producer/run.json",
@@ -370,7 +370,7 @@ The settings divide by what the weights depend on:
 | Must equal the producer | Free to change |
 | --- | --- |
 | world | learning rule and every schedule (learning rate, tau, filtering, EMA rate) |
-| `AgentSpec` (architecture, value kind) | `streams`, `transitions`, `updates` |
+| `ModelConfig` (architecture, value kind) | `streams`, `transitions`, `updates` |
 | observation contract | `behavior`, `opponent`, execution device |
 | | training seed, and the match if the checkpoint validates against it |
 
@@ -454,12 +454,12 @@ run for this change; the default was selected by Jack Heart on 2026-10-20 and
 does not establish a strength or cost gain. Existing
 schedule clocks retain their meanings; no decisions-clock ladder is implied.
 
-Two distinct live models use `manabot.training.paired.PairedLearners`. Construct
+Two distinct live models use `manabot.training.learning.paired.PairedLearners`. Construct
 one `SeatRoutedCollector` with `opponent_mode="learning"`,
 `learning_seats="both"` and `opponent_agent=second_agent`; build two
-`NetOpponentTrainer`s with that collector and independent agents/optimizers.
-Wrap each trainer with `LearningPlayer(trainer, learning, rng)` and pass both to
-`PairedLearners`. `step(transitions, progress=...)` freezes both behavior policies,
+`Learner`s with independent agents/optimizers and `minibatch_rows=collector.num_envs`.
+Pass the collector explicitly to `PairedLearners(collector, first, second)`.
+Wrap each learner with `LearningPlayer(learner, learning, rng)`. `step(transitions, progress=...)` freezes both behavior policies,
 collects complete games, and updates **both** models with only their own rows.
 The first model occupies `stream % 2`; the second occupies the other seat.
 Returned `PairedUpdate.first` and `.second` report each model's trained rows and

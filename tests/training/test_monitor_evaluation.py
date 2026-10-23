@@ -7,17 +7,18 @@ from typing import Any, Literal
 import pytest
 import torch
 
+from manabot.arena import monitor as monitor
 from manabot.arena.match import selected_match
 from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.teacher1_evidence import runtime_fingerprints
-from manabot.training import monitor_evaluation as monitor
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
-from manabot.training.monitoring import default_panels, evaluation_dashboard
+from manabot.infra.config import ModelConfig
+from manabot.infra.provenance import runtime_fingerprints
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.reports.training import evaluation_dashboard
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 
@@ -292,13 +293,13 @@ def test_real_arena_checkpoint_outcomes(
         )
         match = matrix.match() if matrix else selected_match()
         space = ObservationSpace()
-        hypers = AgentSpec(
+        config = ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         )
         torch.manual_seed(101)
         checkpoint = tmp_path / "untrained.pt"
-        save_bc_checkpoint(
-            Agent(space, hypers),
+        save_checkpoint(
+            ActorCritic(space, config),
             space,
             checkpoint,
             player_configs=Match(match).to_rust(),
@@ -307,7 +308,7 @@ def test_real_arena_checkpoint_outcomes(
             id="monitor-fixture",
             world=managym.WORLD_VERSION,
             match=match,
-            agent=hypers,
+            agent=config,
             wall_seconds=10,
             stages=[
                 TrainSelfPlay(
@@ -326,7 +327,7 @@ def test_real_arena_checkpoint_outcomes(
             seed=17,
             seed_streams={},
             identities=runtime_fingerprints(
-                17, match_hypers=match, observation_space=space
+                17, match_config=match, observation_space=space
             ),
         )
         result = monitor.evaluate_checkpoint(
@@ -407,7 +408,6 @@ def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     assert dashboard.rows[0]["monitor/score/lower"] == 0
     assert dashboard.rows[1]["availability/monitor_rates"] is False
     assert "monitor/score/mean" not in dashboard.rows[1]
-    assert len(default_panels(dashboard)) == 6
     changed = complete.model_copy(deep=True)
     changed.protocol.deal_seeds = (200,)
     with pytest.raises(ValueError, match="same run"):

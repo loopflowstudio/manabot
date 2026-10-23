@@ -29,13 +29,13 @@ from manabot.arena.models import (
 )
 from manabot.arena.rating import bootstrap_population, fit_population
 from manabot.env import ObservationSpace
-from manabot.sim.flat_search import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
-from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.provenance import (
     REPO_ROOT,
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.sim.search.flat import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
+from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
 from managym import WORLD_VERSION
 
 
@@ -90,19 +90,19 @@ def arena_runtime_fingerprints(**kwargs) -> dict[str, Any]:
 def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
     if kind == "demo_search":
-        return ["manabot/sim/flat_search.py", "manabot/arena/players.py"]
+        return ["manabot/sim/search/flat.py", "manabot/arena/players.py"]
     if kind == "scripted_greedy":
         return ["manabot/arena/players.py"]
     if kind == "heuristic":
         return [str(path.relative_to(REPO_ROOT)) for path in heuristic_source_paths()]
     if kind == "determinized_puct":
         return [
-            "manabot/sim/flat_mc.py",
-            "manabot/sim/mcts.py",
-            "manabot/sim/search_branch.py",
+            "manabot/sim/search/flat_mc.py",
+            "manabot/sim/search/puct.py",
+            "manabot/sim/search/branch.py",
             "managym/src/python/bindings.rs",
         ]
-    return ["manabot/sim/flat_mc.py"]
+    return ["manabot/sim/search/flat_mc.py"]
 
 
 def validate_registration_source(registration: PlayerRegistration) -> None:
@@ -246,7 +246,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     space = space or ObservationSpace()
     match = selected_match()
     runtime = arena_runtime_fingerprints(
-        match_hypers=match, observation_space=space, world=WORLD_VERSION
+        match_config=match, observation_space=space, world=WORLD_VERSION
     )
     common = dict(
         runner_kind="code",
@@ -271,7 +271,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
         },
         source_sha256=source_digest(
-            ["manabot/sim/flat_search.py", "manabot/arena/players.py"]
+            ["manabot/sim/search/flat.py", "manabot/arena/players.py"]
         ),
     )
     candidate = (
@@ -284,7 +284,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             role="challenger",
             compute_class_id="random-cpu-v1",
             player_spec={"kind": "random"},
-            source_sha256=source_digest(["manabot/sim/flat_mc.py"]),
+            source_sha256=source_digest(["manabot/sim/search/flat_mc.py"]),
         )
     )
     # No inherited INT-6 predictions, anchor population, budget or promotion rule.
@@ -322,7 +322,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
         "source_paths": source_paths,
         "source_sha256": source_sha256,
         "match_hypers": match.model_dump(),
-        "observation": space.encoder.hypers.model_dump(),
+        "observation": space.encoder.config.model_dump(),
         "deal_seeds": list(args.deal_seeds),
         "legs_per_block": 4,
         "game_seconds": args.game_seconds,

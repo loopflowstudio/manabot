@@ -9,17 +9,17 @@ import sys
 import time
 from typing import Any
 
+from managym.decision import Command, DecisionFrame, SemanticTransition
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.tracker import ActionLikelihood, BeliefTracker
 from manabot.env import Env
-from manabot.sim.flat_mc import (
+from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     DEFAULT_ROLLOUTS_PER_WORLD,
     SearchStats,
 )
-from managym.decision import Command, DecisionFrame, SemanticTransition
-from managym.possible_worlds import PossibleWorldSpace
 
 
 class RangeSampling(str, Enum):

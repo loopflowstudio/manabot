@@ -34,7 +34,6 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 import json
 import multiprocessing as mp
-import os
 from pathlib import Path
 import time
 from typing import Any, Callable, Protocol
@@ -42,8 +41,8 @@ from typing import Any, Callable, Protocol
 import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
-from manabot.sim.flat_mc import (
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.sim.search.flat_mc import (
     make_player,
     spec_name,
     wilson_interval,
@@ -135,8 +134,11 @@ def _zone_names(raw: Any, side: str, zone: int) -> list[str]:
 def _stack_names(raw: Any) -> list[str]:
     """Names of spells on the stack, top first (both players' spells)."""
 
-    names = [(int(c.id), str(c.name)) for c in list(raw.agent_cards) + list(raw.opponent_cards)
-             if int(c.zone) == ZONE_STACK]
+    names = [
+        (int(c.id), str(c.name))
+        for c in list(raw.agent_cards) + list(raw.opponent_cards)
+        if int(c.zone) == ZONE_STACK
+    ]
     # populate_cards pushes stack spells top-first per side; merge is
     # approximate when both players have spells on the stack. Scenario and
     # micro games essentially always have <= 2, with the opponent's below.
@@ -272,7 +274,10 @@ class CounterBombTracker:
         self.bomb_resolved = False
 
     def observe_hero(self, raw: Any, action: int) -> None:
-        if _action_casts(raw, action) == "Counterspell" and self.counter_cast_on is None:
+        if (
+            _action_casts(raw, action) == "Counterspell"
+            and self.counter_cast_on is None
+        ):
             stack = _stack_names(raw)
             self.counter_cast_on = stack[0] if stack else None
 
@@ -541,7 +546,13 @@ SCENARIOS: dict[str, Scenario] = {
             "Invasion Reinforcements",
         ),
         hero_battlefield=("Wind Drake", "Wind Drake", "Mountain", "Island", "Island"),
-        villain_battlefield=("Invasion Reinforcements", "Forest", "Forest", "Plains", "Plains"),
+        villain_battlefield=(
+            "Invasion Reinforcements",
+            "Forest",
+            "Forest",
+            "Plains",
+            "Plains",
+        ),
         hero_life=14,
         villain_life=20,
         villain_casts=(
@@ -560,7 +571,14 @@ SCENARIOS: dict[str, Scenario] = {
         hero_hand=(),
         villain_hand=(),
         hero_battlefield=("Wind Drake", "Wind Drake", "Gray Ogre", "Gray Ogre"),
-        villain_battlefield=("Gray Ogre", "Gray Ogre", "Gray Ogre", "Mountain", "Mountain", "Mountain"),
+        villain_battlefield=(
+            "Gray Ogre",
+            "Gray Ogre",
+            "Gray Ogre",
+            "Mountain",
+            "Mountain",
+            "Mountain",
+        ),
         hero_life=10,
         villain_life=17,
         villain_casts=(),
@@ -601,7 +619,7 @@ def build_scenario_env(
     """
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="hero",
             villain="villain",
             hero_deck=dict(scenario.hero_deck),
@@ -611,7 +629,7 @@ def build_scenario_env(
     env = Env(
         match,
         obs_space or ObservationSpace(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
         enable_profiler=False,
@@ -697,9 +715,7 @@ def _scenario_worker(args: dict[str, Any]) -> list[dict[str, Any]]:
     for run_index in range(args["num_runs"]):
         seed = args["base_seed"] + args["run_offset"] + run_index
         player, obs_space = make_player(args["spec"], seed=seed * 2 + 1)
-        results.append(
-            run_scenario_once(scenario, player, obs_space, seed=seed)
-        )
+        results.append(run_scenario_once(scenario, player, obs_space, seed=seed))
     return results
 
 
@@ -751,9 +767,7 @@ def run_scenario_suite(
     ctx = mp.get_context("spawn")
     for scenario_name in scenario_names:
         scenario_block = results.setdefault(scenario_name, {})
-        scenario_block.setdefault(
-            "correct_line", SCENARIOS[scenario_name].correct_line
-        )
+        scenario_block.setdefault("correct_line", SCENARIOS[scenario_name].correct_line)
         for spec in agent_specs:
             agent_name = spec_name(spec)
             if agent_name in scenario_block:
@@ -867,7 +881,10 @@ class BehaviorProbe:
             bool(raw.agent.is_active)
             and int(raw.turn.phase) in (PHASE_PRECOMBAT, PHASE_POSTCOMBAT)
             and not list(raw.stack_objects)
-            and any(c.name == "Counterspell" and int(c.zone) == ZONE_HAND for c in raw.agent_cards)
+            and any(
+                c.name == "Counterspell" and int(c.zone) == ZONE_HAND
+                for c in raw.agent_cards
+            )
         ):
             untapped_lands = sum(
                 1
@@ -916,7 +933,8 @@ class BehaviorProbe:
         chosen = raw.action_space.actions[action]
         focus = int(chosen.focus[0]) if chosen.focus else -1
         villain_creatures = [
-            (card, perm) for card, perm in _battlefield_pairs(raw, "opponent")
+            (card, perm)
+            for card, perm in _battlefield_pairs(raw, "opponent")
             if bool(card.card_types.is_creature)
         ]
         # Target-quality is only meaningful when there was a real choice
@@ -969,7 +987,7 @@ def play_probed_games(
 ) -> dict[str, Any]:
     """Seat-balanced matchup loop with per-decision hero behavior probes.
 
-    Mirrors manabot.sim.flat_mc.play_games (game i puts the hero in seat
+    Mirrors manabot.sim.search.flat_mc.play_games (game i puts the hero in seat
     i % 2) and adds a BehaviorProbe on every hero decision.
     """
 
@@ -980,7 +998,7 @@ def play_probed_games(
     obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero=spec_name(hero_spec)[:32],
             villain=spec_name(villain_spec)[:32],
             hero_deck=dict(hero_deck),
@@ -991,7 +1009,7 @@ def play_probed_games(
     env = Env(
         match,
         obs_space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
         auto_reset=False,
         enable_profiler=False,
@@ -1276,7 +1294,6 @@ def main() -> None:
     micro.add_argument("--out", type=str, default="experiments/data/exp-09-micro.json")
 
     args = parser.parse_args()
-    os.environ.setdefault("WANDB_MODE", "disabled")
 
     if args.command == "scenarios":
         out_path = Path(args.out)

@@ -12,11 +12,11 @@ import tempfile
 
 from pydantic import Field, model_validator
 
+from manabot.experiment.artifacts import retained_artifacts
+from manabot.experiment.evaluation_queue import Attempt
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
-from manabot.training.artifacts import retained_artifacts
-from manabot.training.checkpoint_queue import Attempt
-from manabot.training.models import TrainingRun
-from manabot.training.monitoring import training_dashboard
+from manabot.reports.training import training_dashboard
+from manabot.training.records import TrainingRun
 from manabot.verify.store import VerifyStore
 
 from .bundle import Bundle, BundleFile

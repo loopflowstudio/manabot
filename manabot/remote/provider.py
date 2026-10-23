@@ -66,7 +66,7 @@ class RunPod:
             headers={
                 "Authorization": f"Bearer {self._key}",
                 "Content-Type": "application/json",
-                "User-Agent": "manabot/0.1",
+                "User-ActorCritic": "manabot/0.1",
             },
         )
         try:

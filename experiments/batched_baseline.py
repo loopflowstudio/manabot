@@ -3,9 +3,9 @@
 from typing import Literal
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import GIB, PACK, move_learning
-from manabot.training.models import (
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import GIB, PACK, move_learning
+from manabot.training.regime import (
     Execution,
     IterationSchedule,
     TrainingRegime,
@@ -20,7 +20,7 @@ def batched_baseline() -> TrainingRegime:
         id="batching-grid-small-s64",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(
+        agent=ModelConfig(
             semantic_pack=PACK, value_aggregation="masked_mean", attention_layers=2
         ),
         stages=[

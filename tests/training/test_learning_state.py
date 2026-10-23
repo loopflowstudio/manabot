@@ -8,22 +8,22 @@ import pytest
 import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.arena.monitor import stage_checkpoint
+from manabot.experiment.evaluation_queue import checkpoints
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
-from manabot.training.checkpoint_queue import checkpoints
-from manabot.training.learning_state import admit_learning_state
-from manabot.training.models import (
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
     ArtifactReference,
-    AtaraxosMoveLearning,
+    DampedPolicyLearning,
     Execution,
     LearningStateImport,
     TrainingRegime,
-    TrainingRun,
     TrainSelfPlay,
 )
-from manabot.training.monitor_evaluation import stage_checkpoint
+from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
 from tests.remote.test_job_spec import job_spec
@@ -43,11 +43,11 @@ def producer(tmp_path: Path) -> TrainingRun:
     recipe = TrainingRegime(
         id="portable-test",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(
+        agent=ModelConfig(
             hidden_dim=8, num_attention_heads=2, value_kind="categorical_wdl"
         ),
         schedule_clock="iteration_fraction",
@@ -61,8 +61,8 @@ def producer(tmp_path: Path) -> TrainingRun:
                 ),
                 streams=2,
                 transitions=16,
-                learning=AtaraxosMoveLearning(
-                    gradient="ataraxos_move",
+                learning=DampedPolicyLearning(
+                    gradient="damped_policy",
                     ema=0.9,
                     min_advantage=0,
                     advantage_quantile=0,
@@ -108,7 +108,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
             producer.stages[0].artifacts[role]["path"], weights_only=False
         )
         # Use ordinary reader state to avoid coupling to checkpoint wire keys.
-        expected, _ = load_checkpoint_agent(producer.stages[0].artifacts[role]["path"])
+        expected, _ = load_checkpoint(producer.stages[0].artifacts[role]["path"])
         for key, value in agent.state_dict().items():
             torch.testing.assert_close(
                 value, expected.state_dict()[key], rtol=0, atol=0
@@ -119,7 +119,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     original_update_ema = execution.update_ema
     observed_ema_updates = 0
 
-    def checked_ema(averaged: Agent, learner: Agent, rate: float) -> None:
+    def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
         nonlocal observed_ema_updates
         if observed_ema_updates == 0:
             for key, value in averaged.state_dict().items():

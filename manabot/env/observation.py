@@ -18,12 +18,6 @@ Additional updates in this version:
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
-import numpy as np
-
-# Local imports
-from manabot.infra.hypers import ObservationSpaceHypers
-from manabot.infra.log import getLogger
-import managym
 
 # Many modules import the enum mirrors from here; managym.enums owns them.
 from managym.enums import (  # noqa: F401
@@ -35,6 +29,12 @@ from managym.enums import (  # noqa: F401
     StepEnum,
     ZoneEnum,
 )
+import numpy as np
+
+# Local imports
+from manabot.infra.config import ObservationConfig
+from manabot.infra.log import getLogger
+import managym
 
 # Native action tensor: family, declaration, mode/ability selectors, validity.
 ACTION_TYPE_DIM = len(ActionEnum)
@@ -55,13 +55,13 @@ class ObservationEncoder:
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
 
-    def __init__(self, hypers: ObservationSpaceHypers):
-        self.hypers = hypers
-        self.cards_per_player = hypers.max_cards_per_player
-        self.perms_per_player = hypers.max_permanents_per_player
-        self.max_actions = hypers.max_actions
-        self.max_focus_objects = hypers.max_focus_objects
-        self.max_events = hypers.max_events
+    def __init__(self, config: ObservationConfig):
+        self.config = config
+        self.cards_per_player = config.max_cards_per_player
+        self.perms_per_player = config.max_permanents_per_player
+        self.max_actions = config.max_actions
+        self.max_focus_objects = config.max_focus_objects
+        self.max_events = config.max_events
 
         self.num_phases = len(PhaseEnum.__members__)
         self.num_steps = len(StepEnum.__members__)
@@ -84,7 +84,7 @@ class ObservationEncoder:
         # (printed + until-EOT grants), death-to-exile replacement, definition,
         # temporary Avatar subtype, validity.
         self.permanent_dim = 28
-        self.event_dim = 12 if hypers.policy_history_version == 1 else 7
+        self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
@@ -163,11 +163,11 @@ class ObservationEncoder:
 
         ## NOTE: It is very important that we encode in this exact
         ## order.
-        # 1. Agent player
+        # 1. ActorCritic player
         # 2. Opponent player
-        # 3. Agent cards
+        # 3. ActorCritic cards
         # 4. Opponent cards
-        # 5. Agent permanents
+        # 5. ActorCritic permanents
         # 6. Opponent permanents
         # This ensures that the object_to_index mapping is always
         # consistent and matches the actual array order, because
@@ -234,7 +234,7 @@ class ObservationEncoder:
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
-        if self.hypers.policy_history_version == 1:
+        if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
                 (self.max_events, self.event_dim), dtype=np.float32
@@ -527,9 +527,9 @@ class ObservationSpace(gym.spaces.Space):
     Gymnasium-compatible observation space optimized for attention processing.
     """
 
-    def __init__(self, hypers: ObservationSpaceHypers | None = None):
+    def __init__(self, config: ObservationConfig | None = None):
         super().__init__(shape=None, dtype=None)
-        self.encoder = ObservationEncoder(hypers or ObservationSpaceHypers())
+        self.encoder = ObservationEncoder(config or ObservationConfig())
         self.spaces = gym.spaces.Dict(
             {
                 name: gym.spaces.Box(

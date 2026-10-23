@@ -17,27 +17,28 @@ import torch
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
+from manabot.experiment import evaluation_queue as checkpoint_queue
+from manabot.infra.config import ModelConfig
 from manabot.remote import plan as remote_plan
 from manabot.remote.cohort import CohortEntry
 from manabot.remote.jobs import JobPhase, JobRecord, Resource
 from manabot.remote.plan import Allocation, JobSpec
 from manabot.remote.provider import ProviderError
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.training import checkpoint_queue, execution
-from manabot.training.game_errors import (
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import (
+    Learning,
+    RecoveryPolicy,
+    TrainingRegime,
+    TrainSelfPlay,
+)
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorPolicy,
     GameErrorState,
     replay_attempt,
-)
-from manabot.training.models import (
-    Learning,
-    RecoveryPolicy,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
 )
 from manabot.verify.store import VerifyStore
 import managym
@@ -64,7 +65,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         id="game-recovery",
         world=managym.WORLD_VERSION,
         match=_payment_match(),
-        agent=AgentSpec(attention_on=False, hidden_dim=8),
+        agent=ModelConfig(attention_on=False, hidden_dim=8),
         schedule_clock="iteration_fraction",
         wall_seconds=120,
         recovery=RecoveryPolicy(checkpoint_updates=1),
@@ -230,7 +231,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             patch.setattr(managym, "Env", PaymentMismatchEnv)
             assert replay_attempt(retained)["status"] == "advanced"
         bounded = _bounded_fixture_replay(
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             Path(parent.game_error_ledgers[0]),
             "--attempt",
             line_index,
@@ -239,7 +240,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert bounded["matches_binding"] and bounded["matches_error"]
         allowance = parent.game_errors.model_dump()
         repaired = _bounded_fixture_replay(
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             Path(parent.game_error_ledgers[0]),
             "--attempt",
             line_index,

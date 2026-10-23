@@ -28,9 +28,6 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, Response
-from pydantic import ValidationError
-
-import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -58,6 +55,9 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
+from pydantic import ValidationError
+
+import managym
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (

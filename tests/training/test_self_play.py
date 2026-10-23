@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from manabot.training.experiment_report import load_evidence
-from manabot.training.self_play import SelfPlayCounter, deck_identity
-from manabot.training.self_play_report import self_play_figures, self_play_points
+from manabot.reports.experiment import load_evidence
+from manabot.reports.self_play import self_play_figures, self_play_points
+from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
 
 
 def test_both_seats_deck_swaps_and_drawn_games() -> None:

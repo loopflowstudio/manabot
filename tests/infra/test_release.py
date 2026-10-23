@@ -1,6 +1,8 @@
 """Release projects must retain runtime data and rebuild without the checkout."""
 
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import tomllib
 from types import ModuleType
@@ -39,10 +41,20 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (bot / "managym/libmanagym.dylib.dSYM").exists()
     assert (bot / "content/semantic/v1/generated/two_deck.ir.json").is_file()
     assert (bot / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json").is_file()
-    assert (bot / "manabot/training/time_cohort.html").is_file()
+    assert (bot / "protocol/experience-v1.schema.json").read_bytes() == (
+        ROOT / "protocol/experience-v1.schema.json"
+    ).read_bytes()
+    assert (bot / "manabot/reports/time_cohort.html").is_file()
     assert (bot / "manabot/remote/guardian.sh").is_file()
     assert not (bot / "academy/ui/node_modules").exists()
     assert not (bot / "experiments").exists()
+    source = json.loads((bot / ".manabot-source.json").read_text())
+    assert len(source["commit"]) == 40
+    assert "manabot/training/execution.py" in source["files"]
+    assert "protocol/experience-v1.schema.json" in source["files"]
+    for name, digest in source["files"].items():
+        assert hashlib.sha256((bot / name).read_bytes()).hexdigest() == digest
+
     with pytest.raises(FileExistsError):
         _load("prepare").prepare(stage)
 

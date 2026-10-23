@@ -20,18 +20,19 @@ from manabot.env.failures import (
     runtime_identities,
 )
 from manabot.env.replay import require_replay_runtime
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
-from manabot.sim import distill, rollout
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.sim import datagen, rollout
 from manabot.sim.pooled_datagen import _GameStream
-from manabot.training import compound, execution, selection_data
-from manabot.training.models import (
+from manabot.training import execution
+from manabot.training.regime import (
     Learning,
     SelectionGameSpec,
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.rollout import compound, selection_data
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.game_error_fixtures import (
@@ -41,18 +42,18 @@ from tests.training.game_error_fixtures import (
 )
 
 
-def _model(*, compound_decisions: bool = False) -> Agent:
+def _model(*, compound_decisions: bool = False) -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(
+    return ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, attention_on=False, compound_decisions=compound_decisions
         ),
     )
 
 
 def _env() -> Env:
-    return Env(Match(), ObservationSpace(), Reward(RewardHypers()), seed=24)
+    return Env(Match(), ObservationSpace(), Reward(RewardConfig()), seed=24)
 
 
 def _bounded(path: Path) -> dict[str, Any]:
@@ -61,7 +62,7 @@ def _bounded(path: Path) -> dict[str, Any]:
         [
             sys.executable,
             "-m",
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             str(path),
             "--attempt",
             "1",
@@ -146,7 +147,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     with capture_scope(scope):
         if mode == "vector":
             vector = VectorEnv(
-                1, Match(), ObservationSpace(), Reward(RewardHypers()), "cpu", seed=24
+                1, Match(), ObservationSpace(), Reward(RewardConfig()), "cpu", seed=24
             )
             vector.reset()
             with pytest.raises(managym.AgentError):
@@ -202,7 +203,7 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
             2,
             Match(),
             ObservationSpace(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             "cpu",
             seed=24,
             opponent_policy=policy,
@@ -239,7 +240,7 @@ def test_strict_collector_preserves_masked_prefixes(
         collector = SeatRoutedCollector(
             ObservationSpace(),
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode="self",
             workers=workers,
@@ -268,8 +269,8 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     recipe = TrainingRegime(
         id="strict-capture",
         world=managym.WORLD_VERSION,
-        match=Match().hypers,
-        agent=model.hypers,
+        match=Match().config,
+        agent=model.config,
         wall_seconds=120,
         stages=[
             TrainSelfPlay(
@@ -311,7 +312,11 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
     evidence = read_failure(paths[0])
     assert evidence.error == str(failed.value)
     assert evidence.context["stage"] == f"stage-{stages - 1}"
-    assert evidence.context["coordinates"]
+    assert evidence.context["coordinates"]["updates"] == stages - 1
+    assert evidence.context["coordinates"]["learner_transitions"] == sum(
+        stage.learner_transitions for stage in run.stages[:-1]
+    )
+    assert run.stages[-1].learner_transitions == 0
     assert evidence.context["run"] == run.id
     assert any(
         item["path"] == str(paths[0])
@@ -407,7 +412,7 @@ def test_distillation_failure_uses_scalar_capture(
             )
 
     monkeypatch.setattr(
-        distill, "make_player", lambda *args, **kwargs: (RejectingPlayer(), None)
+        datagen, "make_player", lambda *args, **kwargs: (RejectingPlayer(), None)
     )
     scope = CaptureScope(tmp_path)
     monkeypatch.setattr(managym, "Env", PaymentMismatchEnv)
@@ -415,20 +420,24 @@ def test_distillation_failure_uses_scalar_capture(
         capture_scope(scope),
         pytest.raises(managym.AgentError, match="fixture payment mismatch"),
     ):
-        distill.generate_selfplay_shard(
+        datagen.generate_selfplay_shard(
             num_games=1,
             teacher_spec={"kind": "random"},
             seed=24,
-            match_hypers=_payment_match(),
+            match_config=_payment_match(),
         )
     assert read_failure(scope.paths[0]).context["producer"] == "distill"
     result = _bounded_fixture_replay(
-        "manabot.training.game_errors", scope.paths[0], "--attempt", 1
+        "manabot.training.state.game_errors", scope.paths[0], "--attempt", 1
     )
     assert result["results"][0]["matches_error"]
     original = scope.paths[0].read_bytes()
     repaired = _bounded_fixture_replay(
-        "manabot.training.game_errors", scope.paths[0], "--attempt", 1, repaired=True
+        "manabot.training.state.game_errors",
+        scope.paths[0],
+        "--attempt",
+        1,
+        repaired=True,
     )["results"][0]
     assert repaired["status"] == "advanced"
     assert repaired["matches_binding"] and repaired["at_retained_failure"]
@@ -493,7 +502,7 @@ def test_value_search_failure_keeps_sampled_pool_actions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from manabot.sim import value
+    from manabot.sim.search import value
 
     class Scorer:
         agent = None
@@ -533,46 +542,13 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
     assert _bounded(scope.paths[0])["results"][0]["matches_error"]
 
 
-def test_trainer_keeps_update_coordinates_and_original_error(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from manabot.infra import Experiment
-    from manabot.infra.hypers import ExperimentHypers, Hypers, TrainHypers
-    from manabot.model.train import Trainer
-
-    hypers = Hypers(
-        experiment=ExperimentHypers(wandb=False, runs_dir=str(tmp_path)),
-        train=TrainHypers(num_envs=2, num_steps=2, total_timesteps=4),
-    )
-    experiment = Experiment(hypers.experiment, hypers)
-    env = VectorEnv(2, Match(), ObservationSpace(), Reward(RewardHypers()), "cpu")
-    trainer = Trainer(_model(), experiment, env, hypers.train)
-    original_step = env.step
-
-    def rejected(actions: torch.Tensor) -> Any:
-        return original_step(torch.full_like(actions, -1))
-
-    monkeypatch.setattr(env, "step", rejected)
-    with pytest.raises(managym.AgentError):
-        trainer.train()
-    paths = list(experiment.runs_dir.joinpath("failures").glob("*.jsonl"))
-    assert len(paths) == 1
-    evidence = read_failure(paths[0])
-    assert evidence.context["update"] == 1
-    assert evidence.context["transitions"] == 0
-    assert evidence.context["elapsed_seconds"] >= 0
-    assert trainer.global_step == 0
-    assert _bounded(paths[0])["results"][0]["matches_error"]
-
-
 def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
         collector = SeatRoutedCollector(
             ObservationSpace(),
             Match(),
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             opponent_mode="self",
             workers=2,
@@ -621,13 +597,13 @@ def test_command_is_durable_before_native_execution(tmp_path: Path) -> None:
 def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
     match = Match(
-        MatchHypers.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
+        MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     with capture_scope(scope):
         collector = SeatRoutedCollector(
             ObservationSpace(),
             match,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=2,
             seed=17402,
             opponent_mode="self",

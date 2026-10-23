@@ -21,18 +21,18 @@ import sys
 import time
 
 from experiments.seat_comparison import SEEDS
-from manabot.infra.artifacts import verify_file
-from manabot.remote.job_client import fetch_job_file, job_manifest, load_job
-from manabot.remote.job_store import S3JobStore
-from manabot.remote.jobs import Job, JobRecord
-from manabot.training.execution import atomic_json
-from manabot.training.models import TrainingCoordinates, TrainingRun
-from manabot.training.monitor_evaluation import (
+from manabot.arena.monitor import (
     Checkpoint,
     MonitorProtocol,
     checkpoint_manifest,
     stage_checkpoint,
 )
+from manabot.infra.artifacts import verify_file
+from manabot.remote.job_client import fetch_job_file, job_manifest, load_job
+from manabot.remote.job_store import S3JobStore
+from manabot.remote.jobs import Job, JobRecord
+from manabot.training.execution import atomic_json
+from manabot.training.records import TrainingCoordinates, TrainingRun
 
 MILESTONES = tuple(m * 1_000_000 for m in (1, 2, 4, 8, 16, 32, 64))
 # Fresh deals, fixed before any scoring (protocols/seat-comparison-v1.md).
@@ -174,7 +174,7 @@ def follow(directory: Path, parallel: int, until: float) -> None:
                 [
                     sys.executable,
                     "-m",
-                    "manabot.training.etude_evaluation",
+                    "manabot.arena.benchmark",
                     "--manifest",
                     str(target / "admission.json"),
                 ],

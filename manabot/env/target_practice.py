@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import RewardHypers
+from manabot.infra.config import RewardConfig
 from manabot.verify.competency import _find_cast_action, _pass_index
 import managym
 
@@ -26,7 +26,7 @@ def target_root(match: Match, space: ObservationSpace, seed: int, seat: int) -> 
     env = Env(
         match if seat == 0 else match.swapped(),
         space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=seed,
     )
     env.reset()

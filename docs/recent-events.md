@@ -1,7 +1,7 @@
 # Optional public recent-event input
 
-`AgentSpec(recent_events=True)` enables shared policy/value context for the
-selected semantic pack. `Model(...)` and `with_recent_events(...)` select it
+`ModelConfig(recent_events=True)` enables shared policy/value context for the
+selected semantic pack. `ModelOverride(...)` and `with_recent_events(...)` select it
 independently of capacity, value aggregation/output and learning rule.
 `TrainingRegime` derives `observation.policy_history_version=1`; ordinary
 construction outside recipes must provide that observation setting explicitly.
@@ -10,16 +10,16 @@ Generic policies without a semantic catalog reject history-on.
 This comparison **resolves unexecuted plans only**:
 
 ```python
-from manabot.infra.hypers import AgentSpec
-from manabot.training.experiments import Case, Experiment, Model
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.infra.config import ModelConfig
+from manabot.experiment.config import Case, Experiment, ModelOverride
+from manabot.recipes.ataraxos import ataraxos
 
 comparison = Experiment(
     "recent-history-unexecuted",
-    ataraxos_mtg_v1(),
+    ataraxos(),
     cases=(
-        Case("off", (Model(AgentSpec(recent_events=False)),)),
-        Case("on", (Model(AgentSpec(recent_events=True)),)),
+        Case("off", (ModelOverride(ModelConfig(recent_events=False)),)),
+        Case("on", (ModelOverride(ModelConfig(recent_events=True)),)),
     ),
 ).resolve()
 ```

@@ -39,7 +39,7 @@ else
       tests/academy/*) select_jobs academy_integration protocol_v1 ;;
       scripts/play|scripts/play.py|scripts/verify-clean-machine|deploy/play/*)
         select_jobs python_unit protocol_v1 clean_machine_play ;;
-      manabot/env/*|manabot/model/world.py|manabot/sim/flat_search.py|manabot/sim/flat_mc.py|manabot/sim/structured_policy.py)
+      manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
       manabot/semantic/*|tests/semantic/*|scripts/compile_semantic_content.py|scripts/generate_coverage_gaps.py|scripts/run_opcode_alignment.py)
         select_jobs integration semantic_coverage ;;

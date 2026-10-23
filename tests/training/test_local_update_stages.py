@@ -3,38 +3,38 @@
 import json
 from pathlib import Path
 
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import pytest
 
 from experiments.belief_sampler import learned_belief_local_search
 from manabot.belief.likelihood import RulesProviderGap
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.sim.distill import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.local_update import LocalSearchConfig
-from manabot.sim.search_supervised import _validate_dataset
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
+from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     CollectLocalUpdate,
     Learning,
     TrainingRegime,
     TrainSelfPlay,
     TrainSupervised,
 )
+from manabot.training.supervised.search import _validate_dataset
 from manabot.verify.store import VerifyStore
 import managym
-from managym.possible_worlds import PossibleWorldSpace
 
 
 def local_recipe() -> TrainingRegime:
     return TrainingRegime(
         id="local-update-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         wall_seconds=90,
         stages=[
             TrainSelfPlay(
@@ -120,7 +120,7 @@ def test_complete_games_and_three_distillation_controls(tmp_path: Path) -> None:
             np.testing.assert_allclose(targets[index, :count], expected)
         np.testing.assert_array_equal(dataset[LOCAL_TARGET_KEY], original_targets)
     for record in run.stages[2:]:
-        model, _ = load_checkpoint_agent(record.artifacts["raw"]["path"])
+        model, _ = load_checkpoint(record.artifacts["raw"]["path"])
         assert model.world_binding["world"] == managym.WORLD_VERSION
         assert record.optimizer_exposures > 0
     corrupt = {key: value.copy() for key, value in dataset.items()}
@@ -185,5 +185,5 @@ def test_learned_pipeline_never_enumerates(
                 == run.stages[2].artifacts["sampler"]["sha256"]
             )
             assert receipt["policy_sha256"] == run.stages[0].artifacts["raw"]["sha256"]
-    agent, _ = load_checkpoint_agent(run.stages[4].artifacts["raw"]["path"])
+    agent, _ = load_checkpoint(run.stages[4].artifacts["raw"]["path"])
     assert agent.world_binding["world"] == managym.WORLD_VERSION

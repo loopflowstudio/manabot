@@ -5,6 +5,7 @@ from itertools import product
 import json
 from pathlib import Path
 
+from managym.decision import Observation
 import numpy as np
 import pytest
 import torch
@@ -14,25 +15,20 @@ from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import (
-    LOCAL_RECEIPT_KEY,
-    LOCAL_TARGET_KEY,
-    generate_selfplay_shard,
-    load_shards,
-    save_bc_checkpoint,
-)
-from manabot.sim.local_compound import advance_compound, project_compound
-from manabot.sim.local_update import (
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
+from manabot.sim.search.compound import advance_compound, project_compound
+from manabot.sim.search.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
 )
-from manabot.sim.search_supervised import _validate_dataset
-from manabot.training.models import CollectLocalUpdate, TrainCompound, TrainingRegime
+from manabot.training.regime import CollectLocalUpdate, TrainCompound, TrainingRegime
+from manabot.training.supervised.search import _validate_dataset
 import managym
-from managym.decision import Observation
 from tests.sim import test_local_update as local_fixtures
 from tests.sim.test_local_update import small_match
 from tests.sim.test_local_update_sampling import saved_sampler
@@ -136,10 +132,10 @@ def test_supported_root_rollout_reaching_payment_replays(
     agent = (
         _agent()
         if compound
-        else Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+        else ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     )
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,
@@ -342,8 +338,8 @@ def test_saved_compound_teacher_replays(
     torch.set_num_threads(1)
     torch.manual_seed(3)
     space = ObservationSpace()
-    agent = Agent(
-        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+    agent = ActorCritic(
+        space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     config = [
         managym.PlayerConfig(
@@ -355,7 +351,7 @@ def test_saved_compound_teacher_replays(
         managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
     ]
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=config)
+    save_checkpoint(agent, space, path, player_configs=config)
     teacher = LocalUpdateTeacher(
         path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
     )
@@ -392,11 +388,11 @@ def test_compound_complete_game_targets_without_fitting(
     torch.manual_seed(73)
     match = Match(small_match())
     space = ObservationSpace()
-    agent = Agent(
-        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+    agent = ActorCritic(
+        space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
+    save_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
     teacher = LocalUpdateTeacher(
         checkpoint,
         file_sha256(checkpoint),
@@ -423,7 +419,7 @@ def test_compound_complete_game_targets_without_fitting(
         out_path=shard,
         max_steps_per_game=1000,
         teacher_spec=spec,
-        match_hypers=small_match(),
+        match_config=small_match(),
     )
     dataset = load_shards([shard])
     labels = _validate_dataset(
@@ -479,7 +475,7 @@ def test_compound_regime_admits_direct_collection() -> None:
         id="saved-compound-collection-contract",
         world=managym.WORLD_VERSION,
         match=small_match(),
-        agent=AgentSpec(compound_decisions=True),
+        agent=ModelConfig(compound_decisions=True),
         stages=[
             TrainCompound(id="policy", operation="train_compound"),
             CollectLocalUpdate(
@@ -506,7 +502,7 @@ def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -
 def test_saved_compound_rejects_exact_reference(tmp_path: Path) -> None:
     agent = _agent()
     checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         checkpoint,
@@ -525,12 +521,12 @@ def test_compound_arena_executes_and_replays_saved_policies(
 
     def make(directory: Path) -> tuple[LocalUpdateTeacher, Env]:
         original, env = original_make(directory)
-        agent = Agent(
+        agent = ActorCritic(
             original.space,
-            AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
+            ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
         )
         checkpoint = directory / "compound.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             agent, original.space, checkpoint, player_configs=env.match.to_rust()
         )
         return LocalUpdateTeacher(

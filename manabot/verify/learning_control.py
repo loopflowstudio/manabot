@@ -13,35 +13,33 @@ import torch
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum
-from manabot.infra import Experiment
-from manabot.infra.hypers import (
-    AgentSpec,
-    ExperimentHypers,
-    MatchHypers,
-    RewardHypers,
-    TrainHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
+from manabot.infra.runtime import seed_random
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.sim.rollout import BatchedSampler, run_vector_games
-from manabot.training.models import Learning, Schedule
-from manabot.training.objectives import update_iteration
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.regime import Learning, Schedule
+from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.learnability.schema import PPOResult
 
 _DECK = {"Mountain": 20, "Gray Ogre": 20}
 
 
-def _pass_biased_agent(space: ObservationSpace, bias: float) -> Agent:
-    """Ordinary serializable Agent whose initial logit is bias for passing.
+def _pass_biased_agent(space: ObservationSpace, bias: float) -> ActorCritic:
+    """Ordinary serializable ActorCritic whose initial logit is bias for passing.
 
     One active path carries the public action-type bit through the usual
     network. PPO can change every parameter; this is a deliberately small
     starting policy, not an alternate learner or a reward override.
     """
-    agent = Agent(
-        space, AgentSpec(hidden_dim=8, num_attention_heads=2, attention_on=False)
+    agent = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, attention_on=False)
     )
     with torch.no_grad():
         for parameter in agent.parameters():
@@ -57,7 +55,7 @@ def _pass_biased_agent(space: ObservationSpace, bias: float) -> Agent:
     return agent
 
 
-def _score(agent: Agent, opponent: Agent, seed: int) -> float:
+def _score(agent: ActorCritic, opponent: ActorCritic, seed: int) -> float:
     torch.manual_seed(seed)
     games, _ = run_vector_games(
         BatchedSampler(agent),
@@ -79,40 +77,29 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
     torch.set_num_threads(1)
     try:
         space = ObservationSpace()
-        match = Match(MatchHypers(hero_deck=_DECK, villain_deck=_DECK))
+        match = Match(MatchConfig(hero_deck=_DECK, villain_deck=_DECK))
         path = tmp_path / "pass-policy.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             _pass_biased_agent(space, 20), space, path, player_configs=match.to_rust()
         )
-        opponent, _ = load_checkpoint_agent(str(path))
+        opponent, _ = load_checkpoint(str(path))
         torch.manual_seed(197)
-        learner = _pass_biased_agent(space, 4)
-        before = _score(learner, opponent, 100_197)
+        agent = _pass_biased_agent(space, 4)
+        before = _score(agent, opponent, 100_197)
         collector = SeatRoutedCollector(
             space,
             match,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             num_envs=8,
             seed=197,
             opponent_mode="frozen",
             opponent_agent=opponent,
         )
-        with_experiment = Experiment(
-            ExperimentHypers(
-                wandb=False,
-                seed=197,
-                runs_dir=tmp_path,
-                exp_name="positive-control",
-                log_level="WARNING",
-            )
-        )
         try:
-            trainer = NetOpponentTrainer(
-                learner,
-                with_experiment,
-                collector,
-                TrainHypers(num_envs=8, num_steps=128),
-            )
+            # The baseline score consumes policy RNG. Keep the historical
+            # training boundary independent of evaluation and tracking setup.
+            seed_random(197)
+            learner = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
             learning = Learning(
                 policy_lambda=1,
                 retained_fraction=1,
@@ -127,14 +114,12 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
             rng = np.random.default_rng(197)
             train_started = time.perf_counter()
             for _ in range(64):
-                batch = collector.collect(learner, 128, deadline_monotonic=deadline)
-                update_iteration(trainer, batch, learning, 0, rng)
+                batch = collector.collect(agent, 128, deadline_monotonic=deadline)
+                update_iteration(learner, batch, learning, 0, rng)
             training_seconds = time.perf_counter() - train_started
             checkpoint = tmp_path / "ppo-policy.pt"
-            save_bc_checkpoint(
-                learner, space, checkpoint, player_configs=match.to_rust()
-            )
-            restored, _ = load_checkpoint_agent(str(checkpoint))
+            save_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
+            restored, _ = load_checkpoint(str(checkpoint))
             after = _score(restored, opponent, 200_197)
             no_update = _score(_pass_biased_agent(space, 4), opponent, 200_197)
             return PPOResult(
@@ -149,6 +134,6 @@ def run_positive_control(tmp_path: Path, *, deadline: float) -> PPOResult:
                 passed=after >= max(before, no_update) + 0.2 and after >= 0.8,
             )
         finally:
-            with_experiment.close()
+            collector.close()
     finally:
         torch.set_num_threads(previous_threads)

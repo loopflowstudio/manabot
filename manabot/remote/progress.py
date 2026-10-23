@@ -11,7 +11,8 @@ import time
 
 from manabot.remote.plan import digest
 from manabot.remote.transport import Transport
-from manabot.training.models import ArtifactReference, TrainingRun
+from manabot.training.records import TrainingRun
+from manabot.training.regime import ArtifactReference
 
 
 class LiveExports:

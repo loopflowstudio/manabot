@@ -21,7 +21,7 @@ from pydantic import (
 )
 
 from manabot.infra.artifacts import split_s3_uri
-from manabot.training.models import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
 if TYPE_CHECKING:
     from ._legacy import _LegacyPlan

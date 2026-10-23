@@ -7,18 +7,16 @@ import socket
 import pytest
 import torch
 
-from manabot.training import execution, recovery
-from manabot.training.checkpoint_queue import CheckpointQueue, MonitoringBudget
-from manabot.training.experiment_execution import (
-    ExperimentSchedule,
-    Hardware,
-    HardwareInventory,
-)
-from manabot.training.experiment_runner import run_experiment
-from manabot.training.experiments import Baseline, Experiment
-from manabot.training.models import RecoveryPolicy, TrainingRun, TrainSelfPlay
-from manabot.training.monitor_evaluation import MonitorProtocol
-from manabot.training.recovery import TrainingPaused, load_update
+from manabot.arena.monitor import MonitorProtocol
+from manabot.experiment.config import Baseline, Experiment
+from manabot.experiment.evaluation_queue import CheckpointQueue, MonitoringBudget
+from manabot.experiment.execution import ExperimentSchedule, Hardware, HardwareInventory
+from manabot.experiment.runner import run_experiment
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import RecoveryPolicy, TrainSelfPlay
+from manabot.training.state import recovery
+from manabot.training.state.recovery import TrainingPaused, load_update
 from manabot.verify.store import VerifyStore
 from tests.training import test_recovery as proof
 from tests.training.test_recovery import (
@@ -158,6 +156,8 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The fixture must not acquire a running experiment's real host lease.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "test-account")
     value = recipe()
     value.recovery_max_microsteps = None
     value.recovery = RecoveryPolicy(checkpoint_updates=1)

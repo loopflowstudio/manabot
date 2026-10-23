@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Mapping
 
+from managym.decision import Command, Observation, SemanticTransition
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import torch
 
@@ -20,9 +22,7 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
-from manabot.model.agent import Agent
-from managym.decision import Command, Observation, SemanticTransition
-from managym.possible_worlds import PossibleWorldSpace
+from manabot.model.actor_critic import ActorCritic
 
 
 def _engine(runtime_env: Any) -> Any:
@@ -100,7 +100,7 @@ class ManabotPlayer:
 
     def __init__(
         self,
-        policy_value: Agent,
+        policy_value: ActorCritic,
         *,
         belief_model: BeliefModel | None = None,
         belief_schema: BeliefEncodingSchema | None = None,

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from managym.experience import Command, ExperienceFrame, InteractionOffer
 from pydantic import ValidationError
 import pytest
 
@@ -19,7 +20,6 @@ from academy.replay_index import (
 )
 from academy.server import GameSession, viewer_view
 from academy.trace import GameConfig, Trace, TraceEvent
-from managym.experience import Command, ExperienceFrame, InteractionOffer
 
 
 def _frame(session: GameSession) -> ExperienceFrame:

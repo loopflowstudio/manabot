@@ -7,17 +7,13 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import (
-    ROOT_VALUE_KEY,
-    VISIT_COUNT_KEY,
-    generate_selfplay_shard,
-    load_shards,
-    save_bc_checkpoint,
-)
-from manabot.sim.flat_mc import make_player
-from manabot.sim.mcts import (
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.data import ROOT_VALUE_KEY, VISIT_COUNT_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
+from manabot.sim.search.flat_mc import make_player
+from manabot.sim.search.puct import (
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
     determinized_puct,
@@ -92,7 +88,7 @@ def test_puct_rejects_more_worlds_than_simulations() -> None:
 def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
     root, observation = _fresh_engine_and_observation(seed=35)
     observation_space = ObservationSpace()
-    agent = Agent(observation_space, AgentSpec())
+    agent = ActorCritic(observation_space, ModelConfig())
     agent.value_semantic = "win_logit"
     with torch.no_grad():
         for parameter in agent.parameters():
@@ -141,7 +137,7 @@ def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
 def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
     root, observation = _fresh_engine_and_observation(seed=36)
     observation_space = ObservationSpace()
-    agent = Agent(observation_space, AgentSpec())
+    agent = ActorCritic(observation_space, ModelConfig())
     agent.value_semantic = "win_logit"
     learned = AgentLeafEvaluator(agent, observation_space, value_mode="learned")
     neutral = AgentLeafEvaluator(agent, observation_space, value_mode="neutral")
@@ -171,8 +167,8 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
 ) -> None:
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
-    save_bc_checkpoint(
-        Agent(observation_space, AgentSpec()),
+    save_checkpoint(
+        ActorCritic(observation_space, ModelConfig()),
         observation_space,
         checkpoint,
         player_configs=interactive_player_configs,

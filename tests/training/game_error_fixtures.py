@@ -11,16 +11,16 @@ import subprocess
 import sys
 from typing import Any
 
-from manabot.infra.hypers import MatchHypers
-from manabot.sim.net_opponent import SeatRoutedCollector
+from manabot.infra.config import MatchConfig
+from manabot.training.rollout.collection import SeatRoutedCollector
 import managym
 
 _NATIVE_ENV = managym.Env
 
 
-def _payment_match() -> MatchHypers:
+def _payment_match() -> MatchConfig:
     # A narrow native fixture: every mana source is Mountain, every spell is 2R.
-    return MatchHypers(
+    return MatchConfig(
         hero_deck={"Mountain": 24, "Gray Ogre": 36},
         villain_deck={"Mountain": 24, "Gray Ogre": 36},
     )

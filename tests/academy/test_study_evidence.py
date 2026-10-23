@@ -2,10 +2,8 @@
 
 from academy.replay_index import ReplayDecisionAddress
 from academy.study_evidence import build_study_artifact
-from manabot.sim.teacher1_evidence import (
-    record_teacher_trajectories,
-    runtime_fingerprints,
-)
+from manabot.infra.provenance import runtime_fingerprints
+from manabot.sim.search.teacher1_evidence import record_teacher_trajectories
 
 
 def test_replayed_search_exports_viewer_safe_distinct_evidence() -> None:

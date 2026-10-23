@@ -8,7 +8,7 @@ from experiments.direct_self_play import direct_self_play
 import manabot.remote.bundle as bundles
 from manabot.remote.bundle import Bundle, BundleFile, make_bundle
 from manabot.remote.plan import digest
-from manabot.training.models import StageRecord, TrainingRun
+from manabot.training.records import StageRecord, TrainingRun
 from manabot.verify.store import VerifyStore
 
 
@@ -106,7 +106,7 @@ def test_verified_bundle_must_match_run_artifact_receipts(
         store.save_training_run(run)
     bundle = make_bundle(tmp_path)
     loaded: list[str] = []
-    monkeypatch.setattr(bundles, "load_checkpoint_agent", loaded.append)
+    monkeypatch.setattr(bundles, "load_checkpoint", loaded.append)
     if mismatch is None:
         assert bundles.verify_training_bundle(tmp_path, bundle) == [policy]
         assert loaded == [str(policy)]

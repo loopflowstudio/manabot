@@ -12,10 +12,10 @@ import boto3
 from botocore.exceptions import ClientError
 import pytest
 
+from manabot.experiment.artifacts import ArtifactManifest, publish_run
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.training import monitoring
-from manabot.training.artifacts import ArtifactManifest, publish_run
+from manabot.model.checkpoint import load_checkpoint
+from manabot.reports import training as monitoring
 
 
 @pytest.fixture
@@ -141,9 +141,9 @@ def test_loader_checks_cached_digest_before_deserializing(
     (tmp_path / reference.sha256).write_bytes(b"tampered")
     monkeypatch.setenv("MANABOT_ARTIFACT_CACHE", str(tmp_path))
     loader = MagicMock()
-    monkeypatch.setattr("manabot.sim.flat_mc.torch.load", loader)
+    monkeypatch.setattr("manabot.model.checkpoint.torch.load", loader)
     with pytest.raises(ValueError, match="differ"):
-        load_checkpoint_agent(reference)
+        load_checkpoint(reference)
     loader.assert_not_called()
 
 
@@ -224,10 +224,14 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
     published: list[monitoring.Dashboard] = []
 
     def publish(
-        dashboard: monitoring.Dashboard, out: Path, *, project: str, entity: str | None
+        dashboard: monitoring.Dashboard,
+        out: Path,
+        *,
+        experiment: str,
+        destination: str | None,
     ) -> str:
         published.append(dashboard)
-        return "https://wandb.invalid/run"
+        return "file:///retained/etude/run"
 
     monkeypatch.setattr(monitoring, "publish_dashboard", publish)
     monkeypatch.setattr(
@@ -241,7 +245,6 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
             str(path),
             "--out",
             str(tmp_path / "dashboard"),
-            "--online",
         ],
     )
     monitoring.main()
@@ -249,7 +252,7 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
     assert (
         published[0].rows
         == monitoring.training_dashboard(
-            monitoring.TrainingRun.model_validate_json(payload)
+            monitoring.RetainedRun.model_validate_json(payload)
         ).rows
     )
     bad = manifest.model_copy(update={"training_run_id": "other-run"})

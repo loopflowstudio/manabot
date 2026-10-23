@@ -53,7 +53,7 @@ main engine. The loop is declared as data and executed by one runner:
 
 ```text
  TrainingRegime (experiments/<experiment>.py)
-   world, match + decks, AgentSpec, ordered stages, per-stage hardware limits
+   world, match + decks, ModelConfig, ordered stages, per-stage hardware limits
         │
         v
  TrainingRun ── train_self_play ──> raw + EMA checkpoints (world-bound)

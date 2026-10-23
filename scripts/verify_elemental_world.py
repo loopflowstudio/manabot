@@ -13,9 +13,10 @@ import json
 from pathlib import Path
 import random
 
-import managym
 from managym.decision import Command, DecisionFrame
 from managym.experience_projection import serialize_observation
+
+import managym
 
 PACK = "elemental-world-v2"
 DECKS = ("gr", "gw", "ur", "ub", "uw", "ug", "wr", "wb", "rb", "bg")

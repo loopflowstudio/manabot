@@ -4,6 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from managym._managym import AgentError
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 import torch
@@ -19,27 +21,25 @@ from manabot.arena.models import (
 from manabot.arena.replay import replay_games
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
-from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
-from manabot.sim import local_update
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.local_update import (
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.search import local_update
+from manabot.sim.search.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
     SamplerArtifact,
     regularized_update,
 )
-from managym.decision import Observation
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from manabot.training.supervised.belief import fit_belief_sampler, save_belief_sampler
 
 
-def small_match() -> MatchHypers:
-    return MatchHypers(
+def small_match() -> MatchConfig:
+    return MatchConfig(
         hero_deck={"Mountain": 8, "Gray Ogre": 8},
         villain_deck={"Forest": 8, "Llanowar Elves": 8},
     )
@@ -49,10 +49,10 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
-    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match(small_match())
     path = tmp_path / "policy.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,
@@ -65,7 +65,7 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
         LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
     env = Env(
-        match, space, Reward(RewardHypers()), auto_reset=False, enable_profiler=False
+        match, space, Reward(RewardConfig()), auto_reset=False, enable_profiler=False
     )
     env.reset(seed=42)
     return teacher, env
@@ -285,7 +285,7 @@ def attach_learned_sampler(
 
     dataset = collect_frozen_policy(
         checkpoint=teacher.likelihood.checkpoint,
-        match_hypers=small_match(),
+        match_config=small_match(),
         games=3,
         seed=719,
         max_steps=1000,

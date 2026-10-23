@@ -9,9 +9,10 @@ import numpy as np
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.model.agent import Agent
-from manabot.sim.flat_mc import MatchupPlayer, load_checkpoint_agent
-from manabot.sim.mcts import (
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.search.flat_mc import MatchupPlayer
+from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     LeafEvaluation,
     UniformRandomLeafEvaluator,
@@ -25,10 +26,10 @@ from .players import build_player
 class PolicyPriorRandomLeafEvaluator:
     """Use checkpoint logits only for priors and random terminal leaf values."""
 
-    def __init__(self, agent: Agent, observation_space: ObservationSpace):
+    def __init__(self, agent: ActorCritic, observation_space: ObservationSpace):
         try:
             device = next(agent.parameters()).device
-        except StopIteration as exc:  # pragma: no cover - Agent has parameters
+        except StopIteration as exc:  # pragma: no cover - ActorCritic has parameters
             raise ValueError("policy-prior evaluator requires a model") from exc
         if device.type != "cpu":
             raise ValueError("policy-prior evaluator requires a CPU model")
@@ -111,7 +112,7 @@ def build_arena_player(
         raise FileNotFoundError("checkpoint candidate bytes are unavailable")
     if spec["implementation_source_sha256"] != file_sha256(Path(__file__)):
         raise RuntimeError("policy-prior PUCT implementation source drift")
-    agent, observation_space = load_checkpoint_agent(checkpoint_path)
+    agent, observation_space = load_checkpoint(checkpoint_path)
     evaluator = PolicyPriorRandomLeafEvaluator(agent, observation_space)
     player = DeterminizedPuctPlayer(
         int(spec["sims"]),

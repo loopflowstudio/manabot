@@ -1,9 +1,9 @@
 """Small Ataraxos move learning and its scalar-value control (docs/ataraxos.md)."""
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import PACK, move_checkpoints, with_value_output
-from manabot.training.models import TrainingRegime
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import PACK, move_checkpoints, with_value_output
+from manabot.training.regime import TrainingRegime
 import managym
 
 
@@ -13,7 +13,7 @@ def ataraxos_move() -> TrainingRegime:
         id="ataraxos-move",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(
+        agent=ModelConfig(
             semantic_pack=PACK,
             hidden_dim=16,
             num_attention_heads=2,

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +32,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--name", type=str, required=True)
-    parser.add_argument("--student", type=str, required=True,
-                        help="ported frozen student_r0 checkpoint")
+    parser.add_argument(
+        "--student", type=str, required=True, help="ported frozen student_r0 checkpoint"
+    )
     parser.add_argument("--games", type=int, default=400)
     parser.add_argument("--ladder-games", type=int, default=400)
     parser.add_argument("--rungs", type=str, default="4,8,16")
@@ -48,8 +48,6 @@ def main() -> None:
         "--out", type=str, default="reports/data/exp-11-curriculum-exploitability.json"
     )
     args = parser.parse_args()
-
-    os.environ.setdefault("WANDB_MODE", "disabled")
 
     from manabot.verify.run_exp07_judge import batched_matchup
 
@@ -77,8 +75,11 @@ def main() -> None:
     if "vs_random" not in section:
         print(f"[run ] {args.name} vs random: {args.games} games", flush=True)
         result = batched_matchup(
-            args.checkpoint, None,
-            num_games=args.games, seed=args.seed, device=args.device,
+            args.checkpoint,
+            None,
+            num_games=args.games,
+            seed=args.seed,
+            device=args.device,
         )
         section["vs_random"] = result
         save()
@@ -88,8 +89,11 @@ def main() -> None:
     if "vs_student" not in section:
         print(f"[run ] {args.name} vs student_r0: {args.games} games", flush=True)
         result = batched_matchup(
-            args.checkpoint, args.student,
-            num_games=args.games, seed=args.seed + 5150, device=args.device,
+            args.checkpoint,
+            args.student,
+            num_games=args.games,
+            seed=args.seed + 5150,
+            device=args.device,
         )
         section["vs_student"] = result
         save()
@@ -110,9 +114,7 @@ def main() -> None:
             key = f"search-{rung}"
             if key in ladder:
                 continue
-            print(
-                f"[run ] {args.name} vs {key}: {args.ladder_games} games", flush=True
-            )
+            print(f"[run ] {args.name} vs {key}: {args.ladder_games} games", flush=True)
             result = run_matchup(
                 spec,
                 {"kind": "search", "sims": rung},

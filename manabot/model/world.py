@@ -7,11 +7,12 @@ import hashlib
 import json
 from typing import Any
 
+from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
+
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.semantic.policy_catalog import learning_schema_path
 import managym
-from managym.decision import SEMANTIC_DECISION_VERSION
-from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
 WORLD = managym.WORLD_VERSION
 POLICY_INPUT_VERSION = 1
@@ -73,7 +74,7 @@ def validate_agent_setup(
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
     compiled = binding["content_manifest"].get("compiled_semantics")
-    if compiled is not None and agent.hypers.semantic_pack != compiled["pack_key"]:
+    if compiled is not None and agent.config.semantic_pack != compiled["pack_key"]:
         raise ValueError(
             "compiled matchup checkpoint requires its complete semantic program input"
         )

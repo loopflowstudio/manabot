@@ -7,12 +7,11 @@ import torch
 
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
+from manabot.training.regime import (
     FrozenOpponent,
     Learning,
     TrainingRegime,
@@ -26,8 +25,8 @@ def _regime(path: Path) -> TrainingRegime:
     return TrainingRegime(
         id="frozen-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        match=MatchConfig(),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         stages=[
             TrainSelfPlay(
                 id="attack",
@@ -66,9 +65,9 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     torch.set_num_threads(1)
     path = tmp_path / "opponent.pt"
     space = ObservationSpace()
-    opponent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
-    save_bc_checkpoint(
-        opponent, space, path, player_configs=Match(MatchHypers()).to_rust()
+    opponent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    save_checkpoint(
+        opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     before = file_sha256(path)
     regime = _regime(path)
@@ -81,8 +80,8 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     assert file_sha256(path) == before
     assert run.stages[0].inputs["frozen_opponent"]["sha256"] == before
     assert "initial_raw" not in run.stages[1].artifacts
-    initial, _ = load_checkpoint_agent(run.stages[0].artifacts["initial_raw"]["path"])
-    trained, _ = load_checkpoint_agent(run.stages[1].artifacts["raw"]["path"])
+    initial, _ = load_checkpoint(run.stages[0].artifacts["initial_raw"]["path"])
+    trained, _ = load_checkpoint(run.stages[1].artifacts["raw"]["path"])
     assert any(
         not torch.equal(initial.state_dict()[key], value)
         for key, value in trained.state_dict().items()
@@ -93,12 +92,12 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
 
 def test_compound_opponent_is_rejected_before_training(tmp_path: Path) -> None:
     space = ObservationSpace()
-    opponent = Agent(
-        space, AgentSpec(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
+    opponent = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
     )
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(
-        opponent, space, path, player_configs=Match(MatchHypers()).to_rust()
+    save_checkpoint(
+        opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="compound opponent submissions"):

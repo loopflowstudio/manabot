@@ -5,10 +5,9 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from managym.experience import ProtocolV1ConformanceBundle
 from pydantic import ValidationError
 import pytest
-
-from managym.experience import ProtocolV1ConformanceBundle
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(

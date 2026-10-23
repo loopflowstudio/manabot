@@ -13,7 +13,7 @@ from manabot.remote.bundle import Bundle, BundleFile
 from manabot.remote.cohort import CohortAttempt, CohortInsertion, CohortState
 from manabot.remote.jobs import JobRecord
 from manabot.remote.snapshots import JobManifest
-from manabot.training.monitoring import Dashboard
+from manabot.reports.training import Dashboard
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_cohort_service import plan
 from tests.remote.test_job_fetch import Artifacts
@@ -89,11 +89,17 @@ def test_offline_report_survives_telemetry_outage_and_retries_once(
         lambda prefix: store if prefix == cohort.prefix else jobs,
     )
     monkeypatch.setattr(job_client, "S3ArtifactStore", lambda: artifacts)
-    config = projection.ProjectionConfig(project="etude", entity="loopflow-studio")
+    config = projection.ProjectionConfig(
+        experiment="manabot-monitoring", destination="s3://test/reports"
+    )
     called: list[str] = []
 
     def unavailable(
-        dashboard: Dashboard, out: Path, *, project: str, entity: str | None = None
+        dashboard: Dashboard,
+        out: Path,
+        *,
+        experiment: str,
+        destination: str | None = None,
     ) -> str:
         assert (out / "report.html").exists()  # Local report precedes telemetry.
         called.append(dashboard.run_id)
@@ -110,10 +116,14 @@ def test_offline_report_survives_telemetry_outage_and_retries_once(
     assert store.read("state.json").data == state.model_dump_json().encode()
 
     def available(
-        dashboard: Dashboard, out: Path, *, project: str, entity: str | None = None
+        dashboard: Dashboard,
+        out: Path,
+        *,
+        experiment: str,
+        destination: str | None = None,
     ) -> str:
         called.append(dashboard.run_id)
-        return "https://wandb.ai/loopflow-studio/etude/runs/run-one"
+        return "file:///retained/etude/run-one"
 
     projection.project_once(cohort, output, config, publish=available)
     projection.project_once(cohort, output, config, publish=available)

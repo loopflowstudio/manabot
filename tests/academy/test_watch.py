@@ -133,7 +133,7 @@ def test_watch_roots_fork_both_seats_without_mutating_match(
 
 def test_search_captures_actual_scores(watch: WatchCreated) -> None:
     from academy.villain import choose_bot
-    from manabot.sim.flat_search import FlatSearchPolicy
+    from manabot.sim.search.flat import FlatSearchPolicy
 
     game = server._live_record_for_trace(watch["id"]).game
     outputs = choose_bot(FlatSearchPolicy(sims=1, max_steps=2), game.env, game.obs)
@@ -207,8 +207,8 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
 
     from academy.villain import CheckpointVillain, choose_bot
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec
-    from manabot.model.agent import Agent
+    from manabot.infra.config import ModelConfig
+    from manabot.model.actor_critic import ActorCritic
     from manabot.model.world import checkpoint_world
 
     config = server._parse_game_config(
@@ -220,13 +220,13 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         }
     )
     space = ObservationSpace()
-    spec = AgentSpec(hidden_dim=16, compound_decisions=compound)
-    agent = Agent(space, spec)
+    spec = ModelConfig(hidden_dim=16, compound_decisions=compound)
+    agent = ActorCritic(space, spec)
     checkpoint = tmp_path / "agent.pt"
     torch.save(
         {
             "hypers": {
-                "observation_hypers": space.encoder.hypers.model_dump(),
+                "observation_hypers": space.encoder.config.model_dump(),
                 "agent_hypers": spec.model_dump(),
             },
             "model_state_dict": agent.state_dict(),

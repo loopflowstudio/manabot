@@ -23,21 +23,18 @@ from manabot.arena.models import (
 )
 from manabot.arena.replay import read_game_journal, write_trace
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra import Experiment
-from manabot.infra.hypers import (
-    AgentSpec,
-    ExperimentHypers,
-    MatchHypers,
-    RewardHypers,
-    TrainHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
-from manabot.sim.net_opponent import (
-    NetOpponentTrainer,
-    SeatRoutedCollector,
-    transition_gae,
-)
-from manabot.training.game_errors import (
+from manabot.model.actor_critic import ActorCritic
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
+from manabot.training.learning.returns import transition_gae
+from manabot.training.regime import Learning
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorLimit,
@@ -45,10 +42,6 @@ from manabot.training.game_errors import (
     GameErrorState,
     replay_attempt,
 )
-from manabot.training.models import (
-    Learning,
-)
-from manabot.training.objectives import update_iteration
 import managym
 from tests.training.game_error_fixtures import (
     PaymentMismatchEnv,
@@ -130,9 +123,11 @@ class ScriptedFailures:
         return self.infos
 
 
-def agent() -> Agent:
+def agent() -> ActorCritic:
     torch.set_num_threads(1)
-    return Agent(ObservationSpace(), AgentSpec(attention_on=False, hidden_dim=8))
+    return ActorCritic(
+        ObservationSpace(), ModelConfig(attention_on=False, hidden_dim=8)
+    )
 
 
 def attempt(failed: bool, seed: int = 0) -> GameAttempt:
@@ -140,7 +135,7 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
         stream=0,
         seed=seed,
         seat=0,
-        matchup=MatchHypers(),
+        matchup=MatchConfig(),
         outcome="engine_error" if failed else "completed",
         discarded_samples=3 if failed else 0,
         valid_samples=4 if not failed else 0,
@@ -148,12 +143,15 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
 
 
 def _tolerant_collector(
-    model: Agent, ledger: GameErrorLedger, *, seats: Literal["one", "both"] = "both"
+    model: ActorCritic,
+    ledger: GameErrorLedger,
+    *,
+    seats: Literal["one", "both"] = "both",
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         model.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
         learning_seats=seats,
@@ -225,14 +223,9 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     )
     assert set(returns.flatten().tolist()) <= {-1, 1}
     assert not any(collector._pending) and not any(collector._streams)
-    experiment = Experiment(
-        ExperimentHypers(wandb=False, device="cpu", runs_dir=tmp_path / "train")
-    )
-    trainer = NetOpponentTrainer(
-        model, experiment, collector, TrainHypers(num_envs=2, num_steps=1)
-    )
+    learner = Learner(model, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
-        trainer,
+        learner,
         batch,
         Learning(epochs=1, minibatches=1),
         0,
@@ -240,8 +233,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
         iteration=1,
     )
     assert result["rows"] == batch.actions.size
-    assert trainer.optimizer.state
-    experiment.close()
+    assert learner.optimizer.state
 
 
 def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> None:
@@ -266,7 +258,7 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
     collector = SeatRoutedCollector(
         model.observation_space,
         Match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=3,
         opponent_mode="self",
         workers=workers,
@@ -287,7 +279,7 @@ def _assert_native_failure_replay(collector: SeatRoutedCollector) -> None:
         stream=1,
         seed=1,
         seat=0,
-        matchup=MatchHypers(),
+        matchup=MatchConfig(),
         outcome="engine_error",
         actions=[-1],
         error_class=infos[1]["game_error_class"],
@@ -370,7 +362,7 @@ def test_original_failure_is_immutable_and_cli_replays(
         [
             sys.executable,
             "-m",
-            "manabot.training.game_errors",
+            "manabot.training.state.game_errors",
             str(ledger.path),
             "--attempt",
             "1",

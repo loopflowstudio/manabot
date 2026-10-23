@@ -19,7 +19,7 @@ from manabot.env import (
 
 from .util import (
     TRUNCATION_INFO_KEYS,
-    build_hypers,
+    build_verification_config,
     print_result,
     step_with_fallback,
     suppress_truncation_logs,
@@ -86,10 +86,10 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     suppress_truncation_logs()
 
-    hypers = build_hypers()
-    obs_space = ObservationSpace(hypers.observation)
-    match = Match(hypers.match)
-    reward = Reward(hypers.reward)
+    config = build_verification_config()
+    obs_space = ObservationSpace(config.observation)
+    match = Match(config.match)
+    reward = Reward(config.reward)
 
     random_vs_random = _run_matchup(
         RandomPolicy(),
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> None:
             total_truncations == 0,
             f"{int(total_truncations)} total",
             "Observation space limits must fit the deck. "
-            "Increase max_cards/permanents/actions in ObservationSpaceHypers.",
+            "Increase max_cards/permanents/actions in ObservationConfig.",
         ),
         (
             "zero engine aborts",
