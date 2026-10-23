@@ -129,7 +129,7 @@ UR→GW and GW→UR. Each uses game seed 164, uniform legal-offer selection from
 uv run python -m scripts.verify_elemental_world --out conformance/elemental-world-w11-v1/command-cohort.json
 ```
 
-The [retained result](../../../conformance/elemental-world-w10-v1/command-cohort.json)
+The [retained result](../../../experiments/data/archive/conformance/elemental-world-w10-v1/command-cohort.json)
 records **14 terminal games / 13,126 Commands**, with **268** isolated fork and
 stale-rejection checks. Every Command was replayed on a second root with equal
 frames, transition receipts and state digests. Both viewer projections were

@@ -123,7 +123,7 @@ normal Command application owns transition-queue journaling. The Command-based
 deep rollback and cross-driver comparisons retain their original checks.
 
 CI and the native conformance tests now use the separate
-[w4 corpus](../../conformance/semantic-kernel-w4-v1/). Its four games finish
+[w4 corpus](../../experiments/data/archive/conformance/semantic-kernel-w4-v1/). Its four games finish
 with 567 commands and reproduce exactly. Bounded fuzzing passes 32 cases and
 5,078 commands. Both historical corpora, the authored decks and compiled IR
 remain unchanged. This rebinds the scheduling conformance checks only; it does

@@ -1,9 +1,0 @@
-- cmd: task wait MTG-162 --until terminal
-- xor:
-    router: xor-route
-    paths:
-      build:
-        description: "Read lf task status MTG-162 --json fresh. Select build only when task.completed is true and its required delivery is verified. A terminated, stopped, failed or published Flow alone is insufficient. Dependency MTG-162 must actually be complete. The user authorized autonomous implementation and landing without human review."
-        flow: elemental-163-deliver
-      dependency_blocked:
-        description: "Select this no-op exit when fresh status cannot prove dependency MTG-162 completed its accepted delivery. Record the exact missing dependency or read; do not implement, publish, complete this Task, launch another Flow, or waive the prerequisite. Report through the existing Task records."

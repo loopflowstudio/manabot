@@ -2,6 +2,814 @@
  "schema_version": 1,
  "store": "s3://etudefantasia/manabot/",
  "files": {
+  "experiments/data/archive/conformance/authored-match-parity-w10-v1/release-live-headless-replay-seed-0.json": {
+   "sha256": "3a7d7c1bb6c59d8017c30860c05574bb071055fa66102082479c83d6c45b92e9",
+   "bytes": 352579
+  },
+  "experiments/data/archive/conformance/authored-match-parity-w7-v1/README.md": {
+   "sha256": "158fc9e4cc0e56a9ec1b6f90d7fd56692d78a475d6bedabc099f3e0f3d4ba4ed",
+   "bytes": 798
+  },
+  "experiments/data/archive/conformance/authored-match-parity-w7-v1/release-live-headless-replay-seed-0.json": {
+   "sha256": "589be84dfa612819408a437fa9a2fbd7dde73541f10fabadcdbba81a18121f36",
+   "bytes": 352253
+  },
+  "experiments/data/archive/conformance/authored-match-parity-w8-v1/README.md": {
+   "sha256": "8b99c9f5b8bfc015710a56cdb1c6e40dd785c7a550c16fa971397ef2774bc336",
+   "bytes": 320
+  },
+  "experiments/data/archive/conformance/authored-match-parity-w8-v1/release-live-headless-replay-seed-0.json": {
+   "sha256": "a34bbf9b63fca34e6de2d63afe054718197e0176dfdf61c52875f9ff30a0120b",
+   "bytes": 352416
+  },
+  "experiments/data/archive/conformance/authored-match-parity-w9-v1/release-live-headless-replay-seed-0.json": {
+   "sha256": "03040d69ed9dc04f0ca01685c052ff30708ea6c533524e5baea4c4dc665dd438",
+   "bytes": 352578
+  },
+  "experiments/data/archive/conformance/authored-match-w10-v1/release-stack-ur-vs-gw-seed-0.json": {
+   "sha256": "c9a026adad8735ebac47a0a3f9406817fad4c46b800869c5b824b55354627c1b",
+   "bytes": 435155
+  },
+  "experiments/data/archive/conformance/authored-match-w7-v1/README.md": {
+   "sha256": "c9274f5f95dc86d2114b67df26195f94a3a33bea0bf7b9f16ed6e4583e76864c",
+   "bytes": 733
+  },
+  "experiments/data/archive/conformance/authored-match-w7-v1/release-stack-ur-vs-gw-seed-0.json": {
+   "sha256": "b02a204475b119ccd3443b1f33de9528230a81a5549f508e2cbac63ce753dfbe",
+   "bytes": 449865
+  },
+  "experiments/data/archive/conformance/authored-match-w8-v1/README.md": {
+   "sha256": "f2a5a83c57241af185aa4f257b4d7d7c2b93b4b34880b8c68ee9948a584a2c13",
+   "bytes": 261
+  },
+  "experiments/data/archive/conformance/authored-match-w8-v1/release-stack-ur-vs-gw-seed-0.json": {
+   "sha256": "310e683669a2af0a4cccafdd6f987017975bb51a35a63727c835ebe6f1d50969",
+   "bytes": 449865
+  },
+  "experiments/data/archive/conformance/authored-match-w9-v1/release-stack-ur-vs-gw-seed-0.json": {
+   "sha256": "530afbfe6863e3edf65ad1ec9a4125e1751afbb9b3103aae76d0ed691cde72fb",
+   "bytes": 435154
+  },
+  "experiments/data/archive/conformance/elemental-world-w10-v1/command-cohort.json": {
+   "sha256": "5c41ce22c9206887cf345f14af54bd979eac98bc05b33b9ad21c3530c8de7921",
+   "bytes": 5059
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v1/README.md": {
+   "sha256": "1d30e25b1248cc91c279614459fdd5b751b3e2ac5dfba30a71aed5915ad369b3",
+   "bytes": 327
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v1/registration.json": {
+   "sha256": "dfef037ad5f058b1e36c2342b63b09db5e773a55b0d9a824043b062a223e895d",
+   "bytes": 30680
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/README.md": {
+   "sha256": "00a182a2dfbacd7252cbe4712489b608931ed8c4984ecba49e7977c080deb4cf",
+   "bytes": 638
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/registration.json": {
+   "sha256": "2c6b1f0f111a8b1dc7e2fdc8889613f10ea250f73a50577e9701e2d4f9c5cd67",
+   "bytes": 30680
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-0-reverse-0.json.gz": {
+   "sha256": "981a6dbaaf104c6269a5d9ae03341f72daf0a3c66c6b857d23fab49da90188a9",
+   "bytes": 113520
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-0-reverse-1.json.gz": {
+   "sha256": "a07cd1f70ddcd784a2fd198be416b76b805c4763728a407c0a68ad63f9580f21",
+   "bytes": 78486
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-1-reverse-0.json.gz": {
+   "sha256": "d63c6245045c07fa401873d0af2f8ed5c5e86f905e25f864d9e812bb90e89bbd",
+   "bytes": 128703
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-1-reverse-1.json.gz": {
+   "sha256": "742a0b5438310738322d6d4ca446ca4c235678c7129d4f9bca43020e412dc49a",
+   "bytes": 111003
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-2-reverse-0.json.gz": {
+   "sha256": "0df8a1ecc84e857e24e78308aa6ba51f22b74a67230efba4b936758370a0144d",
+   "bytes": 131269
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-2-reverse-1.json.gz": {
+   "sha256": "7893aeff6d9ce93e3840a6f5418411dff9f94006e0da1910767a914786ab8dd4",
+   "bytes": 207334
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-3-reverse-0.json.gz": {
+   "sha256": "de9b2cd4832444c27d25602d78dd31980c1deadc833a8773a7cb601ad42c26f3",
+   "bytes": 135059
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-3-reverse-1.json.gz": {
+   "sha256": "b772be9ae4a3032b64150be7706a7d50fed4dc2414830063f6bb732c03a7ac36",
+   "bytes": 51189
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-4-reverse-0.json.gz": {
+   "sha256": "9b6301342053fda3c0aa60c9eed61a5b7e0c8d072ea9d749cc275819d38b16f2",
+   "bytes": 448909
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-4-reverse-1.json.gz": {
+   "sha256": "26eeca2e07d576cf4a1fa673055f51037c9fb8b44dcfa663e2bb04690e56e083",
+   "bytes": 298122
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-5-reverse-0.json.gz": {
+   "sha256": "0708731cbe092e10870c0771c272c9cc24c3d4ff8ec9aa7f7fa076a93b053b31",
+   "bytes": 332190
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-5-reverse-1.json.gz": {
+   "sha256": "d1004fe6e40053843e506d4b9e107a728208653370cb274d27210d723e4bf957",
+   "bytes": 168442
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-6-reverse-0.json.gz": {
+   "sha256": "6ee055e54ca4e2433b0477ffbb227a5fcfd7ff67587a797842bad260323ea89d",
+   "bytes": 274980
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-6-reverse-1.json.gz": {
+   "sha256": "f0a6a6852ef04bdd1ba74d118764f59c255d55c0126818566c0e28a43ccd63d5",
+   "bytes": 71751
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-7-reverse-0.json.gz": {
+   "sha256": "7c5b6ab189b2532d5021397836d603f43492df42260f2f3a44af5af1caea758e",
+   "bytes": 209439
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/seed-7-reverse-1.json.gz": {
+   "sha256": "e48c36f7d585d321f2d677e625dc588b07f9f626b9a0e994a4536a4a94372599",
+   "bytes": 32295
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v2/summary.json": {
+   "sha256": "9b40e5e7ece5e3252f55e5b79787d7e6955a43cc9fa4d69015fa4d4e2637e69d",
+   "bytes": 3449
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/README.md": {
+   "sha256": "08d68748063d7537629a73e88b8c4e0ce41eb7d9b54d40d7b167f738efe5a39d",
+   "bytes": 669
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/registration.json": {
+   "sha256": "4caacfe208cbeaacb6ed0a4054973005b2df6d13bfe09c9f5ecae57a44d82d98",
+   "bytes": 30680
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-0-reverse-0.json.gz": {
+   "sha256": "981a6dbaaf104c6269a5d9ae03341f72daf0a3c66c6b857d23fab49da90188a9",
+   "bytes": 113520
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-0-reverse-1.json.gz": {
+   "sha256": "a07cd1f70ddcd784a2fd198be416b76b805c4763728a407c0a68ad63f9580f21",
+   "bytes": 78486
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-1-reverse-0.json.gz": {
+   "sha256": "d63c6245045c07fa401873d0af2f8ed5c5e86f905e25f864d9e812bb90e89bbd",
+   "bytes": 128703
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-1-reverse-1.json.gz": {
+   "sha256": "742a0b5438310738322d6d4ca446ca4c235678c7129d4f9bca43020e412dc49a",
+   "bytes": 111003
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-2-reverse-0.json.gz": {
+   "sha256": "0df8a1ecc84e857e24e78308aa6ba51f22b74a67230efba4b936758370a0144d",
+   "bytes": 131269
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-2-reverse-1.json.gz": {
+   "sha256": "7893aeff6d9ce93e3840a6f5418411dff9f94006e0da1910767a914786ab8dd4",
+   "bytes": 207334
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-3-reverse-0.json.gz": {
+   "sha256": "de9b2cd4832444c27d25602d78dd31980c1deadc833a8773a7cb601ad42c26f3",
+   "bytes": 135059
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-3-reverse-1.json.gz": {
+   "sha256": "b772be9ae4a3032b64150be7706a7d50fed4dc2414830063f6bb732c03a7ac36",
+   "bytes": 51189
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-4-reverse-0.json.gz": {
+   "sha256": "9b6301342053fda3c0aa60c9eed61a5b7e0c8d072ea9d749cc275819d38b16f2",
+   "bytes": 448909
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-4-reverse-1.json.gz": {
+   "sha256": "26eeca2e07d576cf4a1fa673055f51037c9fb8b44dcfa663e2bb04690e56e083",
+   "bytes": 298122
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-5-reverse-0.json.gz": {
+   "sha256": "0708731cbe092e10870c0771c272c9cc24c3d4ff8ec9aa7f7fa076a93b053b31",
+   "bytes": 332190
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-5-reverse-1.json.gz": {
+   "sha256": "d1004fe6e40053843e506d4b9e107a728208653370cb274d27210d723e4bf957",
+   "bytes": 168442
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-6-reverse-0.json.gz": {
+   "sha256": "6ee055e54ca4e2433b0477ffbb227a5fcfd7ff67587a797842bad260323ea89d",
+   "bytes": 274980
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-6-reverse-1.json.gz": {
+   "sha256": "f0a6a6852ef04bdd1ba74d118764f59c255d55c0126818566c0e28a43ccd63d5",
+   "bytes": 71751
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-7-reverse-0.json.gz": {
+   "sha256": "7c5b6ab189b2532d5021397836d603f43492df42260f2f3a44af5af1caea758e",
+   "bytes": 209439
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/seed-7-reverse-1.json.gz": {
+   "sha256": "e48c36f7d585d321f2d677e625dc588b07f9f626b9a0e994a4536a4a94372599",
+   "bytes": 32295
+  },
+  "experiments/data/archive/conformance/learn-lesson-w4-v4/summary.json": {
+   "sha256": "09b106ad2469a437e841bcfe8d21d5213c817bee2a65af2758fd179ccf9f0c25",
+   "bytes": 3449
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/README.md": {
+   "sha256": "18d021f64e39349e2440b1019595b2d51cf89c3171bb3604933653ae35248683",
+   "bytes": 2636
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/evidence.json": {
+   "sha256": "04155481ab35a7a331f643c9be5b16864a6de408757ca87eca4a7acfee259ad3",
+   "bytes": 2866
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/manifest.json": {
+   "sha256": "10831d922b9809e384399132f83c1f929aef76e9bcf0af8cd00edc60e1ce8b76",
+   "bytes": 863
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/regressions/.gitkeep": {
+   "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+   "bytes": 1
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "eb72317fb96f61e9c089e45ec490f06a068df7be6a354201631f238f901a82b9",
+   "bytes": 74059
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "dab3581d0808e7f2a0cd2512efc470583b887df4209735e7c4b3a3aaabe2d61e",
+   "bytes": 153287
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "af3be46d70f5c6b5148327ca4114601dd3abd3d550f573f7fc37918ca1cb1159",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "5fc7f0ddc8702690bb70c4d30c223ad0699b17d0eab694108cf7ae624ee71afb",
+   "bytes": 63216
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/README.md": {
+   "sha256": "6513214486481c85aeb97f7eccfd558087b4f835bf45366cb99d3cd0e2d6f0e8",
+   "bytes": 1405
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/evidence.json": {
+   "sha256": "a6f11d4397edeecf5c6ac35c70afed9055277c3000a55931ed8effa8c26eafab",
+   "bytes": 2876
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/manifest.json": {
+   "sha256": "10831d922b9809e384399132f83c1f929aef76e9bcf0af8cd00edc60e1ce8b76",
+   "bytes": 863
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/replays/gw-vs-ur-5eee.json": {
+   "sha256": "7e634be6c5c8e09eef5217e5f8b1d28ff4af83a7303996f1182001d527c1566e",
+   "bytes": 74041
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "9623592ec0c72d3ea578f4a4cab33c7781b3067b7ebc161186b1cf5d42ece40d",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/replays/ur-vs-gw-5eed.json": {
+   "sha256": "fe654d649e6e280f3e26ec919225e460074fdc2abf1e7a29f2162b9f6764e54f",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-v2/replays/ur-vs-gw-5eef.json": {
+   "sha256": "cb318b14ba1227093878c07cbc0bf13138abdefebb2683d3c82ee7178219ee23",
+   "bytes": 63188
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/evidence.json": {
+   "sha256": "064e0613a555edbf6c5424d9eb9e18df97216cb3f6838ae7c366ff4a02343a2b",
+   "bytes": 5359
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/manifest.json": {
+   "sha256": "1e6c3f0f045b2e7f1629ec52a54a9266d6293a4f0b7e020fe7bfee0a7dc14bb5",
+   "bytes": 2583
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-161.json": {
+   "sha256": "82ee2aec5507bff7ac97962ca63f9d6389f07f72b61308a22371730318bfba5e",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-162.json": {
+   "sha256": "a1cb667c8314b064688fc6516acc737346e26ae752ee137a6d25f7fb6455655f",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-163.json": {
+   "sha256": "64e9d7c5a507451124a86fb67df61927e69341e33993e194e5843153f0f65c50",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-164.json": {
+   "sha256": "7fad0ca9ee376c18e044b22bdac0dd9bd89341df6bf933577a5d67b36451131f",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-world-gr_vs_ug.json": {
+   "sha256": "f6cf9853973689171a3dd694a199d2c0957a9967c363db926c543d4a55c981ee",
+   "bytes": 172419
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/elemental-world-ug_vs_gr.json": {
+   "sha256": "76a1cdee32913b61a171e4a1b976c53bbd6dd441657c705f3d439ad5e83c5e63",
+   "bytes": 135988
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "4f07bea508a50e931d3c7b5a50fc93c4c4df65c24100b7e16d55ad3759666e78",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "9154e4f15b0ddc79ce41e1016dde3c3862f0ef09bc2f60eca30ade4faba1fb50",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/sacrifice-162.json": {
+   "sha256": "3f77075046a45e147fb819572985d21fb246de1467735ae44f3dbc234eb6df9d",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/sacrifice-163.json": {
+   "sha256": "75d69db3353a54425ec37c8a192eedddaf3a1769095841f8ce7914cee33d34ca",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/temur-163.json": {
+   "sha256": "b9cfce6a0dc5d5b78aecbbb8d8ed028169e5933dc3342ab87e7981df2762683b",
+   "bytes": 419164
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/temur-164.json": {
+   "sha256": "aa26d601fe80ef1cde88367d2f8b14828351afe69015c2d9f2c78ebc0ec25199",
+   "bytes": 646778
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "4374b98269f59055a9ba3c4a323dd800b0d766ad99d9113f6c38854aa5ae8832",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w10-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "b750dbc07c4d7a462fb41ee4be654ccbe5052911674b271dd92e9411145f540d",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/evidence.json": {
+   "sha256": "caf2d8b282f1632f354439cd1979e1c531727077698d5f0b6c3ceff2aae9cad8",
+   "bytes": 5359
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/manifest.json": {
+   "sha256": "9f29df52edc6cfd08acfa13bce07368e74589d09dc3779064e801da41ce41faf",
+   "bytes": 2583
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-161.json": {
+   "sha256": "5ab579385204deaf2a20989870f90ab597a9f7516aa1614779cdb9107c9ca971",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-162.json": {
+   "sha256": "6e30eadb0fc88d8d2351cee91a4355d0938b1a0df3e39351814fec67a193a61a",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-163.json": {
+   "sha256": "99e0f80a23d79eca1ba02c67ca03f04b8464cf0b14c46d7ca1c8df881404686f",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-164.json": {
+   "sha256": "faf01834acefa219ae791ad0480e0000f164950e9b4f58fa848b9780ca4aa431",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-world-gr_vs_ug.json": {
+   "sha256": "81abcd25652d3d5fbd3e423172d4a2454d7e54eb9f4b07ea7c7e6ccf509577cb",
+   "bytes": 172419
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/elemental-world-ug_vs_gr.json": {
+   "sha256": "b4dc532bf9664688950a474b8b5647ec0de64a648d48762a18cb0fd6a95874e3",
+   "bytes": 135988
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "9005ff68c1e69f9b509f20f1e0ec0a416e73797777d81ea588de1979fa372585",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "f5de2f60795a869a65e0a506bbd8fb67a0397263489ec8c8f6322aa4982cf3f8",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/sacrifice-162.json": {
+   "sha256": "0ad25dc8868f24a3a1e987dce2ae93063a0d80c5c059963d63c867a3eb1cd504",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/sacrifice-163.json": {
+   "sha256": "a11b2bf9a66ed01e9a72b9836e2878052de1b27ee0c8ce537634d9272eb6ed14",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/temur-163.json": {
+   "sha256": "ee1f91f5f234ab7a5093876e9fe42b2234500dfe17c4eb7304903fe9227bd006",
+   "bytes": 419164
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/temur-164.json": {
+   "sha256": "c4312dd1ea47ee69d36b24105b27b37248529923d7e3fd59918c10fe0137df53",
+   "bytes": 646778
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "e43bf94a45a3d90ff73f64bdc7abf9030e846abd2d14cd44a964c3b7e6bb3a46",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-payment-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "cf0ac6785f01bf55b2689bdf55ae8b5d105ba762760bfb17425bd5726eabbd3f",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/evidence.json": {
+   "sha256": "ec6f3edcd59d14514bd3e792b71b85a757b0fc67db2742bdb30bf4eb9d81a594",
+   "bytes": 5359
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/manifest.json": {
+   "sha256": "9f29df52edc6cfd08acfa13bce07368e74589d09dc3779064e801da41ce41faf",
+   "bytes": 2583
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-161.json": {
+   "sha256": "5ab579385204deaf2a20989870f90ab597a9f7516aa1614779cdb9107c9ca971",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-162.json": {
+   "sha256": "6e30eadb0fc88d8d2351cee91a4355d0938b1a0df3e39351814fec67a193a61a",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-163.json": {
+   "sha256": "99e0f80a23d79eca1ba02c67ca03f04b8464cf0b14c46d7ca1c8df881404686f",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-164.json": {
+   "sha256": "faf01834acefa219ae791ad0480e0000f164950e9b4f58fa848b9780ca4aa431",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-world-gr_vs_ug.json": {
+   "sha256": "3fbbfe6e09b0c477797efac2b6c56c2289c455e2767be92087fc1ded04a62bef",
+   "bytes": 172419
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/elemental-world-ug_vs_gr.json": {
+   "sha256": "2c9f0736d390439bbd34e8c4c3d3797da9162b2f0ca23ea00d220484e308b6cd",
+   "bytes": 135988
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "9005ff68c1e69f9b509f20f1e0ec0a416e73797777d81ea588de1979fa372585",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "f5de2f60795a869a65e0a506bbd8fb67a0397263489ec8c8f6322aa4982cf3f8",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/sacrifice-162.json": {
+   "sha256": "0ad25dc8868f24a3a1e987dce2ae93063a0d80c5c059963d63c867a3eb1cd504",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/sacrifice-163.json": {
+   "sha256": "a11b2bf9a66ed01e9a72b9836e2878052de1b27ee0c8ce537634d9272eb6ed14",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/temur-163.json": {
+   "sha256": "ee1f91f5f234ab7a5093876e9fe42b2234500dfe17c4eb7304903fe9227bd006",
+   "bytes": 419164
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/temur-164.json": {
+   "sha256": "4e3ecdd2449aa4fd25791211e4b2b5435df86c6bfa4c94eeac4d17b670f9b41e",
+   "bytes": 646778
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "e43bf94a45a3d90ff73f64bdc7abf9030e846abd2d14cd44a964c3b7e6bb3a46",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w11-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "cf0ac6785f01bf55b2689bdf55ae8b5d105ba762760bfb17425bd5726eabbd3f",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/evidence.json": {
+   "sha256": "ec6f3edcd59d14514bd3e792b71b85a757b0fc67db2742bdb30bf4eb9d81a594",
+   "bytes": 5359
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/manifest.json": {
+   "sha256": "e54b0a455085440b42e3967aa9cd473596efc854259ab2d3c865f73891ba7676",
+   "bytes": 2583
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-161.json": {
+   "sha256": "5ab579385204deaf2a20989870f90ab597a9f7516aa1614779cdb9107c9ca971",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-162.json": {
+   "sha256": "6e30eadb0fc88d8d2351cee91a4355d0938b1a0df3e39351814fec67a193a61a",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-163.json": {
+   "sha256": "99e0f80a23d79eca1ba02c67ca03f04b8464cf0b14c46d7ca1c8df881404686f",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-164.json": {
+   "sha256": "faf01834acefa219ae791ad0480e0000f164950e9b4f58fa848b9780ca4aa431",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-world-gr_vs_ug.json": {
+   "sha256": "3fbbfe6e09b0c477797efac2b6c56c2289c455e2767be92087fc1ded04a62bef",
+   "bytes": 172419
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/elemental-world-ug_vs_gr.json": {
+   "sha256": "2c9f0736d390439bbd34e8c4c3d3797da9162b2f0ca23ea00d220484e308b6cd",
+   "bytes": 135988
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "9005ff68c1e69f9b509f20f1e0ec0a416e73797777d81ea588de1979fa372585",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "f5de2f60795a869a65e0a506bbd8fb67a0397263489ec8c8f6322aa4982cf3f8",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/sacrifice-162.json": {
+   "sha256": "0ad25dc8868f24a3a1e987dce2ae93063a0d80c5c059963d63c867a3eb1cd504",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/sacrifice-163.json": {
+   "sha256": "a11b2bf9a66ed01e9a72b9836e2878052de1b27ee0c8ce537634d9272eb6ed14",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/temur-163.json": {
+   "sha256": "ee1f91f5f234ab7a5093876e9fe42b2234500dfe17c4eb7304903fe9227bd006",
+   "bytes": 419164
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/temur-164.json": {
+   "sha256": "4e3ecdd2449aa4fd25791211e4b2b5435df86c6bfa4c94eeac4d17b670f9b41e",
+   "bytes": 646778
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "e43bf94a45a3d90ff73f64bdc7abf9030e846abd2d14cd44a964c3b7e6bb3a46",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w12-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "cf0ac6785f01bf55b2689bdf55ae8b5d105ba762760bfb17425bd5726eabbd3f",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/README.md": {
+   "sha256": "e059505d222c19f4f9ca4ed82c0f233d6d691b0c965fc107af7d78cea6b62e66",
+   "bytes": 1546
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/evidence.json": {
+   "sha256": "05b360772ce92ecbd547cd84b65208d1c7090757678878f4bf19c6fb19bed983",
+   "bytes": 2891
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/manifest.json": {
+   "sha256": "10831d922b9809e384399132f83c1f929aef76e9bcf0af8cd00edc60e1ce8b76",
+   "bytes": 863
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "8032540bb8617008086f9cc9c771560e670b57b0ea864633436cc196c4f98c89",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "f49b16a8d1c40386711f3525aa1c9d568299b6eae03f3ba63864977a30e669d1",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "001fa1db2ee26dd1ab8f2053e31e06255cc867c469b209dece322511ec2f9177",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w4-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "807d8e4fdcce3954630e9f2f0159c7c80d122e5866bb9bcc1e7c8b3d90f50540",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/README.md": {
+   "sha256": "af1cf02630aec1d196ba0fb43c9b23b3457fee5a7b817e69f5f7db5865b8adff",
+   "bytes": 1258
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/evidence.json": {
+   "sha256": "3cc18fd3dabe38d63b370225833a2aa854e398871ac2bc9d647723bbb29596fe",
+   "bytes": 2891
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/manifest.json": {
+   "sha256": "10831d922b9809e384399132f83c1f929aef76e9bcf0af8cd00edc60e1ce8b76",
+   "bytes": 863
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "4643043889c48dddaf0da94099b4bd3f02212296ff66a09832f2e0457a2bcdc4",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "32099dc0d290cfd95c5fceb9aaa26f9e5d8d33616265378f709e41be3de84f8a",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "0d4d6bfdd8633e0649ea9b2e3452c1fd192204f8053bdbeba9af1f3b1c112c30",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w5-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "ed9c72d1f29e32fa1354c5219ffe804f87697c44cdf64f1594388889f017f62f",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/README.md": {
+   "sha256": "da575a0696f832e361488db75fdd59b97b919e574fd757b0760ff10d46204601",
+   "bytes": 2137
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/evidence.json": {
+   "sha256": "debe52375d866be86f00bdbe12197a9ae63c2f3fb67e33f8781aebf38a76d1a3",
+   "bytes": 3862
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/manifest.json": {
+   "sha256": "59d17c44e25aeab127d01813edbb0b5b025b6f04b7d4142469328d562665ad7f",
+   "bytes": 1564
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/elemental-161.json": {
+   "sha256": "f579856327e799b0ecc076b7adcc977170ec2bb664217a6a2133506cd3d306c3",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/elemental-162.json": {
+   "sha256": "71d84338154ec0faddce62f7bbc94e93a4f1e319d8c938333fec348f82ed6ad2",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/elemental-163.json": {
+   "sha256": "0696ed6a1965fced4c2680e9963ec3f842d125c46059f456b2eeff4b3245b984",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/elemental-164.json": {
+   "sha256": "5b20b2b45736a92711abd3a3a0ef46cb1f9ca6f337fc37f320cf99ee1e1ca0d1",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "5d84c5e7f96db3e8fba8c21a2d28dabe56dae90fd868ce9e9bf980ad600cb242",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "c4652a340ddfd95712becb35c7dffc692605b4cc44609f7ce2415d8929f730dc",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "30591f847871c0afed902c7c8b3cf1e48e0b00d52e4fdccb966f8920d21a52e8",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w7-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "06a4966e43720c6f896f7b620a884da50aedadebd8f773e4c7d70888900b05bf",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/README.md": {
+   "sha256": "1da1a075fa1dd0a8eba32d981b55e34c826a6135d661b6a9c3db5820f931e6f5",
+   "bytes": 574
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/evidence.json": {
+   "sha256": "90df4f3a76f5c6bd10143bd0d4c3aa50fd6536967ae525915bc042ce54e0efb6",
+   "bytes": 4379
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/manifest.json": {
+   "sha256": "2c6ebe84a818b5a0991cd6a7b7e365ca8cdcef777dd5c1f083cdc4cf30c7f03e",
+   "bytes": 1902
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/elemental-161.json": {
+   "sha256": "833396f553c292e9b946881d128b0c8f3f3168c02aafa2554370d544bcb7359b",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/elemental-162.json": {
+   "sha256": "435ab00d6dee84d10700acaee20fb43f15869485bb88f85879ae4c512a6968f9",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/elemental-163.json": {
+   "sha256": "f718326ef47acda8bb6d62ea9c3fbeb43303cfc0b4d18c7eaae670a5eca9f4a8",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/elemental-164.json": {
+   "sha256": "f024f2e098a812275fcd7cb3110a2333709099c3fd596f618bd56a37393aaacd",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "637e4e9f8b6b602d70c1b29d668dbd66d29b93e2e9a8b7cd0e346d681651efa1",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "5752e0576ba3a1cf97a8f7b0805e4197424a0ed1af4bc927b907fbd22a209ec7",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/sacrifice-162.json": {
+   "sha256": "d6a95a16cba29896317b624eb8b747b4d1ef4ed87627d44d0ff4f16107dc6794",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/sacrifice-163.json": {
+   "sha256": "3946e8c064b9164b4b1e9ee1f329a05a05c51e758cf8e3a3703888879c60175c",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "f62e8eecd1a9a9e02df28c3279059d5234b3ac3756b4ba8de9f71ec81efb14f2",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w8-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "ad54bb2c8a79fd87466817c3d1f48bc5f9a7fa7f04eedfbe7fc842926dac7990",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/evidence.json": {
+   "sha256": "6d4615b3ddb4c5e74ed4b0cbf9350302acab96543dbf369b822693df21c4e75c",
+   "bytes": 4849
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/manifest.json": {
+   "sha256": "cc7ef94b0b2134a3c37a4b3412ce3baf5f802672d9b374f5479d9014b96202a9",
+   "bytes": 2224
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/phase-overlap.json": {
+   "sha256": "e2ae10026bffeb92a660c9ba5e849db19343565639411788562e2f09ed6e9353",
+   "bytes": 11001
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/elemental-161.json": {
+   "sha256": "85eeb7e82635ab38cd35e4a881a09704f38c99364e0a47846d818a73a13396be",
+   "bytes": 90872
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/elemental-162.json": {
+   "sha256": "498a31a8dc9574c2c5bc9d9d6f3a02bb6c95afee0e0033cfcb85398a8a5d7973",
+   "bytes": 56691
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/elemental-163.json": {
+   "sha256": "98878ae7f54780bdfd3cbb8f578970a393aa06f8e9f0dbb36e19da7bcd35b8de",
+   "bytes": 94844
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/elemental-164.json": {
+   "sha256": "99d0a2e68e1e11317893995a991fb2db08a8d6dc4f6a44b195b55cfb837bdb42",
+   "bytes": 136696
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/gw-vs-ur-5eee.json": {
+   "sha256": "da7116fcd37511e66f2f8ec6f26c4c12684a77c53deb9ae058dd54c624b6e486",
+   "bytes": 34424
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/gw-vs-ur-5ef0.json": {
+   "sha256": "ac5ece5b378b6cb09a24eb29d57ca48c320d93a805b022b95729ff6bf3e82c0d",
+   "bytes": 153265
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/sacrifice-162.json": {
+   "sha256": "271d635628a06d980d58d78bb867e1c94a25874e9da752a88cfe552480262488",
+   "bytes": 151713
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/sacrifice-163.json": {
+   "sha256": "79aa008db7309a5eac4f99bd235ff180ff2a8c5d7d1745b71eb36107fca32ef9",
+   "bytes": 125439
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/temur-163.json": {
+   "sha256": "b6bb1e21bee6419153f9fdbd68d233463533692b74c131cce82b4ef61d26b660",
+   "bytes": 419164
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/temur-164.json": {
+   "sha256": "d83f81661b83a4307bcc1658fbe43d217e16cea9780e0e44a7cfeb29afe2a6c4",
+   "bytes": 646778
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/ur-vs-gw-5eed.json": {
+   "sha256": "c8b60db8d53c4939dc0a1da33e5f1ab361a59353ec4243df01b39ac88d1dedfd",
+   "bytes": 100328
+  },
+  "experiments/data/archive/conformance/semantic-kernel-w9-v1/replays/ur-vs-gw-5eef.json": {
+   "sha256": "c128c566cff38c73391fb7f3e0da76ad79b4055e3ab2f6e3acb353e1517eb8fa",
+   "bytes": 106594
+  },
+  "experiments/data/archive/conformance/tla-jeong-increment-v1/seed-1.canonical-replay.json": {
+   "sha256": "a0e0bb6d380544a211e01e53d853a7cfd1da02322115172b3f8a835334f22e81",
+   "bytes": 1702568
+  },
+  "experiments/data/archive/conformance/tla-jeong-increment-v1/seed-3.canonical-replay.json": {
+   "sha256": "39b73639b6ab06848244ca162b69b111f39e2348e950742d1ebcdab93aa95c27",
+   "bytes": 3298920
+  },
+  "experiments/data/archive/experiments/katas/structural-semantic-katas-v1.json": {
+   "sha256": "5595ce579017c4ec84b8746cb30a3f4bb09a69e4801ccaf7748467f7bec2f948",
+   "bytes": 4895574
+  },
+  "experiments/data/archive/experiments/katas/structural-semantic-katas-v1.oracles.json": {
+   "sha256": "87a3e918f513c4bd8bfc4d29634440d0c1c6526542078b88b3f1e50b4e165c11",
+   "bytes": 4090
+  },
+  "experiments/data/archive/experiments/katas/structural-semantic-katas-v1.source.json": {
+   "sha256": "1a61c10d15a0ed5aa2746f4bb4fb9773db841c0c6affffe8cad21fac32ef5f2d",
+   "bytes": 821049
+  },
+  "experiments/data/archive/experiments/workloads/opcode-alignment-v1.json": {
+   "sha256": "c968ee16f62d1ca486f604503d4868de80ab65a1e3037ac9dae26a8e6bb7dadd",
+   "bytes": 1325
+  },
+  "experiments/data/archive/experiments/workloads/structural-semantic-katas-v1.json": {
+   "sha256": "c7afb920522e7d5926982b4dd2d53cdfbf8fc862ad96f2a91cc16c9149d33e8a",
+   "bytes": 4532
+  },
   "experiments/data/cuda-capacity/calibration-amendment.json": {
    "sha256": "4f855afa28d4c7381acc8a62b37e1853283c9c3e6eb7d551f674880bc8f4d87a",
    "bytes": 587
