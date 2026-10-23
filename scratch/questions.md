@@ -71,3 +71,9 @@ They do not select current work or authorize paid execution.
 - The report names a paused run's stop reason `allocation_deadline` and a
   TimeoutError-interrupted run's `deadline`; a real `game_error_rate_exceeded`
   still wins.
+- Status (realign, 2026-10-23): all four Task outcomes implemented in
+  `game_errors.py`, `collection.py` and `reports/experiment.py`;
+  `docs/game-crash-recovery.md` updated to match. A KeyboardInterrupt
+  (BaseException) inside collection still settles nothing, as before.
+  Remaining: PR #359 CI and landing.
+- Check: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_experiment_report.py tests/training/test_allocation.py -q` → 44 passed.
