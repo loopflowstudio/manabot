@@ -20,6 +20,7 @@ instruments.
 | [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
 | [belief_sampler](belief_sampler.py) | `belief_sampler`, `:learned_belief_local_search` ([guide](../docs/belief-sampler.md)) | `manabot train` |
 | [frozen_policy_local_update](frozen_policy_local_update.py) | `frozen_policy_local_update` ([guide](../docs/local-policy-search.md)) | `manabot train` |
+| [heuristic_strength](heuristic_strength.py) | heuristic against a checkpoint, optional search ([report](heuristic-strength.md)) | `python -m experiments.heuristic_strength` |
 
 Reports of finished studies stay as the record. The runners, contracts, plans
 and fixtures they cite were removed once nothing current used them; git
@@ -72,6 +73,12 @@ history.
    changes that break them are failing changes regardless of green tests.
 
 ## Index
+
+[Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
+`heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
+62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with
+faster decisions. Flat Monte Carlo over it adds +6.3 points [0.0, 12.7] at 16
+worlds, for about 3,000 times the decision time.
 
 [MTG-165 two-seat scale ladder](two-seat-ladder.md): **running, interim report** —
 20.9M learner/environment decisions retained in a verified 704-update snapshot.
