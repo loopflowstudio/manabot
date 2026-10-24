@@ -3,21 +3,18 @@
 Frozen protocol: `experiments/protocols/elemental-181.md` (commit 9e47a7d6, amended
 0e9c4427 for the 18101 retry). It stays the authority; this note tracks state.
 
-## Exists (observed 2026-10-23 18:20 UTC; latest check at end)
+## Exists (latest check at end)
 
-- Three jobs running on L4 (direct job_status): `-18101-r2` update 103,
-  `-18102` 91, `-18103` 107; no failures in the ledger. ≈115–145 updates/hour →
-  ≈600–700 updates by the 5 h deadline (≈22:30 UTC), inside the 300–700
-  prediction. Conservative cost ≈ $0.18 including the
-  $0.05 failed 18101 probe.
+- Three jobs running on L4 (direct job_status); no failures in the ledger.
+  ≈115–145 updates/hour → ≈600–700 updates by the 5 h deadline (≈22:30 UTC),
+  inside the 300–700 prediction. Cost includes the $0.05 failed 18101 probe.
 - 18103 at update 3: 106,166 learner = environment decisions, 515 games, 0
   crashed; ≈35k learner decisions/update (protocol estimate ~56k).
 - Follower (launchd, pid 23706, until allocation + 48 h) is playing the first
   grid (18103 update 0) at ≈74 min per grid versus the 45–55 min calibration.
   Its ledger refreshes job state only between grids (last 17:31), so ledger job
-  state lags between grids. At 18:10 the first grid had started 112/200 groups
-  after 39 min and 151/200 at 18:26 (56 min), consistent with ≈74 min per grid;
-  no grid has completed yet. Expected
+  state lags between grids. The first grid had 112/200 group directories at
+  39 min, 151 at 56 min and 172 at 63 min, consistent with ≈74 min per grid. Expected
   cadence 0/200/400/600 + endpoint ≈ 5 grids/seed ≈ 15 grids ≈ 18.5 h, inside
   the 48 h window; protocol predicted 3–6 evaluations per seed.
 - Report script committed (7a75f9cc7, 53afcf4b1): pydantic `Report`/`SeedRecord`/
@@ -53,4 +50,12 @@ Frozen protocol: `experiments/protocols/elemental-181.md` (commit 9e47a7d6, amen
   sharing the machine) projected 45–55 min. The production grid with ten workers
   is running at about 74 min. The cause has not been diagnosed.
 
-Latest check (18:31 UTC, direct job_status + `ps -p 23706`): 18101-r2 running u124, 18102 u108, 18103 u127; none terminal. Follower alive (59 min), first grid in progress, 0 grids complete. Inclusive ≈ $1.93 of $10 (pods $1.88 + $0.05 probe). Read-only helper: /tmp/mtg181tools/status.py.
+- Training terminal (22:23 UTC): all three `paused` with cleanup confirmed. 18101-r2 u616, 18103 u568 at the deadline, 0 crashed games. **18102 stopped at u474 on the kill criterion** `game_error_rate_exceeded` (256 crashed of 127,358 attempted, window rate 1.0); Its `run/game-attempts.jsonl` (127,358 attempts) shows all 256 non-completed attempts are `outcome=deadline`, `TimeoutError: collector exceeded training deadline`, one per stream at u474: the allocation deadline cut the in-flight games and the game-error window counted them. No engine or agent error. It is a deadline stop that the `stop_reason` mislabels, not a game-bug failure. Report it as such (follow-up: deadline abandonment should not enter the game-error window). 18102 is slower (u258 vs 313–321 at 20:02), so it reached the deadline in mid-update. All three records carry a sticky `snapshot upload failed (ValueError)` from some intermediate snapshot; final manifests are complete.
+- Cleanup confirmation needs `RUNPOD_API_KEY` (Doppler `etude/prd`) only to write the deletion receipt; the launchd follower has none, so `doppler run -p etude -c prd -- … status.py` wrote the receipts at 22:25. After that, keyless status reads them.
+
+Latest check (2026-10-24 15:30 UTC): follower pid 23706 alive (22 h); 10/13 grids complete, all 5,000 valid each. Means (n=3): u0 0.206, u200 0.789 (sd 0.002), u400 0.838 (sd 0.007; 18101 0.829, 18102 0.842, 18103 0.842); 18102 endpoint u474 0.844 (gain +0.638). 18103 u568 at 77/200 groups; then 18101 u600 and u616. Overnight grids slowed to ≈3–4 h (host on battery, load ≈30); daytime ≈75 min, so done ≈ 19:00 UTC if the host stays awake. Report script runs cleanly on the partial evidence. Inclusive ≈ $9.12 of $10, settled.
+
+Direction (Jack Heart, 2026-10-24): stack this branch on #362 (`jack-heart/remote-on-etude`) so the evidence publishes to R2. Rebase only after the follower exits (its grid workers import from this checkout). #362 deletes `manabot/remote/job_client.py`, which the report script uses for settled job status; read that from the ledger (or #362's Etude client) instead.
+- #362 merged 2026-10-24 19:22 UTC: rebase onto main, not a stack.
+- Steer (Jack Heart via Etude storage-cost session, 2026-10-24): once the follower stops, copy the keepers from s3://etudefantasia/manabot/jobs/mtg181-* into R2 `manabot` (same relative path, no `manabot/` prefix; checkpoints, final run/run.json, latest manifest, control files, Etude metrics; verify size/sha256; skip superseded snapshots, training.sqlite, dashboards, source archives), then delete all versions and delete markers of those folders. R2 creds: Doppler manabot/prd. Report copied items and deleted bytes.
+- Main shipped a stronger heuristic (639ab7770). The frozen anchor stays v1; offered Jack Heart a separate endpoint addendum against the new heuristic.
