@@ -98,6 +98,7 @@ struct NativeActionTrace {
 pub struct Env {
     game: Option<Game>,
     action_trace: Option<NativeActionTrace>,
+    capture_cards: bool,
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
@@ -181,6 +182,7 @@ impl Env {
         Self {
             game: None,
             action_trace: None,
+            capture_cards: false,
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -200,6 +202,7 @@ impl Env {
         Env {
             game: Some(game),
             action_trace: None,
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -227,11 +230,43 @@ impl Env {
             player_configs: player_configs.clone(),
             actions: Vec::new(),
         });
-        let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
+        let mut game = if self.capture_cards {
+            Game::new_capturing(player_configs, self.seed, self.skip_trivial)
+        } else {
+            Game::new(player_configs, self.seed, self.skip_trivial)
+        };
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
+    }
+
+    /// Must be enabled before reset so setup facts cannot be missed.
+    pub fn enable_card_capture(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError(
+                "card capture must be enabled before reset".into(),
+            ));
+        }
+        self.capture_cards = true;
+        Ok(())
+    }
+
+    pub fn card_capture_json(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("capture before reset".into()))?;
+        let capture = game
+            .card_capture
+            .as_ref()
+            .ok_or_else(|| AgentError("card capture unavailable".into()))?;
+        serde_json::to_string(&serde_json::json!({
+            "capture": capture,
+            "final_cards": crate::flow::card_capture::snapshots(game),
+            "turn": game.state.turn.turn_number,
+        }))
+        .map_err(|e| AgentError(e.to_string()))
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -815,6 +850,7 @@ impl Env {
         Ok(Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -834,6 +870,7 @@ impl Env {
         Ok(Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),

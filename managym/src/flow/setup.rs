@@ -36,6 +36,27 @@ impl Game {
         skip_trivial: bool,
         content: Arc<ContentPack>,
     ) -> Self {
+        Self::construct(player_configs, seed, skip_trivial, content, false)
+    }
+
+    pub(crate) fn new_capturing(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+    ) -> Self {
+        let content = content_pack_for_authored_match(&player_configs)
+            .expect("validated authored content")
+            .unwrap_or_else(default_content_pack);
+        Self::construct(player_configs, seed, skip_trivial, content, true)
+    }
+
+    fn construct(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+        content: Arc<ContentPack>,
+        capture: bool,
+    ) -> Self {
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
@@ -145,11 +166,15 @@ impl Game {
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
             undo: None,
+            card_capture: None,
         };
 
         game.trackers[0].on_game_start();
         game.trackers[1].on_game_start();
 
+        if capture {
+            game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));
+        }
         let _ = game.tick();
         game
     }

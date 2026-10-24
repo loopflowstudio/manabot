@@ -31,6 +31,7 @@ from manabot.sim.search.teacher1_evidence import build_command, build_viewer_fra
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
+from .card_evidence import ArenaGameTrace, capture_verified_game, retain_evidence
 from .guidance import build_arena_player
 from .matchup import AuthoredMatchup
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
@@ -385,6 +386,7 @@ def play_cell(
     max_commands: int = 10_000,
     matchup_mode: MatchupMode = "cross",
     authored_matchup: AuthoredMatchup | None = None,
+    card_evidence_dir: Path | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
@@ -584,7 +586,16 @@ def play_cell(
             rows.append(row)
     trace_receipt["artifact_path"] = trace_relative_path
     replay_started = time.perf_counter()
-    receipts = [replay_games([game]).to_dict() for game in games]
+    if card_evidence_dir is None:
+        receipts = [replay_games([game]).to_dict() for game in games]
+    else:
+        receipts = []
+        references = []
+        for game in games:
+            evidence = capture_verified_game(ArenaGameTrace(data=game))
+            references.append(retain_evidence(card_evidence_dir, evidence).model_dump())
+            receipts.append(dict(evidence.replay))
+        trace_receipt["card_evidence"] = references
     replay_payload = {
         name: sum(r[name] for r in receipts) for name in receipts[0] if name != "passed"
     }
