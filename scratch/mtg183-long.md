@@ -38,6 +38,21 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
   the protocol amendment; follower admission of Etude segment exports.
 - Report: `experiments/elemental_long_report.py` (synthetic test only).
 
+## Concept review (2026-10-24): next implement direction
+
+The accepted contract is one learner lineage with exactly one Etude segment (w3):
+"No retry, extension or further segment." The follower still models a list
+(`--segment` repeated, `Etude.runs`, `ledger.segments`, settled = all runs done),
+which suggests a chaining that the protocol forbids. Make it one run:
+`--run <etude run>` (single), a follower adapter named for what it is (e.g.
+`SegmentSource`, not `Etude`, which names the system), `ledger.segment_outcome`
+holding w3's terminal Etude state for the report, and settlement = that run is
+terminal. Ledger entries from w1/w2 stay unchanged. No other concept changes:
+`LearnerContinuation` (storage keys, pre-launch) vs `LearningStateImport`
+(bound local paths, regime admission) are distinct stages of the same import and
+both earn their place; window (w1/w2, cohort) vs segment (w3, Etude) matches the
+protocol amendment. No open product choice.
+
 ## Remains, in order
 
 1. After w2 ends: fetch w2's final run.json and `self-play-{raw,ema,optimizer}.pt`
