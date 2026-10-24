@@ -68,7 +68,7 @@ class StepCalibration(Strict):
                 "sha256": hashlib.sha256(payload).hexdigest(),
                 "bytes": len(payload),
             },
-            completed_updates=len(stage.diagnostics),
+            completed_updates=stage.updates,
             active_seconds=stage.collection_seconds + stage.learning_seconds,
             learner_transitions=stage.learner_transitions,
         )

@@ -11,20 +11,37 @@ import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.training import execution
-from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.state.recovery import attempt_lock, load_update
+from manabot.training.update_metrics import MetricRow, read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> None:
+def tracked_updates(run: TrainingRun, source: Path) -> list[MetricRow]:
+    """Every update row of a run, read back from its Etude run under `source`."""
+    return [
+        row
+        for rows in stage_rows(run, read_updates(source, [run])).values()
+        for row in rows
+    ]
+
+
+def assert_learning_metrics_equal(
+    left: TrainingRun, right: TrainingRun, source: Path
+) -> None:
     """Recovery preserves learning facts, while elapsed cost and host samples vary."""
-    for a, b in zip(left.diagnostics, right.diagnostics, strict=True):
-        assert {k: v for k, v in a.items() if k != "coordinates"} == {
-            k: v for k, v in b.items() if k != "coordinates"
+    left_rows, right_rows = (
+        tracked_updates(left, source),
+        tracked_updates(right, source),
+    )
+    assert left_rows
+    for a, b in zip(left_rows, right_rows, strict=True):
+        assert {k: v for k, v in a.items() if not k.startswith("coordinates/")} == {
+            k: v for k, v in b.items() if not k.startswith("coordinates/")
         }
         for name in (
             "updates",
@@ -33,7 +50,7 @@ def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> 
             "optimizer_exposures",
             "games",
         ):
-            assert a["coordinates"][name] == b["coordinates"][name]
+            assert a[f"coordinates/{name}"] == b[f"coordinates/{name}"]
 
 
 def recipe() -> TrainingRegime:
@@ -98,7 +115,7 @@ def interrupt(
         if (
             run.status == "running"
             and run.recovery_artifact is not None
-            and run.stages[-1].diagnostics
+            and run.stages[-1].updates
         ):
             raise KeyboardInterrupt("injected after durable update")
         return run
@@ -143,7 +160,7 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
-        a, b = load_update(whole, store), load_update(resumed, store)
+        a, b = load_update(whole), load_update(resumed)
         for name in (
             "learner",
             "optimizer",
@@ -158,7 +175,7 @@ def test_real_interruption_restores_complete_learning_state(
         assert_state_equal(a.collector.buffers, b.collector.buffers)
         assert_state_equal(a.collector.sampling_rng, b.collector.sampling_rng)
         assert a.iteration == b.iteration == 3
-        assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
+        assert_learning_metrics_equal(whole, resumed, tmp_path)
         assert whole.stages[0].games == resumed.stages[0].games
         assert whole.stages[0].games > 0
         transitions = whole.stages[0].learner_transitions
@@ -294,7 +311,7 @@ with VerifyStore(Path(sys.argv[2])) as store:
         assert resumed.prior_seconds == parent.seconds
         assert (failed_out / "run.json").read_bytes() == evidence
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        a, b = load_update(whole, store), load_update(resumed, store)
+        a, b = load_update(whole), load_update(resumed)
         assert_state_equal(a.learner, b.learner)
         assert_state_equal(a.optimizer, b.optimizer)
 
@@ -396,7 +413,7 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
             assert Path(path).read_bytes() == data
         for row in completed:
             assert not list((tmp_path / "child").glob(f"{row.id}-*.pt"))
-        a, b = load_update(whole, store), load_update(child, store)
+        a, b = load_update(whole), load_update(child)
         for name in (
             "learner",
             "optimizer",
@@ -410,8 +427,8 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
         assert a.iteration == b.iteration
         assert a.collector.journal == b.collector.journal
         assert_state_equal(a.collector.buffers, b.collector.buffers)
+        assert_learning_metrics_equal(whole, child, tmp_path)
         for left, right in zip(whole.stages, child.stages, strict=True):
-            assert_learning_diagnostics_equal(left, right)
             assert left.learner_transitions == right.learner_transitions
             assert left.environment_decisions == right.environment_decisions
             assert left.games == right.games
@@ -584,11 +601,7 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
         run_id: str, owner: VerifyStore, path: str | Path
     ) -> TrainingRun:
         run = export(run_id, owner, path)
-        if (
-            run.status == "running"
-            and run.stages
-            and len(run.stages[-1].diagnostics) == 2
-        ):
+        if run.status == "running" and run.stages and run.stages[-1].updates == 2:
             raise KeyboardInterrupt("unsnapshotted progress")
         return run
 
@@ -602,16 +615,16 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()
         failed = store.training_run(row[0])
-        assert len(failed.stages[0].diagnostics) == 2
-        assert load_update(failed, store).iteration == 1
+        assert failed.stages[0].updates == 2
+        assert load_update(failed).iteration == 1
         resumed = execution.execute_regime(
             value, 197, tmp_path / "resumed", store, resume_from=failed.id
         )
         assert resumed.status == "completed"
         assert resumed.prior_seconds == failed.seconds
-        a, b = load_update(whole, store), load_update(resumed, store)
+        a, b = load_update(whole), load_update(resumed)
         for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
             assert_state_equal(getattr(a, name), getattr(b, name))
         assert a.collector.journal == b.collector.journal
-        assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
+        assert_learning_metrics_equal(whole, resumed, tmp_path)
         assert not list((tmp_path / "whole").glob("*update-00000002.pt"))

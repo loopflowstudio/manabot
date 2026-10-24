@@ -1,10 +1,11 @@
 # TrainingRun dashboards
 
-The training monitor projects existing TrainingRun diagnostics and arena receipts
-into Etude metric runs. VerifyStore remains the training authority;
-`run.json`, `dashboard.json` and Etude metrics are exports. No account is needed to
-train or retain diagnostics. These commands do not modify a running trainer,
-its checkout, or its frozen recipe.
+Self-play training logs each update's diagnostics once, to its own Etude run.
+TrainingRun (VerifyStore, exported as `run.json`) keeps the scientific receipt:
+regime, identities, stage counters, artifacts, monitoring checkpoints and
+status. Checkpoint evaluation projects arena receipts into a separate Etude
+monitoring run. No account is needed to train or retain diagnostics. These
+commands do not modify a running trainer, its checkout, or its frozen recipe.
 
 ## New training and live dashboards
 
@@ -54,9 +55,9 @@ numerical step counts once without rewriting the producer's bytes.
 
 See [freezing targets from calibration](training-calibration.md#freeze-prospective-step-targets).
 New comparison notebooks lead with exact matched steps, then sample exposure
-and recorded active time. Existing edited notebooks remain unchanged. Etude is a
-projection of these same recorded coordinates; tracker arrival time is not the
-learning clock.
+and recorded active time. Existing edited notebooks remain unchanged. Each Etude
+row carries these recorded coordinates; tracker arrival time is not the learning
+clock.
 
 Explicit `checkpoint_seconds` / `--checkpoint-seconds` preserves historical
 elapsed-time cadence at update/epoch boundaries. Frozen launch JSON and historical
@@ -66,36 +67,25 @@ and actual cost remain time-based; `JobSpec.checkpoint_seconds` is an export
 reserve, not a monitoring interval. Stage-end raw/EMA exports remain available
 when monitoring is disabled. Watchdog/resource budgets charge all export work.
 
-Once `run.json` exists, launch the read-only dashboard follower separately:
+Update rows need no follower. A local run writes its Etude run under
+`OUT/<stage>/etude/<run id>/`, named in `TrainingRun.metrics_run`; under
+`etude launch` it is the launcher's run in `ETUDE_TRACK_DIR`. A recovery attempt
+continues its parent's Etude run in place, so one run holds every attempt and a
+later attempt's rows replace the earlier one's from the update it resumed at.
+Inspect locally with:
 
 ```bash
-uv run python -m manabot.reports.training \
-  --run .runs/example/run.json --out .runs/example-dashboard --watch-seconds 30
+uv run etude reports write --source .runs/example
 ```
 
-Every invocation writes local `dashboard.json` and an Etude run under
-`OUT/etude`. Add `--destination s3://YOUR-BUCKET/tracking` (or a directory) for
-SDK-managed delivery. `--experiment` selects the Etude comparison name;
-`--store .runs/training.sqlite --run-id ID` reads the authoritative store.
-Delivery failure retains both JSON and SDK files with a `delivery.json` error
-type. Repeating the command retries without rewriting settled rows.
-
-Each TrainingRun has a stable projection ID. Etude keeps the regime, seeds and
-source/runtime/world identities as configuration. A summary observation retains
-current status, errors, checkpoint references and incomplete evaluation counts.
-The adapter reads row digests from Etude's durable metric blocks before appending
-new observations. Changed prefixes and shorter exports are rejected. One local
-publisher lease protects the output directory; keep that directory for retries.
-Recovery attempts retain distinct run identities.
-
-Etude supplies charts for the recorded scalar metrics. `progress/` and
-`throughput/` retain measured coordinates and rates. Missing values remain absent
-with `availability/` flags; no zero values are fabricated. Inspect locally with:
-
-```bash
-uv run etude reports write --source .runs/example-dashboard/etude
-```
-
+Rows use Etude's flat names: `loss`, `numerical/optimizer_steps`,
+`coordinates/learner_transitions`. Selection groups and self-play outcomes are
+keyed, as `selection_groups/<action type>/<terminal distance>/rows` and
+`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline reports read
+them back through `manabot.training.update_metrics.read_updates`, which finds a
+run's folder by name anywhere under an evidence directory. Supervised epochs,
+collection games and compound, selection and belief summaries are bounded and
+stay in their stage's `diagnostics`, as do the rows of historical exports.
 
 ## Reading the curves
 
@@ -171,17 +161,22 @@ wall cost and retained separately in replay receipts. RSS is not native peak
 memory; host load cannot identify contention or correct throughput for it. Arena
 work does not advance the recorded training coordinates.
 
-## Historical backfill
+## Historical evaluation curves
 
-No retraining or new evaluation is needed to publish saved diagnostics:
+No retraining or new evaluation is needed to publish saved monitor results:
 
 ```bash
-uv run python -m manabot.reports.training \
-  --run /path/to/saved/run.json --out .runs/historical-dashboard
 uv run python -m manabot.reports.training \
   --evaluations /path/to/checkpoint-0/monitor.json /path/to/checkpoint-1/monitor.json \
   --out .runs/historical-monitor-dashboard
 ```
+
+Every invocation writes local `dashboard.json` and an Etude run under
+`OUT/etude`. Add `--destination s3://YOUR-BUCKET/tracking` (or a directory) for
+SDK-managed delivery; `--experiment` selects the Etude comparison name. The
+adapter reads row digests from Etude's durable blocks before appending, so a
+retry never rewrites settled rows and a changed prefix is rejected. Delivery
+failure retains both JSON and SDK files with a `delivery.json` error type.
 
 Supply evaluation attempts in immutable append order, including failures. Runs,
 protocols and opponents must agree within a curve. Existing arena rows can be
@@ -196,11 +191,11 @@ uv run python -m manabot.arena.monitor_worker \
 
 Import preserves source path/digest, original training coordinates and recorded
 costs, and validates every deal/leg and registration. It does not reload old model
-bytes or claim a new replay. Historical diagnostics without per-update timestamps
-retain their original stage/ordinal and are explicitly marked incomplete; final
-stage duration is never spread over earlier updates. Missing fixed validation,
-losses or resource observations cannot be recreated from aggregate results.
-Historical schemas still need to be readable by the ordinary TrainingRun model.
+bytes or claim a new replay. Offline reports still read historical exports'
+retained update rows; rows without per-update timestamps keep their original
+stage/ordinal and are explicitly marked incomplete, and final stage duration is
+never spread over earlier updates. Missing fixed validation, losses or resource
+observations cannot be recreated from aggregate results.
 
 ## Experiment comparisons
 
@@ -225,9 +220,6 @@ keys in recipes or manifests. Publish a completed or stopped TrainingRun:
 uv run --extra artifacts python -m manabot.experiment.artifacts publish \
   --run /path/to/run.json --destination s3://etudefantasia/manabot/ \
   --out .runs/storage/run-artifacts.json
-uv run python -m manabot.reports.training \
-  --run /path/to/run.json --artifact-manifest .runs/storage/run-artifacts.json \
-  --out .runs/storage/dashboard --experiment manabot-monitoring
 ```
 
 The publisher validates all retained stage exports, including rejected artifacts,
@@ -246,9 +238,9 @@ The implementation uses conditional single PUT with SHA-256 and full readback;
 artifacts over 5 GiB fail explicitly. Transfer costs are separate from historical
 training costs. Bucket encryption and access policies are managed outside this CLI.
 
-Etude records manifest metadata in the projection summary. Training policy
-exports also use Etude checkpoint retention. The artifact manifest remains a
-separate archive of exact historical producer bytes; no old result is rewritten.
+Training policy exports also use Etude checkpoint retention. The artifact
+manifest remains a separate archive of exact historical producer bytes; no old
+result is rewritten.
 
 Fetch a named role from the manifest (use its exact `artifacts` key):
 

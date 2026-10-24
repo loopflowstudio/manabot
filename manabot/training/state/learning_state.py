@@ -44,14 +44,11 @@ class AdmittedLearningState:
 def _origin(source: TrainingRun, record: StageRecord) -> LearningStateOrigin:
     previous = record.learning_state_origin
     start = previous.iteration if previous is not None else 0
-    if not record.diagnostics or any(
-        diagnostic.get("iteration") != start + offset
-        for offset, diagnostic in enumerate(record.diagnostics, 1)
-    ):
-        raise ValueError("learning-state parent lacks contiguous absolute iterations")
+    if not record.updates:
+        raise ValueError("learning-state parent lacks completed updates")
     if record.cumulative_seconds is None:
         raise ValueError("learning-state parent cost is unavailable")
-    optimizer_updates = record.observed_optimizer_updates()
+    optimizer_updates = record.optimizer_updates
     if previous is not None:
         optimizer_updates = (
             optimizer_updates + previous.optimizer_updates
@@ -61,7 +58,7 @@ def _origin(source: TrainingRun, record: StageRecord) -> LearningStateOrigin:
     return LearningStateOrigin(
         run_id=source.id,
         stage_id=record.id,
-        iteration=start + len(record.diagnostics),
+        iteration=start + record.updates,
         optimizer_updates=optimizer_updates,
         **{
             name: getattr(record, name)

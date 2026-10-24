@@ -1,8 +1,8 @@
 """Completed self-play games, counted by deck matchup and starting seat.
 
 Each game contributes two seat outcomes, but one play and one draw observation.
-Counts are drained once per successful learner update and retained in diagnostics;
-missing historical diagnostics are not zero-game observations. No gradients or
+Counts are drained once per successful learner update and logged with that
+update's Etude metrics; missing rows are not zero-game observations. No gradients or
 policy sampling depend on this accounting.
 """
 

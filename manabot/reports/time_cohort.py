@@ -188,11 +188,11 @@ def native_cohort(
             if s.operation in {"train_self_play", "train_supervised", "train_compound"}
         }
         updates = (
-            sum(len(s.diagnostics) for s in leaf.stages if s.id in learning_ids)
+            sum(s.updates for s in leaf.stages if s.id in learning_ids)
             if complete_lineage
             and leaf.stages
             and all(
-                "diagnostics" in s.model_fields_set
+                "updates" in s.model_fields_set
                 for s in leaf.stages
                 if s.id in learning_ids
             )

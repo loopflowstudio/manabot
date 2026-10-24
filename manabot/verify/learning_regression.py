@@ -28,6 +28,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay
+from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
 import managym
@@ -396,13 +397,20 @@ def report_baseline(directory: Path) -> BaselineReport:
                 )
         report.families = family_changes(report.policies[0], report.policies[-1])
         exposure: dict[int, ActionExposure] = {}
-        for stage in run.stages:
-            for diagnostic in stage.diagnostics:
-                for group in diagnostic.get("selection_groups", []):
-                    kind = group["action_type"]
-                    total = exposure.setdefault(kind, ActionExposure(action_type=kind))
-                    total.collected += group["rows"]
-                    total.retained += group["retained"]
+        rows = stage_rows(run, read_updates(Path(attempt.path), [run]))
+        for row in (row for stage in rows.values() for row in stage):
+            for name, count in row.items():
+                parts = name.split("/")
+                if len(parts) != 4 or parts[0] != "selection_groups":
+                    continue
+                if parts[3] not in ("rows", "retained") or not isinstance(count, int):
+                    continue
+                kind = int(parts[1])
+                total = exposure.setdefault(kind, ActionExposure(action_type=kind))
+                if parts[3] == "rows":
+                    total.collected += count
+                else:
+                    total.retained += count
         report.exposure = [exposure[key] for key in sorted(exposure)]
         if sum(item.retained for item in report.exposure) == 0:
             raise ValueError("no observed training rows retained by learner")

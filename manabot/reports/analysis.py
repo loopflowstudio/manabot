@@ -7,10 +7,12 @@ from typing import Any
 
 from manabot.arena.models import file_sha256
 from manabot.infra.files import atomic_json
+from manabot.reports.records import RetainedRun
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.records import TrainingRun
 from manabot.training.regime import CollectSelection
 from manabot.training.rollout.selection_data import SelectionDataset
+from manabot.training.update_metrics import MetricValue, read_updates, stage_rows
 
 
 def valid_game(row):
@@ -375,17 +377,25 @@ def report(out: Path | str) -> None:
     for entry in study["runs"]:
         if not Path(entry["path"]).exists():
             continue
-        run = json.loads(Path(entry["path"]).read_text())
-        for stage in run["stages"]:
-            for iteration, diagnostic in enumerate(stage["diagnostics"]):
-                for group in diagnostic.get("selection_groups", []):
+        run = RetainedRun.model_validate_json(Path(entry["path"]).read_text())
+        tracked = read_updates(Path(entry["path"]).parent, [run])
+        for stage, rows in stage_rows(run, tracked).items():
+            for iteration, row in enumerate(rows):
+                groups: dict[tuple[str, str], dict[str, MetricValue]] = {}
+                for name, value in row.items():
+                    parts = name.split("/", 3)
+                    if len(parts) == 4 and parts[0] == "selection_groups":
+                        groups.setdefault((parts[1], parts[2]), {})[parts[3]] = value
+                for (action_type, distance), fields in groups.items():
                     selection_rows.append(
                         dict(
-                            run=run["id"],
-                            seed=run["seed"],
-                            stage=stage["id"],
+                            run=run.id,
+                            seed=run.seed,
+                            stage=stage,
                             iteration=iteration,
-                            **group,
+                            action_type=int(action_type),
+                            terminal_distance=distance,
+                            **fields,
                         )
                     )
     atomic_json(out / "selection-diagnostics.json", selection_rows)
