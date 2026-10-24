@@ -4,6 +4,12 @@ TrainingJob freezes an ordinary TrainingRegime and exact export milestones into
 an SDK Job. Etude owns placement, deadlines and attempt identity; execute_regime
 still owns learning, policy admission and scientific TrainingRun receipts. This
 entry point does not claim portable optimizer/collector recovery from a policy.
+
+A job may instead continue a parent TrainingRun's learner (LearnerContinuation):
+the parent's run record and final raw/EMA/Adam exports arrive as digest-checked
+Etude inputs, the worker binds them as the stage's LearningStateImport, and
+training resumes at the parent's absolute update toward the same absolute
+target. Game streams and RNGs restart; this is a new segment, not recovery.
 """
 
 from datetime import datetime, timezone
@@ -14,24 +20,81 @@ import os
 from pathlib import Path
 import time
 
-from etude.launch.records import Job
+from etude.launch.records import Input, Job
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
-from manabot.training.regime import Strict, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    LearningStateImport,
+    Strict,
+    TrainingRegime,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
+
+# Parent files arrive at ETUDE_INPUTS_DIR/<name>.
+_PARENT_FILES = {
+    "source_run": "parent-run.json",
+    "raw": "parent-raw.pt",
+    "ema": "parent-ema.pt",
+    "optimizer": "parent-optimizer.pt",
+}
+
+
+class StagedExport(Strict):
+    """One parent file held in the machine's Etude storage under `key`."""
+
+    key: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bytes: int = Field(ge=1)
+
+
+class LearnerContinuation(Strict):
+    """Continue a parent run's learner from its final exports.
+
+    `from_update` is the parent's absolute completed update; the worker refuses
+    a staged run record that ends anywhere else, or a seed other than the
+    parent's. The exports must be the parent
+    stage's own published raw/EMA/Adam artifacts (LearningStateImport admission
+    compares them with the record).
+    """
+
+    from_update: int = Field(ge=1)
+    source_stage: str
+    source_run: StagedExport
+    raw: StagedExport
+    ema: StagedExport
+    optimizer: StagedExport
+
+    def inputs(self) -> tuple[Input, ...]:
+        return tuple(
+            Input(
+                name=name,
+                key=getattr(self, role).key,
+                sha256=getattr(self, role).sha256,
+                size_bytes=getattr(self, role).bytes,
+            )
+            for role, name in _PARENT_FILES.items()
+        )
 
 
 class TrainingJob(Strict):
-    """Resolved learning plus export coordinates; construction never launches."""
+    """Resolved learning plus export coordinates; construction never launches.
+
+    Milestones and the regime's `updates` are absolute; a continuation's
+    milestones lie strictly between its `from_update` and the target.
+    """
 
     regime: TrainingRegime
     milestones: tuple[int, ...] = ()
     finalization_seconds: float = Field(default=30, gt=0)
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
+    continuation: LearnerContinuation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def admit(self) -> "TrainingJob":
@@ -47,12 +110,43 @@ class TrainingJob(Strict):
                 stage.active_seconds,
             )
         ):
-            raise ValueError("Etude training jobs require fresh step-target self-play")
+            raise ValueError(
+                "Etude training jobs require step-target self-play;"
+                " a learner continuation is bound from its inputs"
+            )
+        start = 0 if self.continuation is None else self.continuation.from_update
+        if start >= stage.updates:
+            raise ValueError("continuation must start before the update target")
         if tuple(sorted(set(self.milestones))) != self.milestones or any(
-            n <= 0 or n >= stage.updates for n in self.milestones
+            n <= start or n >= stage.updates for n in self.milestones
         ):
             raise ValueError("milestones must be unique increasing interior updates")
+        if self.continuation is not None:
+            # Regime admission of the bound import (EMA, damped absolute-step
+            # learning, one stage) happens here, before any job is frozen.
+            self.bound_regime(Path("/inputs"))
         return self
+
+    def bound_regime(self, inputs: Path) -> TrainingRegime:
+        """The regime with the continuation's staged files bound as its import."""
+        if self.continuation is None:
+            return self.regime
+        continuation = self.continuation
+        serialized = self.regime.model_dump(mode="json")
+        serialized["stages"][0]["learning_state"] = LearningStateImport.model_validate(
+            {
+                "source_stage": continuation.source_stage,
+                **{
+                    role: {
+                        "path": str(inputs / name),
+                        "sha256": getattr(continuation, role).sha256,
+                        "bytes": getattr(continuation, role).bytes,
+                    }
+                    for role, name in _PARENT_FILES.items()
+                },
+            }
+        ).model_dump(mode="json")
+        return TrainingRegime.model_validate(serialized)
 
     @property
     def updates(self) -> int:
@@ -90,6 +184,7 @@ class TrainingJob(Strict):
             max_hours=max_hours,
             max_usd=max_usd,
             max_attempts=1,
+            inputs=() if spec.continuation is None else spec.continuation.inputs(),
         )
 
 
@@ -118,9 +213,22 @@ def run_worker() -> TrainingRun:
     remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
     if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
         raise ValueError("remaining allocation cannot cover the frozen regime")
+    regime = spec.regime
+    if spec.continuation is not None:
+        inputs = Path(environment.get("ETUDE_INPUTS_DIR", ""))
+        if not environment.get("ETUDE_INPUTS_DIR") or not inputs.is_dir():
+            raise ValueError("a learner continuation needs its staged inputs")
+        parent = TrainingRun.model_validate_json(
+            (inputs / _PARENT_FILES["source_run"]).read_bytes()
+        )
+        if parent.updates_through() != spec.continuation.from_update:
+            raise ValueError("staged parent ends at a different update")
+        if parent.seed != int(environment["ETUDE_SEED"]):
+            raise ValueError("a learner continuation keeps its parent's seed")
+        regime = spec.bound_regime(inputs)
     # Native world admission precedes any collector or optimizer work. Never
     # shrink the recipe to fit a late start or silently substitute a device.
-    regime = validate_regime(spec.regime)
+    regime = validate_regime(regime)
     output = Path(environment["ETUDE_OUTPUT_DIR"])
     output.mkdir(parents=True, exist_ok=True)
     result_path = output / "etude-result.json"
