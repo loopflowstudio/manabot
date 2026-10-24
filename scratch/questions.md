@@ -1,59 +1,45 @@
-# MTG-176 assumptions
+# Card evaluation design — 2026-10-23
 
-Inherited MTG-174 sync/research notes are retained at
-`95ca2059ea443351cabd4e8c322991c36c0d8212:scratch/questions.md`.
+- Jack Heart selected card ranking by GIH as the first result, with future
+  17Lands-style API expansion and fidelity in the data-processing path.
+- Implementation design: `scratch/17lands-for-bots.md`; investigation:
+  `scratch/17lands-for-bots-evidence.md`. Jack Heart subsequently requested the
+  pursuit after review; the dated implementation defaults below settle engineering choices.
+- Engineering defaults: CLI/SQL first, one subject model
+  and explicit evaluation scope, existing authored deck layouts, true draws
+  excluded and reported separately, no implicit minimum-sample filter.
+- Arena compatibility initially means a versioned, offline-tested log subset
+  parsed by the pinned public 17Lands client. Full downstream metric parity
+  remains unproved without reference fixtures; copying parser hand sightings
+  directly into GIH would be incorrect.
+- Native cards need a verified mapping to Arena printing IDs for export.
+  Missing mappings cannot be invented. Rankings use content-bound native IDs.
+- No Wave or Task was named; standalone design needs no placement lookup.
+
+Prior MTG-176 recovery assumptions, sync provenance and remote-proof limits
+remain at `003644bda6d3ed2e1e6754186960b135ff815e76:scratch/questions.md`.
 They do not select current work or authorize paid execution.
 
-# Material assumptions
+## GIH implementation defaults — 2026-10-23
 
-- MTG-176 supplies the accepted recovery brief; its design is in
-  `scratch/game-crash-recovery.md`.
-- Window/warmup 100/100 are prospective engineering defaults, not numbers chosen
-  by Jack Heart. Game error tolerance is opt-in; complete-game buffering is used
-  even for its one-seat control, avoiding claims of historical unlearning.
-- Native setup/reset failures and buffer/configuration failures fail closed;
-  only settled gameplay errors/truncations are eligible for regather. External
-  run/allocation deadlines remain hard stops, not replacement-game allowances.
-- The supplied Task names MTG-175's seed but does not include its 34-action
-  prefix. The combined regression uses a seeded native Mountain/Gray Ogre setup and
-  a narrow fixture payment arithmetic defect/repair shared across capture, replay
-  and restart. It does not reproduce or fix that original game.
-- Automatic evidence is independent of opt-in tolerance. Strict paths retain
-  exceptions and recipe identities; no recovery is implicitly enabled. Standalone
-  consumers without an owning output scope write private `.runs/game-failures/`
-  files and attach the path to the exception. This is the simpler local default,
-  not a new storage service or public replay surface.
-- A strict vector exception leaves other active rows' execution outcomes unknown.
-  Retain their pre-call inputs for replay without inventing completed/crashed counts.
-  Positional/pool hard aborts or hangs still need external process supervision.
-- Concept review, 2026-10-22: replay evidence formats and existing CLI entry points
-  stay separate. Give their binding/error checks consistent meaning; older missing
-  optional metadata is explicitly unavailable rather than assumed to match. This
-  is the simpler compatibility-preserving interpretation of reproducible evidence,
-  not approval to rewrite historical receipts or relax restart admission. The implemented
-  clarification is recorded in `scratch/game-crash-recovery.md`.
-- Replay diagnostics use null for binding/error checks unavailable or not reached;
-  the boundary flag remains false until execution there is attempted. Arena keeps
-  its original failure label; automatic vector results retain the batch outcome
-  at the top level and mark individual streams' original outcomes unknown.
-  A strict batch exception does not identify which streams originally advanced.
-  Rust/PyO3 exception-name equivalence is normalized only for comparison.
-
-
-## MTG-176 sync recovery — 2026-10-22
-
-- Restored code, tests and design from stash
-  `d815bbfc94e03881681ca30283be0a4b3ccfea8d` after Loopflow sync reset the checkout
-  to `95ca2059e`. Its untracked `scratch/questions.md` collided with main's tracked
-  notes; the historical notes remain in the git reference above. The original
-  stash is unchanged.
-- The original proposed Wave memory remains in the stash. The 2026-10-22 realign
-  step in the active pursue Flow reconciles Intelligence memory with delivered
-  strict capture and the bounded remote integration proof. Integration
-  uses the delivered native uniform sampler and records actual sampled setups.
-
-- The remote accounting proof uses fake provider effects and CPU placement for
-  the exact local recovery recipe. RunPod's production CUDA recovery rejection
-  remains authoritative. Attempt limits here mean the existing permanent provider
-  claim, one recovery child per parent, and no checkpoint-evaluation retries within
-  the retained cumulative allowance; no new numeric process-retry policy is added.
+- Jack Heart's launch request supersedes the earlier design-only note. The
+  keystone keeps CLI/SQL, copy-weighted draws, and the existing eight-leg authored
+  matrices; no later metrics, API, UI, paid execution or external submissions.
+- Installed `etude-sdk[eval]==0.2.0` supports the inspected evaluation APIs.
+  Its delivery only includes metrics/checkpoints/tables/matches, not arbitrary
+  artifacts. Evidence therefore lives under the evaluation's `evidence/`;
+  explicit evaluation publication copies and verifies these immutable bytes via
+  Etude Storage before delivering Etude's indexes. Plain `etude sync` alone is
+  not a card-evidence publication command. This fills a concrete SDK gap without
+  another match scheduler, database, or evidence store.
+- Use the existing `evaluation` extra in commands. Confidence intervals resample
+  whole deal seeds across all selected pairings. Native capture is private,
+  setup-enabled and absent from clones. No rule/world version change is intended.
+- The pinned public client reports mulligan counts of -1 when no mulligan prompt
+  exists. Preserve that unavailable value; do not invent a mulligan decision.
+  Exported logs document this bounded subset and cannot certify server metrics.
+- Scheduled-admission default (2026-10-23): freeze the native content digest
+  alongside world, engine source and content-manifest identities in the existing
+  unreleased Etude environment. Missing identity fails admission; never infer it
+  from the reader's runtime or rewrite historical evidence. Deck/seat validation
+  uses the existing authored matrix, including complete deck and sideboard setup.

@@ -89,9 +89,14 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
 
 
 def replay_environment(
-    game: dict[str, Any], observation_space: ObservationSpace | None = None
+    game: dict[str, Any],
+    observation_space: ObservationSpace | None = None,
+    *,
+    capture_cards: bool = False,
 ) -> tuple[Env, dict[str, Any]]:
     if "scenario_root" in game:
+        if capture_cards:
+            raise ValueError("card capture requires ordinary deck setup")
         root = game["scenario_root"]
         name = root["name"]
         if root != scenario_identity(name):
@@ -125,6 +130,8 @@ def replay_environment(
         seed=int(game["deal_seed"]),
         auto_reset=False,
     )
+    if capture_cards:
+        env._engine.enable_card_capture()
     observation, _ = env.reset(seed=int(game["deal_seed"]))
     return env, observation
 
@@ -157,14 +164,28 @@ def replay_games(
     """
     counts = asdict(ArenaReplayReceipt())
     for game in games:
-        env, _ = replay_environment(game)
-        try:
-            receipt = _replay_game(game, env, require_terminal=require_terminal)
-            for name, count in asdict(receipt).items():
-                counts[name] += count
-        finally:
-            env.close()
+        receipt, _ = replay_game(game, require_terminal=require_terminal)
+        for name, count in asdict(receipt).items():
+            counts[name] += count
     return ArenaReplayReceipt(**counts)
+
+
+def replay_game(
+    game: dict[str, Any],
+    *,
+    require_terminal: bool = True,
+    capture_cards: bool = False,
+) -> tuple[ArenaReplayReceipt, dict[str, Any] | None]:
+    """Verify one game, optionally retaining native facts from the same replay."""
+    env, _ = replay_environment(game, capture_cards=capture_cards)
+    try:
+        receipt = _replay_game(game, env, require_terminal=require_terminal)
+        captured = (
+            json.loads(env._engine.card_capture_json()) if capture_cards else None
+        )
+        return receipt, captured
+    finally:
+        env.close()
 
 
 def _replay_game(

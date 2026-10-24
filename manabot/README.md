@@ -397,3 +397,6 @@ JSON without translating historical learning tags or adding current execution
 defaults. `TrainingRun` admits the current executable recipe; both share measured
 run fields through `RunRecord`. Reading or publishing a historical result does
 not admit its recipe for a new run or recovery.
+
+[GIH card evaluation](../docs/card-evaluation.md) uses arena replay capture and Etude
+tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.

@@ -161,3 +161,12 @@ checks required by the affected package and workflow.
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+
+### Etude card evaluation
+
+Etude SDK 0.2 hashes tracked source paths (`git add -N` admits new files for local
+implementation checks). Its built-in sync sends only known run folders and does
+not include arbitrary evidence artifacts. Card evaluations use the card
+publication operation to verify/copy their immutable evidence through Etude
+Storage before delivering scalar tables and match records. Do not publish their
+indexes alone or put card evidence in the checkpoint namespace.
