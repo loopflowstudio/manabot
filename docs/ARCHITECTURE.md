@@ -76,9 +76,9 @@ main engine. The loop is declared as data and executed by one runner:
   is a separate switch tested on Magic, with PPO kept as a control. See the
   [research program](../manabot/RESEARCH.md) and the
   [technique screens](../experiments/ataraxos-technique-screen.md).
-- **Remote execution.** Etude launches regimes on rented GPUs and returns
-  verified checkpoints and receipts. Training targets (`JobSpec`) are
-  separate from machine allocation. See
+- **Remote execution.** Etude launches regimes on rented GPUs, ships their
+  metrics and checkpoints while they run, and enforces hours and dollars. The
+  machine is chosen at launch, never in the experiment. See
   [remote training](remote-training.md) and
   [training regimes](training-regimes.md).
 - **Beliefs.** Belief samplers over the opponent's hidden cards are fit from a

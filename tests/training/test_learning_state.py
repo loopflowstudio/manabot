@@ -26,8 +26,6 @@ from manabot.training.regime import (
 from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
-from tests.remote.test_job_spec import job_spec
-from tests.training.test_allocation import AllocationClock
 
 
 def reference(path: Path) -> ArtifactReference:
@@ -275,47 +273,3 @@ def test_historical_wire_digest_and_next_iteration(
     assert (
         Path(state.artifacts["parent_run"]["path"]).read_bytes() == export.read_bytes()
     )
-
-
-def test_allocation_pause_exports_next_portable_segment(
-    tmp_path: Path,
-    producer: TrainingRun,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    clock = AllocationClock()
-    allocation = job_spec().admit(clock.time())
-    export = execution.export_training_run
-
-    def pause_after_update(
-        run_id: str,
-        owner: VerifyStore,
-        out: str | Path,
-    ) -> TrainingRun:
-        run = export(run_id, owner, out)
-        if run.status == "running" and run.stages and run.stages[0].diagnostics:
-            clock.now = allocation.pause_at
-        return run
-
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        with monkeypatch.context() as patch:
-            patch.setattr(execution, "time", clock)
-            patch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0.0)
-            patch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
-            patch.setattr(execution, "export_training_run", pause_after_update)
-            paused = execution.execute_regime(
-                continuation(producer, tmp_path / "producer/run.json", 4),
-                197,
-                tmp_path / "paused",
-                store,
-                allocation=allocation,
-            )
-        assert paused.status == "paused" and paused.updates_through() == 3
-        assert paused.recovery_artifact is None
-        continued = execution.execute_regime(
-            continuation(paused, tmp_path / "paused/run.json", 4),
-            197,
-            tmp_path / "continued",
-            store,
-        )
-    assert continued.status == "completed" and continued.updates_through() == 4
-    assert [d["iteration"] for d in continued.stages[0].diagnostics] == [4]

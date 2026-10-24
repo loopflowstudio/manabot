@@ -9,7 +9,6 @@ on:
       - 'manabot/env/**'
       - 'manabot/model/**'
       - 'manabot/verify/**'
-      - 'manabot/conf/**'
       - 'manabot/infra/**'
       - 'manabot/semantic/**'
       - 'manabot/belief/**'

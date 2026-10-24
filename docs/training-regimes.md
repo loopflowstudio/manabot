@@ -18,7 +18,7 @@ and holds whatever else that experiment needs to run and report.
 `<experiment>:<variant>` any other; `manabot.cli.regime_names()` lists them.
 Experiments with an arena study run with `python -m experiments.<experiment>`;
 shared study plumbing is `manabot.experiment.study`. Write a regime file
-for `--regime` or `manabot deploy` from Python:
+for `--regime` from Python:
 
 ```bash
 uv run python -c "from experiments.batched_baseline import batched_baseline; print(batched_baseline().model_dump_json(indent=2))" > regime.json

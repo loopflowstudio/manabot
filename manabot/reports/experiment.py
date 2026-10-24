@@ -513,6 +513,17 @@ def _training_time(evidence: ReportEvidence, output: Path) -> str:
     )
 
 
+def _stop_reason(run: ReportRun) -> str:
+    """Name why a game-tolerant run stopped; deadlines are not game errors."""
+    if run.game_errors is not None and run.game_errors.stop_reason:
+        return run.game_errors.stop_reason
+    if run.status == "paused":
+        return "allocation_deadline"
+    if run.status == "interrupted" and (run.error or "").startswith("TimeoutError"):
+        return "deadline"
+    return run.status
+
+
 def write_time_profile(evidence: ReportEvidence, output: Path) -> Path:
     """Write a selectable training cohort from existing offline evidence."""
     from manabot.reports.time_cohort import (
@@ -609,12 +620,13 @@ def write_dashboard(
             errors = run.game_errors
             parts.append(
                 f"<p>Run {escape(run.id)}: {errors.attempted} settled game attempts, "
-                f"{errors.completed} completed, {errors.crashed} crashed; "
+                f"{errors.completed} completed, {errors.crashed} crashed, "
+                f"{errors.abandoned} cut off when the run stopped; "
                 f"{errors.discarded_samples} samples discarded, "
                 f"{errors.replacement_samples} replacement samples. "
                 f"Game error rate {errors.error_rate:.1%} over the last "
                 f"{len(errors.window)} settled attempts; "
-                f"stop reason: {escape(errors.stop_reason or run.status)}. "
+                f"stop reason: {escape(_stop_reason(run))}. "
                 "Recovery does not establish that the rules defect was repaired.</p>"
             )
     parts.append(
