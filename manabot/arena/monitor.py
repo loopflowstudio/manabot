@@ -127,6 +127,8 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
         ):
             return None
         prefix = run.stages[: index + 1]
+        operation = run.regime.stages[index].operation
+        self_play = operation == "train_self_play"
         origins = [
             s.learning_state_origin
             for s in prefix
@@ -137,22 +139,21 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
             coordinates=TrainingCoordinates(
                 stage_id=stage.id,
                 updates=run.updates_through(stage.id),
-                segment_updates=len(stage.diagnostics)
-                if run.regime.stages[index].operation == "train_self_play"
-                and stage.optimizer_updates is not None
+                segment_updates=stage.updates
+                if self_play and stage.optimizer_updates is not None
                 else None,
                 optimizer_updates=run.optimizer_updates_through(stage.id),
                 training_seconds=stage.cumulative_seconds
                 + sum(origin.cumulative_seconds for origin in origins),
-                active_training_seconds=(
-                    float(
-                        stage.diagnostics[-1]["coordinates"]["active_training_seconds"]
-                    )
-                    if stage.diagnostics
-                    and "active_training_seconds"
-                    in stage.diagnostics[-1].get("coordinates", {})
-                    else None
-                ),
+                # As the stage's last update coordinate measured it: collection
+                # and learning time of this attempt's stages plus inherited time.
+                active_training_seconds=sum(
+                    s.collection_seconds + s.learning_seconds for s in prefix
+                )
+                + sum(origin.active_training_seconds for origin in origins)
+                if stage.updates
+                and operation in {"train_self_play", "train_supervised"}
+                else None,
                 **{
                     name: sum(getattr(s, name) for s in prefix)
                     + sum(getattr(origin, name) for origin in origins)

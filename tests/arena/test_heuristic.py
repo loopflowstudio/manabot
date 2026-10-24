@@ -117,18 +117,22 @@ def act(
     stack: list[SimpleNamespace] = (),
     events: list[SimpleNamespace] = (),
     turn: int = 3,
+    active: int = OWN,
+    lessons: int = 0,
+    sideboard: list[SimpleNamespace] = (),
     player: ScriptedGreedyPlayer | None = None,
 ) -> int:
     raw = SimpleNamespace(
-        agent=SimpleNamespace(id=OWN, life=life[0]),
+        agent=SimpleNamespace(id=OWN, life=life[0], graveyard_lessons=lessons),
         opponent=SimpleNamespace(id=OPPONENT, life=life[1]),
+        agent_sideboard=list(sideboard),
         agent_cards=[c for _, c in mine] + list(cards),
         opponent_cards=[c for _, c in theirs],
         agent_permanents=[p for p, _ in mine],
         opponent_permanents=[p for p, _ in theirs],
         stack_objects=list(stack),
         recent_events=list(events),
-        turn=SimpleNamespace(step=step, turn_number=turn),
+        turn=SimpleNamespace(step=step, turn_number=turn, active_player_id=active),
         action_space=SimpleNamespace(
             action_space_type=kind, focus=list(focus), actions=actions
         ),
@@ -157,7 +161,29 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Yip Yip!": "beneficial",
         "Fancy Footwork": "beneficial",
         "Lightning Bolt": "harmful",
+        # The Elemental world's ten decks.
+        "Boomerang Basics": "harmful",
+        "Combustion Technique": "harmful",
+        "Deadly Precision": "harmful",
+        "Epic Downfall": "harmful",
+        "Lightning Strike": "harmful",
+        "Ozai's Cruelty": "harmful",
+        "Power Word Kill": "harmful",
+        "Savor": "harmful",
+        "Zuko's Exile": "harmful",
+        "Enter the Avatar State": "beneficial",
+        "Enthusiastic Study": "beneficial",
+        "Fists of Flame": "beneficial",
+        "Octopus Form": "beneficial",
+        # Modal, or a counter that also untaps one's own permanent.
+        "Azula Always Lies": None,
+        "Iroh's Demonstration": None,
+        "Origin of Metalbending": None,
+        "Sokka's Haiku": None,
+        "True Ancestry": None,
     }
+    combustion = spells["Combustion Technique"]
+    assert (combustion.damage, combustion.lesson_damage) == (2, True)
     assert spells["Lightning Bolt"].damage == 3
     fire = spells["Firebending Lesson"]
     assert (fire.damage, fire.kicked_damage) == (2, 5)
@@ -243,7 +269,7 @@ def test_burn_kills_the_biggest_creature_it_can_else_goes_face() -> None:
     assert picked.focus == [OPPONENT]
 
 
-def test_pump_targets_own_side_and_side_restricted_spells_use_v1() -> None:
+def test_pump_targets_own_side_and_harm_goes_to_the_opponent() -> None:
     footwork = hand(1, "Fancy Footwork", 3)
     mine, theirs = creature(30, OWN, 2, 2, tapped=True), creature(31, OPPONENT, 4, 4)
     actions = [offer(ActionEnum.CHOOSE_TARGET, 31), offer(ActionEnum.CHOOSE_TARGET, 30)]
@@ -455,3 +481,104 @@ def test_pump_after_blocks_only_where_it_changes_the_result() -> None:
     assert act(ActionSpaceEnum.PRIORITY, cast_it, theirs=[flips], **early) == 1
     lethal = dict(board, events=[blocked(30)], life=(20, 5))
     assert act(ActionSpaceEnum.PRIORITY, cast_it, theirs=[hopeless], **lethal) == 0
+
+
+# Timing, abilities and card choices -------------------------------------------
+
+
+def test_draw_instants_wait_for_the_opponents_end_step() -> None:
+    quiz = hand(1, "Pop Quiz", 3)
+    actions = [
+        offer(ActionEnum.PRIORITY_CAST_SPELL, 1),
+        offer(ActionEnum.PRIORITY_PASS_PRIORITY),
+    ]
+    assert act(ActionSpaceEnum.PRIORITY, actions, cards=[quiz]) == 1
+    end = dict(cards=[quiz], step=StepEnum.ENDING_END)
+    assert act(ActionSpaceEnum.PRIORITY, actions, **end) == 1
+    assert act(ActionSpaceEnum.PRIORITY, actions, active=OPPONENT, **end) == 0
+
+
+def test_removal_waits_out_its_own_upkeep_and_its_own_spell() -> None:
+    fire = hand(1, "Firebending Lesson", 1)
+    actions = [
+        offer(ActionEnum.PRIORITY_CAST_SPELL, 1),
+        offer(ActionEnum.PRIORITY_PASS_PRIORITY),
+    ]
+    board = dict(cards=[fire], theirs=[creature(50, OPPONENT, 2, 2)])
+    assert act(ActionSpaceEnum.PRIORITY, actions, **board) == 0
+    upkeep = dict(board, step=StepEnum.BEGINNING_UPKEEP)
+    assert act(ActionSpaceEnum.PRIORITY, actions, **upkeep) == 1
+    mine = SimpleNamespace(kind=0, controller_id=OWN)
+    assert act(ActionSpaceEnum.PRIORITY, actions, stack=[mine], **board) == 1
+
+
+def test_lesson_damage_counts_the_graveyard() -> None:
+    combustion = hand(1, "Combustion Technique", 2)
+    actions = [
+        offer(ActionEnum.PRIORITY_CAST_SPELL, 1),
+        offer(ActionEnum.PRIORITY_PASS_PRIORITY),
+    ]
+    board = dict(cards=[combustion], theirs=[creature(50, OPPONENT, 4, 4)])
+    assert act(ActionSpaceEnum.PRIORITY, actions, **board) == 1
+    assert act(ActionSpaceEnum.PRIORITY, actions, lessons=2, **board) == 0
+
+
+def test_burn_holds_for_a_kill_or_lethal() -> None:
+    strike = hand(1, "Lightning Strike", 2)
+    actions = [
+        offer(ActionEnum.PRIORITY_CAST_SPELL, 1),
+        offer(ActionEnum.PRIORITY_PASS_PRIORITY),
+    ]
+    wall = dict(cards=[strike], theirs=[creature(50, OPPONENT, 0, 8)])
+    assert act(ActionSpaceEnum.PRIORITY, actions, **wall) == 1
+    assert act(ActionSpaceEnum.PRIORITY, actions, life=(20, 3), **wall) == 0
+    targets = [offer(ActionEnum.CHOOSE_TARGET, t) for t in (50, OPPONENT)]
+    lethal = dict(wall, life=(20, 3), focus=[1], theirs=[creature(50, OPPONENT, 2, 2)])
+    assert act(ActionSpaceEnum.CHOOSE_TARGET, targets, **lethal) == 1
+
+
+def test_cracks_fetch_lands_when_offered() -> None:
+    passage, card = creature(60, OWN, 0, 0)
+    card.name = "Fabled Passage"
+    card.card_types = SimpleNamespace(is_creature=False, is_land=True)
+    actions = [
+        offer(ActionEnum.PRIORITY_PASS_PRIORITY),
+        offer(ActionEnum.PRIORITY_ACTIVATE_ABILITY, 60),
+    ]
+    assert act(ActionSpaceEnum.PRIORITY, actions, mine=[(passage, card)]) == 1
+
+
+def test_learn_takes_removal_against_creatures_else_card_advantage() -> None:
+    sideboard = [
+        SimpleNamespace(candidate_id=82, name="Accumulate Wisdom"),
+        SimpleNamespace(candidate_id=84, name="Firebending Lesson"),
+    ]
+    actions = [
+        offer(ActionEnum.LEARN_DISCARD, 2),
+        offer(ActionEnum.LEARN_TAKE_LESSON, 82),
+        offer(ActionEnum.LEARN_TAKE_LESSON, 84),
+    ]
+    board = dict(sideboard=sideboard)
+    assert act(ActionSpaceEnum.LEARN, actions, **board) == 1
+    against = dict(board, theirs=[creature(50, OPPONENT, 2, 2)])
+    assert act(ActionSpaceEnum.LEARN, actions, **against) == 2
+
+
+def test_blockers_spread_over_attackers_and_chump_only_what_lethal_needs() -> None:
+    a, b = creature(30, OWN, 1, 1, mv=1), creature(31, OWN, 1, 1, mv=1)
+    big, other = creature(40, OPPONENT, 4, 4), creature(41, OPPONENT, 3, 3)
+    player = HeuristicPlayer()
+    board = dict(mine=[a, b], theirs=[big, other], life=(6, 20), player=player)
+    first = block_prompt(30, 40, 41)
+    assert first[act(ActionSpaceEnum.DECLARE_BLOCKER, first, **board)].focus == [30, 40]
+    second = block_prompt(31, 40, 41)
+    assert second[act(ActionSpaceEnum.DECLARE_BLOCKER, second, **board)].focus == [31]
+
+
+def test_holds_back_a_defender_when_the_swing_back_is_lethal() -> None:
+    a, b = creature(30, OWN, 2, 2), creature(31, OWN, 2, 5)
+    ogre = creature(40, OPPONENT, 6, 6, tapped=True)
+    player = HeuristicPlayer()
+    board = dict(mine=[a, b], theirs=[ogre], life=(5, 20), player=player)
+    assert act(ActionSpaceEnum.DECLARE_ATTACKER, attack_prompt(30), **board) == 0
+    assert act(ActionSpaceEnum.DECLARE_ATTACKER, attack_prompt(31), **board) == 1

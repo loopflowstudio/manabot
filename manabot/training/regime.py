@@ -207,6 +207,8 @@ class Execution(Strict):
     threads: int = Field(default=1, ge=1, le=4)
     wall_seconds: float = Field(default=300, gt=0)
     memory_bytes: int = Field(default=32 * 1024**3, gt=0)
+    # Historical opt-in; phase timers are now always recorded. Retained so
+    # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
 
 

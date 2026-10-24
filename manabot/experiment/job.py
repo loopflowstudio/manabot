@@ -12,10 +12,12 @@ import json
 import math
 import os
 from pathlib import Path
+import time
 
 from etude.launch.records import Job
 from pydantic import Field, model_validator
 
+from manabot.experiment.numerics import check_numerics
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainingRegime, TrainSelfPlay
@@ -28,6 +30,8 @@ class TrainingJob(Strict):
     regime: TrainingRegime
     milestones: tuple[int, ...] = ()
     finalization_seconds: float = Field(default=30, gt=0)
+    # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
+    validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def admit(self) -> "TrainingJob":
@@ -125,6 +129,11 @@ def run_worker() -> TrainingRun:
     stop = Path(environment["ETUDE_STOP_FILE"])
     if stop.exists():
         raise ValueError("launcher requested stop before training admission")
+    if spec.validate_numerics:
+        # The gate spends at most five minutes of the attempt's own allowance.
+        gate = check_numerics(output, min(time.time() + 300, deadline.timestamp()))
+        if gate.status != "completed":
+            raise RuntimeError(f"numerics gate did not pass: {gate.status}")
     with VerifyStore(output / "training.sqlite") as store:
         run = execute_regime(
             regime,

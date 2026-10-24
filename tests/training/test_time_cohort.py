@@ -38,7 +38,7 @@ def _run(identifier: str = "first") -> RetainedRun:
                     export_seconds=0.25,
                     diagnostic_seconds=0.0,
                     learner_transitions=100,
-                    diagnostics=[{}],
+                    updates=1,
                 )
             ],
         }
@@ -78,7 +78,7 @@ def test_recovery_counts_retained_work_once_and_keeps_attempt_costs() -> None:
                         "collection_seconds": 1.0,
                         "learning_seconds": 1.0,
                         "learner_transitions": 150,
-                        "diagnostics": [{}, {}],
+                        "updates": 2,
                     }
                 )
             ],
