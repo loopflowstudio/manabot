@@ -31,3 +31,11 @@ They do not select current work or authorize paid execution.
   the tracked experiment is the stage id (`RunContext` name). The tracking
   storage URI is an explicit CLI argument; not verified against a live run.
 - Staged-object reuse compares digests by downloading the object (simple, small files).
+
+# MTG-183 publication held (2026-10-24 19:25 UTC)
+
+- Not published: the branch carries #362's whole unmerged diff (#362 still open,
+  head 38ddc7153, merged here at 05ac39fa4), and `elemental-183-w3.json` cannot be
+  committed until w2 ends (2026-10-25 01:47 UTC). A ready PR against main now
+  would be a dependent PR that could land #362 ahead of its own review. Publish
+  after #362 is on main and w3's spec is committed (plan steps 1–2).
