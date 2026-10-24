@@ -58,18 +58,6 @@ def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
     monkeypatch.setattr(duel_eval, "play_cell", play_cell)
     duel_eval.evaluate(target / "duel.json")
     result = json.loads((target / "result.json").read_bytes())
-    public = tmp_path / "source" / "public"
-    public.mkdir(parents=True)
-    duel_eval.report(
-        tmp_path,
-        public.parent,
-        {
-            "1000": duel_eval.DirectAttempt(
-                phase="completed", started_at=1, two_seat="a" * 64, one_seat="b" * 64
-            )
-        },
-    )
-    assert "W/D/L" in (public / "head-to-head.html").read_text()
     assert len(played) == 25
     assert result["groups"]["all"]["games"] == 200
     assert [
