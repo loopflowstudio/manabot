@@ -310,7 +310,8 @@ uv run python -m manabot.reports.snapshot SOURCE_DIRECTORY SNAPSHOT_DIRECTORY
 The destination must not exist. The command copies only reporting evidence,
 retains source hashes and capture times in `snapshot.json`, and never loads a
 checkpoint or launches games. SQLite is transaction-consistent; atomic monitor
-JSON files are captured separately within the stated window. Their completion
+JSON files and the sealed files of training's Etude runs, which hold self-play
+update rows, are captured separately within the stated window. Their completion
 timestamps and original checkpoint coordinates stay intact. A snapshot's saved
 `running` status is not a live process check. Older records without a distinct
 active clock say unavailable; recorded training and elapsed wall remain separate.

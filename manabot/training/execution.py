@@ -99,6 +99,7 @@ from manabot.training.supervised.search import (
     SearchSupervisedEpochStats,
     train_search_supervised,
 )
+from manabot.training.update_metrics import metric_row
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -296,7 +297,7 @@ def execute_regime(
                 parent.monitoring_checkpoint_milestones,
             ):
                 raise ValueError("recovery checkpoint cadence differs from parent")
-            snapshot = load_update(parent, store)
+            snapshot = load_update(parent)
             admit_recovery_identities(
                 parent.identities,
                 _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
@@ -414,12 +415,13 @@ def _execute_regime(
         if parent is not None
         else 0,
         recovery_artifact=parent.recovery_artifact if parent is not None else None,
+        metrics_run=parent.metrics_run if parent is not None else None,
         stages=deepcopy(snapshot.completed_stages) if snapshot is not None else [],
     )
     if parent is not None and (checkpoint_updates is not None or checkpoint_milestones):
         assert snapshot is not None
         restored_updates = sum(
-            len(s.diagnostics) for s in (*snapshot.completed_stages, snapshot.record)
+            s.updates for s in (*snapshot.completed_stages, snapshot.record)
         )
         # Retain admitted exports from the committed prefix. Their artifact paths,
         # original costs and coordinates remain unchanged across process attempts.
@@ -510,7 +512,7 @@ def _execute_regime(
         return {
             "updates": run.updates_through(),
             **(
-                {"segment_updates": len(record.diagnostics)}
+                {"segment_updates": record.updates}
                 if isinstance(stage, TrainSelfPlay)
                 else {}
             ),
@@ -557,10 +559,7 @@ def _execute_regime(
             else time.perf_counter() - start - run.monitoring_export_seconds
         )
         point = coordinates()
-        if (
-            isinstance(stage, TrainSelfPlay)
-            and len(record.diagnostics) == stage.updates
-        ):
+        if isinstance(stage, TrainSelfPlay) and record.updates == stage.updates:
             return
         scheduled = point["updates"] in checkpoint_milestones and not any(
             c.updates == point["updates"] for c in run.monitoring_checkpoints
@@ -678,9 +677,8 @@ def _execute_regime(
                     snapshot = None
                     continue
             if isinstance(stage, TrainSelfPlay):
-                record.optimizer_updates = (
-                    record.observed_optimizer_updates() if snapshot is not None else 0
-                )
+                if snapshot is None:
+                    record.optimizer_updates = 0
                 if not restoring_completed:
                     record.admission_wait_seconds = 0.0
                     record.collection_timings = (
@@ -972,6 +970,7 @@ def _execute_regime(
                         check=check,
                     )
                     record.learning_seconds += time.perf_counter() - tick
+                    record.updates += 1
                     record.optimizer_exposures += update.optimizer_exposures
                     stats.learning_seconds = record.learning_seconds
                     stats.optimizer_exposures += update.optimizer_exposures
@@ -1318,12 +1317,16 @@ def _execute_regime(
                             device=stage.execution.device,
                             log_level="WARNING",
                         ),
+                        run=run.id,
+                        # A recovery attempt continues its parent's metrics.
+                        resume=Path(run.metrics_run) if run.metrics_run else None,
                         resolved_config={
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
                         },
                     )
+                    run.metrics_run = str(experiment.run.files.root)
                     resources.callback(
                         lambda exp=experiment: exp.close(
                             "finished" if run.status == "completed" else "failed"
@@ -1374,7 +1377,7 @@ def _execute_regime(
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
                     iteration = snapshot.iteration
-                    first_update = len(snapshot.record.diagnostics)
+                    first_update = snapshot.record.updates
                     # Restored counts are committed scientific work; failed work
                     # remains in the parent attempt and its cost stays charged.
                     before = snapshot.collector_before
@@ -1506,7 +1509,7 @@ def _execute_regime(
                         diagnostic["self_play_outcomes"] = (
                             collector.stats.self_play.drain()
                         )
-                    record.diagnostics.append(diagnostic)
+                    record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
                         record.optimizer_updates += diagnostic["numerical"][
@@ -1520,8 +1523,9 @@ def _execute_regime(
                         collector.stats.learner_transitions - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        diagnostic,
+                        metric_row(diagnostic),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
@@ -1613,6 +1617,7 @@ def _execute_regime(
                         (~np.isin(dataset["game_index"], list(validation))).sum()
                     )
                     row = asdict(stats)
+                    record.updates += 1
                     record.diagnostics.append(row)
                     row["coordinates"] = coordinates()
                     monitor_checkpoint(model)

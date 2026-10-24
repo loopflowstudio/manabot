@@ -44,6 +44,7 @@ from tests.training.game_error_fixtures import (
     _repaired_payment,
 )
 from tests.training.test_checkpoint_queue import Process
+from tests.training.test_recovery import tracked_updates
 
 
 def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
@@ -134,7 +135,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()[0]
         parent = store.training_run(parent_id)
-        assert 1 <= len(parent.stages[0].diagnostics) < 3
+        assert 1 <= parent.stages[0].updates < 3
         assert parent.game_errors is not None and parent.game_errors.crashed == 2
         original = Path(parent.game_error_ledgers[0]).read_bytes()
         entries = [json.loads(line) for line in original.splitlines()]
@@ -183,8 +184,9 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert repaired["original_outcome"] == "engine_error"
         assert Path(parent.game_error_ledgers[0]).read_bytes() == original
         assert parent.game_errors.model_dump() == allowance
-        assert failed_entry["context"]["coordinates"]["updates"] == len(
-            parent.stages[0].diagnostics
+        assert (
+            failed_entry["context"]["coordinates"]["updates"]
+            == parent.stages[0].updates
         )
         assert parent.recovery_artifact is not None
         frozen_snapshot = Path(parent.recovery_artifact["path"]).read_bytes()
@@ -265,7 +267,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert child.status == "completed"
         assert child.game_errors is not None and child.game_errors.crashed == 2
         assert child.game_errors.attempted > parent.game_errors.attempted
-        assert len(child.stages[0].diagnostics) == 3
+        assert child.stages[0].updates == 3
         assert child.prior_seconds == failed.prior_seconds + failed.seconds
         assert (
             child.prior_watchdog_seconds
@@ -274,10 +276,10 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert child.regime.wall_seconds == parent.regime.wall_seconds
         assert child.parent_run_id == failed.id and child.source_repair_reason
         assert Path(parent.game_error_ledgers[0]).read_bytes() == original
-        assert (
-            child.stages[0].diagnostics[: len(parent.stages[0].diagnostics)]
-            == parent.stages[0].diagnostics
-        )
+        # Every attempt's rows join one Etude run, each update exactly once.
+        assert [
+            row["coordinates/updates"] for row in tracked_updates(child, tmp_path)
+        ] == [1, 2, 3]
         assert Path(parent.recovery_artifact["path"]).read_bytes() == frozen_snapshot
         assert child.allocation_deadline is None
         assert child.optimizer_updates_through() == 3

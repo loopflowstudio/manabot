@@ -20,7 +20,7 @@ from manabot.training.state.recovery import TrainingPaused, load_update
 from manabot.verify.store import VerifyStore
 from tests.training import test_recovery as proof
 from tests.training.test_recovery import (
-    assert_learning_diagnostics_equal,
+    assert_learning_metrics_equal,
     assert_state_equal,
     recipe,
 )
@@ -64,7 +64,7 @@ def test_safe_pause_restores_current_games_and_exact_learning(
             (tmp_path / "paused/run.json").read_text()
         )
         assert stopped.status == "interrupted" and stopped.updates_through() == 3
-        assert load_update(stopped, store).iteration == 3
+        assert load_update(stopped).iteration == 3
         pause.unlink()
         child = execution.execute_regime(
             value, 197, tmp_path / "resumed", store, resume_from=stopped.id
@@ -72,7 +72,7 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         assert child.status == "completed" and child.updates_through() == 12
         assert child.prior_seconds == stopped.seconds
         assert child.prior_watchdog_seconds == stopped.watchdog_seconds
-        a, b = load_update(whole, store), load_update(child, store)
+        a, b = load_update(whole), load_update(child)
         for name in (
             "learner",
             "optimizer",
@@ -92,7 +92,7 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         )
         assert a.collector.journal == b.collector.journal == []
         assert_state_equal(a.collector.buffers, b.collector.buffers)
-        assert_learning_diagnostics_equal(whole.stages[0], child.stages[0])
+        assert_learning_metrics_equal(whole, child, tmp_path)
         assert (
             child.stages[0].learner_transitions == whole.stages[0].learner_transitions
         )
@@ -100,21 +100,9 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         assert child.recovery_artifact is not None
         with gzip.open(child.recovery_artifact["path"], "rb") as stream:
             compact = torch.load(stream, weights_only=False)
-        assert compact.format_version == 3
-        assert compact.record.diagnostics == []
-        assert all(not row.diagnostics for row in compact.completed_stages)
-        assert compact.diagnostic_prefixes[-1].count == 12
-        # A compact snapshot cannot silently recover from missing/edited evidence.
-        damaged = child.model_copy(deep=True)
-        damaged.stages[0].diagnostics[-1]["optimizer_exposures"] = -1
-        store.save_training_run(damaged)
-        with pytest.raises(ValueError, match="diagnostic prefix digest"):
-            load_update(child, store)
-        damaged.stages[0].diagnostics = []
-        store.save_training_run(damaged)
-        with pytest.raises(ValueError, match="diagnostic prefix missing"):
-            load_update(child, store)
-        store.save_training_run(child)
+        assert compact.format_version == 4
+        # Snapshots hold counters, not update rows: those are Etude metrics.
+        assert compact.record.updates == 12 and compact.record.diagnostics == []
 
 
 def test_orphan_separates_known_sleep_from_uncertain_awake_gap(

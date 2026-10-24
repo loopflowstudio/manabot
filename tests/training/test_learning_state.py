@@ -26,6 +26,7 @@ from manabot.training.regime import (
 from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
+from tests.training.test_recovery import tracked_updates
 
 
 def reference(path: Path) -> ArtifactReference:
@@ -159,8 +160,9 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         == producer.stages[0].learner_transitions
     )
     assert second.updates_through() == 4 and third.updates_through() == 5
-    assert [d["iteration"] for d in second.stages[0].diagnostics] == [3, 4]
-    assert [d["iteration"] for d in third.stages[0].diagnostics] == [5]
+    rows = {run.id: tracked_updates(run, tmp_path) for run in (second, third)}
+    assert [d["iteration"] for d in rows[second.id]] == [3, 4]
+    assert [d["iteration"] for d in rows[third.id]] == [5]
     for child, parent in ((second, producer), (third, second)):
         record = child.stages[0]
         origin = record.learning_state_origin
@@ -174,13 +176,10 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
             "learner_transitions",
             "optimizer_exposures",
         ):
-            assert record.diagnostics[-1]["coordinates"][name] == getattr(
+            assert rows[child.id][-1][f"coordinates/{name}"] == getattr(
                 origin, name
             ) + getattr(record, name)
-        assert (
-            record.diagnostics[0]["tau"]
-            == stage.learning.rates(origin.iteration + 1)[1]
-        )
+        assert rows[child.id][0]["tau"] == stage.learning.rates(origin.iteration + 1)[1]
         assert (
             child.prior_seconds == 0
         )  # inherited cost is separate, not allowance consumption
@@ -235,7 +234,7 @@ def test_rejects_incomplete_or_mismatched_learning_state(
     failed = TrainingRun.model_validate_json(
         (tmp_path / "rejected/run.json").read_text()
     )
-    assert failed.status == "failed" and not failed.stages[0].diagnostics
+    assert failed.status == "failed" and not failed.stages[0].updates
     assert failed.stages[0].inputs["learning_state/source_run"] == spec.source_run
 
 
@@ -249,7 +248,7 @@ def test_historical_wire_digest_and_next_iteration(
     payload["regime"]["observation"]["policy_history_version"] = 0
     payload["regime_digest"] = canonical_sha256(payload["regime"])
     # A synthetic coordinate fixture, not a claim that this test trained 26k updates.
-    payload["stages"][0]["diagnostics"] = [{"iteration": i} for i in range(1, 26001)]
+    payload["stages"][0]["updates"] = 26000
     for role in ("raw", "ema"):
         path = Path(producer.stages[0].artifacts[role]["path"])
         weights = torch.load(path, weights_only=False)

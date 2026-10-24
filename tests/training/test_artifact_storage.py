@@ -5,7 +5,6 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import sys
 from unittest.mock import MagicMock
 
 import boto3
@@ -15,7 +14,6 @@ import pytest
 from manabot.experiment.artifacts import ArtifactManifest, publish_run
 from manabot.infra.artifacts import ArtifactStore, StoredArtifact
 from manabot.model.checkpoint import load_checkpoint
-from manabot.reports import training as monitoring
 
 
 @pytest.fixture
@@ -207,59 +205,6 @@ def test_run_publication_preserves_export_and_all_roles(
     with pytest.raises(ValueError, match="differ"):
         publish_run(source, "s3://bucket/prefix", tmp_path / "other.json", store)
     assert client.put_object.call_count == count
-
-
-def test_monitor_publishes_only_references_bound_to_exact_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = next(Path("tests/fixtures/experiment-demo/training").glob("**/run.json"))
-    payload = source.read_bytes()
-    manifest = ArtifactManifest(
-        training_run_id=json.loads(payload)["id"],
-        source_run=_reference(payload),
-        artifacts={"stages/policy-0/artifacts/raw": _reference(b"model bytes")},
-    )
-    path = tmp_path / "manifest.json"
-    path.write_text(manifest.model_dump_json())
-    published: list[monitoring.Dashboard] = []
-
-    def publish(
-        dashboard: monitoring.Dashboard,
-        out: Path,
-        *,
-        experiment: str,
-        destination: str | None,
-    ) -> str:
-        published.append(dashboard)
-        return "file:///retained/etude/run"
-
-    monkeypatch.setattr(monitoring, "publish_dashboard", publish)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "monitoring",
-            "--run",
-            str(source),
-            "--artifact-manifest",
-            str(path),
-            "--out",
-            str(tmp_path / "dashboard"),
-        ],
-    )
-    monitoring.main()
-    assert published[0].summary["artifact_storage"] == manifest.model_dump(mode="json")
-    assert (
-        published[0].rows
-        == monitoring.training_dashboard(
-            monitoring.RetainedRun.model_validate_json(payload)
-        ).rows
-    )
-    bad = manifest.model_copy(update={"training_run_id": "other-run"})
-    path.write_text(bad.model_dump_json())
-    with pytest.raises(ValueError, match="another training run"):
-        monitoring.main()
-    assert len(published) == 1
 
 
 def test_r2_locations_round_trip_through_their_own_client(

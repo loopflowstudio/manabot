@@ -135,7 +135,7 @@ def selection_diagnostics(
 
 
 class UpdateDiagnostics(TypedDict, total=False):
-    """Per-iteration measurements persisted in the TrainingRun stage record."""
+    """Per-iteration measurements, logged once as the update's Etude metrics."""
 
     self_play_outcomes: list[SelfPlayOutcome]
     numerical: NumericalHealth

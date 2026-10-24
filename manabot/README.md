@@ -254,9 +254,10 @@ ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
 [compound decisions](../docs/training-regimes.md#compound-decisions).
 
-TrainingRun diagnostics can be followed live or backfilled into Etude without
-retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
-operation, fixed distillation validation and separate checkpoint monitoring.
+Self-play update diagnostics live only in the run's Etude metrics;
+TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training-monitoring.md)
+covers reading them offline, fixed distillation validation and separate
+checkpoint monitoring.
 
 Optional [public recent-event input](../docs/recent-events.md) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
