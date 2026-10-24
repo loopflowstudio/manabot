@@ -410,8 +410,10 @@ def test_later_crash_preserves_previous_complete_games(tmp_path: Path) -> None:
 
 
 def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> None:
+    """MTG-181 seed 18102: the deadline cut off every stream mid-game."""
     model = agent()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
+    policy = GameErrorPolicy(window=2, warmup=2)
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers)
     collector._env = scripted
@@ -425,11 +427,77 @@ def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> N
 
     with pytest.raises(TimeoutError, match="original allocation"):
         collector.collect(model, 1, check=deadline)
-    assert ledger.state.completed == 0 and ledger.state.crashed == 2
+    assert ledger.state.completed == ledger.state.crashed == 0
+    assert ledger.state.attempted == ledger.state.abandoned == 2
+    assert ledger.state.abandoned_samples == 4 and ledger.state.discarded_samples == 0
+    assert ledger.state.window == [] and ledger.state.stop_reason is None
     assert scripted.steps == [2, 2] and scripted.generation == [0, 0]
     receipts = [json.loads(line) for line in ledger.path.read_text().splitlines()]
     assert all(row["attempt"]["outcome"] == "deadline" for row in receipts)
     assert not any(collector._pending) and not any(collector._streams)
+    restored = GameErrorLedger(
+        tmp_path / "resumed.jsonl", policy, parents=[str(ledger.path)]
+    )
+    assert restored.state == ledger.state
+
+
+def test_deadline_after_real_crashes_counts_only_the_crashes(tmp_path: Path) -> None:
+    model = agent()
+    policy = GameErrorPolicy(window=4, warmup=4)
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    collector = _tolerant_collector(model, ledger)
+    scripted = ScriptedFailures(collector._buffers, always=True)
+    collector._env = scripted
+    checks = 0
+
+    def deadline() -> None:
+        nonlocal checks
+        checks += 1
+        if checks == 7:
+            raise TimeoutError("collector exceeded training deadline")
+
+    # Each stream crashes at its fourth step; the deadline lands two steps
+    # into both replacement games, before the window reaches its warmup.
+    with pytest.raises(TimeoutError):
+        collector.collect(model, 1, check=deadline)
+    assert scripted.steps == [6, 6]
+    assert ledger.state.crashed == 2 and ledger.state.abandoned == 2
+    assert ledger.state.window == [True, True]
+    assert ledger.state.stop_reason is None
+    outcomes = [
+        json.loads(line)["attempt"]["outcome"]
+        for line in ledger.path.read_text().splitlines()
+    ]
+    assert outcomes == ["engine_error", "engine_error", "deadline", "deadline"]
+    # Two further real crashes complete warmup and exceed the threshold.
+    ledger.record(attempt(True), {})
+    ledger.record(attempt(True), {})
+    assert ledger.state.stop_reason == "game_error_rate_exceeded"
+
+
+def test_cancellation_settles_games_as_abandoned(tmp_path: Path) -> None:
+    model = agent()
+    ledger = GameErrorLedger(
+        tmp_path / "attempts.jsonl", GameErrorPolicy(window=2, warmup=2)
+    )
+    collector = _tolerant_collector(model, ledger)
+    collector._env = ScriptedFailures(collector._buffers)
+    checks = 0
+
+    def cancel() -> None:
+        nonlocal checks
+        checks += 1
+        if checks == 3:
+            raise RuntimeError("training cancelled by launcher")
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        collector.collect(model, 1, check=cancel)
+    assert ledger.state.abandoned == 2 and ledger.state.crashed == 0
+    assert ledger.state.stop_reason is None
+    assert all(
+        json.loads(line)["attempt"]["outcome"] == "abandoned"
+        for line in ledger.path.read_text().splitlines()
+    )
 
 
 def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:

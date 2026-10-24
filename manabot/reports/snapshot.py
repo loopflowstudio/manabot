@@ -1,7 +1,8 @@
 """Make an offline report snapshot without opening a live store for writing.
 
-SQLite's online backup owns consistency of run, stage and diagnostic rows. Atomic
-monitor JSON exports are copied separately; the receipt states that capture window
+SQLite's online backup owns consistency of run and stage rows. Atomic monitor
+JSON exports and the sealed files of training's Etude runs, which hold self-play
+update metrics, are copied separately; the receipt states that capture window
 rather than claiming a transaction across the filesystem and database. Checkpoint
 bytes, credentials and training control files are deliberately outside this export.
 """
@@ -54,11 +55,24 @@ def snapshot_report(source: Path, output: Path) -> Path:
         with sqlite3.connect(database) as backup:
             live.backup(backup, pages=128, sleep=0.05)
     export_database(database, output)
-    for name in ("monitor.json", "attempt.json"):
-        for path in sorted((source / "monitoring").rglob(name)):
-            destination = output / path.relative_to(source)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(path.read_bytes())
+    copied = [
+        path
+        for name in ("monitor.json", "attempt.json")
+        for path in (source / "monitoring").rglob(name)
+    ]
+    # Etude writes blocks whole by rename; open logs and partial files are
+    # not yet rows a reader would count.
+    copied += [
+        path
+        for path in (source / "training").glob("**/etude/**/*")
+        if path.is_file()
+        and path.suffix not in {".open", ".partial"}
+        and "checkpoints" not in path.relative_to(source).parts
+    ]
+    for path in sorted(copied):
+        destination = output / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(path.read_bytes())
     files = [
         {"path": str(p.relative_to(output)), "sha256": file_sha256(p)}
         for p in sorted(output.rglob("*"))

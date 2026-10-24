@@ -5,7 +5,8 @@ comparison. Each real experiment lives in its own Python file with a thin entry
 point. `resolve()` remains side-effect free; `run_experiment()` explicitly executes
 its schedule on configured hardware. `ExperimentRun` records what actually ran,
 separately from the declaration. VerifyStore owns both ExperimentRun and
-TrainingRun persistence; JSON exports and optional trackers are projections.
+TrainingRun persistence, and JSON exports are projections; self-play update
+rows are each run's Etude metrics, stored beside its attempt.
 
 The primary report is **one editable `comparison.ipynb` per execution directory**.
 It loads every regime's learning metrics, milestone win/draw/score rates and

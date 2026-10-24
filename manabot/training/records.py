@@ -66,6 +66,10 @@ class StageRecord(Strict):
     collection_timings: dict[str, PhaseTiming] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # Completed update iterations in this segment: self-play collect/update
+    # iterations, supervised epochs or compound updates. Imported learning-state
+    # iterations are counted by learning_state_origin, not here.
+    updates: int = Field(default=0, ge=0)
     games: int = 0
     environment_decisions: int = 0
     learner_transitions: int = 0
@@ -79,21 +83,12 @@ class StageRecord(Strict):
     inputs: dict[str, dict] = {}
     artifacts: dict[str, dict] = {}
     rejected_artifacts: dict[str, dict] = {}
+    # Bounded rows of stages Etude does not track: supervised epochs, collection
+    # games and compound, selection or belief summaries. Self-play update rows
+    # are Etude metrics only (TrainingRun.metrics_run); historical exports
+    # retain theirs here.
     diagnostics: list[dict] = []
     error: str | None = None
-
-    def observed_optimizer_updates(self) -> int | None:
-        """Read saved counters once at import/recovery, never infer from exposures."""
-        if self.optimizer_updates is not None:
-            return self.optimizer_updates
-        total = 0
-        for diagnostic in self.diagnostics:
-            health = diagnostic.get("numerical")
-            count = health.get("optimizer_steps") if isinstance(health, dict) else None
-            if type(count) is not int or count < 0:
-                return None
-            total += count
-        return total if self.diagnostics else None
 
 
 class TrainingCoordinates(Strict):
@@ -187,12 +182,16 @@ class RunRecord[RegimeT](Strict):
         default=None, exclude_if=lambda value: value is None
     )
     fixed_validation: FixedValidationCohort | None = None
+    # Folder of the Etude run holding self-play update metrics, named for the
+    # run. Recovery children continue their parent's run in place, so one
+    # Etude run covers every attempt; readers find it by name under a source.
+    metrics_run: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
     def _updates_through(self, learning: set[str], stage_id: str | None) -> int:
         total = 0
         for stage in self.stages:
             if stage.id in learning:
-                total += len(stage.diagnostics)
+                total += stage.updates
                 if stage.learning_state_origin is not None:
                     total += stage.learning_state_origin.iteration
             if stage.id == stage_id:

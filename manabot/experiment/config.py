@@ -3,23 +3,23 @@
 Baseline freezes configuration bytes. Experiment combines typed component writes,
 explicit cases and ordered matrix axes. Each resolved cell retains leaf-level
 ownership and provenance separately from the unchanged TrainingRegime digest.
-The existing study protocol and executor own cohorts, allocation and execution.
+`Experiment.runs` turns planned runs into Etude training runs; Etude launches them.
 """
 
 from dataclasses import dataclass
 from itertools import product
 import json
+import pathlib
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+from etude.launch.records import Run
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from manabot.experiment.execution import ExperimentSchedule, PlannedRun
+from manabot.experiment.job import TrainingJob
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_json, canonical_sha256
-from manabot.remote.job_client import prepare_experiment_job
-from manabot.remote.jobs import Job
-from manabot.remote.plan import DeploymentPlan, Source, compile_plan
 from manabot.training.execution import validate_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -29,9 +29,6 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-
-if TYPE_CHECKING:
-    from manabot.remote.cohort import Cohort
 
 ComponentName = Literal[
     "model", "environment", "learning", "resources", "pipeline", "run", "identity"
@@ -391,84 +388,34 @@ class Experiment:
     schedule: ExperimentSchedule | None = None
     jobs: tuple[PlannedRun, ...] = ()
 
-    def compile_jobs(self, source: "Source") -> tuple["DeploymentPlan", ...]:
-        """Pure compilation; preserves cases, seed order and learning targets."""
+    def runs(self, *, repo: pathlib.Path, revision: str) -> tuple[Run, ...]:
+        """Each planned run as an Etude training run; launching is the caller's.
+
+        Pure: nothing is submitted. Queue or launch the result with
+        `etude.launch.client.queue_cohort`, or return it from a launch file.
+        """
         if self.schedule is not None and self.jobs:
-            raise ValueError("choose local schedule or explicit launch allocations")
+            raise ValueError("choose local schedule or launched runs")
         cases = {case.name: case for case in self.resolve().cases}
         if len({(run.case, run.seed) for run in self.jobs}) != len(self.jobs):
-            raise ValueError("launch case/seed bindings must be unique")
+            raise ValueError("launched case/seed bindings must be unique")
         if any(run.case not in cases for run in self.jobs):
-            raise ValueError("launch references an unresolved case")
-        plans = tuple(
-            compile_plan(cases[run.case].configuration, run.spec, source, run.seed)
-            for run in self.jobs
-        )
-        for binding, plan in zip(self.jobs, plans, strict=True):
-            binding.admit_regime(plan.regime)
-        intervals = {binding.checkpoint_updates for binding in self.jobs}
-        if any(interval is not None for interval in intervals) and len(intervals) != 1:
-            raise ValueError(
-                "comparison jobs require one shared checkpoint_updates interval"
+            raise ValueError("a launched run references an unresolved case")
+        runs: list[Run] = []
+        for binding in self.jobs:
+            case = cases[binding.case]
+            job = TrainingJob(
+                regime=case.regime,
+                milestones=binding.milestones,
+                validate_numerics=binding.validate_numerics,
+            ).job(
+                repo=repo,
+                revision=revision,
+                max_hours=binding.max_hours,
+                max_usd=binding.max_usd,
             )
-        return plans
-
-    def cohort(
-        self,
-        source: "Source",
-        cohort_id: str,
-        *,
-        deadline: float,
-        spending_limit: float,
-        prior_dollars: float,
-        controller_dollars: float,
-    ) -> "Cohort":
-        """Freeze the existing job order for deployment by an independent service."""
-        from manabot.remote.cohort import Cohort, CohortEntry
-
-        plans = self.compile_jobs(source)
-        cases = {case.name: case for case in self.resolve().cases}
-        return Cohort(
-            cohort_id=cohort_id,
-            deadline=deadline,
-            spending_limit=spending_limit,
-            prior_dollars=prior_dollars,
-            controller_dollars=controller_dollars,
-            entries=tuple(
-                CohortEntry(
-                    job_id=f"{cohort_id}-{index}",
-                    plan=plan,
-                    monitoring=binding.monitoring,
-                    checkpoint_seconds=binding.checkpoint_seconds,
-                    checkpoint_updates=binding.checkpoint_updates,
-                    validate_numerics=binding.validate_numerics,
-                    experiment_json=json.dumps(
-                        cases[binding.case].receipt(), sort_keys=True
-                    ),
-                )
-                for index, (binding, plan) in enumerate(
-                    zip(self.jobs, plans, strict=True)
-                )
-            ),
-        )
-
-    def prepare_job(self, index: int, source: "Source", job_id: str) -> "Job":
-        """Persist one selected run through the existing disconnected job owner."""
-        self.compile_jobs(source)
-        binding = self.jobs[index]
-        case = next(case for case in self.resolve().cases if case.name == binding.case)
-        return prepare_experiment_job(
-            case,
-            binding.spec,
-            source,
-            binding.seed,
-            job_id,
-            monitoring=binding.monitoring,
-            checkpoint_seconds=binding.checkpoint_seconds,
-            checkpoint_updates=binding.checkpoint_updates,
-            destination=binding.spec.access.destination,
-            validate_numerics=binding.validate_numerics,
-        )
+            runs += job.runs(binding.seed, params={"case": case.name})
+        return tuple(runs)
 
     def resolve(self) -> ResolvedExperiment:
         if self.name:

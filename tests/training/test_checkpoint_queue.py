@@ -64,7 +64,7 @@ def run_fixture(path: Path) -> TrainingRun:
                 id=regime.stages[0].id,
                 status="completed",
                 cumulative_seconds=1,
-                diagnostics=[{}],
+                updates=1,
                 artifacts={"raw": {"path": "first.pt", "sha256": "a" * 64, "bytes": 1}},
             ),
             StageRecord(id=regime.stages[1].id),

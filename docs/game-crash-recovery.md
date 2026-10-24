@@ -35,8 +35,13 @@ must be declared in comparisons. Both-seat collection already used this boundary
 There are no fabricated terminal targets or bootstraps across replacement.
 
 Native truncations and the per-game action limit count as failed attempts.
-Run/allocation deadline expiry retains each unfinished game's prefix as a
-`deadline` failure and stops; it does not grant more time for regather. Setup,
+When the run itself stops mid-collection, each unfinished game's prefix is
+retained as a `deadline` attempt (allocation deadline or wall allowance) or an
+`abandoned` attempt (cancellation or another supervision limit). These are run
+interruptions, not game errors: they count in `attempted` and `abandoned`, never
+in the error window, `crashed`, discarded samples or replacement debt, and they
+grant no time for regather. Reports name a paused run's stop reason
+`allocation_deadline`. Setup,
 reset, buffer, policy/numerical and infrastructure errors remain fatal. Game
 recovery contains Rust unwinds, not process aborts, out-of-memory termination or
 native hangs; external process supervision still owns hard execution limits.

@@ -30,7 +30,7 @@ from manabot.experiment.checkpoint_evaluation import (
 )
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.reports.training import evaluation_dashboard, training_dashboard
+from manabot.reports.training import evaluation_dashboard
 from manabot.training.clock import arm_worker_deadline
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
@@ -310,10 +310,6 @@ class CheckpointQueue:
                     raise ValueError("monitoring TrainingRun binding changed")
             else:
                 atomic_json(binding_path, binding)
-            atomic_json(
-                run_dir / "training-dashboard.json",
-                training_dashboard(run).model_dump(mode="json"),
-            )
             for checkpoint in checkpoints(
                 run,
                 include_initial=self.config.include_initial,
@@ -380,14 +376,10 @@ class CheckpointQueue:
                     raise ValueError("relocated checkpoint identity differs")
                 local_checkpoint = checkpoint.model_copy(update={"artifact": local})
             job = EvaluationJob(
-                # Keep producer metadata without copying the growing learning
-                # ledger into every evaluation job. VerifyStore owns diagnostics.
+                # Keep producer metadata without copying the growing checkpoint
+                # ledger into every evaluation job.
                 run=run.model_copy(
                     update={
-                        "stages": [
-                            stage.model_copy(update={"diagnostics": []})
-                            for stage in run.stages
-                        ],
                         "monitoring_checkpoints": [],
                         "fixed_validation": None,
                     }

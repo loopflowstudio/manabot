@@ -57,13 +57,13 @@ jobs:
       - name: Integration tests
         if: matrix.group == 'main'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/remote/ \
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 tests/env/ tests/agent/ tests/model/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_matchups.py \
-            tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
+            tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_monitoring.py \

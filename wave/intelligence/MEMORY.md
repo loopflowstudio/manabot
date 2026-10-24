@@ -98,7 +98,7 @@ time/samples separately from unequal endpoints. Preserve old failures and Mini o
 
 The `2555c0e2` pilot passed CUDA admission/cleanup ($4.717918369190 estimated).
 PR263 repairs its endpoint race; CPU recovery retains the original omission.
-Timing proves neither strength nor sustained throughput. The [remote contract](../../docs/remote-jobs.md),
+Timing proves neither strength nor sustained throughput. The [remote training guide](../../docs/remote-training.md),
 [capacity record](../../experiments/model-capacity.md) and `2a4fd419` own receipts.
 
 Jack Heart approved the separate restricted controller and secure Mini installation.
@@ -199,7 +199,7 @@ reconnect never restarts learning and unknown creates never retry speculatively.
 
 The initial scoped-S3 403 failure and successful mailbox repair remain retained.
 Both attempts cost $0.1158450 estimated; shared prior spending was $0.6518216.
-The [remote contract](../../docs/remote-jobs.md) owns commands, scope and receipts;
+The [remote training guide](../../docs/remote-training.md) owns commands, scope and receipts;
 `.runs/etu123-disconnect` and `f6bcc83e` retain originals/details. No scientific
 allocation transfers. Personal SSO chaining bounds that old path below one hour.
 

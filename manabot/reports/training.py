@@ -1,16 +1,17 @@
-"""Read retained training facts into Etude metric runs and portable dashboards.
+"""Project training rows for reports, and publish evaluation curves to Etude.
 
-VerifyStore or a retained run.json owns training facts. Settled rows are appended
-once, checked against Etude's durable row digests on retry. In-progress evaluation
-stays in the summary until settled. Etude owns metric storage and delivery.
+`training_dashboard` names a run's update rows (`update_metrics.stage_rows`)
+for offline reports; self-play rows already live in the run's own Etude run.
+`evaluation_dashboard` projects saved monitor results, and `publish_dashboard`
+appends settled rows once, checked against Etude's durable row digests on
+retry. In-progress evaluation stays in the summary until settled.
 """
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import json
 import math
 from pathlib import Path
-import time
 from typing import Literal
 
 from etude.run.storage import storage_from_uri
@@ -20,13 +21,11 @@ from etude.train.run import seal_runs, track
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from manabot.eval.monitor import MonitorResult
-from manabot.experiment.artifacts import ArtifactManifest
-from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.reports.records import ReportRun, RetainedRun
+from manabot.reports.records import ReportRun
 from manabot.training.state.recovery import attempt_lock
-from manabot.verify.store import VerifyStore
+from manabot.training.update_metrics import MetricRow
 
 Scalar = int | float | str | bool
 
@@ -52,20 +51,27 @@ def _scalars(value: Mapping[str, object], prefix: str = "") -> dict[str, Scalar]
     return result
 
 
-def training_dashboard(run: ReportRun) -> Dashboard:
+def training_dashboard(
+    run: ReportRun, updates: Mapping[str, Sequence[MetricRow]]
+) -> Dashboard:
+    """Name each stage's rows; `updates` maps stage IDs to their flat rows."""
     rows: list[dict[str, Scalar]] = []
     missing_coordinates = 0
     for stage in run.stages:
         specification = next(s for s in run.regime.stages if s.id == stage.id)
-        for ordinal, diagnostic in enumerate(stage.diagnostics):
+        for ordinal, diagnostic in enumerate(updates.get(stage.id, ())):
             row: dict[str, Scalar] = {
                 "progress/observation": len(rows),
                 "stage/id": stage.id,
                 "stage/operation": specification.operation,
                 "stage/ordinal": ordinal,
             }
-            coordinate = diagnostic.get("coordinates")
-            if isinstance(coordinate, dict):
+            coordinate = {
+                name.removeprefix("coordinates/"): value
+                for name, value in diagnostic.items()
+                if name.startswith("coordinates/")
+            }
+            if coordinate:
                 row.update(_scalars(coordinate, "progress"))
                 elapsed = coordinate.get("training_seconds")
                 if isinstance(elapsed, (int, float)) and elapsed > 0:
@@ -88,7 +94,7 @@ def training_dashboard(run: ReportRun) -> Dashboard:
                         row["progress/checkpoint_age_seconds"] = elapsed - max(admitted)
             else:
                 missing_coordinates += 1
-            row["availability/original_coordinates"] = isinstance(coordinate, dict)
+            row["availability/original_coordinates"] = bool(coordinate)
             if specification.operation == "train_supervised":
                 row["objective/meaning"] = "teacher cross-entropy (nats)"
                 row["objective/training_target"] = specification.target
@@ -138,11 +144,13 @@ def training_dashboard(run: ReportRun) -> Dashboard:
                     row["rl/retained_fraction"] = (
                         diagnostic["retained"] / diagnostic["rows"]
                     )
-            numerical = diagnostic.get("numerical")
-            if isinstance(numerical, dict):
-                for name, value in numerical.items():
-                    if isinstance(value, (int, float)) and math.isfinite(value):
-                        row[f"numerical/{name}"] = value
+            for name, value in diagnostic.items():
+                if (
+                    name.startswith("numerical/")
+                    and isinstance(value, (int, float))
+                    and math.isfinite(value)
+                ):
+                    row[name] = value
             rows.append(row)
         if stage.numerical_failure is not None:
             failure = stage.numerical_failure
@@ -362,103 +370,47 @@ def evaluation_dashboard(results: list[MonitorResult]) -> Dashboard:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--run", type=Path, help="Retained run.json export")
-    source.add_argument("--run-id", help="TrainingRun ID in VerifyStore")
-    source.add_argument(
+    parser = argparse.ArgumentParser(
+        description="Publish saved monitor results as an Etude evaluation curve."
+    )
+    parser.add_argument(
         "--evaluations",
         type=Path,
         nargs="+",
+        required=True,
         help="Saved monitor.json attempts in immutable append order",
     )
-    parser.add_argument("--store", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--experiment", default="manabot-monitoring")
     parser.add_argument("--destination", help="Etude directory or s3://bucket/prefix")
-    parser.add_argument(
-        "--artifact-manifest",
-        type=Path,
-        help="S3 locations for this exact --run export; metadata only",
-    )
-    parser.add_argument("--watch-seconds", type=float, default=0)
     args = parser.parse_args()
-    if args.run_id and not args.store:
-        parser.error("--run-id requires --store")
-    if args.artifact_manifest and not args.run:
-        parser.error("--artifact-manifest requires --run")
-    if args.watch_seconds < 0 or not math.isfinite(args.watch_seconds):
-        parser.error("--watch-seconds must be finite and nonnegative")
     args.out.mkdir(parents=True, exist_ok=True)
     with attempt_lock(args.out / "publisher.lock"):
-        while True:
-            if args.evaluations:
-                dashboard = evaluation_dashboard(
-                    [
-                        MonitorResult.model_validate_json(p.read_text())
-                        for p in args.evaluations
-                    ]
-                )
-                status = "completed"
-            elif args.run:
-                run = RetainedRun.model_validate_json(args.run.read_text())
-                dashboard = training_dashboard(run)
-                status = run.status
-            else:
-                with VerifyStore(args.store) as store:
-                    run = store.training_run(args.run_id)
-                dashboard = training_dashboard(run)
-                status = run.status
-            if args.artifact_manifest:
-                manifest = ArtifactManifest.model_validate_json(
-                    args.artifact_manifest.read_text()
-                )
-                verify_file(
-                    args.run, manifest.source_run.sha256, manifest.source_run.bytes
-                )
-                if manifest.training_run_id != run.id:
-                    raise ValueError(
-                        "artifact manifest belongs to another training run"
-                    )
-                dashboard.summary["artifact_storage"] = manifest.model_dump(mode="json")
-            atomic_json(args.out / "dashboard.json", dashboard.model_dump(mode="json"))
-            try:
-                url = publish_dashboard(
-                    dashboard,
-                    args.out,
-                    experiment=args.experiment,
-                    destination=args.destination,
-                )
-                atomic_json(
-                    args.out / "delivery.json",
-                    {
-                        "status": "delivered" if args.destination else "recorded",
-                        "url": url,
-                    },
-                )
-            except Exception as error:
-                # Do not dump SDK errors, which can contain credential URLs.
-                atomic_json(
-                    args.out / "delivery.json",
-                    {"status": "failed", "error_type": type(error).__name__},
-                )
-                if not args.watch_seconds:
-                    raise SystemExit(
-                        "Etude delivery failed; local dashboard retained (see delivery.json)"
-                    ) from None
-            print(
-                json.dumps(
-                    {
-                        "run": dashboard.run_id,
-                        "status": status,
-                        "rows": len(dashboard.rows),
-                    }
-                ),
-                flush=True,
+        dashboard = evaluation_dashboard(
+            [MonitorResult.model_validate_json(p.read_text()) for p in args.evaluations]
+        )
+        atomic_json(args.out / "dashboard.json", dashboard.model_dump(mode="json"))
+        try:
+            url = publish_dashboard(
+                dashboard,
+                args.out,
+                experiment=args.experiment,
+                destination=args.destination,
             )
-            if not args.watch_seconds or status not in {"pending", "running"}:
-                break
-            time.sleep(args.watch_seconds)
+        except Exception as error:
+            # Do not dump SDK errors, which can contain credential URLs.
+            atomic_json(
+                args.out / "delivery.json",
+                {"status": "failed", "error_type": type(error).__name__},
+            )
+            raise SystemExit(
+                "Etude delivery failed; local dashboard retained (see delivery.json)"
+            ) from None
+        atomic_json(
+            args.out / "delivery.json",
+            {"status": "delivered" if args.destination else "recorded", "url": url},
+        )
+        print(json.dumps({"run": dashboard.run_id, "rows": len(dashboard.rows)}))
 
 
 if __name__ == "__main__":

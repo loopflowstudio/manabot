@@ -5,6 +5,7 @@ is explicitly configured, never provisioned. ExperimentRun records every actual
 process attempt; VerifyStore is its persistence owner.
 """
 
+from decimal import Decimal
 import hashlib
 import math
 import os
@@ -16,7 +17,6 @@ from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.evaluation_queue import MonitoringBudget
-from manabot.remote.plan import JobSpec
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -68,7 +68,7 @@ class StepCalibration(Strict):
                 "sha256": hashlib.sha256(payload).hexdigest(),
                 "bytes": len(payload),
             },
-            completed_updates=len(stage.diagnostics),
+            completed_updates=stage.updates,
             active_seconds=stage.collection_seconds + stage.learning_seconds,
             learner_transitions=stage.learner_transitions,
         )
@@ -85,13 +85,19 @@ class StepCalibration(Strict):
         return updates
 
 
-class PlannedRun(CheckpointCadence):
-    """Bind one resolved case and training seed to allocation and evaluation intent."""
+class PlannedRun(Strict):
+    """One resolved case and training seed, launched as an Etude training run.
+
+    Hours and dollars bound the run; which machine it gets is chosen at launch
+    (`etude launch --pool/--rent`), never here. Milestones are absolute updates
+    at which the run records a checkpoint that evaluations can follow.
+    """
 
     case: str
     seed: int = Field(ge=0)
-    spec: JobSpec
-    monitoring: MonitoringBudget
+    max_hours: float = Field(gt=0)
+    max_usd: Decimal | None = Field(default=None, gt=0)
+    milestones: tuple[int, ...] = ()
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
 

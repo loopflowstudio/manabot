@@ -10,6 +10,7 @@ from experiments.direct_self_play import direct_self_play
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -50,14 +51,18 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         assert store.training_run(run.id).status == "completed"
     assert run.status == "completed"
     assert sum(stage.games for stage in run.stages) > 0
+    updates = stage_rows(run, read_updates(tmp_path, [run]))
     for index, stage in enumerate(run.stages):
-        outcomes = stage.diagnostics[0]["self_play_outcomes"]
-        assert (
-            sum(r["wins"] + r["losses"] + r["draws"] for r in outcomes)
-            == 2 * stage.games
-        )
-        assert sum(r["wins"] for r in outcomes) == sum(r["losses"] for r in outcomes)
-        assert {r["position"] for r in outcomes} == {"play", "draw"}
+        first = updates[stage.id][0]
+        outcomes = {
+            tuple(name.split("/")[3:]): int(count)
+            for name, count in first.items()
+            if name.startswith("self_play_outcomes/")
+        }
+        assert sum(outcomes.values()) == 2 * stage.games
+        wins = sum(n for (_, kind), n in outcomes.items() if kind == "wins")
+        assert wins == sum(n for (_, kind), n in outcomes.items() if kind == "losses")
+        assert {position for position, _ in outcomes} == {"play", "draw"}
         if learning_seats == "one":
             assert stage.learner_transitions == 512
         else:
@@ -68,7 +73,7 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         assert stage.export_seconds > 0
         if empty_second and index == 1:
             assert stage.optimizer_exposures == 0
-            assert stage.diagnostics[0]["skipped"] == "empty advantage filter"
+            assert first["skipped"] == "empty advantage filter"
         else:
             assert stage.optimizer_exposures > 0
         assert stage.artifacts["raw"]["sha256"] != stage.artifacts["ema"]["sha256"]

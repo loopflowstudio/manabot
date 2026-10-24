@@ -12,14 +12,12 @@ from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
-from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
-app.add_typer(deploy_app, name="deploy")
 
 # Named regimes are repository experiment code outside the installed package,
 # found by module name: experiments/<experiment>.py, one experiment per file.
@@ -109,9 +107,6 @@ def train_command(
         help="Legacy elapsed-time monitoring interval for an explicitly frozen recipe",
     ),
     initial_admission: Optional[str] = typer.Option(None, hidden=True),
-    allocation: Optional[str] = typer.Option(
-        None, help="Admitted allocation JSON, with absolute deadline"
-    ),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -139,7 +134,6 @@ def train_command(
                 checkpoint_updates,
                 checkpoint_seconds,
                 initial_admission,
-                allocation,
             )
         ):
             raise typer.BadParameter(
@@ -182,7 +176,6 @@ def train_command(
         raise typer.BadParameter("select --regime or --regime-name, not both")
     if out is None:
         raise typer.BadParameter("--regime requires --out")
-    from manabot.remote.plan import Allocation
     from manabot.training.execution import execute_regime
     from manabot.verify.store import VerifyStore
 
@@ -199,9 +192,6 @@ def train_command(
             store,
             resume_from=resume_from,
             source_repair_reason=source_repair_reason,
-            allocation=Allocation.model_validate_json(Path(allocation).read_text())
-            if allocation
-            else None,
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,

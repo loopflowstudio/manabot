@@ -1,7 +1,6 @@
 """Direct checkpoint comparisons through Etude and replay-verified simulation.
 
-Each match contains all eight deck/seat legs of one deal. Checkpoint following
-and process lifetime management belong to experiment.duel_follow."""
+Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
@@ -260,12 +259,3 @@ def evaluate(path: Path) -> None:
             one_seat_coordinates=duel.one_seat.coordinates,
         ).model_dump(mode="json"),
     )
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--duel", type=Path, required=True)
-    args = parser.parse_args()
-    evaluate(args.duel)

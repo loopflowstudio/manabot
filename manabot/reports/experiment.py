@@ -33,6 +33,12 @@ from manabot.reports.time_profile import (
     training_time_report,
 )
 from manabot.reports.training import Scalar, training_dashboard
+from manabot.training.update_metrics import (
+    MetricRow,
+    Updates,
+    read_updates,
+    stage_rows,
+)
 
 _RUN_RECORD = TypeAdapter(RetainedRun | EtudeRunFile)
 
@@ -82,20 +88,32 @@ class ReportEvidence:
         run = self.runs_by_id.get(run_id)
         return f"{run.regime.id} · seed {run.seed}" if run is not None else run_id
 
+    @cached_property
+    def tracked(self) -> dict[str, Updates]:
+        """Self-play update rows of every run's Etude run found under root."""
+        return read_updates(self.root, self.runs)
+
+    def updates(self, run: ReportRun) -> dict[str, list[MetricRow]]:
+        """One run's rows by stage, self-play rows from its Etude run."""
+        return stage_rows(run, self.tracked)
+
     def metrics(self, run: ReportRun) -> list[dict[str, Scalar]]:
         """Expose all saved diagnostics for notebook-selected deeper analysis."""
-        rows = training_dashboard(run).rows
-        diagnostics = {
-            (s.id, i): d for s in run.stages for i, d in enumerate(s.diagnostics)
-        }
-        for row in rows:
-            diagnostic = diagnostics.get(
-                (row.get("stage/id"), row.get("stage/ordinal")), {}
-            )
-            for key, value in diagnostic.items():
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
+        updates = self.updates(run)
+        rows = training_dashboard(run, updates)
+        for row in rows.rows:
+            stage, ordinal = row.get("stage/id"), row.get("stage/ordinal")
+            if not isinstance(stage, str) or not isinstance(ordinal, int):
+                continue
+            for key, value in updates[stage][ordinal].items():
+                # Top-level scalars; nested names are already projected above.
+                if (
+                    "/" not in key
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                ):
                     row.setdefault(f"diagnostic/{key}", value)
-        return rows
+        return rows.rows
 
 
 def load_evidence(root: Path) -> ReportEvidence:
@@ -434,7 +452,7 @@ def diagnostic_figures(evidence: ReportEvidence, *, window: int = 25) -> list[Fi
 def _sampling_rows(evidence: ReportEvidence) -> list[list[str]]:
     rows: list[list[str]] = []
     for run in evidence.runs:
-        diagnostics = [d for stage in run.stages for d in stage.diagnostics]
+        diagnostics = [d for rows in evidence.updates(run).values() for d in rows]
         entropy = [
             float(d["entropy"])
             for d in diagnostics
@@ -511,6 +529,17 @@ def _training_time(evidence: ReportEvidence, output: Path) -> str:
         f'<p><a href="{escape(time_path.name, quote=True)}" download>'
         "Download training time accounting and source hashes (JSON)</a></p>"
     )
+
+
+def _stop_reason(run: ReportRun) -> str:
+    """Name why a game-tolerant run stopped; deadlines are not game errors."""
+    if run.game_errors is not None and run.game_errors.stop_reason:
+        return run.game_errors.stop_reason
+    if run.status == "paused":
+        return "allocation_deadline"
+    if run.status == "interrupted" and (run.error or "").startswith("TimeoutError"):
+        return "deadline"
+    return run.status
 
 
 def write_time_profile(evidence: ReportEvidence, output: Path) -> Path:
@@ -609,12 +638,13 @@ def write_dashboard(
             errors = run.game_errors
             parts.append(
                 f"<p>Run {escape(run.id)}: {errors.attempted} settled game attempts, "
-                f"{errors.completed} completed, {errors.crashed} crashed; "
+                f"{errors.completed} completed, {errors.crashed} crashed, "
+                f"{errors.abandoned} cut off when the run stopped; "
                 f"{errors.discarded_samples} samples discarded, "
                 f"{errors.replacement_samples} replacement samples. "
                 f"Game error rate {errors.error_rate:.1%} over the last "
                 f"{len(errors.window)} settled attempts; "
-                f"stop reason: {escape(errors.stop_reason or run.status)}. "
+                f"stop reason: {escape(_stop_reason(run))}. "
                 "Recovery does not establish that the rules defect was repaired.</p>"
             )
     parts.append(

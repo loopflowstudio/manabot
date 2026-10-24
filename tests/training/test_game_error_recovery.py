@@ -1,8 +1,7 @@
-"""Repaired CPU continuation under the existing provider and evaluation owners.
+"""Repaired CPU continuation under the existing evaluation owner.
 
-Only provider effects, evaluator processes and placement are fake. Real training
-snapshots, allocation receipts and exported checkpoints connect the owners; no
-paid execution or portable CUDA recovery is exercised here.
+Only evaluator processes are fake. Real training snapshots and exported
+checkpoints connect the owners; no portable CUDA recovery is exercised here.
 """
 
 from collections.abc import Mapping
@@ -19,11 +18,6 @@ from manabot.env import ObservationSpace
 from manabot.experiment import evaluation_queue as checkpoint_queue
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.remote import plan as remote_plan
-from manabot.remote.cohort import CohortEntry
-from manabot.remote.jobs import JobPhase, JobRecord, Resource
-from manabot.remote.plan import Allocation, JobSpec
-from manabot.remote.provider import ProviderError
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -42,8 +36,6 @@ from manabot.training.state.game_errors import (
 )
 from manabot.verify.store import VerifyStore
 import managym
-from tests.remote.test_cohort import Harness
-from tests.remote.test_compile import SOURCE
 from tests.training.game_error_fixtures import (
     PaymentMismatchCollector,
     PaymentMismatchEnv,
@@ -52,13 +44,11 @@ from tests.training.game_error_fixtures import (
     _repaired_payment,
 )
 from tests.training.test_checkpoint_queue import Process
+from tests.training.test_recovery import tracked_updates
 
 
-@pytest.mark.parametrize("provider_phase", ["completed", "failed"])
 def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    provider_phase: JobPhase,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     torch.set_num_threads(1)
     recipe = TrainingRegime(
@@ -81,64 +71,8 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             )
         ],
     )
-    remote = Harness(tmp_path, monkeypatch)
-    remote.clock.now = time.time()
-    machine_spec = remote.cohort.entries[0].plan.spec
-
-    def local_placement(raw: str, spec: JobSpec) -> TrainingRegime:
-        # Fake provider runs this exact CPU recipe. Production RunPod placement
-        # requires CUDA and still rejects process recovery; do not bypass that
-        # admission outside this fixture or claim portable GPU recovery.
-        assert spec == machine_spec
-        return TrainingRegime.model_validate_json(raw)
-
-    monkeypatch.setattr(remote_plan, "resolve", local_placement)
-    plan = remote_plan.compile_plan(recipe.model_dump_json(), machine_spec, SOURCE, 197)
+    now = [time.time()]
     monitoring = checkpoint_queue.MonitoringBudget(seconds=10, attempt_seconds=5)
-    remote.cohort = remote.cohort.model_copy(
-        update={
-            "deadline": remote.clock.now + 3600,
-            "entries": (
-                CohortEntry(
-                    job_id="repaired-training",
-                    plan=plan,
-                    monitoring=monitoring,
-                    checkpoint_updates=1,
-                ),
-            ),
-        }
-    )
-    admitted = remote.restart().tick()
-    spec = admitted.attempts[0].spec
-    allocation = spec.allocation
-    assert allocation is not None and spec.plan.regime == recipe
-    reserved = admitted.charged_dollars(remote.cohort)
-    assert reserved == remote.cohort.reserved_dollars
-    remote.provider.failure = "ambiguous"
-    with pytest.raises(ProviderError, match="create timed out"):
-        remote.restart().tick()
-    remote.provider.failure = ""
-    with pytest.raises(TimeoutError, match="acceptance"):
-        remote.restart().tick()
-    assert remote.provider.created == 1
-    job_store = remote.jobs(spec)
-    frozen_remote = {
-        key: job_store.read(key)
-        for key in ("spec.json", "training-claim.json", "training.json")
-    }
-    resource_bytes = frozen_remote["training.json"]
-    assert resource_bytes is not None
-    resource = Resource.model_validate_json(resource_bytes.data)
-    assert resource.claim.deadline == allocation.deadline
-    running = JobRecord(
-        spec_sha256=spec.identity,
-        pod_id=resource.pod.id,
-        phase="running",
-        accepted_at=remote.clock.now,
-        heartbeat_at=remote.clock.now,
-    )
-    assert job_store.create("runtime/record.json", running.model_dump_json().encode())
-    assert remote.restart().tick().charged_dollars(remote.cohort) == reserved
     original_fingerprints = execution._runtime_identities
 
     def fixture_identities(
@@ -181,15 +115,13 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             *,
             resume_from: str | None = None,
             source_repair_reason: str | None = None,
-            admitted_allocation: Allocation = allocation,
         ) -> TrainingRun:
             return execution.execute_regime(
-                spec.plan.regime,
-                spec.plan.seed,
+                recipe,
+                197,
                 tmp_path / name,
                 store,
-                checkpoint_updates=spec.checkpoint_updates,
-                allocation=admitted_allocation,
+                checkpoint_updates=1,
                 resume_from=resume_from,
                 source_repair_reason=source_repair_reason,
             )
@@ -203,7 +135,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()[0]
         parent = store.training_run(parent_id)
-        assert 1 <= len(parent.stages[0].diagnostics) < 3
+        assert 1 <= parent.stages[0].updates < 3
         assert parent.game_errors is not None and parent.game_errors.crashed == 2
         original = Path(parent.game_error_ledgers[0]).read_bytes()
         entries = [json.loads(line) for line in original.splitlines()]
@@ -252,8 +184,9 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert repaired["original_outcome"] == "engine_error"
         assert Path(parent.game_error_ledgers[0]).read_bytes() == original
         assert parent.game_errors.model_dump() == allowance
-        assert failed_entry["context"]["coordinates"]["updates"] == len(
-            parent.stages[0].diagnostics
+        assert (
+            failed_entry["context"]["coordinates"]["updates"]
+            == parent.stages[0].updates
         )
         assert parent.recovery_artifact is not None
         frozen_snapshot = Path(parent.recovery_artifact["path"]).read_bytes()
@@ -272,7 +205,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
 
         def restart_monitor() -> checkpoint_queue.CheckpointQueue:
             return checkpoint_queue.CheckpointQueue(
-                monitor_out, monitoring, clock=remote.clock.time, lease=lease
+                monitor_out, monitoring, clock=lambda: now[0], lease=lease
             )
 
         monitor = restart_monitor()
@@ -287,7 +220,6 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             # Simulate loss of the owner and its fake worker without finalizing
             # the running receipt. The next owner must charge the full reserve.
             monitor.lock.close()
-        assert remote.restart().tick().charged_dollars(remote.cohort) == reserved
         monkeypatch.setattr(
             PaymentMismatchEnv, "payment", staticmethod(_repaired_payment)
         )
@@ -330,20 +262,12 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             ).fetchone()[0]
         )
         assert failed.recovery_artifact == parent.recovery_artifact
-        with pytest.raises(ValueError, match="original allocation deadline"):
-            run(
-                "renewed",
-                admitted_allocation=allocation.model_copy(
-                    update={"admitted_at": allocation.admitted_at + 60}
-                ),
-                resume_from=failed.id,
-            )
         monkeypatch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
         child = run("second", resume_from=failed.id)
         assert child.status == "completed"
         assert child.game_errors is not None and child.game_errors.crashed == 2
         assert child.game_errors.attempted > parent.game_errors.attempted
-        assert len(child.stages[0].diagnostics) == 3
+        assert child.stages[0].updates == 3
         assert child.prior_seconds == failed.prior_seconds + failed.seconds
         assert (
             child.prior_watchdog_seconds
@@ -352,13 +276,12 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         assert child.regime.wall_seconds == parent.regime.wall_seconds
         assert child.parent_run_id == failed.id and child.source_repair_reason
         assert Path(parent.game_error_ledgers[0]).read_bytes() == original
-        assert (
-            child.stages[0].diagnostics[: len(parent.stages[0].diagnostics)]
-            == parent.stages[0].diagnostics
-        )
+        # Every attempt's rows join one Etude run, each update exactly once.
+        assert [
+            row["coordinates/updates"] for row in tracked_updates(child, tmp_path)
+        ] == [1, 2, 3]
         assert Path(parent.recovery_artifact["path"]).read_bytes() == frozen_snapshot
-        assert child.allocation_deadline == parent.allocation_deadline
-        assert child.allocation_deadline == allocation.deadline
+        assert child.allocation_deadline is None
         assert child.optimizer_updates_through() == 3
         exported = TrainingRun.model_validate_json(
             (tmp_path / "second/run.json").read_text()
@@ -395,7 +318,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             )
             assert job.checkpoint.coordinates.updates == 2
             assert job.checkpoint.artifact == child.monitoring_checkpoints[1].artifact
-            remote.clock.now += monitoring.attempt_seconds
+            now[0] += monitoring.attempt_seconds
             processes[-1].code = 1
             monitor.tick(sources)
             assert monitor.charged_seconds == monitoring.seconds
@@ -407,32 +330,3 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             assert monitor.charged_seconds == monitoring.seconds
             assert monitor.pending == 1 and monitor.process is None
             assert interrupted_job.read_bytes() == frozen_evaluation
-
-        state = remote.restart().tick()
-        assert len(state.attempts) == remote.provider.created == 1
-        assert state.attempts[0].spec == spec
-        assert state.charged_dollars(remote.cohort) == reserved
-        assert {key: job_store.read(key) for key in frozen_remote} == frozen_remote
-        remote.finish(spec, provider_phase)
-        state = remote.restart().tick()
-        assert state.phase == provider_phase
-        expected_charge = (
-            remote.cohort.prior_dollars
-            + remote.cohort.controller_dollars
-            + (remote.clock.now - resource.claim.intent_time)
-            * (resource.pod.rate + machine_spec.machine.storage_hourly_allowance)
-            / 3600
-        )
-        assert state.charged_dollars(remote.cohort) == pytest.approx(expected_charge)
-        remote.clock.now += 60
-        for _ in range(2):
-            state = remote.restart().tick()
-            assert state.phase == provider_phase
-            assert len(state.attempts) == remote.provider.created == 1
-            assert state.attempts[0].spec.deadline == allocation.deadline
-            assert state.charged_dollars(remote.cohort) == pytest.approx(
-                expected_charge
-            )
-        assert remote.verified == (
-            [spec.job_id] if provider_phase == "completed" else []
-        )

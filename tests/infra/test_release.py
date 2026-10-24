@@ -49,7 +49,6 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
         ROOT / "protocol/experience-v1.schema.json"
     ).read_bytes()
     assert (bot / "manabot/reports/time_cohort.html").is_file()
-    assert (bot / "manabot/remote/guardian.sh").is_file()
     assert not (bot / "academy/ui/node_modules").exists()
     assert not (bot / "experiments").exists()
     source = json.loads((bot / ".manabot-source.json").read_text())

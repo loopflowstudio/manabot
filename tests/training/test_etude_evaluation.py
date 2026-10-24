@@ -15,11 +15,7 @@ from etude.eval.tournament import curves  # noqa: E402
 from manabot.eval import benchmark as evaluation
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.infra.identity import file_sha256
-from manabot.remote.live_evaluation import Ledger, _checkpoints, report
-from manabot.sim.matchup import selected_decks, selected_match
-from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-import managym
+from manabot.sim.matchup import selected_decks
 
 
 def _admission(tmp_path: Path) -> MonitorResult:
@@ -100,10 +96,6 @@ def test_etude_resumes_complete_deals_and_report_counts_them(
         assert points[0].value == 0.5
     finally:
         db.close()
-    ledger = Ledger(cohort_sha256="a" * 64, observed_at=1)
-    report(tmp_path, ledger)
-    assert "heuristic" in (tmp_path / "public/eval.html").read_text()
-    assert "whole deals" in (tmp_path / "public/index.html").read_text()
 
 
 def test_failed_deal_retains_evidence_and_etude_failure(
@@ -125,11 +117,6 @@ def test_failed_deal_retains_evidence_and_etude_failure(
     assert list((tmp_path / "evaluations/one/arena").rglob("rows.json"))
     assert not (tmp_path / "evaluations/one/result.json").exists()
 
-    # A live run can have its declaration and failed match records before any
-    # score table exists. Rendering that state must not stop the observer.
-    report(tmp_path, Ledger(cohort_sha256="a" * 64, observed_at=1))
-    assert (tmp_path / "public/status.json").is_file()
-
 
 def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
     tmp_path: Path,
@@ -139,64 +126,6 @@ def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
     with pytest.raises(ValueError, match="artifact bytes differ"):
         evaluation.evaluate(manifest, tmp_path / "evaluations/one")
     assert not (tmp_path / "track").exists()
-
-
-@pytest.mark.parametrize(
-    "status", ["paused", "completed", "running", "failed", "interrupted"]
-)
-def test_budget_endpoint_between_milestones_is_selected_only_after_export(
-    status: str,
-) -> None:
-    regime = TrainingRegime(
-        id="endpoint",
-        world=managym.WORLD_VERSION,
-        match=selected_match(),
-        stages=[
-            TrainSelfPlay(
-                id="self",
-                operation="train_self_play",
-                updates=1000,
-                streams=2,
-                transitions=8,
-            )
-        ],
-    )
-    milestone = MonitoringCheckpoint(
-        stage_id="self",
-        ordinal=0,
-        updates=250,
-        training_seconds=90,
-        artifact={"path": "monitor.pt", "sha256": "a" * 64, "bytes": 1},
-    )
-    stage = StageRecord.model_validate(
-        {
-            "id": "self",
-            "status": status,
-            "cumulative_seconds": 100,
-            "optimizer_updates": 253,
-            "diagnostics": [{} for _ in range(253)],
-            "artifacts": {"raw": {"path": "final.pt", "sha256": "b" * 64, "bytes": 2}},
-        }
-    )
-    run = TrainingRun(
-        id="endpoint",
-        regime_digest="c" * 64,
-        regime=regime,
-        seed=1,
-        seed_streams={},
-        identities={},
-        stages=[stage],
-        monitoring_checkpoints=[milestone],
-    )
-    selected = _checkpoints(run)
-    assert [item.coordinates.updates for item in selected] == (
-        [250, 253] if status in {"paused", "completed"} else [250]
-    )
-    if status in {"paused", "completed"}:
-        assert selected[-1].artifact["sha256"] == "b" * 64
-        assert selected[-1].coordinates.training_seconds == 100
-        stage.artifacts["raw"] = milestone.artifact
-        assert len(_checkpoints(run)) == 1
 
 
 def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(

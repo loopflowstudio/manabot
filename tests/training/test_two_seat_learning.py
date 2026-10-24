@@ -31,6 +31,7 @@ from manabot.training.regime import (
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
+from tests.training.test_recovery import tracked_updates
 
 
 class ScriptedGames:
@@ -321,9 +322,10 @@ def test_regime_trains_and_exports_both_seats(
     record = run.stages[0]
     assert record.games == 4
     assert record.environment_decisions == record.learner_transitions
-    assert sum(row["rows"] for row in record.diagnostics) == record.learner_transitions
+    rows = tracked_updates(run, tmp_path)
+    assert sum(row["rows"] for row in rows) == record.learner_transitions
     assert record.optimizer_exposures == record.learner_transitions
-    assert all(row["bootstrapped_tail_fraction"] == 0 for row in record.diagnostics)
+    assert all(row["bootstrapped_tail_fraction"] == 0 for row in rows)
     for role in ("raw", "ema"):
         loaded, _ = load_checkpoint(record.artifacts[role]["path"])
         assert loaded.config == agent.config
