@@ -68,15 +68,21 @@ class LearnerContinuation(Strict):
     ema: StagedExport
     optimizer: StagedExport
 
+    def files(self) -> dict[str, tuple[str, StagedExport]]:
+        """Import role -> (input file name, staged export)."""
+        return {
+            role: (name, getattr(self, role)) for role, name in _PARENT_FILES.items()
+        }
+
     def inputs(self) -> tuple[Input, ...]:
         return tuple(
             Input(
                 name=name,
-                key=getattr(self, role).key,
-                sha256=getattr(self, role).sha256,
-                size_bytes=getattr(self, role).bytes,
+                key=export.key,
+                sha256=export.sha256,
+                size_bytes=export.bytes,
             )
-            for role, name in _PARENT_FILES.items()
+            for name, export in self.files().values()
         )
 
 
@@ -131,18 +137,17 @@ class TrainingJob(Strict):
         """The regime with the continuation's staged files bound as its import."""
         if self.continuation is None:
             return self.regime
-        continuation = self.continuation
         serialized = self.regime.model_dump(mode="json")
         serialized["stages"][0]["learning_state"] = LearningStateImport.model_validate(
             {
-                "source_stage": continuation.source_stage,
+                "source_stage": self.continuation.source_stage,
                 **{
                     role: {
                         "path": str(inputs / name),
-                        "sha256": getattr(continuation, role).sha256,
-                        "bytes": getattr(continuation, role).bytes,
+                        "sha256": export.sha256,
+                        "bytes": export.bytes,
                     }
-                    for role, name in _PARENT_FILES.items()
+                    for role, (name, export) in self.continuation.files().items()
                 },
             }
         ).model_dump(mode="json")
@@ -215,8 +220,9 @@ def run_worker() -> TrainingRun:
         raise ValueError("remaining allocation cannot cover the frozen regime")
     regime = spec.regime
     if spec.continuation is not None:
-        inputs = Path(environment.get("ETUDE_INPUTS_DIR", ""))
-        if not environment.get("ETUDE_INPUTS_DIR") or not inputs.is_dir():
+        directory = environment.get("ETUDE_INPUTS_DIR")
+        inputs = Path(directory or "")
+        if not directory or not inputs.is_dir():
             raise ValueError("a learner continuation needs its staged inputs")
         parent = TrainingRun.model_validate_json(
             (inputs / _PARENT_FILES["source_run"]).read_bytes()

@@ -40,7 +40,9 @@ import sys
 import time
 from typing import Literal
 
+from etude.launch.client import status
 from etude.launch.records import Status
+from etude.train.read import read
 from etude.train.records import CheckpointRecord
 from pydantic import BaseModel, ConfigDict
 
@@ -386,18 +388,13 @@ def collect_pair(directory: Path) -> list[H2HRow]:
 class Etude:
     """Where the follower reads segment runs and asks whether they are done."""
 
-    source: str
     runs: tuple[str, ...]
     checkpoints: Callable[[str], list[CheckpointRecord]]
     status: Callable[[str], Status]
 
 
 def etude(source: str, runs: tuple[str, ...]) -> Etude:
-    from etude.launch.client import status
-    from etude.train.read import read
-
     return Etude(
-        source=source,
         runs=runs,
         checkpoints=lambda run: list(read(source, STAGE, run).checkpoints),
         status=status,

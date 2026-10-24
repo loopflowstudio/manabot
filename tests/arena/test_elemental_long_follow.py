@@ -64,7 +64,6 @@ def test_segments_join_retained_windows_and_settle_when_done(tmp_path: Path) -> 
     )
     phase = ["running", None]
     segments = Etude(
-        source="fixture",
         runs=("w3",),
         checkpoints=lambda run: exports[:2] if phase[0] == "running" else exports,
         status=lambda run: _status(phase[0], phase[1]),

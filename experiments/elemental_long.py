@@ -82,6 +82,8 @@ def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinua
         raise ValueError("parent is not an MTG-183 self-play window")
     if run.status not in {"completed", "paused"}:
         raise ValueError(f"parent did not finish its window: {run.status}")
+    folder = f"{prefix.strip('/')}/"
+    existing = set(storage.keys(folder))
     staged = {}
     for role, name in _PARENT_FILES.items():
         path = parent / name
@@ -93,9 +95,8 @@ def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinua
                 size,
             ):
                 raise ValueError(f"{name} differs from the parent's published {role}")
-        folder = f"{prefix.strip('/')}/"
         key = folder + name
-        if key in storage.keys(folder):
+        if key in existing:
             if hashlib.sha256(storage.get(key)).hexdigest() != sha256:
                 raise ValueError(f"{key} already holds other bytes")
         else:

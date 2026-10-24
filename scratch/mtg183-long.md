@@ -91,6 +91,7 @@ frozen launch commit `8e7df92e4` stays an ancestor):
    `experiments/protocols/elemental-183-w3.json` at staging, before allocation).
 4. Follower admits Etude segment exports, settles on Etude run done.
 Check: `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed.
+Compress 2026-10-24: same check → 39 passed (follower `Etude.source` dropped, role/file mapping shared via `LearnerContinuation.files`).
 
 Remaining, in order:
 - After w2 ends (deadline 2026-10-25 01:47 UTC): fetch w2's final run.json and
