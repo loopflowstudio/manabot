@@ -6,14 +6,14 @@ import time
 
 import pytest
 
+from manabot.arena.monitor import MonitorProtocol, stage_checkpoint
 from manabot.env import ObservationSpace
-from manabot.model.agent import Agent
-from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.model.actor_critic import ActorCritic
 from manabot.training import execution
-from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.models import TrainingRun
-from manabot.training.monitor_evaluation import MonitorProtocol, stage_checkpoint
-from manabot.training.recovery import load_update
+from manabot.training.records import TrainingRun
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.state.recovery import load_update
 from manabot.verify.store import VerifyStore
 from tests.remote.test_job_spec import job_spec
 from tests.training.test_recovery import (
@@ -80,6 +80,7 @@ def test_pause_export_and_resume_preserve_target_and_learning(
         assert paused.allocation_deadline == allocation.deadline
         assert paused.recovery_artifact is not None
         second = job_spec(1).admit(clock.time())
+        assert second.deadline > allocation.deadline
         resumed = execution.execute_regime(
             value,
             197,
@@ -92,6 +93,8 @@ def test_pause_export_and_resume_preserve_target_and_learning(
             value, 197, tmp_path / "control", store, allocation=second
         )
         assert resumed.status == control.status == "completed"
+        assert resumed.allocation_deadline == second.deadline
+        assert resumed.parent_run_id == paused.id
         assert resumed.updates_through() == control.updates_through() == 3
         assert resumed.regime_digest == paused.regime_digest == control.regime_digest
         assert_learning_diagnostics_equal(resumed.stages[0], control.stages[0])
@@ -129,7 +132,7 @@ def test_collection_cutoff_leaves_checkpoint_reserve_without_claiming_cuda_recov
 
     def expire_collection(
         collector: SeatRoutedCollector,
-        agent: Agent,
+        agent: ActorCritic,
         num_steps: int,
         *,
         deadline_monotonic: float | None = None,
@@ -188,14 +191,14 @@ def test_export_reserve_exhaustion_is_not_a_completed_or_paused_run(
     value = recipe()
     value.stages[0].updates = 1
     value.recovery_max_microsteps = None
-    load = execution.load_checkpoint_agent
+    load = execution.load_checkpoint
 
-    def slow_admission(path: str) -> tuple[Agent, ObservationSpace]:
+    def slow_admission(path: str) -> tuple[ActorCritic, ObservationSpace]:
         result = load(path)
         clock.now = allocation.checkpoint_deadline
         return result
 
-    monkeypatch.setattr(execution, "load_checkpoint_agent", slow_admission)
+    monkeypatch.setattr(execution, "load_checkpoint", slow_admission)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(TimeoutError, match="wall deadline"):
             execution.execute_regime(

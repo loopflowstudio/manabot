@@ -1,5 +1,6 @@
-"""Executable training regimes over the existing manabot trainers."""
+"""Training regimes and run records; execute_regime orchestrates their execution."""
 
-from .models import TrainingRegime, TrainingRun
+from .records import TrainingRun
+from .regime import TrainingRegime
 
 __all__ = ["TrainingRegime", "TrainingRun"]

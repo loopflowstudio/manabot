@@ -1,5 +1,7 @@
 """Behavioral checks for autonomous and supplied-belief manabot paths."""
 
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import pytest
 
@@ -13,10 +15,8 @@ from manabot.belief import (
 )
 from manabot.belief.demo import _runtime_env, run_demo
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
-from managym.decision import Observation
-from managym.possible_worlds import PossibleWorldSpace
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from tests.belief.support import (
     fixture_decision,
     fixture_history,
@@ -40,9 +40,9 @@ def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
 
 def test_belief_enabled_agent_has_no_silent_fallback() -> None:
     decision, schema = fixture_decision()
-    agent = Agent(
+    agent = ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,

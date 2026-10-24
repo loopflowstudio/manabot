@@ -7,15 +7,15 @@ runs the learning-speed study (smoke by default; see `--help`).
 """
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import PACK, ppo_checkpoints
-from manabot.training.models import (
+from manabot.experiment.study import main
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import PACK, ppo_checkpoints
+from manabot.training.regime import (
     CollectSearch,
     Learning,
     TrainingRegime,
     TrainSupervised,
 )
-from manabot.training.regime_study import main
 import managym
 
 
@@ -25,7 +25,7 @@ def direct_self_play() -> TrainingRegime:
         id="direct-self-play",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(semantic_pack=PACK),
+        agent=ModelConfig(semantic_pack=PACK),
         stages=ppo_checkpoints(2, Learning()),
         wall_seconds=900,
     )
@@ -37,7 +37,7 @@ def search_distillation() -> TrainingRegime:
         id="search-distillation",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(semantic_pack=PACK),
+        agent=ModelConfig(semantic_pack=PACK),
         stages=[
             CollectSearch(id="data-0", operation="collect_search", games=2),
             TrainSupervised(

@@ -117,7 +117,7 @@ No training or game generation is needed. Use the immutable dataset and sampler
 from a completed run, and the sampler SHA-256 recorded in its artifact receipt:
 
 ```bash
-uv run python -m manabot.belief.sampling_report \
+uv run python -m manabot.reports.belief \
   --dataset /path/to/evaluation-dataset.json \
   --training-dataset /path/to/sampler-training-dataset.json \
   --checkpoint /path/to/sampler.pt \

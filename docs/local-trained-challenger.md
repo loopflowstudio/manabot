@@ -5,7 +5,7 @@ Allies/Lessons world: the authored decks with their sideboards, so every Learn
 decision offers Take a Lesson, Discard and draw, and Decline. Exp-03 supports
 distillation over early PPO in its historical world; it does **not** rank this
 small new candidate as the strongest current bot. The generic
-`manabot train --preset local` uses a different deck and is a training smoke,
+`manabot train` is a bounded production-path training smoke,
 not this matchup's challenger recipe.
 
 No cloud account is needed. The fixed local workflow follows the
@@ -170,7 +170,7 @@ uv run python -m manabot.arena.evaluate \
 ```
 
 Without a candidate registration this runs Random against the shipped default
-demo Search-64. It calls `manabot.sim.flat_search.FlatSearchPolicy` itself: 64 simulations
+demo Search-64. It calls `manabot.sim.search.flat.FlatSearchPolicy` itself: 64 simulations
 per legal action, four rollouts per world, 2,000-step playout cap, deterministic
 first-maximum selection, CPU, one worker and one Torch thread. The baseline
 registration pins the policy source bytes; the protocol additionally pins the

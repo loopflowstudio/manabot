@@ -12,6 +12,7 @@ import sqlite3
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from managym.experience import UNVERSIONED_CONTENT_HASH
 import pytest
 
 # Local imports
@@ -19,7 +20,6 @@ from academy import server, trace as trace_store
 from academy.server import app
 import managym
 from managym import experience_projection
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
@@ -165,18 +165,18 @@ def test_full_game_vs_random_villain(isolated_traces):
 
 
 def _write_tiny_checkpoint(path) -> None:
-    """Write a minimal (untrained) Agent checkpoint in the training format."""
+    """Write a minimal (untrained) ActorCritic checkpoint in the training format."""
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-    from manabot.model.agent import Agent
+    from manabot.infra.config import ModelConfig, ObservationConfig
+    from manabot.model.actor_critic import ActorCritic
 
-    obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")
-    agent = Agent(ObservationSpace(obs_hypers), agent_hypers)
-    from manabot.sim.distill import save_bc_checkpoint
+    obs_config = ObservationConfig()
+    agent_config = ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")
+    agent = ActorCritic(ObservationSpace(obs_config), agent_config)
+    from manabot.model.checkpoint import save_checkpoint
     import managym
 
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         path,

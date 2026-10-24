@@ -17,8 +17,8 @@ from typing import Literal
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import (
     PACK,
@@ -32,8 +32,8 @@ Arm = Literal["generic", "semantic", "generic_no_attention"]
 ARMS: tuple[Arm, ...] = ("generic", "semantic", "generic_no_attention")
 
 
-def _spec(arm: Arm) -> AgentSpec:
-    return AgentSpec(
+def _spec(arm: Arm) -> ModelConfig:
+    return ModelConfig(
         hidden_dim=32,
         num_attention_heads=2,
         attention_feedforward_dim=None if arm == "generic_no_attention" else 64,
@@ -48,7 +48,7 @@ def _fit(
     started = time.perf_counter()
     torch.manual_seed(seed)
     spec = _spec(arm)
-    agent = Agent(ObservationSpace(), spec)
+    agent = ActorCritic(ObservationSpace(), spec)
     batch = {key: torch.cat([case.obs[key] for case in cases]) for key in cases[0].obs}
     selected = torch.zeros_like(batch["actions_valid"], dtype=torch.bool)
     pair = selected.clone()
@@ -86,7 +86,7 @@ def _fit(
         {"state_dict": agent.state_dict(), "spec": spec.model_dump(), "seed": seed},
         path,
     )
-    restored = Agent(ObservationSpace(), spec)
+    restored = ActorCritic(ObservationSpace(), spec)
     restored.load_state_dict(torch.load(path, weights_only=True)["state_dict"])
     restored.eval()
     scores: list[dict[str, object]] = []

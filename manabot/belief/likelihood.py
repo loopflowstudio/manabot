@@ -9,12 +9,12 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Mapping
 
+from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefState
-from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
 class RulesProviderGap(RuntimeError):
@@ -115,9 +115,9 @@ class FrozenPolicyLikelihood:
         self.device = torch.device(device)
         self.counterfactual_seed = counterfactual_seed
         self.batch_observer = batch_observer
-        from manabot.sim.flat_mc import load_checkpoint_agent
+        from manabot.model.checkpoint import load_checkpoint
 
-        self.agent, self.obs_space = load_checkpoint_agent(str(path))
+        self.agent, self.obs_space = load_checkpoint(str(path))
         self.agent.to(self.device)
         self.agent.eval()
 

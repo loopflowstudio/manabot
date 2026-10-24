@@ -1,6 +1,6 @@
 # Run an Experiment comparison
 
-`manabot.training.experiments.Experiment` is the readable declaration of a
+`manabot.experiment.config.Experiment` is the readable declaration of a
 comparison. Each real experiment lives in its own Python file with a thin entry
 point. `resolve()` remains side-effect free; `run_experiment()` explicitly executes
 its schedule on configured hardware. `ExperimentRun` records what actually ran,
@@ -21,15 +21,15 @@ A declaration adds an `ExperimentSchedule` to the existing components/cases API:
 
 ```python
 from pathlib import Path
-from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.experiment_execution import ExperimentSchedule, HardwareInventory
-from manabot.training.experiment_runner import run_experiment
-from manabot.training.experiments import Case, Experiment
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.execution import ExperimentSchedule, HardwareInventory
+from manabot.experiment.runner import run_experiment
+from manabot.experiment.config import Case, Experiment
+from manabot.recipes.ataraxos import ataraxos
 
 experiment = Experiment(
     name="my-comparison",
-    baseline=ataraxos_mtg_v1(),
+    baseline=ataraxos(),
     cases=(Case("control"),),
     schedule=ExperimentSchedule(
         seeds=(117, 118),
@@ -151,8 +151,8 @@ allocation. Configure a local CPU resource named `fixture`, then run it:
 ```bash
 uv run --extra notebook python -c "
 from pathlib import Path
-from manabot.training.experiment_execution import HardwareInventory
-from manabot.training.experiment_runner import run_experiment
+from manabot.experiment.execution import HardwareInventory
+from manabot.experiment.runner import run_experiment
 from tests.training.test_experiment_runner import demo_declaration
 hardware = HardwareInventory.model_validate_json(Path('hardware.json').read_text())
 print(run_experiment(demo_declaration(), hardware, Path('.runs/experiment-demo')).status)"

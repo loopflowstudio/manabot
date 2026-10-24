@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from managym.decision import SEMANTIC_DECISION_VERSION, SemanticContractError
 import pytest
 
 from academy.semantic_boundary import SemanticExperienceBoundary
 import managym
-from managym.decision import SEMANTIC_DECISION_VERSION, SemanticContractError
 
 
 def _env() -> managym.Env:

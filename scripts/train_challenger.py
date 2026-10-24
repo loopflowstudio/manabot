@@ -54,7 +54,7 @@ def world_identity(observation: dict) -> dict:
     """Identify the rules, content, Lesson pool and tensor ABI a run binds to."""
     from manabot.env import ObservationSpace
     from manabot.env.observation import ActionEnum, ActionSpaceEnum
-    from manabot.infra.hypers import ObservationSpaceHypers
+    from manabot.infra.config import ObservationConfig
     import managym
 
     setup = {}
@@ -72,9 +72,9 @@ def world_identity(observation: dict) -> dict:
         ]
     )
     manifest = env.content_pack_manifest()
-    encoder = ObservationSpace(ObservationSpaceHypers(**observation)).encoder
+    encoder = ObservationSpace(ObservationConfig(**observation)).encoder
     abi = {
-        "hypers": encoder.hypers.model_dump(),
+        "hypers": encoder.config.model_dump(),
         "shapes": {key: list(shape) for key, shape in encoder.shapes.items()},
         "action_types": {member.name: int(member) for member in ActionEnum},
         "decision_kinds": {member.name: int(member) for member in ActionSpaceEnum},
@@ -184,8 +184,8 @@ def deck_order(index: int) -> tuple[str, str]:
 
 def teacher_game(recipe: dict, index: int, shard: Path) -> dict:
     """Play one authored teacher game into its own shard; return its summary."""
-    from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers
-    from manabot.sim.distill import generate_selfplay_shard
+    from manabot.infra.config import MatchConfig, ObservationConfig
+    from manabot.sim.datagen import generate_selfplay_shard
 
     return generate_selfplay_shard(
         num_games=1,
@@ -193,25 +193,25 @@ def teacher_game(recipe: dict, index: int, shard: Path) -> dict:
         seed=recipe["seed"],
         game_offset=index,
         out_path=shard,
-        match_hypers=MatchHypers.authored(PACK_KEY, *deck_order(index)),
-        observation_hypers=ObservationSpaceHypers(**recipe["observation"]),
+        match_config=MatchConfig.authored(PACK_KEY, *deck_order(index)),
+        observation_config=ObservationConfig(**recipe["observation"]),
     )
 
 
 def train(out: Path, recipe: dict) -> None:
     import torch
 
-    from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-    from manabot.sim.distill import load_shards, save_bc_checkpoint
-    from manabot.sim.flat_mc import load_checkpoint_agent
-    from manabot.sim.search_supervised import train_search_supervised
+    from manabot.infra.config import ModelConfig, ObservationConfig
+    from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+    from manabot.sim.data import load_shards
+    from manabot.training.supervised.search import train_search_supervised
     import managym
 
     torch.set_num_threads(1)
     world = recipe["world"]
     if world_identity(recipe["observation"]) != world:
         raise RuntimeError("Worker runtime differs from the recorded world")
-    observation = ObservationSpaceHypers(**recipe["observation"])
+    observation = ObservationConfig(**recipe["observation"])
     shards = []
     summaries = []
     phases = {}
@@ -244,8 +244,8 @@ def train(out: Path, recipe: dict) -> None:
         value_target_kind=recipe["value_target"],
         policy_weight=recipe["policy_weight"],
         value_weight=recipe["value_weight"],
-        agent_hypers=AgentSpec(**recipe["agent"]),
-        observation_hypers=observation,
+        agent_config=ModelConfig(**recipe["agent"]),
+        observation_config=observation,
         epochs=recipe["epochs"],
         seed=recipe["seed"],
         batch_size=recipe["batch_size"],
@@ -264,7 +264,7 @@ def train(out: Path, recipe: dict) -> None:
     write_json(out / "phases.json", phases)
     phase_start = time.monotonic()
     checkpoint = out / "candidate.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         checkpoint,
@@ -273,7 +273,7 @@ def train(out: Path, recipe: dict) -> None:
         ],
         extra={"recipe": recipe},
     )
-    loaded, _ = load_checkpoint_agent(str(checkpoint))
+    loaded, _ = load_checkpoint(str(checkpoint))
     sample = {
         key: torch.as_tensor(value[:2])
         for key, value in dataset.items()

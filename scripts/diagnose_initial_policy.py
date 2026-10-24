@@ -3,10 +3,10 @@
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra import Hypers
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.verify.util import (
     STANDARD_DECK,
+    VerificationConfig,
     _action_type_name,
     _attack_available,
     _is_attack_action,
@@ -18,17 +18,16 @@ from manabot.verify.util import (
     step_with_fallback,
 )
 
-hypers = Hypers(
+config = VerificationConfig(
     match={"hero_deck": STANDARD_DECK, "villain_deck": STANDARD_DECK},
-    train={"opponent_policy": "random"},
     agent={"attention_on": False},
 )
 
-obs_space = ObservationSpace(hypers.observation)
-match = Match(hypers.match)
-reward = Reward(hypers.reward)
+obs_space = ObservationSpace(config.observation)
+match = Match(config.match)
+reward = Reward(config.reward)
 
-agent = Agent(obs_space, hypers.agent)
+agent = ActorCritic(obs_space, config.agent)
 agent.eval()
 agent.debug = True  # forward() stashes last_raw_logits only in debug mode
 

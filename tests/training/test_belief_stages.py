@@ -6,14 +6,14 @@ from typing import Literal
 
 import pytest
 
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import read_dataset
-from manabot.belief.sampling_fit import load_belief_sampler
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.models import (
-    AtaraxosMoveLearning,
+from manabot.training.regime import (
     CollectBelief,
+    DampedPolicyLearning,
     Execution,
     Learning,
     TrainBelief,
@@ -29,11 +29,11 @@ def belief_recipe() -> TrainingRegime:
     return TrainingRegime(
         id="belief-stage-proof",
         world=managym.WORLD_VERSION,
-        match=MatchHypers(
+        match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
         wall_seconds=120,
         stages=[
             TrainSelfPlay(
@@ -87,14 +87,14 @@ def test_belief_dependencies_reject_forward_and_wrong_artifacts() -> None:
     "gradient,weights",
     [
         ("ppo", "raw"),
-        ("ataraxos_move", "raw"),
-        ("ataraxos_move", "ema"),
+        ("damped_policy", "raw"),
+        ("damped_policy", "ema"),
         ("compound", "raw"),
     ],
 )
 def test_frozen_belief_stages_run_and_reload(
     tmp_path: Path,
-    gradient: Literal["ppo", "ataraxos_move", "compound"],
+    gradient: Literal["ppo", "damped_policy", "compound"],
     weights: Literal["raw", "ema"],
 ) -> None:
     recipe = belief_recipe()
@@ -102,10 +102,10 @@ def test_frozen_belief_stages_run_and_reload(
     collection_stage = recipe.stages[1]
     assert isinstance(policy_stage, TrainSelfPlay)
     assert isinstance(collection_stage, CollectBelief)
-    if gradient == "ataraxos_move":
+    if gradient == "damped_policy":
         recipe.agent.value_kind = "categorical_wdl"
-        policy_stage.learning = AtaraxosMoveLearning(
-            gradient="ataraxos_move", min_advantage=0, advantage_quantile=0
+        policy_stage.learning = DampedPolicyLearning(
+            gradient="damped_policy", min_advantage=0, advantage_quantile=0
         )
     collection_stage.weights = weights
     if gradient == "compound":
@@ -124,9 +124,9 @@ def test_frozen_belief_stages_run_and_reload(
         assert collection.games == 3
         assert collection.inputs["policy/raw"] == policy.artifacts["raw"]
         assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
-        loaded, _ = load_checkpoint_agent(policy.artifacts[weights]["path"])
-        assert loaded.hypers.value_kind == recipe.agent.value_kind
-        assert loaded.hypers.compound_decisions == recipe.agent.compound_decisions
+        loaded, _ = load_checkpoint(policy.artifacts[weights]["path"])
+        assert loaded.config.value_kind == recipe.agent.value_kind
+        assert loaded.config.compound_decisions == recipe.agent.compound_decisions
         assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]
         dataset = read_dataset(Path(collection.artifacts["dataset"]["path"]))
         assert {game.split for game in dataset.games} == {"train", "validation", "test"}

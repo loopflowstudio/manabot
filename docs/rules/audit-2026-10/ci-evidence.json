@@ -1,0 +1,1549 @@
+{
+  "measurement": "GitHub job lifetimes, not billing invoices. Sum includes setup and post steps; observed job span excludes any queue before first job. Two successful runs are a sample, not a performance distribution.",
+  "runs": [
+    {
+      "run_id": 39714587357,
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/39714587357",
+      "jobs": [
+        {
+          "name": "Detect Changes",
+          "id": 119613550573,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:44Z",
+          "completed_at": "2026-10-22T03:01:48Z",
+          "seconds": 4.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Classify changed files",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Clean-machine Play",
+          "id": 119613582180,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:50Z",
+          "completed_at": "2026-10-22T03:10:14Z",
+          "seconds": 504.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup uv and CPython 3.12",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Node 22",
+              "seconds": 0.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 9.0
+            },
+            {
+              "name": "Provision proof Chromium",
+              "seconds": 423.0
+            },
+            {
+              "name": "Prove clean launch and offline reload",
+              "seconds": 61.0
+            },
+            {
+              "name": "Report time to playable against the 90-second budget",
+              "seconds": 0.0
+            },
+            {
+              "name": "Upload clean-machine receipt",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Setup Node 22",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv and CPython 3.12",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Semantic Coverage Gate",
+          "id": 119613582210,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:50Z",
+          "completed_at": "2026-10-22T03:02:35Z",
+          "seconds": 45.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 18.0
+            },
+            {
+              "name": "Check semantic coverage evidence",
+              "seconds": 17.0
+            },
+            {
+              "name": "Check optional payment content",
+              "seconds": 2.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Semantic Kernel Conformance",
+          "id": 119613582214,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:02:55Z",
+          "seconds": 64.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 9.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 2.0
+            },
+            {
+              "name": "Check replay, property, and metamorphic evidence",
+              "seconds": 34.0
+            },
+            {
+              "name": "Reproduce checked conformance artifacts",
+              "seconds": 6.0
+            },
+            {
+              "name": "Run bounded valid-action fuzzing",
+              "seconds": 7.0
+            },
+            {
+              "name": "Preserve exact fuzz replay seeds",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Protocol v1 Conformance",
+          "id": 119613582222,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:10:58Z",
+          "seconds": 547.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 3.0
+            },
+            {
+              "name": "Setup Node",
+              "seconds": 4.0
+            },
+            {
+              "name": "Install Python dependencies",
+              "seconds": 18.0
+            },
+            {
+              "name": "Build Python extension",
+              "seconds": 46.0
+            },
+            {
+              "name": "Certify Rust and Python",
+              "seconds": 32.0
+            },
+            {
+              "name": "Launcher contract tests",
+              "seconds": 2.0
+            },
+            {
+              "name": "Certify TypeScript",
+              "seconds": 432.0
+            },
+            {
+              "name": "Post Setup Node",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Rust Tests",
+          "id": 119613582247,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:04:46Z",
+          "seconds": 175.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 2.0
+            },
+            {
+              "name": "Rust tests",
+              "seconds": 165.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Academy UI",
+          "id": 119613582265,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:50Z",
+          "completed_at": "2026-10-22T03:09:43Z",
+          "seconds": 473.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Node",
+              "seconds": 1.0
+            },
+            {
+              "name": "Install Python dependencies",
+              "seconds": 4.0
+            },
+            {
+              "name": "Build Python extension",
+              "seconds": 31.0
+            },
+            {
+              "name": "Install frontend and Chromium",
+              "seconds": 347.0
+            },
+            {
+              "name": "Focused UI checks and browser interactions",
+              "seconds": 80.0
+            },
+            {
+              "name": "Upload browser failure evidence",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Node",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Integration / Integration (ubuntu-latest, long)",
+          "id": 119613582279,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:06:59Z",
+          "seconds": 308.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 34.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 23.0
+            },
+            {
+              "name": "Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Integration tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Long integration tests",
+              "seconds": 238.0
+            },
+            {
+              "name": "Enum smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Training smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Python Unit Tests",
+          "id": 119613582285,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:50Z",
+          "completed_at": "2026-10-22T03:02:38Z",
+          "seconds": 48.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 3.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 32.0
+            },
+            {
+              "name": "Run unit tests",
+              "seconds": 5.0
+            },
+            {
+              "name": "Website routing tests",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Academy Integration / Academy Integration (ubuntu-latest)",
+          "id": 119613582295,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:04:20Z",
+          "seconds": 149.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 10.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 20.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 26.0
+            },
+            {
+              "name": "Checkpoint world bindings",
+              "seconds": 6.0
+            },
+            {
+              "name": "Elemental roster admission",
+              "seconds": 9.0
+            },
+            {
+              "name": "Frozen-policy search fixtures",
+              "seconds": 67.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Integration / Integration (ubuntu-latest, main)",
+          "id": 119613582401,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:01:51Z",
+          "completed_at": "2026-10-22T03:08:49Z",
+          "seconds": 418.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 10.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 1.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 1.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 21.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 26.0
+            },
+            {
+              "name": "Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Integration tests",
+              "seconds": 348.0
+            },
+            {
+              "name": "Long integration tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Enum smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Training smoke test",
+              "seconds": 3.0
+            },
+            {
+              "name": "Post Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Tests Result",
+          "id": 119616269068,
+          "conclusion": "success",
+          "started_at": "2026-10-22T03:11:00Z",
+          "completed_at": "2026-10-22T03:11:02Z",
+          "seconds": 2.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Check all jobs",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        }
+      ],
+      "runner_minutes": 45.61666666666667,
+      "observed_job_span_seconds": 558.0,
+      "head_sha": "5c270f6c77586004fa566249e0a02dff217fea96",
+      "created_at": "2026-10-22T03:01:41Z"
+    },
+    {
+      "run_id": 39711865197,
+      "url": "https://github.com/loopflowstudio/manabot/actions/runs/39711865197",
+      "jobs": [
+        {
+          "name": "Detect Changes",
+          "id": 119604816518,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:42Z",
+          "completed_at": "2026-10-22T02:31:46Z",
+          "seconds": 4.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Classify changed files",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Semantic Coverage Gate",
+          "id": 119604849479,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:32:43Z",
+          "seconds": 55.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 3.0
+            },
+            {
+              "name": "Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 29.0
+            },
+            {
+              "name": "Check semantic coverage evidence",
+              "seconds": 15.0
+            },
+            {
+              "name": "Check optional payment content",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Academy UI",
+          "id": 119604849510,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:49Z",
+          "completed_at": "2026-10-22T02:42:10Z",
+          "seconds": 621.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 12.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup Node",
+              "seconds": 5.0
+            },
+            {
+              "name": "Install Python dependencies",
+              "seconds": 3.0
+            },
+            {
+              "name": "Build Python extension",
+              "seconds": 36.0
+            },
+            {
+              "name": "Install frontend and Chromium",
+              "seconds": 459.0
+            },
+            {
+              "name": "Focused UI checks and browser interactions",
+              "seconds": 99.0
+            },
+            {
+              "name": "Upload browser failure evidence",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Node",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Semantic Kernel Conformance",
+          "id": 119604849527,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:49Z",
+          "completed_at": "2026-10-22T02:32:47Z",
+          "seconds": 58.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 1.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 2.0
+            },
+            {
+              "name": "Check replay, property, and metamorphic evidence",
+              "seconds": 36.0
+            },
+            {
+              "name": "Reproduce checked conformance artifacts",
+              "seconds": 5.0
+            },
+            {
+              "name": "Run bounded valid-action fuzzing",
+              "seconds": 7.0
+            },
+            {
+              "name": "Preserve exact fuzz replay seeds",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 1.0
+            }
+          ]
+        },
+        {
+          "name": "Python Unit Tests",
+          "id": 119604849532,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:49Z",
+          "completed_at": "2026-10-22T02:32:25Z",
+          "seconds": 36.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 21.0
+            },
+            {
+              "name": "Run unit tests",
+              "seconds": 6.0
+            },
+            {
+              "name": "Website routing tests",
+              "seconds": 2.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Rust Tests",
+          "id": 119604849558,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:34:29Z",
+          "seconds": 161.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 3.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 0.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 2.0
+            },
+            {
+              "name": "Rust tests",
+              "seconds": 152.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Clean-machine Play",
+          "id": 119604849562,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:33:29Z",
+          "seconds": 101.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup uv and CPython 3.12",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup Node 22",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 10.0
+            },
+            {
+              "name": "Provision proof Chromium",
+              "seconds": 24.0
+            },
+            {
+              "name": "Prove clean launch and offline reload",
+              "seconds": 56.0
+            },
+            {
+              "name": "Report time to playable against the 90-second budget",
+              "seconds": 0.0
+            },
+            {
+              "name": "Upload clean-machine receipt",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Setup Node 22",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Setup uv and CPython 3.12",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Integration / Integration (ubuntu-latest, main)",
+          "id": 119604849580,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:38:56Z",
+          "seconds": 428.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 10.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 20.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 28.0
+            },
+            {
+              "name": "Setup Node for offline report tests",
+              "seconds": 3.0
+            },
+            {
+              "name": "Integration tests",
+              "seconds": 352.0
+            },
+            {
+              "name": "Long integration tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Enum smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Training smoke test",
+              "seconds": 3.0
+            },
+            {
+              "name": "Post Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Academy Integration / Academy Integration (ubuntu-latest)",
+          "id": 119604849610,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:34:22Z",
+          "seconds": 154.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 1.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 11.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 22.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 27.0
+            },
+            {
+              "name": "Checkpoint world bindings",
+              "seconds": 9.0
+            },
+            {
+              "name": "Elemental roster admission",
+              "seconds": 8.0
+            },
+            {
+              "name": "Frozen-policy search fixtures",
+              "seconds": 68.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Integration / Integration (ubuntu-latest, long)",
+          "id": 119604849616,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:48Z",
+          "completed_at": "2026-10-22T02:36:56Z",
+          "seconds": 308.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 9.0
+            },
+            {
+              "name": "Cache Rust artifacts",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Install dependencies",
+              "seconds": 33.0
+            },
+            {
+              "name": "Build managym extension",
+              "seconds": 22.0
+            },
+            {
+              "name": "Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Integration tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Long integration tests",
+              "seconds": 232.0
+            },
+            {
+              "name": "Enum smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Training smoke test",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Node for offline report tests",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache uv downloads",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Cache Rust artifacts",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Protocol v1 Conformance",
+          "id": 119604849710,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:31:49Z",
+          "completed_at": "2026-10-22T02:34:58Z",
+          "seconds": 189.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 2.0
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Rust",
+              "seconds": 1.0
+            },
+            {
+              "name": "Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Setup uv",
+              "seconds": 2.0
+            },
+            {
+              "name": "Setup Node",
+              "seconds": 2.0
+            },
+            {
+              "name": "Install Python dependencies",
+              "seconds": 32.0
+            },
+            {
+              "name": "Build Python extension",
+              "seconds": 39.0
+            },
+            {
+              "name": "Certify Rust and Python",
+              "seconds": 23.0
+            },
+            {
+              "name": "Launcher contract tests",
+              "seconds": 2.0
+            },
+            {
+              "name": "Certify TypeScript",
+              "seconds": 80.0
+            },
+            {
+              "name": "Post Setup Node",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup uv",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Setup Python",
+              "seconds": 0.0
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "seconds": 1.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        },
+        {
+          "name": "Tests Result",
+          "id": 119607927904,
+          "conclusion": "success",
+          "started_at": "2026-10-22T02:42:12Z",
+          "completed_at": "2026-10-22T02:42:14Z",
+          "seconds": 2.0,
+          "steps": [
+            {
+              "name": "Set up job",
+              "seconds": 0.0
+            },
+            {
+              "name": "Check all jobs",
+              "seconds": 0.0
+            },
+            {
+              "name": "Complete job",
+              "seconds": 0.0
+            }
+          ]
+        }
+      ],
+      "runner_minutes": 35.28333333333333,
+      "observed_job_span_seconds": 632.0,
+      "head_sha": "70d5180e4b8c869b84f67f955c3b8f5dbbc7552a",
+      "created_at": "2026-10-22T02:31:40Z"
+    }
+  ],
+  "rust_test_summaries_run_39714587357": [
+    {
+      "first_test": "agent::observation_encoder::tests::attack_and_decline_have_distinct_policy_features",
+      "last_test": "agent::vector_env::tests::shards_preserve_global_seeds_through_autoreset_and_restore",
+      "summary": "ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s"
+    },
+    {
+      "first_test": null,
+      "last_test": null,
+      "summary": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": null,
+      "last_test": null,
+      "summary": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": null,
+      "last_test": null,
+      "summary": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": "compiled_sacrifice_closure_matches_all_native_rules",
+      "last_test": "elemental_validation_rosters_select_compiled_content_and_play_to_terminal",
+      "summary": "ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+    },
+    {
+      "first_test": "checked_in_schema_is_generated_from_rust_projection_authority",
+      "last_test": "study_address_is_the_game_owned_player_zero_row_address",
+      "summary": "ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    },
+    {
+      "first_test": "not_real_cards_are_registered",
+      "last_test": "every_registered_real_card_matches_scryfall",
+      "summary": "ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": "content_pack_clone_allocations_do_not_scale_with_definition_bytes",
+      "last_test": "content_pack_clone_allocations_do_not_scale_with_definition_bytes",
+      "summary": "ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s"
+    },
+    {
+      "first_test": "stable_card_def_ids_preserve_legacy_registry_values",
+      "last_test": "seeded_fixed_action_trace_is_deterministic",
+      "summary": "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s"
+    },
+    {
+      "first_test": "selected_world_compiles_every_card_without_reduced_native_rules",
+      "last_test": "every_pair_and_mirror_uses_the_selected_world_and_completes",
+      "summary": "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s"
+    },
+    {
+      "first_test": "env_reports_negative_action_index",
+      "last_test": "random_smoke_stage2_cards",
+      "summary": "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.83s"
+    },
+    {
+      "first_test": "bolt_target_bundle_round_trips_through_rust_authority_types",
+      "last_test": "required_nullable_fields_and_closed_presentation_kinds_are_enforced",
+      "summary": "ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": "learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats",
+      "last_test": "learn_sideboard_does_not_change_opening_deal_or_library_order",
+      "summary": "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    },
+    {
+      "first_test": "canonical_hash_source_has_no_compatibility_or_formatting_dispatch",
+      "last_test": "independently_built_seeded_traces_have_the_same_hash",
+      "summary": "ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s"
+    },
+    {
+      "first_test": "direct_sampled_hand_preserves_public_known_minima",
+      "last_test": "viewer_relative_slice_preserves_observation_and_hides_truth",
+      "summary": "ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s"
+    },
+    {
+      "first_test": "prepared_rejects_invalid_construction_and_changed_hidden_pool",
+      "last_test": "prepared_batches_enumerate_once_preserve_order_and_fail_closed",
+      "summary": "ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s"
+    },
+    {
+      "first_test": "rules::cr_103_game_start::cr_103_3_players_start_at_twenty_life",
+      "last_test": "rules::ur_lessons_increment::revised_forty_card_deck_completes_and_replays_every_command_exactly",
+      "summary": "ok. 297 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.21s"
+    },
+    {
+      "first_test": "clear_hand_moves_cards_to_library_bottom",
+      "last_test": "refresh_recomputes_castability_from_injected_lands",
+      "summary": "ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    },
+    {
+      "first_test": "clone_plus_undo_rolls_back_token_allocation_and_the_id_watermark",
+      "last_test": "clone_plus_undo_matches_the_full_clone_reference_receipts",
+      "summary": "ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.42s"
+    },
+    {
+      "first_test": "determinize_is_deterministic_in_seed",
+      "last_test": "flat_mc_survives_milestone1_matchup",
+      "summary": "ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.28s"
+    },
+    {
+      "first_test": "compatibility_names_and_content_allocations_are_metamorphic",
+      "last_test": "checked_semantic_conformance_evidence_reproduces",
+      "summary": "ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.91s"
+    },
+    {
+      "first_test": "checked_in_ir_carries_only_typed_numeric_opcodes",
+      "last_test": "south_pole_voyager_draws_only_on_the_second_arrival",
+      "summary": "ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    },
+    {
+      "first_test": "executable_ir_has_no_card_name_dispatch_or_unresolved_definition_refs",
+      "last_test": "authored_optional_payment_lowers_both_methods_and_continuations",
+      "summary": "ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    },
+    {
+      "first_test": "landmarks_are_ranked_recommendations_not_navigation_gates",
+      "last_test": "checked_in_index_schemas_are_generated_from_rust_authority",
+      "summary": "ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": "default_evidence_rejects_opponent_private_facts_and_rng_secrets",
+      "last_test": "study_protocol_shared_fixture_round_trips_and_restores_exact_decision",
+      "summary": "ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    },
+    {
+      "first_test": null,
+      "last_test": null,
+      "summary": "ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+    }
+  ]
+}

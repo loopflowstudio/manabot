@@ -5,7 +5,7 @@ import time
 
 import typer
 
-from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.experiment.evaluation_queue import MonitoringBudget
 
 from .cohort_cli import app as cohort_app
 from .deploy import cleanup, current_source, deploy
@@ -304,13 +304,13 @@ def report_command(
     evidence: Path = typer.Option(...), out: Path = typer.Option(...)
 ) -> None:
     """Regenerate a notebook and HTML from a fetched generation, without a rental."""
-    from manabot.training.comparison_notebook import write_comparison_notebook
-    from manabot.training.experiment_report import (
+    from manabot.reports.experiment import (
         diagnostic_figures,
         load_evidence,
         strength_figures,
         write_dashboard,
     )
+    from manabot.reports.notebook import write_comparison_notebook
 
     from .bundle import Bundle
 

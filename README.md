@@ -111,7 +111,7 @@ uv sync --python 3.12 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train          # small CPU training run, under a minute, no W&B
+uv run manabot train          # small CPU training run, under a minute, local Etude tracking
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to
@@ -193,7 +193,7 @@ not comparable with today's checkpoints:
 | `manabot/` | Agents: models, training, search, beliefs, arena, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Card and deck definitions compiled to a typed IR |
-| `conformance/` | Rules conformance fixtures |
+| `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/repository-archive.md) |
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |

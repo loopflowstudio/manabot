@@ -31,7 +31,7 @@ from manabot.remote.plan import DeploymentPlan, JobSpec, compile_plan, digest
 from manabot.remote.provider import RunPod
 from manabot.remote.transport import REPO_DIR, Transport, bootstrap
 from manabot.training.execution import atomic_json
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 
 
 @dataclass

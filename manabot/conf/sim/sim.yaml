@@ -9,7 +9,6 @@ defaults:
 experiment:
   exp_name: "sim"
   log_level: "DEBUG"
-  wandb: false
 
 
 hydra:

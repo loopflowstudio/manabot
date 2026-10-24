@@ -5,7 +5,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::AgentError, env::Env, observation::Observation, opponent::OpponentPolicy},
-    infra::profiler::InfoDict,
+    infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
 };
 
@@ -28,6 +28,7 @@ pub struct VectorEnv {
     next_seeds: Vec<u64>,
     seed_stride: u64,
     uniform_roster: Vec<PlayerConfig>,
+    skip_trivial: bool,
 }
 
 impl VectorEnv {
@@ -51,6 +52,7 @@ impl VectorEnv {
             next_seeds,
             seed_stride: num_envs.max(1) as u64,
             uniform_roster: Vec::new(),
+            skip_trivial,
         }
     }
 
@@ -124,6 +126,29 @@ impl VectorEnv {
     /// Exact current-game seeds; auto-reset succession remains native authority.
     pub fn current_game_seeds(&self) -> Vec<u64> {
         self.envs.iter().map(Env::seed).collect()
+    }
+
+    /// Retain the exact surfaced offers before a strict batch can mutate any row.
+    /// Paused streams need no frame and must not be queried for a live decision.
+    pub fn semantic_decision_frames_json(
+        &self,
+        active: Option<&[bool]>,
+    ) -> Result<Vec<Option<String>>, AgentError> {
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
+        self.envs
+            .iter()
+            .enumerate()
+            .map(|(index, env)| {
+                if active.is_some_and(|mask| !mask[index]) {
+                    return Ok(None);
+                }
+                serde_json::to_string(&env.semantic_decision_frame()?)
+                    .map(Some)
+                    .map_err(|error| AgentError(error.to_string()))
+            })
+            .collect()
     }
 
     /// Restore current roots before replaying their bounded legal action prefixes.
@@ -304,6 +329,99 @@ impl VectorEnv {
                 result.truncated,
             )?;
             Ok(result.info)
+        })
+    }
+
+    /// Settle each active gameplay call independently. Failed games are poisoned:
+    /// callers must retain their inputs and replace them before stepping again.
+    /// Encoding and reset failures remain fatal, rather than looking like games.
+    pub fn step_isolated_into<F>(
+        &mut self,
+        actions: &[i64],
+        active: &[bool],
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.validate_actions_len(actions.len())?;
+        self.validate_actions_len(active.len())?;
+        self.validate_ready_for_step()?;
+        let policy = self.opponent_policy;
+        let stride = self.seed_stride;
+        self.for_each_env(|index, env, next_seed, configs, roster| {
+            if !active[index] {
+                return Ok(InfoDict::new());
+            }
+            let frame = serde_json::to_string(&env.semantic_decision_frame()?)
+                .map_err(|error| AgentError(error.to_string()))?;
+            // A Rust unwind is contained only around gameplay of a disposable
+            // stream. Buffer errors and invalid setup must never be tolerated.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Self::step_one_on_env(env, actions[index], policy)
+            }));
+            let mut out = match result {
+                Ok(Ok(out)) => out,
+                failure => {
+                    let (class, message) = match failure {
+                        Ok(Err(error)) => ("AgentError", error.to_string()),
+                        Err(payload) => (
+                            "NativePanic",
+                            payload
+                                .downcast_ref::<String>()
+                                .cloned()
+                                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                                .unwrap_or_else(|| "native gameplay panic".into()),
+                        ),
+                        Ok(Ok(_)) => unreachable!(),
+                    };
+                    return Ok(InfoDict::from([
+                        ("game_error".into(), InfoValue::String(message)),
+                        ("game_error_class".into(), InfoValue::String(class.into())),
+                        ("game_error_frame".into(), InfoValue::String(frame)),
+                        (
+                            "game_error_trace".into(),
+                            InfoValue::String(
+                                std::backtrace::Backtrace::force_capture().to_string(),
+                            ),
+                        ),
+                    ]));
+                }
+            };
+            if out.terminated || out.truncated {
+                let (obs, _) = Self::reset_to_hero_turn_on_env(
+                    roster, env, next_seed, configs, policy, stride,
+                )?;
+                out.obs = obs;
+            }
+            write(index, &out.obs, out.reward, out.terminated, out.truncated)?;
+            Ok(out.info)
+        })
+    }
+
+    /// Replace quarantined games under the unchanged native seed succession.
+    pub fn replace_failed_into<F>(
+        &mut self,
+        failed: &[bool],
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.validate_actions_len(failed.len())?;
+        self.validate_ready_for_step()?;
+        let policy = self.opponent_policy;
+        let stride = self.seed_stride;
+        let skip_trivial = self.skip_trivial;
+        self.for_each_env(|index, env, next_seed, configs, roster| {
+            if !failed[index] {
+                return Ok(InfoDict::new());
+            }
+            *env = Env::new(*next_seed, skip_trivial, false, false);
+            let (obs, info) =
+                Self::reset_to_hero_turn_on_env(roster, env, next_seed, configs, policy, stride)?;
+            write(index, &obs, 0.0, false, false)?;
+            Ok(info)
         })
     }
 
@@ -672,6 +790,46 @@ mod tests {
 
         let stepped = env.step(&[0, 0, 0]).expect("step should succeed");
         assert_eq!(stepped.len(), 3);
+    }
+
+    #[test]
+    fn isolated_failure_preserves_successful_streams_and_seed_stride() {
+        let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+        vector.reset_all(sample_player_configs()).unwrap();
+        let mut control = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+        control.reset_all(sample_player_configs()).unwrap();
+        let rows = RefCell::new(Vec::new());
+        let outcomes = vector
+            .step_isolated_into(&[0, -1, 0], &[true; 3], |index, _, _, _, _| {
+                rows.borrow_mut().push(index);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(*rows.borrow(), vec![0, 2]);
+        assert!(!outcomes[0].contains_key("game_error"));
+        assert!(outcomes[1].contains_key("game_error_frame"));
+        assert!(!outcomes[2].contains_key("game_error"));
+        control
+            .step_into(&[0, 0, 0], Some(&[true, false, true]), |_, _, _, _, _| {
+                Ok(())
+            })
+            .unwrap();
+        for index in [0, 2] {
+            assert_eq!(
+                vector.envs[index].state_digest().unwrap(),
+                control.envs[index].state_digest().unwrap()
+            );
+        }
+        vector
+            .replace_failed_into(&[false, true, false], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(vector.current_game_seeds(), vec![7, 11, 9]);
+        for index in [0, 2] {
+            assert_eq!(
+                vector.envs[index].state_digest().unwrap(),
+                control.envs[index].state_digest().unwrap()
+            );
+        }
     }
 
     #[test]

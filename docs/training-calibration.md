@@ -12,7 +12,7 @@ export, setup, upload and cleanup remain separate machine/cost reserves.
 ```python
 import json
 from pathlib import Path
-from manabot.training.experiment_execution import StepCalibration
+from manabot.experiment.execution import StepCalibration
 
 pilots = {
     name: StepCalibration.from_export(Path(f".runs/{name}-pilot/run.json"))

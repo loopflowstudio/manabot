@@ -45,12 +45,12 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import numpy as np
 
 from manabot.env import Env
-from manabot.study.targeting import inspect_target
+from manabot.sim.action.targeting import inspect_target
 import managym
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 
 from .players import ScriptedGreedyPlayer
 
@@ -180,7 +180,7 @@ def heuristic_source_paths() -> list[Path]:
     return [
         Path(__file__).resolve(),
         arena / "players.py",
-        arena.parent / "study/targeting.py",
+        arena.parent / "sim/action/targeting.py",
         SEMANTIC_SOURCE,
     ]
 

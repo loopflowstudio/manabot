@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from pydantic import ValidationError
 import pytest
@@ -23,27 +24,29 @@ from academy.study_branch import (
 import managym
 
 
-def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
+def _completed_session(tmp_path: Path) -> tuple[GameSession, CanonicalReplayV1]:
     session = GameSession(
         tmp_path,
         id_factory=lambda kind: f"study-fork-{kind}",
         clock=lambda: "2026-07-17T00:00:00+00:00",
         villain_offer_policy=lambda context: int(context.offers[-1]["id"]),
     )
-    session.new_game(
+    # Priority automation still records Commands and retains their Study roots.
+    # Reuse each returned frame: requesting it again persists the growing replay.
+    initial = session.new_game(
         {
             "villain_type": "passive",
             "seed": 7,
             "hero_deck": "ur_lessons",
             "villain_deck": "gw_allies",
-            "auto_pass": False,
+            "auto_pass": True,
         }
     )
+    frame = initial["frame"]
     for index in range(2_000):
         assert session.obs is not None
         if session.obs.game_over:
             break
-        frame = session._experience_frame()
         outcome = session.hero_command(
             {
                 "command_id": f"study-source-{index}",
@@ -55,6 +58,7 @@ def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
             }
         )
         assert outcome["status"] == "accepted"
+        frame = outcome["update"]["frame"]
     else:
         pytest.fail("deterministic Study source match did not terminate")
 

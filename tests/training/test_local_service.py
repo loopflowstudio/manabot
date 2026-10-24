@@ -7,12 +7,7 @@ import time
 
 import pytest
 
-from manabot.training.local_service import (
-    LocalAllocation,
-    LocalCommand,
-    _stop,
-    supervise,
-)
+from manabot.experiment.local import LocalAllocation, LocalCommand, _stop, supervise
 
 
 def test_expired_allocation_cannot_start_or_extend(tmp_path: Path) -> None:

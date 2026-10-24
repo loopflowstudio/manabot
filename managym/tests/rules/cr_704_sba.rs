@@ -352,3 +352,46 @@ fn cr_117_5_equivalent_seeded_stabilization_replay_is_identical() {
     right.assert_game_over();
     assert_eq!(left.game().winner_index(), right.game().winner_index());
 }
+
+/// CR 704.5f/g/h, 702.12b: zero toughness is a zone move; lethal and
+/// deathtouch damage destroy. Indestructible prevents only destruction.
+/// This finite boundary matrix uses printed 2/2 Gray Ogre, not engine queries,
+/// to compute the expected result. Both controllers exercise the same SBAs.
+#[test]
+fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
+    for controller in 0..2 {
+        for toughness in [-1, 0, 1, 2] {
+            for damage in [0, 1, 2] {
+                for deathtouch in [false, true] {
+                    for indestructible in [false, true] {
+                        let deck = BTreeMap::from([
+                            ("Mountain".to_string(), 8),
+                            ("Gray Ogre".to_string(), 1),
+                        ]);
+                        let mut s = Scenario::new(deck.clone(), deck, 177_704);
+                        s.advance_to_active_step(0, StepKind::Main);
+                        let id = s.force_permanent_on_battlefield(controller, "Gray Ogre");
+                        let perm = s.game_mut().state.permanents[id].as_mut().unwrap();
+                        let card = perm.card;
+                        perm.temp_toughness = toughness - 2;
+                        perm.damage = damage;
+                        // A deathtouch flag describes positive damage, never zero.
+                        perm.deathtouch_damage = deathtouch && damage > 0;
+                        perm.temp_keywords.indestructible = indestructible;
+                        s.pass_priority();
+                        let dies = toughness <= 0
+                            || (!indestructible
+                                && damage > 0
+                                && (damage >= toughness || deathtouch));
+                        assert_eq!(
+                            s.game().state.zones.zone_of(card),
+                            Some(if dies { ZoneType::Graveyard } else { ZoneType::Battlefield }),
+                            "controller={controller}, toughness={toughness}, damage={damage}, deathtouch={deathtouch}, indestructible={indestructible}"
+                        );
+                        assert!(!s.game().is_game_over());
+                    }
+                }
+            }
+        }
+    }
+}

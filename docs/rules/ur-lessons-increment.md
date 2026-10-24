@@ -2,7 +2,7 @@
 
 Jack Heart requested these three additions in ETU-88 on 2026-09-29, then
 accepted a new world version for their complete behavior. They are registered
-for custom `MatchHypers` decklists. The authored 41-card UR Lessons and 40-card
+for custom `MatchConfig` decklists. The authored 41-card UR Lessons and 40-card
 GW Allies decks and their sideboards remain unchanged.
 
 Jack's final candidate list has 40 cards: remove two It'll Quench Ya!, two
@@ -73,7 +73,7 @@ comparison, performance budget or semantic-transfer claim follows from ETU-88.
   revised 40-card candidate. Each recorded semantic Command is applied to an
   equivalent replay root and compared for full state hash, ordered events and
   observations after every transition. All reach terminal.
-- Four Python `MatchHypers` games, seeds 0–1 in both seat orders, finish with
+- Four Python `MatchConfig` games, seeds 0–1 in both seat orders, finish with
   ordinary observation encoding and no truncation. Native search evaluates
   both mandatory-discard and legend choices with complete rollouts and an
   unchanged authoritative root.
@@ -123,7 +123,7 @@ normal Command application owns transition-queue journaling. The Command-based
 deep rollback and cross-driver comparisons retain their original checks.
 
 CI and the native conformance tests now use the separate
-[w4 corpus](../../conformance/semantic-kernel-w4-v1/). Its four games finish
+[w4 corpus](../../experiments/data/archive/conformance/semantic-kernel-w4-v1/). Its four games finish
 with 567 commands and reproduce exactly. Bounded fuzzing passes 32 cases and
 5,078 commands. Both historical corpora, the authored decks and compiled IR
 remain unchanged. This rebinds the scheduling conformance checks only; it does

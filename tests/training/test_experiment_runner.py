@@ -9,19 +9,19 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
-from manabot.infra.hypers import AgentSpec
-from manabot.training.checkpoint_queue import Attempt, MonitoringBudget
-from manabot.training.comparison_notebook import write_comparison_notebook
-from manabot.training.experiment_execution import (
+from manabot.arena.monitor import MonitorProtocol, MonitorResult
+from manabot.experiment.config import Baseline, Case, Experiment, ModelOverride
+from manabot.experiment.evaluation_queue import Attempt, MonitoringBudget
+from manabot.experiment.execution import (
     ExperimentRun,
     ExperimentSchedule,
     Hardware,
     HardwareInventory,
 )
-from manabot.training.experiment_runner import run_experiment
-from manabot.training.experiments import Baseline, Case, Experiment, Model
-from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.experiment.runner import run_experiment
+from manabot.infra.config import ModelConfig
+from manabot.recipes.ataraxos import ataraxos
+from manabot.reports.notebook import write_comparison_notebook
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_monitor_evaluation import failure_summary
@@ -35,7 +35,7 @@ def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 def demo_declaration() -> Experiment:
     """Four short training runs and four milestones: a workflow fixture."""
-    base = ataraxos_mtg_v1().regime()
+    base = ataraxos().regime()
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]
@@ -53,7 +53,10 @@ def demo_declaration() -> Experiment:
     return Experiment(
         name="fixture",
         baseline=Baseline.capture(f"fixture-{base.world}", base),
-        cases=(Case("small"), Case("wide", (Model(AgentSpec(hidden_dim=16)),))),
+        cases=(
+            Case("small"),
+            Case("wide", (ModelOverride(ModelConfig(hidden_dim=16)),)),
+        ),
         schedule=ExperimentSchedule(
             seeds=(117, 118),
             hardware="fixture",
@@ -192,9 +195,10 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from manabot.training import experiment_runner as runner
-    from manabot.training.execution import atomic_json
-    from manabot.training.models import TrainingRegime, TrainingRun
+    from manabot.experiment import runner as runner
+    from manabot.infra.files import atomic_json
+    from manabot.training.records import TrainingRun
+    from manabot.training.regime import TrainingRegime
 
     launched: list[str] = []
 
@@ -275,8 +279,8 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
 
 
 def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) -> None:
-    from manabot.training.experiments import Baseline, Experiment
-    from manabot.training.models import TrainingRun
+    from manabot.experiment.config import Baseline, Experiment
+    from manabot.training.records import TrainingRun
     from tests.training.test_recovery import recipe
 
     value = recipe()

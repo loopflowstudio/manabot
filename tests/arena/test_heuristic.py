@@ -5,18 +5,18 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import pytest
 
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 from manabot.arena.heuristic import (
     HeuristicPlayer,
     TargetedSpell,
     heuristic_source_paths,
     targeted_spells,
 )
+from manabot.arena.monitor import MonitorProtocol, _opponent_source_sha256
 from manabot.arena.players import ScriptedGreedyPlayer
 from manabot.env import Env
-from manabot.training.monitor_evaluation import MonitorProtocol, _opponent_source_sha256
 
 OWN, OPPONENT = 10, 20
 

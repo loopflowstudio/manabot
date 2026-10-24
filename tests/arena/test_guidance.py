@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from manabot.arena.guidance import PolicyPriorRandomLeafEvaluator
-from manabot.sim.mcts import LeafEvaluation
+from manabot.sim.search.puct import LeafEvaluation
 
 
 class _PolicyOnlyAgent(torch.nn.Module):

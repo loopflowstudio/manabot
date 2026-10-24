@@ -1,282 +1,104 @@
-# PPO Implementation Guide for manabot
+# Training ownership and learning rules
 
-## Algorithm
+RL entry points resolve a `TrainingRegime` and call
+`manabot.training.execution.execute_regime`. Bounded diagnostics may use the
+same `SeatRoutedCollector` and `update_iteration` primitives directly. A new
+loop or optimizer implementation needs a concrete unsupported behavior and a
+current consumer; an old import or test is not a reason to retain one.
 
-### Training Loop Structure
+`Learner` owns the admitted train-mode `ActorCritic`, Adam (epsilon 1e-5), device and
+native-stream minibatch width. The executor owns collection, EMA, schedules,
+tracking, checkpoint exports, failure receipts and recovery. `PairedLearners`
+uses two independent owners with one collector. Supervised, search and belief
+stages retain their separate data/target contracts.
 
-```python
-def train_iteration(self):
-    """Single PPO training iteration"""
-    # 1. Collect trajectories
-    trajectories = self.collect_trajectories()
-    
-    # 2. Compute advantages (per player)
-    for player_id in range(self.num_players):
-        player_advantages = self.compute_player_advantages(
-            trajectories.filter(player_id=player_id)
-        )
-        
-    # 3. Policy updates
-    for epoch in range(self.num_epochs):
-        # Generate minibatches
-        for batch in self.get_minibatches():
-            # Update policy
-            loss = self.compute_ppo_loss(batch)
-            
-            # Optimize
-            self.optimizer.zero_grad()
-            loss.backward()
-            nn.utils.clip_grad_norm_(self.parameters(), self.max_grad_norm)
-            self.optimizer.step()
-            
-            # Early stopping check
-            if self.approx_kl > self.target_kl:
-                break
-```
+## Credit and behavior
 
-### Advantage Estimation:`compute_player_advantages`
-PPO uses Generalized Advantage Estimation (GAE) to measure how much better an action was than average.
+`model.returns.transition_gae` consumes rewards and end flags from the same
+transition. Each column follows the same player until terminal. Complete-game
+collection groups seat histories before packing them; terminal flags separate
+all seats and games. An interleaved native A/B/A stream must never go directly
+into the estimator. Changing reward signs cannot repair an incorrect trajectory.
 
-GAE uses two different discount factors:
-* γ: The discount factor for the immediate reward in the TD error
-* λ: The discount factor for the TD errors
+Gamma and lambda advance per retained same-player decision, including consecutive
+decisions. Opponent and skipped forced decisions add no discount steps. One-seat
+exact-quota tails bootstrap from the same player's paused observation. Both-seat
+self-play finishes current games after the combined decision floor, so actual
+rows may exceed the quota. Explicit games-per-stream controls work in either arm.
+Frozen/random opponents contribute no learner rows. Native winner identity sets
+terminal win/loss/draw labels; draws stay zero. Strict collection rejects
+truncation because continuing-task bootstrap from a missing final observation
+is unsupported. Opted-in game-error recovery instead quarantines the entire
+failed or truncated game, discards both seats' uncommitted rows and regathers.
+It finishes games even with one learning seat; that mode uses a decision floor,
+not the strict one-seat exact quota.
 
-Tuning λ allows you to balance between: 
-1. Temporal Difference (TD) learning (rt + γV(st+1)): Low variance but biased by value function errors
-2. Full returns (rt + γrt+1 + γ²rt+2 + ...): Unbiased but high variance from accumulating future randomness
+Collection freezes behavior within each batch. Complete games end before weights
+change; exact-quota games may span updates. Stored full legal-action probabilities,
+log probabilities and sampled-action likelihoods belong to the behavior that
+actually generated each row. Minibatch updates change current weights, so these
+likelihoods remain necessary even without replay. Targets and references are
+constants; gradients flow through current policy and value outputs only.
 
-The GAE equation combines these approaches:
+## Objectives
 
-```math
-A^{GAE(γ,λ)}_t = ∑_{l=0}^∞ (γλ)^l δ_{t+l}
-```
-where δt = rt + γV(st+1) - V(st) is the TD error.
+`Learning(gradient="ppo")` uses the clipped likelihood-ratio surrogate,
+configurable discount and separate policy/value lambdas. It normalizes advantages
+over selected actor rows, shuffles minibatches over multiple epochs and uses
+half squared scalar value error with a configurable coefficient. Reverse KL to
+the reference and collection behavior are explicit regularizers. This control
+is used by the full reward-driven learnability proof.
 
-The λ parameter directly controls this tradeoff:
-- λ=0: Pure TD learning using rt + γV(st+1). Minimum variance but potentially highly biased by value function errors
-- λ=1: Full returns using rt + γrt+1 + γ²rt+2 + .... Maximum variance but unbiased
-- λ~=0.95 (recommended): Slightly favors real returns while maintaining some variance reduction from TD estimates
+`DampedPolicyLearning(gradient="damped_policy")` uses undiscounted same-player
+returns, separate policy/value lambdas, absolute-advantage selection, one ordered
+epoch, native-stream-sized minibatches and no advantage normalization. Its
+clipped surrogate includes reverse KL to behavior and an action reference.
+Scalar value loss is squared error; categorical value loss is cross-entropy to
+loss/draw/win lambda-return mixtures. Actor-only selection retains critic rows;
+actor-and-critic selection removes both. Inclusive quantile selection keeps ties.
+Method provenance, equations and MTG adaptations are in
+[the source fidelity contract](../../docs/ataraxos.md).
 
-Implementation requirements:
-1. Bootstrap values for non-terminal states
-2. Handle terminal vs truncated episodes differently
-3. Use TD(λ) returns for value targets
+Iteration schedules count completed collection/update boundaries, including
+empty-filter skips. EMA advances once at each such boundary. Optimizer steps,
+learner transitions and environment decisions are recorded separately. Wall-time
+limits fail the run; they do not shorten the declared schedule.
 
-### Surrogate Objective: `compute_ppo_loss`
-Proximal Policy Optimization (PPO) is a method to allow multiple rounds of policy updates to be computed
-on a single batch of trajectories.
+## Admission and recovery
 
-One issue under such a scheme is that the variance increases as the policy diverges from the data-generating policy
-and the local estimation of state probabilities becomes less accurate. PPO addresses this by setting the gradient to 0 for any parameter that is already sufficiently far from its value under the policy that was used to generate the trajectories. 
+Policy checkpoint admission binds world, setup, input schema and architecture.
+The loader returns eval mode; `Learner` explicitly enables train mode, including
+recurrent encoders whose CUDA backward requires a training-mode forward. Starting
+from admitted weights is a new run, not exact recovery.
 
-We start with the high variance "surrogate objective":
-```math
-L^{SURROGATE}(θ) = E[\frac{π_θ(a|s)}{π_{θold}(a|s)} A^π(s,a)]
-```
+Supported private recovery restores learner, Adam, EMA, collector, sampler,
+minibatch, Python, NumPy and Torch RNG state at a committed update boundary.
+It preserves attempts, prior costs and absolute schedule coordinates. No update
+is applied from an incomplete collection. Recovery remains subject to source,
+recipe and backend admission; CPU proof does not certify CUDA recovery.
 
-PPO introduces clipping to prevent these large changes:
+Automatic failure capture does not enable tolerance. Opted-in game-error
+recovery retains its attempt ledger independently of optimizer snapshots, so
+restoring a committed update cannot erase later failures or replenish the error
+allowance. Source repair requires explicit restart admission; replay advancement
+alone neither admits training nor establishes the original game's outcome.
+See [game crash recovery](../../docs/game-crash-recovery.md) for bounds and limits.
 
-```math
-L^{CLIP}(θ) = E[min(
-    \frac{π_θ(a|s)}{π_{θold}(a|s)} A^π(s,a),
-    clip(\frac{π_θ(a|s)}{π_{θold}(a|s)}, 1-ε, 1+ε) A^π(s,a)
-)]
-```
-- ε is typically set to 0.2, meaning the policy can only change probabilities by ±20%
+Current recipes use `damped_policy` directly. The historical `ataraxos_move`
+discriminator is rejected: old recipes require pinned source. No compatibility
+decoder, serialized-tag override or old preset execution path remains.
 
-## Implementation Plan
+## Entry points and retired routes
 
-### Policy Network Architecture and Initialization
+`uv run manabot train` resolves `local-smoke-v1`: two CPU updates, two streams,
+16 combined decisions per stream as a floor, both seats and complete games,
+with a 120-second failure limit. It uses the baseline model and horizon-scaled
+damped objective. `--learning-seats one` selects exact quotas. `--recipe baseline`
+adds the ordinary baseline's independent evaluation. Neither smoke nor successful
+export certifies playing strength.
 
-Policy initialization is crucial for training stability. Key requirements:
-
-```python
-def layer_init(layer: nn.Module, layer_type: str = "hidden") -> nn.Module:
-    """Initialize layer with carefully chosen orthogonal initialization scales
-    
-    Args:
-        layer: The neural network layer to initialize
-        layer_type: One of "hidden", "policy_final", or "value_final"
-    """
-    if layer_type == "policy_final":
-        std = 0.01  # Small for final policy layer (prevents initial extreme actions)
-    elif layer_type == "value_final":
-        std = 1.0   # Larger for value layer (allows learning larger value ranges)
-    else:  # hidden layers
-        std = np.sqrt(2)  # Prevents vanishing gradients in deep networks
-        
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, 0.0)
-    return layer
-```
-
-Critical aspects:
-- Use orthogonal initialization with sqrt(2) for hidden layers
-- Final policy layer uses much smaller initialization (0.01)
-- Ensures near-zero mean and small standard deviation initially
-- Value network final layer uses std=1.0
-
-### Advantage Computation and Normalization
-
-Accurate advantage computation is essential:
-
-```python
-def compute_gae(
-    rewards: torch.Tensor,
-    values: torch.Tensor,
-    next_value: torch.Tensor,
-    dones: torch.Tensor,
-    player_ids: torch.Tensor,  # Added to track player perspective
-    gamma: float = 0.99,
-    gae_lambda: float = 0.95
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Compute GAE advantages and returns from correct player perspectives"""
-    advantages = torch.zeros_like(rewards)
-    lastgaelam = 0
-    
-    # Track active player for proper advantage computation
-    active_player = player_ids[-1]
-    
-    for t in reversed(range(len(rewards))):
-        # Only compute advantages for current player's turns
-        if player_ids[t] != active_player:
-            continue
-            
-        nextnonterminal = 1.0 - dones[t]
-        nextvalues = values[t + 1] if t < len(rewards) - 1 else next_value
-        delta = rewards[t] + gamma * nextvalues * nextnonterminal - values[t]
-        advantages[t] = lastgaelam = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
-    
-    returns = advantages + values
-    return advantages, returns
-
-def normalize_advantages(advantages: torch.Tensor, batch_indices: torch.Tensor) -> torch.Tensor:
-    """Normalize advantages within each minibatch"""
-    batch_advantages = advantages[batch_indices]
-    return (batch_advantages - batch_advantages.mean()) / (batch_advantages.std() + 1e-8)
-```
-
-Critical aspects:
-- Careful handling of episode boundaries
-- Proper bootstrapping for non-terminal states
-- Advantage normalization per minibatch
-- Multi-agent perspective maintained throughout
-
-### Action Masking System
-
-Robust action masking is crucial for Magic's dynamic action space:
-
-```python
-class ActionMaskingLayer(nn.Module):
-    def __init__(self, action_space_size: int):
-        super().__init__()
-        self.action_space_size = action_space_size
-        self.register_buffer("mask", torch.ones(action_space_size))
-    
-    def forward(self, logits: torch.Tensor, valid_actions: torch.Tensor) -> torch.Tensor:
-        """Apply action mask and handle edge cases"""
-        # Set invalid action logits to -inf
-        masked_logits = logits.clone()
-        masked_logits[~valid_actions] = float('-inf')
-        
-        # Safety check: Ensure at least one valid action
-        if not torch.any(valid_actions):
-            raise ValueError("No valid actions available")
-            
-        return masked_logits
-```
-
-Critical aspects:
-- Set invalid action logits to -inf
-- Handle edge cases (e.g., no valid actions)
-- Maintain mask efficiency for large action spaces
-- Verify mask correctness before training
-
-### Multi-Agent Policy System
-
-We need to store separate buffers for each player to compute long-run returns.
-
-```python
-class MultiAgentBuffer:
-    def __init__(self, buffer_size: int, num_players: int):
-        self.buffers = {
-            player_id: PPOBuffer(buffer_size)
-            for player_id in range(num_players)
-        }
-    
-    def add(self, transition: Dict, player_id: int):
-        """Add transition to correct player buffer"""
-        self.buffers[player_id].add(transition)
-    
-    def compute_advantages(self):
-        """Compute advantages separately for each player"""
-        for buffer in self.buffers.values():
-            buffer.compute_player_advantages()
-```
-
-For now though, we are just going to use a single policy for both players.
-
-## Validation and Testing
-
-### Policy
-* All probability ratios π_new/π_old must be valid (no NaNs)
-* KL divergence between old/new policies stays below target
-* At least one valid action always available after masking
-* Logits for invalid actions properly set to -inf
-* Action sampling never selects invalid actions
-
-### Advantage Estimation
-* Advantages only computed within same player's turns
-* Bootstrap values only used for non-terminal states
-* Advantage normalization preserves sign
-* GAE computation properly handles episode boundaries
-* Value estimates exist for all non-terminal states
-
-### State Management
-* Trajectories maintain correct temporal ordering
-* Player perspectives remain consistent throughout updates
-* Action masks correctly reflect current game state
-* Reward attribution matches active player
-* Episode termination properly distinguished from truncation
-
-### Hyperparameter Tuning
-
-    Probably not going to do any systematic sweeps to start.
-    See infra/hypers.py for the current hyperparameters.
-
-#### Diagnostics
- * If approx_kl skyrockets early, the learning rate or clip range might be too large.
- * If approx_kl stays near zero, maybe the policy isn’t learning aggressively enough.
- * If entropy plummets to near-zero quickly, the model may be collapsing to a single set of actions (overfitting).
- * If value loss is very large or consistently grows, check for improper reward scaling or network initialization 
-
- ### Training Runs
-
-Right now I will be training for 1min-24hr runs on my Mac.
-Will move to doing a 1-7day runs on a remote GPU once that is working well.
-After that is working I will investigate in some basic distributed training infrastructure.
-
-## Future Projects
-
-### Separate Value Network 
- * The original PPO paper uses a separate, wider value network.
-
-### Neural Network Architectures
- * There's a lot of room for experimentation here.
-    LSTMs or Attention seem like good candidates.
-
-### Value Loss Clipping
-  * Original PPO paper recommends against clipping
-
-### Advantage Normalization
- * Per-minibatch more mathematically precise
- 
-hese decisions should be resolved based on empirical testing with the manabot environment.
-
-## References
-
-1. Schulman, J., et al. "Proximal Policy Optimization Algorithms" (2017)
-2. Schulman, J., et al. "High-dimensional Continuous Control Using Generalized Advantage Estimation" (2016)
-3. "Implementation Matters in Deep Policy Gradients: A Case Study on PPO and TRPO" (2020)
-4. "The 37 Implementation Details of Proximal Policy Optimization" (2022)
-
+The old standalone `Trainer` and `NetOpponentTrainer` loops, fake environment
+shim, training presets and step1–4/first-light/exp11 launchers are retired.
+They used different shaping/update contracts and are not silently translated.
+Historical evidence and first-light report/store readers remain available;
+reproduction of retired executions requires their pinned source revision.

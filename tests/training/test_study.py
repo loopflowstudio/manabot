@@ -7,14 +7,14 @@ import pytest
 
 from experiments.direct_self_play import ARMS as LEARNING_SPEED
 from manabot.arena.models import canonical_sha256
-from manabot.training import regime_study
-from manabot.training.analysis import cost_comparison, verify_saved_inputs
-from manabot.training.regime_study import (
+from manabot.experiment import study as regime_study
+from manabot.experiment.study import (
     EvaluationProtocol,
     calibration_plan,
     scientific_plan,
     smoke_recipe,
 )
+from manabot.reports.analysis import cost_comparison, verify_saved_inputs
 
 
 def point(name, seconds, score):
@@ -127,7 +127,7 @@ def test_offline_reporting_rejects_changed_recipe(tmp_path):
 
 def test_report_regeneration_preserves_metrics_without_training(tmp_path):
     pytest.importorskip("nbclient")
-    from manabot.training.analysis import report
+    from manabot.reports.analysis import report
 
     study = dict(
         study="ataraxos-ablations",
@@ -213,7 +213,7 @@ def test_scientific_profile_requires_replicates_and_explicit_uncertainty():
 
 
 def test_cost_cutoffs_exclude_endpoint_and_future_weights():
-    from manabot.training.analysis import cost_cutoffs
+    from manabot.reports.analysis import cost_cutoffs
 
     rows = [
         point("a", 10, 0.2),
@@ -228,7 +228,7 @@ def test_cost_cutoffs_exclude_endpoint_and_future_weights():
 
 
 def test_uncertainty_clusters_training_seeds_and_four_leg_deals():
-    from manabot.training.analysis import paired_uncertainty
+    from manabot.reports.analysis import paired_uncertainty
 
     cells = [
         dict(
@@ -334,7 +334,7 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
 
     with monkeypatch.context() as patch:
         patch.setattr(
-            "manabot.training.regime_study.shutil.disk_usage",
+            "manabot.experiment.study.shutil.disk_usage",
             lambda _: SimpleNamespace(free=0),
         )
         with pytest.raises(ValueError, match="storage infeasible"):
@@ -352,7 +352,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
 ):
     import torch
 
-    from manabot.training.models import StageRecord, TrainingRun
+    from manabot.training.records import StageRecord, TrainingRun
 
     runner = regime_study
 
@@ -376,7 +376,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         runner, "execute_regime", lambda *a: pytest.fail("resume must not retrain")
     )
     monkeypatch.setattr(
-        runner, "load_checkpoint_agent", lambda *a: (torch.nn.Linear(1, 1), None)
+        runner, "load_checkpoint", lambda *a: (torch.nn.Linear(1, 1), None)
     )
     monkeypatch.setattr(runner, "report", lambda *a: None)
     calls = []

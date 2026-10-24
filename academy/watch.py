@@ -263,7 +263,7 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
                 unavailable="Policy, value and search outputs were not retained in this arena recording.",
             )
             if expected.get("local_update_receipt") is not None:
-                from manabot.sim.local_update import LocalUpdateReceipt
+                from manabot.sim.search.local_update import LocalUpdateReceipt
 
                 receipt = LocalUpdateReceipt.from_json(expected["local_update_receipt"])
                 if receipt.viewer != seat or len(receipt.target) != len(context.offers):

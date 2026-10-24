@@ -44,7 +44,7 @@ cohort is necessary to isolate these generic-input defects. Existing focused
 semantic target tests remain in `tests/model/test_action_identity.py`.
 
 The model has width 32, two attention heads and feed-forward width 64, with the
-FiLM-conditioned policy (`AgentSpec(policy_film=True)`, protocol
+FiLM-conditioned policy (`ModelConfig(policy_film=True)`, protocol
 `learnability-2`; see
 [starting-weight sensitivity](#starting-weight-sensitivity)). Each of 240 Adam
 updates (learning rate .003) uses the same 24 fit cases, for 5,760 supervised
@@ -177,7 +177,7 @@ for each assertion or change the frozen qualification receipts.
 
 `manabot.verify.learning_control` is the single implementation formerly embedded
 in `tests/training/test_exploiter_positive_control.py`; that test calls it too.
-It uses the existing `SeatRoutedCollector`, `NetOpponentTrainer` and
+It uses the existing `SeatRoutedCollector`, `Learner` and
 `update_iteration`, with terminal game rewards and no alternative PPO loss.
 
 Seed 197 trains width 8 against a frozen passing opponent in the existing

@@ -4,6 +4,13 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Callable
 
+from managym.decision import (
+    PUBLIC_COMMITMENT_KINDS,
+    Command,
+    DecisionFrame,
+    Observation,
+)
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 import torch
@@ -12,27 +19,21 @@ from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
 from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
-from manabot.sim.distill import LOCAL_TARGET_KEY, generate_selfplay_shard, load_shards
-from manabot.sim.local_sampling import (
-    HandBatch,
-    HandSample,
-    PhysicalHandSampler,
-    PreparedHands,
-)
-from manabot.sim.local_update import (
+from manabot.sim.data import LOCAL_TARGET_KEY, load_shards
+from manabot.sim.datagen import generate_selfplay_shard
+from manabot.sim.search.local_update import (
     LocalUpdatePlayer,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
     SamplerArtifact,
 )
-from manabot.sim.search_supervised import _validate_dataset
-from managym.decision import (
-    PUBLIC_COMMITMENT_KINDS,
-    Command,
-    DecisionFrame,
-    Observation,
+from manabot.sim.search.sampling import (
+    HandBatch,
+    HandSample,
+    PhysicalHandSampler,
+    PreparedHands,
 )
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from manabot.training.supervised.search import _validate_dataset
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher, small_match
 
@@ -224,7 +225,7 @@ def test_prior_targets_reload_through_distillation_reader(tmp_path: Path) -> Non
         seed=44,
         out_path=shard,
         max_steps_per_game=1000,
-        match_hypers=small_match(),
+        match_config=small_match(),
         teacher_spec={
             "kind": "local_update",
             "checkpoint": str(teacher.likelihood.checkpoint),
@@ -274,6 +275,8 @@ def test_deadline_after_injected_sampling(
             env._engine.semantic_observation_json(env._engine.current_agent_index())
         )
     )
-    monkeypatch.setattr("manabot.sim.local_update.time.perf_counter", lambda: clock[0])
+    monkeypatch.setattr(
+        "manabot.sim.search.local_update.time.perf_counter", lambda: clock[0]
+    )
     with pytest.raises(TimeoutError, match="target unavailable"):
         teacher.search(env._engine, history, seed=4)

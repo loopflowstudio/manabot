@@ -7,7 +7,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from manabot.training.report_study import ScientificStudy
+    from manabot.reports.study import ScientificStudy
 
 from etude.run.records import RunDeclaration, RunFile, SourceKey
 from nbclient import NotebookClient
@@ -15,15 +15,51 @@ import nbformat
 from pydantic import ValidationError
 import pytest
 
-from manabot.training.comparison_notebook import write_comparison_notebook
-from manabot.training.experiment_report import (
+from manabot.reports.experiment import (
     load_evidence,
     matched_milestones,
     strength_figures,
     write_dashboard,
 )
+from manabot.reports.notebook import write_comparison_notebook
+from manabot.training.records import TrainingRun
+from manabot.training.state.game_errors import GameErrorState
 
 DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
+
+
+@pytest.mark.parametrize("stop_reason", [None, "game_error_rate_exceeded"])
+def test_game_recovery_summary_does_not_publish_private_inputs(
+    tmp_path: Path, stop_reason: str | None
+) -> None:
+    evidence = load_evidence(DEMO)
+    run = evidence.runs[0].model_copy(deep=True)
+    run.game_errors = GameErrorState(
+        attempted=10,
+        completed=9,
+        crashed=1,
+        discarded_samples=5,
+        replacement_samples=5,
+        window=[False] * 9 + [True],
+        stop_reason=stop_reason,
+    )
+    run.status = "failed"
+    run.error = "AgentError: private-card-name in hidden hand at private-seed"
+    run.game_error_ledgers = ["private-seed-and-action-prefix.jsonl"]
+    output = write_dashboard(
+        replace(evidence, runs=(run,)),
+        tmp_path / "report.html",
+        question="Recovery",
+        docs="metrics.html",
+        sections=[],
+    )
+    html = output.read_text()
+    assert "10 settled game attempts, 9 completed, 1 crashed" in html
+    assert "5 samples discarded, 5 replacement samples" in html
+    assert "10.0% over the last 10 settled attempts" in html
+    assert "private-seed-and-action-prefix" not in html
+    assert "private-card-name" not in html and "private-seed" not in html
+    assert f"stop reason: {stop_reason or 'failed'}" in html
 
 
 def test_tracker_declarations_are_sources_without_extra_trajectories(
@@ -232,7 +268,7 @@ def test_missing_observation_times_and_resources_are_unavailable(
 def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
     import math
 
-    from manabot.training.experiment_report import diagnostic_figures
+    from manabot.reports.experiment import diagnostic_figures
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -261,7 +297,7 @@ def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
 
 
 def _scientific_fixture() -> "ScientificStudy":
-    from manabot.training.report_study import ScientificStudy
+    from manabot.reports.study import ScientificStudy
 
     evidence = load_evidence(DEMO)
     monitor = evidence.monitors[0]
@@ -311,7 +347,7 @@ def _scientific_fixture() -> "ScientificStudy":
 
 
 def test_scientific_cohort_matching_and_initialization() -> None:
-    from manabot.training.report_study import study_strength_figures
+    from manabot.reports.study import study_strength_figures
 
     study = _scientific_fixture()
     figure = study_strength_figures(study)[0]
@@ -328,7 +364,7 @@ def test_scientific_cohort_matching_and_initialization() -> None:
 def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None:
     import pytest
 
-    from manabot.training.report_study import study_strength_figures
+    from manabot.reports.study import study_strength_figures
 
     study = _scientific_fixture()
     study.measurements[0].score = 0.123
@@ -345,7 +381,7 @@ def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None
 
 
 def test_missing_retention_is_not_zero_and_run_histories_stay_separate() -> None:
-    from manabot.training.experiment_report import strength_figures
+    from manabot.reports.experiment import strength_figures
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -391,3 +427,16 @@ def test_capacity_reports_match_steps_without_claiming_equal_samples() -> None:
         float(line.get_xdata()[0]) for line in samples.lines if line.get_marker() == "o"
     ) == [16, 32, 48, 64]
     assert strength_figures(evidence, "optimizer_updates") == []
+
+
+def test_retained_recipe_is_readable_but_not_executable() -> None:
+    """Reporting preserves retired parameters without translating learning rules."""
+    source = next((DEMO / "training").glob("**/run.json"))
+    payload = json.loads(source.read_text())
+    record = next(run for run in load_evidence(DEMO).runs if run.id == payload["id"])
+    assert (
+        record.regime.model_dump(mode="json")["stages"] == payload["regime"]["stages"]
+    )
+    with pytest.raises(ValidationError):
+        TrainingRun.model_validate(record.model_dump(mode="json"))
+    assert json.loads(source.read_text()) == payload

@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.sim.search_branch import branch_backend
+from manabot.sim.search.branch import branch_backend
 
 
 def canonical_json(value: Any) -> bytes:
@@ -34,7 +34,9 @@ class StrictModel(BaseModel):
 
 
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
-type ArenaWorld = Literal["w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11"]
+type ArenaWorld = Literal[
+    "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13"
+]
 BASE_ANCHOR_IDS = (
     "random-v1",
     "scripted-greedy-v1",
@@ -138,7 +140,10 @@ class PlayerRegistration(StrictModel):
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "local_update":
-                from manabot.sim.local_update import LocalSearchConfig, SamplerArtifact
+                from manabot.sim.search.local_update import (
+                    LocalSearchConfig,
+                    SamplerArtifact,
+                )
 
                 config = LocalSearchConfig.model_validate(
                     self.player_spec.get("config", {})

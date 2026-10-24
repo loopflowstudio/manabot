@@ -1,63 +1,8 @@
-"""Built-in runtime presets for training and simulation commands."""
+"""Built-in runtime presets for simulation commands."""
 
-from copy import deepcopy
+from manabot.infra import RuntimeConfig, SimulationConfig
 
-from manabot.infra import Hypers, SimulationHypers
-
-DEFAULT_TRAIN_PRESET = "local"
 DEFAULT_SIM_PRESET = "sim"
-
-TRAIN_PRESETS = {
-    "local": {
-        "train": {
-            "num_envs": 4,
-            "num_steps": 16,
-            "total_timesteps": 10_000,
-        },
-        "experiment": {
-            "exp_name": "local",
-            "profiler_enabled": True,
-            # The certified laptop path: no W&B credentials, no CUDA.
-            "wandb": False,
-        },
-    },
-    "simple": {
-        "train": {
-            "num_envs": 16,
-            "num_steps": 256,
-            "total_timesteps": 10_000_000,
-        },
-        "experiment": {
-            "exp_name": "simple",
-            "device": "cuda",
-            "profiler_enabled": True,
-        },
-        "agent": {"attention_on": False},
-    },
-    "attention": {
-        "train": {
-            "num_envs": 16,
-            "num_steps": 256,
-            "total_timesteps": 10_000_000,
-        },
-        "experiment": {
-            "exp_name": "attention",
-            "device": "cuda",
-            "profiler_enabled": True,
-        },
-    },
-}
-
-
-def get_training_preset(name: str) -> dict:
-    if name not in TRAIN_PRESETS:
-        available = ", ".join(sorted(TRAIN_PRESETS))
-        raise ValueError(f"Unknown training preset '{name}'. Available: {available}")
-    return deepcopy(TRAIN_PRESETS[name])
-
-
-def get_training_base() -> dict:
-    return Hypers().model_dump()
 
 
 def get_sim_preset(name: str) -> dict:
@@ -66,15 +11,14 @@ def get_sim_preset(name: str) -> dict:
             f"Unknown simulation preset '{name}'. Available: {DEFAULT_SIM_PRESET}"
         )
 
-    experiment = Hypers().experiment.model_dump()
-    experiment.update(
+    runtime = RuntimeConfig().model_dump()
+    runtime.update(
         {
-            "exp_name": DEFAULT_SIM_PRESET,
-            "wandb": False,
+            "name": DEFAULT_SIM_PRESET,
             "log_level": "DEBUG",
         }
     )
     return {
-        "experiment": experiment,
-        "sim": SimulationHypers().model_dump(),
+        "runtime": runtime,
+        "sim": SimulationConfig().model_dump(),
     }

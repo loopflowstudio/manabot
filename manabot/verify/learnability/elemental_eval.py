@@ -14,7 +14,7 @@ import subprocess
 from urllib.parse import unquote, urlparse
 
 from etude.eval.match import Tables, agent, environment
-from etude.eval.records import Agent, Match, RoundRobin, digest
+from etude.eval.records import ActorCritic, Match, RoundRobin, digest
 from etude.jobs import evaluation
 from etude.launch.client import launch
 from etude.launch.records import Run, Runtime
@@ -111,7 +111,7 @@ def prepare_evaluation(
 ) -> Run:
     """Build the typed run and register its prospective training-report link."""
 
-    def checkpoint_agent(path: Path, label: str) -> Agent:
+    def checkpoint_agent(path: Path, label: str) -> ActorCritic:
         return agent(
             label,
             checkpoint=ArtifactRef(

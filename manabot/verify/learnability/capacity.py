@@ -15,8 +15,8 @@ import time
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.verify.action_cases import (
     CASE_SET,
     DecisionCase,
@@ -45,7 +45,7 @@ def _digest_cases(cases: list[DecisionCase]) -> str:
 
 @torch.no_grad()
 def _score(
-    agent: Agent, case: DecisionCase, seed: int, initial: float, config: Config
+    agent: ActorCritic, case: DecisionCase, seed: int, initial: float, config: Config
 ) -> Score:
     obs = case.observation
     logits, _ = agent(obs)
@@ -123,7 +123,7 @@ def run(out: Path, result: Result) -> None:
         key: torch.cat([c.observation[key] for c in fit]) for key in fit[0].observation
     }
     labels = torch.tensor([c.preferred for c in fit])
-    spec = AgentSpec(
+    spec = ModelConfig(
         hidden_dim=result.config.hidden_dim,
         num_attention_heads=2,
         attention_feedforward_dim=64,
@@ -131,7 +131,7 @@ def run(out: Path, result: Result) -> None:
     )
     for seed in result.config.seeds:
         torch.manual_seed(seed)
-        agent = Agent(ObservationSpace(), spec)
+        agent = ActorCritic(ObservationSpace(), spec)
         agent.eval()
         with torch.no_grad():
             initial = [
@@ -165,7 +165,7 @@ def run(out: Path, result: Result) -> None:
             },
             path,
         )
-        restored = Agent(ObservationSpace(), spec)
+        restored = ActorCritic(ObservationSpace(), spec)
         restored.load_state_dict(torch.load(path, weights_only=True)["state_dict"])
         restored.eval()
         result.artifacts[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()

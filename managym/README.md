@@ -73,7 +73,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w11-payment-v1](../conformance/semantic-kernel-w11-payment-v1/).
+[semantic-kernel-w13-v1](../conformance/semantic-kernel-w13-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -81,6 +81,23 @@ After changing Rust, rebuild the Python extension into the uv-managed venv:
 uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
+
+The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+inventories every numbered entry, with explicit unknowns and scoped evidence.
+Card-shell checks and replay agreement do not independently prove rules
+correctness. Prefer directed tests with independently specified outcomes and
+small bounded combinations before adding longer random-game cohorts.
+
+Check the committed inventory offline from the repository root with
+`uv run python scripts/audit_rules.py`. Supplying `--source <downloaded-txt>`
+also checks the pinned byte digest and exact source inventory. Do not upgrade
+child rules merely because their family has a test or a matching citation.
+The Prism/Treasure audit probe now follows explicit nested payment decisions
+and passes its final mana, sacrifice and empty-stack assertions. Its original
+failure remains historical evidence; this bounded pass does not certify all
+payment rules. See the audit's
+[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+before using its historical Task attribution.
 
 ## Style
 

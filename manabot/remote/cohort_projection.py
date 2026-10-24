@@ -1,7 +1,7 @@
-"""Bounded report/W&B delivery, independently supervised from cohort scheduling.
+"""Bounded report/Etude delivery, independently supervised from cohort scheduling.
 
 Only existing Dashboard exports are downloaded. Local reports precede telemetry;
-failed publication retains evidence and retries against W&B's acknowledged cursor.
+failed publication retains evidence and retries against Etude's durable metric rows.
 A child process bounds network/render time, and reservations survive owner restart.
 """
 
@@ -21,8 +21,8 @@ from typing import Protocol
 from pydantic import Field, model_validator
 
 from manabot.infra.artifacts import verify_file
-from manabot.training.execution import atomic_json
-from manabot.training.monitoring import Dashboard, publish_dashboard
+from manabot.infra.files import atomic_json
+from manabot.reports.training import Dashboard, publish_dashboard
 
 from .cohort import Cohort, CohortState
 from .cohort_service import owner_lock
@@ -39,24 +39,22 @@ class DashboardPublisher(Protocol):
         dashboard: Dashboard,
         out: Path,
         *,
-        project: str,
-        entity: str | None = None,
+        experiment: str,
+        destination: str | None = None,
     ) -> str | None: ...
 
 
 class ProjectionConfig(Frozen):
     """Reporting allowance is inside the cohort's declared controller allocation."""
 
-    project: str | None = None
-    entity: str | None = None
+    experiment: str = "manabot-monitoring"
+    destination: str | None = None
     interval_seconds: float = Field(default=300, ge=30)
     attempt_seconds: float = Field(default=120, ge=15, le=600)
     total_seconds: float = Field(default=3600, gt=0)
 
     @model_validator(mode="after")
     def valid(self) -> "ProjectionConfig":
-        if (self.project is None) != (self.entity is None):
-            raise ValueError("W&B projection requires both project and entity")
         if self.attempt_seconds > self.total_seconds:
             raise ValueError("projection attempt exceeds total allowance")
         return self
@@ -150,7 +148,7 @@ def _write_report(
             f"<tr><td>{escape(row.job_id)}</td><td>{escape(row.phase)}</td><td>{row.updates}</td><td>{row.evaluations}</td><td>{row.generation} / {row.heartbeat_at}</td><td>{links} {escape(row.error or '')}</td></tr>"
         )
     body.append(
-        "</table><p>Full notebook/HTML analysis remains available through deploy fetch/report. W&B uses these same retained Dashboard rows.</p>"
+        "</table><p>Full notebook/HTML analysis remains available through deploy fetch/report. Etude uses these same retained Dashboard rows.</p>"
     )
     temporary = directory / "report.html.tmp"
     temporary.write_text(
@@ -231,30 +229,29 @@ def project_once(
         # Always persist local evidence/report before optional network telemetry.
         _write_report(cohort, state, rows, directory)
         failures: list[str] = []
-        if config.project is not None:
-            for dashboard, path in pending:
-                if path.with_suffix(".publication.json").exists():
-                    continue
-                try:
-                    url = publish(
-                        dashboard,
-                        directory,
-                        project=config.project,
-                        entity=config.entity,
-                    )
-                    atomic_json(
-                        path.with_suffix(".publication.json"),
-                        {"url": url, "at": time.time()},
-                    )
-                except Exception as error:
-                    failures.append(type(error).__name__)
+        for dashboard, path in pending:
+            if path.with_suffix(".publication.json").exists():
+                continue
+            try:
+                url = publish(
+                    dashboard,
+                    directory,
+                    experiment=config.experiment,
+                    destination=config.destination,
+                )
+                atomic_json(
+                    path.with_suffix(".publication.json"),
+                    {"url": url, "at": time.time()},
+                )
+            except Exception as error:
+                failures.append(type(error).__name__)
         history = directory / "telemetry-history"
         history.mkdir(exist_ok=True)
         atomic_json(
             history / f"{time.time_ns()}.json",
             {
                 "at": time.time(),
-                "enabled": config.project is not None,
+                "enabled": True,
                 "errors": failures,
             },
         )
@@ -262,7 +259,7 @@ def project_once(
             directory / "telemetry.json",
             {
                 "at": time.time(),
-                "enabled": config.project is not None,
+                "enabled": True,
                 "errors": failures,
             },
         )

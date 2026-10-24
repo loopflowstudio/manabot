@@ -129,6 +129,13 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+Read [validation by change area](docs/development/validation.md) for the
+checks required by the affected package and workflow.
+
+- Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
+  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  full vector diagnostic payloads in evidence.
 - Experiment results under `experiments/data/` live in the artifact store. Before
   committing new results or merging a branch that tracked them, publish their
   bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
@@ -136,7 +143,7 @@ checkpoints or experiment evidence.
   the local files. Verify with
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
-  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
   and run the full diagnostic with
   `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
   The `--pr` subset omits reward-driven PPO and cannot verify that path.

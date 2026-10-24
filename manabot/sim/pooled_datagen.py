@@ -7,7 +7,7 @@ driver plays G self-play games concurrently in ONE process and merges the
 rollout batches of every game's current decision into single net forwards:
 per ply, one forward covers sum_g(active slots of game g) observations.
 
-Produces shards in exactly the manabot.sim.distill format (observations,
+Produces shards in exactly the manabot.sim.datagen format (observations,
 argmax action, raw score vector, provenance tag).
 """
 
@@ -21,14 +21,12 @@ from typing import Any
 import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
-from manabot.sim.distill import OBS_KEYS, SCORE_KEY, _git_commit
-from manabot.sim.flat_mc import (
-    DEFAULT_MAX_PLAYOUT_STEPS,
-    load_checkpoint_agent,
-    spec_name,
-)
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.data import OBS_KEYS, SCORE_KEY
+from manabot.sim.datagen import _git_commit
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
+from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
 
@@ -39,7 +37,7 @@ class _GameStream:
         self.env = Env(
             match,
             obs_space,
-            Reward(RewardHypers()),
+            Reward(RewardConfig()),
             seed=seed,
             auto_reset=False,
             enable_profiler=False,
@@ -57,6 +55,9 @@ class _GameStream:
         self.actions_full: np.ndarray | None = None
 
     def start_game(self, game_index: int, seed: int) -> None:
+        self.env.failure_context.update(
+            game_index=game_index, producer="pooled_datagen"
+        )
         self.obs, _ = self.env.reset(seed=seed)
         self.game_index = game_index
         self.steps = 0
@@ -100,11 +101,11 @@ def generate_selfplay_shard_pooled(
     }
     name = spec_name(teacher_spec)
 
-    agent, _ = load_checkpoint_agent(checkpoint)
+    agent, _ = load_checkpoint(checkpoint)
     sampler = BatchedSampler(agent, epsilon=epsilon, seed=seed * 2 + 1, device=device)
 
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero=f"{name}-a"[:32],
             villain=f"{name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),
@@ -154,7 +155,8 @@ def generate_selfplay_shard_pooled(
         call_seed = (seed * 1_000_003 + decision_count * 31 + stream.game_index) & (
             0xFFFFFFFFFFFFFFFF
         )
-        pool = stream.env._engine.rollout_pool(worlds, rollouts, call_seed, max_steps)
+        stream.env.failure_context.update(step=stream.steps, decisions=decision_count)
+        pool = stream.env.rollout_pool(worlds, rollouts, call_seed, max_steps)
         capacity = pool.num_slots
         if stream.pool_buffers is None or stream.pool_capacity < capacity:
             stream.pool_buffers = _allocate_buffers(obs_space, capacity)

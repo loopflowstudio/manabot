@@ -47,7 +47,7 @@ def test_cost_and_watchdog_admission() -> None:
 
 
 def test_cuda_rejects_recovery_and_mixed_device_continuation() -> None:
-    from manabot.training.models import TrainingRegime
+    from manabot.training.regime import TrainingRegime
 
     data = direct_self_play().model_dump()
     data["stages"][0]["execution"]["device"] = "cuda"

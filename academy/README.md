@@ -211,3 +211,25 @@ human-only choice or extra information. See the
 Optional resolving costs share typed payment progress and effect continuations.
 See [optional payments](../docs/rules/optional-payments.md) for authoring,
 commitment and frozen-content boundaries.
+
+## Isolated browser validation
+
+Use unused backend and frontend ports for this checkout. Playwright can reuse an
+existing server; another worktree's server is not evidence for this source.
+
+```bash
+ACADEMY_API_PORT=8123 ACADEMY_FRONTEND_PORT=5293 \
+  npm --prefix academy/ui run test:e2e -- testing-house.spec.ts
+```
+
+For a built SPA, set an absolute `ACADEMY_FRONTEND_BUILD` for build and ASGI,
+a separate `ACADEMY_TRACES_DIR`, and
+`ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
+stores and sibling servers untouched. Shared-history proofs use separate
+browser identities and cover private unfinished replays and participant feedback.
+
+Changes to persistence or Study addresses require presentation, Study runtime,
+and protocol checks as well as attempt-store checks. SQLite is the trace
+authority; historical JSON is read-only. `ed2` names a pre-command frame;
+Command and offer validation belongs to its landmark. Preserve frozen `erd1`
+evidence and test recorder failure through the WebSocket boundary.

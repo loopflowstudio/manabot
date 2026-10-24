@@ -6,9 +6,9 @@ use managym::{
 
 use super::helpers::*;
 
-/// CR 117.3b — The active player receives priority first.
+/// CR 117.3a — The active player receives priority at the start of a main phase.
 #[test]
-fn cr_117_3b_active_player_gets_priority_first() {
+fn cr_117_3a_active_player_gets_priority_first() {
     let mut s = Scenario::new(mountain_deck(), mountain_deck(), 21);
 
     s.advance_to_step(StepKind::Main);

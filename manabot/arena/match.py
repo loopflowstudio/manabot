@@ -2,33 +2,39 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
+import json
 import math
 import multiprocessing as mp
+from multiprocessing.connection import Connection
+import os
 from pathlib import Path
 import time
+import traceback
 from typing import Any, Literal
 
+from managym.decision import Command, DecisionFrame
+from managym.experience import UNVERSIONED_CONTENT_HASH
 import numpy as np
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import MatchHypers
-from manabot.sim.local_update import LocalUpdatePlayer
-from manabot.sim.mcts import DeterminizedPuctPlayer
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.config import MatchConfig
+from manabot.infra.provenance import (
     RECORDED_ASSET_MANIFEST_HASH,
-    build_command,
-    build_viewer_frame,
+    runtime_fingerprints,
+    source_bundle_sha256,
 )
+from manabot.sim.search.local_update import LocalUpdatePlayer
+from manabot.sim.search.puct import DeterminizedPuctPlayer
+from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
-from managym.decision import Command, DecisionFrame
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 from .guidance import build_arena_player
 from .matchup import AuthoredMatchup
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
-from .replay import replay_environment, replay_games, write_trace
+from .replay import apply_game_event, replay_environment, replay_games, write_trace
 
 SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"
 MatchupMode = Literal["cross", "mirrors", "all"]
@@ -52,8 +58,8 @@ def selected_decks(leg: int) -> tuple[str, str]:
     return deck_pairs[leg // 2]
 
 
-def selected_match() -> MatchHypers:
-    return MatchHypers.authored(
+def selected_match() -> MatchConfig:
+    return MatchConfig.authored(
         "ur-lessons-vs-gw-allies",
         "ur_lessons",
         "gw_allies",
@@ -95,11 +101,11 @@ def _failure(game: dict, reason: str, message: str, player_id: str | None) -> No
 
 
 def _execute_game(
-    game: dict,
+    game: dict[str, Any],
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
-    send,
+    send: Callable[[tuple[str, Any]], None],
 ) -> None:
     import torch
 
@@ -121,8 +127,19 @@ def _execute_game(
         if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
             raise ValueError("players have different observation ABIs")
         space = spaces[0] if spaces else ObservationSpace()
-        game["observation_hypers"] = space.encoder.hypers.model_dump()
+        game["observation_hypers"] = space.encoder.config.model_dump()
         send(("observation", game["observation_hypers"]))
+        game["runtime_identities"] = runtime_fingerprints(
+            game["deal_seed"],
+            match_config=MatchConfig.model_validate(game["match_hypers"])
+            if "match_hypers" in game
+            else None,
+            observation_space=space,
+        )
+        game["runtime_identities"]["arena_source_sha256"] = source_bundle_sha256(
+            sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
+        )
+        send(("identities", game["runtime_identities"]))
         env, obs = replay_environment(game, space)
         game["initial_state_digest"] = env._engine.state_digest()
         send(("initial", game["initial_state_digest"]))
@@ -170,6 +187,25 @@ def _execute_game(
             command = build_command(frame, action)
             responsible = None
             send(("phase", None))
+            decision = {
+                "revision": revision,
+                "actor": actor,
+                "player_id": player_id,
+                "player_seed": game["player_seeds"][player_id],
+                "player_decision_ordinal": ordinal,
+                "policy_rng_seed": policy_seed,
+                "action_space_kind": frame["action_space"],
+                "frame_sha256": canonical_sha256(frame),
+                "command": command,
+                "command_sha256": canonical_sha256(command),
+                "chosen_offer": offers[action],
+                "pre_state_digest": pre_digest,
+                "latency_seconds": elapsed,
+            }
+            # The parent acknowledges durable pre-command evidence before native
+            # execution. Successful Commands alone cannot reproduce a rejection.
+            game["pending_decision"] = decision
+            send(("pending", decision))
             if local_players:
                 for player in local_players:
                     player.prepare_step(env, actor, action)
@@ -186,22 +222,7 @@ def _execute_game(
                 )
             else:
                 obs, _, terminated, truncated, info = env.step(action)
-            decision = {
-                "revision": revision,
-                "actor": actor,
-                "player_id": player_id,
-                "player_seed": game["player_seeds"][player_id],
-                "player_decision_ordinal": ordinal,
-                "policy_rng_seed": policy_seed,
-                "action_space_kind": frame["action_space"],
-                "frame_sha256": canonical_sha256(frame),
-                "command": command,
-                "command_sha256": canonical_sha256(command),
-                "chosen_offer": offers[action],
-                "pre_state_digest": pre_digest,
-                "post_state_digest": env._engine.state_digest(),
-                "latency_seconds": elapsed,
-            }
+            decision["post_state_digest"] = env._engine.state_digest()
             player = built[player_id][0]
             if (
                 isinstance(player, LocalUpdatePlayer)
@@ -213,6 +234,7 @@ def _execute_game(
                 decision["belief_model_mismatch"] = (
                     "opponent_behavior_not_assumed_equal_to_frozen_policy"
                 )
+            game.pop("pending_decision", None)
             game["decisions"].append(decision)
             decision_counts[player_id] += 1
             send(("decision", decision))
@@ -241,30 +263,61 @@ def _execute_game(
                 break
         else:
             _failure(game, "command_cap", "game exceeded its Command cap", None)
-    except Exception as exc:
+    except BaseException as exc:
+        if not isinstance(exc, Exception) and type(exc).__name__ != "PanicException":
+            raise
+        game["failure_trace"] = traceback.format_exc()
+        game["error_class"] = type(exc).__name__
         _failure(game, "crash", f"{type(exc).__name__}: {exc}", responsible)
     send(("result", game))
 
 
-def _game_worker(connection, game, registrations, checkpoint_paths, max_commands):
+def _game_worker(
+    connection: Connection,
+    game: dict[str, Any],
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+) -> None:
+    def send(event: tuple[str, Any]) -> None:
+        connection.send(event)
+        if event[0] == "pending" and connection.recv() != "retained":
+            raise RuntimeError("pre-command evidence was not retained")
+
     try:
-        _execute_game(
-            game, registrations, checkpoint_paths, max_commands, connection.send
-        )
+        _execute_game(game, registrations, checkpoint_paths, max_commands, send)
     finally:
         connection.close()
 
 
 def _bounded_game(
-    game: dict,
+    game: dict[str, Any],
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
     game_seconds: float,
-) -> dict:
-    """Keep completed Commands even if native code hangs or the worker dies."""
+    evidence_path: Path | None = None,
+) -> dict[str, Any]:
+    """Retain attempted Commands before native code can hang or kill its worker."""
+    started = time.monotonic()
+
+    def retain(kind: str, value: Any) -> None:
+        if evidence_path is not None:
+            with evidence_path.open("a") as evidence:
+                evidence.write(json.dumps([kind, value], allow_nan=False) + "\n")
+                evidence.flush()
+                os.fsync(evidence.fileno())
+
+    game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
+    game["registrations"] = [
+        registration.model_dump(mode="json") for registration in registrations
+    ]
+    if evidence_path is not None:
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        evidence_path.touch(mode=0o600, exist_ok=False)
+        retain("game", game)
     context = mp.get_context("spawn")
-    receiver, sender = context.Pipe(duplex=False)
+    receiver, sender = context.Pipe(duplex=True)
     process = context.Process(
         target=_game_worker,
         args=(
@@ -276,7 +329,6 @@ def _bounded_game(
         ),
     )
     responsible = None
-    started = time.monotonic()
     process.start()
     sender.close()
     try:
@@ -297,21 +349,27 @@ def _bounded_game(
             except EOFError:
                 _failure(game, "crash", "worker exited without a result", responsible)
                 return game
+            retain(kind, value)
+            game = apply_game_event(game, kind, value)
             if kind == "phase":
                 responsible = value
-            elif kind == "initial":
-                game["initial_state_digest"] = value
-            elif kind == "observation":
-                game["observation_hypers"] = value
-            elif kind == "decision":
-                game["decisions"].append(value)
+            elif kind == "pending":
+                try:
+                    receiver.send("retained")
+                except (BrokenPipeError, ConnectionResetError):
+                    _failure(
+                        game, "crash", "worker exited before acknowledgement", None
+                    )
+                    return game
             elif kind == "result":
-                return value
+                return game
     finally:
         if process.is_alive():
             process.kill()
         process.join()
         receiver.close()
+        game["execution_seconds"] = time.monotonic() - started
+        retain("settled", game)
 
 
 def play_cell(
@@ -349,7 +407,7 @@ def play_cell(
         if authored_matchup is not None
         else selected_match()
         if selected
-        else MatchHypers(
+        else MatchConfig(
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
@@ -412,7 +470,7 @@ def play_cell(
             setup = (
                 authored_matchup.match(leg)
                 if authored_matchup is not None
-                else MatchHypers.authored("ur-lessons-vs-gw-allies", *seat_decks)
+                else MatchConfig.authored("ur-lessons-vs-gw-allies", *seat_decks)
                 if selected
                 else match.model_copy(deep=True)
             )
@@ -450,7 +508,12 @@ def play_cell(
                 game["seat_decks"] = list(seat_decks)
             started = time.perf_counter()
             game = _bounded_game(
-                game, seat_players, checkpoint_paths, max_commands, game_seconds
+                game,
+                seat_players,
+                checkpoint_paths,
+                max_commands,
+                game_seconds,
+                out_dir / "failures" / f"{cell_id}.{deal_seed}.{leg}.jsonl",
             )
             seconds = time.perf_counter() - started
             game["game_trace_sha256"] = canonical_sha256(game)

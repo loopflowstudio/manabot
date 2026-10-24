@@ -7,7 +7,7 @@ import pytest
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
 from manabot.remote.plan import digest
 from manabot.remote.snapshots import publish_snapshot, snapshot_evidence
-from manabot.training.models import TrainingRun
+from manabot.training.records import TrainingRun
 from manabot.verify.store import VerifyStore
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_jobs import specification

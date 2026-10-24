@@ -8,44 +8,44 @@ import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
+from manabot.experiment.config import Case, Environment, Experiment, ModelOverride
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
 )
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent, make_player
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.training.builders import with_recent_events
-from manabot.training.experiments import Case, Environment, Experiment, Model
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.recipes.ataraxos import ataraxos
+from manabot.recipes.builders import with_recent_events
+from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
+from manabot.training.rollout.collection import SeatRoutedCollector
 
 PACK = "ur-lessons-vs-gw-allies"
 
 
 def _match() -> Match:
-    return Match(MatchHypers.authored(PACK, "ur_lessons", "gw_allies"))
+    return Match(MatchConfig.authored(PACK, "ur_lessons", "gw_allies"))
 
 
 def _space() -> ObservationSpace:
-    return ObservationSpace(ObservationSpaceHypers(policy_history_version=1))
+    return ObservationSpace(ObservationConfig(policy_history_version=1))
 
 
-def _agent(space: ObservationSpace, **kwargs: object) -> Agent:
+def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
     torch.set_num_threads(1)
     torch.manual_seed(111)
-    settings = AgentSpec.model_validate(
+    settings = ModelConfig.model_validate(
         {"hidden_dim": 16, "semantic_pack": PACK, "recent_events": True, **kwargs}
     )
-    return Agent(space, settings)
+    return ActorCritic(space, settings)
 
 
-def _collected(agent: Agent) -> dict[str, torch.Tensor]:
+def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
     collector = SeatRoutedCollector(
-        agent.observation_space, _match(), Reward(RewardHypers()), num_envs=1, seed=111
+        agent.observation_space, _match(), Reward(RewardConfig()), num_envs=1, seed=111
     )
     batch = collector.collect(agent, 16)
     nonempty = np.flatnonzero(batch.obs["events_valid"].sum(axis=(-1, -2)) >= 2)
@@ -92,11 +92,11 @@ def test_real_history_reaches_both_heads_and_reloads(
     )[0]
     assert torch.isfinite(semantic_gradient).all() and semantic_gradient.abs().sum() > 0
     path = tmp_path / "history.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent, agent.observation_space, path, player_configs=_match().to_rust()
     )
-    loaded, space = load_checkpoint_agent(str(path))
-    assert space.encoder.hypers.policy_history_version == 1
+    loaded, space = load_checkpoint(str(path))
+    assert space.encoder.config.policy_history_version == 1
     assert architecture_receipt(loaded) == architecture_receipt(agent)
     assert architecture_receipt(agent).components["recent_events"].total > 0
     for expected, actual in zip((policy, value), loaded(obs), strict=True):
@@ -105,7 +105,7 @@ def test_real_history_reaches_both_heads_and_reloads(
     del checkpoint["hypers"]["agent_hypers"]["recent_events"]
     torch.save(checkpoint, path)
     with pytest.raises((ValueError, RuntimeError)):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_semantics_order_padding_and_stateless_reset() -> None:
@@ -141,7 +141,9 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
-    baseline = Agent(ObservationSpace(), AgentSpec(hidden_dim=16, semantic_pack=PACK))
+    baseline = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=16, semantic_pack=PACK)
+    )
     baseline.load_state_dict(
         {
             key: value
@@ -165,12 +167,12 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     space = _space()
     agent = _agent(space)
     path = tmp_path / "player.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=_match().to_rust())
+    save_checkpoint(agent, space, path, player_configs=_match().to_rust())
     player, loaded_space = make_player(
         {"kind": "checkpoint", "path": str(path)}, seed=111
     )
     assert isinstance(player, AgentMatchupPlayer) and loaded_space is not None
-    env = Env(_match(), loaded_space, Reward(RewardHypers()), seed=111)
+    env = Env(_match(), loaded_space, Reward(RewardConfig()), seed=111)
     obs, _ = env.reset()
     assert not obs["events_valid"].any()
     retained = False
@@ -212,20 +214,22 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
 def test_history_off_and_declarative_identity() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(9)
-    baseline = Agent(ObservationSpace(), AgentSpec(hidden_dim=16))
+    baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16))
     torch.manual_seed(9)
-    explicit = Agent(ObservationSpace(), AgentSpec(hidden_dim=16, recent_events=False))
-    assert baseline.hypers.model_dump() == explicit.hypers.model_dump()
-    assert "recent_events" not in explicit.hypers.model_dump()
+    explicit = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=16, recent_events=False)
+    )
+    assert baseline.config.model_dump() == explicit.config.model_dump()
+    assert "recent_events" not in explicit.config.model_dump()
     assert (
         "policy_history_version"
-        not in explicit.observation_space.encoder.hypers.model_dump()
+        not in explicit.observation_space.encoder.config.model_dump()
     )
     assert architecture_receipt(baseline) == architecture_receipt(explicit)
     for name, weights in baseline.state_dict().items():
         assert "recent_events" not in name
         assert torch.equal(weights, explicit.state_dict()[name])
-    env = Env(_match(), ObservationSpace(), Reward(RewardHypers()), seed=111)
+    env = Env(_match(), ObservationSpace(), Reward(RewardConfig()), seed=111)
     raw, _ = env.reset()
     tensors = {key: torch.from_numpy(value).unsqueeze(0) for key, value in raw.items()}
     expected = baseline(tensors)
@@ -233,13 +237,13 @@ def test_history_off_and_declarative_identity() -> None:
     tensors.pop("events_valid")
     for left, right in zip(expected, explicit(tensors), strict=True):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
-    base = ataraxos_mtg_v1()
+    base = ataraxos()
     comparison = Experiment(
         "history-unexecuted",
         base,
         cases=(
-            Case("off", (Model(AgentSpec(recent_events=False)),)),
-            Case("on", (Model(AgentSpec(recent_events=True)),)),
+            Case("off", (ModelOverride(ModelConfig(recent_events=False)),)),
+            Case("on", (ModelOverride(ModelConfig(recent_events=True)),)),
         ),
     ).resolve()
     off, on = (case.regime for case in comparison.cases)
@@ -261,22 +265,18 @@ def test_history_off_and_declarative_identity() -> None:
 
 
 def test_short_window_native_collector_and_bad_contracts() -> None:
-    space = ObservationSpace(
-        ObservationSpaceHypers(policy_history_version=1, max_events=3)
-    )
+    space = ObservationSpace(ObservationConfig(policy_history_version=1, max_events=3))
     agent = _agent(space)
     obs = _collected(agent)
     assert obs["events"].shape == (1, 3, 12)
     assert obs["events_valid"].sum() == 3
     with pytest.raises(ValueError, match="policy_history_version"):
         _agent(ObservationSpace())
-    with pytest.raises(ValueError, match="history input is selected by Model"):
+    with pytest.raises(ValueError, match="history input is selected by ModelOverride"):
         Experiment(
             "bad",
-            ataraxos_mtg_v1(),
+            ataraxos(),
             overrides=(
-                Environment(
-                    observation=ObservationSpaceHypers(policy_history_version=1)
-                ),
+                Environment(observation=ObservationConfig(policy_history_version=1)),
             ),
         ).resolve()

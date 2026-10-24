@@ -1,5 +1,7 @@
 // temur_cards.rs
 // Directed Temur payment, graveyard casting, and copied-token rules.
+use std::collections::BTreeMap;
+
 use super::{
     elemental_cards::{card, cast, pass_until, permanent, settle, setup},
     helpers::Scenario,
@@ -575,6 +577,41 @@ fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
             .unwrap()
             .tapped
     );
+}
+
+/// CR 605.3a/b, 118.3: one Treasure can pay Prism's activation cost;
+/// sacrifice precedes the chosen-color output, and neither uses the stack.
+#[test]
+fn audit_prism_treasure_empty_pool_activation() {
+    let deck = BTreeMap::from([
+        ("Mountain".to_string(), 8),
+        ("Prophetic Prism".to_string(), 1),
+    ]);
+    let mut s = Scenario::new(deck.clone(), deck, 177_605);
+    s.advance_to_active_step(0, managym::flow::turn::StepKind::Main);
+    // Only the activation is under test; do not introduce Prism's ETB draw.
+    s.force_permanent_on_battlefield(0, "Prophetic Prism");
+    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.set_player_mana_pool(0, "0");
+    activate(&mut s, "Prophetic Prism", 0);
+    // Paying the upfront cost exposes the nested Treasure/color decisions.
+    activate(&mut s, "Treasure", 0);
+    choose(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 4, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    choose(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 1, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
+    assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
+    assert!(
+        s.game().state.permanents[permanent(&s, "Prophetic Prism")]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
+    assert!(s.game().state.stack_objects.is_empty());
 }
 
 #[test]

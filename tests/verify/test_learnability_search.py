@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.model import Agent
+from manabot.model import ActorCritic
 from manabot.verify.action_cases import (
     Family,
     decision_case,
@@ -32,7 +32,7 @@ def one_thread() -> Iterator[None]:
 def test_search_configuration_scores_native_state(arm: Arm) -> None:
     env = initial()
     obs = encode(env, env.scenario_refresh())
-    agent = Agent(ObservationSpace(), _spec(arm))
+    agent = ActorCritic(ObservationSpace(), _spec(arm))
     with torch.no_grad():
         logits, value = agent(obs)
     assert torch.isfinite(logits[obs["actions_valid"].bool()]).all()

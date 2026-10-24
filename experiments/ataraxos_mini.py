@@ -5,9 +5,9 @@ screen and the sustained baseline run it with their own stage plans.
 """
 
 from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import GIB, PACK, move_checkpoints, move_stage
-from manabot.training.models import TrainingRegime
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import GIB, PACK, move_checkpoints, move_stage
+from manabot.training.regime import TrainingRegime
 import managym
 
 
@@ -17,7 +17,7 @@ def ataraxos_mini() -> TrainingRegime:
         id="early-learning-rate-mini-source",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(
+        agent=ModelConfig(
             semantic_pack=PACK, value_aggregation="masked_mean", attention_layers=2
         ),
         stages=[

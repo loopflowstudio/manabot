@@ -11,12 +11,12 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
+from managym.experience import ProtocolV1ConformanceBundle
 
 # Local imports
 from academy import server, trace as trace_store
 from academy.server import app
 from managym import experience_projection
-from managym.experience import ProtocolV1ConformanceBundle
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(

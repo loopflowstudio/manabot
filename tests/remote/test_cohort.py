@@ -117,7 +117,12 @@ class Harness:
             ),
             artifacts_complete=complete,
         )
-        store.create("runtime/record.json", record.model_dump_json().encode())
+        previous = store.read("runtime/record.json")
+        data = record.model_dump_json().encode()
+        if previous is None:
+            assert store.create("runtime/record.json", data)
+        else:
+            assert store.replace("runtime/record.json", data, previous.etag)
         self.provider.delete(pod.id)
 
     def launch(self) -> Job:

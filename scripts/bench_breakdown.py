@@ -9,9 +9,9 @@ import argparse
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward, VectorEnv
-from manabot.infra.hypers import AgentSpec, RewardHypers
+from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.profiler import Profiler
-from manabot.model import Agent
+from manabot.model import ActorCritic
 
 
 def build_env(num_envs: int, seed: int) -> VectorEnv:
@@ -19,7 +19,7 @@ def build_env(num_envs: int, seed: int) -> VectorEnv:
         num_envs=num_envs,
         match=Match(),
         observation_space=ObservationSpace(),
-        reward=Reward(RewardHypers()),
+        reward=Reward(RewardConfig()),
         device="cpu",
         seed=seed,
         opponent_policy="passive",
@@ -37,7 +37,7 @@ def run_breakdown(
 
     agent = None
     if with_inference:
-        agent = Agent(env.observation_space, AgentSpec())
+        agent = ActorCritic(env.observation_space, ModelConfig())
         agent.eval()
 
     obs, _ = env.reset()

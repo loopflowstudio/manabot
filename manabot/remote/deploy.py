@@ -18,7 +18,7 @@ import time
 from typing import TYPE_CHECKING, Callable, Iterator, Literal
 
 if TYPE_CHECKING:
-    from manabot.training.checkpoint_queue import MonitoringBudget
+    from manabot.experiment.evaluation_queue import MonitoringBudget
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid
@@ -112,7 +112,7 @@ def current_source(root: Path) -> Source:
 def verify_public_source(source: Source) -> None:
     request = Request(
         f"https://api.github.com/repos/loopflowstudio/manabot/git/commits/{source.commit}",
-        headers={"User-Agent": "manabot/0.1"},
+        headers={"User-ActorCritic": "manabot/0.1"},
     )
     try:
         with urlopen(request, timeout=15) as response:

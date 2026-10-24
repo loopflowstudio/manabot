@@ -51,8 +51,8 @@ def start_command(
     state_dir: Path = typer.Option(...),
     doppler: bool = False,
     reports: bool = False,
-    wandb_project: str | None = None,
-    wandb_entity: str | None = None,
+    report_experiment: str = "manabot-monitoring",
+    report_destination: str | None = None,
     source_root: list[Path] = typer.Option(
         [], help="Retained exact worker source checkout"
     ),
@@ -63,8 +63,10 @@ def start_command(
 ) -> None:
     """Persist the cohort and install its service on this selected controller host."""
     cohort = Cohort.model_validate_json(plan.read_bytes())
-    projection = ProjectionConfig(project=wandb_project, entity=wandb_entity)
-    if wandb_project is not None:
+    projection = ProjectionConfig(
+        experiment=report_experiment, destination=report_destination
+    )
+    if report_destination is not None:
         reports = True
     prepare_cohort(cohort)
     if adopt_job is not None:

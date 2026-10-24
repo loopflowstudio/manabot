@@ -6,22 +6,22 @@ training, and verification. You train *a* manabot; this package is how.
 ## Quickstart
 
 ```bash
-uv run manabot train              # --preset local: bounded laptop run
+uv run manabot train              # bounded CPU production-path smoke
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
-uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
-uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
+uv run manabot train --learning-seats one  # explicit exact-quota control
+uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local` preset is the bounded laptop training path. Ordinary
-Trainer metrics and exported checkpoints now record through the public
-Etude SDK without a W&B account. Standalone tracking lives under
-`<runs_dir>/<experiment>/etude/`; under `etude launch`, the SDK supplies
-`ETUDE_RUN` and `ETUDE_TRACK_DIR`. The `simple` and `attention` presets still
-expect CUDA. Historical W&B model readers and frozen recipe fields remain
-readable; those fields no longer select the live Trainer tracker.
+The default `local-smoke-v1` recipe runs two CPU collection/update iterations
+through the production regime executor: two streams, 16 decisions per stream as
+a floor, both seats and complete games, with a 120-second failure deadline.
+It uses the baseline model and horizon-scaled damped policy objective, records
+actual counts through Etude and exports admitted checkpoints. `--steps`,
+`--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
+explicit. This is a software smoke, not playing-strength evidence.
 
 Self-play TrainingRegime execution logs cumulative update/transition clocks and
 retains admitted initialization, exact monitoring milestones, and raw stage
@@ -31,8 +31,9 @@ been replaced by Etude jobs. This is a partial migration, not end-to-end experim
 admission. SDK artifact retention alone does not establish portable collector/RNG
 recovery. Remote storage, rentals and scientific runs require explicit allocation.
 
-Override any hyperparameter with `--set dotted.path=value`; presets live in
-`manabot/config/presets.py`.
+Training `--preset` and `--set` routes are retired. Their old reward and
+optimizer contracts are not translated. Use a recipe or an explicit
+`TrainingRegime` JSON. Simulation retains its presets and `--set` overrides.
 
 `--recipe baseline` selects a complete ordinary training run above the regime
 layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
@@ -42,8 +43,7 @@ each, finishing current games before updating), not optimizer
 calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
-`--seconds` sets a failure deadline without changing the step schedule. Historical
-`--regime` and `--preset` routes retain their meanings and cannot be combined with
+`--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with
 `--recipe`. The baseline is a versioned starting point, not a strength certification.
 
 For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
@@ -57,10 +57,10 @@ horizon. The regime is that study's exact tested recipe; it requires CUDA.
 For an identified Allies/Lessons opponent, use the bounded
 [train/export/play workflow](../docs/local-trained-challenger.md). It uses the
 existing search-distillation trainer and a server-pinned candidate; players see
-the bot's identity in the ordinary table. The `local` PPO preset above remains
-a separate default-deck training smoke.
+the bot's identity in the ordinary table. The local smoke above trains the same authored matchup but does not run
+that challenger workflow.
 
-Build named curated matches with `MatchHypers.authored(pack_key, hero_deck,
+Build named curated matches with `MatchConfig.authored(pack_key, hero_deck,
 villain_deck)` so both main decks and sideboards come from managym's compiled
 setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `Match.swapped()` moves both lists together;
@@ -86,18 +86,28 @@ learning models can use `PairedLearners` to update both independent optimizers
 from their own seat trajectories. See [both-seat learning](../docs/training-regimes.md#learning-from-both-seats)
 for collection boundaries, accounting and measurement limits.
 
+Single-stage self-play can opt into bounded [game crash recovery](../docs/game-crash-recovery.md).
+It retains private replay inputs, discards both seats' uncommitted experience from
+failed games and regathers under the same policy. A persisted rolling error rate
+strictly above the declared threshold stops training; evaluation remains strict.
+Strict scalar/vector training and data-generation paths automatically retain
+private native failure inputs before propagating errors. Compound/selection and
+arena retain pending Commands before execution. The same bounded replay command
+handles strict failures without enabling tolerance or process recovery; see the
+linked capture audit for boundaries and supervision limits.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
 content manifest and input schema. Missing or mismatched bindings fail before
-weights load. Seat reversal preserves each deck's sideboard. BC and value
+weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
 For the compiled Allies/Lessons matchup, use
-`AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+`ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. Selected compiled checkpoints
@@ -105,18 +115,18 @@ without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
-`AgentSpec(policy_film=True)` scales each action embedding by the pooled game
+`ModelConfig(policy_film=True)` scales each action embedding by the pooled game
 state before the policy head, so offer choices that depend on the state stay
-learnable from any start. New runs train it: `new_agent_spec()` is the
-`manabot train` default, and the ordinary baseline recipe is `baseline-v3`.
+learnable from any start. The local and baseline recipes enable it; the
+ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning. The learnability gate trains the same FiLM policy.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w11** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w13** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w10 artifacts, are not compatible with w11. Elemental combat,
+including w12 artifacts, are not compatible with w13. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -124,8 +134,13 @@ challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
 
-`train_bc` and `train_search_supervised` take the `observation_hypers` the
-shards were encoded with and reject a dataset of any other shape.
+`manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
+Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
+exact digest-bound local/S3 artifacts before normal world and architecture
+admission. Simulation results are recorded locally through Etude.
+
+`train_search_supervised` takes the `observation_config` the
+shards were encoded with and rejects a dataset of any other shape.
 
 ## Architecture
 
@@ -136,20 +151,19 @@ world. The cross-package contracts and convergence status are in
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
-2. **`manabot.model`**: trainable policy and value models (`Agent`, PPO
-   `Trainer`)
-3. **`manabot.sim`**: search, teacher data generation, and game simulation
-   (`Player`, `Sim`, determinized PUCT, Teacher-1 evidence)
-4. **`manabot.semantic`**: semantic-program encoders and structural
-   representation experiments
+2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
+   `manabot.training` owns the regime executor and `Learner`
+3. **`manabot.sim`**: players, game runners and teacher data generation.
+   `sim/action` owns structured offers and compound-action execution.
+   `sim/search` owns frozen-policy planning, world sampling and search evidence:
+   `puct.py` implements tree search; `conditional.py` compares its action estimates
+   under different hidden-information assumptions at the same decision.
+4. **`manabot.semantic`**: semantic-program projection and production encoders
 5. **`manabot.verify`**: competency scenarios, behavioral probes, and the
    run-provenance store
-6. **`manabot.infra`**: experiment tracking (W&B/TensorBoard), `Hypers`
-   config models, profiling
+6. **`manabot.infra`**: shared configuration, runtime setup, provenance and profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
-   supervised exact-world learning, and the `ManabotPlayer` lifecycle
-8. **`manabot.study`**: behavioral study of recorded games (`record_games`,
-   `measures`, `report`), with one subpackage per matchup
+   exact-world inference, and the `ManabotPlayer` lifecycle
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.
@@ -187,19 +201,12 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
-Study records retain viewer-safe target source names and target controller sides.
-Audit retained Allies/Lessons records without starting games with
-`uv run python -m manabot.study.allies_lessons.targeting_audit --games games.jsonl.gz --label greedy`.
-The output lists LvA, AvL, LvL and AvA (the selected player's deck first), split by engine
-seat, including absent cohorts, unfinished records, declined targets and unknown
-identities. Target offers list player 0's objects first, so a first-offer
-policy's target side depends on its seat.
-Older records remain readable and count as unmeasured target prompts; source-less
-trigger choices remain unknown. Labels identify recorded seats, not a verified
-policy implementation. Own-side targeting alone does not establish a misplay,
-and these dependent choice counts are not game-level strength estimates.
+The retired behavioral-study and structural/opcode experiment tools are retained
+in Git history. Their archived inputs and receipts are indexed in
+[repository archive](../docs/repository-archive.md). Shared target inspection
+now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/arena/heuristic.py`, Study label `heuristic`) is a
+`heuristic` (`manabot/arena/heuristic.py`) is a
 separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
 removal held for a kill, counters held for an opponent's spell, effect polarity
 derived from the semantic card source, attacks unless a blocker kills and
@@ -253,7 +260,7 @@ ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
 [compound decisions](../docs/training-regimes.md#compound-decisions).
 
-TrainingRun diagnostics can be followed live or backfilled into W&B without
+TrainingRun diagnostics can be followed live or backfilled into Etude without
 retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
 operation, fixed distillation validation and separate checkpoint monitoring.
 
@@ -272,14 +279,14 @@ it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
 
-`manabot.training.etude_job.TrainingJob` freezes a single fresh self-play
+`manabot.experiment.job.TrainingJob` freezes a single fresh self-play
 `TrainingRegime` and its interior update milestones into an `etude.launch.Job`.
 Its `job(repo=..., revision=..., max_hours=...)` method only builds the job;
 `job.runs(*seeds)` only declares runs. Neither submits or reserves resources.
 The job command is:
 
 ```sh
-uv run --locked python -m manabot.training.etude_job
+uv run --locked python -m manabot.experiment.job
 ```
 
 Run that command through an Etude worker, not as a standalone training CLI: it
@@ -337,3 +344,56 @@ The [learnability diagnostic](../docs/nightly-learnability.md) trains
 three shared tiny generic policies, fans out identity/capacity assertions, and
 checks reward-driven production PPO plus checkpoint reload. Its credential-free
 CPU runner and failure reports are separate from full-game strength evidence.
+
+Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
+`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
+owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
+experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
+The regime’s search-supervised fitting and evaluation live in
+`training/supervised/search.py`; search-data generation remains in `sim`. The standalone exp-10 BC/value fitting loops and launcher are retired; replaying
+that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
+but old `ataraxos_move` recipes require pinned source rather than runtime aliases.
+
+
+### Training and simulation ownership
+
+Dependencies flow from training to simulation. Simulation does not import
+training, experiment scheduling or reports, even when loading a frozen model.
+The package-boundary tests import every simulation module and play a checkpoint
+with those packages blocked.
+
+- `model/`: network construction/inference and portable checkpoint admission.
+  `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
+  their serialized historical keys remain unchanged.
+- `sim/`: frozen players, search, batched games and search-target generation.
+  `sim.data` owns shard formats/loading; `sim.datagen` generates examples.
+- `training/`: regime execution, seat-routed collection, learning rules,
+  supervised/belief fitting, numerical health and optimizer/collector recovery.
+  `regime.py` declares recipes; `records.py` holds measured run records.
+  `execution.py` sequences stages and owns the run lifecycle.
+- `training/rollout/`: on-policy collection, stream producers, matchups and
+  complete-game accounting. Compound collection and replay live here.
+- `training/learning/`: Learner, optimization rules, per-seat returns, sample
+  selection and numerical health. Compound credit and parameter updates live here.
+- `training/supervised/`: search and belief fitting, whole-game validation
+  partitions and target transforms.
+- `training/state/`: policy admission, exact learning snapshots, recovery and
+  retained game-failure state.
+- `recipes/`: packaged local/baseline/belief recipes and composition helpers.
+- `experiment/`: authored comparisons, local scheduling, Etude job adapters,
+  checkpoint evaluation scheduling and artifact publication.
+- `arena/`: game authority, replay, checkpoint monitoring and comparisons.
+- `reports/`: retained-run projections, dashboards, report templates and
+  historical evidence readers.
+- `infra/`: runtime context, shared file operations and provenance identities.
+
+A policy checkpoint can be loaded for play without a trainer. Resuming a run
+also requires the admitted optimizer/collector/RNG snapshot and durable failure
+ledger. Moving files changes source identity; it does not admit an old run under
+new source or alter its frozen world, protocol or cost limits.
+
+Reports use `reports.records.RetainedRun` to read recorded stage parameters as
+JSON without translating historical learning tags or adding current execution
+defaults. `TrainingRun` admits the current executable recipe; both share measured
+run fields through `RunRecord`. Reading or publishing a historical result does
+not admit its recipe for a new run or recovery.
