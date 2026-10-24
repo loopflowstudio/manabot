@@ -19,11 +19,11 @@ from manabot.belief.population import (
     capture_materialized_world_supervision,
     pack_belief_examples,
     split_belief_population,
+    train_bounded_population,
 )
 from manabot.belief.range import BeliefError
 from manabot.belief.state import ViewerHistory, ViewerHistoryEvent
 from manabot.recipes.belief import run_demo
-from manabot.training.supervised.population import train_bounded_population
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 

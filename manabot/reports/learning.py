@@ -323,12 +323,8 @@ def learning_story(evidence: "ReportEvidence", docs: str) -> str:
         metrics = evidence.metrics(run)
         latest = metrics[-1] if metrics else {}
         updates = latest.get("progress/updates")
-        target = sum(
-            getattr(s, "updates", getattr(s, "epochs", 0)) for s in run.regime.stages
-        )
+        target = sum(getattr(s, "updates", 0) for s in run.regime.stages)
         target_label = f"{target:,}" if target else "unavailable"
-        if any(s.operation == "train_supervised" for s in run.regime.stages):
-            target_label += " (includes epochs)"
         active_target = sum(
             getattr(s, "active_seconds", None) or 0 for s in run.regime.stages
         )
@@ -353,18 +349,10 @@ def learning_story(evidence: "ReportEvidence", docs: str) -> str:
             if last and isinstance(updates, (int, float))
             else "unavailable"
         )
-        loss_key = next(
-            (k for k in ("rl/loss", "distillation/train_cross_entropy") if k in latest),
-            None,
-        )
-        if loss_key:
-            semantics = (
-                "RL minibatch objective (not log loss)"
-                if loss_key == "rl/loss"
-                else "teacher cross-entropy (nats)"
-            )
+        if "rl/loss" in latest:
             losses.append(
-                f"{evidence.label(run.id)}: {semantics} {_number(latest[loss_key])}"
+                f"{evidence.label(run.id)}: RL minibatch objective (not log loss) "
+                f"{_number(latest['rl/loss'])}"
             )
         else:
             losses.append(f"{evidence.label(run.id)}: latest loss unavailable")

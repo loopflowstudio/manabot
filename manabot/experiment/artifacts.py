@@ -51,10 +51,6 @@ def retained_artifacts(run: ReportRun) -> dict[str, LocalArtifact]:
             result[role] = LocalArtifact.model_validate(item.artifact)
     if run.recovery_artifact is not None:
         result["recovery"] = LocalArtifact.model_validate(run.recovery_artifact)
-    if run.fixed_validation is not None:
-        result["fixed-validation"] = LocalArtifact.model_validate(
-            run.fixed_validation.artifact
-        )
     return result
 
 

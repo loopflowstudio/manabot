@@ -55,7 +55,7 @@ def test_current_checkpoint_is_admissible_with_its_identity(tmp_path: Path) -> N
     assert summary.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
     assert summary.model == "width 8, 1 attention layer × 2 heads"
     assert summary.parameters > 0
-    assert summary.producer == "supervised distillation"
+    assert summary.producer == "unknown"
     assert summary.label == "run/step_0"
     assert len(summary.setups) == 2
 

@@ -382,7 +382,6 @@ class CheckpointQueue:
                 run=run.model_copy(
                     update={
                         "monitoring_checkpoints": [],
-                        "fixed_validation": None,
                     }
                 ),
                 checkpoint=local_checkpoint,

@@ -71,8 +71,7 @@ not wall-clock time since export. Missing time coordinates are unavailable.
 
 Progress is shown separately for each variant and independent training seed.
 Updates are collect/update iterations, including empty-filter skips; planned
-updates come from declared stages. Supervised epoch counters are labeled as
-such; an active-time recipe labels its update safety ceiling separately from
+updates come from declared stages. An active-time recipe labels its update safety ceiling separately from
 the active-hour target. Learner transitions, native decisions and
 optimizer exposures count different work. SPS explicitly means cumulative
 learner transitions divided by recorded training seconds at the latest diagnostic.
@@ -82,8 +81,7 @@ is uncorrected. There is no uncertainty interval for these process measurements.
 RL loss is the latest retained optimized minibatch objective, with policy/value
 and regularization semantics defined by the recipe. It is not predictive log
 loss, is not necessarily comparable across recipes, and can be absent on an
-empty-filter update. Distillation cross-entropy is labeled as such. Do not infer
-strength from either loss. Latest rows without a loss remain unavailable rather
+empty-filter update. Do not infer strength from the loss. Latest rows without a loss remain unavailable rather
 than carrying a stale optimized value forward without a label.
 
 Deeper example in a notebook cell (figures go into the HTML `sections` list):
@@ -229,7 +227,7 @@ reverse KL in this recipe. The unregularized surrogate was not saved separately;
 the report does not subtract guessed penalties. The KL panels show unweighted
 nats. Scalar value loss is MSE against lambda targets; categorical value loss is
 cross-entropy against outcome-distribution lambda targets. Neither is an independent
-terminal-outcome test. PPO and distillation retain their own objective semantics.
+terminal-outcome test.
 
 `rows` and `retained` cover the collection batch, unlike the last-minibatch losses.
 The report totals these only where both are present, names the record count, and
