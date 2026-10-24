@@ -119,3 +119,6 @@ the remaining MTG-183 work:
 - **Report data** via `manabot.data publish` (now R2).
 - Open question for Jack: which heuristic anchors the curve (v1 frozen in the
   protocol vs v2 from 639ab7770). Quick 10/cell grid of u2200 vs v2 is running.
+- **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`)
+  anchors MTG-183's heuristic curve and the rating. Record in the protocol
+  amendment before any result; v1 scores (MTG-181, ladder) are not comparable.
