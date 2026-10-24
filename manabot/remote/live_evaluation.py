@@ -94,7 +94,15 @@ def report(directory: Path, ledger: Ledger) -> None:
     )
     score_rows: list[str] = []
     for curve in summaries:
-        for point in curve.points:
+        for point in sorted(
+            curve.points,
+            key=lambda point: (
+                ledger.attempts[point.checkpoint].updates
+                if point.checkpoint in ledger.attempts
+                else float("inf"),
+                point.checkpoint,
+            ),
+        ):
             attempt = ledger.attempts.get(point.checkpoint)
             interval = point.interval
             bounds = (

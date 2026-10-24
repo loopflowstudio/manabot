@@ -224,16 +224,23 @@ def update_damped_iteration(
     EMA remains owned by execute_regime and advances once even on an empty
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
     Scalar value is an explicit MSE ablation; categorical uses equation (5).
+
+    Timed phases end where the code already reads device values (the behavior
+    checks, target and diagnostic floats, the objective and gradient checks).
     """
     device = learner.device
-    observations = observation_tensors(batch.obs, device)
-    actions = torch.as_tensor(batch.actions, device=device)
-    behavior = torch.as_tensor(batch.probabilities, device=device)
-    old_logs = torch.as_tensor(batch.logprobs, device=device)
-    behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
-    valid = legal_mask(observations["actions_valid"])
-    check_behavior(behavior_logs, behavior, actions, old_logs, valid)
-    targets = _targets(learner, batch, learning, bootstrap_agent)
+    track = learner.profiler.track
+    with track("Batch transfer and behavior checks"):
+        observations = observation_tensors(batch.obs, device)
+        actions = torch.as_tensor(batch.actions, device=device)
+        behavior = torch.as_tensor(batch.probabilities, device=device)
+        old_logs = torch.as_tensor(batch.logprobs, device=device)
+        behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
+        valid = legal_mask(observations["actions_valid"])
+        check_behavior(behavior_logs, behavior, actions, old_logs, valid)
+    with track("Targets"):
+        targets = _targets(learner, batch, learning, bootstrap_agent)
+        advantage_abs_mean = float(targets.advantages.abs().mean())
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
@@ -246,44 +253,47 @@ def update_damped_iteration(
         "tau": tau,
         "schedule_clock": "collection-update-iteration",
         "reference": learning.reference,
-        "advantage_abs_mean": float(targets.advantages.abs().mean()),
+        "advantage_abs_mean": advantage_abs_mean,
         "bootstrapped_tail_fraction": float(
             (~torch.as_tensor(batch.dones[-1])).float().mean()
         ),
     }
-    health = batch_health(
-        behavior_logs,
-        behavior,
-        valid,
-        targets.advantages,
-        targets.selected,
-        actor_only=learning.filter_scope == "actor",
-    )
-    diagnostics["numerical"] = health
-    observer = OptimizerHealth(learner.agent, learner.optimizer, health, iteration)
-    expected_targets = (
-        targets.values[..., 2] - targets.values[..., 0]
-        if learner.agent.config.value_kind == "categorical_wdl"
-        else targets.values
-    )
-    chosen_types = (
-        observations["actions"]
-        .gather(
-            2,
-            actions[..., None, None].expand(
-                *actions.shape, 1, observations["actions"].shape[-1]
-            ),
+    with track("Selection and health diagnostics"):
+        health = batch_health(
+            behavior_logs,
+            behavior,
+            valid,
+            targets.advantages,
+            targets.selected,
+            actor_only=learning.filter_scope == "actor",
         )
-        .squeeze(2)[..., :ACTION_TYPE_DIM]
-        .argmax(-1)
-    )
-    diagnostics["selection_groups"] = selection_diagnostics(
-        targets.advantages,
-        expected_targets - torch.as_tensor(batch.values, device=device),
-        targets.selected,
-        torch.as_tensor(batch.dones, device=device),
-        chosen_types,
-    )
+        diagnostics["numerical"] = health
+        observer = OptimizerHealth(
+            learner.agent, learner.optimizer, health, iteration, learner.profiler
+        )
+        expected_targets = (
+            targets.values[..., 2] - targets.values[..., 0]
+            if learner.agent.config.value_kind == "categorical_wdl"
+            else targets.values
+        )
+        chosen_types = (
+            observations["actions"]
+            .gather(
+                2,
+                actions[..., None, None].expand(
+                    *actions.shape, 1, observations["actions"].shape[-1]
+                ),
+            )
+            .squeeze(2)[..., :ACTION_TYPE_DIM]
+            .argmax(-1)
+        )
+        diagnostics["selection_groups"] = selection_diagnostics(
+            targets.advantages,
+            expected_targets - torch.as_tensor(batch.values, device=device),
+            targets.selected,
+            torch.as_tensor(batch.dones, device=device),
+            chosen_types,
+        )
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0
     for group in learner.optimizer.param_groups:
@@ -306,96 +316,116 @@ def update_damped_iteration(
         diagnostics["skipped"] = "empty advantage filter"
         health["skipped_steps"] = (actions.numel() + width - 1) // width
         return diagnostics
-    for start in range(0, actions.numel(), width):
-        actor_selected = targets.selected[start : start + width]
-        selected = (
-            actor_selected
-            if learning.filter_scope == "actor_critic"
-            else torch.ones_like(actor_selected)
-        )
-        if not selected.any():
-            health["skipped_steps"] += 1
-            continue
-        indexes = torch.arange(start, start + len(selected), device=device)[selected]
-        obs = {key: value[indexes] for key, value in observations.items()}
-        logits, value_logits = learner.agent.forward_distribution(obs)
-        reference = reference_distribution(obs, learning.reference)
-        policy_loss = damped_policy_loss(
-            logits,
-            actions[indexes],
-            targets.advantages[indexes],
-            behavior_logs[indexes],
-            reference,
-            valid[indexes],
-            clip=learning.clip,
-            collection_kl=learning.collection_kl,
-            tau=tau,
-        )
-        actor_mask = actor_selected[selected]
-        policy_loss = selected_mean(policy_loss, actor_mask)
-        if learner.agent.config.value_kind == "categorical_wdl":
-            value_loss = (
-                -(targets.values[indexes] * value_logits.log_softmax(-1)).sum(-1).mean()
+    with track("Minibatches"):
+        for start in range(0, actions.numel(), width):
+            actor_selected = targets.selected[start : start + width]
+            selected = (
+                actor_selected
+                if learning.filter_scope == "actor_critic"
+                else torch.ones_like(actor_selected)
             )
-        else:
-            # Representation ablation, not the paper's outcome objective.
-            value_loss = (
-                (value_logits.squeeze(-1) - targets.values[indexes]).square().mean()
-            )
-        loss = policy_loss + value_loss
-        try:
-            norm = observer.step(loss, learning.max_grad_norm)
-        except NumericalError as error:
-            error.tensors.update(
-                {
-                    "logits": logits.detach(),
-                    "value_logits": value_logits.detach(),
-                    "valid": valid[indexes],
-                    "actions": actions[indexes],
-                    "behavior_logs": behavior_logs[indexes],
-                    "reference": reference,
-                    "advantages": targets.advantages[indexes],
-                    "value_targets": targets.values[indexes],
-                    "actor_selected": actor_mask,
-                    "minibatch_indexes": indexes,
-                    **{
-                        f"minibatch_observation/{key}": value
-                        for key, value in obs.items()
-                    },
-                }
-            )
-            raise
-        diagnostics["optimizer_exposures"] += int(selected.sum())
-        diagnostics["actor_exposures"] += int(actor_mask.sum())
-        diagnostics["critic_exposures"] += int(selected.sum())
-        with torch.no_grad():
-            logs = policy_logs(logits, valid[indexes])
-            probabilities = logs.exp()
-            diagnostics["entropy"] = float(
-                -(probabilities * logs.masked_fill(~valid[indexes], 0)).sum(-1).mean()
-            )
-            diagnostics["collection_kl"] = float(
-                reverse_kl(logs, behavior_logs[indexes], valid[indexes]).mean()
-            )
-            diagnostics["reference_kl"] = float(
-                reverse_kl(
-                    logs,
-                    reference.masked_fill(~valid[indexes], 1).log(),
+            if not selected.any():
+                health["skipped_steps"] += 1
+                continue
+            with track("Forward and loss"):
+                indexes = torch.arange(start, start + len(selected), device=device)[
+                    selected
+                ]
+                obs = {key: value[indexes] for key, value in observations.items()}
+                logits, value_logits = learner.agent.forward_distribution(obs)
+                reference = reference_distribution(obs, learning.reference)
+                policy_loss = damped_policy_loss(
+                    logits,
+                    actions[indexes],
+                    targets.advantages[indexes],
+                    behavior_logs[indexes],
+                    reference,
                     valid[indexes],
-                ).mean()
-            )
-            ratio_logs = (
-                (logs - behavior_logs[indexes])
-                .gather(-1, actions[indexes, None])
-                .squeeze(-1)
-            )
-            health["clip_fraction"] = float(
-                ((ratio_logs.double().exp() - 1).abs() > learning.clip).float().mean()
-            )
-        diagnostics.update(
-            loss=float(loss.detach()),
-            value_loss=float(value_loss.detach()),
-            policy_loss=float(policy_loss.detach()),
-            gradient_norm=float(norm),
-        )
+                    clip=learning.clip,
+                    collection_kl=learning.collection_kl,
+                    tau=tau,
+                )
+                actor_mask = actor_selected[selected]
+                policy_loss = selected_mean(policy_loss, actor_mask)
+                if learner.agent.config.value_kind == "categorical_wdl":
+                    value_loss = (
+                        -(targets.values[indexes] * value_logits.log_softmax(-1))
+                        .sum(-1)
+                        .mean()
+                    )
+                else:
+                    # Representation ablation, not the paper's outcome objective.
+                    value_loss = (
+                        (value_logits.squeeze(-1) - targets.values[indexes])
+                        .square()
+                        .mean()
+                    )
+                loss = policy_loss + value_loss
+
+                def _failure_tensors() -> dict[str, torch.Tensor]:
+                    return {
+                        "logits": logits.detach(),
+                        "value_logits": value_logits.detach(),
+                        "valid": valid[indexes],
+                        "actions": actions[indexes],
+                        "behavior_logs": behavior_logs[indexes],
+                        "reference": reference,
+                        "advantages": targets.advantages[indexes],
+                        "value_targets": targets.values[indexes],
+                        "actor_selected": actor_mask,
+                        "minibatch_indexes": indexes,
+                        **{
+                            f"minibatch_observation/{key}": value
+                            for key, value in obs.items()
+                        },
+                    }
+
+                try:
+                    observer.check(loss)
+                except NumericalError as error:
+                    error.tensors.update(_failure_tensors())
+                    raise
+            try:
+                norm = observer.step(loss, learning.max_grad_norm, checked=True)
+            except NumericalError as error:
+                error.tensors.update(_failure_tensors())
+                raise
+            with track("Minibatch diagnostics"):
+                diagnostics["optimizer_exposures"] += int(selected.sum())
+                diagnostics["actor_exposures"] += int(actor_mask.sum())
+                diagnostics["critic_exposures"] += int(selected.sum())
+                with torch.no_grad():
+                    logs = policy_logs(logits, valid[indexes])
+                    probabilities = logs.exp()
+                    diagnostics["entropy"] = float(
+                        -(probabilities * logs.masked_fill(~valid[indexes], 0))
+                        .sum(-1)
+                        .mean()
+                    )
+                    diagnostics["collection_kl"] = float(
+                        reverse_kl(logs, behavior_logs[indexes], valid[indexes]).mean()
+                    )
+                    diagnostics["reference_kl"] = float(
+                        reverse_kl(
+                            logs,
+                            reference.masked_fill(~valid[indexes], 1).log(),
+                            valid[indexes],
+                        ).mean()
+                    )
+                    ratio_logs = (
+                        (logs - behavior_logs[indexes])
+                        .gather(-1, actions[indexes, None])
+                        .squeeze(-1)
+                    )
+                    health["clip_fraction"] = float(
+                        ((ratio_logs.double().exp() - 1).abs() > learning.clip)
+                        .float()
+                        .mean()
+                    )
+                diagnostics.update(
+                    loss=float(loss.detach()),
+                    value_loss=float(value_loss.detach()),
+                    policy_loss=float(policy_loss.detach()),
+                    gradient_norm=float(norm),
+                )
     return diagnostics
