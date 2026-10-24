@@ -30,7 +30,12 @@ class NumericalFailure(Strict):
 
 
 class PhaseTiming(Strict):
-    """Accumulated host wall seconds and calls; never device utilization."""
+    """Accumulated host wall seconds and calls; never device utilization.
+
+    Phase boundaries sit at points that already wait for the device, so a
+    phase includes the device work it queued. Nested phases sum to at most
+    their parent; the remainder is untimed work inside the parent.
+    """
 
     seconds: float = Field(ge=0, allow_inf_nan=False)
     calls: int = Field(ge=0)
@@ -64,6 +69,11 @@ class StageRecord(Strict):
         default=None, ge=0, exclude_if=lambda value: value is None
     )
     collection_timings: dict[str, PhaseTiming] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    # Learning subphases keyed like collection's ("Minibatches/Forward and
+    # loss"); None for records written before learning was timed.
+    learning_timings: dict[str, PhaseTiming] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     # Completed update iterations in this segment: self-play collect/update

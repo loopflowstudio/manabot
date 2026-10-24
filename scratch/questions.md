@@ -1,5 +1,34 @@
 # MTG-176 assumptions
 
+## MTG-180 kickoff — 2026-10-22
+
+- The empty kickoff seed selects the current MTG-180 brief and retained report
+  requirements. Scope is the draft design in `scratch/two-seat-report.md`, not
+  the inherited Elemental repair or a new experiment.
+- Proposed ownership: Etude supplies exact checkpoint/evaluation joins and
+  generic report interactions; Manabot supplies matchup, timing and experiment
+  composition. Jack Heart requested this boundary be decided together; no
+  acceptance of this specific split is recorded. Preserve draft status.
+- The installed SDK 0.2.0 has `train.report.pages/render/write` but lacks
+  `etude.reports`; local SDK source has the latter but still lacks the complete
+  required filter/overlay contract. An installable upstream capability is a
+  delivery prerequisite; no fallback renderer is selected.
+- Scaling protocol and source are readable as retained evidence, but a complete
+  scaling result snapshot is absent here. Design missing-result states and a
+  typed reader without changing or executing the existing follower.
+
+## Historical sync assumptions
+
+- Keep the branch's Elemental evaluation helpers at the merge-selected
+  `manabot/verify/learnability/` paths and update executable references. Preserve
+  frozen protocol and experiment evidence without rewriting historical paths.
+- Accept main's deletion of the seven unused Allies/Lessons study JSON files
+  that Git carried into `tests/fixtures/` as rename/delete conflicts. They have
+  no current consumers and are outside the Elemental payment repair.
+- Preserve main's default two-seat learning and historical schema-1 one-seat
+  recipes. Elemental exposure keys identify `learner-both` when both seats learn;
+  transition slots map back to their native stream before accounting.
+
 Inherited MTG-174 sync/research notes are retained at
 `95ca2059ea443351cabd4e8c322991c36c0d8212:scratch/questions.md`.
 They do not select current work or authorize paid execution.
