@@ -122,3 +122,8 @@ the remaining MTG-183 work:
 - **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`)
   anchors MTG-183's heuristic curve and the rating. Record in the protocol
   amendment before any result; v1 scores (MTG-181, ladder) are not comparable.
+- Side check, outside the protocol (2026-10-24 23:40 UTC): u2200 (w2, sha
+  2c48116f…) vs heuristic v2, first 10 games/cell of the frozen grid schedule,
+  1,000/1,000 valid: model 0.742 [0.714, 0.768]; seat 0 0.733, seat 1 0.751.
+  Hardest heuristic decks GR .54, WR .58, UR .59. Rows in the session scratchpad
+  (quick-grid-u2200-hv2); not results for the report.
