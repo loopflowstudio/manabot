@@ -28,7 +28,8 @@ def _write(directory: Path) -> None:
         heuristic_schedule_sha256="x",
         h2h_schedule_sha256="y",
         endpoint=endpoint,
-        cohort_phase="completed",
+        segments={"w3": "done: succeeded"},
+        settled=True,
         checkpoints={
             u: Checkpoint(
                 updates=u,

@@ -42,33 +42,45 @@ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSp
     Require digest and size before loading weights. Local SDK snapshots and S3
     destinations share the same admission; neither names nor tags select a model.
     """
-    reference = CheckpointRecord.model_validate_json(record_path.read_bytes()).artifact
+    record = CheckpointRecord.model_validate_json(record_path.read_bytes())
+    with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
+        return load_checkpoint(
+            str(fetch_etude_checkpoint(record, Path(directory) / "policy.pt"))
+        )
+
+
+def fetch_etude_checkpoint(record: CheckpointRecord, target: Path) -> Path:
+    """The verified local bytes of a recorded checkpoint; loads no weights.
+
+    A local file is verified in place and returned. An S3 object is downloaded to
+    `target` through the SDK's storage adapter and verified before it is renamed
+    there, so a partial download never becomes a cached policy.
+    """
+    reference = record.artifact
     if reference.sha256 is None or reference.size_bytes is None:
         raise ValueError("Etude checkpoint requires a digest and byte count")
     uri = urlsplit(reference.uri)
     if uri.scheme == "file" and uri.netloc in {"", "localhost"}:
         path = Path(unquote(uri.path))
         verify_file(path, reference.sha256, reference.size_bytes)
-        return load_checkpoint(str(path))
+        return path
     if uri.scheme != "s3" or uri.query or uri.fragment or not uri.netloc:
         raise ValueError("Etude checkpoint must name a local file or S3 object")
-    # The SDK's storage adapter owns remote access. Verification happens before
-    # torch admission, and a partial download never becomes a cached policy.
     storage = storage_from_uri(f"s3://{uri.netloc}")
     key = uri.path.lstrip("/")
-    with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
-        path = Path(directory) / "policy.pt"
-        with path.open("wb") as target:
-            offset = 0
-            while offset < reference.size_bytes:
-                length = min(8 * 1024 * 1024, reference.size_bytes - offset)
-                block = storage.get_range(key, offset, length)
-                if len(block) != length:
-                    raise ValueError("incomplete Etude checkpoint download")
-                target.write(block)
-                offset += length
-        verify_file(path, reference.sha256, reference.size_bytes)
-        return load_checkpoint(str(path))
+    partial = target.with_name(target.name + ".partial")
+    with partial.open("wb") as file:
+        offset = 0
+        while offset < reference.size_bytes:
+            length = min(8 * 1024 * 1024, reference.size_bytes - offset)
+            block = storage.get_range(key, offset, length)
+            if len(block) != length:
+                raise ValueError("incomplete Etude checkpoint download")
+            file.write(block)
+            offset += length
+    verify_file(partial, reference.sha256, reference.size_bytes)
+    partial.replace(target)
+    return target
 
 
 @overload

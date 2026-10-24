@@ -1,31 +1,36 @@
-"""Evaluate MTG-183's rated checkpoints on local CPU while the cohort trains.
+"""Evaluate MTG-183's rated checkpoints on local CPU while the seed trains.
 
-The follower reads each window's committed generation through
-`manabot.verify.learnability.elemental_remote.observe` (verified manifests and
-digest-checked fetches) and admits the rated checkpoints of
-`experiments.elemental_long.rated_updates`. It then plays two kinds of
-evaluation unit, oldest newer-checkpoint first:
+Windows w1 and w2 trained under the retired cohort controller; the follower
+that watched them admitted their exports into `<directory>/ledger.json`, and
+those entries are kept as they are. Later segments are Etude runs
+(`experiments.elemental_long.segment_job`): the follower reads each run's
+tracked checkpoint records from Etude storage, fetches digest-checked bytes
+and admits the rated checkpoints of `experiments.elemental_long.rated_updates`.
+It then plays two kinds of evaluation unit, oldest newer-checkpoint first:
 
 - `heuristic`: a checkpoint's 10×10 grid against the heuristic
   (`experiments.elemental_grid`, full or declared 10-game subset);
 - `pair`: a newer checkpoint against an older one on the 10×10 deck grid
   (`h2h_schedule`), from `pair_design`.
 
-The endpoint (the last window's final update) is admitted only once the cohort
-state is settled; its pairs follow. Group results under `<directory>/units/`
+The endpoint (the last segment's final update) is admitted only once every
+named Etude run is done; its pairs follow. Group results under `<directory>/units/`
 are the durable authority: a completed group is reused after a restart, a
 failed group counts its games as invalid and is never replayed. The follower
 never rents, cancels or changes training, and waits while MTG-181's follower
 is still evaluating on this machine.
 
     uv run --extra artifacts python -m experiments.elemental_long_follow \
-        --directory .runs/mtg183/follow --until <unix-seconds>
+        --directory .runs/mtg183/follow --until <unix-seconds> \
+        --etude-source <tracking storage URI> --segment <etude run> ...
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 import fcntl
 import json
 import os
@@ -35,6 +40,8 @@ import sys
 import time
 from typing import Literal
 
+from etude.launch.records import Status
+from etude.train.records import CheckpointRecord
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import (
@@ -50,10 +57,9 @@ from experiments.elemental_grid import (
     schedule_sha256,
 )
 from experiments.elemental_long import (
-    COHORT,
     H2H_SCHEDULE_SHA256,
-    JOBS,
     SEED,
+    STAGE,
     H2HGame,
     h2h_schedule,
     h2h_schedule_sha256,
@@ -62,9 +68,7 @@ from experiments.elemental_long import (
     rated_updates,
 )
 from manabot.infra.files import atomic_json
-from manabot.remote.cohort import DEFAULT_COHORTS, CohortState
-from manabot.remote.job_store import S3JobStore
-from manabot.verify.learnability.elemental_remote import observe
+from manabot.model.checkpoint import fetch_etude_checkpoint
 
 ROOT = Path(__file__).resolve().parents[1]
 # MTG-181's local follower; this one yields the CPU until it exits.
@@ -103,8 +107,9 @@ class Ledger(BaseModel):
     h2h_schedule_sha256: str
     checkpoints: dict[int, Checkpoint] = {}
     units: dict[str, Unit] = {}
-    cohort_phase: str | None = None
-    cohort_settled: bool = False
+    # Etude run -> its last observed status, e.g. "running" or "done: succeeded".
+    segments: dict[str, str] = {}
+    settled: bool = False
     endpoint: int | None = None
     error: str | None = None
     observed_at: float = 0.0
@@ -377,38 +382,67 @@ def collect_pair(directory: Path) -> list[H2HRow]:
 # Admission
 
 
-def _cohort_state() -> CohortState | None:
-    raw = S3JobStore(f"{DEFAULT_COHORTS}/{COHORT}").read("state.json")
-    return None if raw is None else CohortState.model_validate_json(raw.data)
+@dataclass(frozen=True)
+class Etude:
+    """Where the follower reads segment runs and asks whether they are done."""
+
+    source: str
+    runs: tuple[str, ...]
+    checkpoints: Callable[[str], list[CheckpointRecord]]
+    status: Callable[[str], Status]
 
 
-def _admit(directory: Path, ledger: Ledger) -> None:
-    """Record every window's exports and the cohort's settlement."""
+def etude(source: str, runs: tuple[str, ...]) -> Etude:
+    from etude.launch.client import status
+    from etude.train.read import read
+
+    return Etude(
+        source=source,
+        runs=runs,
+        checkpoints=lambda run: list(read(source, STAGE, run).checkpoints),
+        status=status,
+    )
+
+
+def _admit(directory: Path, ledger: Ledger, segments: Etude) -> None:
+    """Record every segment's tracked exports and whether all have ended.
+
+    Any terminal Etude state settles a segment: one that stops short of its
+    target still ends the seed at its last tracked export, and its outcome
+    stays in `ledger.segments` for the report.
+    """
     errors = []
-    for job in JOBS:
+    for run in segments.runs:
         try:
-            observation = observe(job, directory / "cache" / job)
-        except Exception as error:  # a window not yet admitted has no job intent
-            errors.append(f"{job}: {type(error).__name__}")
+            found = segments.status(run)
+            ledger.segments[run] = str(found).split(",")[0]
+            records = segments.checkpoints(run)
+        except Exception as error:
+            errors.append(f"{run}: {type(error).__name__}")
             continue
-        run = observation.get("run")
-        for found in observation["checkpoints"]:  # type: ignore[union-attr]
-            updates = int(found["coordinates"]["updates"])
-            # A continuation's initial export repeats its predecessor's endpoint.
-            if updates not in ledger.checkpoints and run is not None:
-                ledger.checkpoints[updates] = Checkpoint(
-                    updates=updates,
-                    job=job,
-                    training_run=run["id"],  # type: ignore[index]
-                    path=found["path"],
-                    sha256=found["sha256"],
-                    coordinates=found["coordinates"],
-                )
-    state = _cohort_state()
-    if state is not None:
-        ledger.cohort_phase = state.phase
-        ledger.cohort_settled = state.settled
-    if ledger.cohort_settled and ledger.checkpoints and ledger.endpoint is None:
+        for record in records:
+            updates = int(record.at["updates"])
+            # A segment's initial export repeats its parent's endpoint.
+            if updates in ledger.checkpoints:
+                continue
+            cache = directory / "cache" / run
+            cache.mkdir(parents=True, exist_ok=True)
+            path = fetch_etude_checkpoint(record, cache / f"{updates:06d}.pt")
+            assert record.artifact.sha256 is not None
+            ledger.checkpoints[updates] = Checkpoint(
+                updates=updates,
+                job=run,
+                training_run=run,
+                path=str(path),
+                sha256=record.artifact.sha256,
+                coordinates=dict(record.at),
+            )
+    ledger.settled = (
+        not errors
+        and len(ledger.segments) == len(segments.runs)
+        and all(phase.startswith("done") for phase in ledger.segments.values())
+    )
+    if ledger.settled and ledger.checkpoints and ledger.endpoint is None:
         ledger.endpoint = max(ledger.checkpoints)
     ledger.error = "; ".join(errors) or None
     latest = max(ledger.checkpoints, default=0)
@@ -459,7 +493,7 @@ def _evaluate(unit: Unit, directory: Path, ledger: Ledger, path: Path) -> None:
     atomic_json(path, ledger.model_dump(mode="json"))
 
 
-def follow(directory: Path, until: float) -> None:
+def follow(directory: Path, until: float, segments: Etude) -> None:
     if schedule_sha256() != SCHEDULE_SHA256 or h2h_schedule_sha256() != (
         H2H_SCHEDULE_SHA256
     ):
@@ -481,7 +515,7 @@ def follow(directory: Path, until: float) -> None:
             if time.time() - polled > 600:
                 polled = time.time()
                 try:
-                    _admit(directory, ledger)
+                    _admit(directory, ledger, segments)
                 except Exception as error:
                     ledger.error = f"admission: {type(error).__name__}: {error}"
                 ledger.observed_at = time.time()
@@ -507,8 +541,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--until", type=float, required=True)
+    parser.add_argument("--etude-source", required=True)
+    parser.add_argument("--segment", action="append", required=True)
     args = parser.parse_args()
-    follow(args.directory.resolve(), args.until)
+    follow(
+        args.directory.resolve(),
+        args.until,
+        etude(args.etude_source, tuple(args.segment)),
+    )
 
 
 if __name__ == "__main__":
