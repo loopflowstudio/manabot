@@ -29,6 +29,7 @@ from manabot.training.state.game_errors import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from tests.training.test_recovery import tracked_updates
 
 PACK = "elemental-world-v2"
 
@@ -233,10 +234,19 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     result = run.stages[0]
     assert result.learner_transitions == 4 * 64 * 2
     assert result.optimizer_exposures > 0
-    assert len(result.diagnostics) == 2
-    exposure = result.diagnostics[-1]["cumulative_matchup_exposure"]
-    assert sum(c["learner_transitions"] for c in exposure.values()) == 512
-    assert sum(c["terminal_games"] for c in exposure.values()) == result.games
+    assert result.updates == 2
+    last = tracked_updates(run, tmp_path)[-1]
+
+    def exposure(count: str) -> int:
+        prefix = "cumulative_matchup_exposure/"
+        return sum(
+            int(value)
+            for name, value in last.items()
+            if name.startswith(prefix) and name.endswith(f"/{count}")
+        )
+
+    assert exposure("learner_transitions") == 512
+    assert exposure("terminal_games") == result.games
     raw, _ = load_checkpoint(result.artifacts["raw"]["path"])
     ema, _ = load_checkpoint(result.artifacts["ema"]["path"])
     initial, _ = load_checkpoint(result.artifacts["initial_raw"]["path"])

@@ -26,8 +26,7 @@ from manabot.training.regime import (
 from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
-from tests.remote.test_job_spec import job_spec
-from tests.training.test_allocation import AllocationClock
+from tests.training.test_recovery import tracked_updates
 
 
 def reference(path: Path) -> ArtifactReference:
@@ -161,8 +160,9 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         == producer.stages[0].learner_transitions
     )
     assert second.updates_through() == 4 and third.updates_through() == 5
-    assert [d["iteration"] for d in second.stages[0].diagnostics] == [3, 4]
-    assert [d["iteration"] for d in third.stages[0].diagnostics] == [5]
+    rows = {run.id: tracked_updates(run, tmp_path) for run in (second, third)}
+    assert [d["iteration"] for d in rows[second.id]] == [3, 4]
+    assert [d["iteration"] for d in rows[third.id]] == [5]
     for child, parent in ((second, producer), (third, second)):
         record = child.stages[0]
         origin = record.learning_state_origin
@@ -176,13 +176,10 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
             "learner_transitions",
             "optimizer_exposures",
         ):
-            assert record.diagnostics[-1]["coordinates"][name] == getattr(
+            assert rows[child.id][-1][f"coordinates/{name}"] == getattr(
                 origin, name
             ) + getattr(record, name)
-        assert (
-            record.diagnostics[0]["tau"]
-            == stage.learning.rates(origin.iteration + 1)[1]
-        )
+        assert rows[child.id][0]["tau"] == stage.learning.rates(origin.iteration + 1)[1]
         assert (
             child.prior_seconds == 0
         )  # inherited cost is separate, not allowance consumption
@@ -237,7 +234,7 @@ def test_rejects_incomplete_or_mismatched_learning_state(
     failed = TrainingRun.model_validate_json(
         (tmp_path / "rejected/run.json").read_text()
     )
-    assert failed.status == "failed" and not failed.stages[0].diagnostics
+    assert failed.status == "failed" and not failed.stages[0].updates
     assert failed.stages[0].inputs["learning_state/source_run"] == spec.source_run
 
 
@@ -251,7 +248,7 @@ def test_historical_wire_digest_and_next_iteration(
     payload["regime"]["observation"]["policy_history_version"] = 0
     payload["regime_digest"] = canonical_sha256(payload["regime"])
     # A synthetic coordinate fixture, not a claim that this test trained 26k updates.
-    payload["stages"][0]["diagnostics"] = [{"iteration": i} for i in range(1, 26001)]
+    payload["stages"][0]["updates"] = 26000
     for role in ("raw", "ema"):
         path = Path(producer.stages[0].artifacts[role]["path"])
         weights = torch.load(path, weights_only=False)
@@ -275,47 +272,3 @@ def test_historical_wire_digest_and_next_iteration(
     assert (
         Path(state.artifacts["parent_run"]["path"]).read_bytes() == export.read_bytes()
     )
-
-
-def test_allocation_pause_exports_next_portable_segment(
-    tmp_path: Path,
-    producer: TrainingRun,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    clock = AllocationClock()
-    allocation = job_spec().admit(clock.time())
-    export = execution.export_training_run
-
-    def pause_after_update(
-        run_id: str,
-        owner: VerifyStore,
-        out: str | Path,
-    ) -> TrainingRun:
-        run = export(run_id, owner, out)
-        if run.status == "running" and run.stages and run.stages[0].diagnostics:
-            clock.now = allocation.pause_at
-        return run
-
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        with monkeypatch.context() as patch:
-            patch.setattr(execution, "time", clock)
-            patch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0.0)
-            patch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
-            patch.setattr(execution, "export_training_run", pause_after_update)
-            paused = execution.execute_regime(
-                continuation(producer, tmp_path / "producer/run.json", 4),
-                197,
-                tmp_path / "paused",
-                store,
-                allocation=allocation,
-            )
-        assert paused.status == "paused" and paused.updates_through() == 3
-        assert paused.recovery_artifact is None
-        continued = execution.execute_regime(
-            continuation(paused, tmp_path / "paused/run.json", 4),
-            197,
-            tmp_path / "continued",
-            store,
-        )
-    assert continued.status == "completed" and continued.updates_through() == 4
-    assert [d["iteration"] for d in continued.stages[0].diagnostics] == [4]

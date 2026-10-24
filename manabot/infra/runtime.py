@@ -14,7 +14,7 @@ import random
 from types import TracebackType
 from typing import Literal, Self
 
-from etude.run.records import ArtifactRef
+from etude.run.records import ArtifactRef, RunFile
 from etude.train.records import Step
 from etude.train.run import Run, track
 import numpy as np
@@ -40,8 +40,10 @@ def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
 class RunContext:
     """Seed the learner and record locally or into an Etude-launched run.
 
-    A standalone invocation writes below runs_dir; under the SDK launcher its
-    run identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR.
+    A standalone invocation writes below runs_dir, or continues the existing
+    run folder `resume` (a recovery attempt resumes its parent's metrics and
+    seals rows the parent left unsealed). Under the SDK launcher the run
+    identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR.
     SDK admission failures are not silently converted to untracked training.
     """
 
@@ -49,6 +51,8 @@ class RunContext:
         self,
         config: RuntimeConfig,
         *,
+        run: str | None = None,
+        resume: Path | None = None,
         resolved_config: Mapping[str, object] | None = None,
     ) -> None:
         self.device = config.device
@@ -58,7 +62,15 @@ class RunContext:
         manabot.infra.log.setGlobalLogLevel(level)
         seed_random(config.seed, torch_deterministic=config.torch_deterministic)
         self.run: Run = track(
-            experiment=config.name,
+            # A resumed run keeps the experiment it was declared under, which
+            # names the stage that started it, not necessarily this one.
+            experiment=RunFile.model_validate_json(
+                (resume / "run.json").read_bytes()
+            ).experiment
+            if resume
+            else config.name,
+            # The launcher's identity wins; it owns continuation of its runs.
+            run=os.environ.get("ETUDE_RUN") or (resume.name if resume else run),
             clocks=[
                 Step("learner_transitions", "collected learner transitions"),
                 Step("updates", "completed collect/update iterations"),
@@ -72,6 +84,8 @@ class RunContext:
             },
             directory=None
             if os.environ.get("ETUDE_TRACK_DIR")
+            else resume.parent
+            if resume
             else self.runs_dir / "etude",
             strict=True,
         )

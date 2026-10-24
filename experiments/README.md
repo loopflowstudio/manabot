@@ -10,7 +10,7 @@ instruments.
 
 | module | recipes (`--regime-name`) | runs and reports |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / `manabot deploy` |
+| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/remote-training.md) |
 | [gpu_training_profile](gpu_training_profile.py) | `gpu_training_profile` ([training time](training-time.md)) | `manabot train` |
 | [ataraxos_mini](ataraxos_mini.py) | `ataraxos_mini`, `:mirror_screen_baseline`, `:sustained_baseline_source` | `manabot train` |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
@@ -36,14 +36,14 @@ uv run --extra artifacts python -m manabot.data publish experiments/data/<new-ru
 
 `data/` is not in git. [`data.manifest.json`](data.manifest.json) records each
 file's path, sha256 and size; the bytes live once per digest at
-`s3://etudefantasia/manabot/sha256/<sha256>` and need the team's AWS
-credentials. `fetch` restores files to their original paths, verifies every
+`r2://manabot/sha256/<sha256>` and need the team's R2
+credentials (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, in Doppler `manabot/prd`). `fetch` restores files to their original paths, verifies every
 digest, skips files already present and refuses to overwrite a file whose bytes
-differ. Runs still write results under `data/`; `publish` uploads them (S3
+differ. Runs still write results under `data/`; `publish` uploads them (storage
 checks each SHA-256; nothing is read back) and updates the manifest, which you
 commit with the report. Every worktree on a machine shares one read-only cache,
 `$MANABOT_DATA_CACHE` (default `~/.cache/manabot/sha256/<sha256>`), filled by
-`publish` and by downloads, so a machine reads each digest from S3 at most once. Tests that read data are marked
+`publish` and by downloads, so a machine reads each digest from the store at most once. Tests that read data are marked
 `experiment_data(...)`: they fetch what they name, or skip with this command
 when the store is unreachable. Data committed before the manifest remains in git
 history.

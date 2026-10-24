@@ -11,6 +11,7 @@ from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -60,15 +61,17 @@ def test_real_collection_update_export_reload(
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(recipe, 601, tmp_path / "run", store)
     assert run.status == "completed"
+    updates = stage_rows(run, read_updates(tmp_path, [run]))
     for iteration, stage in enumerate(run.stages, 1):
-        assert stage.learner_transitions == sum(d["rows"] for d in stage.diagnostics)
+        rows = updates[stage.id]
+        assert stage.learner_transitions == sum(d["rows"] for d in rows)
         assert stage.learner_transitions >= 16
         assert stage.optimizer_exposures == stage.learner_transitions
         assert stage.collection_seconds > 0
         assert stage.learning_seconds > 0
         assert stage.export_seconds > 0
-        assert stage.diagnostics[0]["iteration"] == iteration
-        assert stage.diagnostics[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
+        assert rows[0]["iteration"] == iteration
+        assert rows[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
         for variant in ("raw", "ema"):
             loaded, _ = load_checkpoint(stage.artifacts[variant]["path"])
             assert loaded.config.value_kind == recipe.agent.value_kind

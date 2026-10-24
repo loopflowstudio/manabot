@@ -17,7 +17,7 @@ training loop, and who owns which truth. Experiment reports live in
 | [recent-events.md](recent-events.md) | Optional viewer-safe recent-event history as model input |
 | [training-calibration.md](training-calibration.md) | Measuring complete-loop training cost |
 | [training-recovery.md](training-recovery.md) | Recovering interrupted CPU self-play |
-| [remote-training.md](remote-training.md) / [remote-jobs.md](remote-jobs.md) | GPU training on RunPod, and jobs that survive a disconnected laptop |
+| [remote-training.md](remote-training.md) | GPU training on rented machines through Etude |
 | [training-monitoring.md](training-monitoring.md) | Dashboards, W&B, and S3 checkpoint storage |
 | [distributed-rl.md](distributed-rl.md) | Distributed RL research and CPU feasibility evidence |
 

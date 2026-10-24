@@ -36,7 +36,6 @@ from manabot.model.architecture import architecture_identity
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
-from manabot.remote.plan import Allocation
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.sim.data import load_shards
 from manabot.sim.datagen import generate_selfplay_shard
@@ -100,6 +99,7 @@ from manabot.training.supervised.search import (
     SearchSupervisedEpochStats,
     train_search_supervised,
 )
+from manabot.training.update_metrics import metric_row
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -226,7 +226,6 @@ def execute_regime(
     checkpoint_seconds: float | None = None,
     checkpoint_updates: int | tuple[int, ...] | None = None,
     initial_admission: Path | None = None,
-    allocation: Allocation | None = None,
     pause_path: Path | None = None,
     stop_path: Path | None = None,
 ) -> TrainingRun:
@@ -272,18 +271,6 @@ def execute_regime(
         )
     ):
         raise ValueError("step continuation cannot repeat initialization admission")
-    if allocation is not None:
-        if (
-            len(regime.stages) != 1
-            or not isinstance(regime.stages[0], TrainSelfPlay)
-            or regime.stages[0].active_seconds is not None
-            or regime.schedule_clock != "iteration_fraction"
-        ):
-            raise ValueError(
-                "allocation execution requires a step-target self-play regime"
-            )
-        if time.time() >= allocation.pause_at:
-            raise ValueError("allocation reserves exhausted before training admission")
     if pause_path is not None and not regime.recoverable:
         raise ValueError("safe pause requires complete-state recovery")
     destination = Path(out).resolve()
@@ -310,24 +297,17 @@ def execute_regime(
                 parent.monitoring_checkpoint_milestones,
             ):
                 raise ValueError("recovery checkpoint cadence differs from parent")
-            snapshot = load_update(parent, store)
+            snapshot = load_update(parent)
             admit_recovery_identities(
                 parent.identities,
                 _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
                 source_repair_reason,
             )
-            # Game-error recovery cannot renew its original allowance. Ordinary
-            # paused CPU runs retain explicit continuation under a new allocation.
-            if (
-                game_error_recovery
-                and parent.allocation_deadline is not None
-                and (
-                    allocation is None
-                    or allocation.deadline != parent.allocation_deadline
-                )
-            ):
+            # Game-error recovery cannot renew its original allowance, and nothing
+            # here can reproduce the rental deadline of a run that had one.
+            if game_error_recovery and parent.allocation_deadline is not None:
                 raise ValueError(
-                    "recovery must preserve the original allocation deadline"
+                    "recovery cannot preserve the original allocation deadline"
                 )
             settled = settle_orphan(parent)
             if settled != parent:
@@ -360,7 +340,6 @@ def execute_regime(
             pause_path=pause_path,
             stop_path=stop_path,
             initial_admission=initial_admission,
-            allocation=allocation,
         )
 
 
@@ -379,7 +358,6 @@ def _execute_regime(
     pause_path: Path | None = None,
     stop_path: Path | None = None,
     initial_admission: Path | None = None,
-    allocation: Allocation | None = None,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -422,7 +400,6 @@ def _execute_regime(
         monitoring_checkpoint_seconds=checkpoint_seconds,
         monitoring_checkpoint_updates=checkpoint_updates,
         monitoring_checkpoint_milestones=checkpoint_milestones,
-        allocation_deadline=allocation.deadline if allocation is not None else None,
         recovery_lock_path=str(out.with_name(out.name + ".writer.lock")),
         recovery_host=socket.gethostname(),
         last_recorded_wall_seconds=time.time(),
@@ -438,12 +415,13 @@ def _execute_regime(
         if parent is not None
         else 0,
         recovery_artifact=parent.recovery_artifact if parent is not None else None,
+        metrics_run=parent.metrics_run if parent is not None else None,
         stages=deepcopy(snapshot.completed_stages) if snapshot is not None else [],
     )
     if parent is not None and (checkpoint_updates is not None or checkpoint_milestones):
         assert snapshot is not None
         restored_updates = sum(
-            len(s.diagnostics) for s in (*snapshot.completed_stages, snapshot.record)
+            s.updates for s in (*snapshot.completed_stages, snapshot.record)
         )
         # Retain admitted exports from the committed prefix. Their artifact paths,
         # original costs and coordinates remain unchanged across process attempts.
@@ -534,7 +512,7 @@ def _execute_regime(
         return {
             "updates": run.updates_through(),
             **(
-                {"segment_updates": len(record.diagnostics)}
+                {"segment_updates": record.updates}
                 if isinstance(stage, TrainSelfPlay)
                 else {}
             ),
@@ -581,10 +559,7 @@ def _execute_regime(
             else time.perf_counter() - start - run.monitoring_export_seconds
         )
         point = coordinates()
-        if (
-            isinstance(stage, TrainSelfPlay)
-            and len(record.diagnostics) == stage.updates
-        ):
+        if isinstance(stage, TrainSelfPlay) and record.updates == stage.updates:
             return
         scheduled = point["updates"] in checkpoint_milestones and not any(
             c.updates == point["updates"] for c in run.monitoring_checkpoints
@@ -702,9 +677,8 @@ def _execute_regime(
                     snapshot = None
                     continue
             if isinstance(stage, TrainSelfPlay):
-                record.optimizer_updates = (
-                    record.observed_optimizer_updates() if snapshot is not None else 0
-                )
+                if snapshot is None:
+                    record.optimizer_updates = 0
                 if not restoring_completed:
                     record.admission_wait_seconds = 0.0
                     record.collection_timings = (
@@ -740,14 +714,8 @@ def _execute_regime(
                 if restoring_completed
                 else stage_start + stage.execution.wall_seconds - prior_stage_watchdog,
             )
-            if allocation is not None:
-                deadline = (
-                    time.perf_counter() + allocation.checkpoint_deadline - time.time()
-                )
             incident_learner = None
             batch = None
-            paused = False
-            collection_interrupted = False
             torch.set_num_threads(stage.execution.threads)
             cuda = stage.execution.device == "cuda"
             if cuda and not torch.cuda.is_available():
@@ -770,15 +738,9 @@ def _execute_regime(
                 charged = run.prior_watchdog_seconds + budget_now() - watchdog_start
                 if (
                     time.perf_counter() >= deadline
+                    or charged >= regime.wall_seconds
                     or (
-                        allocation is not None
-                        and time.time() >= allocation.checkpoint_deadline
-                    )
-                    or allocation is None
-                    and charged >= regime.wall_seconds
-                    or (
-                        allocation is None
-                        and regime.recoverable
+                        regime.recoverable
                         and not restoring_completed
                         and prior_stage_watchdog + budget_now() - stage_watchdog_start
                         >= stage.execution.wall_seconds
@@ -1008,6 +970,7 @@ def _execute_regime(
                         check=check,
                     )
                     record.learning_seconds += time.perf_counter() - tick
+                    record.updates += 1
                     record.optimizer_exposures += update.optimizer_exposures
                     stats.learning_seconds = record.learning_seconds
                     stats.optimizer_exposures += update.optimizer_exposures
@@ -1354,12 +1317,16 @@ def _execute_regime(
                             device=stage.execution.device,
                             log_level="WARNING",
                         ),
+                        run=run.id,
+                        # A recovery attempt continues its parent's metrics.
+                        resume=Path(run.metrics_run) if run.metrics_run else None,
                         resolved_config={
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
                         },
                     )
+                    run.metrics_run = str(experiment.run.files.root)
                     resources.callback(
                         lambda exp=experiment: exp.close(
                             "finished" if run.status == "completed" else "failed"
@@ -1410,7 +1377,7 @@ def _execute_regime(
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
                     iteration = snapshot.iteration
-                    first_update = len(snapshot.record.diagnostics)
+                    first_update = snapshot.record.updates
                     # Restored counts are committed scientific work; failed work
                     # remains in the parent attempt and its cost stays charged.
                     before = snapshot.collector_before
@@ -1456,11 +1423,6 @@ def _execute_regime(
                 snapshot = None
                 incident_learner = learner
                 for update_index in range(first_update, stage.updates):
-                    # Stop only at an exact collector/update boundary. The saved
-                    # snapshot includes Adam, EMA, RNGs and paused native streams.
-                    if allocation is not None and time.time() >= allocation.pause_at:
-                        paused = True
-                        break
                     if stage.active_seconds is not None and (
                         record.collection_seconds + record.learning_seconds
                         >= stage.active_seconds
@@ -1477,19 +1439,9 @@ def _execute_regime(
                         batch = collector.collect(
                             behavior_agent,
                             stage.transitions,
-                            deadline_monotonic=min(
-                                deadline,
-                                time.perf_counter() + allocation.pause_at - time.time(),
-                            )
-                            if allocation is not None
-                            else deadline,
+                            deadline_monotonic=deadline,
                             check=check if regime.recoverable else None,
                         )
-                    except TimeoutError:
-                        if allocation is None or time.time() < allocation.pause_at:
-                            raise
-                        paused = collection_interrupted = True
-                        break
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
@@ -1557,7 +1509,7 @@ def _execute_regime(
                         diagnostic["self_play_outcomes"] = (
                             collector.stats.self_play.drain()
                         )
-                    record.diagnostics.append(diagnostic)
+                    record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
                         record.optimizer_updates += diagnostic["numerical"][
@@ -1571,8 +1523,9 @@ def _execute_regime(
                         collector.stats.learner_transitions - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        diagnostic,
+                        metric_row(diagnostic),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
@@ -1664,6 +1617,7 @@ def _execute_regime(
                         (~np.isin(dataset["game_index"], list(validation))).sum()
                     )
                     row = asdict(stats)
+                    record.updates += 1
                     record.diagnostics.append(row)
                     row["coordinates"] = coordinates()
                     monitor_checkpoint(model)
@@ -1731,13 +1685,7 @@ def _execute_regime(
                     os.replace(temporary, target)
                     candidate = artifact(target)
                     try:
-                        if allocation is not None:
-                            # Admission constructs a model; pause exports must not
-                            # perturb the RNG resumed by the next allocation.
-                            with torch.random.fork_rng(devices=[0] if cuda else []):
-                                load_checkpoint(str(target))
-                        else:
-                            load_checkpoint(str(target))
+                        load_checkpoint(str(target))
                     except Exception:
                         record.rejected_artifacts[name] = candidate
                         raise
@@ -1760,7 +1708,7 @@ def _execute_regime(
             check()
             record.seconds = time.perf_counter() - stage_start
             record.cpu_seconds = time.process_time() - cpu_start
-            record.status = "paused" if paused else "completed"
+            record.status = "completed"
             # Freeze the admission cost; later persistence belongs to later outputs.
             record.cumulative_seconds = run.prior_seconds + time.perf_counter() - start
             record.watchdog_seconds = (
@@ -1768,8 +1716,7 @@ def _execute_regime(
             )
             if isinstance(stage, TrainSelfPlay):
                 try:
-                    if not collection_interrupted:
-                        checkpoint("paused" if paused else "completed")
+                    checkpoint("completed")
                 except BaseException:
                     record.status = "running"
                     raise
@@ -1782,11 +1729,6 @@ def _execute_regime(
                     run.prior_seconds + time.perf_counter() - start
                 )
             persist()
-            if paused:
-                run.status = "paused"
-                run.error = "Allocation ended before the update target; explicit recovery required"
-                persist()
-                return run
         completed_models = [
             item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
         ]
