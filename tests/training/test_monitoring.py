@@ -34,6 +34,7 @@ from manabot.training.supervised.search import (
     evaluate_search_supervised,
     train_search_supervised,
 )
+from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
@@ -57,9 +58,7 @@ def _recipe() -> TrainingRegime:
     return value
 
 
-def test_backfill_preserves_missing_coordinates_and_resumes_suffix(
-    tmp_path: Path,
-) -> None:
+def test_retained_rows_without_coordinates_stay_unavailable() -> None:
     run = TrainingRun(
         id="saved-fixture",
         regime=_recipe(),
@@ -69,19 +68,11 @@ def test_backfill_preserves_missing_coordinates_and_resumes_suffix(
         identities={},
         stages=[StageRecord(id="policy-0", diagnostics=[{"policy_loss": -0.4}])],
     )
-    dashboard = training_dashboard(run)
+    dashboard = training_dashboard(run, stage_rows(run, {}))
     assert dashboard.summary["history_incomplete"] is True
     assert "progress/training_seconds" not in dashboard.rows[0]
     assert dashboard.rows[0]["rl/policy_loss"] == -0.4
     assert dashboard.rows[0]["availability/rl/value_loss"] is False
-    monitoring.publish_dashboard(dashboard, tmp_path)
-    monitoring.publish_dashboard(dashboard, tmp_path)
-    assert len(_history(tmp_path, dashboard.run_id)) == 1
-    run.stages[0].diagnostics.append({"policy_loss": -0.3})
-    monitoring.publish_dashboard(training_dashboard(run), tmp_path)
-    assert len(_history(tmp_path, dashboard.run_id)) == 2
-    with pytest.raises(ValueError, match="published prefix"):
-        monitoring.publish_dashboard(dashboard, tmp_path)
 
 
 def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
@@ -144,7 +135,9 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
     tracked, _ = load_checkpoint(monitored.selected_artifact["path"])
     for key, weights in plain.state_dict().items():
         torch.testing.assert_close(weights, tracked.state_dict()[key], rtol=0, atol=0)
-    dashboard = training_dashboard(monitored)
+    dashboard = training_dashboard(
+        monitored, stage_rows(monitored, read_updates(tmp_path, [monitored]))
+    )
     assert dashboard.summary["history_incomplete"] is False
     assert len(dashboard.rows) == 2
     assert (
@@ -253,7 +246,10 @@ def test_executor_streams_fixed_and_growing_validation(
         assert stage.diagnostics[0]["fixed_validation"]["policy_loss"] >= 0
         assert stage.diagnostics[0]["validation"]["policy_loss"] >= 0
         assert stage.diagnostics[0]["coordinates"]["optimizer_exposures"] > 0
-    assert training_dashboard(run).summary["history_incomplete"] is False
+    assert (
+        training_dashboard(run, stage_rows(run, {})).summary["history_incomplete"]
+        is False
+    )
 
 
 def test_publisher_reads_etude_prefix_and_rejects_rewritten_history(
@@ -399,7 +395,7 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
             )
         ],
     )
-    dashboard = training_dashboard(run)
+    dashboard = training_dashboard(run, stage_rows(run, {}))
     assert len(dashboard.rows) == 3
     assert dashboard.rows[0]["numerical/parameter_delta_l2"] == 0.01
     assert "numerical/parameter_delta_l2" not in dashboard.rows[1]

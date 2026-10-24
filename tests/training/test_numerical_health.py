@@ -393,7 +393,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         assert "incident capture failed: OSError" in run["error"]
         return
     assert "incident capture failed" not in run["error"]
-    assert len(record["diagnostics"]) == 1
+    assert record["updates"] == 1
     assert record["learning_seconds"] >= 0.25
     assert record["diagnostic_seconds"] >= 2
     assert record["learning_seconds"] < record["diagnostic_seconds"]

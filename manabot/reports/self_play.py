@@ -7,13 +7,14 @@ not performance against a fixed opponent.
 """
 
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from matplotlib.figure import Figure
 
-from manabot.reports.records import ReportRun
 from manabot.training.rollout.self_play import deck_identity
+from manabot.training.update_metrics import MetricRow
 import managym
 
 if TYPE_CHECKING:
@@ -36,28 +37,30 @@ class SelfPlayPoint:
         return self.wins + self.losses + self.draws
 
 
-def self_play_points(run: ReportRun, window_updates: int = 100) -> list[SelfPlayPoint]:
-    """Retain joint counts; no observations are emitted for unrecorded history."""
+def self_play_points(
+    updates: Mapping[str, Sequence[MetricRow]], window_updates: int = 100
+) -> list[SelfPlayPoint]:
+    """Retain joint counts from rows by stage; unrecorded history emits nothing."""
     if window_updates < 1:
         raise ValueError("window_updates must be positive")
     points: list[SelfPlayPoint] = []
-    for stage in run.stages:
+    for stage, rows in updates.items():
         groups: dict[tuple[int, str, str, Literal["play", "draw"]], list[int]] = {}
-        for diagnostic in stage.diagnostics:
-            update = diagnostic.get("coordinates", {}).get("updates")
+        for row in rows:
+            update = row.get("coordinates/updates")
             if not isinstance(update, int):
                 continue
-            for row in diagnostic.get("self_play_outcomes", []):
-                key = (
-                    (max(update, 1) - 1) // window_updates,
-                    row["deck"],
-                    row["opponent_deck"],
-                    row["position"],
-                )
+            for name, count in row.items():
+                parts = name.split("/")
+                if len(parts) != 5 or parts[0] != "self_play_outcomes":
+                    continue
+                _, deck, opponent, seat, outcome = parts
+                if seat not in ("play", "draw") or not isinstance(count, int):
+                    raise ValueError(f"invalid self-play outcome {name!r}")
+                position: Literal["play", "draw"] = "play" if seat == "play" else "draw"
+                key = ((max(update, 1) - 1) // window_updates, deck, opponent, position)
                 totals = groups.setdefault(key, [0, 0, 0, update])
-                totals[0] += row["wins"]
-                totals[1] += row["losses"]
-                totals[2] += row["draws"]
+                totals[("wins", "losses", "draws").index(outcome)] += count
                 totals[3] = max(totals[3], update)
         for (_, deck, opponent, position), (wins, losses, draws, update) in sorted(
             groups.items()
@@ -65,7 +68,7 @@ def self_play_points(run: ReportRun, window_updates: int = 100) -> list[SelfPlay
             if wins + losses + draws:
                 points.append(
                     SelfPlayPoint(
-                        stage.id, update, deck, opponent, position, wins, losses, draws
+                        stage, update, deck, opponent, position, wins, losses, draws
                     )
                 )
     return points
@@ -86,7 +89,7 @@ def self_play_figures(
     """Two views per matchup: play/draw and deck win rates, on an update axis."""
     figures: list[Figure] = []
     for run in evidence.runs:
-        points = self_play_points(run, window_updates)
+        points = self_play_points(evidence.updates(run), window_updates)
         labels = _deck_labels() if points else {}
         matchups = sorted({tuple(sorted((p.deck, p.opponent_deck))) for p in points})
         if not matchups:

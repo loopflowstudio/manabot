@@ -17,12 +17,12 @@ from pathlib import Path
 import random
 import socket
 import time
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import numpy as np
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.arena.models import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.clock import boot_identity
 from manabot.training.learning.learner import Learner
@@ -33,18 +33,6 @@ from manabot.training.rollout.collection import (
     SeatRoutedCollector,
 )
 
-if TYPE_CHECKING:
-    from manabot.verify.store import VerifyStore
-
-
-@dataclass(frozen=True)
-class DiagnosticPrefix:
-    """Exact committed prefix in the snapshot writer's canonical StageRecord."""
-
-    stage_id: str
-    count: int
-    sha256: str
-
 
 class TrainingPaused(KeyboardInterrupt):
     """A requested pause after a complete, store-committed learning boundary."""
@@ -52,7 +40,8 @@ class TrainingPaused(KeyboardInterrupt):
 
 @dataclass
 class UpdateSnapshot:
-    format_version: Literal[2, 3]
+    # Version 4 holds complete stage records; self-play rows live in Etude.
+    format_version: Literal[4]
     iteration: int
     completed_stages: list[StageRecord]
     collector_before: CollectorStats
@@ -69,8 +58,6 @@ class UpdateSnapshot:
     regime_digest: str
     seed: int
     identities: dict[str, Any]
-    diagnostic_run_id: str | None = None
-    diagnostic_prefixes: tuple[DiagnosticPrefix, ...] = ()
 
 
 def save_update(
@@ -85,19 +72,14 @@ def save_update(
     collector_before: CollectorStats,
 ) -> None:
     """Publish immutable bytes before the store advertises their digest."""
-    records = [*run.stages[:-1], record]
-    # Diagnostics stay in VerifyStore once. Keep stage metadata at the exact
-    # snapshot boundary, including immutable exports and cumulative counters.
-    compact = [
-        StageRecord.model_validate(row.model_dump(exclude={"diagnostics"}))
-        for row in records
-    ]
+    # Stage records at the exact snapshot boundary, including immutable
+    # exports and cumulative counters.
     state = UpdateSnapshot(
-        format_version=3,
+        format_version=4,
         iteration=iteration,
-        completed_stages=compact[:-1],
+        completed_stages=deepcopy(run.stages[:-1]),
         collector_before=deepcopy(collector_before),
-        record=compact[-1],
+        record=record.model_copy(deep=True),
         learner=deepcopy(learner.agent.state_dict()),
         ema=deepcopy(ema.state_dict()) if ema is not None else None,
         optimizer=deepcopy(learner.optimizer.state_dict()),
@@ -109,13 +91,6 @@ def save_update(
         regime_digest=run.regime_digest,
         seed=run.seed,
         identities=deepcopy(run.identities),
-        diagnostic_run_id=run.id,
-        diagnostic_prefixes=tuple(
-            DiagnosticPrefix(
-                row.id, len(row.diagnostics), canonical_sha256(row.diagnostics)
-            )
-            for row in records
-        ),
     )
     temporary = path.with_suffix(".tmp")
     with temporary.open("xb") as stream:
@@ -153,7 +128,7 @@ def admit_recovery_identities(
         raise ValueError("recovery runtime/source identity mismatch")
 
 
-def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
+def load_update(parent: TrainingRun) -> UpdateSnapshot:
     """Load only the latest artifact registered in the canonical local store."""
     artifact = parent.recovery_artifact
     if artifact is None:
@@ -163,9 +138,10 @@ def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
         raise ValueError("recovery artifact digest mismatch")
     with gzip.open(path, "rb") if path.suffix == ".gz" else path.open("rb") as stream:
         state = torch.load(stream, map_location="cpu", weights_only=False)
-    if not isinstance(state, UpdateSnapshot) or getattr(
-        state, "format_version", None
-    ) not in {2, 3}:
+    if (
+        not isinstance(state, UpdateSnapshot)
+        or getattr(state, "format_version", None) != 4
+    ):
         raise ValueError("invalid recovery snapshot type")
     if state.regime_digest != parent.regime_digest or state.seed != parent.seed:
         raise ValueError("recovery snapshot identity mismatch")
@@ -173,35 +149,6 @@ def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
         state.identities, parent.identities, parent.source_repair_reason
     )
     records = [*state.completed_stages, state.record]
-    if state.format_version == 3:
-        if state.diagnostic_run_id is None:
-            raise ValueError("recovery diagnostic owner missing")
-        # A setup failure may inherit an ancestor's snapshot before it has any
-        # current-stage rows of its own. Resolve the writer, not the latest retry.
-        owner = store.training_run(state.diagnostic_run_id)
-        if (owner.regime_digest, owner.seed, owner.identities) != (
-            state.regime_digest,
-            state.seed,
-            state.identities,
-        ):
-            raise ValueError("recovery diagnostic owner mismatch")
-        if len(records) != len(state.diagnostic_prefixes):
-            raise ValueError("recovery diagnostic prefix mismatch")
-        by_id = {row.id: row for row in owner.stages}
-        for row, prefix in zip(records, state.diagnostic_prefixes, strict=True):
-            source = by_id.get(row.id)
-            if (
-                row.diagnostics
-                or prefix.stage_id != row.id
-                or prefix.count < 0
-                or source is None
-                or len(source.diagnostics) < prefix.count
-            ):
-                raise ValueError("recovery diagnostic prefix missing")
-            diagnostics = source.diagnostics[: prefix.count]
-            if canonical_sha256(diagnostics) != prefix.sha256:
-                raise ValueError("recovery diagnostic prefix digest mismatch")
-            row.diagnostics = deepcopy(diagnostics)
     expected = [stage.id for stage in parent.regime.stages[: len(records)]]
     if [record.id for record in records] != expected or any(
         record.status != "completed" for record in state.completed_stages
