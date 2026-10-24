@@ -61,6 +61,8 @@ amendment. No open product choice.
 3. Follower cutover per the amendment (restart from the w3 commit with
    `--etude-source`/`--run`, same ledger). The Etude read path
    (`etude.train.read.read`, tracking URI argument) is unverified against a live run.
+   The live ledger (37 checkpoints, 44 units) loads into the current `Ledger`;
+   its stale `cohort_phase`/`cohort_settled` fields are dropped on first write.
 4. Local evaluation: the protocol expects ~51 h of grids/pairs, mostly overlapping
    training, but none has started. If MTG-181's follower keeps running, the
    follower's stop deadline (w3 deadline + 2 days + ~9 h) may leave units missing;
