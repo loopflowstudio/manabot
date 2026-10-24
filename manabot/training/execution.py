@@ -114,6 +114,17 @@ PROGRESS_EXPORT_SECONDS = 30.0
 PROGRESS_EXPORT_SHARE = 0.02
 
 
+def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
+    """Cumulative subphase timings under `root`, keyed by their path below it."""
+    return {
+        path.removeprefix(f"{root}/"): PhaseTiming(
+            seconds=stats["total_time"], calls=int(stats["count"])
+        )
+        for path, stats in profiler.get_stats().items()
+        if path.startswith(f"{root}/")
+    }
+
+
 def process_tree_rss(process: psutil.Process) -> int:
     """Resident bytes of a process and its live descendants.
 
@@ -707,9 +718,8 @@ def _execute_regime(
                 )
                 if not restoring_completed:
                     record.admission_wait_seconds = 0.0
-                    record.collection_timings = (
-                        {} if stage.execution.profile_collection else None
-                    )
+                    record.collection_timings = {}
+                    record.learning_timings = {}
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -1394,9 +1404,9 @@ def _execute_regime(
                         imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(learner.agent.parameters()).device)
-                collector.profiler = Profiler(
-                    enabled=stage.execution.profile_collection
-                )
+                # Phase timers are always on: each ends at an existing device
+                # wait, so they add no synchronization (~1 µs per phase).
+                collector.profiler = Profiler()
                 before = deepcopy(collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
@@ -1493,66 +1503,73 @@ def _execute_regime(
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
-                        if stage.execution.profile_collection:
-                            # Subphases inherit the existing collection boundary.
-                            # Copy after it closes; reporting overhead is outside it.
-                            record.collection_timings = {
-                                path.removeprefix("Collection/"): PhaseTiming(
-                                    seconds=stats["total_time"],
-                                    calls=int(stats["count"]),
-                                )
-                                for path, stats in collector.profiler.get_stats().items()
-                                if path.startswith("Collection/")
-                            }
+                        # Subphases inherit the existing collection boundary.
+                        # Copy after it closes; reporting overhead is outside it.
+                        record.collection_timings = _phase_timings(
+                            collector.profiler, "Collection"
+                        )
                     check()
                     tick = time.perf_counter()
                     try:
-                        diagnostic = (
-                            update_iteration(
-                                learner,
-                                batch,
-                                stage.learning,
-                                update_index / stage.updates
-                                if regime.schedule_clock == "iteration_fraction"
-                                else (
-                                    time.perf_counter()
-                                    - start
-                                    - run.monitoring_export_seconds
+                        # The final device sync stays inside the Learning phase so
+                        # queued work (EMA, last step) counts toward learning.
+                        with learner.profiler.track("Learning"):
+                            try:
+                                diagnostic = (
+                                    update_iteration(
+                                        learner,
+                                        batch,
+                                        stage.learning,
+                                        update_index / stage.updates
+                                        if regime.schedule_clock == "iteration_fraction"
+                                        else (
+                                            time.perf_counter()
+                                            - start
+                                            - run.monitoring_export_seconds
+                                        )
+                                        / regime.wall_seconds,
+                                        rng,
+                                        iteration=iteration + 1,
+                                        bootstrap_agent=behavior_agent,
+                                    )
+                                    if stage.trainable == "policy_value"
+                                    else {
+                                        "rows": batch.actions.size,
+                                        "optimizer_exposures": 0,
+                                        "retained": 0,
+                                        "numerical": {"optimizer_steps": 0},
+                                    }
                                 )
-                                / regime.wall_seconds,
-                                rng,
-                                iteration=iteration + 1,
-                                bootstrap_agent=behavior_agent,
-                            )
-                            if stage.trainable == "policy_value"
-                            else {
-                                "rows": batch.actions.size,
-                                "optimizer_exposures": 0,
-                                "retained": 0,
-                                "numerical": {"optimizer_steps": 0},
-                            }
-                        )
-                        if stage.matchup_curriculum != "fixed":
-                            diagnostic["matchup_curriculum"] = stage.matchup_curriculum
-                            if stage.matchup_curriculum == "elemental-uniform":
-                                diagnostic["cumulative_matchup_exposure"] = deepcopy(
-                                    collector.stats.exposure
-                                )
-                            diagnostic["cumulative_games_by_stream"] = {
-                                str(k): v
-                                for k, v in collector.stats.games_by_stream.items()
-                            }
-                        diagnostic["behavior"] = stage.behavior
-                        diagnostic["behavior_iteration"] = iteration
-                        if stage.learning.gradient != "damped_policy":
-                            diagnostic["schedule_clock"] = regime.schedule_clock
-                        iteration += 1
-                        diagnostic["iteration"] = iteration
-                        if ema is not None:
-                            update_ema(ema, learner.agent, stage.learning.ema)
+                                if stage.matchup_curriculum != "fixed":
+                                    diagnostic["matchup_curriculum"] = (
+                                        stage.matchup_curriculum
+                                    )
+                                    if stage.matchup_curriculum == "elemental-uniform":
+                                        diagnostic["cumulative_matchup_exposure"] = (
+                                            deepcopy(collector.stats.exposure)
+                                        )
+                                    diagnostic["cumulative_games_by_stream"] = {
+                                        str(k): v
+                                        for k, v in collector.stats.games_by_stream.items()
+                                    }
+                                diagnostic["behavior"] = stage.behavior
+                                diagnostic["behavior_iteration"] = iteration
+                                if stage.learning.gradient != "damped_policy":
+                                    diagnostic["schedule_clock"] = regime.schedule_clock
+                                iteration += 1
+                                diagnostic["iteration"] = iteration
+                                if ema is not None:
+                                    with learner.profiler.track("EMA update"):
+                                        update_ema(
+                                            ema, learner.agent, stage.learning.ema
+                                        )
+                            finally:
+                                synchronize()
                     finally:
-                        synchronize()
                         record.learning_seconds += time.perf_counter() - tick
+                        record.learning_timings = _phase_timings(
+                            learner.profiler, "Learning"
+                        )
                     if collector.opponent_mode == "self":
                         diagnostic["self_play_outcomes"] = (
                             collector.stats.self_play.drain()
