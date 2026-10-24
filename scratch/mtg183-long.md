@@ -38,23 +38,18 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
   the protocol amendment; follower admission of Etude segment exports.
 - Report: `experiments/elemental_long_report.py` (synthetic test only).
 
-## Concept review (2026-10-24): next implement direction
+## Concept review (2026-10-24): one Etude segment — implemented
 
 The accepted contract is one learner lineage with exactly one Etude segment (w3):
-"No retry, extension or further segment." The follower still models a list
-(`--segment` repeated, `Etude.runs`, `ledger.segments`, settled = all runs done),
-which suggests a chaining that the protocol forbids. Make it one run:
-`--run <etude run>` (single), a follower adapter named for what it is (e.g.
-`SegmentSource`, not `Etude`, which names the system), `ledger.segment_outcome`
-holding w3's terminal Etude state for the report, and settlement = that run is
-terminal. Ledger entries from w1/w2 stay unchanged. No other concept changes:
-`LearnerContinuation` (storage keys, pre-launch) vs `LearningStateImport`
-(bound local paths, regime admission) are distinct stages of the same import and
-both earn their place; window (w1/w2, cohort) vs segment (w3, Etude) matches the
-protocol amendment. No open product choice. Implemented 2026-10-24 (single `--run`,
-`SegmentSource`, `Ledger.segment_outcome` from Etude's typed status — it alone
-settles the segment; report reads it); the focused suite
-(etude_job, learning_state, elemental_long*, elemental_grid, tracking) passed, 39 tests.
+"No retry, extension or further segment." The follower now follows one run:
+`--run <etude run>`, adapter `SegmentSource`, `Ledger.segment_outcome` from Etude's
+typed status (any terminal state settles the segment; the report reads it), endpoint
+= max admitted update, so a w3 that fails before its first export leaves w2's final
+update as the endpoint, as the amendment requires. w1/w2 ledger entries unchanged.
+No other concept changes: `LearnerContinuation` (storage keys, pre-launch) vs
+`LearningStateImport` (bound local paths, regime admission) are distinct stages of
+the same import; window (w1/w2, cohort) vs segment (w3, Etude) matches the
+amendment. No open product choice.
 
 ## Remains, in order
 
@@ -85,4 +80,4 @@ settles the segment; report reads it); the focused suite
 - Local evaluation that yields to another Task's follower can stall entirely;
   declare its expected wall time against the real queue, not idle capacity.
 
-Check (2026-10-24): `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed (after the single-segment compress).
+Check (2026-10-24): `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed (2026-10-24 realign, at 626360b32).
