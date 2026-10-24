@@ -52,7 +52,8 @@ terminal. Ledger entries from w1/w2 stay unchanged. No other concept changes:
 (bound local paths, regime admission) are distinct stages of the same import and
 both earn their place; window (w1/w2, cohort) vs segment (w3, Etude) matches the
 protocol amendment. No open product choice. Implemented 2026-10-24 (single `--run`,
-`SegmentSource`, `Ledger.segment_outcome`, report reads it); the focused suite
+`SegmentSource`, `Ledger.segment_outcome` from Etude's typed status — it alone
+settles the segment; report reads it); the focused suite
 (etude_job, learning_state, elemental_long*, elemental_grid, tracking) passed, 39 tests.
 
 ## Remains, in order
@@ -84,4 +85,4 @@ protocol amendment. No open product choice. Implemented 2026-10-24 (single `--ru
 - Local evaluation that yields to another Task's follower can stall entirely;
   declare its expected wall time against the real queue, not idle capacity.
 
-Check (2026-10-24): `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed (after compress; not rerun by realign — only the amendment header time changed).
+Check (2026-10-24): `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed (after the single-segment compress).

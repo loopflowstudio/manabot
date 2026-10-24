@@ -73,11 +73,9 @@ def test_segment_joins_retained_windows_and_settles_when_terminal(
     _admit(tmp_path, ledger, segment)
     assert ledger.checkpoints[2550].job == "mtg183-elemental-long-w2"
     assert ledger.checkpoints[2600].job == "w3"
-    assert not ledger.settled and ledger.endpoint is None
-    assert ledger.segment_outcome is None
+    assert ledger.segment_outcome is None and ledger.endpoint is None
     # A segment that stops short of its target still ends the seed.
     phase[:] = ["done", "failed"]
     _admit(tmp_path, ledger, segment)
-    assert ledger.settled and ledger.endpoint == 2650
-    assert ledger.segment_outcome == "done: failed"
+    assert ledger.segment_outcome == "failed" and ledger.endpoint == 2650
     assert ledger.error is None

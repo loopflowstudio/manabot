@@ -109,9 +109,9 @@ class Ledger(BaseModel):
     h2h_schedule_sha256: str
     checkpoints: dict[int, Checkpoint] = {}
     units: dict[str, Unit] = {}
-    # The segment's terminal Etude state, e.g. "done: succeeded"; None until then.
+    # The segment's terminal Etude outcome, e.g. "failed (deadline)"; None
+    # while the run is live. Any outcome settles the segment.
     segment_outcome: str | None = None
-    settled: bool = False
     endpoint: int | None = None
     error: str | None = None
     observed_at: float = 0.0
@@ -409,18 +409,18 @@ def _admit(directory: Path, ledger: Ledger, segment: SegmentSource) -> None:
     stays in `ledger.segment_outcome` for the report.
     """
     try:
-        phase = str(segment.status()).split(",")[0]
+        state: Status | None = segment.status()
         records = segment.checkpoints()
         ledger.error = None
     except Exception as error:
-        phase, records = "", []
+        state, records = None, []
         ledger.error = f"{segment.run}: {type(error).__name__}"
+    cache = directory / "cache" / segment.run
     for record in records:
         updates = int(record.at["updates"])
         # The segment's initial export repeats w2's endpoint.
         if updates in ledger.checkpoints:
             continue
-        cache = directory / "cache" / segment.run
         cache.mkdir(parents=True, exist_ok=True)
         path = fetch_etude_checkpoint(record, cache / f"{updates:06d}.pt")
         assert record.artifact.sha256 is not None
@@ -432,10 +432,10 @@ def _admit(directory: Path, ledger: Ledger, segment: SegmentSource) -> None:
             sha256=record.artifact.sha256,
             coordinates=dict(record.at),
         )
-    if phase.startswith("done"):
-        ledger.segment_outcome = phase
-    ledger.settled = ledger.segment_outcome is not None
-    if ledger.settled and ledger.checkpoints and ledger.endpoint is None:
+    if state is not None and state.done:
+        cause = f" ({state.cause})" if state.cause else ""
+        ledger.segment_outcome = f"{state.outcome}{cause}"
+    if ledger.segment_outcome and ledger.checkpoints and ledger.endpoint is None:
         ledger.endpoint = max(ledger.checkpoints)
     latest = max(ledger.checkpoints, default=0)
     rated = [
