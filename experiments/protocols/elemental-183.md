@@ -219,3 +219,61 @@ meet that bound (a 1,000-game subset's interval is too wide). The strict rule
 is still reported beside it. The existence test (endpoint rating above U_h,
 endpoint v U_h above 0.5) is unchanged. No game had been played when this was
 written; training window w1 was in setup.
+
+## Amendment, 2026-10-24 19:30 UTC: the seed continues on Etude after w2
+
+Jack Heart's migration retired the cohort controller on 2026-10-24 at about
+18:45 UTC, so w3–w7 above never start. Jack Heart decided (about 18:55 UTC) to
+continue the same seed past w2 on Etude within the remaining cap: one learner
+lineage, no new seed. Results so far are the follower's evaluation units of w1
+and w2 exports; no training decision below depends on them.
+
+**What stays.** Seed 18301, the regime's learning recipe (EMA, Adam, damped
+policy with absolute-iteration schedules, streams, decision floor, seats,
+deck curriculum, game-error policy), the 50-update export cadence on the same
+absolute coordinates, the rated set, the heuristic grid, the cross-checkpoint
+schedule and pairing graph, the rating, the analysis and the predictions above.
+
+**Segment w3.** One Etude training run (`manabot.experiment.job`, built by
+`experiments.elemental_long.segment_job`) continues w2's final export:
+
+- Parent: w2's last complete update, read from its own `run.json` (expected
+  near 2,550). `stage_parent` uploads that run record and its published
+  raw/EMA/Adam exports to the Etude machine storage and refuses any byte that
+  differs from what the record published. The worker refuses a parent that ends
+  at another update or used another seed.
+- Machine: one L4, rented by Etude with CUDA numerical validation before
+  learning, one attempt (`max_attempts=1`).
+- Dollars: `max_usd` = $50 − w1's and w2's observed cost (job receipts, the
+  same conservative estimate as above) − $1.30 reserve.
+- Hours: `max_usd` ÷ the quoted L4 hourly price at launch, rounded down to a
+  tenth of an hour; the regime watchdog leaves 30 minutes for setup and the
+  numerics gate and 10 minutes for finalization.
+- Update target: the parent update + 0.9 × w2's measured updates per training hour ×
+  (hours − 0.7), rounded down to a multiple of 50. Milestones: every multiple
+  of 50 after the parent. The regime's `updates` changes only the endpoint:
+  damped-policy rates follow the absolute iteration, so the learning schedule
+  is the 100,000-horizon one above.
+- These four numbers, the parent's digests and keys, and the source commit are
+  written to `experiments/protocols/elemental-183-w3.json` and committed before
+  allocation. The source is a published commit on main that contains Etude's
+  training job with learner continuation (#362 and this Task's change).
+
+Collector, game and RNG streams restart at the boundary, as at every earlier
+window boundary. MTG-182 is on main, so w3's in-flight games at a cutoff are
+recorded as run interruptions, not game errors.
+
+**Endpoint.** The endpoint is w3's last tracked export once Etude reports the
+run done, whatever its outcome. A run that stops short of its target (time,
+dollars, or a failure after some exports) still ends the seed there; its
+outcome is reported. A run that fails before its first export leaves w2's
+final update as the endpoint. No retry, extension or further segment.
+
+**Follower.** The cohort follower keeps evaluating w1/w2 exports until w2
+has ended and its ledger holds w2's final cadence export. It is then stopped
+and restarted from the w3 source commit on the same directory and ledger,
+naming the Etude tracking storage and the w3 run; completed units are kept.
+It admits w3's tracked exports by absolute update, settles when the run is
+done, and stops two days after w3's deadline plus the endpoint's units
+(about 9 hours); anything unevaluated then is reported as missing. The report
+shows Etude's run outcome in place of the retired cohort phase.
