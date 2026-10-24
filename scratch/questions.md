@@ -57,3 +57,30 @@ They do not select current work or authorize paid execution.
   remains authoritative. Attempt limits here mean the existing permanent provider
   claim, one recovery child per parent, and no checkpoint-evaluation retries within
   the retained cumulative allowance; no new numeric process-retry policy is added.
+
+# MTG-182 assumptions (2026-10-23)
+
+- Any exception raised by the run's own supervision inside collection (deadline,
+  wall allowance, cancellation, process memory limit) settles in-progress games
+  as run interruptions: `deadline` for TimeoutError, `abandoned` otherwise. They
+  count in `attempted`/`abandoned`/`abandoned_samples`, never in the error window,
+  `crashed`, `discarded_samples` or replacement debt. Strict-path failure capture
+  remains TimeoutError-only, as before.
+- Existing `deadline` receipts in parent ledgers (e.g. MTG-181) now settle as
+  abandoned on resume. Frozen run.json states are not rewritten.
+- The report names a paused run's stop reason `allocation_deadline` and a
+  TimeoutError-interrupted run's `deadline`; a real `game_error_rate_exceeded`
+  still wins.
+- Status (realign, 2026-10-23): all four Task outcomes implemented in
+  `game_errors.py`, `collection.py` and `reports/experiment.py`;
+  `docs/game-crash-recovery.md` updated to match. A KeyboardInterrupt
+  (BaseException) inside collection still settles nothing, as before.
+  Remaining: PR #359 CI and landing.
+- Check: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_experiment_report.py tests/training/test_allocation.py -q` → 44 passed.
+- Concept review (2026-10-23): no change. "Run interruption" is one concept
+  with two receipt labels (`deadline`, `abandoned`) and one counter
+  (`abandoned`), matching the brief's explicit outcomes. The broadened `except`
+  wraps only `check()` and the deadline test, so engine/agent failures cannot
+  reach it. `paused` is set only when the allocation ends
+  (`training/execution.py`), so `allocation_deadline` is accurate. No open
+  product choice.

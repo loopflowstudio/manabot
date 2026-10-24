@@ -635,8 +635,16 @@ class SeatRoutedCollector:
                     and time.perf_counter() >= deadline_monotonic
                 ):
                     raise TimeoutError("collector exceeded training deadline")
-            except TimeoutError as error:
-                if not self.game_errors and hasattr(env, "capture_failure"):
+            except Exception as error:
+                # The run stopped, not the games: deadlines, cancellation and
+                # supervision limits settle in-progress games as abandoned
+                # attempts outside the game error window.
+                deadline = isinstance(error, TimeoutError)
+                if (
+                    deadline
+                    and not self.game_errors
+                    and hasattr(env, "capture_failure")
+                ):
                     env.capture_failure(error)
                 if self.game_errors:
                     seeds = env.current_game_seeds()
@@ -647,8 +655,8 @@ class SeatRoutedCollector:
                                 row,
                                 seeds[row],
                                 seats[row],
-                                "deadline",
-                                error_class="TimeoutError",
+                                "deadline" if deadline else "abandoned",
+                                error_class=type(error).__name__,
                                 error=str(error),
                             )
                 raise

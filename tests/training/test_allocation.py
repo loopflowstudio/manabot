@@ -12,7 +12,9 @@ from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.model.actor_critic import ActorCritic
 from manabot.training import execution
 from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainSelfPlay
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.state.game_errors import GameErrorPolicy
 from manabot.training.state.recovery import load_update
 from manabot.verify.store import VerifyStore
 from tests.remote.test_job_spec import job_spec
@@ -180,6 +182,58 @@ def test_collection_cutoff_leaves_checkpoint_reserve_without_claiming_cuda_recov
                 resume_from=paused.id,
                 allocation=job_spec().admit(clock.time()),
             )
+
+
+def test_mid_collection_allocation_deadline_is_a_pause_not_game_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every stream is mid-game when the allocation ends (MTG-181 seed 18102)."""
+    clock = AllocationClock()
+    monkeypatch.setattr(execution, "time", clock)
+    allocation = job_spec().admit(clock.time())
+    original_collect = SeatRoutedCollector.collect
+    value = recipe()
+    value.recovery_max_microsteps = None
+    stage = value.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.game_errors = GameErrorPolicy(window=2, warmup=2)
+
+    def expire_mid_game(
+        collector: SeatRoutedCollector,
+        agent: ActorCritic,
+        num_steps: int,
+        *,
+        deadline_monotonic: float | None = None,
+        check: Callable[[], None] | None = None,
+    ) -> RolloutBatch:
+        checks = 0
+
+        def deadline() -> None:
+            nonlocal checks
+            checks += 1
+            if checks == 3:
+                clock.now = allocation.pause_at
+                raise TimeoutError("collector exceeded training deadline")
+
+        return original_collect(
+            collector,
+            agent,
+            num_steps,
+            deadline_monotonic=deadline_monotonic,
+            check=deadline,
+        )
+
+    monkeypatch.setattr(SeatRoutedCollector, "collect", expire_mid_game)
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        paused = execution.execute_regime(
+            value, 197, tmp_path / "paused", store, allocation=allocation
+        )
+    assert paused.status == "paused" and paused.updates_through() == 0
+    errors = paused.game_errors
+    assert errors is not None
+    assert errors.attempted == errors.abandoned == stage.streams
+    assert errors.crashed == 0 and errors.window == []
+    assert errors.stop_reason is None
 
 
 def test_export_reserve_exhaustion_is_not_a_completed_or_paused_run(
