@@ -220,7 +220,7 @@ is still reported beside it. The existence test (endpoint rating above U_h,
 endpoint v U_h above 0.5) is unchanged. No game had been played when this was
 written; training window w1 was in setup.
 
-## Amendment, 2026-10-24 19:30 UTC: the seed continues on Etude after w2
+## Amendment, 2026-10-24 19:00 UTC: the seed continues on Etude after w2
 
 Jack Heart's migration retired the cohort controller on 2026-10-24 at about
 18:45 UTC, so w3–w7 above never start. Jack Heart decided (about 18:55 UTC) to
