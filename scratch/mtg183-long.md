@@ -30,6 +30,12 @@ gained a `games` subset argument); whichever branch lands second keeps one copy.
   Keep `--extra artifacts` on every `uv run` in the pinned checkout (a bare
   `uv run` would re-sync the venv and drop the service's dependencies).
 
+Latest check (2026-10-24 02:23 UTC): w1 running (TrainingRun 67ec6c48…), update
+32, 0 crashed games, ~49k learner decisions/update, ~120 updates/h; update 0
+published and admitted, its full grid queued behind MTG-181's follower (pid 23706).
+Snapshot uploads fail intermittently (sticky `snapshot upload failed (ValueError)`,
+as in MTG-181); exports appear whenever a later generation succeeds.
+
 ## Remains
 
 - After the cohort settles and the follower finishes: results report, publish
