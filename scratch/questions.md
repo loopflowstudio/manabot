@@ -18,3 +18,16 @@ They do not select current work or authorize paid execution.
   not Jack Heart's numbers.
 - Local evaluation yields while MTG-181's follower runs (Task: do not disturb it).
 - The 0.03 practical saturation margin (amendment) is this session's choice.
+
+# MTG-183 Etude continuation (2026-10-24)
+
+- Merged #362's branch instead of rebasing (the steer said rebase): rebasing
+  rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
+  otherwise keep `8e7df92e4` reachable if the PR is squashed.
+- One Etude segment (w3) to the remaining cap rather than several ~12 h ones:
+  fewer stream restarts and setup/gate costs, no Etude-output→input chaining.
+  A failure keeps every export tracked up to it.
+- Follower reads w3's checkpoints with `etude.train.read.read(source, "self-play", run)`:
+  the tracked experiment is the stage id (`RunContext` name). The tracking
+  storage URI is an explicit CLI argument; not verified against a live run.
+- Staged-object reuse compares digests by downloading the object (simple, small files).

@@ -5,9 +5,13 @@ It stays the authority; this note tracks state.
 
 ## Delete — do not maintain
 
-Nothing replaced. `experiments/elemental_grid.py`, the `play_cell` leg subset and
-the `User-Agent` repair are MTG-181's unmerged bytes, copied unchanged (the grid
-gained a `games` subset argument); whichever branch lands second keeps one copy.
+- Cohort windows in `experiments/elemental_long.py` (`L4`, `WINDOWS`, `JOBS`,
+  `cohort()`, `specs`/`cohort` CLI) and the follower's S3/cohort admission
+  (`observe`, `S3JobStore`, `CohortState`): deleted 2026-10-24 with #362's remote
+  system. Frozen job specs `experiments/protocols/elemental-183-job-*.json` stay
+  as w1/w2 evidence. The `manabot/remote` `User-Agent` repair went with #362.
+- `experiments/elemental_grid.py` and the `play_cell` leg subset are MTG-181's
+  unmerged bytes, copied unchanged; whichever branch lands second keeps one copy.
 
 ## Exists
 
@@ -73,15 +77,30 @@ What blocks it today (verified on #362's branch `jack-heart/remote-on-etude`):
 - The regime still supports it: `TrainSelfPlay.initial: LearningStateImport`
   (raw, ema, optimizer + parent run reference, staged paths; RNGs restart).
 
-Plan (build on main after #362 lands; do not fork its deleted system):
-1. `TrainingJob` takes a learner-state import as Etude `Input`s (parent run
-   record, raw, ema, optimizer), resolves them under `ETUDE_INPUTS_DIR`, and
-   trains to an absolute update target. Tests; no change to fresh-run behavior.
-2. Stage w2's `last-complete` learner exports from the old S3 job folder
-   (skipped by the S3 cleanup) into Etude inputs, digest-checked.
-3. Protocol amendment, committed before allocation: windows after w2 run on
-   Etude; segment lengths/hours and dollar cap from actual w1+w2 cost; same
-   export cadence (50) and absolute update coordinates; the endpoint rule.
-4. Follower: admit the Etude run's milestone checkpoints by absolute update and
-   settle on the Etude run's terminal state instead of the retired cohort
-   status (which now stays `running` forever).
+Plan (Jack Heart's steer): build on #362 (`jack-heart/remote-on-etude`), allocate
+nothing until it is on main; do not touch w2's pod, MTG-181's follower or S3 folders.
+
+Done 2026-10-24 (branch merges #362's head `e0009ad57`; merge, not rebase, so the
+frozen launch commit `8e7df92e4` stays an ancestor):
+1. `TrainingJob.continuation` (`LearnerContinuation`, `StagedExport`) in
+   `manabot/experiment/job.py`: parent run.json + raw/EMA/Adam as Etude inputs,
+   bound as `LearningStateImport`; refuses another parent update or seed.
+2. `experiments.elemental_long stage` (upload + digest check against the parent
+   record) and `segment` (Etude Job JSON for w3).
+3. Protocol amendment "continue on Etude after w2" (rules; numbers go in
+   `experiments/protocols/elemental-183-w3.json` at staging, before allocation).
+4. Follower admits Etude segment exports, settles on Etude run done.
+Check: `uv run --extra dev pytest tests/training/test_etude_job.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 34 passed.
+
+Remaining, in order:
+- After w2 ends (deadline 2026-10-25 01:47 UTC): fetch w2's final run.json and
+  `self-play-{raw,ema,optimizer}.pt` into a local dir (pinned checkout's old
+  tooling can read the S3 job folder), `stage` them to the Etude machine
+  storage, compute hours/target/max_usd per the amendment, commit
+  `elemental-183-w3.json`.
+- When #362 is on main: merge main, land or publish this change so w3's source
+  revision is on main, then launch w3 (`queue_cohort`/`launch` with `rent="l4"`).
+- Follower cutover per the amendment (stop `gg.manabot.mtg183.follower`, restart
+  from the w3 commit with `--etude-source`/`--segment`).
+- Then: results report, publish evidence with `manabot.data publish`, manifest,
+  protocol Results pointer.
