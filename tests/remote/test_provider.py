@@ -33,6 +33,27 @@ def test_zero_price_catalog_entries_do_not_block_quoted_gpu(
     assert provider.RunPod().prices() == {"NVIDIA L4": 0.49}
 
 
+def test_requests_identify_the_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RunPod's REST edge rejects urllib's default agent with HTTP 403."""
+    monkeypatch.setenv("RUNPOD_API_KEY", "fixture")
+    seen = []
+
+    class Response(BytesIO):
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    def urlopen(request: provider.Request, timeout: float) -> Response:
+        seen.append(request)
+        return Response(b"[]")
+
+    monkeypatch.setattr(provider, "urlopen", urlopen)
+    assert provider.RunPod().list() == []
+    assert seen[0].get_header("User-agent") == "manabot/0.1"
+
+
 @pytest.mark.parametrize("rate", [-1, float("nan"), float("inf"), 1000])
 def test_invalid_prices_still_fail_admission(
     monkeypatch: pytest.MonkeyPatch, rate: float

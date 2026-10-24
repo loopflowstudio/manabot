@@ -57,3 +57,17 @@ They do not select current work or authorize paid execution.
   remains authoritative. Attempt limits here mean the existing permanent provider
   claim, one recovery child per parent, and no checkpoint-evaluation retries within
   the retained cumulative allowance; no new numeric process-retry policy is added.
+
+# MTG-183 assumptions (2026-10-23)
+
+- A RunPod job cannot exceed twelve hours, so "one long seed" is one cohort of
+  chained `last-complete` learner-state continuations (MTG-165's $50 ladder
+  pattern). Collector/RNG streams restart at each of six boundaries.
+- Controller is this laptop; the Mac mini (`mini-heart.local`) did not resolve.
+  Guardians bound every rental, so controller downtime only delays successors.
+- MTG-182 not merged: deadline-abandoned games at each window cutoff are read as
+  deadline pauses (protocol), not game errors.
+- Rated spacing, references (200, 2,000), held-out skip-one pairs, 10 games per
+  cell for pairs/subset grids and the saturation rule are this session's choices,
+  not Jack Heart's numbers.
+- Local evaluation yields while MTG-181's follower runs (Task: do not disturb it).
