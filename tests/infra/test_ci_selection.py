@@ -52,7 +52,7 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
         ("academy/ui/src/lib/components/a card.svelte", {"frontend"}),
         ("academy/ui/package-lock.json", {"frontend", "clean_machine_play"}),
         ("manabot/training/learning/learner.py", {"integration"}),
-        ("manabot/remote/jobs.py", {"integration"}),
+        ("manabot/experiment/job.py", {"integration"}),
         ("experiments/protocols/recipe.md", {"integration"}),
         ("docs/experiment-metrics.md", {"integration"}),
         ("manabot/semantic/compiler.py", {"integration", "semantic_coverage"}),

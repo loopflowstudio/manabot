@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "store": "s3://etudefantasia/manabot/",
+ "store": "r2://manabot/",
  "files": {
   "experiments/data/archive/conformance/authored-match-parity-w10-v1/release-live-headless-replay-seed-0.json": {
    "sha256": "3a7d7c1bb6c59d8017c30860c05574bb071055fa66102082479c83d6c45b92e9",

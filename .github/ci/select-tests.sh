@@ -45,7 +45,7 @@ else
         select_jobs integration semantic_coverage ;;
       tests/infra/*) select_jobs python_unit ;;
       manabot/infra/*) select_jobs python_unit integration ;;
-      manabot/*|tests/agent/*|tests/model/*|tests/env/*|tests/arena/*|tests/sim/*|tests/training/*|tests/bench/*|tests/remote/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
+      manabot/*|tests/agent/*|tests/model/*|tests/env/*|tests/arena/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
         select_jobs integration ;;
       website/*) select_jobs python_unit ;;
       paper/*|wave/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;

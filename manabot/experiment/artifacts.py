@@ -1,7 +1,7 @@
-"""Publish retained TrainingRun artifacts to S3 without rewriting training evidence.
+"""Publish retained TrainingRun artifacts to a bucket without rewriting training evidence.
 
 ArtifactManifest binds the exact producer export and named artifact roles to
-verified S3 bytes. The CLI publishes completed snapshots or fetches one named
+verified bucket bytes. The CLI publishes completed snapshots or fetches one named
 artifact into a cache; neither path runs training or evaluation. A manifest is
 storage provenance, never policy admission or a portable training recovery claim.
 """
@@ -13,7 +13,7 @@ from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
+from manabot.infra.artifacts import ArtifactStore, StoredArtifact, verify_file
 from manabot.infra.files import atomic_json
 from manabot.reports.records import ReportRun, RetainedRun
 
@@ -62,7 +62,7 @@ def publish_run(
     source: Path,
     destination: str,
     output: Path,
-    store: S3ArtifactStore,
+    store: ArtifactStore,
     *,
     resolve_artifact: Callable[[LocalArtifact], Path] | None = None,
 ) -> ArtifactManifest:
@@ -124,7 +124,7 @@ def main() -> None:
     fetch.add_argument("--profile")
     args = parser.parse_args()
     try:
-        store = S3ArtifactStore(profile=args.profile)
+        store = ArtifactStore(profile=args.profile)
         if args.command == "publish":
             publish_run(args.run, args.destination, args.out, store)
             payload = args.out.read_bytes()
