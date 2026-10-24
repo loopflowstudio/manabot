@@ -1,16 +1,16 @@
-"""Experiment data kept in content-addressed S3 rather than in git.
+"""Experiment data kept in a content-addressed bucket (R2) rather than in git.
 
 Results that runs write under ``experiments/data/`` are evidence, not source, so
 git keeps only ``experiments/data.manifest.json``: each repository-relative path
 with the sha256 and size of its bytes. The bytes live once per digest at
-``<store>sha256/<digest>`` (``S3ArtifactStore`` owns the S3 protocol).
+``<store>sha256/<digest>`` (``ArtifactStore`` owns the bucket protocol).
 
 A machine-wide cache, shared by every worktree, holds one read-only file per
 digest at ``$MANABOT_DATA_CACHE/<digest>`` (default
-``${XDG_CACHE_HOME:-~/.cache}/manabot/sha256``). It keeps S3 reads within budget:
+``${XDG_CACHE_HOME:-~/.cache}/manabot/sha256``). It keeps bucket reads within budget:
 ``publish`` fills it from the local file and reads nothing back, and ``fetch``
 downloads a digest only when the cache lacks it, so each machine reads each
-digest from S3 at most once. Worktree files are clones or copies of cache files,
+digest from the bucket at most once. Worktree files are clones or copies of cache files,
 never hardlinks, so editing one cannot change the cache.
 
 ``fetch`` restores manifest paths byte-for-byte and never overwrites a local file
@@ -35,7 +35,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, split_s3_uri
+from manabot.infra.artifacts import ArtifactStore, StoredArtifact, split_bucket_uri
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "experiments" / "data.manifest.json"
@@ -57,10 +57,10 @@ class DataManifest(BaseModel):
     files: dict[str, DataFile]
 
     def stored(self, entry: DataFile) -> StoredArtifact:
-        bucket, prefix = split_s3_uri(self.store)
+        scheme, bucket, prefix = split_bucket_uri(self.store)
         key = "/".join(filter(None, (prefix.rstrip("/"), "sha256", entry.sha256)))
         return StoredArtifact(
-            uri=f"s3://{bucket}/{key}", sha256=entry.sha256, bytes=entry.bytes
+            uri=f"{scheme}://{bucket}/{key}", sha256=entry.sha256, bytes=entry.bytes
         )
 
     def select(self, paths: Iterable[str]) -> list[str]:
@@ -92,7 +92,7 @@ class DataUnavailable(RuntimeError):
 
 
 class FetchReport(BaseModel):
-    """Paths installed by a fetch, and how many digests S3 had to supply."""
+    """Paths installed by a fetch, and how many digests the bucket had to supply."""
 
     model_config = ConfigDict(frozen=True)
     fetched: list[str]
@@ -158,7 +158,7 @@ def fetch_data(
 def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> list[str]:
     """Upload local files under experiments/data and record them in the manifest.
 
-    S3 verifies each upload's SHA-256 and never overwrites a digest; nothing is
+    Storage verifies each upload's SHA-256 and never overwrites a digest; nothing is
     read back. The same local bytes fill the cache. Returns the paths whose
     manifest entry was added or changed.
     """
@@ -179,7 +179,7 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
             files.append(relative)
         else:
             raise ValueError(f"no local file or directory at {request}")
-    store = S3ArtifactStore()
+    store = ArtifactStore()
     cache = cache_directory()
     entries = dict(manifest.files)
     changed: list[str] = []
@@ -270,7 +270,7 @@ def _download(entries: list[DataFile], manifest: DataManifest, cache: Path) -> N
     except ImportError as error:
         raise DataUnavailable("fetching needs `uv run --extra artifacts`") from error
     try:
-        store = S3ArtifactStore()
+        store = ArtifactStore()
         for entry in entries:
             reference = manifest.stored(entry)
             _admit(cache, entry, lambda partial: store.download(reference, partial))
@@ -303,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         "paths", nargs="*", help="Files or directories; everything when omitted"
     )
     publish = commands.add_parser(
-        "publish", help="Upload to the S3 store and update the manifest to commit"
+        "publish", help="Upload to the store and update the manifest to commit"
     )
     publish.add_argument("paths", nargs="+", help="Files or directories to upload")
     args = parser.parse_args(argv)

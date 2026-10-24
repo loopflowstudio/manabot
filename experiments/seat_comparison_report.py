@@ -23,9 +23,10 @@ from pathlib import Path
 import random
 import statistics
 
-from experiments.seat_comparison import SEEDS
-from experiments.seat_comparison_follow import MILESTONES
-
+# The experiment's training seeds and learner-decision milestones, as launched
+# (protocols/seat-comparison-v1.md).
+SEEDS = (64001, 64002, 64003, 64004)
+MILESTONES = tuple(m * 1_000_000 for m in (1, 2, 4, 8, 16, 32, 64))
 REPLICATES = 4000
 
 

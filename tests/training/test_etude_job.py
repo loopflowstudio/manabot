@@ -1,6 +1,7 @@
 """Direct SDK worker proof: actual learner, admitted bytes and failure admission."""
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import json
 from pathlib import Path
 import subprocess
@@ -9,6 +10,8 @@ from etude.train.read import read_all
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.experiment.config import Baseline, Case, Experiment
+from manabot.experiment.execution import PlannedRun
 from manabot.experiment.job import TrainingJob, run_worker
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
@@ -132,3 +135,33 @@ def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     assert run.error is not None and "cancelled by launcher" in run.error
     assert run.selected_artifact is None
     assert (tmp_path / "run/run.json").exists()
+
+
+def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> None:
+    regime = specification().regime
+    experiment = Experiment(
+        "plans",
+        Baseline.capture("fixture", regime),
+        cases=(Case("control"),),
+        jobs=(
+            PlannedRun(case="plans-control", seed=11, max_hours=1, milestones=(1,)),
+            PlannedRun(
+                case="plans-control",
+                seed=12,
+                max_hours=2,
+                max_usd=Decimal(3),
+                validate_numerics=True,
+            ),
+        ),
+    )
+    runs = experiment.runs(repo=tmp_path, revision="fixture-commit")
+    assert [run.seed for run in runs] == [11, 12]
+    assert [run.params for run in runs] == [{"case": "plans-control"}] * 2
+    assert [run.job.max_hours for run in runs] == [1, 2]
+    assert runs[1].job.max_usd == Decimal(3)
+    first, second = (
+        TrainingJob.model_validate_json(run.job.config or "") for run in runs
+    )
+    assert first.milestones == (1,) and not first.validate_numerics
+    assert second.validate_numerics
+    assert first.regime.stages == experiment.resolve().cases[0].regime.stages
