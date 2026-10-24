@@ -51,7 +51,9 @@ terminal. Ledger entries from w1/w2 stay unchanged. No other concept changes:
 `LearnerContinuation` (storage keys, pre-launch) vs `LearningStateImport`
 (bound local paths, regime admission) are distinct stages of the same import and
 both earn their place; window (w1/w2, cohort) vs segment (w3, Etude) matches the
-protocol amendment. No open product choice.
+protocol amendment. No open product choice. Implemented 2026-10-24 (single `--run`,
+`SegmentSource`, `Ledger.segment_outcome`, report reads it); the focused suite
+(etude_job, learning_state, elemental_long*, elemental_grid, tracking) passed, 39 tests.
 
 ## Remains, in order
 
@@ -61,7 +63,7 @@ protocol amendment. No open product choice.
 2. When #362 is on main: merge main, land this change so w3's source is on main,
    launch w3 (`rent="l4"`, one attempt).
 3. Follower cutover per the amendment (restart from the w3 commit with
-   `--etude-source`/`--segment`, same ledger). The Etude read path
+   `--etude-source`/`--run`, same ledger). The Etude read path
    (`etude.train.read.read`, tracking URI argument) is unverified against a live run.
 4. Local evaluation: the protocol expects ~51 h of grids/pairs, mostly overlapping
    training, but none has started. If MTG-181's follower keeps running, the

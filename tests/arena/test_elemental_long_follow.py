@@ -1,4 +1,4 @@
-"""The follower keeps cohort-era checkpoints and settles on Etude segments."""
+"""The follower keeps cohort-era checkpoints and settles on its one Etude segment."""
 
 from decimal import Decimal
 import hashlib
@@ -8,7 +8,7 @@ from etude.launch.records import Status
 from etude.run.records import ArtifactRef
 from etude.train.records import CheckpointRecord
 
-from experiments.elemental_long_follow import Checkpoint, Etude, Ledger, _admit
+from experiments.elemental_long_follow import Checkpoint, Ledger, SegmentSource, _admit
 
 
 def _record(path: Path, updates: int) -> CheckpointRecord:
@@ -42,7 +42,9 @@ def _status(phase: str, outcome: str | None) -> Status:
     )
 
 
-def test_segments_join_retained_windows_and_settle_when_done(tmp_path: Path) -> None:
+def test_segment_joins_retained_windows_and_settles_when_terminal(
+    tmp_path: Path,
+) -> None:
     exports = []
     for updates in (2550, 2600, 2650):
         path = tmp_path / f"{updates}.pt"
@@ -63,18 +65,19 @@ def test_segments_join_retained_windows_and_settle_when_done(tmp_path: Path) -> 
         },
     )
     phase = ["running", None]
-    segments = Etude(
-        runs=("w3",),
-        checkpoints=lambda run: exports[:2] if phase[0] == "running" else exports,
-        status=lambda run: _status(phase[0], phase[1]),
+    segment = SegmentSource(
+        run="w3",
+        checkpoints=lambda: exports[:2] if phase[0] == "running" else exports,
+        status=lambda: _status(phase[0], phase[1]),
     )
-    _admit(tmp_path, ledger, segments)
+    _admit(tmp_path, ledger, segment)
     assert ledger.checkpoints[2550].job == "mtg183-elemental-long-w2"
     assert ledger.checkpoints[2600].job == "w3"
     assert not ledger.settled and ledger.endpoint is None
+    assert ledger.segment_outcome is None
     # A segment that stops short of its target still ends the seed.
     phase[:] = ["done", "failed"]
-    _admit(tmp_path, ledger, segments)
+    _admit(tmp_path, ledger, segment)
     assert ledger.settled and ledger.endpoint == 2650
-    assert ledger.segments == {"w3": "done: failed"}
+    assert ledger.segment_outcome == "done: failed"
     assert ledger.error is None

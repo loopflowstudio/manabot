@@ -2,9 +2,9 @@
 
 Windows w1 and w2 trained under the retired cohort controller; the follower
 that watched them admitted their exports into `<directory>/ledger.json`, and
-those entries are kept as they are. Later segments are Etude runs
-(`experiments.elemental_long.segment_job`): the follower reads each run's
-tracked checkpoint records from Etude storage, fetches digest-checked bytes
+those entries are kept as they are. The seed continues in exactly one Etude
+segment, w3 (`experiments.elemental_long.segment_job`): the follower reads that
+run's tracked checkpoint records from Etude storage, fetches digest-checked bytes
 and admits the rated checkpoints of `experiments.elemental_long.rated_updates`.
 It then plays two kinds of evaluation unit, oldest newer-checkpoint first:
 
@@ -13,8 +13,8 @@ It then plays two kinds of evaluation unit, oldest newer-checkpoint first:
 - `pair`: a newer checkpoint against an older one on the 10×10 deck grid
   (`h2h_schedule`), from `pair_design`.
 
-The endpoint (the last segment's final update) is admitted only once every
-named Etude run is done; its pairs follow. Group results under `<directory>/units/`
+The endpoint (the segment's final update) is admitted only once the run is
+terminal; its pairs follow. Group results under `<directory>/units/`
 are the durable authority: a completed group is reused after a restart, a
 failed group counts its games as invalid and is never replayed. The follower
 never rents, cancels or changes training, and waits while MTG-181's follower
@@ -22,7 +22,7 @@ is still evaluating on this machine.
 
     uv run --extra artifacts python -m experiments.elemental_long_follow \
         --directory .runs/mtg183/follow --until <unix-seconds> \
-        --etude-source <tracking storage URI> --segment <etude run> ...
+        --etude-source <tracking storage URI> --run <etude run>
 """
 
 from __future__ import annotations
@@ -109,8 +109,8 @@ class Ledger(BaseModel):
     h2h_schedule_sha256: str
     checkpoints: dict[int, Checkpoint] = {}
     units: dict[str, Unit] = {}
-    # Etude run -> its last observed status, e.g. "running" or "done: succeeded".
-    segments: dict[str, str] = {}
+    # The segment's terminal Etude state, e.g. "done: succeeded"; None until then.
+    segment_outcome: str | None = None
     settled: bool = False
     endpoint: int | None = None
     error: str | None = None
@@ -385,63 +385,58 @@ def collect_pair(directory: Path) -> list[H2HRow]:
 
 
 @dataclass(frozen=True)
-class Etude:
-    """Where the follower reads segment runs and asks whether they are done."""
+class SegmentSource:
+    """The segment's Etude run: its tracked checkpoints and its status."""
 
-    runs: tuple[str, ...]
-    checkpoints: Callable[[str], list[CheckpointRecord]]
-    status: Callable[[str], Status]
+    run: str
+    checkpoints: Callable[[], list[CheckpointRecord]]
+    status: Callable[[], Status]
 
 
-def etude(source: str, runs: tuple[str, ...]) -> Etude:
-    return Etude(
-        runs=runs,
-        checkpoints=lambda run: list(read(source, STAGE, run).checkpoints),
-        status=status,
+def segment_source(source: str, run: str) -> SegmentSource:
+    return SegmentSource(
+        run=run,
+        checkpoints=lambda: list(read(source, STAGE, run).checkpoints),
+        status=lambda: status(run),
     )
 
 
-def _admit(directory: Path, ledger: Ledger, segments: Etude) -> None:
-    """Record every segment's tracked exports and whether all have ended.
+def _admit(directory: Path, ledger: Ledger, segment: SegmentSource) -> None:
+    """Record the segment's tracked exports and whether its run has ended.
 
-    Any terminal Etude state settles a segment: one that stops short of its
-    target still ends the seed at its last tracked export, and its outcome
-    stays in `ledger.segments` for the report.
+    Any terminal Etude state settles the segment: a run that stops short of
+    its target still ends the seed at its last tracked export, and its state
+    stays in `ledger.segment_outcome` for the report.
     """
-    errors = []
-    for run in segments.runs:
-        try:
-            found = segments.status(run)
-            ledger.segments[run] = str(found).split(",")[0]
-            records = segments.checkpoints(run)
-        except Exception as error:
-            errors.append(f"{run}: {type(error).__name__}")
+    try:
+        phase = str(segment.status()).split(",")[0]
+        records = segment.checkpoints()
+        ledger.error = None
+    except Exception as error:
+        phase, records = "", []
+        ledger.error = f"{segment.run}: {type(error).__name__}"
+    for record in records:
+        updates = int(record.at["updates"])
+        # The segment's initial export repeats w2's endpoint.
+        if updates in ledger.checkpoints:
             continue
-        for record in records:
-            updates = int(record.at["updates"])
-            # A segment's initial export repeats its parent's endpoint.
-            if updates in ledger.checkpoints:
-                continue
-            cache = directory / "cache" / run
-            cache.mkdir(parents=True, exist_ok=True)
-            path = fetch_etude_checkpoint(record, cache / f"{updates:06d}.pt")
-            assert record.artifact.sha256 is not None
-            ledger.checkpoints[updates] = Checkpoint(
-                updates=updates,
-                job=run,
-                training_run=run,
-                path=str(path),
-                sha256=record.artifact.sha256,
-                coordinates=dict(record.at),
-            )
-    ledger.settled = (
-        not errors
-        and len(ledger.segments) == len(segments.runs)
-        and all(phase.startswith("done") for phase in ledger.segments.values())
-    )
+        cache = directory / "cache" / segment.run
+        cache.mkdir(parents=True, exist_ok=True)
+        path = fetch_etude_checkpoint(record, cache / f"{updates:06d}.pt")
+        assert record.artifact.sha256 is not None
+        ledger.checkpoints[updates] = Checkpoint(
+            updates=updates,
+            job=segment.run,
+            training_run=segment.run,
+            path=str(path),
+            sha256=record.artifact.sha256,
+            coordinates=dict(record.at),
+        )
+    if phase.startswith("done"):
+        ledger.segment_outcome = phase
+    ledger.settled = ledger.segment_outcome is not None
     if ledger.settled and ledger.checkpoints and ledger.endpoint is None:
         ledger.endpoint = max(ledger.checkpoints)
-    ledger.error = "; ".join(errors) or None
     latest = max(ledger.checkpoints, default=0)
     rated = [
         u for u in rated_updates(latest, ledger.endpoint) if u in ledger.checkpoints
@@ -490,7 +485,7 @@ def _evaluate(unit: Unit, directory: Path, ledger: Ledger, path: Path) -> None:
     atomic_json(path, ledger.model_dump(mode="json"))
 
 
-def follow(directory: Path, until: float, segments: Etude) -> None:
+def follow(directory: Path, until: float, segment: SegmentSource) -> None:
     if schedule_sha256() != SCHEDULE_SHA256 or h2h_schedule_sha256() != (
         H2H_SCHEDULE_SHA256
     ):
@@ -512,7 +507,7 @@ def follow(directory: Path, until: float, segments: Etude) -> None:
             if time.time() - polled > 600:
                 polled = time.time()
                 try:
-                    _admit(directory, ledger, segments)
+                    _admit(directory, ledger, segment)
                 except Exception as error:
                     ledger.error = f"admission: {type(error).__name__}: {error}"
                 ledger.observed_at = time.time()
@@ -539,12 +534,12 @@ def main() -> None:
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--until", type=float, required=True)
     parser.add_argument("--etude-source", required=True)
-    parser.add_argument("--segment", action="append", required=True)
+    parser.add_argument("--run", required=True)
     args = parser.parse_args()
     follow(
         args.directory.resolve(),
         args.until,
-        etude(args.etude_source, tuple(args.segment)),
+        segment_source(args.etude_source, args.run),
     )
 
 

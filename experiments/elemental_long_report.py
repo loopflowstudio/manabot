@@ -412,7 +412,7 @@ class CurvePoint(BaseModel):
 class Summary(BaseModel):
     seed: int
     endpoint: int | None
-    segments: dict[str, str]
+    segment_outcome: str | None
     rated: list[int]
     curve: list[CurvePoint]
     seat0_elo: float | None
@@ -467,7 +467,7 @@ def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
     return Summary(
         seed=SEED,
         endpoint=endpoint,
-        segments=results.ledger.segments,
+        segment_outcome=results.ledger.segment_outcome,
         rated=results.rated,
         curve=curve,
         seat0_elo=fit.seat0_elo if fit else None,
@@ -509,8 +509,8 @@ def markdown(summary: Summary) -> str:
     lines = [
         f"# MTG-183 seed {summary.seed}: heuristic and checkpoint rating",
         "",
-        f"Endpoint update: {summary.endpoint}; Etude segments: "
-        f"{', '.join(f'{k} {v}' for k, v in summary.segments.items()) or 'none'}. "
+        f"Endpoint update: {summary.endpoint}; Etude segment: "
+        f"{summary.segment_outcome or 'not ended'}. "
         f"Seat-0 advantage {summary.seat0_elo:.1f} Elo."
         if summary.seat0_elo is not None
         else "",
