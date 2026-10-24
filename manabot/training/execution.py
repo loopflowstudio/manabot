@@ -99,6 +99,7 @@ from manabot.training.supervised.search import (
     SearchSupervisedEpochStats,
     train_search_supervised,
 )
+from manabot.training.update_metrics import metric_row
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -111,6 +112,17 @@ if TYPE_CHECKING:
 PROGRESS_EXPORT_SECONDS = 30.0
 # Largest share of a stage's wall time that progress exports may consume.
 PROGRESS_EXPORT_SHARE = 0.02
+
+
+def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
+    """Cumulative subphase timings under `root`, keyed by their path below it."""
+    return {
+        path.removeprefix(f"{root}/"): PhaseTiming(
+            seconds=stats["total_time"], calls=int(stats["count"])
+        )
+        for path, stats in profiler.get_stats().items()
+        if path.startswith(f"{root}/")
+    }
 
 
 def process_tree_rss(process: psutil.Process) -> int:
@@ -296,7 +308,7 @@ def execute_regime(
                 parent.monitoring_checkpoint_milestones,
             ):
                 raise ValueError("recovery checkpoint cadence differs from parent")
-            snapshot = load_update(parent, store)
+            snapshot = load_update(parent)
             admit_recovery_identities(
                 parent.identities,
                 _runtime_identities(seed, regime, ObservationSpace(regime.observation)),
@@ -414,12 +426,13 @@ def _execute_regime(
         if parent is not None
         else 0,
         recovery_artifact=parent.recovery_artifact if parent is not None else None,
+        metrics_run=parent.metrics_run if parent is not None else None,
         stages=deepcopy(snapshot.completed_stages) if snapshot is not None else [],
     )
     if parent is not None and (checkpoint_updates is not None or checkpoint_milestones):
         assert snapshot is not None
         restored_updates = sum(
-            len(s.diagnostics) for s in (*snapshot.completed_stages, snapshot.record)
+            s.updates for s in (*snapshot.completed_stages, snapshot.record)
         )
         # Retain admitted exports from the committed prefix. Their artifact paths,
         # original costs and coordinates remain unchanged across process attempts.
@@ -510,7 +523,7 @@ def _execute_regime(
         return {
             "updates": run.updates_through(),
             **(
-                {"segment_updates": len(record.diagnostics)}
+                {"segment_updates": record.updates}
                 if isinstance(stage, TrainSelfPlay)
                 else {}
             ),
@@ -557,10 +570,7 @@ def _execute_regime(
             else time.perf_counter() - start - run.monitoring_export_seconds
         )
         point = coordinates()
-        if (
-            isinstance(stage, TrainSelfPlay)
-            and len(record.diagnostics) == stage.updates
-        ):
+        if isinstance(stage, TrainSelfPlay) and record.updates == stage.updates:
             return
         scheduled = point["updates"] in checkpoint_milestones and not any(
             c.updates == point["updates"] for c in run.monitoring_checkpoints
@@ -678,14 +688,12 @@ def _execute_regime(
                     snapshot = None
                     continue
             if isinstance(stage, TrainSelfPlay):
-                record.optimizer_updates = (
-                    record.observed_optimizer_updates() if snapshot is not None else 0
-                )
+                if snapshot is None:
+                    record.optimizer_updates = 0
                 if not restoring_completed:
                     record.admission_wait_seconds = 0.0
-                    record.collection_timings = (
-                        {} if stage.execution.profile_collection else None
-                    )
+                    record.collection_timings = {}
+                    record.learning_timings = {}
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -972,6 +980,7 @@ def _execute_regime(
                         check=check,
                     )
                     record.learning_seconds += time.perf_counter() - tick
+                    record.updates += 1
                     record.optimizer_exposures += update.optimizer_exposures
                     stats.learning_seconds = record.learning_seconds
                     stats.optimizer_exposures += update.optimizer_exposures
@@ -1318,12 +1327,16 @@ def _execute_regime(
                             device=stage.execution.device,
                             log_level="WARNING",
                         ),
+                        run=run.id,
+                        # A recovery attempt continues its parent's metrics.
+                        resume=Path(run.metrics_run) if run.metrics_run else None,
                         resolved_config={
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,
                             "identities": run.identities,
                         },
                     )
+                    run.metrics_run = str(experiment.run.files.root)
                     resources.callback(
                         lambda exp=experiment: exp.close(
                             "finished" if run.status == "completed" else "failed"
@@ -1358,9 +1371,9 @@ def _execute_regime(
                         imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(learner.agent.parameters()).device)
-                collector.profiler = Profiler(
-                    enabled=stage.execution.profile_collection
-                )
+                # Phase timers are always on: each ends at an existing device
+                # wait, so they add no synchronization (~1 µs per phase).
+                collector.profiler = Profiler()
                 before = deepcopy(collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
@@ -1374,7 +1387,7 @@ def _execute_regime(
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
                     iteration = snapshot.iteration
-                    first_update = len(snapshot.record.diagnostics)
+                    first_update = snapshot.record.updates
                     # Restored counts are committed scientific work; failed work
                     # remains in the parent attempt and its cost stays charged.
                     before = snapshot.collector_before
@@ -1442,71 +1455,78 @@ def _execute_regime(
                     finally:
                         synchronize()
                         record.collection_seconds += time.perf_counter() - tick
-                        if stage.execution.profile_collection:
-                            # Subphases inherit the existing collection boundary.
-                            # Copy after it closes; reporting overhead is outside it.
-                            record.collection_timings = {
-                                path.removeprefix("Collection/"): PhaseTiming(
-                                    seconds=stats["total_time"],
-                                    calls=int(stats["count"]),
-                                )
-                                for path, stats in collector.profiler.get_stats().items()
-                                if path.startswith("Collection/")
-                            }
+                        # Subphases inherit the existing collection boundary.
+                        # Copy after it closes; reporting overhead is outside it.
+                        record.collection_timings = _phase_timings(
+                            collector.profiler, "Collection"
+                        )
                     check()
                     tick = time.perf_counter()
                     try:
-                        diagnostic = (
-                            update_iteration(
-                                learner,
-                                batch,
-                                stage.learning,
-                                update_index / stage.updates
-                                if regime.schedule_clock == "iteration_fraction"
-                                else (
-                                    time.perf_counter()
-                                    - start
-                                    - run.monitoring_export_seconds
+                        # The final device sync stays inside the Learning phase so
+                        # queued work (EMA, last step) counts toward learning.
+                        with learner.profiler.track("Learning"):
+                            try:
+                                diagnostic = (
+                                    update_iteration(
+                                        learner,
+                                        batch,
+                                        stage.learning,
+                                        update_index / stage.updates
+                                        if regime.schedule_clock == "iteration_fraction"
+                                        else (
+                                            time.perf_counter()
+                                            - start
+                                            - run.monitoring_export_seconds
+                                        )
+                                        / regime.wall_seconds,
+                                        rng,
+                                        iteration=iteration + 1,
+                                        bootstrap_agent=behavior_agent,
+                                    )
+                                    if stage.trainable == "policy_value"
+                                    else {
+                                        "rows": batch.actions.size,
+                                        "optimizer_exposures": 0,
+                                        "retained": 0,
+                                        "numerical": {"optimizer_steps": 0},
+                                    }
                                 )
-                                / regime.wall_seconds,
-                                rng,
-                                iteration=iteration + 1,
-                                bootstrap_agent=behavior_agent,
-                            )
-                            if stage.trainable == "policy_value"
-                            else {
-                                "rows": batch.actions.size,
-                                "optimizer_exposures": 0,
-                                "retained": 0,
-                                "numerical": {"optimizer_steps": 0},
-                            }
-                        )
-                        if stage.matchup_curriculum != "fixed":
-                            diagnostic["matchup_curriculum"] = stage.matchup_curriculum
-                            if stage.matchup_curriculum == "elemental-uniform":
-                                diagnostic["cumulative_matchup_exposure"] = deepcopy(
-                                    collector.stats.exposure
-                                )
-                            diagnostic["cumulative_games_by_stream"] = {
-                                str(k): v
-                                for k, v in collector.stats.games_by_stream.items()
-                            }
-                        diagnostic["behavior"] = stage.behavior
-                        diagnostic["behavior_iteration"] = iteration
-                        if stage.learning.gradient != "damped_policy":
-                            diagnostic["schedule_clock"] = regime.schedule_clock
-                        iteration += 1
-                        diagnostic["iteration"] = iteration
-                        if ema is not None:
-                            update_ema(ema, learner.agent, stage.learning.ema)
+                                if stage.matchup_curriculum != "fixed":
+                                    diagnostic["matchup_curriculum"] = (
+                                        stage.matchup_curriculum
+                                    )
+                                    if stage.matchup_curriculum == "elemental-uniform":
+                                        diagnostic["cumulative_matchup_exposure"] = (
+                                            deepcopy(collector.stats.exposure)
+                                        )
+                                    diagnostic["cumulative_games_by_stream"] = {
+                                        str(k): v
+                                        for k, v in collector.stats.games_by_stream.items()
+                                    }
+                                diagnostic["behavior"] = stage.behavior
+                                diagnostic["behavior_iteration"] = iteration
+                                if stage.learning.gradient != "damped_policy":
+                                    diagnostic["schedule_clock"] = regime.schedule_clock
+                                iteration += 1
+                                diagnostic["iteration"] = iteration
+                                if ema is not None:
+                                    with learner.profiler.track("EMA update"):
+                                        update_ema(
+                                            ema, learner.agent, stage.learning.ema
+                                        )
+                            finally:
+                                synchronize()
                     finally:
-                        synchronize()
                         record.learning_seconds += time.perf_counter() - tick
+                        record.learning_timings = _phase_timings(
+                            learner.profiler, "Learning"
+                        )
                     if collector.opponent_mode == "self":
                         diagnostic["self_play_outcomes"] = (
                             collector.stats.self_play.drain()
                         )
-                    record.diagnostics.append(diagnostic)
+                    record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
                         record.optimizer_updates += diagnostic["numerical"][
@@ -1520,8 +1540,9 @@ def _execute_regime(
                         collector.stats.learner_transitions - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        diagnostic,
+                        metric_row(diagnostic),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
@@ -1613,6 +1634,7 @@ def _execute_regime(
                         (~np.isin(dataset["game_index"], list(validation))).sum()
                     )
                     row = asdict(stats)
+                    record.updates += 1
                     record.diagnostics.append(row)
                     row["coordinates"] = coordinates()
                     monitor_checkpoint(model)

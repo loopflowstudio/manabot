@@ -87,7 +87,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     assert run.status == expected
     stage = run.stages[0]
     if expected == "completed":
-        assert len(stage.diagnostics) == 2
+        assert stage.updates == 2
         assert stage.collection_seconds + stage.learning_seconds >= 20
         assert len(run.monitoring_checkpoints) == 1
         point = run.monitoring_checkpoints[0]
@@ -172,7 +172,7 @@ def test_initial_admission_precedes_collection(
         if admitted:
             finished = future.result(timeout=30)
             assert finished.status == "completed"
-            assert len(finished.stages[0].diagnostics) == 2
+            assert finished.stages[0].updates == 2
             assert finished.stages[0].admission_wait_seconds is not None
             assert finished.stages[0].admission_wait_seconds >= 100
         else:

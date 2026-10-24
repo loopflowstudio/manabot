@@ -62,6 +62,7 @@ main engine. The loop is declared as data and executed by one runner:
         │
         ├── VerifyStore: resolved recipe, seed streams, source identity,
         │   costs, and every failed attempt
+        ├── Etude: per-update self-play metrics, once
         v
  evaluation: fixed anchors (random, scripted greedy, heuristic) on held-out
  paired deals, both decks and seats, replay-verified games

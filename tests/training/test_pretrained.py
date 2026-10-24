@@ -11,6 +11,7 @@ from manabot.training.records import TrainingRun
 from manabot.training.regime import PretrainedPolicy, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 from tests.training.test_learning_state import continuation, producer, reference
+from tests.training.test_recovery import tracked_updates
 
 __all__ = ["producer"]
 
@@ -57,11 +58,11 @@ def test_changed_recipe_starts_from_published_weights(
         torch.testing.assert_close(value, expected.state_dict()[key], rtol=0, atol=0)
     # Schedules, counters and Adam belong to this run, not to the producer.
     assert record.learning_state_origin is None
-    assert [d["iteration"] for d in record.diagnostics] == [1, 2]
+    assert [d["iteration"] for d in tracked_updates(forked, tmp_path)] == [1, 2]
     assert forked.updates_through() == 2
     adam = torch.load(record.artifacts["optimizer"]["path"], weights_only=True)
     steps = {int(state["step"].item()) for state in adam["state"].values()}
-    assert max(steps) == record.observed_optimizer_updates()
+    assert max(steps) == record.optimizer_updates
     assert record.producer_cost is not None
     assert record.producer_cost.run_id == producer.id
     assert record.producer_cost.weights == "ema"
@@ -120,7 +121,7 @@ def test_rejects_weights_this_model_cannot_hold(
     failed = TrainingRun.model_validate_json(
         (tmp_path / "rejected/run.json").read_text()
     )
-    assert failed.status == "failed" and not failed.stages[0].diagnostics
+    assert failed.status == "failed" and not failed.stages[0].updates
 
 
 def test_one_starting_state_per_stage(tmp_path: Path, producer: TrainingRun) -> None:

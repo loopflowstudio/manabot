@@ -160,7 +160,7 @@ def save_incident(
         "recipe": run.regime_digest,
         "stage": run.stages[-1].id,
         "iteration": iteration,
-        "completed_updates": len(run.stages[-1].diagnostics),
+        "completed_updates": run.stages[-1].updates,
         "source": {
             k: run.identities.get(k)
             for k in ("source_commit", "training_source_sha256", "torch", "cuda")
