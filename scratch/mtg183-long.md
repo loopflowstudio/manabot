@@ -90,7 +90,7 @@ frozen launch commit `8e7df92e4` stays an ancestor):
 3. Protocol amendment "continue on Etude after w2" (rules; numbers go in
    `experiments/protocols/elemental-183-w3.json` at staging, before allocation).
 4. Follower admits Etude segment exports, settles on Etude run done.
-Check: `uv run --extra dev pytest tests/training/test_etude_job.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 34 passed.
+Check: `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed.
 
 Remaining, in order:
 - After w2 ends (deadline 2026-10-25 01:47 UTC): fetch w2's final run.json and
