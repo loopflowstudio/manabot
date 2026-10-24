@@ -205,3 +205,17 @@ Refutation, a failed window, no saturation point and no useful effect are
 reportable outcomes. Kill criteria are the job's own: non-finite values,
 illegal offered action, identity mismatch, game-error rate above 10% before a
 cutoff, or exhausted time/cost allowance. Stop rather than tune or substitute.
+
+## Amendment, 2026-10-24 02:10 UTC, before any evaluation result
+
+Writing the report's synthetic test showed that the saturation rule above is
+degenerate at this sample size: with 5,000 paired heuristic games, a remaining
+gain of 0.004 is already significant, so a heuristic score that keeps creeping
+upward never "saturates". The primary rule is therefore a practical margin:
+U_h is the earliest rated update whose remaining gain (endpoint − U_h) has a
+95% upper bound below **0.03**, after which no later rated checkpoint is
+significantly above the endpoint. In practice only full-grid checkpoints can
+meet that bound (a 1,000-game subset's interval is too wide). The strict rule
+is still reported beside it. The existence test (endpoint rating above U_h,
+endpoint v U_h above 0.5) is unchanged. No game had been played when this was
+written; training window w1 was in setup.
