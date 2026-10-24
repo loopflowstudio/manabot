@@ -10,7 +10,7 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.arena.monitor import stage_checkpoint
+from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay

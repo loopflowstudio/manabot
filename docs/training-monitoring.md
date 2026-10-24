@@ -1,6 +1,6 @@
 # TrainingRun dashboards
 
-The training monitor projects existing TrainingRun diagnostics and arena receipts
+The training monitor projects existing TrainingRun diagnostics and evaluation receipts
 into Etude metric runs. VerifyStore remains the training authority;
 `run.json`, `dashboard.json` and Etude metrics are exports. No account is needed to
 train or retain diagnostics. These commands do not modify a running trainer,
@@ -129,7 +129,7 @@ uv run etude reports write --source .runs/example-dashboard/etude
 Run evaluation in a separate process, explicitly accounting for its compute:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --out .runs/example-monitor --watch-seconds 30 \
   --concurrent-activity 'training running concurrently' --entity TEAM
 ```
@@ -140,9 +140,9 @@ are not automatically replaced. Saved results can be synced later. For an
 individual export or a stage-end checkpoint:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --checkpoint 0 --out .runs/checkpoint-0-monitor
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --stage policy-0 --out .runs/stage-0-monitor
 ```
 
@@ -184,12 +184,12 @@ uv run python -m manabot.reports.training \
 ```
 
 Supply evaluation attempts in immutable append order, including failures. Runs,
-protocols and opponents must agree within a curve. Existing arena rows can be
+protocols and opponents must agree within a curve. Existing evaluation rows can be
 imported against a saved MonitorResult manifest with original checkpoint,
 coordinates, registrations and protocol:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --import-manifest /path/to/manifest.json --import-rows /path/to/rows.json \
   --out .runs/imported-monitor
 ```

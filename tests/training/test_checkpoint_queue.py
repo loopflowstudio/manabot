@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import ArenaRow, _summarize
+from manabot.eval.monitor import EvaluationRow, _summarize
 from manabot.experiment import evaluation_queue as queue
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
 from manabot.recipes.ataraxos import ataraxos
 from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
 from tests.training.test_monitor_evaluation import _manifest, _rows
@@ -169,7 +169,7 @@ def test_completed_result_projects_and_interruption_suppresses_rate(
     monitor.tick([source])
     attempt = monitor.attempts[0]
     manifest = _manifest()
-    manifest.rows = [ArenaRow.model_validate(r) for r in _rows(manifest)]
+    manifest.rows = [EvaluationRow.model_validate(r) for r in _rows(manifest)]
     _summarize(manifest)
     directory = monitor._directory(attempt) / "evaluation"
     directory.mkdir()
@@ -237,7 +237,7 @@ def test_completed_worker_survives_delayed_parent_poll(
     try:
         monitor.tick([source])
         result = _manifest()
-        result.rows = [ArenaRow.model_validate(r) for r in _rows(result)]
+        result.rows = [EvaluationRow.model_validate(r) for r in _rows(result)]
         _summarize(result)
         directory = monitor._directory(monitor.attempts[0]) / "evaluation"
         directory.mkdir()

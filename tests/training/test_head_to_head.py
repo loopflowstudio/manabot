@@ -8,8 +8,9 @@ import pytest
 
 pytest.importorskip("etude.eval.match")
 
-from manabot.arena import duel as duel_eval
-from manabot.arena.monitor import MonitorProtocol
+from manabot.eval import duel as duel_eval
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment import duel_follow
 from manabot.infra.files import atomic_json
 from tests.training.test_etude_evaluation import _admission, _play_rows
 
@@ -60,11 +61,11 @@ def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
     result = json.loads((target / "result.json").read_bytes())
     public = tmp_path / "source" / "public"
     public.mkdir(parents=True)
-    duel_eval.report(
+    duel_follow.report(
         tmp_path,
         public.parent,
         {
-            "1000": duel_eval.DirectAttempt(
+            "1000": duel_follow.DirectAttempt(
                 phase="completed", started_at=1, two_seat="a" * 64, one_seat="b" * 64
             )
         },
@@ -142,10 +143,10 @@ def test_follower_selects_1000_and_retains_failure_without_retry(
         def wait(self, timeout: float | None = None) -> int:
             return 1
 
-    monkeypatch.setattr(duel_eval.subprocess, "Popen", FailedChild)
+    monkeypatch.setattr(duel_follow.subprocess, "Popen", FailedChild)
     for _ in range(2):
-        duel_eval.follow(
-            source, controls, tmp_path / "direct", deadline=duel_eval.time.time() + 10
+        duel_follow.follow(
+            source, controls, tmp_path / "direct", deadline=duel_follow.time.time() + 10
         )
     assert len(calls) == 1
     ledger = json.loads((tmp_path / "direct/ledger.json").read_bytes())

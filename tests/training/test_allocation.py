@@ -6,8 +6,9 @@ import time
 
 import pytest
 
-from manabot.arena.monitor import MonitorProtocol, stage_checkpoint
 from manabot.env import ObservationSpace
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.model.actor_critic import ActorCritic
 from manabot.training import execution

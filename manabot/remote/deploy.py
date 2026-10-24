@@ -390,7 +390,6 @@ def deploy(
     destination: str = "s3://etudefantasia/manabot/jobs",
     observe: Callable[[Transport], None] | None = None,
     after_training: Callable[[Transport], None] | None = None,
-    bulk_return: bool = False,
 ) -> Receipt:
     """Submit and observe the shared durable lifecycle; disconnect never cancels.
 

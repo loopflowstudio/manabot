@@ -9,7 +9,8 @@ import argparse
 from pathlib import Path
 import time
 
-from manabot.arena.monitor import MonitorProtocol, evaluate_checkpoint
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.checkpoint_evaluation import evaluate_checkpoint
 from manabot.infra.files import atomic_json
 from manabot.remote.bundle import Bundle, verify_training_bundle
 from manabot.remote.deploy import Receipt, current_source, deploy

@@ -7,7 +7,7 @@ import socket
 import pytest
 import torch
 
-from manabot.arena.monitor import MonitorProtocol
+from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.config import Baseline, Experiment
 from manabot.experiment.evaluation_queue import CheckpointQueue, MonitoringBudget
 from manabot.experiment.execution import ExperimentSchedule, Hardware, HardwareInventory

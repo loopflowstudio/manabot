@@ -38,7 +38,7 @@ honestly. Three decisions anchor the design:
                  │                        │                        │
                  └────────────────────────┼────────────────────────┘
                                           v
-             checkpoints ──> arena / anchor evaluation ──> receipts
+             checkpoints ──> evaluation against anchors ──> receipts
 
                          inspection UI (Academy, optional)
 
@@ -285,7 +285,7 @@ The durable learning and evaluation identities are:
 | `CheckpointManifest` | manabot | Exact weight bytes plus model, history/memory, belief, Observation/action ABI, dataset/run, target, seed, and inference-profile identities. |
 | `OpponentPoolManifest` | manabot | Immutable registered opponents and a versioned selection policy. A sampled opponent is recorded per match. |
 | `PlayerRegistration` | manabot | Immutable algorithm/checkpoint bytes, world, information boundary, compute class, and seed policy. |
-| `ArenaKey` | manabot | World, content suite, viewer boundary, arena/rating versions, frozen anchor cohort, and compute class. |
+| `EvaluationKey` | manabot | World, content suite, viewer boundary, evaluation/rating versions, frozen anchor cohort, and compute class. |
 | `DecisionEvidence` | manabot evidence consumed by Academy | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
 | `StudyReturnReceipt` | Academy adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
 
@@ -624,18 +624,27 @@ exploiters. Selection is a manabot training policy, not an arena rating rule or
 managym behavior. No recurrent memory, belief state, branch, or RNG stream is
 shared between seats or matches.
 
-### 9. Arena evaluation, skill estimation, and promotion
+### 9. Evaluation, skill estimation, and promotion
 
-Development evaluation answers a pairwise question and remains useful. Arena
-admission registers a candidate under one `ArenaKey`, plays a declared frozen
+`sim` owns registered policies, bounded execution, replay and native card facts.
+`eval` owns admission, schedules, result schemas, ratings, GIH reduction/query
+and MTG Arena log export. `experiment` owns checkpoint staging and followers.
+Simulation imports none of evaluation, training, experiment or reports. Canonical
+byte identities live in `infra.identity`. The former `manabot.arena` package
+is removed without import shims. Frozen wire fields (`arena_key`,
+`arena_version`), seed identifiers, source-path contracts and artifact paths keep
+their recorded meaning; new evaluations bind the relocated source bytes.
+
+Development evaluation answers a pairwise question and remains useful. Evaluation
+admission registers a candidate under one `EvaluationKey`, plays a declared frozen
 cohort on exact paired deals with seats swapped, and records Commands, outcomes,
 competencies, calibration, latency, throughput, and cost.
 
 INT-6's intended estimator is a regularized Bradley–Terry-style population
 model with order effects and paired-deal block bootstrap. The estimator and
-prior are part of `ArenaKey`; raw matrix, connectivity, residuals, and
+prior are part of `EvaluationKey`; raw matrix, connectivity, residuals, and
 uncertainty remain visible. “Elo” is acceptable product shorthand only when it
-does not imply portability across arenas. Promotion is an immutable receipt
+does not imply portability across evaluation cohorts. Promotion is an immutable receipt
 over all declared strength, safety, competency, and systems gates.
 
 ### 10. Projecting evidence into Study

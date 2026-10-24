@@ -28,10 +28,10 @@ METRICS = {
 }
 CONSUMERS = {
     "setup": "ETU-79 corrected-world binding and device smoke",
-    "generation": "manabot.sim.search.selected_branchdriver_teacher.run_teacher_game",
+    "generation": "selected BranchDriver teacher (retired; recover from git history)",
     "training": "manabot.training.supervised.search.train_search_supervised",
     "export": "manabot.sim.datagen.save_checkpoint -> academy.villain.CheckpointVillain",
-    "evaluation": "manabot.arena.match.play_cell (ETU-79 selected-match binding required)",
+    "evaluation": "manabot.eval.match.play_cell (ETU-79 selected-match binding required)",
 }
 
 

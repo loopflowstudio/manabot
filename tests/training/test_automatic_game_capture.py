@@ -23,7 +23,6 @@ from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim import datagen, rollout
-from manabot.sim.pooled_datagen import _GameStream
 from manabot.training import execution
 from manabot.training.regime import (
     Learning,
@@ -444,26 +443,6 @@ def test_distillation_failure_uses_scalar_capture(
     assert repaired["matches_error"] is None
     assert repaired["original_outcome"] == "failed"
     assert scope.paths[0].read_bytes() == original
-
-
-def test_pooled_stream_and_search_slot_failures_replay(tmp_path: Path) -> None:
-    scope = CaptureScope(tmp_path)
-    with capture_scope(scope):
-        stream = _GameStream(ObservationSpace(), Match(), 24)
-        stream.start_game(11, 24)
-        pool = stream.env.rollout_pool(1, 1, 197, 100)
-        buffers = rollout._allocate_buffers(ObservationSpace(), pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
-        assert pool.encode_active()
-        with pytest.raises(managym.AgentError):
-            pool.step_active([-1] * pool.num_slots)
-        with pytest.raises(managym.AgentError):
-            stream.env.step(-1)
-    assert read_failure(scope.paths[0]).mode == "search"
-    for path in scope.paths:
-        assert read_failure(path).context["game_index"] == 11
-        result = _bounded(path)["results"][0]
-        assert result["matches_error"] and result["at_retained_failure"]
 
 
 def test_capture_write_failure_does_not_mask_native_error(

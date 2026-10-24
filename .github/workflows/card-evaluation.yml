@@ -21,7 +21,7 @@ jobs:
       - name: Verify 1024 native games and retained rebuild
         run: |
           mkdir -p .runs
-          uv run --extra evaluation python -m manabot.arena.cards verify --games 1024 --out .runs/card-verification > .runs/card-verification-result.json
+          uv run --extra evaluation python -m manabot.eval.cards verify --games 1024 --out .runs/card-verification > .runs/card-verification-result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

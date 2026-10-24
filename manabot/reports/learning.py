@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING, Literal
 from matplotlib.figure import Figure
 import numpy as np
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import ArenaRow, MonitorResult, RateInterval
+from manabot.eval.monitor import EvaluationRow, MonitorResult, RateInterval
+from manabot.infra.identity import canonical_sha256
 
 if TYPE_CHECKING:
     from manabot.reports.experiment import ReportEvidence
@@ -39,7 +39,7 @@ class CheckpointPanel:
     results: tuple[MonitorResult, ...]
 
 
-def candidate_deck(row: ArenaRow) -> str | None:
+def candidate_deck(row: EvaluationRow) -> str | None:
     """Old rows without seat metadata remain unavailable, never guessed from leg."""
     extra = row.model_extra or {}
     seat = extra.get("player_a_seat")
@@ -76,7 +76,7 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
         ):
             raise ValueError("monitoring row differs from completed frozen cohort")
 
-    def cell(row: ArenaRow) -> str | None:
+    def cell(row: EvaluationRow) -> str | None:
         deck = candidate_deck(row)
         if deck is None or not result.protocol.include_mirrors:
             return deck

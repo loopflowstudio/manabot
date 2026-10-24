@@ -211,7 +211,7 @@ held-out opponents). The first two can improve while the third gets worse.
 ### Skill rating contract
 
 Strength is a population rating, not a win rate against random. The arena
-(`manabot/arena/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
+(`manabot/eval/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
 parameters on the familiar Elo scale; [Tournament](../experiments/head-to-head.md)
 files play chosen checkpoints against each other on shared deals.
 

@@ -151,3 +151,31 @@ unchanged and whitespace passed. Step 7 assessment accepts that result within
 the GIH keystone and proceeds to authorized step 8 publication. Required full
 regression/native/Clippy/1024-game checks remain explicit gate/CI obligations,
 not passing claims. Publication does not authorize merge or paid execution.
+
+Step 8 `lf -b pr-publish` exited successfully. Published PR #360:
+https://github.com/loopflowstudio/manabot/pull/360
+Parent inspection confirmed OPEN, ready for review, and no auto-merge request.
+The PR accurately records scope and outstanding full Python/native suites,
+Clippy and 1024-game proof. All child steps were awaited and inspected; pursuit
+is complete at publication, with no merge or next work selected. This final
+publication receipt is retained locally after the published commit.
+
+## Package migration evidence — 2026-10-23
+
+Jack Heart requested completing the migration in this checkout. The mixed source
+package and exclusive old test directory are gone. Split models/execution/capture
+into simulation, schedules/admission/metrics into evaluation, and checkpoint
+staging/followers into experiment. Canonical hashes now have one infra owner.
+Live imports, subprocess entry points, current guides, CI selection and release
+checks use the new paths. Frozen source-path allowlists, serialized keys, seed
+identifiers, artifact directories and fixtures retain their meanings.
+
+Focused checks exposed stale monkeypatch module targets, corrected to the actual
+simulation/checkpoint owners. The Academy search-score fixture began on a forced
+action, where search correctly produces no scores; it now advances to a real
+choice before asserting score coverage. Etude requires moved source paths to be
+tracked before hashing them; intent-to-add admission supplied that without
+changing digest logic. Missing local notebook/artifact extras were installed
+from the lockfile before integration collection. Passing proofs are summarized
+once in the design. No native source changed during this migration, no external
+scientific runs or paid jobs were launched, and no log-import API was added.

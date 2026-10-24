@@ -1,5 +1,14 @@
 # Card evaluation design — 2026-10-23
 
+- Interactive correction from Jack Heart: MTG-179 already accepted retiring the
+  mixed `arena/` name because it conflicts with MTG Arena. Its detailed split was
+  deferred, not rejected. Reusable play/replay/policies belong in `sim/`, evaluation
+  and card statistics in `eval/`, checkpoint followers in `experiment/`. This
+  change missed that direction; the working design now records the required
+  consumer cutover and removal. The review itself moved no code; the subsequent explicit migration request
+  authorized and completed the direct cutover. `manabot/arena/` is removed,
+  simulation imports no higher layers, and frozen serialized identities survive.
+
 - Jack Heart selected card ranking by GIH as the first result, with future
   17Lands-style API expansion and fidelity in the data-processing path.
 - Implementation design: `scratch/17lands-for-bots.md`; investigation:

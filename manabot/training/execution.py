@@ -16,7 +16,6 @@ import numpy as np
 import psutil
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
@@ -28,6 +27,7 @@ from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import RunContext
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.infra.source import source_commit

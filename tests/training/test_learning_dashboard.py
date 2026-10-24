@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from manabot.arena.monitor import MonitorResult
+from manabot.eval.monitor import MonitorResult
 from manabot.reports.experiment import RetainedRun, load_evidence, write_dashboard
 from manabot.reports.learning import candidate_deck, checkpoint_panels, deck_results
 

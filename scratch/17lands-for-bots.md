@@ -37,16 +37,16 @@ client, comparing its extracted fields against the expected game facts.
 Implemented entry points (the existing `evaluation` extra supplies DuckDB):
 
 ```sh
-uv run --extra evaluation python -m manabot.arena.cards evaluate --spec evaluation.json --out .runs/cards
-uv run --extra evaluation python -m manabot.arena.cards rank --source .runs/cards --run RUN --player AGENT --json
-uv run --extra evaluation python -m manabot.arena.cards export-log --source .runs/cards --run RUN --game GAME --viewer 0 --mapping mapping.json --out game.log
+uv run --extra evaluation python -m manabot.eval.cards evaluate --spec evaluation.json --out .runs/cards
+uv run --extra evaluation python -m manabot.eval.cards rank --source .runs/cards --run RUN --player AGENT --json
+uv run --extra evaluation python -m manabot.eval.cards export-log --source .runs/cards --run RUN --game GAME --viewer 0 --mapping mapping.json --out game.log
 ```
 
 ## Current system
 
-`arena.match.play_cell` owns bounded games and retained Commands;
-`arena.replay` checks their execution. `arena.benchmark.arena_tables` emits
-outcome-only `plays` rows; `arena.duel.play` uses it for model comparisons.
+`eval.match.play_cell` owns bounded games and retained Commands;
+`sim.replay` checks their execution. `eval.benchmark.evaluation_tables` emits
+outcome-only `plays` rows; `eval.duel.play` uses it for model comparisons.
 Etude already owns workers, identities, resume, Parquet delivery, and DuckDB
 queries. Its `player` means tournament participant, not physical engine seat.
 
@@ -58,13 +58,13 @@ policy snapshots or adding metric events to the rules ledger.
 
 The synced base already consolidates evaluation/tracking into Etude (`8c7f55813`)
 and retires historical study tooling (`003644bda`). The implementation uses that
-existing arena/Etude path; retired experiment runners are not integration targets.
+existing simulation/evaluation/Etude path; retired experiment runners are not integration targets.
 
 ## Data structures
 
 - `CardEvaluationSpec`: admitted agents, world/content identity, authored matchup,
   seeds, execution limits and capture/metric versions. Etude schedules one existing
-  eight-leg deck/seat matrix per pairing/deal; arena admission checks code and
+  eight-leg deck/seat matrix per pairing/deal; evaluation admission checks code and
   checkpoint entrants. Omitted matchup selects the existing Lessons/Allies matrix.
 - `GameEvidence`: trace/replay receipt hashes, terminal outcome, setup/decks,
   participant-to-engine-seat mapping, and ordered native facts. Capture opening
@@ -139,13 +139,13 @@ rankable internally but cannot claim successful Arena-ID export.
 
 ```python
 def play_card_match(match: Match) -> Tables: ...
-def capture_verified_game(trace: ArenaGameTrace) -> GameEvidence: ...
+def capture_verified_game(trace: GameTrace) -> GameEvidence: ...
 def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[CardGame]: ...
 def rank_cards(source: Storage | Path | str, query: CardQuery) -> CardRanking: ...
 def export_arena_log(game: GameEvidence, viewer: Seat, mapping: CardMapping) -> str: ...
 ```
 
-`ArenaGameTrace` is a typed view of the existing receipt, not a replacement
+`GameTrace` is a typed view of the existing receipt, not a replacement
 replay format. Query output includes selection, versions and completeness.
 
 ## Constraints
@@ -157,6 +157,13 @@ schema, not intermediate migrations. Installed SDK 0.2 supports scheduling,
 resume and query; its arbitrary-artifact delivery gap is handled explicitly.
 Existing outcome consumers and frozen evidence remain intact. No existing
 scientific run is relaunched.
+
+Package direction, reaffirmed by Jack Heart during interactive concept review:
+`manabot/sim/` owns reusable game execution/replay and opponent policies;
+`manabot/eval/` owns evaluation and card statistics; `manabot/experiment/`
+owns checkpoint-following orchestration. Retire the mixed `manabot/arena/`
+namespace; reserve Arena terminology for actual MTG Arena interoperability.
+Current commands and APIs above use the migrated owners.
 
 ## Forbidden outcomes
 
@@ -172,7 +179,7 @@ from client acceptance alone; uploading synthetic games to 17Lands.
    physical copy/incarnation facts, explicit draws, root-only capture, and offline
    pinned-parser tests for both viewers. Unmodified upstream test source and its
    license are retained; sockets are disabled and submissions use an in-memory sink.
-2. **Implemented: evaluation and query.** The arena's existing verification replay
+2. **Implemented: evaluation and query.** Simulation verification replay
    writes immutable compressed evidence containing its original trace. Etude
    stores `plays`, `card_games`, and `card_evidence`; rank rebuilds reducer rows
    before accepting the scalar tables. Resume skips completed matches and retains
@@ -201,12 +208,14 @@ from client acceptance alone; uploading synthetic games to 17Lands.
 
 ## Remaining implementation and verification
 
-**Implementation/concept gaps:** none identified in the 2026-10-23 reconciliation
+**Prior reconciliation:** no gaps were identified in the 2026-10-23 reconciliation
 of the schedule producer, shared admission, evidence loader, query and verifier
 against their regression sources. The earlier scheduled-admission gap is closed.
 This is a bounded source review supported by the preserved focused proofs, not
-full regression or scale certification. No product decision is outstanding for
-the current keystone.
+full regression or scale certification. The subsequent interactive review found
+that this change missed the accepted MTG-179 package direction. The
+mixed `arena/` ownership has now been corrected in this checkout; the
+log-interchange proposal below remains a separate unresolved scope question.
 
 **Deferred verification — gate/CI.** Full affected Python suites, the complete
 debug Rust suite and Clippy, and the declared 1024-game proof remain outstanding.
@@ -226,12 +235,12 @@ Draft/pick metrics require new draft evidence and are not promised by game logs.
 
 Headless acceptance (entry points and schedule admission are implemented):
 
-- `uv run --extra dev --extra evaluation pytest tests/arena/test_card_evaluation.py tests/arena/test_arena_log_conformance.py tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py -q`
+- `uv run --extra dev --extra evaluation pytest tests/eval/test_card_evaluation.py tests/eval/test_arena_log_conformance.py tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py -q`
   passes hand-calculated weighting, tutor/bounce/redraw, terminal/invalid cases,
   seat swaps, duplicate delivery, interrupted resume, filters, missing evidence,
   parser field equality and replay invariance, plus schedule-binding regressions
   above. Parser tests cannot skip silently.
-- `uv run --extra dev --extra evaluation python -m manabot.arena.cards verify --games 1024 --out .runs/card-verification`
+- `uv run --extra dev --extra evaluation python -m manabot.eval.cards verify --games 1024 --out .runs/card-verification`
   completes bounded native games with small code agents, verifies every trace,
   and rebuilds identical rows/ranks for both participants from artifacts. A tiny
   checkpoint matchup is already in focused coverage. The scale result reports
@@ -252,7 +261,13 @@ The prior 16-test focused Python pass, two debug recorder tests, native build,
 lint/format, bounded native/checkpoint games, resume, nested publication/rebuild
 and both-viewer pinned parser checks remain the supplied proof baseline. They
 were not repeated during reconciliation and do not certify the deferred gates.
-Check — 2026-10-23: preserved compress proof: `uv run --extra dev --extra evaluation pytest tests/arena/test_card_evaluation.py -q -k 'participant_schedule or schedule_admission or interrupted_schedule or native_evaluation_resume or loaded_evidence or scale_verifier'` → 19 passed, 9 deselected (58.37s); changed-file Ruff/format, `uv run --extra evaluation python -m compileall -q` and whitespace passed; documentation-only realign: `git diff --check` passed, tests not repeated. Full affected/native suites, Clippy and `verify --games 1024` remain deferred to gate/CI.
+Check — 2026-10-23: focused game/replay, registration, GIH/parser, monitoring,
+follower, search, Academy consumer, failure-recovery, boundary, CI-selection and
+release tests pass (failed cases rerun after fixes); integration workflow collects
+890 tests; changed Python Ruff/format and whitespace pass; release wheel built,
+installed independently, passed dependency check, imported every sim module with
+higher layers refused, and passed seven CLI help probes outside the checkout.
+Full affected/native suites, Clippy and `verify --games 1024` remain gate/CI scope.
 
 Engineering decisions: use existing arena admission (including checkpoint bytes,
 parameter counts and shared observation ABI); local explicit evaluation spec;
@@ -263,7 +278,7 @@ replay and public-hand reveal annotations. It reports unavailable mulligan count
 from the real client, not fabricated prompts. Missing printing mappings fail
 export but never prevent internal ranking. See `docs/card-evaluation.md`.
 
-## Concept review — 2026-10-23
+## Headless concept review — 2026-10-23
 
 Pursue step 6 outcome: **nothing to change and no open product choice** within
 Jack Heart's accepted GIH keystone. This review preserves the accepted design;
@@ -309,3 +324,292 @@ mismatch; no implementation was changed and no proof runs were repeated.
 Next proof remains the declared full affected Python/native checks, Clippy and
 1024-game verification at gate/CI. The supplied bounded proof remains evidence
 at its recorded scope. Step 7 owns navigation from this outcome.
+
+## Interactive concept review — 2026-10-23
+
+Jack Heart invoked concept-review after pursuit publication. The prior headless
+review assessed the accepted bounded export; it did not settle the stronger
+interchange experience below. This is a proposal and open product choice, not
+approval to change implementation or restart execution.
+
+**Question:** should processing fidelity mean that exported Arena logs can be
+read back to reproduce the same GIH card rows and rankings for supported games,
+or is the current parser-compatible export sufficient for the first release?
+
+Current behavior has two paths: native facts → `reduce_cards` → rankings, and
+native facts → Arena export → upstream-client extracted fields. The conformance
+fixture deliberately expects six parser hand sightings but four qualifying GIH
+copies for one viewer. That distinction is correct; however, passing the parser
+test does not demonstrate metric interchange. The exporter does not retain
+draw-versus-selection cause annotations. A library-to-hand move alone cannot
+distinguish drawing from tutoring. This is a concrete limit on the stronger
+promise, not evidence that the current GIH calculation is incorrect.
+
+Proposed usage wording is drafted in `docs/card-evaluation.md`. A user would
+evaluate models, rank a subject, export a game's viewer logs, then import those
+logs to obtain the same card facts and derived ranking. The conceptual addition
+would be an alternate evidence source, not another ranking implementation:
+native and Arena inputs normalize into the same metric-relevant facts and use
+one reducer. Native traces remain authoritative for engine replay; imported
+logs cannot claim native replay verification.
+
+Recovery counterexample: an import has hand arrivals but no reliable draw/tutor
+distinction. It must report unsupported/incomplete metric evidence and preserve
+the source bytes; it cannot infer that every arrival was a draw. Reprocessing
+after adapter repair should not require replaying the bots or silently replace
+an earlier version's derived result. Viewer privacy remains binding.
+
+If selected, next proof is equality of per-card contributions through both
+paths for duplicate copies, true draws, tutors, bounce and redraw, plus explicit
+rejection of insufficient logs. This would expand the current first-release
+boundary and needs Jack Heart's choice; no import API or general Arena replay
+support is approved by this note.
+
+### Package ownership correction
+
+Jack Heart clarified that MTG-179 already selected moving away from `arena`
+because of the conflict with MTG Arena, with responsibilities split between
+`sim/` and `eval/`. The source is
+`/Users/jack/src/manabot.training-correctness/scratch/training-credit-audit.md:641`:
+it records the naming direction as accepted, the detailed relocation as proposed,
+and the split as deferred from that CI repair. The landed
+`docs/repository-archive.md` also retains this boundary as remaining work.
+
+The prior design incorrectly treated existing package placement as a constraint.
+Accepted target ownership: reusable execution/replay/policies in `sim/`;
+evaluation protocols, admission, ratings, GIH reduction/query/CLI and MTG Arena
+export in `eval/`; checkpoint-following orchestration in `experiment/`.
+Native recording stays in managym. Shared simulation evidence must not import
+evaluation, training or experiment orchestration.
+
+**Delete — do not maintain:** retire `manabot/arena/` by cutting its live consumers
+over to those owners, including CLI/module references and tests. Do not leave
+re-export shims or another implementation behind. Split the new `card_evidence`
+module where its replay/capture responsibility meets metric reduction; do not
+move the entire mixed package to `eval/`. Actual MTG Arena export may retain that
+specific name. Frozen serialized evidence and recorded historical commands retain
+their original identities; active APIs, imports and instructions adopt the new
+paths. The completed cuts are recorded below.
+
+Jack Heart subsequently requested “lets complete the arena migration now” on
+2026-10-23. This authorizes the direct consumer cutover in this checkout. It does
+not select the separate log-import proposal.
+
+The migration is indivisible and ships in this PR. **Implemented:** removed the
+mixed package and divided its models, execution, capture, metrics and followers
+at their dependency boundaries. `sim.registration`, `sim.match`, `sim.replay`,
+`sim.card_evidence` and simulation policies remain independent of evaluation,
+training and experiment orchestration. `eval` owns admission, schedules, rating,
+monitoring schemas, comparisons and GIH processing. `experiment` owns checkpoint
+staging/admission orchestration and followers. Canonical byte identities belong
+to `infra.identity`. Move exclusive tests and active CLI/workflow consumers in
+the same cut; preserve their behavioral assertions. No schema migration or
+compatibility import package is needed. Existing serialized arena-named keys,
+seed derivation identifiers and evidence paths remain readable unchanged;
+relocated source receives its actual new identity.
+
+Migration acceptance is complete at the local implementation boundary. The
+simulation probe rejects eval, training, experiment and reports imports, and the
+retired package is absent in source and installed wheel. CI follows `tests/eval/`
+and the moved simulation tests; release CI probes the new CLI modules.
+**This slice:** complete. Remaining verification is the broader GIH gate/CI scope
+already declared above. Publication/merge of this migration has not occurred.
+The v1 native-evidence envelope retains its historical metric-version tag;
+all counting rules and the current metric version constant live in eval.
+
+## Cross-run aggregation direction — 2026-10-23
+
+Jack Heart's direction, given while reviewing the PR walkthrough: GIH should
+aggregate as many games as possible, filterable by game properties such as
+opponent or play/draw; "however many evals we run at a time shouldnt matter. we
+should be aggregating across all the runs into one big db". This supersedes the
+per-run, complete-schedule ranking contract above. It is not yet implemented.
+
+- **One queryable database per experiment, explicit selections.** Every run of
+  an experiment lands in one store that can be queried together; the number
+  or size of its runs does not constrain a query. Jack Heart: "i just
+  structurally think you should be able to have a big DB and query it", not
+  read every evaluation by default, and "1 DB per experiment. no cross
+  experimetn joniing by default". An experiment contains many runs; a query names
+  its experiment and by default joins all of that experiment's runs, then
+  selects games by subject, opponent, play/draw and decks. A run filter only
+  narrows that default. Cross-experiment joins
+  require an explicit request. Etude records each run's experiment and its
+  `connect` can scope to it, but its storage layout is `<root>/<run>`, not
+  per experiment; the current `EXPERIMENT = "gih-card-evaluation"` constant
+  puts every card evaluation in one experiment, so the spec must name it.
+- **Participants come from joined run tables (Jack Heart: "we need to join it
+  against tables saying who the participants were in each eval run").** Etude
+  `connect` already materializes `runs(run, experiment, environment, ...)`,
+  `seats(run, match, player, agent)` and `agents(agent, name, kind, artifact,
+  config)`. Card rows carry `run`/`match`/`player`, so subject and opponent are
+  joins, not fields copied into each row: `card_games ⋈ seats ⋈ agents` for the
+  subject, the other seat for the opponent, `runs` for the experiment.
+  `agents.artifact` is the checkpoint digest, so checkpoint-keyed grouping
+  works through this join; the commit would join from run or agent config.
+  Proof (2026-10-23, local 16-game verify run): the join returned subject,
+  opponent, play/draw, games and GIH copies per experiment.
+- **Game-level admission.** Each game is admitted on its own integrity (bytes,
+  trace/replay digests, passed replay, content identity). A failed or missing
+  game is a reported exclusion; it does not void its deal or block ranking.
+  The eight-leg matrix remains one way of producing balanced games, not an
+  admission requirement, so schedule binding and the completeness/`--partial`
+  gate retire.
+- **Identity keys on the checkpoint; the commit is logged (Jack Heart).** An
+  initial note kept the source-code digest in agent identity ("easier to stick
+  to one commit"); Jack Heart then refined it: "maybe can key on checkpoint but
+  just also log the git commit hash so that we can validate it matched when we
+  have questions". Proposed shape: checkpoint agents key on checkpoint bytes
+  plus registration (player spec, observation/action ABIs), deliberately
+  omitting Etude's suggested code list; code agents key on player spec plus
+  their policy `source_sha256`. Every game records git commit, dirty flag and a
+  digest of uncommitted changes (nothing records the commit today). Pool on
+  world, content digest and capture/metric versions; engine source digest and
+  commit are per-game provenance and filters, not pooling keys.
+- **Subjects are a selection, not a single fixed agent (Jack Heart: "but allow
+  people to use different ceckpoints if they want").** A query names one or
+  more checkpoints (or code agents) as subjects and optionally opponents; rows
+  from every selected subject pool, and output reports the subject mix.
+  Selecting one checkpoint is the ordinary case.
+- **Persistent experiment database; verify at ingestion (Jack Heart: the
+  rebuild-per-connect behavior "cant be teh right thing to do").** Today each
+  `etude.eval.query.connect` rebuilds an in-memory DuckDB from every Parquet
+  file and match record (downloading them from S3), and every `rank_cards`
+  re-reads, re-validates and re-reduces all selected evidence. Proposed: an
+  experiment owns one persistent database, updated incrementally as matches
+  complete; evidence is verified and reduced once when a match is admitted;
+  ordinary queries trust admitted rows; an explicit audit command re-verifies
+  evidence on demand. Ownership follows the existing boundary (Etude owns
+  evaluation storage/query), so the persistent database is an Etude
+  capability; manabot owns admission checks and card reduction. Jack Heart:
+  "we write etude. we can issue PRs against etude as necessary" — Etude
+  gaps (persistent experiment database, artifact delivery that forced
+  evidence-first publication) are fixed in Etude, not worked around here.
+- **Normalized tables (proposed).** One per-game `card_plays` row per
+  game × participant (game facts, outcome/eligibility, evidence ref); counts
+  only in `card_counts` per game × participant × card; a small `cards`
+  dimension; participants via Etude `seats`/`agents`. `plays` stays the shared
+  outcome table. `leg` and the fixed eight-game layout leave the data model.
+- **Uncertainty.** Resample by deal seed across all pooled runs, because games
+  sharing a seed share shuffles.
+
+Open: implementation on this branch has not been requested.
+
+### Concept review — experiment, scheduling and games (2026-10-24)
+
+Jack Heart, asked whether the experiment is an Etude tournament: "A tournament
+is one way of deciding what eval runs to do and which matches to run. This is
+indepedent of how we determine who to play against whom". Accepted reading:
+**scheduling produces games; the experiment holds them.** The experiment
+database is every eval run declared with that experiment, however it was
+scheduled (tournament hold, round robin, benchmark, a plain `evaluate` call).
+Card queries never consult a schedule: no schedule binding, no completeness
+precondition, no `--partial`. A tournament's `complete` remains a scheduling
+fact it can report about its own matches.
+
+Proposed consequences (not implemented): the evaluation spec names its
+experiment (replacing the `gih-card-evaluation` constant) and any producer may
+write card tables into it; admission is per game at ingestion; subjects and
+opponents come from `seats`/`agents` and may be grouped by `agents.artifact`.
+
+Environment pooling (Jack Heart, 2026-10-24: "I just dont think we should
+worry about it. i guess 1 is fine here"): within an experiment, games pool
+across engine/manabot commits. The pooling key is world + content; engine
+source and git commit are logged per run and available as filters, not
+environment identity. Card keys already include the content digest.
+
+Next proof (when implementation is requested): games from two runs of one
+experiment with different engine commits, different producers and a failed
+game rank as one selection; a filter by opponent, play/draw and commit narrows
+it; a second experiment's games never appear without an explicit request.
+
+## Etude PR plan — proposed (2026-10-24)
+
+Jack Heart asked to plan the Etude PR. Proposal, not implemented; Etude source
+read at `loopflowstudio/etude` `origin/main` `2bd2b75` (one commit past v0.2.0).
+
+**Already on Etude main (unreleased):** #32 made delivery carry every file
+under a run (`etude.carriage.listing`), not only Etude's named folders. Evidence
+written under the run therefore ships with ordinary delivery and `etude sync`
+once manabot pins a release containing it, and `publish_cards` can be deleted.
+Remaining gap: only metrics, tables and checkpoints are `immutable`; any other
+file is re-hashed on every delivery pass, so thousands of evidence files cost
+O(files) reads after every match.
+
+**Not needed in Etude:** an ingestion hook. `play(match)` already is ingestion:
+manabot verifies replay/evidence there and returns admitted rows, and a raising
+match is recorded failed. Per-game failures should become ineligible rows, not
+raised matches (manabot side). Checkpoint-keyed grouping uses
+`agents.artifact`; no identity change.
+
+**Etude PR — "Query an experiment's evaluations from a kept database":**
+1. *Experiment scope.* `connect(source, experiment=...)` includes only eval runs
+   whose `run.json` names that experiment (Etude's own tables too). Omitted keeps
+   today's every-run behavior for reports.
+2. *Kept, incremental database.* `connect(..., keep=True)` opens a DuckDB file
+   under `ETUDE_HOME` keyed by source and experiment, derived and rebuildable
+   (storage stays the authority). Each open lists keys, ingests only new ones:
+   done match records (`matches/KEY.json`, never rewritten) and failed ones
+   superseded by a done record; table Parquet files (immutable, write-time in
+   the name). A merged file replaces earlier rows of its (run, match) when its
+   write time is later, the same rule `connect` applies today. Deleted keys
+   need no action because their rows reappear in the merged file. A schema
+   version or Etude-version change rebuilds the file. Bytes still come through
+   `ObjectCache`.
+3. *Immutable artifacts folder.* Files under a run's `artifacts/` are sent once
+   (`immutable`), and authors are told to name them by content. manabot writes
+   `artifacts/evidence/<sha256>.json.gz`.
+4. *Release.* Jack Heart (2026-10-24): "we can run an etude release (0.2.1)
+   whaenever". Step one is releasing current main as 0.2.1 so manabot can pin
+   #32's delivery and delete `publish_cards` independently; this PR follows in
+   a later release.
+
+*Interface direction (Jack Heart, 2026-10-24: "connect seems like a weird
+interface"; "this should be like etude.eval.statsdb()"):* items 1–2 become one
+entry point, `etude.eval.statsdb(experiment, store=None)`, that opens the
+experiment's kept database (store from Etude config unless given). The
+experiment is required; `keep` disappears because keeping is the only behavior.
+`rebuild()` recreates it from storage. `curves`/`standings`/`compare` and
+manabot's ranking take it where they took the connection; `connect` becomes a
+deprecated wrapper or is removed. Jack Heart (2026-10-24): "im ok with it
+taking new matches automatically", so opening catches up.
+
+*Landed as loopflowstudio/etude#34 (`a821680`, 2026-10-24) and released in
+`etude-sdk` 0.2.1 (PyPI; tag `v0.2.1` at `83797c6`, with #32, #33, #35 and #37).
+The pieces below are what manabot pins against:*
+- `statsdb(experiment, store=None, *, rebuild=False)` replaces `connect`, which
+  is removed (we own its callers). The file lives at
+  `ETUDE_HOME/statsdb/EXPERIMENT.STORE.duckdb`, with bookkeeping in the `kept`
+  schema. Opening it lists the store once and reads only unseen files. A
+  second lock holder gets `statsdb_in_use`. Rebuilding is a flag, not
+  `db.rebuild()`, because callers keep a plain DuckDB connection.
+- Found while implementing: `hold` named each eval run's experiment after the
+  tournament. That contradicts "a tournament is only scheduling" and would
+  have kept benchmark results out of their training experiment's database. Now
+  `hold(..., experiment=)` and `evaluation(..., experiment=)` require the
+  experiment. A batch hold reuses only matches delivered by the experiment's
+  own eval runs; that costs one extra `run.json` read per eval run.
+- `etude reports eval` writes `reports/eval/EXPERIMENT.html` for each
+  experiment, with an optional `--experiment`, matching the training reports.
+- Checks: 424 passed and 6 skipped across the full suite, plus mypy and ruff.
+  The new tests are in `tests/eval/test_statsdb.py`.
+- Not done: the stated "immutable `artifacts/`" delivery item (PR item 3), and
+  the manabot follow-ups. Pinning 0.2.1 breaks `card_query.py` and
+  `remote/live_evaluation.py` (`connect`) and the `hold` calls in
+  `eval/benchmark.py`, `eval/duel.py` and `eval/card_evaluation.py`, which
+  must name their experiment.
+
+Failure/recovery: an interrupted ingest leaves the DuckDB transaction
+uncommitted, so the next open repeats it; a corrupt or stale file is deleted
+and rebuilt from storage; no derived state is authoritative.
+
+Tests (Etude): experiment scoping excludes another experiment's runs; a second
+open ingests only a newly delivered match; merge replacement neither drops nor
+doubles a match; failed-then-done match counts once as done; rebuild after
+schema bump; artifacts delivered once.
+
+**manabot after the release:** delete `publish_cards`, schedule binding,
+completeness/`--partial`, and per-query evidence re-reading; normalized
+`card_plays`/`card_counts`/`cards`; per-game exclusion rows; spec names its
+experiment; `rank --experiment` uses the kept database; `audit` re-verifies
+evidence on request; runs record git commit and engine source as provenance.

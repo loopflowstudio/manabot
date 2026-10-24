@@ -44,9 +44,9 @@ class WatchRequest(BaseModel):
 
 def _policy(kind: str, request: WatchRequest, seat: int) -> VillainPolicy:
     if kind in {"greedy", "heuristic"}:
-        from manabot.arena.heuristic import HeuristicPlayer
-        from manabot.arena.players import ScriptedGreedyPlayer
         from manabot.env import Env
+        from manabot.sim.heuristic import HeuristicPlayer
+        from manabot.sim.players import ScriptedGreedyPlayer
 
         player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
 
@@ -189,7 +189,7 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
-    from manabot.arena.replay import replay_environment, replay_games
+    from manabot.sim.replay import replay_environment, replay_games
 
     from .trace import GameConfig
 

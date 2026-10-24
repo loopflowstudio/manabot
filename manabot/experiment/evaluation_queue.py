@@ -22,15 +22,14 @@ from typing import Callable, Literal
 from pydantic import Field, model_validator
 import torch
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import (
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.experiment.checkpoint_evaluation import (
     Checkpoint,
-    MonitorProtocol,
-    MonitorResult,
     evaluate_checkpoint,
     stage_checkpoint,
 )
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
 from manabot.reports.training import evaluation_dashboard, training_dashboard
 from manabot.training.clock import arm_worker_deadline
 from manabot.training.records import TrainingCoordinates, TrainingRun

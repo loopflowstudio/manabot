@@ -9,7 +9,7 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
-from manabot.arena.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.experiment.config import Baseline, Case, Experiment, ModelOverride
 from manabot.experiment.evaluation_queue import Attempt, MonitoringBudget
 from manabot.experiment.execution import (

@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import sqlite3
 
-from manabot.arena.models import file_sha256
+from manabot.infra.identity import file_sha256
 from manabot.verify.store import training_stage_payloads
 
 

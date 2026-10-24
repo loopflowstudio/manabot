@@ -21,9 +21,9 @@ import sys
 import time
 
 from experiments.seat_comparison import SEEDS
-from manabot.arena.monitor import (
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.checkpoint_evaluation import (
     Checkpoint,
-    MonitorProtocol,
     checkpoint_manifest,
     stage_checkpoint,
 )
@@ -174,7 +174,7 @@ def follow(directory: Path, parallel: int, until: float) -> None:
                 [
                     sys.executable,
                     "-m",
-                    "manabot.arena.benchmark",
+                    "manabot.eval.benchmark",
                     "--manifest",
                     str(target / "admission.json"),
                 ],

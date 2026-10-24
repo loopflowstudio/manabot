@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.monitor import stage_checkpoint
+from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.experiment.evaluation_queue import checkpoints
 from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution

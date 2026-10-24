@@ -16,15 +16,15 @@ import numpy as np
 from pydantic import Field
 import torch
 
-from manabot.arena.match import selected_decks
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.monitor import MonitorResult
 from manabot.env.observation import ActionEnum
+from manabot.eval.monitor import MonitorResult
 from manabot.experiment.evaluation_queue import Attempt, checkpoints
 from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
+from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay

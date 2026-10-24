@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
-from manabot.arena.models import canonical_json, canonical_sha256
 from manabot.experiment.execution import ExperimentSchedule, PlannedRun
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.identity import canonical_json, canonical_sha256
 from manabot.remote.job_client import prepare_experiment_job
 from manabot.remote.jobs import Job
 from manabot.remote.plan import DeploymentPlan, Source, compile_plan

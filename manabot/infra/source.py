@@ -16,7 +16,7 @@ import sysconfig
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from manabot.arena.models import file_sha256
+from manabot.infra.identity import file_sha256
 
 
 class SourceBundle(BaseModel):

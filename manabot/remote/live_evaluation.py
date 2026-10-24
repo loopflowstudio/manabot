@@ -22,10 +22,10 @@ from etude.eval.report import render
 from etude.eval.tournament import Curve, curves
 from pydantic import BaseModel
 
-from manabot.arena.benchmark import BENCHMARK
-from manabot.arena.monitor import (
+from manabot.eval.benchmark import BENCHMARK
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.checkpoint_evaluation import (
     Checkpoint,
-    MonitorProtocol,
     checkpoint_manifest,
     stage_checkpoint,
 )
@@ -268,7 +268,7 @@ def evaluate_exports(
                     [
                         sys.executable,
                         "-m",
-                        "manabot.arena.benchmark",
+                        "manabot.eval.benchmark",
                         "--manifest",
                         str(target / "admission.json"),
                     ],

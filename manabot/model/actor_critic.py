@@ -641,16 +641,6 @@ class ActorCritic(nn.Module):
 # -----------------------------------------------------------------------------
 # Basic Building Blocks
 # -----------------------------------------------------------------------------
-class MaxPoolingLayer(nn.Module):
-    def __init__(self, dim: int):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pooled, _ = torch.max(x, dim=self.dim)
-        return pooled
-
-
 class MeanPoolingLayer(nn.Module):
     def __init__(self, dim: int):
         super().__init__()

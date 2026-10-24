@@ -92,7 +92,7 @@ failed games and regathers under the same policy. A persisted rolling error rate
 strictly above the declared threshold stops training; evaluation remains strict.
 Strict scalar/vector training and data-generation paths automatically retain
 private native failure inputs before propagating errors. Compound/selection and
-arena retain pending Commands before execution. The same bounded replay command
+simulation retain pending Commands before execution. The same bounded replay command
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
@@ -185,11 +185,11 @@ foreign-opponent calibration or search strength.
 Frozen-policy local search and same-root distillation run through
 [`collect_local_update` regimes](../docs/local-policy-search.md). The bounded
 compatible-prior recipe completes games; exact-history search rejects unsupported
-Rules likelihood events. Target receipts and arena replay retain this distinction.
+Rules likelihood events. Target receipts and simulation replay retain this distinction.
 
 The existing `agent_puct` player accepts current flat and compound checkpoints;
 see [PUCT policy/value compatibility](../docs/local-policy-search.md#puct-policyvalue-compatibility)
-for critic units, retained prefixes and arena registration. This is a search
+for critic units, retained prefixes and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
 Declare training comparisons with [typed Python experiments](../docs/training-experiments.md).
@@ -206,12 +206,12 @@ in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/repository-archive.md). Shared target inspection
 now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/arena/heuristic.py`) is a
+`heuristic` (`manabot/sim/heuristic.py`) is a
 separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
 removal held for a kill, counters held for an opponent's spell, effect polarity
 derived from the semantic card source, attacks unless a blocker kills and
 survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its arena source identity. Select it for checkpoint monitoring
+stays frozen with its registered source identity. Select it for checkpoint monitoring
 with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
 GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
@@ -333,7 +333,7 @@ seat assignments. The training match must equal `matrix.match()`; arbitrary
 renaming or substituting a different setup fails admission. Simple roles retain
 their own names, never Allies/Lessons labels.
 
-The shared arena records the actual decks, explicit content pack and Commands;
+The simulator records the actual decks, explicit content pack and Commands;
 its ordinary replay checks still apply. The matrix identity is separate from
 the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural
@@ -365,7 +365,8 @@ with those packages blocked.
 - `model/`: network construction/inference and portable checkpoint admission.
   `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
   their serialized historical keys remain unchanged.
-- `sim/`: frozen players, search, batched games and search-target generation.
+- `sim/`: registered players, bounded game execution, replay, native card evidence,
+  search, batched games and search-target generation.
   `sim.data` owns shard formats/loading; `sim.datagen` generates examples.
 - `training/`: regime execution, seat-routed collection, learning rules,
   supervised/belief fitting, numerical health and optimizer/collector recovery.
@@ -381,8 +382,9 @@ with those packages blocked.
   retained game-failure state.
 - `recipes/`: packaged local/baseline/belief recipes and composition helpers.
 - `experiment/`: authored comparisons, local scheduling, Etude job adapters,
-  checkpoint evaluation scheduling and artifact publication.
-- `arena/`: game authority, replay, checkpoint monitoring and comparisons.
+  checkpoint staging, evaluation scheduling/followers and artifact publication.
+- `eval/`: evaluation protocols, admission, comparisons, population ratings,
+  GIH reduction/query and MTG Arena log export.
 - `reports/`: retained-run projections, dashboards, report templates and
   historical evidence readers.
 - `infra/`: runtime context, shared file operations and provenance identities.
@@ -398,5 +400,11 @@ defaults. `TrainingRun` admits the current executable recipe; both share measure
 run fields through `RunRecord`. Reading or publishing a historical result does
 not admit its recipe for a new run or recovery.
 
-[GIH card evaluation](../docs/card-evaluation.md) uses arena replay capture and Etude
+[GIH card evaluation](../docs/card-evaluation.md) uses simulation replay capture and Etude
 tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.
+
+Simulation imports no evaluation, training, experiment or report modules.
+Shared registration types live in `sim.registration`; canonical byte identities
+live in `infra.identity`. The former `manabot.arena` package is removed. Existing
+serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
+paths preserve their original meaning; current source identities use the new paths.

@@ -136,6 +136,12 @@ def test_search_captures_actual_scores(watch: WatchCreated) -> None:
     from manabot.sim.search.flat import FlatSearchPolicy
 
     game = server._live_record_for_trace(watch["id"]).game
+    # Forced actions bypass search; reach a real choice before checking scores.
+    for revision in range(64):
+        if len(game.obs.action_space.actions) > 1:
+            break
+        step_watch(watch["id"], watch["token"], revision)
+    assert len(game.obs.action_space.actions) > 1
     outputs = choose_bot(FlatSearchPolicy(sims=1, max_steps=2), game.env, game.obs)
     assert len(outputs.search_scores) == len(game.obs.action_space.actions)
     assert outputs.action == max(
@@ -151,12 +157,12 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     import json
 
     from academy.watch import import_arena
-    from manabot.arena.match import play_cell
-    from manabot.arena.models import ArenaContract
-    from manabot.arena.replay import read_trace
+    from manabot.eval.match import play_cell
+    from manabot.eval.models import EvaluationContract
+    from manabot.sim.replay import read_trace
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
-    contract = ArenaContract.model_validate(
+    contract = EvaluationContract.model_validate(
         json.loads(Path("tests/fixtures/int-6-skill-arena-v1.json").read_text())
     )
     _, trace, receipt = play_cell(
