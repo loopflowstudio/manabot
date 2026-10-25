@@ -29,7 +29,7 @@ pair, oldest newer checkpoint first) at a time, delivering every match's tables
 to the given storage, and writes `<directory>/state.json` (`EvalState`): the
 admitted checkpoints, the segment's outcome and the endpoint. The report reads
 that state and the tables (`etude.eval.query.statsdb`). It never rents, cancels
-or changes training, and yields while MTG-181's follower runs on this machine.
+or changes training, and yields while any MTG-181 experiment runs on this machine.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \
         --directory ~/.manabot/mtg183-eval --until <unix-seconds> \
@@ -105,8 +105,10 @@ INFERENCE_CODE = (
     ROOT / "manabot/arena/match.py",
     ROOT / "experiments/elemental_grid.py",
 )
-# MTG-181's local follower; this one yields the CPU until it exits.
-YIELD_TO = "experiments.elemental_two_seat_follow"
+# Any experiment process from MTG-181's checkout (its follower, its later
+# evaluation scripts and their grid workers); this one yields the CPU until none
+# runs. Matching the checkout, not a script name, survives MTG-181 switching scripts.
+YIELD_TO = r"manabot\.mtg-181-trial-two-seat/.* -m experiments\."
 # Where `play` writes arena evidence; `follow` sets it for its worker processes.
 EVIDENCE = "MTG183_EVAL_EVIDENCE"
 
