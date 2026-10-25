@@ -1320,6 +1320,12 @@ def _execute_regime(
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,
+                        resumed_at={
+                            clock: float(coordinates()[clock])
+                            for clock in ("updates", "learner_transitions")
+                        }
+                        if run.metrics_run
+                        else None,
                         resolved_config={
                             "regime": regime.model_dump(mode="json"),
                             "run_id": run.id,

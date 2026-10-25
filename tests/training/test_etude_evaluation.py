@@ -9,7 +9,7 @@ from tests.training.test_monitor_evaluation import _manifest, _rows
 
 pytest.importorskip("etude.eval.match")
 
-from etude.eval.query import connect  # noqa: E402
+from etude.eval.query import statsdb  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
 from manabot.eval import benchmark as evaluation
@@ -86,7 +86,7 @@ def test_etude_resumes_complete_deals_and_report_counts_them(
     evaluation.evaluate(manifest, target)
     evaluation.evaluate(manifest, target)
     assert sorted(played) == [101, 102]
-    db = connect(tmp_path / "track")
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
         points = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
             0

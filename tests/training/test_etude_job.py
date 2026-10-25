@@ -37,8 +37,7 @@ def worker_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Train
     spec = specification()
     config = tmp_path / "config.json"
     config.write_text(spec.model_dump_json())
-    for key in ("ETUDE_CHECKPOINT", "ETUDE_FROM_VALUE"):
-        monkeypatch.delenv(key, raising=False)
+    monkeypatch.delenv("ETUDE_CONTINUES", raising=False)
     for key, value in {
         "ETUDE_RUN": "sdk-worker-fixture",
         "ETUDE_TRACK_DIR": str(tmp_path / "tracking"),
@@ -102,7 +101,7 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
 @pytest.mark.parametrize(
     ("key", "value", "message"),
     [
-        ("ETUDE_CHECKPOINT", "policy.pt", "cannot resume"),
+        ("ETUDE_CONTINUES", "{}", "cannot resume"),
         ("ETUDE_UNTIL_VALUE", "3", "target differs"),
         ("ETUDE_DEADLINE", "2000-01-01T00:00:00+00:00", "remaining allocation"),
         ("ETUDE_RUN", "", "missing launcher identity"),

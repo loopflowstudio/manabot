@@ -6,10 +6,11 @@ all opponents and seat/deck legs, including deals with zero card opportunities."
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import json
 from operator import attrgetter
 from pathlib import Path
 
-from etude.eval.query import connect, estimate
+from etude.eval.query import estimate, statsdb
 from etude.eval.records import Match, TournamentRun, assemble
 from etude.run.listing import as_storage, places
 from etude.run.storage import Storage
@@ -96,8 +97,15 @@ def evidence_prefix(source: Storage, run: str) -> str:
     return next(iter(manifests))
 
 
+def run_experiment(source: Storage, prefix: str) -> str:
+    """The experiment an evaluation run declared, which names its database."""
+    return json.loads(source.get(prefix + "run.json"))["experiment"]
+
+
 def evidence_refs(source: Storage | Path | str, run: str) -> list[EvidenceRef]:
-    with connect(source) as db:
+    store = as_storage(source)
+    experiment = run_experiment(store, evidence_prefix(store, run))
+    with statsdb(experiment, store) as db:
         if "card_evidence" not in {r[0] for r in db.execute("show tables").fetchall()}:
             raise ValueError("card evidence unavailable (outcome-only evaluation)")
         rows = db.execute(
@@ -153,7 +161,7 @@ def rank_cards(source: Storage | Path | str, query: CardQuery) -> CardRanking:
     if held.tournament.environment.config.get("metric_version") != METRIC_VERSION:
         raise ValueError("card evidence unavailable or incompatible metric version")
     subject, schedule = _selected_schedule(held, query)
-    with connect(store) as db:
+    with statsdb(run_experiment(store, prefix), store) as db:
         records = db.execute(
             "select match, state, error from matches where run = ?", [query.run]
         ).fetchall()

@@ -26,6 +26,8 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.training.records import TrainingCoordinates
 from manabot.training.regime import ArtifactReference
 
+EXPERIMENT = "two-seat-vs-one-seat-equal-updates"
+
 
 class ScoreGroup(BaseModel):
     score: float
@@ -192,7 +194,7 @@ def evaluate(path: Path) -> None:
         Path("manabot/eval/benchmark.py"),
     ]
     benchmark = Benchmark(
-        name="two-seat-vs-one-seat-equal-updates",
+        name=EXPERIMENT,
         environment=Environment(
             name=f"{duel.two_seat.key.world}-direct-development",
             files=canonical_sha256(duel.two_seat.evaluation_identities),
@@ -238,6 +240,7 @@ def evaluate(path: Path) -> None:
     )
     result = hold(
         benchmark,
+        experiment=EXPERIMENT,
         play=play,
         checkpoint=ArtifactRef(
             uri=Path(duel.two_seat.artifact["path"]).resolve().as_uri(),

@@ -269,6 +269,7 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
     ):
         return hold(
             tournament,
+            experiment=EXPERIMENT,
             play=play_card_match,
             enter=entrants,
             workers=spec.workers,

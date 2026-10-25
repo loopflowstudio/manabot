@@ -197,6 +197,7 @@ def evaluate(manifest: MonitorResult, directory: Path) -> None:
     os.environ["ETUDE_RUN"] = "checkpoint-" + manifest.artifact["sha256"]
     result = hold(
         benchmark(manifest),
+        experiment=BENCHMARK,
         play=play,
         checkpoint=ArtifactRef(
             uri=path.as_uri(),

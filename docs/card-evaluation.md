@@ -36,8 +36,9 @@ The deterministic 95% percentile interval uses Etude's ratio estimator on whole
 It is unavailable with fewer than two deals. Output includes counts, opponent
 mix, versions, completeness and contributing game IDs.
 
-`card_games` and `card_evidence` are author tables available through
-`etude.eval.query.connect(source)`. Etude adds `run` and `match`; `player` is an
+`card_games` and `card_evidence` are author tables in the experiment's kept
+database, `etude.eval.query.statsdb("gih-card-evaluation", source)`, which reads
+newly delivered matches as it opens. Etude adds `run` and `match`; `player` is an
 Etude participant, not an engine seat. The card key is native content digest plus
 definition ID; names are labels. Evidence contains copy/incarnation identity,
 owner/controller, movement source/destination/cause, sequence and turn, original
