@@ -422,3 +422,26 @@ allocation. A launch that never trains is relaunched under the 03:51 UTC
 amendment. When w4 ends, the chain ends; the evaluator then follows w3 and w4
 with no successor declared and settles at w4's last tracked export. The
 evaluator keeps its pinned revision; only its run list changes.
+
+## Amendment, 2026-10-25 14:30 UTC (its commit time), before any card result: card data from every evaluation game
+
+Jack Heart, 2026-10-25: generate card statistics going forward. Every
+evaluation game now also yields 17Lands-style card data (`card_plays`,
+`card_counts`, `cards`; #368/#369), captured during `play_cell`'s existing
+replay check, with its evidence retained under the eval run's `artifacts/`
+and delivered with the run's tables to `r2://manabot/evaluations`.
+
+- The design, schedules and digests, deals, seats, the heuristic v2 anchor, the
+  checkpoints and the validity rule are unchanged. Card data is descriptive:
+  associations between cards and wins, not part of the rating, the saturation
+  rule or any prediction.
+- The evaluator moves to this commit's code (etude-sdk 0.2.6), whose match keys
+  differ from the 0.2.2 run's. It plays as a new eval run,
+  `mtg183-elemental-eval` / `mtg183-eval-cards`, from the start of the design,
+  state in mini `~/.manabot/mtg183-eval-cards`. Its results are the results.
+  `mtg183-eval` (Etude job `ac6c45760d88`, 22,900 valid games through update
+  200, none invalid) is cancelled and retained as superseded evidence; its
+  units are replayed with the same seeded deals, so it is a reproduction check,
+  not pooled.
+- The evaluator relaunch planned for w4 relaunches this job with w4 added; it
+  keeps this revision.

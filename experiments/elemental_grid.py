@@ -119,6 +119,8 @@ class Request(BaseModel):
     training_seed: int
     group: Group
     output: Path
+    # The eval run's folder: when given, each game's card evidence is retained there.
+    card_evidence: Path | None = None
 
 
 class GameRow(BaseModel):
@@ -246,6 +248,7 @@ def play_group(request: Request) -> list[GameRow]:
         authored_matchup=matchup,
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
+        card_evidence_dir=request.card_evidence,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))

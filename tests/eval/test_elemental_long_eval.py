@@ -14,6 +14,7 @@ import pytest
 from experiments.elemental_grid import DECKS, GameRow, schedule
 from experiments.elemental_long import h2h_schedule
 from experiments.elemental_long_eval import (
+    CARDS,
     EVIDENCE,
     Checkpoint,
     Conditions,
@@ -201,6 +202,7 @@ def test_failed_group_is_stored_as_invalid_games(
 ) -> None:
     """A worker that cannot load the checkpoint fails its group, not the run."""
     monkeypatch.setenv(EVIDENCE, str(tmp_path / "arena"))
+    monkeypatch.setenv(CARDS, str(tmp_path / "run"))
     state = _state(tmp_path, (0,), None)
     unit = units(state)[0]
     first = Conditions.model_validate(unit.matches[0].conditions)

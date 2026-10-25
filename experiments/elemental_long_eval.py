@@ -25,11 +25,13 @@ or pair schedule (player 0's deck), ten per unit. Player 0 is the rated (or
 newer) checkpoint and player 1 the heuristic (or older checkpoint); conditions
 carry the row's (opposing deck, player 0's native seat, deals) groups. `play`
 runs each group in the grid's subprocess worker under its wall bound and
-returns table `games`: one row per game and player. A group that fails or reaches its bound is stored
+returns table `games`: one row per game and player, plus the card tables
+(`card_plays`, `card_counts`, `cards`) from each game's replay-checked card
+evidence, retained in the eval run's folder. A group that fails or reaches its bound is stored
 with invalid rows (score null) and never replayed, as the protocol requires;
 Etude fails a match only for an integrity error (wrong bytes, wrong legs).
 
-`follow` holds the eval run `mtg183-eval`, one unit (a checkpoint's grid or one
+`follow` holds the eval run `mtg183-eval-cards`, one unit (a checkpoint's grid or one
 pair, oldest newer checkpoint first) at a time, delivering every match's tables
 to the given storage, and writes `<directory>/state.json` (`EvalState`): the
 admitted checkpoints, the final segment's outcome and the endpoint. The report
@@ -38,7 +40,7 @@ cancels or changes training, and yields while any MTG-181 experiment runs on thi
 machine. It runs as an Etude job on the Mac mini (`experiments/protocols/elemental-183-eval-job.json`).
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \
-        --directory ~/.manabot/mtg183-eval --until <unix-seconds> \
+        --directory ~/.manabot/mtg183-eval-cards --until <unix-seconds> \
         --windows experiments/protocols/elemental-183-windows.json \
         --storage r2://manabot/evaluations --etude-source <tracking storage> \
         --run <w3 run> --run <w4 run> [--continues]
@@ -100,6 +102,7 @@ from experiments.elemental_long import (
     rated_updates,
 )
 from manabot.data import cache_directory
+from manabot.eval.card_evaluation import trace_card_tables
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
@@ -108,7 +111,10 @@ import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = "mtg183-elemental-eval"
-RUN = "mtg183-eval"
+# The run that plays the design with card data (amendment 2026-10-25, card data).
+# `mtg183-eval` played its first units without it on etude-sdk 0.2.2, whose
+# match keys this code does not reproduce, so this run replays them.
+RUN = "mtg183-eval-cards"
 HEURISTIC = "heuristic"
 # The code that turns a checkpoint's bytes into play; a change makes new agents.
 INFERENCE_CODE = (
@@ -124,6 +130,8 @@ INFERENCE_CODE = (
 YIELD_TO = r"manabot\.mtg-181-trial-two-seat/.* -m experiments\."
 # Where `play` writes arena evidence; `follow` sets it for its worker processes.
 EVIDENCE = "MTG183_EVAL_EVIDENCE"
+# The eval run's folder, where workers retain card evidence; `follow` sets it.
+CARDS = "MTG183_EVAL_CARDS"
 
 
 def player(updates: int) -> str:
@@ -413,6 +421,7 @@ class H2HRequest(BaseModel):
     older: LocalCheckpoint
     group: Group
     output: Path
+    card_evidence: Path | None = None
 
 
 def _local(seated: Agent) -> LocalCheckpoint:
@@ -436,17 +445,29 @@ def _local(seated: Agent) -> LocalCheckpoint:
 
 
 def play(match: Match) -> Tables:
-    """Play one grid row, a bounded worker process per group; see the module docstring."""
+    """Play one grid row, a bounded worker process per group; see the module docstring.
+
+    Each played group's card evidence lands in the eval run's folder (`CARDS`),
+    and its card tables are delivered beside `games`. A failed group has none.
+    """
     conditions = Conditions.model_validate(match.conditions)
     newer = _local(match.agents[0])
     older = None if conditions.kind != "pair" else _local(match.agents[1])
+    # The registered player IDs the workers seat, in Etude row order.
+    participants = ("model", "heuristic") if older is None else ("newer", "older")
+    cards = Path(os.environ[CARDS])
     rows: list[GameRow] = []
+    tables: dict[str, list[Row]] = {}
     for group in conditions.groups:
         if group.model_deck != conditions.deck:
             raise ValueError("a group plays another deck than its match")
         output = Path(os.environ[EVIDENCE]) / match.key / f"attempt-{time.time_ns()}"
-        rows += _play_group(group, newer, older, output)
-    return {"games": game_rows(rows, conditions.kind)}
+        played, trace = _play_group(group, newer, older, output, cards)
+        rows += played
+        if trace is not None:
+            for name, found in trace_card_tables(cards, trace, participants).items():
+                tables.setdefault(name, []).extend(found)
+    return {"games": game_rows(rows, conditions.kind), **tables}
 
 
 def _play_group(
@@ -454,8 +475,10 @@ def _play_group(
     newer: LocalCheckpoint,
     older: LocalCheckpoint | None,
     output: Path,
-) -> list[GameRow]:
-    """A group's rows from its worker, or invalid rows when it fails or times out."""
+    cards: Path,
+) -> tuple[list[GameRow], dict[str, object] | None]:
+    """A group's rows and arena trace from its worker; invalid rows and no trace
+    when it fails or times out."""
     if older is None:
         command = ["experiments.elemental_grid"]
         request: BaseModel = Request(
@@ -464,10 +487,13 @@ def _play_group(
             training_seed=SEED,
             group=group,
             output=output,
+            card_evidence=cards,
         )
     else:
         command = ["experiments.elemental_long_eval", "worker"]
-        request = H2HRequest(newer=newer, older=older, group=group, output=output)
+        request = H2HRequest(
+            newer=newer, older=older, group=group, output=output, card_evidence=cards
+        )
     try:
         completed = subprocess.run(
             [sys.executable, "-m", *command],
@@ -484,12 +510,12 @@ def _play_group(
     if failure is not None:
         output.mkdir(parents=True, exist_ok=True)
         (output / "failed.txt").write_text(failure)
-        return [_invalid(group, deal, failure) for deal in group.deals]
+        return [_invalid(group, deal, failure) for deal in group.deals], None
     assert completed is not None
     rows = [GameRow.model_validate(r) for r in json.loads(completed.stdout)]
     if sorted(r.deal for r in rows) != sorted(group.deals):
         raise ValueError("worker rows differ from the scheduled deals")
-    return rows
+    return rows, json.loads((output / "trace.json").read_text())
 
 
 def _invalid(group: Group, deal: int, failure: str) -> GameRow:
@@ -637,6 +663,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         authored_matchup=matchup,
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
+        card_evidence_dir=request.card_evidence,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
@@ -716,13 +743,14 @@ def follow(
         raise ValueError("a game schedule differs from its frozen digest")
     directory.mkdir(parents=True, exist_ok=True)
     os.environ[EVIDENCE] = str(directory / "arena")
+    track = directory / "track"
+    os.environ[CARDS] = str(run_directory(track, EXPERIMENT, RUN)[1].resolve())
     path = directory / "state.json"
     state = (
         EvalState.model_validate_json(path.read_bytes())
         if path.exists()
         else EvalState()
     )
-    track = directory / "track"
     known = eval_environment()
     polled = 0.0
     while time.time() < until and not state.done:
