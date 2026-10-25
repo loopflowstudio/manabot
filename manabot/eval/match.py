@@ -66,7 +66,13 @@ def play_cell(
     matchup_mode: MatchupMode = "cross",
     authored_matchup: AuthoredMatchup | None = None,
     card_evidence_dir: Path | None = None,
+    legs: tuple[int, ...] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Play every deal across the mode's deck/seat legs, or only the given subset.
+
+    `legs` selects a subset of the mode's legs for every deal, for designs that
+    assign one seat and deck pair per game instead of playing whole deals.
+    """
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
     if player_a.player_id == player_b.player_id:
@@ -117,6 +123,16 @@ def play_cell(
                 raise ValueError(
                     "mirrors require explicit checkpoint deck repetition admission"
                 )
+    mode_legs = (
+        range(8)
+        if matchup_mode == "all"
+        else range(4, 8)
+        if matchup_mode == "mirrors"
+        else range(4 if authored else 2)
+    )
+    if legs is not None and (not legs or not set(legs) <= set(mode_legs)):
+        raise ValueError("selected legs must be a nonempty subset of the mode's legs")
+    played_legs = tuple(mode_legs) if legs is None else tuple(sorted(set(legs)))
     games, rows = [], []
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
@@ -134,14 +150,7 @@ def play_cell(
             )
             for p in (player_a, player_b)
         }
-        legs = (
-            range(8)
-            if matchup_mode == "all"
-            else range(4, 8)
-            if matchup_mode == "mirrors"
-            else range(4 if authored else 2)
-        )
-        for leg in legs:
+        for leg in played_legs:
             seat_players = (
                 [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]
             )

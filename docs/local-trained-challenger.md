@@ -1,19 +1,10 @@
 # Play, evaluate and retain a local challenger
 
-`ACADEMY_PLAY_CANDIDATE` names one retained `candidate.json` bundle: an exact
-checkpoint digest with its source/recipe, world identities, observation
-configuration, content manifest and inference setting. The search-distillation
-trainer that produced these bundles is retired; the
-[2026-09-29 record](evidence/corrected-world-training-2026-09-29.md) holds the
-corrected-world executions. Any other trained checkpoint is selectable from the
-table's checkpoint list described below.
-
 Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
 ```sh
 npm --prefix academy/ui ci
 ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
-ACADEMY_PLAY_CANDIDATE="$PWD/.runs/challenger/candidate.json" \
 ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" \
 ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
 ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
@@ -21,21 +12,19 @@ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 uv run uvicorn deploy.play.asgi:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://localhost:8000`. The trained opponent is selected automatically;
-its name and short digest remain visible through reconnect and Play Again.
-Search, Random and Passive remain selectable controls. The browser never needs
-a checkpoint path. The server verifies the artifact digest, rules binary,
-content manifest and decks. Replacing checkpoint bytes fails clearly.
-
-Checkpoints from `uv run manabot train`, regime runs and Tournament files
-are listed below the candidate under **Trained checkpoints**. Everything under
-`.runs/` appears automatically; add other files, run directories or Tournament
-JSON with `ACADEMY_PLAY_CHECKPOINTS="/path/a.pt:/path/run-dir:/path/grid.json"`.
+Open `http://localhost:8000` and choose a trained opponent under **Trained
+checkpoints**. Checkpoints from `uv run manabot train`, regime runs and
+Tournament files are listed there. Everything under `.runs/` appears
+automatically; add other files, run directories or Tournament JSON with
+`ACADEMY_PLAY_CHECKPOINTS="/path/a.pt:/path/run-dir:/path/grid.json"`.
 Tournament entrants resolve beside the Tournament file or in a listed
 directory, and only with their pinned bytes. A checkpoint bound to another
 world, content or deck setup is listed with the mismatch and cannot be started.
 Choose the checkpoint's decks in either seat; its world, model, step and
 producer show under the menu, and its exact identity is recorded on the trace.
+The browser names only a digest, never a checkpoint path; the server verifies
+the bytes before play, and replacing them fails clearly. Search, Random and
+Passive remain selectable controls.
 
 Play, optionally save a note, and choose Play Again. Open replay beside the note
 to revisit that attempt. Attempts are saved at startup and each surfaced
@@ -90,7 +79,7 @@ browser APIs expose the authorized viewer projection. Keep this file private.
 New `deal_seed` values use hexadecimal text to preserve all unsigned 64 bits;
 the trace JSON retains the exact integer. Earlier feasibility rows used integers.
 Before any hosted deployment, configure persistent storage and bundle the
-training runtime and candidate. The checked Fly deployment has no volume mount;
+training runtime and checkpoints. The checked Fly deployment has no volume mount;
 this local workflow does not deploy anything.
 
 
@@ -186,10 +175,9 @@ SQLite record version 2 owns identity in `attempt_players` (two seats per game).
 It replaces the former `attempts.bot_sha256`, `hero_deck`, and `villain_deck`
 summary columns. Original trace configurations remain retained evidence, not
 another mutable player directory. `players` maps private browser credentials to
-public human IDs; bot identities come from the configured artifact's optional
-`bot_id`, separate from producer, digest and loading path. Older artifacts lacking
-lineage retain an identity for their exact digest; we do not guess lineage from
-similar names. New local challenger exports declare `etude:local-challenger`.
+public human IDs; a trained bot's identity is its exact checkpoint digest,
+separate from producer and loading path. We do not guess lineage from similar
+names.
 
 Declare record origin when launching the server with `ACADEMY_PLAY_RECORD_ORIGIN`:
 `human_exploratory`, `automated_validation`, `bot_evaluation`, or `training`.

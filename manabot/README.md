@@ -40,7 +40,7 @@ layer: current-world Allies/Lessons self-play (128 updates by default), its hori
 checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
 collection/update iterations (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not optimizer
-calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
+calls. The same recipe drives the [nightly learning check](../.github/workflows/baseline.yml).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with
@@ -109,7 +109,7 @@ learnable from any start. The local and baseline recipes enable it; the
 ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
-keep their meaning. The learnability gate trains the same FiLM policy.
+keep their meaning.
 
 An observation/action-shape or rules-meaning change is a world version.
 The current development world is **w13** (`managym.WORLD_VERSION`); its rules, tensor shape,
@@ -323,11 +323,6 @@ the historical selected-world suite. Omitting it preserves existing selected
 protocol serialization. A native authored roster does not itself admit a neural
 policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
-
-The [learnability diagnostic](../docs/nightly-learnability.md) trains
-three shared tiny generic policies, fans out identity/capacity assertions, and
-checks reward-driven production PPO plus checkpoint reload. Its credential-free
-CPU runner and failure reports are separate from full-game strength evidence.
 
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 `ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`

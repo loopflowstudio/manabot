@@ -187,65 +187,13 @@ def _write_tiny_checkpoint(path) -> None:
     )
 
 
-def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path, monkeypatch):
-    checkpoint_path = tmp_path / "tiny_agent.pt"
-    _write_tiny_checkpoint(checkpoint_path)
-    import hashlib
-
-    from academy.opponent import Opponent
-    import managym
-
-    # The server admits an opponent only for the setup it was bound to,
-    # sideboards included.
-    setups = {
-        deck: managym.authored_deck_setup("ur-lessons-vs-gw-allies", deck)
-        for deck in ("ur_lessons", "gw_allies")
-    }
-    env = managym.Env()
-    env.reset(
-        [
-            managym.PlayerConfig(deck, setup.decklist, setup.sideboard)
-            for deck, setup in setups.items()
-        ]
-    )
-    opponent = Opponent(
-        "Synthetic loader test",
-        "test",
-        hashlib.sha256(checkpoint_path.read_bytes()).hexdigest(),
-        checkpoint_path,
-        False,
-        env.content_pack_manifest(),
-        {deck: dict(setup.decklist) for deck, setup in setups.items()},
-    )
-    monkeypatch.setattr(server, "configured_opponent", lambda: opponent)
-
-    with TestClient(app) as client:
-        payload = _play_full_game(
-            client,
-            {
-                "villain_type": "checkpoint",
-                "villain_checkpoint": str(checkpoint_path),
-                "villain_deterministic": False,
-                "seed": 5,
-            },
-            hero_seed=3,
-        )
-    assert payload["type"] == "game_over"
-
-    trace_files = _recorded_traces(isolated_traces)
-    assert len(trace_files) == 1
-    trace_payload = trace_files[0][1]
-    assert trace_payload["config"]["villain_type"] == "checkpoint"
-    assert trace_payload["config"]["villain_checkpoint"] == str(checkpoint_path)
-
-
 def test_new_game_rejects_bad_villain_configs(isolated_traces):
     cases = [
         ({"villain_type": "nonsense"}, "villain_type"),
-        ({"villain_type": "checkpoint"}, "configured"),
+        ({"villain_type": "checkpoint"}, "opponent_sha256"),
         (
             {"villain_type": "checkpoint", "villain_checkpoint": "/no/such/file.pt"},
-            "configured",
+            "opponent_sha256",
         ),
         ({"villain_type": "search", "villain_sims": 0}, "villain_sims"),
         ({"villain_type": "search", "villain_sims": "many"}, "villain_sims"),
