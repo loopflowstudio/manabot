@@ -48,8 +48,8 @@ import sys
 import tarfile
 import tempfile
 import time
+from typing import TYPE_CHECKING
 
-import duckdb
 from etude.eval.match import Row, Tables, environment as eval_environment, evaluate
 from etude.eval.query import statsdb
 from etude.eval.records import (
@@ -89,13 +89,13 @@ from experiments.mtg186_eval import (
     arena,
 )
 from manabot.eval.card_evaluation import trace_card_tables
-from manabot.eval.card_page import write_page
-from manabot.eval.card_query import CardSelection, card_data
-from manabot.eval.cards import print_data
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.sim.matchup import AuthoredMatchup
+
+if TYPE_CHECKING:
+    import duckdb
 
 OUT = ROOT / "experiments/data/mtg186/cards"
 EXPERIMENT = "mtg186-cards"
@@ -517,7 +517,7 @@ class CardSummary(BaseModel):
     overall: Score
 
 
-def _rows(db: duckdb.DuckDBPyConnection) -> list[GameRow]:
+def _rows(db: "duckdb.DuckDBPyConnection") -> list[GameRow]:
     """The `games` table as rows; Etude stores no column that is null throughout."""
     cursor = db.execute("select * from games")
     names = [column[0] for column in cursor.description]
@@ -541,7 +541,7 @@ def _rows(db: duckdb.DuckDBPyConnection) -> list[GameRow]:
     ]
 
 
-def summary(db: duckdb.DuckDBPyConnection) -> CardSummary:
+def summary(db: "duckdb.DuckDBPyConnection") -> CardSummary:
     rows = _rows(db)
     played = sorted((r.deal, r.model_deck, r.model_seat) for r in rows)
     wanted = sorted((d, x, s) for d in deals() for x in (UR, GW) for s in (0, 1))
@@ -569,6 +569,12 @@ def summary(db: duckdb.DuckDBPyConnection) -> CardSummary:
 
 def report(source: Path = OUT / "eval") -> None:
     """Both models' card tables (text and page) and the head-to-head summary."""
+    # Card queries need duckdb (the `evaluation` extra); recipe discovery imports
+    # every experiment module without it, so they load only here.
+    from manabot.eval.card_page import write_page
+    from manabot.eval.card_query import CardSelection, card_data
+    from manabot.eval.cards import print_data
+
     with statsdb(EXPERIMENT, source, rebuild=True) as db:
         for subject in ("mtg186", "mtg181"):
             selection = CardSelection(experiment=EXPERIMENT, subjects=(subject,))
