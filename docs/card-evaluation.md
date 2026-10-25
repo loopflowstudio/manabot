@@ -35,6 +35,28 @@ written on this computer. The database lives under `ETUDE_HOME/statsdb` and
 reads only files delivered since it was last opened; `--rebuild` reads everything
 again. Another experiment's games never appear.
 
+## Card data from any evaluation
+
+An evaluation that calls `play_cell` itself, such as a checkpoint grid or a
+head-to-head, can deliver card data beside its own tables. Pass
+`card_evidence_dir` as the eval run's folder, then merge the card tables into
+what `play` returns:
+
+```python
+rows, trace, _ = play_cell(..., card_evidence_dir=run_folder)
+return {
+    "games": my_rows(rows),
+    **trace_card_tables(run_folder, trace, (player_a.player_id, player_b.player_id)),
+}
+```
+
+The participants are the two registered players in Etude row order (the order
+of the match's agents). The run then appears in `cards data --experiment` for
+its experiment, and `cards audit` rebuilds its games from those participants;
+only card evaluations are additionally bound to an eight-leg schedule.
+Capture happens during `play_cell`'s existing verification replay and writes
+about 90 KB of compressed evidence per game.
+
 ## What the columns mean
 
 | Column | Meaning |

@@ -11,6 +11,7 @@ import duckdb
 from etude.eval.match import Tables, evaluate
 from etude.eval.query import statsdb
 from etude.eval.records import Agent, Environment, Match
+from etude.run.declaration import declare
 from etude.run.delivery import sync
 from etude.run.storage import DirectoryStorage
 from pydantic import JsonValue
@@ -19,7 +20,7 @@ import torch
 
 from manabot.env import Match as EnvMatch, ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
-from manabot.eval.card_evaluation import card_tables, evaluate_cards
+from manabot.eval.card_evaluation import card_tables, evaluate_cards, trace_card_tables
 from manabot.eval.card_metrics import CardGame, normalize, reduce_cards
 from manabot.eval.card_page import page_data, write_page
 from manabot.eval.card_query import (
@@ -32,6 +33,7 @@ from manabot.eval.card_query import (
 )
 from manabot.eval.card_schedule import CardConditions, admit_card_runtime
 from manabot.eval.cards import verification_spec
+from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -805,3 +807,74 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
         "</script>"
     )[0]
     assert json.loads(embedded)["variants"].keys() == variants.keys()
+
+
+def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
+    tmp_path: Path,
+) -> None:
+    """An eval that calls `play_cell` itself adds card tables with one call."""
+    spec = verification_spec(8)
+    first, second = spec.players
+    root = declare(
+        experiment="grid-like",
+        clocks=(),
+        run="grid",
+        kind="evaluation",
+        directory=tmp_path,
+    ).root
+
+    def play(match: Match) -> Tables:
+        out = root / "games" / match.key
+        out.mkdir(parents=True)
+        rows, trace, _ = play_cell(
+            key=spec.key,
+            player_a=first,
+            player_b=second,
+            deal_seeds=(int(match.conditions["deal"]),),
+            out_dir=out,
+            game_seconds=spec.game_seconds,
+            max_commands=spec.max_commands,
+            authored_matchup=spec.authored_matchup,
+            matchup_mode="all",
+            legs=(0, 1),
+            card_evidence_dir=root,
+        )
+        own = {
+            "games": [{"player": 0, "score": float(r["score_a"] or 0)} for r in rows]
+        }
+        return {
+            **own,
+            **trace_card_tables(root, trace, (first.player_id, second.player_id)),
+        }
+
+    evaluate(
+        experiment="grid-like",
+        environment=Environment(name="grid", files="a" * 64),
+        matches=[
+            Match(
+                agents=(
+                    Agent(name=first.player_id, kind="code", artifact="b" * 64),
+                    Agent(name=second.player_id, kind="code", artifact="c" * 64),
+                ),
+                conditions={"deal": spec.deals[0]},
+            )
+        ],
+        play=play,
+        run="grid",
+        directory=tmp_path,
+    )
+    with statsdb("grid-like", tmp_path) as db:
+        data = card_data(
+            db, CardSelection(experiment="grid-like", subjects=(first.player_id,))
+        )
+        assert data.games + sum(data.excluded.values()) == 2 and data.cards
+        assert {r[0] for r in db.execute("show tables").fetchall()} >= {
+            "games",
+            "card_plays",
+        }
+        checked = audit(db, tmp_path)
+        assert (checked.games, checked.problems) == (2, ())
+        db.execute("update card_counts set gih_copies = gih_copies + 1")
+        assert len(audit(db, tmp_path).problems) == 2
+    with pytest.raises(ValueError, match="card_evidence_dir"):
+        trace_card_tables(root, {}, (first.player_id, second.player_id))
