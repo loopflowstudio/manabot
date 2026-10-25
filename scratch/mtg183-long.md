@@ -94,3 +94,6 @@ after w2 ends, report data via `manabot.data publish`.
 in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
 
 Check (2026-10-25): `uv run --extra dev --extra evaluation --extra artifacts --extra reports pytest tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/training/test_etude_job.py tests/training/test_learning_state.py tests/sim/test_tracking.py tests/test_package_boundaries.py -q` → 49 passed. Gate owns the wider suites.
+
+Compress (2026-10-25): `Unit.older` replaces parsing the pair key for unit order;
+focused suite (`test_elemental_long*`, `test_elemental_grid`, `test_etude_job`) → 31 passed.

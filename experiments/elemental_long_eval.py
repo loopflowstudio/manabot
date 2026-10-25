@@ -288,6 +288,8 @@ class Unit:
 
     key: str
     newer: int
+    # The pair's older checkpoint; None for a heuristic grid.
+    older: int | None
     matches: tuple[Match, ...]
 
 
@@ -337,6 +339,7 @@ def units(state: EvalState) -> list[Unit]:
             Unit(
                 key=f"heuristic-{updates:06d}-{grid}",
                 newer=updates,
+                older=None,
                 matches=_matches(grid, (agents[updates], anchor), groups(games)),
             )
         )
@@ -346,6 +349,7 @@ def units(state: EvalState) -> list[Unit]:
             Unit(
                 key=f"pair-{pair.newer:06d}-v-{pair.older:06d}",
                 newer=pair.newer,
+                older=pair.older,
                 matches=_matches(
                     "pair", (agents[pair.newer], agents[pair.older]), pairs
                 ),
@@ -354,12 +358,8 @@ def units(state: EvalState) -> list[Unit]:
     # Stable: a checkpoint's grid before its pairs, nearer older checkpoints first.
     return sorted(
         found,
-        key=lambda u: (u.newer, u.key.startswith("pair"), -_older(u.key)),
+        key=lambda u: (u.newer, u.older is not None, -(u.older or 0)),
     )
-
-
-def _older(key: str) -> int:
-    return int(key.rsplit("-", 1)[-1]) if key.startswith("pair") else 0
 
 
 # ---------------------------------------------------------------------------

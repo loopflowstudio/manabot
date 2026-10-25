@@ -151,8 +151,8 @@ HEURISTIC_SUBSET_GAMES = 10
 def rated_updates(latest: int, endpoint: int | None = None) -> tuple[int, ...]:
     """Every 50 to 400, every 200 to 2,000, every 400 after, then the endpoint.
 
-    `latest` bounds the cadence points known so far; the endpoint (the last
-    window's final update) joins once the cohort is settled.
+    `latest` bounds the cadence points known so far; the endpoint (the seed's
+    final update) joins once the last segment has ended.
     """
     bound = latest if endpoint is None else endpoint
     found = [
