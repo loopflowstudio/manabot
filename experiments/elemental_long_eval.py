@@ -87,11 +87,11 @@ from experiments.elemental_long import (
     pair_design,
     rated_updates,
 )
-from manabot.arena.heuristic import heuristic_source_paths
-from manabot.arena.models import file_sha256
 from manabot.data import cache_directory
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
+from manabot.sim.heuristic import heuristic_source_paths
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,7 +102,8 @@ HEURISTIC = "heuristic"
 INFERENCE_CODE = (
     ROOT / "manabot/model",
     ROOT / "manabot/env",
-    ROOT / "manabot/arena/match.py",
+    ROOT / "manabot/sim/match.py",
+    ROOT / "manabot/eval/match.py",
     ROOT / "experiments/elemental_grid.py",
 )
 # Any experiment process from MTG-181's checkout (its follower, its later
@@ -527,11 +528,13 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
     """
     import torch
 
-    from manabot.arena.match import play_cell
-    from manabot.arena.matchup import AuthoredMatchup
-    from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
+    from manabot.eval.match import play_cell
+    from manabot.eval.models import EvaluationKey
+    from manabot.infra.identity import canonical_sha256
     from manabot.infra.provenance import runtime_fingerprints
     from manabot.model.checkpoint import load_checkpoint
+    from manabot.sim.matchup import AuthoredMatchup
+    from manabot.sim.registration import PlayerRegistration
 
     torch.set_num_threads(1)
     group = request.group
@@ -577,7 +580,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
 
     newer = register("newer", request.newer, "challenger")
     older = register("older", request.older, "anchor")
-    key = ArenaKey(
+    key = EvaluationKey(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",

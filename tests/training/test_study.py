@@ -6,7 +6,6 @@ import json
 import pytest
 
 from experiments.ataraxos_ablation import ARMS as ABLATIONS
-from manabot.arena.models import canonical_sha256
 from manabot.experiment import study as regime_study
 from manabot.experiment.study import (
     EvaluationProtocol,
@@ -14,6 +13,7 @@ from manabot.experiment.study import (
     scientific_plan,
     smoke_recipe,
 )
+from manabot.infra.identity import canonical_sha256
 from manabot.reports.analysis import cost_comparison, verify_saved_inputs
 
 

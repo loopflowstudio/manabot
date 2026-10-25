@@ -327,9 +327,7 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
     assert 'src="http' not in html
 
 
-def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> None:
     from etude.train.records import Step, Time
     from etude.train.run import track
 
@@ -340,16 +338,19 @@ def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(
     first = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     first.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     first.finish()
-    monkeypatch.setenv("ETUDE_UNTIL_CLOCK", "training_seconds")
-    monkeypatch.setenv("ETUDE_FROM_VALUE", "8")
-    second = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    second = track(
+        experiment="resume",
+        run="same",
+        directory=tmp_path,
+        clocks=clocks,
+        resumed_at={"training_seconds": 8},
+    )
     second.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
     second.finish()
     run = load_time_sources([str(tmp_path)]).runs[0]
     assert len(run.members) == 2
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
-    monkeypatch.delenv("ETUDE_FROM_VALUE")
     third = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     third.log({"loss": 0.4}, training_seconds=14, learner_transitions=140)
     third.finish()

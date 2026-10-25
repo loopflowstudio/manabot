@@ -61,8 +61,8 @@ _INDEPENDENCE_PROBE = textwrap.dedent(
     from tests.test_package_boundaries import _RefuseAcademy
 
     sys.meta_path.insert(0, _RefuseAcademy())
-    import manabot.arena.players
-    import manabot.arena.replay
+    import manabot.sim.players
+    import manabot.sim.replay
     import manabot.semantic.policy
     import manabot.sim.search.teacher1_evidence
 
@@ -104,7 +104,12 @@ class _RefuseTraining(importlib.abc.MetaPathFinder):
     ) -> importlib.machinery.ModuleSpec | None:
         if any(
             fullname == root or fullname.startswith(root + ".")
-            for root in ("manabot.training", "manabot.experiment", "manabot.reports")
+            for root in (
+                "manabot.training",
+                "manabot.experiment",
+                "manabot.reports",
+                "manabot.eval",
+            )
         ):
             raise ImportError(f"simulation must not import {fullname}")
         return None
@@ -132,6 +137,7 @@ def test_simulation_never_imports_training() -> None:
                         "manabot.training",
                         "manabot.experiment",
                         "manabot.reports",
+                        "manabot.eval",
                     )
                 ):
                     violations.append(
@@ -174,3 +180,8 @@ def test_simulation_imports_and_plays_without_training() -> None:
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+def test_retired_arena_package_is_absent() -> None:
+    assert importlib.util.find_spec("manabot.arena") is None
+    assert not (REPO_ROOT / "manabot" / "arena").exists()

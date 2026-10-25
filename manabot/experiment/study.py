@@ -29,18 +29,16 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
-from manabot.arena.match import SELECTED_SUITE, play_cell
-from manabot.arena.models import (
-    ArenaKey,
-    PlayerRegistration,
-    SearchSemantics,
-    canonical_sha256,
-)
 from manabot.env import ObservationSpace
+from manabot.eval.match import play_cell
+from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
+from manabot.sim.matchup import SELECTED_SUITE
+from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
@@ -723,7 +721,7 @@ def run_study(
                 )
             )
 
-        key = ArenaKey(
+        key = EvaluationKey(
             world=runs[0].regime.world,
             content_suite=SELECTED_SUITE,
             viewer_boundary="acting-viewer",

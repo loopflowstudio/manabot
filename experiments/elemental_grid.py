@@ -37,7 +37,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from manabot.arena.models import canonical_sha256
+from manabot.infra.identity import canonical_sha256
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -165,12 +165,14 @@ def _legs(group: Group) -> tuple[str, str, int]:
 def play_group(request: Request) -> list[GameRow]:
     import torch
 
-    from manabot.arena.heuristic import heuristic_source_paths
-    from manabot.arena.match import play_cell
-    from manabot.arena.matchup import AuthoredMatchup
-    from manabot.arena.models import ArenaKey, PlayerRegistration, file_sha256
+    from manabot.eval.match import play_cell
+    from manabot.eval.models import EvaluationKey
+    from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
     from manabot.model.checkpoint import load_checkpoint
+    from manabot.sim.heuristic import heuristic_source_paths
+    from manabot.sim.matchup import AuthoredMatchup
+    from manabot.sim.registration import PlayerRegistration
     import managym
 
     torch.set_num_threads(1)
@@ -221,7 +223,7 @@ def play_group(request: Request) -> list[GameRow]:
             [Path(path) for path in heuristic_source_paths()]
         ),
     )
-    key = ArenaKey(
+    key = EvaluationKey(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",

@@ -8,7 +8,7 @@ the opponent's private hand to the learner.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
 from managym.experience import (
@@ -27,9 +27,7 @@ import numpy as np
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ActionSpaceEnum
 from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.infra.provenance import (
-    canonical_sha256,
-)
+from manabot.infra.identity import canonical_sha256
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
@@ -558,7 +556,3 @@ def evaluate_root_stability(
             "cap_hits": int(block["cap_hits"]),
         }
     return aggregate
-
-
-def receipt_dict(receipt: ReplayReceipt) -> dict[str, Any]:
-    return {**asdict(receipt), "passed": receipt.passed}

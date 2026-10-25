@@ -18,10 +18,10 @@ from managym.experience import UNVERSIONED_CONTENT_HASH
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.replay import read_trace, replay_games, write_trace
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.competency import (

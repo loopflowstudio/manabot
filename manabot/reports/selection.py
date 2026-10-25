@@ -14,7 +14,7 @@ import numpy as np
 from pydantic import Field
 import torch
 
-from manabot.arena.models import canonical_sha256
+from manabot.infra.identity import canonical_sha256
 from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import (
     SelectionGroup,

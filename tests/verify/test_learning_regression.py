@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.monitor import checkpoint_manifest
 from manabot.env import Match, ObservationSpace
+from manabot.experiment.checkpoint_evaluation import checkpoint_manifest
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model import ActorCritic
 from manabot.model.checkpoint import save_checkpoint

@@ -9,7 +9,6 @@ from pydantic import JsonValue, ValidationError
 import pytest
 
 from experiments.value_model_baseline import value_model_baseline
-from manabot.arena.models import canonical_sha256
 from manabot.experiment.config import (
     Axis,
     Baseline,
@@ -24,6 +23,7 @@ from manabot.experiment.config import (
     SettingProvenance,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.identity import canonical_sha256
 from manabot.recipes.ataraxos import ataraxos
 from manabot.training.regime import (
     ArtifactReference,

@@ -27,9 +27,9 @@ from managym.enums import ActionEnum, ActionSpaceEnum
 from pydantic import BaseModel, ConfigDict
 import torch
 
-from manabot.arena.heuristic import HeuristicPlayer
 from manabot.env import Env, Match, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.search.flat_mc import make_player
 
 PACK = "elemental-world-v2"

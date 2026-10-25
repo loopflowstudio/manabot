@@ -8,7 +8,7 @@ metric runs/pages under `<out>/etude`. The analysis is the frozen protocol's
 (experiments/protocols/elemental-183.md, "Rating and analysis"):
 
 - `fit_rows` turns every valid fit-pair and heuristic game into a
-  `manabot/arena/rating.py` row (player A = newer checkpoint or the rated
+  `manabot/eval/rating.py` row (player A = newer checkpoint or the rated
   checkpoint against the heuristic; `deal_block` = the deal, shared by every
   pair or grid that plays it). `rating.fit_population` fits the seat-aware
   Bradley-Terry model with the heuristic anchored at 1,000 and
@@ -50,7 +50,7 @@ from experiments.elemental_long_eval import (
     player,
     units,
 )
-from manabot.arena.rating import (
+from manabot.eval.rating import (
     ELO_FACTOR,
     PopulationFit,
     bootstrap_population,

@@ -278,7 +278,3 @@ def prepare_trace_payload(
             redact_observation(observation)
 
     return prepared
-
-
-def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return prepare_trace_payload(payload, reveal_hidden=False)

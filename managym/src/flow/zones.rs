@@ -125,7 +125,13 @@ impl Game {
             }
 
             if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
+                if let Some(capture) = &mut self.card_capture {
+                    capture.drawing = Some(card);
+                }
                 self.move_card(card, ZoneType::Hand);
+                if let Some(capture) = &mut self.card_capture {
+                    capture.drawing = None;
+                }
                 self.journal_turn();
                 self.state.turn.cards_drawn_this_turn[player.0] += 1;
                 self.emit(GameEvent::CardDrawn {
@@ -418,6 +424,7 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
+        self.capture_card_move(card, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             card,
             from: old_zone,

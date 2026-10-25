@@ -7,16 +7,18 @@ from typing import Any, Literal
 import pytest
 import torch
 
-from manabot.arena import monitor as monitor
-from manabot.arena.match import selected_match
-from manabot.arena.matchup import AuthoredMatchup
-from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.env import Match, ObservationSpace
+from manabot.eval import monitor
+from manabot.eval.models import EvaluationKey
+from manabot.experiment import checkpoint_evaluation
 from manabot.infra.config import ModelConfig
+from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.reports.training import evaluation_dashboard
+from manabot.sim.matchup import AuthoredMatchup, selected_match
+from manabot.sim.registration import PlayerRegistration
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
@@ -76,7 +78,7 @@ def _manifest() -> monitor.MonitorResult:
         compute_class_id="cpu",
         source_sha256="e" * 64,
     )
-    key = ArenaKey(
+    key = EvaluationKey(
         world="w4",
         content_suite="w4-allies-lessons-v1",
         viewer_boundary="acting-viewer",
@@ -189,7 +191,9 @@ def test_block_failure_retains_prior_rows_and_costs(
 ) -> None:
     manifest = _manifest()
     monkeypatch.setattr(
-        monitor, "checkpoint_manifest", lambda *args: manifest.model_copy(deep=True)
+        checkpoint_evaluation,
+        "checkpoint_manifest",
+        lambda *args: manifest.model_copy(deep=True),
     )
 
     def play(
@@ -199,9 +203,9 @@ def test_block_failure_retains_prior_rows_and_costs(
             raise TimeoutError("retained block failure")
         return _rows(manifest, (101,)), {"sha256": "trace"}, {"passed": True}
 
-    monkeypatch.setattr(monitor, "play_cell", play)
+    monkeypatch.setattr(checkpoint_evaluation, "play_cell", play)
     # The injected manifest isolates arena orchestration from checkpoint loading.
-    result = monitor.evaluate_checkpoint(
+    result = checkpoint_evaluation.evaluate_checkpoint(
         TrainingRun.model_construct(),
         manifest.artifact,
         manifest.coordinates,
@@ -218,7 +222,7 @@ def test_block_failure_retains_prior_rows_and_costs(
     )
     assert saved == result
     with pytest.raises(FileExistsError):
-        monitor.evaluate_checkpoint(
+        checkpoint_evaluation.evaluate_checkpoint(
             TrainingRun.model_construct(),
             manifest.artifact,
             manifest.coordinates,
@@ -330,7 +334,7 @@ def test_real_arena_checkpoint_outcomes(
                 17, match_config=match, observation_space=space
             ),
         )
-        result = monitor.evaluate_checkpoint(
+        result = checkpoint_evaluation.evaluate_checkpoint(
             run,
             {
                 "path": str(checkpoint),
@@ -383,7 +387,7 @@ def test_real_arena_checkpoint_outcomes(
 def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
     manifest = _manifest()
     with pytest.raises(FileNotFoundError):
-        monitor.evaluate_checkpoint(
+        checkpoint_evaluation.evaluate_checkpoint(
             TrainingRun.model_construct(id="failed-admission"),
             manifest.artifact,
             manifest.coordinates,

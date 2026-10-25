@@ -3,7 +3,7 @@
 Self-play training logs each update's diagnostics once, to its own Etude run.
 TrainingRun (VerifyStore, exported as `run.json`) keeps the scientific receipt:
 regime, identities, stage counters, artifacts, monitoring checkpoints and
-status. Checkpoint evaluation projects arena receipts into a separate Etude
+status. Checkpoint evaluation projects evaluation receipts into a separate Etude
 monitoring run. No account is needed to train or retain diagnostics. These
 commands do not modify a running trainer, its checkout, or its frozen recipe.
 
@@ -109,7 +109,7 @@ the rows of historical exports.
 Run evaluation in a separate process, explicitly accounting for its compute:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --out .runs/example-monitor --watch-seconds 30 \
   --concurrent-activity 'training running concurrently' --entity TEAM
 ```
@@ -120,9 +120,9 @@ are not automatically replaced. Saved results can be synced later. For an
 individual export or a stage-end checkpoint:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --checkpoint 0 --out .runs/checkpoint-0-monitor
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --run .runs/example/run.json --stage policy-0 --out .runs/stage-0-monitor
 ```
 
@@ -169,12 +169,12 @@ retry never rewrites settled rows and a changed prefix is rejected. Delivery
 failure retains both JSON and SDK files with a `delivery.json` error type.
 
 Supply evaluation attempts in immutable append order, including failures. Runs,
-protocols and opponents must agree within a curve. Existing arena rows can be
+protocols and opponents must agree within a curve. Existing evaluation rows can be
 imported against a saved MonitorResult manifest with original checkpoint,
 coordinates, registrations and protocol:
 
 ```bash
-uv run python -m manabot.arena.monitor_worker \
+uv run python -m manabot.experiment.monitor_worker \
   --import-manifest /path/to/manifest.json --import-rows /path/to/rows.json \
   --out .runs/imported-monitor
 ```

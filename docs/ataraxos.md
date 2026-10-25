@@ -114,7 +114,7 @@ Before expensive scoring, freeze a new protocol, independent seed cohort,
 training and evaluation budgets, immutable world/setup and code identities,
 held-out paired deals and both seat/deck assignments. Compare current PPO,
 Ataraxos categorical and its scalar ablation using existing TrainingRun exports
-and `manabot.arena` registration/play/replay. Keep the full planned cohort and
+and `manabot.sim` registration/play/replay and `manabot.eval` admission. Keep the full planned cohort and
 all failures, and compare only overlapping observed cost intervals, including
 collection, fitting and exports. Use one inference envelope and declare raw
 versus EMA selection before evaluating. Whole-game partitions apply to any

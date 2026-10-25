@@ -40,8 +40,8 @@ from etude.launch.records import Job
 from etude.run.storage import Storage, storage_from_uri
 
 from experiments.elemental_grid import DECKS, Game, schedule
-from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 

@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.arena.matchup import AuthoredMatchup
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
@@ -15,6 +14,7 @@ from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
+from manabot.sim.matchup import AuthoredMatchup
 
 
 def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:

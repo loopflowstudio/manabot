@@ -16,7 +16,7 @@ dependencies = [
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk==0.2.1",
+    "etude-sdk==0.2.2",
 ]
 
 [project.scripts]
@@ -24,7 +24,7 @@ manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
 reports = [
-    "etude-sdk[s3]==0.2.1 ; python_version >= '3.12'",
+    "etude-sdk[s3]==0.2.2 ; python_version >= '3.12'",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -35,7 +35,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
-    "etude-sdk[eval]==0.2.1",
+    "etude-sdk[eval]==0.2.2",
     "matplotlib>=3.9",
 ]
 play = [
@@ -70,7 +70,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
-    "etude-sdk==0.2.1",
+    "etude-sdk==0.2.2",
 ]
 
 [tool.uv]
@@ -150,6 +150,7 @@ markers = [
 ]
 
 [tool.ruff]
+extend-exclude = ["tests/fixtures/seventeenlands/mtga_follower.py"]
 line-length = 88
 target-version = "py312"
 

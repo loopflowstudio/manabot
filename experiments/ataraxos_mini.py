@@ -4,9 +4,9 @@
 screen and the sustained baseline run it with their own stage plans.
 """
 
-from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_checkpoints, move_stage
+from manabot.sim.matchup import selected_match
 from manabot.training.regime import TrainingRegime
 import managym
 
