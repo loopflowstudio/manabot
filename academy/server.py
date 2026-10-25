@@ -79,7 +79,6 @@ from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
 from .opponent import (
     Opponent,
     catalog_opponent,
-    configured_opponent,
     opponent_catalog,
 )
 from .presentation import PresentationProjector
@@ -644,29 +643,13 @@ def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str
 
 
 def _select_opponent(sha256: Any) -> Opponent:
-    """Resolve the requested trained opponent by exact digest, verified.
+    """Resolve the requested catalog checkpoint by exact digest, verified.
 
-    Without a digest the configured candidate plays (its historical default).
-    A digest names the configured candidate or a catalog checkpoint; catalog
-    refusals carry the mismatch that makes the checkpoint unplayable here.
+    Refusals carry the mismatch that makes the checkpoint unplayable here.
     """
 
-    try:
-        configured = configured_opponent()
-    except ValueError:
-        # A broken candidate bundle must not hide catalog checkpoints.
-        if sha256 is None:
-            raise
-        configured = None
-    if sha256 is None:
-        if configured is None:
-            raise ValueError("No trained opponent is configured on this server.")
-        sha256 = configured.sha256
     if not isinstance(sha256, str):
-        raise ValueError("opponent_sha256 must be a checkpoint digest.")
-    if configured is not None and sha256 == configured.sha256:
-        configured.verify()
-        return configured
+        raise ValueError("opponent_sha256 must name a trained checkpoint digest.")
     opponent = catalog_opponent(sha256)
     if opponent is None:
         raise ValueError("The selected opponent is no longer available.")
@@ -684,8 +667,7 @@ def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
     """Refuse a matchup outside the decks a catalog checkpoint was bound to.
 
     Seats may swap: the binding is the sorted pair of deck/sideboard setups,
-    so the bot plays either of its decks from either seat. Candidate bundles
-    check their decks after reset against the engine manifest instead.
+    so the bot plays either of its decks from either seat.
     """
 
     if not opponent.setups:
@@ -956,21 +938,6 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        # Candidate bundles pin the engine manifest and decks outside the
-        # checkpoint; catalog checkpoints were checked by their world binding.
-        if (
-            config.opponent_checkpoint is not None
-            and config.opponent_checkpoint["source"] == "candidate"
-        ):
-            opponent = configured_opponent()
-            assert opponent is not None
-            if manifest != opponent.content_manifest:
-                raise ValueError(
-                    "Trained opponent is incompatible with the current world."
-                )
-            decks = (opponent.decks or {}).values()
-            if config.hero_deck not in decks or config.villain_deck not in decks:
-                raise ValueError("Trained opponent does not support these decks.")
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
