@@ -49,6 +49,7 @@ import tarfile
 import tempfile
 import time
 
+import duckdb
 from etude.eval.match import Row, Tables, environment as eval_environment, evaluate
 from etude.eval.query import statsdb
 from etude.eval.records import (
@@ -516,12 +517,11 @@ class CardSummary(BaseModel):
     overall: Score
 
 
-def _rows(source: Path) -> list[GameRow]:
+def _rows(db: duckdb.DuckDBPyConnection) -> list[GameRow]:
     """The `games` table as rows; Etude stores no column that is null throughout."""
-    with statsdb(EXPERIMENT, source, rebuild=True) as db:
-        cursor = db.execute("select * from games")
-        names = [column[0] for column in cursor.description]
-        found = [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
+    cursor = db.execute("select * from games")
+    names = [column[0] for column in cursor.description]
+    found = [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
     return [
         GameRow(
             deal=row["deal"],
@@ -541,8 +541,8 @@ def _rows(source: Path) -> list[GameRow]:
     ]
 
 
-def summary(source: Path) -> CardSummary:
-    rows = _rows(source)
+def summary(db: duckdb.DuckDBPyConnection) -> CardSummary:
+    rows = _rows(db)
     played = sorted((r.deal, r.model_deck, r.model_seat) for r in rows)
     wanted = sorted((d, x, s) for d in deals() for x in (UR, GW) for s in (0, 1))
     if played != wanted:
@@ -569,15 +569,16 @@ def summary(source: Path) -> CardSummary:
 
 def report(source: Path = OUT / "eval") -> None:
     """Both models' card tables (text and page) and the head-to-head summary."""
-    for subject in ("mtg186", "mtg181"):
-        selection = CardSelection(experiment=EXPERIMENT, subjects=(subject,))
-        with statsdb(EXPERIMENT, source, rebuild=True) as db:
+    with statsdb(EXPERIMENT, source, rebuild=True) as db:
+        for subject in ("mtg186", "mtg181"):
+            selection = CardSelection(experiment=EXPERIMENT, subjects=(subject,))
             text = io.StringIO()
             with redirect_stdout(text):
                 print_data(card_data(db, selection))
             (OUT / f"{subject}.txt").write_text(text.getvalue())
             write_page(db, selection, OUT / f"{subject}.html")
-    (OUT / "summary.json").write_text(summary(source).model_dump_json(indent=2) + "\n")
+        card_summary = summary(db)
+    (OUT / "summary.json").write_text(card_summary.model_dump_json(indent=2) + "\n")
 
 
 def main() -> None:
