@@ -23,6 +23,7 @@ from experiments.elemental_long import (
     pair_design,
     rated_updates,
     segment_job,
+    stage_monitoring,
     stage_parent,
 )
 from manabot.experiment.job import LearnerContinuation, StagedExport
@@ -58,7 +59,7 @@ def test_segment_continues_the_frozen_recipe_on_the_cadence() -> None:
     assert job.until == "updates=4000" and len(job.inputs) == 4
 
 
-def _window(tmp_path: Path) -> Path:
+def _window(tmp_path: Path, checkpoint_updates: int | None = None) -> Path:
     """A tiny run shaped like a window: MTG-183's seed and stage name."""
     regime = TrainingRegime(
         id="window-fixture",
@@ -88,7 +89,13 @@ def _window(tmp_path: Path) -> Path:
         ],
     )
     with VerifyStore(tmp_path / "window.sqlite") as store:
-        execute_regime(regime, SEED, tmp_path / "window", store)
+        execute_regime(
+            regime,
+            SEED,
+            tmp_path / "window",
+            store,
+            checkpoint_updates=checkpoint_updates,
+        )
     return tmp_path / "window"
 
 
@@ -125,6 +132,35 @@ def test_staging_counts_a_historical_parent_by_its_inline_update_rows(
     (parent / "run.json").write_text(json.dumps(record))
     continuation = stage_parent(parent, DirectoryStorage(tmp_path / "bucket"), "w")
     assert continuation.from_update == 2
+
+
+def test_monitoring_staging_binds_an_interrupted_parent_raw_export(
+    tmp_path: Path,
+) -> None:
+    parent = _window(tmp_path, checkpoint_updates=1)
+    storage = DirectoryStorage(tmp_path / "bucket")
+    with pytest.raises(ValueError, match="final exports"):
+        stage_monitoring(parent, storage, "mtg183/w3", 1)
+    record = json.loads((parent / "run.json").read_bytes())
+    record["status"] = record["stages"][0]["status"] = "interrupted"
+    (parent / "run.json").write_text(json.dumps(record))
+    continuation = stage_monitoring(parent, storage, "mtg183/w3", 1)
+    assert continuation.from_monitoring and continuation.from_update == 1
+    assert continuation.ema is None and continuation.optimizer is None
+    assert continuation.raw.key == "mtg183/w3/monitor-00000000.pt"
+    assert (
+        storage.get(continuation.raw.key)
+        == (parent / "monitor-00000000.pt").read_bytes()
+    )
+    spec = segment_job(continuation, 120, hours=24)
+    assert spec.milestones[0] == CADENCE
+    job = spec.job(repo=REGIME.parent, revision="HEAD", max_hours=24)
+    assert len(job.inputs) == 2
+    with pytest.raises(ValueError, match="no monitoring export"):
+        stage_monitoring(parent, storage, "mtg183/w3", 2)
+    (parent / "monitor-00000000.pt").write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="published monitoring raw"):
+        stage_monitoring(parent, storage, "mtg183/w4", 1)
 
 
 def test_h2h_schedule_is_frozen_and_disjoint_from_the_heuristic_grid() -> None:

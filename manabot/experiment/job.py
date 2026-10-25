@@ -16,6 +16,14 @@ the parent's run record and final raw/EMA/Adam exports arrive as digest-checked
 Etude inputs, the worker binds them as the stage's LearningStateImport, and
 training resumes at the parent's absolute update toward the same absolute
 target. Game streams and RNGs restart; this is a new segment, not recovery.
+A parent interrupted before its final exports can be continued only by
+declaration (`from_monitoring`): from the raw weights of one of its monitoring
+exports, with the EMA reset to them and a fresh Adam.
+
+A segment ends before its wall budget rather than at it: the stage stops at an
+update boundary once another update plus `stop_reserve_seconds` no longer fits,
+exports raw/EMA/Adam and ends `paused`. That paused segment is a successful
+attempt reporting the update it reached, and its successor continues normally.
 """
 
 from datetime import datetime, timezone
@@ -66,19 +74,40 @@ class LearnerContinuation(Strict):
     parent's. The exports must be the parent
     stage's own published raw/EMA/Adam artifacts (LearningStateImport admission
     compares them with the record).
+
+    With `from_monitoring`, `from_update` instead names one of an interrupted
+    parent's monitoring exports and only `raw` (that export's bytes) is staged;
+    admission resets the EMA to it and starts Adam afresh.
     """
 
     from_update: int = Field(ge=1)
     source_stage: str
     source_run: StagedExport
     raw: StagedExport
-    ema: StagedExport
-    optimizer: StagedExport
+    ema: StagedExport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    optimizer: StagedExport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    from_monitoring: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def declared_roles(self) -> "LearnerContinuation":
+        staged = (self.ema is not None, self.optimizer is not None)
+        if staged != ((False, False) if self.from_monitoring else (True, True)):
+            raise ValueError(
+                "a continuation stages raw/EMA/Adam, or raw alone from a"
+                " declared monitoring export"
+            )
+        return self
 
     def files(self) -> dict[str, tuple[str, StagedExport]]:
-        """Import role -> (input file name, staged export)."""
+        """Import role -> (input file name, staged export), for staged roles."""
         return {
-            role: (name, getattr(self, role)) for role, name in _PARENT_FILES.items()
+            role: (name, export)
+            for role, name in _PARENT_FILES.items()
+            if (export := getattr(self, role)) is not None
         }
 
     def inputs(self) -> tuple[Input, ...]:
@@ -119,6 +148,12 @@ class TrainingJob(Strict):
     regime: TrainingRegime
     milestones: tuple[int, ...] = ()
     finalization_seconds: float = Field(default=30, gt=0)
+    # Inside the watchdog: the final raw/EMA/Adam exports after a wall-bounded
+    # stop (execute_regime's stop_reserve_seconds). Omitted: 120 s, or a tenth
+    # of the watchdog when that is shorter.
+    stop_reserve_seconds: float | None = Field(
+        default=None, gt=0, exclude_if=lambda value: value is None
+    )
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
     # Frozen by `job` from the exact revision; absent only for local workers,
@@ -151,6 +186,8 @@ class TrainingJob(Strict):
         start = 0 if self.continuation is None else self.continuation.from_update
         if start >= stage.updates:
             raise ValueError("continuation must start before the update target")
+        if self.stop_reserve >= self._watchdog_seconds:
+            raise ValueError("the stop reserve must lie inside the regime watchdog")
         if tuple(sorted(set(self.milestones))) != self.milestones or any(
             n <= start or n >= stage.updates for n in self.milestones
         ):
@@ -169,6 +206,11 @@ class TrainingJob(Strict):
         serialized["stages"][0]["learning_state"] = LearningStateImport.model_validate(
             {
                 "source_stage": self.continuation.source_stage,
+                **(
+                    {"monitoring_update": self.continuation.from_update}
+                    if self.continuation.from_monitoring
+                    else {}
+                ),
                 **{
                     role: {
                         "path": str(inputs / name),
@@ -180,6 +222,17 @@ class TrainingJob(Strict):
             }
         ).model_dump(mode="json")
         return TrainingRegime.model_validate(serialized)
+
+    @property
+    def _watchdog_seconds(self) -> float:
+        stage = self.regime.stages[0]
+        return min(self.regime.wall_seconds, stage.execution.wall_seconds)
+
+    @property
+    def stop_reserve(self) -> float:
+        if self.stop_reserve_seconds is not None:
+            return self.stop_reserve_seconds
+        return min(120.0, self._watchdog_seconds / 10)
 
     @property
     def updates(self) -> int:
@@ -262,7 +315,11 @@ def run_worker() -> TrainingRun:
         parent = TrainingRun.model_validate_json(
             (inputs / _PARENT_FILES["source_run"]).read_bytes()
         )
-        if parent.updates_through() != spec.continuation.from_update:
+        # A monitoring continuation's parent trained past its export;
+        # admission matches the export's receipt at from_update instead.
+        if not spec.continuation.from_monitoring and (
+            parent.updates_through() != spec.continuation.from_update
+        ):
             raise ValueError("staged parent ends at a different update")
         if parent.seed != int(environment["ETUDE_SEED"]):
             raise ValueError("a learner continuation keeps its parent's seed")
@@ -291,16 +348,25 @@ def run_worker() -> TrainingRun:
             store,
             checkpoint_updates=spec.milestones,
             stop_path=stop,
+            stop_reserve_seconds=spec.stop_reserve,
         )
-    if run.status != "completed" or run.updates_through() != spec.updates:
+    finished = run.status == "completed" and run.updates_through() == spec.updates
+    # A wall-bounded stop exported the complete learner state short of target.
+    paused = (
+        run.status == "paused"
+        and run.updates_through() < spec.updates
+        and {"raw", "ema", "optimizer"} <= set(run.stages[0].artifacts)
+    )
+    if not (finished or paused):
         raise RuntimeError(
             f"training did not complete target: {run.status}: {run.error}"
         )
     artifact = run.selected_artifact
     if artifact is None:
         raise RuntimeError("completed training has no admitted policy")
-    # Only completed targets become launcher successes. Private scientific
-    # receipts and rejected attempts remain under output even on failure.
+    # Completed targets and wall-bounded segments become launcher successes,
+    # reporting the update reached. Private scientific receipts and rejected
+    # attempts remain under output even on failure.
     result = {
         "clocks": {"updates": run.updates_through()},
         "checkpoint": str(

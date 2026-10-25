@@ -41,6 +41,11 @@ raw/EMA/Adam exports as objects in the machine's Etude storage; they arrive as
 job inputs, the worker binds them as the stage's `LearningStateImport`, and
 training resumes at the parent's absolute update toward the job's absolute
 target. Game streams and RNGs restart, and the seed must be the parent's.
+A parent interrupted before its final exports continues only by declaration
+(`from_monitoring`): from the raw weights of one of its monitoring exports,
+with the EMA reset to them and a fresh Adam. A job stops at an update boundary
+before its watchdog (`stop_reserve_seconds`), exports its learner state and
+ends `paused`; Etude records that attempt as succeeded at the update it reached.
 `etude continue` is different: it resumes from a policy checkpoint, which
 cannot carry Adam or collector state, so the worker refuses it.
 
