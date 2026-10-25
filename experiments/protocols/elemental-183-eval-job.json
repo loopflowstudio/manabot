@@ -1,5 +1,5 @@
 {
- "amendment": "2026-10-25 04:34 UTC: evaluation on the Mac mini",
+ "amendment": "2026-10-25: card data from every evaluation game (run mtg183-eval-cards)",
  "pool": "mini",
  "segments": [
   "e7d47d8b220f"
@@ -13,14 +13,14 @@
    "stop_seconds": 120.0,
    "cleanup_seconds": null,
    "runtime": null,
-   "command": "set -eu\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nDOPPLER_TOKEN=\"$(cat \"$HOME/.config/manabot/doppler-prd.token\")\" exec doppler run --config-dir \"$HOME/.config/manabot/doppler\" -- \\\n  uv run --locked --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \\\n  --directory \"$HOME/.manabot/mtg183-eval\" --until 1793584946 \\\n  --windows experiments/protocols/elemental-183-windows.json \\\n  --storage r2://manabot/evaluations --etude-source r2://manabot/jobs \\\n  --run e7d47d8b220f --continues\n",
+   "command": "set -eu\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nDOPPLER_TOKEN=\"$(cat \"$HOME/.config/manabot/doppler-prd.token\")\" exec doppler run --config-dir \"$HOME/.config/manabot/doppler\" -- \\\n  uv run --locked --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \\\n  --directory \"$HOME/.manabot/mtg183-eval-cards\" --until 1793584946 \\\n  --windows experiments/protocols/elemental-183-windows.json \\\n  --storage r2://manabot/evaluations --etude-source r2://manabot/jobs \\\n  --run e7d47d8b220f --continues\n",
    "max_hours": 190.0,
    "max_usd": null,
    "name": "mtg183-elemental-eval",
    "until": null,
    "config": null,
    "repo": "/Users/jack/src/manabot.mtg-183-train-one-long",
-   "revision": "39b02876e347adf5cf93e8ed77e716796a71c3ed",
+   "revision": "fb71050cf7c89cea27f700ed0ea35bb490c1e7a6",
    "max_attempts": 1,
    "inputs": [],
    "environment": [
