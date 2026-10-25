@@ -1,7 +1,9 @@
-"""Card evaluation CLI: evaluate, rank, export-log, publish, and bounded verify.
+"""Card evaluation CLI: evaluate, data, audit, export-log and bounded verify.
 
-Use the evaluation extra. Every evaluation has an explicit run ID and admitted
-registrations; no command selects a checkpoint or remote destination implicitly."""
+Use the evaluation extra. Every evaluation names its experiment and run and has
+admitted registrations; no command selects a checkpoint implicitly. `data` and
+`audit` read the experiment's kept Etude database, caught up with `--source`
+(by default, where runs are written on this computer)."""
 
 from __future__ import annotations
 
@@ -12,22 +14,21 @@ import resource
 import sys
 import time
 
-from etude.run.storage import storage_from_uri
+from etude.eval.query import statsdb
+from etude.run.storage import default_root
 
 from manabot.eval.arena_log import CardMapping, export_arena_log
-from manabot.eval.card_evaluation import (
-    CardEvaluationSpec,
-    evaluate_cards,
-    publish_cards,
-)
-from manabot.eval.card_query import CardQuery, evidence_refs, load_game, rank_cards
+from manabot.eval.card_evaluation import CardEvaluationSpec, evaluate_cards
+from manabot.eval.card_page import write_page
+from manabot.eval.card_query import CardData, CardSelection, audit, card_data, load_game
 from manabot.eval.evaluate import source_digest
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.replay import replay_games
+
+VERIFY_EXPERIMENT = "card-verification"
 
 
 def verification_spec(games: int) -> CardEvaluationSpec:
@@ -57,6 +58,7 @@ def verification_spec(games: int) -> CardEvaluationSpec:
         for name in ("verify-one", "verify-two")
     )
     return CardEvaluationSpec(
+        experiment=VERIFY_EXPERIMENT,
         run=f"verify-{games}",
         key=EvaluationKey(
             world=runtime["world"],
@@ -77,27 +79,38 @@ def verification_spec(games: int) -> CardEvaluationSpec:
 
 
 def verify(games: int, out: Path) -> dict[str, int | float | str]:
+    """Play bounded native games, then audit every retained game by replay.
+
+    Card data is read for both participants, and again after the audit, so a
+    corrupted row for either player fails here.
+    """
     started = time.monotonic()
     spec = verification_spec(games)
     evaluate_cards(spec, out)
-    queries = [CardQuery(run=spec.run, player=p.player_id) for p in spec.players]
-    # Each subject query rebuilds its rows; both participants must be checked.
-    before = [rank_cards(out, query) for query in queries]
-    refs = evidence_refs(out, spec.run)
-    if len(refs) != games:
-        raise ValueError("verification schedule did not retain every game")
-    for ref in refs:
-        game = load_game(out, spec.run, ref)
-        if not replay_games([game.trace.data]).passed:
-            raise ValueError(f"retained trace no longer verifies: {game.game}")
-    if [rank_cards(out, query) for query in queries] != before:
-        raise ValueError("ranking changed when rebuilt from evidence")
+    selections = [
+        CardSelection(
+            experiment=spec.experiment, subjects=(p.player_id,), runs=(spec.run,)
+        )
+        for p in spec.players
+    ]
+    with statsdb(spec.experiment, out) as db:
+        before = [card_data(db, selection) for selection in selections]
+        if (
+            sum(data.games + sum(data.excluded.values()) for data in before)
+            != 2 * games
+        ):
+            raise ValueError("verification did not retain every game for both players")
+        result = audit(db, out, replay=True)
+        if result.problems or result.games != games:
+            raise ValueError(f"audit failed: {result.model_dump()}")
+        if [card_data(db, selection) for selection in selections] != before:
+            raise ValueError("card data changed when read again")
     usage = resource.getrusage(resource.RUSAGE_SELF)
     children = resource.getrusage(resource.RUSAGE_CHILDREN)
     return {
         "games": games,
         "elapsed_seconds": time.monotonic() - started,
-        "artifact_bytes": sum(ref.bytes for ref in refs),
+        "audited_games": result.games,
         "peak_parent_memory_bytes": int(
             usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
         ),
@@ -108,32 +121,60 @@ def verify(games: int, out: Path) -> dict[str, int | float | str]:
     }
 
 
+def print_data(data: CardData) -> None:
+    subjects = ", ".join(data.subjects.values()) or "every agent"
+    print(
+        f"{data.selection.experiment}: {subjects}; {data.games} games, "
+        f"{data.deals} deals, {len(data.runs)} runs"
+    )
+    print(f"opponents: {data.opponents}; excluded: {data.excluded}")
+    print("card\t# GIH\tGIH WR\t95% deal interval\t# GNS\tGNS WR\tIWD")
+    for card in data.cards:
+        rate = "—" if card.gih.rate is None else f"{card.gih.rate:.1%}"
+        gns = "—" if card.gns.rate is None else f"{card.gns.rate:.1%}"
+        interval = (
+            "—"
+            if card.gih_interval is None
+            else f"{card.gih_interval[0]:.1%}–{card.gih_interval[1]:.1%}"
+        )
+        iwd = "—" if card.iwd is None else f"{card.iwd:+.1f}pp"
+        print(
+            f"{card.name}\t{card.gih.count}\t{rate}\t{interval}\t{card.gns.count}\t{gns}\t{iwd}"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     evaluation = commands.add_parser("evaluate")
     evaluation.add_argument("--spec", type=Path, required=True)
     evaluation.add_argument("--out", type=Path, required=True)
-    ranking = commands.add_parser("rank")
-    ranking.add_argument("--source", required=True)
-    ranking.add_argument("--run", required=True)
-    ranking.add_argument("--player", required=True)
-    ranking.add_argument("--opponent", action="append", default=[])
-    ranking.add_argument("--deck")
-    ranking.add_argument("--opponent-deck")
-    ranking.add_argument("--position", choices=["play", "draw"])
-    ranking.add_argument("--partial", action="store_true")
-    ranking.add_argument("--json", action="store_true")
+    data = commands.add_parser("data", help="17Lands-style card columns")
+    data.add_argument("--experiment", required=True)
+    data.add_argument("--source", help="directory or bucket of eval runs")
+    data.add_argument("--subject", action="append", default=[])
+    data.add_argument("--opponent", action="append", default=[])
+    data.add_argument("--run", action="append", default=[])
+    data.add_argument("--commit", action="append", default=[])
+    data.add_argument("--deck")
+    data.add_argument("--opponent-deck")
+    data.add_argument("--position", choices=["play", "draw"])
+    data.add_argument("--rebuild", action="store_true", help="read every file again")
+    shown = data.add_mutually_exclusive_group()
+    shown.add_argument("--json", action="store_true")
+    shown.add_argument("--html", type=Path, help="write a card data page")
+    checking = commands.add_parser("audit", help="re-verify retained evidence")
+    checking.add_argument("--experiment", required=True)
+    checking.add_argument("--source")
+    checking.add_argument("--replay", action="store_true")
     export = commands.add_parser("export-log")
-    export.add_argument("--source", required=True)
+    export.add_argument("--experiment", required=True)
+    export.add_argument("--source")
     export.add_argument("--run", required=True)
     export.add_argument("--game", required=True)
     export.add_argument("--viewer", type=int, choices=[0, 1], required=True)
     export.add_argument("--mapping", type=Path, required=True)
     export.add_argument("--out", type=Path, required=True)
-    publication = commands.add_parser("publish")
-    publication.add_argument("--source", type=Path, required=True)
-    publication.add_argument("--destination", required=True)
     verification = commands.add_parser("verify")
     verification.add_argument("--games", type=int, default=1024)
     verification.add_argument("--out", type=Path, required=True)
@@ -143,46 +184,41 @@ def main() -> None:
             CardEvaluationSpec.model_validate_json(args.spec.read_bytes()), args.out
         )
         print(result.model_dump_json(indent=2))
-    elif args.command == "rank":
-        result = rank_cards(
-            args.source,
-            CardQuery(
-                run=args.run,
-                player=args.player,
-                opponents=tuple(args.opponent),
-                deck=args.deck,
-                opponent_deck=args.opponent_deck,
-                on_play=None if args.position is None else args.position == "play",
-                partial=args.partial,
-            ),
+    elif args.command == "data":
+        selection = CardSelection(
+            experiment=args.experiment,
+            subjects=tuple(args.subject),
+            opponents=tuple(args.opponent),
+            runs=tuple(args.run),
+            commits=tuple(args.commit),
+            deck=args.deck,
+            opponent_deck=args.opponent_deck,
+            on_play=None if args.position is None else args.position == "play",
         )
-        if args.json:
-            print(result.model_dump_json(indent=2))
-        else:
-            print(
-                f"{result.subject} / {result.selection.run}: {result.completeness.model_dump()}"
-            )
-            print(
-                f"opponent mix: {result.opponent_mix}; excluded: {result.excluded_outcomes}"
-            )
-            print("card\tGIH WR\tcopies\tgames\t95% deal interval")
-            for card in result.cards:
-                rate = "unavailable" if card.rate is None else f"{card.rate:.3%}"
-                print(
-                    f"{card.name}\t{rate}\t{card.qualifying_copies}\t{card.games}\t{card.interval}"
-                )
+        with statsdb(args.experiment, args.source, rebuild=args.rebuild) as db:
+            if args.html:
+                print(write_page(db, selection, args.html))
+            elif args.json:
+                print(card_data(db, selection).model_dump_json(indent=2))
+            else:
+                print_data(card_data(db, selection))
+    elif args.command == "audit":
+        source = args.source
+        with statsdb(args.experiment, source) as db:
+            result = audit(db, source or default_root(), replay=args.replay)
+        print(result.model_dump_json(indent=2))
+        if result.problems:
+            sys.exit(1)
     elif args.command == "export-log":
-        refs = [r for r in evidence_refs(args.source, args.run) if r.game == args.game]
-        if len(refs) != 1:
-            raise ValueError("game must identify exactly one retained artifact")
+        source = args.source
+        with statsdb(args.experiment, source) as db:
+            game = load_game(db, source or default_root(), args.run, args.game)
         log = export_arena_log(
-            load_game(args.source, args.run, refs[0]),
+            game,
             args.viewer,
             CardMapping.model_validate_json(args.mapping.read_bytes()),
         )
         args.out.write_text(log)
-    elif args.command == "publish":
-        publish_cards(args.source, storage_from_uri(args.destination))
     else:
         print(json.dumps(verify(args.games, args.out), indent=2))
 

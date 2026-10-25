@@ -1,0 +1,118 @@
+{
+  "segment": "w3",
+  "amendment": "2026-10-25 02:06 UTC: segments of one rental each",
+  "seed": 18301,
+  "parent": {
+    "job": "mtg183-elemental-long-w2",
+    "training_run": "da9a395a7488478e8481e9a4fc93a066",
+    "status": "paused",
+    "update": 2534,
+    "stage_seconds": 42033.33545708802,
+    "updates": 1209,
+    "staged_to": "r2://manabot/jobs/mtg183/w2/"
+  },
+  "receipts_usd": {
+    "w1": {
+      "training": 7.208965978813834,
+      "guardian": 0.016270151660839716
+    },
+    "w2": {
+      "training": 7.2197591241763694,
+      "guardian": 0.01606456249621179
+    }
+  },
+  "sizing": {
+    "cap_usd": 50.0,
+    "spent_usd": 14.4611,
+    "reserve_usd": 1.3,
+    "remaining_usd": 34.23,
+    "quoted_usd_per_hour": 0.59,
+    "quoted_at": "2026-10-25T01:57:26Z",
+    "ceiling_usd_per_hour": 0.6,
+    "w2_updates_per_hour": 103.55,
+    "hours": 11.6,
+    "max_usd": 7.11,
+    "target_update": 3500
+  },
+  "source": {
+    "commit": "418eb456cd99a9c9a7af39e4e1e6b093e50cfd63",
+    "tag": "mtg183-w3-source"
+  },
+  "continuation": {
+    "from_update": 2534,
+    "source_stage": "self-play",
+    "source_run": {
+      "key": "mtg183/w2/run.json",
+      "sha256": "bfeecd32a921c6dee4a4b380660b3f0539c9b26dd74e737af66b6f29665818ae",
+      "bytes": 170649059
+    },
+    "raw": {
+      "key": "mtg183/w2/self-play-raw.pt",
+      "sha256": "745efa199676671de67abb3b4432c1899311a68b2a21e03494a86018baf31201",
+      "bytes": 1071166
+    },
+    "ema": {
+      "key": "mtg183/w2/self-play-ema.pt",
+      "sha256": "1dcbcf6c8be6b4aa73be80d2891d79dbaf3cd1ec82b817f78e77843dfea66c55",
+      "bytes": 1071879
+    },
+    "optimizer": {
+      "key": "mtg183/w2/self-play-optimizer.pt",
+      "sha256": "6e7e1b957da889d8adf3c06747387e1e8d1c6aba61a6e58b2279cab77a0db3ff",
+      "bytes": 1624207
+    }
+  },
+  "run": {
+    "job": {
+      "setup": null,
+      "cleanup": null,
+      "stop_seconds": null,
+      "cleanup_seconds": null,
+      "runtime": null,
+      "command": "uv run --locked python -m manabot.experiment.job",
+      "max_hours": 11.6,
+      "max_usd": "7.11",
+      "name": "elemental-long-183-v1",
+      "until": "updates=3500",
+      "config": "{\"regime\":{\"schema_version\":2,\"id\":\"elemental-long-183-v1\",\"world\":\"w13\",\"match\":{\"content_pack\":\"elemental-world-v2\",\"hero\":\"gaea\",\"villain\":\"urza\",\"hero_deck\":{\"Origin of Metalbending\":1,\"Cycle of Renewal\":1,\"Deadly Precision\":2,\"Deadly Dispute\":1,\"Fabled Passage\":3,\"Forest\":6,\"Ostrich-Horse\":2,\"Power Word Kill\":1,\"Prismatic Vista\":2,\"Savor\":1,\"Tireless Tracker\":1,\"Dai Li Agents\":1,\"June, Bounty Hunter\":1,\"Callous Inspector\":1,\"Lotus Cobra\":1,\"Sazh's Chocobo\":1,\"Tireless Provisioner\":1,\"Toph, the Blind Bandit\":1,\"Unlucky Cabbage Merchant\":1,\"Badgermole Cub\":1,\"Swamp\":6,\"Field Trip\":1,\"True Ancestry\":1,\"Corrupt Court Official\":2},\"villain_deck\":{\"Tiger-Dillo\":2,\"Toph, the Blind Bandit\":1,\"Ostrich-Horse\":2,\"Fabled Passage\":2,\"Badgermole Cub\":1,\"Deserter's Disciple\":1,\"Shared Roots\":1,\"Enthusiastic Study\":1,\"Field Trip\":1,\"Forest\":8,\"Monastery Swiftspear\":1,\"Igneous Inspiration\":1,\"Giant Cindermaw\":1,\"Gnarled Professor\":1,\"Mountain\":7,\"Fists of Flame\":2,\"Origin of Metalbending\":1,\"Uncle Iroh\":1,\"Lightning Strike\":2,\"Firebending Lesson\":2,\"Wartime Protestors\":1},\"hero_sideboard\":{\"Zuko's Exile\":1,\"Azula Always Lies\":1,\"Ozai's Cruelty\":1},\"villain_sideboard\":{\"Origin of Metalbending\":1,\"Combustion Technique\":1,\"Zuko's Exile\":1,\"Firebending Lesson\":1}},\"observation\":{\"max_cards_per_player\":60,\"max_permanents_per_player\":40,\"max_actions\":64,\"max_focus_objects\":2,\"max_events\":32},\"agent\":{\"semantic_pack\":\"elemental-world-v2\",\"value_kind\":\"scalar\",\"value_aggregation\":\"masked_mean\",\"attention_layers\":2,\"hidden_dim\":64,\"num_attention_heads\":4,\"attention_on\":true,\"belief_count_buckets\":0,\"belief_card_vocab_size\":0,\"belief_owner_role_vocab_size\":2,\"belief_hidden_zone_vocab_size\":7},\"stages\":[{\"id\":\"self-play\",\"execution\":{\"device\":\"cuda\",\"precision\":\"float32\",\"workers\":1,\"threads\":1,\"wall_seconds\":39360.0,\"memory_bytes\":42949672960},\"game_errors\":{\"threshold\":0.1,\"window\":100,\"warmup\":100,\"max_game_actions\":40000},\"operation\":\"train_self_play\",\"trainer\":\"net_opponent\",\"optimizer\":\"adam\",\"trainable\":\"policy_value\",\"behavior\":\"current-self\",\"opponent\":null,\"initial\":null,\"updates\":3500,\"streams\":256,\"transitions\":64,\"learning_seats\":\"both\",\"matchup_curriculum\":\"elemental-uniform\",\"learning\":{\"gradient\":\"damped_policy\",\"policy_lambda\":0.5,\"value_lambda\":0.8,\"filter_kind\":\"quantile\",\"filter_scope\":\"actor_critic\",\"advantage_quantile\":0.75,\"min_advantage\":0.01,\"reference\":\"action_type_uniform\",\"clip\":0.2,\"collection_kl\":0.1,\"learning_rate_scale\":0.5,\"learning_rate_power\":1.1,\"learning_rate_min\":5e-6,\"learning_rate_max\":0.0001,\"tau_scale\":0.05,\"tau_power\":0.3,\"max_grad_norm\":0.267,\"ema\":0.999}}],\"wall_seconds\":39360.0,\"schedule_clock\":\"iteration_fraction\",\"recovery_max_microsteps\":null,\"selection\":\"last-complete-raw\"},\"milestones\":[2550,2600,2650,2700,2750,2800,2850,2900,2950,3000,3050,3100,3150,3200,3250,3300,3350,3400,3450],\"finalization_seconds\":600.0,\"validate_numerics\":true,\"continuation\":{\"from_update\":2534,\"source_stage\":\"self-play\",\"source_run\":{\"key\":\"mtg183/w2/run.json\",\"sha256\":\"bfeecd32a921c6dee4a4b380660b3f0539c9b26dd74e737af66b6f29665818ae\",\"bytes\":170649059},\"raw\":{\"key\":\"mtg183/w2/self-play-raw.pt\",\"sha256\":\"745efa199676671de67abb3b4432c1899311a68b2a21e03494a86018baf31201\",\"bytes\":1071166},\"ema\":{\"key\":\"mtg183/w2/self-play-ema.pt\",\"sha256\":\"1dcbcf6c8be6b4aa73be80d2891d79dbaf3cd1ec82b817f78e77843dfea66c55\",\"bytes\":1071879},\"optimizer\":{\"key\":\"mtg183/w2/self-play-optimizer.pt\",\"sha256\":\"6e7e1b957da889d8adf3c06747387e1e8d1c6aba61a6e58b2279cab77a0db3ff\",\"bytes\":1624207}}}",
+      "repo": "/Users/jack/src/manabot.mtg-183-train-one-long",
+      "revision": "418eb456cd99a9c9a7af39e4e1e6b093e50cfd63",
+      "max_attempts": 1,
+      "inputs": [
+        {
+          "name": "parent-run.json",
+          "key": "mtg183/w2/run.json",
+          "sha256": "bfeecd32a921c6dee4a4b380660b3f0539c9b26dd74e737af66b6f29665818ae",
+          "size_bytes": 170649059,
+          "run": null
+        },
+        {
+          "name": "parent-raw.pt",
+          "key": "mtg183/w2/self-play-raw.pt",
+          "sha256": "745efa199676671de67abb3b4432c1899311a68b2a21e03494a86018baf31201",
+          "size_bytes": 1071166,
+          "run": null
+        },
+        {
+          "name": "parent-ema.pt",
+          "key": "mtg183/w2/self-play-ema.pt",
+          "sha256": "1dcbcf6c8be6b4aa73be80d2891d79dbaf3cd1ec82b817f78e77843dfea66c55",
+          "size_bytes": 1071879,
+          "run": null
+        },
+        {
+          "name": "parent-optimizer.pt",
+          "key": "mtg183/w2/self-play-optimizer.pt",
+          "sha256": "6e7e1b957da889d8adf3c06747387e1e8d1c6aba61a6e58b2279cab77a0db3ff",
+          "size_bytes": 1624207,
+          "run": null
+        }
+      ],
+      "environment": []
+    },
+    "seed": 18301,
+    "params": {},
+    "source": null,
+    "id": null
+  }
+}

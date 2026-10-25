@@ -37,6 +37,15 @@ fails. The job's setup installs Rust 1.98.1 with rustup and runs the locked
 `uv sync`, which builds the native engine; stock RunPod images supply uv but
 no Rust.
 
+A job can also continue another run's learner. `TrainingJob.continuation`
+(`LearnerContinuation`) names the parent's `run.json` and its published
+raw/EMA/Adam exports as objects in the machine's Etude storage; they arrive as
+job inputs, the worker binds them as the stage's `LearningStateImport`, and
+training resumes at the parent's absolute update toward the job's absolute
+target. Game streams and RNGs restart, and the seed must be the parent's.
+`etude continue` is different: it resumes from a policy checkpoint, which
+cannot carry Adam or collector state, so the worker refuses it.
+
 Pick the machine when launching (`--pool`, `--rent`), not in the experiment.
 Read progress with `etude status`, `etude logs` and `etude usage`; continue a run
 from one of its checkpoints with `etude continue`. See Etude's
