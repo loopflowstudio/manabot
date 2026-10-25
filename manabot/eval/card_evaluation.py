@@ -9,7 +9,7 @@ never a reason to drop the rest of its deal."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 import os
 from pathlib import Path
@@ -186,35 +186,14 @@ def play_card_match(match: Match) -> Tables:
 
 
 def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> Tables:
-    """Admit each retained game and project it into Etude tables.
-
-    `plays` is the shared outcome table; the card tables are normalized by
-    `card_metrics.normalize`, with each game's evidence reference and source
-    commit on its `card_plays` rows.
-    """
-    tables: dict[str, list[Row]] = {
-        "plays": [],
-        "card_plays": [],
-        "card_counts": [],
-        "cards": [],
-    }
-    provenance = {"source_commit": source_commit(), "source_dirty": source_dirty()}
+    """A card evaluation's tables: each game admitted against its match, plus `plays`."""
+    tables: dict[str, list[Row]] = {"plays": []}
     for ref, game in games:
         participants = admit_card_game(game, match)
-        rows = normalize(reduce_cards(game, participants))
-        evidence = {
-            "evidence": ref.path,
-            "evidence_sha256": ref.sha256,
-            "evidence_bytes": ref.bytes,
-            "trace_sha256": game.trace_sha256,
-            "replay_sha256": game.replay_sha256,
-            "capture_version": CAPTURE_VERSION,
-            **provenance,
-        }
-        tables["card_plays"].extend({**play, **evidence} for play in rows.plays)
-        tables["card_counts"].extend(rows.counts)
-        tables["cards"].extend(rows.cards)
-        for play in rows.plays:
+        game_tables = _game_card_tables(ref, game, participants)
+        for name, rows in game_tables.items():
+            tables.setdefault(name, []).extend(rows)
+        for play in game_tables["card_plays"]:
             tables["plays"].append(
                 {
                     "player": play["player"],
@@ -226,9 +205,58 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
                     "valid": play["eligible"] or game.outcome == "draw",
                 }
             )
-    if not tables["card_plays"]:
+    if not tables["plays"]:
         raise ValueError("match retained no card evidence")
     return tables
+
+
+def trace_card_tables(
+    root: Path, trace: Mapping[str, object], participants: tuple[str, str]
+) -> Tables:
+    """Card tables for the games one `play_cell(card_evidence_dir=root)` call retained.
+
+    This lets any evaluation deliver card data beside its own outcome tables:
+    merge the result into the `Tables` its `play` returns. `root` is the eval
+    run's folder, so Etude delivery carries the evidence and `cards audit` finds
+    it. `participants` names the two registered players in Etude row order.
+    Games are not bound to a card-evaluation schedule; each must seat exactly
+    these players.
+    """
+    references = trace.get("card_evidence")
+    if not isinstance(references, list):
+        raise ValueError("play_cell retained no card evidence; pass card_evidence_dir")
+    tables: dict[str, list[Row]] = {}
+    for raw in references:
+        ref = EvidenceRef.model_validate(raw)
+        game = read_evidence((root / ref.path).read_bytes(), ref)
+        for name, rows in _game_card_tables(ref, game, participants).items():
+            tables.setdefault(name, []).extend(rows)
+    return tables
+
+
+def _game_card_tables(
+    ref: EvidenceRef, game: GameEvidence, participants: tuple[str, str]
+) -> dict[str, list[Row]]:
+    """One game's normalized card rows, with its evidence and provenance on `card_plays`."""
+    rows = normalize(reduce_cards(game, participants))
+    evidence = {
+        "evidence": ref.path,
+        "evidence_sha256": ref.sha256,
+        "evidence_bytes": ref.bytes,
+        "trace_sha256": game.trace_sha256,
+        "replay_sha256": game.replay_sha256,
+        "capture_version": CAPTURE_VERSION,
+        "source_commit": source_commit(),
+        "source_dirty": source_dirty(),
+    }
+    return {
+        "card_plays": [
+            {**play, **evidence, "participant": participants[int(play["player"] or 0)]}
+            for play in rows.plays
+        ],
+        "card_counts": list(rows.counts),
+        "cards": list(rows.cards),
+    }
 
 
 def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:

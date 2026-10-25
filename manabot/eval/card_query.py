@@ -31,7 +31,11 @@ from manabot.eval.card_metrics import (
     normalize,
     reduce_cards,
 )
-from manabot.eval.card_schedule import admit_card_game, admit_card_runtime
+from manabot.eval.card_schedule import (
+    CardConditions,
+    admit_card_game,
+    admit_card_runtime,
+)
 from manabot.infra.identity import StrictModel
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
@@ -301,33 +305,38 @@ def audit(
 ) -> AuditResult:
     """Re-read every admitted game's evidence and rebuild its card rows.
 
-    Checks bytes, the game's schedule binding and declared runtime, and that the
-    stored rows equal the reducer's. `replay` also re-runs each trace.
+    Checks bytes and that the stored rows equal the reducer's. A card
+    evaluation's game is also bound to its scheduled match and to the runtime
+    its eval run declared; another evaluation's game is rebuilt with the
+    participants its rows name. `replay` also re-runs each trace.
     """
     store = as_storage(source)
+    columns = {r[0] for r in db.execute("describe card_plays").fetchall()}
+    participant = "participant" if "participant" in columns else "null"
     plays = db.execute(
-        "select run, match, game, evidence, evidence_sha256, evidence_bytes"
+        "select run, match, game, evidence, evidence_sha256, evidence_bytes,"
+        f" list({participant} order by player)"
         " from card_plays group by all order by run, match, game"
     ).fetchall()
-    held: dict[str, tuple[dict[str, Match], TournamentRun]] = {}
+    held: dict[str, tuple[dict[str, Match], TournamentRun] | None] = {}
     problems: list[str] = []
     replayed = 0
-    for run, match_key, game_id, path, digest, size in plays:
+    for run, match_key, game_id, path, digest, size, named in plays:
         try:
             if run not in held:
-                folder = _folder(store, run, "tournament.json")
-                tournament = TournamentRun.model_validate_json(
-                    store.get(folder + "tournament.json")
-                )
-                matches = {
-                    s.match.key: s.match for s in assemble([tournament]).schedule()
-                }
-                held[run] = (matches, tournament)
-            matches, tournament = held[run]
+                held[run] = _card_schedule(store, run)
             ref = EvidenceRef(path=path, sha256=digest, bytes=size, game=game_id)
             game = read_evidence(store.get(_folder(store, run, path) + path), ref)
-            participants = admit_card_game(game, matches[match_key])
-            admit_card_runtime(game, tournament.tournament.environment)
+            schedule = held[run]
+            if schedule is not None and match_key in schedule[0]:
+                participants = admit_card_game(game, schedule[0][match_key])
+                admit_card_runtime(game, schedule[1].tournament.environment)
+            elif len(named) == 2 and all(named):
+                participants = (named[0], named[1])
+            else:
+                raise ValueError("no schedule or participants to rebuild this game")
+            if any(named) and tuple(named) != participants:
+                raise ValueError("stored participants differ from the schedule")
             expected = normalize(reduce_cards(game, participants))
             stored_plays = _rows(db, "card_plays", PLAY_FIELDS, run, match_key, game_id)
             stored_counts = _rows(
@@ -344,6 +353,31 @@ def audit(
         except (ValueError, KeyError) as problem:
             problems.append(f"{run}/{game_id}: {problem}")
     return AuditResult(games=len(plays), replayed=replayed, problems=tuple(problems))
+
+
+def _card_schedule(
+    store: Storage, run: str
+) -> tuple[dict[str, Match], TournamentRun] | None:
+    """A card evaluation's scheduled matches by key; None for any other eval run."""
+    try:
+        folder = _folder(store, run, "tournament.json")
+    except ValueError:
+        return None
+    tournament = TournamentRun.model_validate_json(
+        store.get(folder + "tournament.json")
+    )
+    matches = {s.match.key: s.match for s in assemble([tournament]).schedule()}
+    if not all(_is_card_match(m) for m in matches.values()):
+        return None
+    return matches, tournament
+
+
+def _is_card_match(match: Match) -> bool:
+    try:
+        CardConditions.model_validate(match.conditions)
+    except ValueError:
+        return False
+    return True
 
 
 def _sorted(rows: Sequence[dict[str, object]]) -> list[dict[str, object]]:
