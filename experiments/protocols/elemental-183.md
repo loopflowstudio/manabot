@@ -397,3 +397,28 @@ MTG-181's follower was a laptop rule and does not apply on the mini.
   chain continues, so a segment's end settles the seed only when it is the
   last; each new segment's run is added by relaunching the eval job, which
   keeps its state directory on the mini.
+
+## Amendment, 2026-10-25 05:14 UTC (its commit time), before w4 allocation: w4 is one rental to the remaining cap
+
+Jack Heart, 2026-10-25: Etude's 43,000-second rental ceiling is removed
+(etude#46, released in etude-sdk 0.2.6). A rental is now bounded by its
+`max_hours`, dollar caps, the on-demand's price ceiling and the storage grant
+(R2: 7 days). w4, which continues w3's final export, is therefore the last
+segment: one rental sized to the remaining cap, on etude-sdk 0.2.6, with the
+same recipe, seed, cadence, continuation path and L4 on-demand. Once w3 has
+ended, with `remaining` = $50 − every receipt (w1, w2, w3, and every launch
+that never trained) − $1.30:
+
+- Hours: `remaining` ÷ the quoted L4 price − 0.25 h, rounded down to a tenth,
+  and no more than 7 days less the 0.25 h setup allowance.
+- Dollars: `max_usd` = the lesser of `remaining` and the $0.60 ceiling ×
+  (hours + 0.25), rounded down to a cent.
+- Update target: w3's final update + 0.9 × w3's measured rate (its updates
+  over its stage wall seconds) × (hours − 0.7), rounded down to a multiple
+  of 50.
+
+The spec `experiments/protocols/elemental-183-w4.json` is committed before
+allocation. A launch that never trains is relaunched under the 03:51 UTC
+amendment. When w4 ends, the chain ends; the evaluator then follows w3 and w4
+with no successor declared and settles at w4's last tracked export. The
+evaluator keeps its pinned revision; only its run list changes.
