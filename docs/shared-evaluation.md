@@ -239,7 +239,7 @@ Device events have no host epoch alignment; the profiler trace is the linked
 CPU/GPU timeline. Unmeasured kernel counts, pure binding cost and billing remain
 explicitly unavailable.
 
-Render retained evidence through the existing experiment report prototype:
+Render retained evidence through the evaluation-only report viewer:
 
 ```sh
 uv run python -m experiments.report_prototype.build \
@@ -255,8 +255,10 @@ phases. Comparison elapsed, Game CPU usage and Inference service expose separate
 clocks. Concurrent game time and inference waits overlap other views and cannot
 be added into one elapsed total. Missing seed timers are never averaged as zeros. Shared
 allocation cost appears once, remains explicitly unallocated to jobs, and never
-turns an estimated dollar value into a bill. No production Etude report API is
-claimed.
+turns an estimated dollar value into a bill. Training reports use Etude experiment files. The former prototype training
+builder and definitions are removed; this evaluation-only adapter retains the
+accepted view because Etude 0.2.5 does not yet accept these resource-specific
+evaluation receipts. No production Etude evaluation-performance API is claimed.
 
 The measurement boundaries matter when comparing costs:
 
