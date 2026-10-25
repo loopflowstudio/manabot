@@ -9,13 +9,13 @@ from tests.training.test_monitor_evaluation import _manifest, _rows
 
 pytest.importorskip("etude.eval.match")
 
-from etude.eval.query import connect  # noqa: E402
+from etude.eval.query import statsdb  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
-from manabot.arena import benchmark as evaluation
-from manabot.arena.match import selected_decks
-from manabot.arena.models import file_sha256
-from manabot.arena.monitor import MonitorProtocol, MonitorResult
+from manabot.eval import benchmark as evaluation
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.infra.identity import file_sha256
+from manabot.sim.matchup import selected_decks
 
 
 def _admission(tmp_path: Path) -> MonitorResult:
@@ -86,7 +86,7 @@ def test_etude_resumes_complete_deals_and_report_counts_them(
     evaluation.evaluate(manifest, target)
     evaluation.evaluate(manifest, target)
     assert sorted(played) == [101, 102]
-    db = connect(tmp_path / "track")
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
         points = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
             0
@@ -133,10 +133,10 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
 ) -> None:
     manifest = _admission(tmp_path)
     rows = [
-        evaluation.ArenaRow.model_validate(row)
+        evaluation.EvaluationRow.model_validate(row)
         for row in _play_rows(manifest, 101, tmp_path)
     ]
-    projected = evaluation.arena_tables(rows)["plays"]
+    projected = evaluation.evaluation_tables(rows)["plays"]
     expected = {"LvA": {0, 3}, "AvL": {1, 2}, "LvL": {4, 5}, "AvA": {6, 7}}
     for matchup, legs in expected.items():
         assert {
@@ -152,6 +152,6 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
     ]
     corrupted = rows[0].model_dump(mode="json")
     corrupted["player_a_seat"] = 1
-    rows[0] = evaluation.ArenaRow.model_validate(corrupted)
+    rows[0] = evaluation.EvaluationRow.model_validate(corrupted)
     with pytest.raises(ValueError, match="deck/seat assignment"):
-        evaluation.arena_tables(rows)
+        evaluation.evaluation_tables(rows)

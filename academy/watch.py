@@ -33,9 +33,9 @@ class WatchStep(TypedDict):
 
 
 class WatchRequest(BaseModel):
-    players: list[
-        Literal["random", "passive", "greedy", "heuristic", "search", "checkpoint"]
-    ] = Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    players: list[Literal["random", "passive", "greedy", "heuristic", "search"]] = (
+        Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
     seed: int = Field(default=0, ge=0, lt=2**64)
@@ -44,9 +44,9 @@ class WatchRequest(BaseModel):
 
 def _policy(kind: str, request: WatchRequest, seat: int) -> VillainPolicy:
     if kind in {"greedy", "heuristic"}:
-        from manabot.arena.heuristic import HeuristicPlayer
-        from manabot.arena.players import ScriptedGreedyPlayer
         from manabot.env import Env
+        from manabot.sim.heuristic import HeuristicPlayer
+        from manabot.sim.players import ScriptedGreedyPlayer
 
         player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
 
@@ -189,7 +189,7 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
-    from manabot.arena.replay import replay_environment, replay_games
+    from manabot.sim.replay import replay_environment, replay_games
 
     from .trace import GameConfig
 

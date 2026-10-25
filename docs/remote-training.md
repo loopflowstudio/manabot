@@ -35,6 +35,15 @@ jobs can follow them before the run ends. `validate_numerics=True` runs the CUDA
 numerics gate (`manabot.experiment.numerics`) first and refuses to train if it
 fails.
 
+A job can also continue another run's learner. `TrainingJob.continuation`
+(`LearnerContinuation`) names the parent's `run.json` and its published
+raw/EMA/Adam exports as objects in the machine's Etude storage; they arrive as
+job inputs, the worker binds them as the stage's `LearningStateImport`, and
+training resumes at the parent's absolute update toward the job's absolute
+target. Game streams and RNGs restart, and the seed must be the parent's.
+`etude continue` is different: it resumes from a policy checkpoint, which
+cannot carry Adam or collector state, so the worker refuses it.
+
 Pick the machine when launching (`--pool`, `--rent`), not in the experiment.
 Read progress with `etude status`, `etude logs` and `etude usage`; continue a run
 from one of its checkpoints with `etude continue`. See Etude's

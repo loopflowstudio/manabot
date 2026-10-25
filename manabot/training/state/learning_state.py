@@ -14,9 +14,9 @@ from typing import Any
 
 import torch
 
-from manabot.arena.models import canonical_sha256
 from manabot.env import Match
 from manabot.infra.config import MatchConfig
+from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup

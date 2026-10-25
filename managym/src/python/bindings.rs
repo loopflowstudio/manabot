@@ -2603,6 +2603,23 @@ impl PyEnv {
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
     }
 
+    fn enable_card_capture(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_card_capture")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_card_capture()
+            .map_err(map_agent_err)
+    }
+
+    fn card_capture_json(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .card_capture_json()
+            .map_err(map_agent_err)
+    }
+
     fn set_seed(&self, seed: u64) -> PyResult<()> {
         let mut env = self
             .inner

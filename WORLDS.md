@@ -270,5 +270,5 @@ new tensor shape, learning schema, authored cards or payment implementation.
 [Fresh conformance evidence](conformance/semantic-kernel-w13-v1/) uses the same
 bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
 ordinary Command path. All earlier corpora and demo files retain their bytes.
-Current-world admission, monitoring and full learnability must validate this
-combined runtime; historical w12 passes are scoped to their recorded sources.
+Current-world admission and monitoring must validate this combined runtime;
+historical w12 passes are scoped to their recorded sources.

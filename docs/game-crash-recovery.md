@@ -175,8 +175,8 @@ labels it `execution_outcome_unknown`, not an engine failure or completed game.
 Replay a failure from a cell trace or its one-game journal:
 
 ```sh
-uv run python -m manabot.arena.replay .runs/arena/traces/CELL.commands.jsonl.gz --game 1 --seconds 30
-uv run python -m manabot.arena.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
+uv run python -m manabot.sim.replay .runs/arena/traces/CELL.commands.jsonl.gz --game 1 --seconds 30
+uv run python -m manabot.sim.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
 ```
 
 The subprocess bound includes prefix reconstruction and the pending native step.
@@ -219,7 +219,7 @@ Capture does not create reservations, reconcile submissions, or change budgets.
 | --- | --- |
 | Strict self-play, including multistage and sharded producers | Current native game seeds, per-stream prefixes and active pre-call frames. Masked rows are excluded. Native auto-reset strides and per-stream setups survive replay. |
 | Standalone `sim.rollout` and vector environments | The same strict vector capture, including deterministic built-in random/passive opponents. A failed batch produces no completed evaluation result. |
-| Distillation/value/pooled generation | Scalar live-game inputs; native flat-MC and rollout-pool calls additionally retain their exact root, search seed/parameters and sampled slot actions. Pool replay needs no model or policy sampling. |
+| Search players | Scalar live-game inputs; native flat-MC and rollout-pool calls additionally retain their exact root, search seed/parameters and sampled slot actions. Pool replay needs no model or policy sampling. |
 | Compound and selection training | Fsynced pre-execution Command/offer journals, followed by success or failure. Complete-game logs remain separate and incomplete games cannot pass their existing replay admission. |
 | Tolerant self-play and arena | Their existing settled-attempt ledger and pre-command arena journal remain authoritative, as described above. |
 
@@ -248,7 +248,7 @@ Positional and pool prefixes are in memory until a caught failure; process abort
 hard kill, out-of-memory termination or a native hang before capture still needs
 external supervision. Semantic Commands and arena pending decisions are journaled
 before execution. Identity hashes are not source/binary archives. The focused
-strict-path checks include the shared payment-mismatch fixture through
-distillation; that fixture remains distinct from the unavailable MTG-175 prefix
+strict-path checks include the shared payment-mismatch fixture; that fixture
+remains distinct from the unavailable MTG-175 prefix
 and from any production payment repair. Broader validation and acceptance review
 remain with gate.

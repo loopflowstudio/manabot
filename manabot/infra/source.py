@@ -16,7 +16,7 @@ import sysconfig
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from manabot.arena.models import file_sha256
+from manabot.infra.identity import file_sha256
 
 
 class SourceBundle(BaseModel):
@@ -53,6 +53,20 @@ def source_commit() -> str:
         ):
             raise ValueError(f"source bundle differs: {name}")
     return bundle.commit
+
+
+@cache
+def source_dirty() -> bool:
+    """Whether tracked files differ from `source_commit`; a verified bundle never does."""
+    root = Path(__file__).resolve().parents[2]
+    if (root / ".manabot-source.json").exists():
+        return False
+    return bool(
+        subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+            text=True,
+        ).strip()
+    )
 
 
 def bind_etude_source() -> None:

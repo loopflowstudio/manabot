@@ -1,4 +1,4 @@
-"""Batched policy inference for rollouts: eval, datagen, and search.
+"""Batched policy inference for rollouts: evaluation and search.
 
 Exp-07 (wave/intelligence C7, goal 1). The historical net-in-loop path ran one
 forward pass per decision at tiny batch (2.0k SPS at 16 envs, 97% of step

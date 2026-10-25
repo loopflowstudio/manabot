@@ -9,8 +9,8 @@ current consumer; an old import or test is not a reason to retain one.
 `Learner` owns the admitted train-mode `ActorCritic`, Adam (epsilon 1e-5), device and
 native-stream minibatch width. The executor owns collection, EMA, schedules,
 tracking, checkpoint exports, failure receipts and recovery. `PairedLearners`
-uses two independent owners with one collector. Supervised, search and belief
-stages retain their separate data/target contracts.
+uses two independent owners with one collector. Belief stages retain their
+separate data/target contracts.
 
 ## Credit and behavior
 
@@ -46,8 +46,7 @@ constants; gradients flow through current policy and value outputs only.
 configurable discount and separate policy/value lambdas. It normalizes advantages
 over selected actor rows, shuffles minibatches over multiple epochs and uses
 half squared scalar value error with a configurable coefficient. Reverse KL to
-the reference and collection behavior are explicit regularizers. This control
-is used by the full reward-driven learnability proof.
+the reference and collection behavior are explicit regularizers.
 
 `DampedPolicyLearning(gradient="damped_policy")` uses undiscounted same-player
 returns, separate policy/value lambdas, absolute-advantage selection, one ordered

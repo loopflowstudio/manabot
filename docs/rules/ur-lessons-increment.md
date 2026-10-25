@@ -94,7 +94,6 @@ cargo test --manifest-path managym/Cargo.toml --lib observation_encoder
 uv run pytest tests/academy/test_ur_lessons_increment.py tests/semantic/test_decision_contract.py tests/env/test_observation.py -q
 uv run pytest tests/academy/test_experience_protocol.py tests/academy/test_study_protocol.py -q
 uv run pytest tests/arena/test_match.py -k selected -q
-uv run pytest tests/sim/test_train_challenger.py -q
 # In frontend/:
 npm run check
 npm test -- src/lib/protocol-conformance.test.ts src/lib/components/HoverPreview.svelte.test.ts src/lib/prompt-instructions.test.ts

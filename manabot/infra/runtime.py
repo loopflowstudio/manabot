@@ -42,7 +42,9 @@ class RunContext:
 
     A standalone invocation writes below runs_dir, or continues the existing
     run folder `resume` (a recovery attempt resumes its parent's metrics and
-    seals rows the parent left unsealed). Under the SDK launcher the run
+    seals rows the parent left unsealed). `resumed_at` is where this process
+    stands in that run, a restored snapshot or a stage boundary, which need not
+    be the run's latest Etude checkpoint; earlier rows after it are superseded. Under the SDK launcher the run
     identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR.
     SDK admission failures are not silently converted to untracked training.
     """
@@ -53,6 +55,7 @@ class RunContext:
         *,
         run: str | None = None,
         resume: Path | None = None,
+        resumed_at: Mapping[str, float] | None = None,
         resolved_config: Mapping[str, object] | None = None,
     ) -> None:
         self.device = config.device
@@ -88,7 +91,14 @@ class RunContext:
             if resume
             else self.runs_dir / "etude",
             strict=True,
+            resumed_at=resumed_at,
         )
+        # A launcher retry restores the run's checkpoints and expects the job
+        # to resume from the latest, but a policy export cannot restore
+        # collector or optimizer state.
+        if resume is None and self.run.latest_checkpoint() is not None:
+            self.run.finish("failed")
+            raise ValueError("policy artifacts cannot resume collector/optimizer state")
         self._closed = False
         self._updates = 0
         self._transitions = 0

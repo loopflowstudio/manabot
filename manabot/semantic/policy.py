@@ -514,7 +514,7 @@ class SemanticDecisionAdapter:
         # imports of manabot.semantic work before managym is built.
         from managym.experience import ExperienceFrame  # noqa: PLC0415
 
-        from manabot.infra.provenance import canonical_sha256
+        from manabot.infra.identity import canonical_sha256
         from manabot.sim.search.teacher1_evidence import build_viewer_frame
 
         frame = build_viewer_frame(

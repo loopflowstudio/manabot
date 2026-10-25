@@ -17,17 +17,15 @@ import numpy as np
 from pydantic import Field
 import torch
 
-from manabot.arena.match import SELECTED_SUITE, play_cell, selected_match
-from manabot.arena.models import (
-    ArenaKey,
-    PlayerRegistration,
-    canonical_sha256,
-    file_sha256,
-)
+from manabot.eval.match import play_cell
+from manabot.eval.models import EvaluationKey
 from manabot.experiment.attacks import AttackPlan
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import valid_game
+from manabot.sim.matchup import SELECTED_SUITE, selected_match
+from manabot.sim.registration import PlayerRegistration
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict
@@ -191,7 +189,7 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
                         target.producer_seeds[0],
                         run,
                     )
-                    key = ArenaKey(
+                    key = EvaluationKey(
                         world=run.regime.world,
                         content_suite=SELECTED_SUITE,
                         viewer_boundary="acting-viewer",

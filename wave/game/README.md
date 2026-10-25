@@ -25,9 +25,8 @@ boundary.
 ## What exists
 
 - `./scripts/play` starts the server and table locally.
-- One trained opponent can be configured through `ACADEMY_PLAY_CANDIDATE`
-  ([local challenger](../../docs/local-trained-challenger.md)), chosen in the
-  opponent selector.
+- Trained checkpoints are chosen in the opponent selector
+  ([local challenger](../../docs/local-trained-challenger.md)).
 - Finished games are recorded as traces and open as replays.
 - Study forks a recorded decision and lets you try another action.
 - Advice shows a policy's distribution at a live decision.

@@ -37,7 +37,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from manabot.arena.models import canonical_sha256
+from manabot.infra.identity import canonical_sha256
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -165,12 +165,14 @@ def _legs(group: Group) -> tuple[str, str, int]:
 def play_group(request: Request) -> list[GameRow]:
     import torch
 
-    from manabot.arena.heuristic import heuristic_source_paths
-    from manabot.arena.match import play_cell
-    from manabot.arena.matchup import AuthoredMatchup
-    from manabot.arena.models import ArenaKey, PlayerRegistration, file_sha256
+    from manabot.eval.match import play_cell
+    from manabot.eval.models import EvaluationKey
+    from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
     from manabot.model.checkpoint import load_checkpoint
+    from manabot.sim.heuristic import heuristic_source_paths
+    from manabot.sim.matchup import AuthoredMatchup
+    from manabot.sim.registration import PlayerRegistration
     import managym
 
     torch.set_num_threads(1)
@@ -221,7 +223,7 @@ def play_group(request: Request) -> list[GameRow]:
             [Path(path) for path in heuristic_source_paths()]
         ),
     )
-    key = ArenaKey(
+    key = EvaluationKey(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
@@ -297,8 +299,10 @@ def evaluate(
     *,
     workers: int = WORKERS,
     root: Path | None = None,
+    games: Sequence[Game] | None = None,
 ) -> list[GameRow]:
-    """Play the whole grid; completed groups are reused after an interruption.
+    """Play the whole grid (or a declared subset of its games); completed groups
+    are reused after an interruption.
 
     A group's retained `games.json` is its durable result. A group that failed
     or timed out is retained as `failed.json` and counts its games as invalid;
@@ -306,8 +310,9 @@ def evaluate(
     """
     root = root or Path(__file__).resolve().parents[1]
     directory.mkdir(parents=True, exist_ok=True)
+    games = schedule() if games is None else games
     pending = []
-    for group in groups(schedule()):
+    for group in groups(games):
         target = directory / _group_name(group)
         if (
             not (target / "games.json").exists()
@@ -352,13 +357,13 @@ def evaluate(
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(run, pending))
-    return collect(directory)
+    return collect(directory, games)
 
 
-def collect(directory: Path) -> list[GameRow]:
+def collect(directory: Path, games: Sequence[Game] | None = None) -> list[GameRow]:
     """Retained rows for every scheduled game; failed groups become invalid rows."""
     rows: list[GameRow] = []
-    for group in groups(schedule()):
+    for group in groups(schedule() if games is None else games):
         target = directory / _group_name(group)
         if (target / "games.json").exists():
             found = [

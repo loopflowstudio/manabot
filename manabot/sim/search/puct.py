@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 import numpy as np
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Env, ObservationSpace
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import (
     SELECTED_BRANCH_DRIVER_ID,
@@ -681,8 +681,6 @@ class DeterminizedPuctPlayer:
         self._seed = seed
         self._calls = 0
         self.stats = PuctSearchStats()
-        self.last_visit_counts: np.ndarray | None = None
-        self.last_root_value: float | None = None
         self.last_scores: np.ndarray | None = None
         self.last_result: PuctResult | None = None
         self.compound_cursor: CompoundCursor | None = None
@@ -739,8 +737,6 @@ class DeterminizedPuctPlayer:
         self._check_deadline()
         elapsed = time.perf_counter() - started
         self.last_result = result
-        self.last_visit_counts = result.visit_counts.astype(np.float32)
-        self.last_root_value = result.root_value
         self.last_scores = result.q_values
         self.stats.decisions += 1
         self.stats.seconds += elapsed

@@ -20,8 +20,8 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from manabot.belief.sampling_data import Split
+from manabot.belief.sampling_fit import SamplerArmMetrics
 from manabot.reports.belief import SamplerQualityReport, SplitMeasurement
-from manabot.training.supervised.belief import SamplerArmMetrics
 
 
 class Declaration(BaseModel):

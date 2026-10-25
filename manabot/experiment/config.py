@@ -16,10 +16,10 @@ from typing import Literal
 from etude.launch.records import Run
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
-from manabot.arena.models import canonical_json, canonical_sha256
 from manabot.experiment.execution import ExperimentSchedule, PlannedRun
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.identity import canonical_json, canonical_sha256
 from manabot.training.execution import validate_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
