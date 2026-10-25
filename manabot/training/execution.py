@@ -761,19 +761,25 @@ def _execute_regime(
 
             last_memory_sample = float("-inf")
 
+            def remaining() -> float:
+                """Seconds left before the first of the watchdog clocks expires."""
+                charged = run.prior_watchdog_seconds + budget_now() - watchdog_start
+                left = min(
+                    deadline - time.perf_counter(), regime.wall_seconds - charged
+                )
+                if regime.recoverable and not restoring_completed:
+                    left = min(
+                        left,
+                        stage.execution.wall_seconds
+                        - prior_stage_watchdog
+                        - budget_now()
+                        + stage_watchdog_start,
+                    )
+                return left
+
             def check() -> None:
                 nonlocal last_memory_sample
-                charged = run.prior_watchdog_seconds + budget_now() - watchdog_start
-                if (
-                    time.perf_counter() >= deadline
-                    or charged >= regime.wall_seconds
-                    or (
-                        regime.recoverable
-                        and not restoring_completed
-                        and prior_stage_watchdog + budget_now() - stage_watchdog_start
-                        >= stage.execution.wall_seconds
-                    )
-                ):
+                if remaining() <= 0:
                     raise TimeoutError("training resource wall deadline exceeded")
                 # Deadline checks run at every native step. On macOS, recursive
                 # child discovery scans the whole host process table; sampling
@@ -1522,18 +1528,11 @@ def _execute_regime(
                         and update_index + 1 < stage.updates
                     ):
                         # Stop while another update and the final exports
-                        # still fit inside both watchdog clocks.
+                        # still fit inside every watchdog clock.
                         slowest_update = max(
                             slowest_update, time.perf_counter() - update_start
                         )
-                        remaining = min(
-                            deadline - time.perf_counter(),
-                            regime.wall_seconds
-                            - run.prior_watchdog_seconds
-                            - budget_now()
-                            + watchdog_start,
-                        )
-                        if remaining < slowest_update + stop_reserve_seconds:
+                        if remaining() < slowest_update + stop_reserve_seconds:
                             wall_bounded = True
                             break
                 if stage.active_seconds is not None and (

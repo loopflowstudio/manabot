@@ -279,6 +279,10 @@ class PretrainedPolicy(Strict):
     weights: Literal["raw", "ema"] = "raw"
 
 
+LearnerRole = Literal["raw", "ema", "optimizer"]
+_LEARNER_ROLES: tuple[LearnerRole, ...] = ("raw", "ema", "optimizer")
+
+
 class LearningStateImport(Strict):
     """Portable learner state; source bytes retain historical paths and identity.
 
@@ -316,11 +320,8 @@ class LearningStateImport(Strict):
 
     @model_validator(mode="after")
     def declared_roles(self) -> "LearningStateImport":
-        complete = self.ema is not None and self.optimizer is not None
-        raw_only = self.ema is None and self.optimizer is None
-        if (self.monitoring_update is None and not complete) or (
-            self.monitoring_update is not None and not raw_only
-        ):
+        raw_only = self.monitoring_update is not None
+        if (self.ema is None, self.optimizer is None) != (raw_only, raw_only):
             raise ValueError(
                 "learning state imports raw/EMA/Adam, or raw alone from a"
                 " declared monitoring export"
@@ -328,17 +329,9 @@ class LearningStateImport(Strict):
         return self
 
     @property
-    def roles(self) -> tuple[Literal["raw", "ema", "optimizer"], ...]:
+    def roles(self) -> tuple[LearnerRole, ...]:
         """The learner-state roles this import carries."""
-        return (
-            ("raw",)
-            if self.monitoring_update is not None
-            else (
-                "raw",
-                "ema",
-                "optimizer",
-            )
-        )
+        return ("raw",) if self.monitoring_update is not None else _LEARNER_ROLES
 
 
 class LearningStateOrigin(Strict):

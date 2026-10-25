@@ -28,7 +28,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
+from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
@@ -88,13 +88,29 @@ def _origin(source: TrainingRun, record: StageRecord) -> LearningStateOrigin:
 
 
 def _monitoring_origin(
-    source: TrainingRun, record: StageRecord, receipt: MonitoringCheckpoint
+    source: TrainingRun, record: StageRecord, update: int, raw: ArtifactReference
 ) -> LearningStateOrigin:
-    """Absolute coordinates of a monitoring export; its counters already include
-    any origin the parent inherited."""
+    """Absolute coordinates of the one admitted monitoring export at `update`
+    whose bytes are `raw`; its counters already include any origin the parent
+    inherited."""
+    found = [
+        c
+        for c in source.monitoring_checkpoints
+        if c.stage_id == record.id and c.updates == update
+    ]
+    if len(found) != 1:
+        raise ValueError(f"parent has no single monitoring export at update {update}")
+    receipt = found[0]
+    if (
+        receipt.error is not None
+        or receipt.artifact is None
+        or any(receipt.artifact.get(key) != raw[key] for key in ("sha256", "bytes"))
+    ):
+        raise ValueError(
+            "learning-state raw differs from the parent's monitoring export"
+        )
     previous = record.learning_state_origin
-    start = previous.iteration if previous is not None else 0
-    if receipt.updates <= start:
+    if receipt.updates <= (previous.iteration if previous is not None else 0):
         raise ValueError("monitoring export precedes the parent's own updates")
     if receipt.active_training_seconds is None:
         raise ValueError("monitoring export lacks active training seconds")
@@ -111,29 +127,6 @@ def _monitoring_origin(
         cumulative_seconds=receipt.training_seconds,
         reset=("ema", "optimizer"),
     )
-
-
-def _monitoring_receipt(
-    source: TrainingRun, stage_id: str, update: int, raw: ArtifactReference
-) -> MonitoringCheckpoint:
-    """The one admitted monitoring export at `update` whose bytes are `raw`."""
-    found = [
-        c
-        for c in source.monitoring_checkpoints
-        if c.stage_id == stage_id and c.updates == update
-    ]
-    if len(found) != 1:
-        raise ValueError(f"parent has no single monitoring export at update {update}")
-    receipt = found[0]
-    if (
-        receipt.error is not None
-        or receipt.artifact is None
-        or any(receipt.artifact.get(key) != raw[key] for key in ("sha256", "bytes"))
-    ):
-        raise ValueError(
-            "learning-state raw differs from the parent's monitoring export"
-        )
-    return receipt
 
 
 def validate_adam(optimizer: torch.optim.Adam) -> None:
@@ -232,14 +225,11 @@ def admit_learning_state(
     ):
         if getattr(definition, name) != getattr(stage, name):
             raise ValueError(f"learning-state recipe mismatch: {name}")
-    if spec.monitoring_update is None:
-        origin = _origin(source, record)
-    else:
-        origin = _monitoring_origin(
-            source,
-            record,
-            _monitoring_receipt(source, record.id, spec.monitoring_update, spec.raw),
-        )
+    origin = (
+        _origin(source, record)
+        if spec.monitoring_update is None
+        else _monitoring_origin(source, record, spec.monitoring_update, spec.raw)
+    )
     if origin.iteration >= stage.updates:
         raise ValueError("learning-state target must exceed parent absolute iteration")
     artifacts = {"parent_run": receipt}
