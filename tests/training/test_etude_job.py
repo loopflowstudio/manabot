@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -18,6 +19,7 @@ from manabot.experiment.job import (
     TrainingJob,
     run_worker,
 )
+from manabot.experiment.numerics import _suite_environment
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import load_checkpoint
@@ -74,15 +76,31 @@ def worker_environment(
 
 def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     spec = specification()
-    job = spec.job(repo=tmp_path, revision="fixture-commit", max_hours=1)
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
     assert job.max_attempts == 1
     assert job.until == "updates=2"
     assert job.config is not None
-    assert TrainingJob.model_validate_json(job.config) == spec
+    frozen = TrainingJob.model_validate_json(job.config)
+    # Etude unpacks the commit without .git; the config carries its bundle.
+    assert frozen.source_bundle is not None
+    assert "manabot/experiment/job.py" in frozen.source_bundle.files
+    assert frozen.model_copy(update={"source_bundle": None}) == spec
     assert job.runs(11, 12)[1].seed == 12
+    # Stock machines lack Rust; setup installs the pinned toolchain before the
+    # locked sync builds the engine, and the command keeps it on PATH.
+    assert job.setup is not None and job.setup.startswith("set -eu\n")
+    assert "--default-toolchain 1.98.1" in job.setup
+    assert "uv sync --locked --python 3.12\n" in job.setup
+    assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
+    assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
+    gated = TrainingJob(
+        regime=spec.regime, milestones=(1,), validate_numerics=True
+    ).job(repo=ROOT, revision="HEAD", max_hours=1)
+    assert gated.setup is not None and "--extra dev" in gated.setup
+    assert "uv run --locked --extra dev python" in gated.command
     assert not list(tmp_path.iterdir())
     with pytest.raises(ValueError, match="lifetime"):
-        spec.job(repo=tmp_path, revision="fixture-commit", max_hours=0.0001)
+        spec.job(repo=ROOT, revision="HEAD", max_hours=0.0001)
     with pytest.raises(ValueError, match="milestones"):
         TrainingJob(regime=spec.regime, milestones=(2,))
 
@@ -169,7 +187,7 @@ def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> 
             ),
         ),
     )
-    runs = experiment.runs(repo=tmp_path, revision="fixture-commit")
+    runs = experiment.runs(repo=ROOT, revision="HEAD")
     assert [run.seed for run in runs] == [11, 12]
     assert [run.params for run in runs] == [{"case": "plans-control"}] * 2
     assert [run.job.max_hours for run in runs] == [1, 2]
@@ -180,6 +198,17 @@ def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> 
     assert first.milestones == (1,) and not first.validate_numerics
     assert second.validate_numerics
     assert first.regime.stages == experiment.resolve().cases[0].regime.stages
+
+
+def test_numerics_suite_runs_without_launcher_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The suite's own fixtures would otherwise attach to the job's Etude run.
+    monkeypatch.setenv("ETUDE_RUN", "launcher-run")
+    monkeypatch.setenv("ETUDE_CONFIG", "/job/config.json")
+    environment = _suite_environment()
+    assert not any(key.startswith("ETUDE_") for key in environment)
+    assert environment["PATH"] == os.environ["PATH"]
 
 
 def ema_regime(updates: int) -> TrainingRegime:
@@ -247,7 +276,7 @@ def test_continuation_trains_parent_learner_to_absolute_target(
 ) -> None:
     continuation, inputs = staged_continuation(tmp_path, 2)
     spec = TrainingJob(regime=ema_regime(4), milestones=(3,), continuation=continuation)
-    job = spec.job(repo=tmp_path, revision="fixture-commit", max_hours=1)
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
     assert {(i.name, i.key) for i in job.inputs} == {
         ("parent-run.json", "mtg-fixture/parent-run.json"),
         ("parent-raw.pt", "mtg-fixture/parent-raw.pt"),

@@ -7,12 +7,15 @@ for foreign pickle artifacts.
 """
 
 from functools import cache
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
 import sysconfig
+import tarfile
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -31,6 +34,27 @@ class SourceBundle(BaseModel):
         if re.fullmatch(r"[0-9a-f]{40}", value) is None:
             raise ValueError("bundle requires an exact source commit")
         return value
+
+
+def bundle_at(repo: Path, revision: str) -> SourceBundle:
+    """The commit and SHA-256 of every tracked file at an exact revision.
+
+    Read from git's own archive of that commit, never from the working tree,
+    so an Etude job freezes the bytes it will be admitted against.
+    """
+    commit = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        text=True,
+    ).strip()
+    archive = subprocess.check_output(["git", "-C", str(repo), "archive", commit])
+    files: dict[str, str] = {}
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        for member in tar:
+            if member.isfile():
+                body = tar.extractfile(member)
+                assert body is not None
+                files[member.name] = hashlib.sha256(body.read()).hexdigest()
+    return SourceBundle(commit=commit, files=files)
 
 
 @cache
@@ -55,6 +79,20 @@ def source_commit() -> str:
     return bundle.commit
 
 
+@cache
+def source_dirty() -> bool:
+    """Whether tracked files differ from `source_commit`; a verified bundle never does."""
+    root = Path(__file__).resolve().parents[2]
+    if (root / ".manabot-source.json").exists():
+        return False
+    return bool(
+        subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+            text=True,
+        ).strip()
+    )
+
+
 def bind_etude_source() -> None:
     """Verify launcher-pinned archive bytes and bind the freshly built extension.
 
@@ -76,7 +114,12 @@ def bind_etude_source() -> None:
             or file_sha256(root / relative) != digest
         ):
             raise ValueError(f"Etude archive differs from submitted source: {name}")
-    native = root / "managym" / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
+    native = (
+        root
+        / "manabot"
+        / "managym"
+        / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
+    )
     files = dict(bundle.files)
     files[str(native.relative_to(root))] = file_sha256(native)
     target = root / ".manabot-source.json"
