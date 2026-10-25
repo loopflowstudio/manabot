@@ -175,3 +175,13 @@ retry $3.10 and its proof ≈ **$9.41** of $10. The retry's source commit adds
 only this amendment and the follower's job-ID mapping; learning and evaluation
 code are unchanged. If the retry fails, seed 18101 is reported and not retried
 again.
+
+## Results
+
+`experiments/data/mtg181/report.md` (fetch with `manabot.data fetch
+experiments/data/mtg181`). All three seeds learned: 0.206 → 0.851 mean overall
+against the v1 heuristic (endpoint range 0.015), ≈ $9.12 inclusive. 18102's
+`game_error_rate_exceeded` stop is a deadline cut, not game errors. The trial
+scripts are retired; read them at
+`739fb251d:experiments/elemental_two_seat{,_follow,_report}.py`. The report adds
+the endpoints against main's strengthened heuristic.
