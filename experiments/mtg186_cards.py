@@ -460,7 +460,7 @@ def job(pairing: Pairing, *, revision: str) -> Job:
         repo=str(ROOT),
         revision=spec.source_bundle.commit,
         # At cpu32's $0.96/hour, with Etude's setup allowance, within the cap.
-        max_hours=1.25,
+        max_hours=1.0,
         max_usd=CARDS_USD,
         max_attempts=1,
         inputs=(_input("mtg186", pairing.mtg186), _input("mtg181", pairing.mtg181)),
