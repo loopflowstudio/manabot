@@ -45,7 +45,7 @@ fixtures ([conformance/](conformance/)).
 
 **Versioned worlds.** The observation and action encoding is versioned as a
 *world* ([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were
-trained in, and a nightly learnability check catches encodings that make two
+trained in, and the nightly baseline check refuses encodings that make two
 different choices look identical.
 
 **One network, one action head.** One network encodes every visible object,

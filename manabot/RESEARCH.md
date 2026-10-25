@@ -104,14 +104,11 @@ self-play policy (frozen checkpoint)
         +----------+------------+
                    v
        local search at the decision
-                   |
-                   v
-     distillation back into the policy
 ```
 
 The sampler and search exist ([belief sampler](../docs/belief-sampler.md),
-[local policy search](../docs/local-policy-search.md)); distillation back into
-the policy is not currently implemented. The plan is to make them improve play. Search should adjust a strong learned policy, not replace
+[local policy search](../docs/local-policy-search.md)). The plan is to make
+them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
 the policy's distribution:
@@ -138,11 +135,9 @@ Constraints that apply throughout:
 - A shallow search with a strong continuation policy may beat deeper search
   with a weak one, so depth, rollout count and continuation quality are
   measured rather than assumed.
-- Distilled targets must keep genuine mixed strategies; hard targets cannot
-  represent bluffing.
 
-The protocols for sampler quality, search with learned sampling, distillation
-and exploiters are preregistered
+The protocols for sampler quality, search with learned sampling and exploiters
+are preregistered
 ([transfer protocols](../experiments/ataraxos-transfer.md)).
 
 ### Training dynamics

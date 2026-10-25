@@ -49,8 +49,9 @@ from manabot.sim.replay import replay_games
 class CardSelection(StrictModel):
     """Which games to pool. Empty tuples select everything in the experiment.
 
-    A subject or opponent is an agent identity, its name, or a prefix (at least
-    eight characters) of its checkpoint digest.
+    A subject or opponent is an agent's key, its name, its checkpoint's key
+    (such as `RUN/checkpoints/NAME`), or a prefix (at least eight characters)
+    of its checkpoint digest.
     """
 
     experiment: str
@@ -99,13 +100,15 @@ class CardData(StrictModel):
 
 
 def _agents(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
-    known = db.execute("select agent, name, artifact from agents").fetchall()
+    known = db.execute(
+        "select agent, name, checkpoint, artifact from agents"
+    ).fetchall()
     found: list[str] = []
     for value in values:
         matches = [
             agent
-            for agent, name, artifact in known
-            if value in (agent, name)
+            for agent, name, checkpoint, artifact in known
+            if value in (agent, name, checkpoint)
             or (len(value) >= 8 and (artifact or "").startswith(value))
         ]
         if not matches:
