@@ -352,7 +352,7 @@ refusal); the endpoint is then the last tracked export of the last segment
 that produced one. No segment is retried. The evaluator admits every
 segment's exports by absolute update and settles when the chain ends.
 
-## Amendment, 2026-10-25 04:00 UTC, before learning: launches that never trained
+## Amendment, 2026-10-25 03:51 UTC (its commit time), before learning: launches that never trained
 
 No w3 attempt has taken a learning step. Etude run `a04845f2548b` booted w1/w2's
 image, which lacks python3.12, and was deleted at its startup deadline
