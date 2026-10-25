@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -13,6 +14,7 @@ from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.experiment.config import Baseline, Case, Experiment
 from manabot.experiment.execution import PlannedRun
 from manabot.experiment.job import TrainingJob, run_worker
+from manabot.experiment.numerics import _suite_environment
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
@@ -180,3 +182,14 @@ def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> 
     assert first.milestones == (1,) and not first.validate_numerics
     assert second.validate_numerics
     assert first.regime.stages == experiment.resolve().cases[0].regime.stages
+
+
+def test_numerics_suite_runs_without_launcher_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The suite's own fixtures would otherwise attach to the job's Etude run.
+    monkeypatch.setenv("ETUDE_RUN", "launcher-run")
+    monkeypatch.setenv("ETUDE_CONFIG", "/job/config.json")
+    environment = _suite_environment()
+    assert not any(key.startswith("ETUDE_") for key in environment)
+    assert environment["PATH"] == os.environ["PATH"]

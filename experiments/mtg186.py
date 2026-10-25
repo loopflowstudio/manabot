@@ -70,10 +70,10 @@ RENT = "l4-etude"
 MILESTONES = (200, 400, 600)
 # Inclusive authorization for the Task: training, setup, failures and evaluation.
 CAP_USD = Decimal(10)
-# Etude cohorts are single-use. The first cohort's only run was lost before
-# start (protocol amendment); the retry's cohort gets the cap that remains.
-LAUNCHES = {"mtg186": Decimal("0.148")}
-LAUNCH = "mtg186-r2"
+# Etude cohorts are single-use. Earlier cohorts' runs failed before learning
+# (protocol amendments); the next cohort gets the cap that remains.
+LAUNCHES = {"mtg186": Decimal("0.148"), "mtg186-r2": Decimal("0.05")}
+LAUNCH = "mtg186-r3"
 # 8.25 hours covers setup, the 7.5-hour training ceiling and finalization. At the
 # on-demand's $0.60/hour ceiling plus storage this is at most about $5.10.
 MAX_HOURS = 8.25

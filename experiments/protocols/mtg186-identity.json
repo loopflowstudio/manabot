@@ -313,7 +313,7 @@
     "seed": 18190001
   },
   "job_usd": "5.50",
-  "launch": "mtg186-r2",
+  "launch": "mtg186-r3",
   "max_hours": 8.25,
   "milestones": [
     200,
@@ -397,10 +397,10 @@
   "seed": 18601,
   "sha256": {
     "experiments/elemental_grid.py": "d91027baf18455da2b079759d40aa417b6b2ff3601370a3e4665e3cb7a917cf5",
-    "experiments/mtg186.py": "30dee681e54a39771cce45ae91fe646e998275b24565f07517f9c06e6a508dfa",
+    "experiments/mtg186.py": "49e171034d7aa70428756d87ba3f5f7579eaf41f980f198500f745fb2c940729",
     "experiments/regimes/elemental-ur-gw-186-v1.json": "6ecb6149dafa4552b1e555d452b14cf4983fb39a68eb49c2196d9fffcc226d35",
     "manabot/eval/match.py": "511d67a773ca44e277195c9a6e93b209955cdbbc9788e3814543146fb9b7bc6a",
-    "manabot/experiment/job.py": "aa97fa5906cc4611a033a75e411db49333118ee0ed2659861ae34024fa1588cd",
+    "manabot/experiment/job.py": "36c65f2da46527e7f374cc2a567bdc7404f0d5a91da945c0cd3d0006e8e6b301",
     "manabot/managym/_managym.cpython-312-darwin.so": "7c22a1e101874ae4818ba8250326277b2fb3b0a55260edcb9da0c162080baf25",
     "manabot/sim/heuristic.py": "81d3d08f3bd7a8a27003a051e2e48b8e6ca3ddfb250873bf9cd9968ae939a31f",
     "uv.lock": "c2ebfe4c4cdcabb80ed8d4b88e819e715bcc8a8ce21a760556a653b3796d8d08"

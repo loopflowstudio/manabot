@@ -72,6 +72,15 @@ _CHECKS: tuple[tuple[str, list[str]], ...] = (
 )
 
 
+def _suite_environment() -> dict[str, str]:
+    """The job's environment without the launcher's run identity.
+
+    The suite trains fixtures of its own; given ETUDE_RUN and friends they
+    would attach to the job's launcher run instead of fixture tracking.
+    """
+    return {k: v for k, v in os.environ.items() if not k.startswith("ETUDE_")}
+
+
 def check_numerics(output: Path, deadline: float) -> NumericsReceipt:
     """Run the named checks by `deadline` (Unix seconds); fail closed without CUDA.
 
@@ -96,7 +105,7 @@ def check_numerics(output: Path, deadline: float) -> NumericsReceipt:
             }
         )
         atomic_json(path, receipt.model_dump(mode="json"))
-        environment = {**os.environ, "MANABOT_NUMERICS_DEVICE": "cuda"}
+        environment = {**_suite_environment(), "MANABOT_NUMERICS_DEVICE": "cuda"}
         with (output / "numerical-validation.log").open("ab") as log:
             for name, command in _CHECKS:
                 remaining = deadline - time.time()
