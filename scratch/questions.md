@@ -121,3 +121,10 @@ They do not select current work or authorize paid execution.
 
 The 17Lands/GIH design, investigation and implementation defaults landed with #360;
 they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evidence,questions}.md`.
+
+# MTG-186 u0 replay (2026-10-25)
+
+- Assumed that the protocol's no-replay rule does not cover groups that never
+  started a game. The 181 u0 groups that hit a SyntaxError (mid-merge checkout)
+  are being played again, and their failures are kept as evidence. The
+  alternative was to report u0 as 96% invalid. See the protocol's evaluation note.

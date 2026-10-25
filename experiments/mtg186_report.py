@@ -84,13 +84,13 @@ class Report(BaseModel):
     rows: list[Row]
 
 
-def _rows_by_seat(groups: Path, x: str, y: str, seat: int) -> Score:
+def _seat_score(groups: Path | None, x: str, y: str, seat: int) -> Score:
     """Per-cell play/draw from retained group rows; summaries keep only grid totals.
 
     Missing rows (no retained groups) read as an empty score.
     """
-    target = groups / f"{x}--{y}--seat{seat}" / "games.json"
-    if not target.exists():
+    target = None if groups is None else groups / f"{x}--{y}--seat{seat}" / "games.json"
+    if target is None or not target.exists():
         return wilson([])
     return wilson([GameRow.model_validate(r) for r in json.loads(target.read_text())])
 
@@ -104,9 +104,7 @@ def _row(
     groups: Path | None,
 ) -> Row:
     seats = {
-        f"{name}_{label}": (
-            wilson([]) if groups is None else _rows_by_seat(groups, x, y, seat)
-        )
+        f"{name}_{label}": _seat_score(groups, x, y, seat)
         for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True)
         for label, seat in (("play", 0), ("draw", 1))
     }
