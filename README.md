@@ -206,6 +206,9 @@ see.
 
 ## Development
 
+Read [TESTING.md](TESTING.md) before running checks. Never intentionally induce
+load for testing.
+
 ```bash
 # Rust (CI runs cargo test in debug, so validate in debug before landing)
 cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test && cd ..
