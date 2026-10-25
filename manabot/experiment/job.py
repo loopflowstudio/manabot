@@ -4,6 +4,10 @@ TrainingJob freezes an ordinary TrainingRegime and exact export milestones into
 an SDK Job. Etude owns placement, deadlines and attempt identity; execute_regime
 still owns learning, policy admission and scientific TrainingRun receipts. This
 entry point does not claim portable optimizer/collector recovery from a policy.
+
+Etude's stock machine supplies uv but no Rust, while maturin builds the native
+engine during the locked sync. The job's setup installs the pinned toolchain and
+syncs once; the command reuses that toolchain if uv must rebuild.
 """
 
 from datetime import datetime, timezone
@@ -22,6 +26,21 @@ from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
+
+RUST_TOOLCHAIN = "1.98.1"
+_TOOLCHAIN = f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}'
+
+
+def _setup(extras: str) -> str:
+    return (
+        "set -eu\n"
+        'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
+        "https://sh.rustup.rs | sh -s -- -y --profile minimal "
+        f"--default-toolchain {RUST_TOOLCHAIN}\n"
+        f"{_TOOLCHAIN}\n"
+        f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
+        f"uv sync --locked --python 3.12{extras}\n"
+    )
 
 
 class TrainingJob(Strict):
@@ -80,9 +99,12 @@ class TrainingJob(Strict):
             spec.regime.wall_seconds + spec.finalization_seconds
         ):
             raise ValueError("job lifetime must cover regime and finalization reserve")
+        # The numerics gate runs the frozen pytest suite from the job's own venv.
+        extras = " --extra dev" if spec.validate_numerics else ""
         return Job(
             name=spec.regime.id,
-            command="uv run --locked python -m manabot.experiment.job",
+            setup=_setup(extras),
+            command=f"{_TOOLCHAIN}\nuv run --locked{extras} python -m manabot.experiment.job",
             config=spec.model_dump_json(),
             repo=str(repo.resolve()),
             revision=revision,

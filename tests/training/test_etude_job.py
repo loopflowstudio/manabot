@@ -64,6 +64,18 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     assert job.config is not None
     assert TrainingJob.model_validate_json(job.config) == spec
     assert job.runs(11, 12)[1].seed == 12
+    # Stock machines lack Rust; setup installs the pinned toolchain before the
+    # locked sync builds the engine, and the command keeps it on PATH.
+    assert job.setup is not None and job.setup.startswith("set -eu\n")
+    assert "--default-toolchain 1.98.1" in job.setup
+    assert "uv sync --locked --python 3.12\n" in job.setup
+    assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
+    assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
+    gated = TrainingJob(
+        regime=spec.regime, milestones=(1,), validate_numerics=True
+    ).job(repo=tmp_path, revision="fixture-commit", max_hours=1)
+    assert gated.setup is not None and "--extra dev" in gated.setup
+    assert "uv run --locked --extra dev python" in gated.command
     assert not list(tmp_path.iterdir())
     with pytest.raises(ValueError, match="lifetime"):
         spec.job(repo=tmp_path, revision="fixture-commit", max_hours=0.0001)

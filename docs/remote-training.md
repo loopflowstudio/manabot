@@ -33,7 +33,9 @@ wait(*queue_cohort("capacity", runs, rent="l4", parallel=1, max_usd=Decimal(10))
 update target and records a checkpoint at every milestone, so Etude evaluation
 jobs can follow them before the run ends. `validate_numerics=True` runs the CUDA
 numerics gate (`manabot.experiment.numerics`) first and refuses to train if it
-fails.
+fails. The job's setup installs Rust 1.98.1 with rustup and runs the locked
+`uv sync`, which builds the native engine; stock RunPod images supply uv but
+no Rust.
 
 Pick the machine when launching (`--pool`, `--rent`), not in the experiment.
 Read progress with `etude status`, `etude logs` and `etude usage`; continue a run
