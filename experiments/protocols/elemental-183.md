@@ -445,3 +445,52 @@ and delivered with the run's tables to `r2://manabot/evaluations`.
   not pooled.
 - The evaluator relaunch planned for w4 relaunches this job with w4 added; it
   keeps this revision.
+
+## Amendment, 2026-10-25 21:39 UTC (its commit time), before w4 allocation: w4 continues w3's raw export at update 3,250
+
+w3 (Etude run `e7d47d8b220f`, attempt `4c9ada27b8d0`) stopped at 14:54 UTC
+on its regime watchdog (`TimeoutError: training resource wall deadline
+exceeded`) after update 3,264, 730 updates past w2, Etude receipt $6.31. Its
+target, 3,500, had been sized from w2's rate (103.55 updates/h); on the Etude
+L4 w3 ran 730 updates in its stage's 39,367 s, 66.76 updates/h. A segment
+then had no way to stop before its watchdog, so w3 exported no final
+raw/EMA/Adam and ended `interrupted`; the 02:06 UTC rule would end the chain
+at its last tracked export. Its monitoring exports (`weights: raw`, every 50
+updates) survive, the last at update 3,250 (ordinal 14, sha256
+`ea3cf99b…`, tracked as `learner_transitions-178800486`).
+
+Jack Heart, 2026-10-25 ~21:10 UTC: the seed continues as w4 from w3's raw
+weights at update 3,250, with EMA := those raw weights and a fresh Adam. This
+is a declared learner-state discontinuity at 3,250:
+
+- w4's import (`LearningStateImport.monitoring_update`, staged by
+  `stage --monitoring-update 3250`) admits only the raw bytes w3's record
+  names at that update, takes the receipt's absolute coordinates (games,
+  decisions, transitions, optimizer exposures/updates, seconds), and records
+  `reset: [ema, optimizer]` in its origin. Recipe, seed, cadence, the L4
+  on-demand and the absolute iteration (and so the damped-policy schedule)
+  are unchanged; streams restart as at every boundary.
+- w3's updates 3,251–3,264 are discarded. w3's exports at or before 3,250 stay
+  in the rated set; no w3 checkpoint after 3,250 exists. Rated checkpoints
+  from w4 lie after the discontinuity, and the report marks 3,250 on the
+  update axis. Consecutive and reference pairs across it are played as
+  designed; a jump in ratings at 3,250 is read as the reset, not learning.
+- From w4 on, a segment stops at an update boundary while another update and
+  its final exports still fit inside its watchdog (reserve 120 s), exports
+  raw/EMA/Adam and ends `paused`, reporting the update it reached. Ending
+  short of the target is then an ordinary end, not a failure.
+- Receipts: w1 $7.2252, w2 $7.2358, w3 $6.31 (Etude), launches that never
+  trained $0.60 (`a04845f2548b` $0.15, `9fe2a28ddbf3` $0,
+  `3828021cbc80` $0.44, `cf7dec5040bc` $0.01: the earlier provider
+  estimates where they exceed Etude's $0.04 and $0.09, since one pod was
+  deleted outside Etude). Spent $21.371; remaining = $50 − $21.371 − $1.30
+  = $27.32.
+- Sizing (05:14 UTC rule, with 3,250 in place of w3's final update): L4
+  quoted $0.59/h at 21:29 UTC; hours = 27.32 ÷ 0.59 − 0.25 → 46.0;
+  `max_usd` = min(27.32, 0.60 × 46.25) = $27.32; target = 3,250 + 0.9 ×
+  66.76 × (46.0 − 0.7) → 5,950.
+
+The spec is `experiments/protocols/elemental-183-w4.json` (source
+`5d676d6df`, tag `mtg183-w4-source`). A w4 launch that never trains is
+relaunched under the 03:51 UTC amendment. w4 is the last segment; the endpoint
+is its final export, or its last tracked export if it fails.

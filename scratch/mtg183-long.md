@@ -136,29 +136,38 @@ played under different pins are not comparable.
   first admitted at 04:40 UTC.
 - Spend: w1 $7.2252 + w2 $7.2358 + non-training launches ≈ $0.60 + w3 ≤ $6.99.
 
+## w3 end and w4 spec (2026-10-25 ~21:40 UTC)
+
+- w3 stopped 14:54 UTC on its regime watchdog at 3,264 (`interrupted`, $6.31),
+  no final exports (brief: `scratch/w4-restart.md`). Jack Heart: w4 continues
+  w3's raw monitoring export at 3,250, EMA := raw, fresh Adam.
+- Code `5d676d6df` (local tag `mtg183-w4-source`): raw-only
+  `LearningStateImport.monitoring_update` / `LearnerContinuation.from_monitoring`
+  / `stage --monitoring-update`; `execute_regime(stop_reserve_seconds)` ends a
+  segment `paused` with raw/EMA/Adam before its watchdog; `TrainingJob` always
+  uses it (default 120 s or a tenth of the watchdog) and reports success at the
+  update reached. Real w3 bytes admitted locally (origin 3,250, resets recorded).
+- Staged and read back: `r2://manabot/mtg183/w3/{run.json,monitor-00000014.pt}`
+  (local copies in `~/.manabot/mtg183-w3-final/`).
+- Amendment 21:39 UTC + `experiments/protocols/elemental-183-w4.json`: 46.0 h,
+  max $27.32, target 5,950, quote $0.59/h at 21:29 UTC.
+- Check: `tests/training/test_{etude_job,learning_state,pretrained}.py`,
+  `tests/eval/test_elemental_long.py` → 43 passed (21:30 UTC). Gate owns the rest.
+
 ## Remains, in order
 
-1. w4 = one rental to the remaining cap (amendment 05:14 UTC, `cf1ee4eb6`; Jack
-   Heart: Etude cap removed, pin etude-sdk 0.2.6). Before w3 ends: merge main once
-   #373 lands (done 06:0x UTC: merged, then etude-sdk 0.2.6 `51572801b`; it ports `elemental_long_eval` to 0.2.4 agent keys and the report
-   anchor to `seats.source`); after the merge the 0.2.6 bump passes the
-   MTG-183 eval/long/report/source tests (21 passed, 06:55 UTC; w3 at update
-   2,732, ~$1.20). After w3 ends (~15:50 UTC): move the launchd
-   controller (`gg.manabot.mtg183.controller`, now on the 0.2.2 venv in
-   `~/.manabot/mtg183-eval-source`) to a 0.2.6 checkout; fetch/stage w3's
-   run.json/raw/EMA/Adam (bucket-root keys); size and commit
-   `elemental-183-w4.json`; tag the source; launch.
-2. Then relaunch the eval job at the SAME revision `39b02876e` (0.2.2, identities
-   unchanged) with command `--run e7d47d8b220f --run <w4>` and no `--continues`:
-   `etude cancel ac6c45760d88`, edit `elemental-183-eval-job.json`'s command,
-   launch to pool `mini` (state persists on the mini). Relaunched never-trained
-   w4 attempts replace its `--run`.
+1. Launch w4 (operator session; not launched here): push branch + tag
+   `mtg183-w4-source` (Etude bundles the revision), move the launchd controller
+   to a 0.2.6 checkout, `etude ondemand max l4 2` if MTG-186 holds the slot,
+   `Run` from `elemental-183-w4.json` with seed 18301.
+2. Then relaunch the eval job (`mtg183-eval-cards`, currently `493438ce31d1`,
+   revision `fb71050cf`) with `--run e7d47d8b220f --run <w4>` and no
+   `--continues`. Relaunched never-trained w4 attempts replace its `--run`.
 3. S3 cleanup below (w1/w2 checkpoint bytes already copied to R2 at their target keys).
-4. Results report, publish evidence with `manabot.data publish`, manifest,
-   protocol Results pointer. Card statistics (#368/#369) are not adopted by this
-   frozen eval run (agent identities would change); the next new eval run adopts them.
-5. Publish this Task's follow-up commits (evaluator settle fix, ported worker
-   fixes, re-frozen w3, amendment) as its next PR.
+4. Results report: mark the 3,250 discontinuity on the update axis (amendment
+   21:39 UTC). Publish evidence with `manabot.data publish`, manifest, protocol
+   Results pointer.
+5. Publish this Task's follow-up commits as its next PR.
 
 ## Proposed Wave memory (not written; standalone realign leaves `.lf/wave/` read-only)
 

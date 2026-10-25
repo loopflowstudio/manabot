@@ -110,3 +110,18 @@ they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evide
   applies), though MTG-181's evaluation shares the mini's 8 cores; games have a
   600 s bound and take seconds.
 - The eval job's `max_attempts=1`, `max_hours=190` (to `--until`).
+
+# MTG-183 w4 restart (2026-10-25 ~21:40 UTC)
+
+- Never-trained launches count at the larger of the earlier provider estimate
+  and Etude's receipt ($0.15 vs $0.04 for `a04845f2548b`, $0.44 vs $0.09 for
+  `3828021cbc80`, whose pod was deleted outside Etude): conservative under the cap.
+- A wall-bounded segment exits 0 (Etude `succeeded`) with `etude-result.json`
+  at the update reached, below its `until`; its tracking closes `finished`.
+- `TrainingJob.stop_reserve_seconds` defaults to 120 s or a tenth of the
+  watchdog, whichever is shorter, so short-watchdog experiment jobs still admit.
+- The update target uses 3,250 (w4's origin) in place of "w3's final update".
+- The raw-only import accepts an `interrupted` parent only; a `failed` parent is
+  refused (not needed for w3; widen deliberately if ever needed).
+- Branch and tag not pushed here: the brief stops at a committed spec, and the
+  operator session launches.
