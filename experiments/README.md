@@ -21,6 +21,30 @@ instruments.
 | [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/belief-sampler.md)) | `manabot train` |
 | [heuristic_strength](heuristic_strength.py) | heuristic against a checkpoint, optional search ([report](heuristic-strength.md)) | `python -m experiments.heuristic_strength` |
 
+## Etude experiment files
+
+```sh
+uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
+uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+```
+
+A file defining `report()` or `eval(state)` is an Etude experiment, named for
+its stem. Its training runs track under that stem (`TrainingJob.experiment`),
+so `etude eval` and `etude report` find them; Etude's launcher does not pass
+the name itself yet.
+
+| file | `runs()` | `eval(state)` | `report()` |
+| --- | --- | --- | --- |
+| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, pairs |
+| [seat_comparison](seat_comparison.py) (MTG-165) | one- and two-seat arms × four seeds | — | score on learner transitions, one-seat dotted |
+| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
+
+Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
+including a flame graph of each update's `time/` seconds. The two-deck
+experiments' evaluation is still bound to each checkpoint's training record
+(`manabot.eval.benchmark`), and their retained results predate Etude eval runs.
+
 Reports of finished studies stay as the record. The runners, contracts, plans
 and fixtures they cite were removed once nothing current used them; git
 history holds them at the commit each report names.

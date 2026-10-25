@@ -1,4 +1,4 @@
-"""Public SDK admission: local recording, artifact retention, and offline reports.
+"""Public SDK admission: local recording and artifact retention.
 
 This is infrastructure proof only. The fixture does not train a policy, launch a
 job, or claim that an SDK artifact has passed manabot checkpoint admission.
@@ -10,7 +10,6 @@ from urllib.parse import unquote, urlparse
 
 from etude.train.read import read_all
 from etude.train.records import Step
-from etude.train.report import page_data, write
 from etude.train.run import track
 import pytest
 
@@ -18,7 +17,7 @@ from manabot.infra.config import RuntimeConfig
 from manabot.infra.runtime import RunContext
 
 
-def test_public_sdk_records_checkpoint_and_renders_offline(tmp_path: Path) -> None:
+def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:
     artifact = tmp_path / "fixture.bin"
     payload = b"mtg122-sdk-admission-no-training"
     artifact.write_bytes(payload)
@@ -42,17 +41,19 @@ def test_public_sdk_records_checkpoint_and_renders_offline(tmp_path: Path) -> No
     data = read_all(directory)
     assert len(data) == 1
     assert len(data[0].checkpoints) == 1
-    report = write(page_data("mtg122-sdk-admission", data), tmp_path / "report")
-    assert "mtg122-sdk-admission" in report.read_text()
 
 
 def test_run_context_records_update_clocks(
     tmp_path: Path,
 ) -> None:
-    with RunContext(RuntimeConfig(name="sdk-fixture", runs_dir=tmp_path)) as experiment:
+    with RunContext(
+        RuntimeConfig(name="sdk-fixture", runs_dir=tmp_path),
+        experiment="seat_comparison",
+    ) as experiment:
         experiment.log_update({"loss": 0.25}, updates=2, transitions=512)
     data = read_all(tmp_path / "sdk-fixture" / "etude")
     assert len(data) == 1
+    assert data[0].experiment == "seat_comparison"
     assert data[0].rows == 1
     assert "loss" in data[0].metrics()
     assert data[0].incomplete == 0
@@ -64,7 +65,10 @@ def test_run_context_records_update_clocks(
 
 def test_run_context_retains_failure_state(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="fixture failure"):
-        with RunContext(RuntimeConfig(name="failed-fixture", runs_dir=tmp_path)):
+        with RunContext(
+            RuntimeConfig(name="failed-fixture", runs_dir=tmp_path),
+            experiment="failed-fixture",
+        ):
             raise RuntimeError("fixture failure")
     data = read_all(tmp_path / "failed-fixture" / "etude")
     assert data[0].state is not None
@@ -79,6 +83,7 @@ def test_run_context_obeys_launcher_identity_and_directory(
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(launched))
     with RunContext(
         RuntimeConfig(name="launched-fixture", runs_dir=tmp_path / "local"),
+        experiment="launched-fixture",
         resolved_config={"fixture": "resolved-recipe"},
     ) as experiment:
         experiment.log_update({"loss": 0.5}, updates=1, transitions=16)

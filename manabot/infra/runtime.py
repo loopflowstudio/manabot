@@ -45,7 +45,8 @@ class RunContext:
     seals rows the parent left unsealed). `resumed_at` is where this process
     stands in that run, a restored snapshot or a stage boundary, which need not
     be the run's latest Etude checkpoint; earlier rows after it are superseded. Under the SDK launcher the run
-    identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR.
+    identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR. A
+    new run tracks under `experiment`, an experiment file's stem.
     SDK admission failures are not silently converted to untracked training.
     """
 
@@ -53,6 +54,7 @@ class RunContext:
         self,
         config: RuntimeConfig,
         *,
+        experiment: str,
         run: str | None = None,
         resume: Path | None = None,
         resumed_at: Mapping[str, float] | None = None,
@@ -71,7 +73,7 @@ class RunContext:
                 (resume / "run.json").read_bytes()
             ).experiment
             if resume
-            else config.name,
+            else experiment,
             # The launcher's identity wins; it owns continuation of its runs.
             run=os.environ.get("ETUDE_RUN") or (resume.name if resume else run),
             clocks=[

@@ -106,6 +106,19 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
     )
 
 
+def _checkpoint(result: MonitorResult) -> CheckpointRef:
+    """A training run's export, keyed by its run and file, read from where it lies."""
+    path = Path(result.artifact["path"]).resolve()
+    return CheckpointRef(
+        key=CheckpointKey(run=result.run_id, name=path.name),
+        artifact=ArtifactRef(
+            uri=path.as_uri(),
+            sha256=result.artifact["sha256"],
+            size_bytes=result.artifact["bytes"],
+        ),
+    )
+
+
 def play(match: Match) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
