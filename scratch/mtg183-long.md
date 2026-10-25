@@ -23,7 +23,7 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 - `experiments/elemental_grid.py` is MTG-181's unmerged bytes, copied unchanged;
   whichever branch lands second keeps one copy.
 
-## Exists (2026-10-25 00:00 UTC)
+## Exists (2026-10-25 00:52 UTC)
 
 - Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`; etude-sdk 0.2.1.
 - Seed 18301: w1 ended at update 1,325; w2 running to its pod deadline
@@ -63,7 +63,10 @@ checkout `/Users/jack/.manabot/mtg183-eval-source` (`d9fc58df2`), directory
 poll), `--storage r2://manabot/evaluations`, `--until 1793584946`. It yields
 while any experiment from MTG-181's checkout runs (MTG-181 switched to
 `elemental_181_new_heuristic`; the old name-based yield missed it). First poll
-admitted 48 checkpoints (0…2,300).
+admitted 48 checkpoints (0…2,300). At 00:52 UTC MTG-181's
+`elemental_181_new_heuristic` was still running, so the evaluator had played
+no rows (it logs nothing while yielding; `state.json` refreshes each poll).
+Evaluation wall time depends on when MTG-181 finishes, not on idle capacity.
 
 ## Remains, in order
 
@@ -116,7 +119,7 @@ after w2 ends, report data via `manabot.data publish`.
 **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`); recorded
 in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
 
-Check (2026-10-25 00:55 UTC): focused suite (`test_elemental_long*`, `test_elemental_grid`,
+Check (2026-10-25 00:50 UTC): focused suite (`test_elemental_long*`, `test_elemental_grid`,
 `test_etude_job`) → 31 passed, `tests/sim/test_tracking.py` → 4 passed, after
 `fetch_etude_checkpoint` took per-call partial files (so `_local` caches by digest
 without its own pid rename). The live evaluator runs the pinned `d9fc58df2`, not this.
