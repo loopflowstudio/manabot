@@ -38,9 +38,9 @@ Calibrate throughput before launch, freeze the target and shared interval, then
 keep them fixed regardless of observed runtime. Ataraxos keeps its absolute
 iteration formulas; PPO step recipes select `schedule_clock="iteration_fraction"`.
 Step cadence currently requires one ordinary step-target self-play stage.
-Multi-stage recipes, active-time endpoints, supervised epochs and compound-game
-training retain their explicit legacy cadence; their differing iteration/epoch
-clocks are not silently combined into one step schedule.
+Multi-stage recipes, active-time endpoints and compound-game training retain
+their explicit legacy cadence; their differing iteration clocks are not silently
+combined into one step schedule.
 
 New self-play receipts distinguish `updates` (absolute completed iterations),
 `segment_updates` (completed iterations in this stage, including a recovered
@@ -83,21 +83,12 @@ Rows use Etude's flat names: `loss`, `numerical/optimizer_steps`,
 keyed, as `selection_groups/<action type>/<terminal distance>/rows` and
 `self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline reports read
 them back through `manabot.training.update_metrics.read_updates`, which finds a
-run's folder by name anywhere under an evidence directory. Supervised epochs,
-collection games and compound, selection and belief summaries are bounded and
-stay in their stage's `diagnostics`, as do the rows of historical exports.
+run's folder by name anywhere under an evidence directory. Compound, selection
+and belief summaries are bounded and stay in their stage's `diagnostics`, as do
+the rows of historical exports.
 
 ## Reading the curves
 
-* Distillation records epoch-average training cross-entropy and teacher KL in
-  nats, growing-data validation CE/KL and fixed-cohort validation CE/KL. The first
-  supervised stage freezes whole validation games and exact dataset bytes in
-  `fixed-validation.npz`; its digest, source shards and game IDs are retained.
-  Every later stage excludes those games from training and evaluates the same
-  rows against the first stage's fixed reference targets. Later stages may change
-  their training/growing-validation targets; those identities are labeled separately. TrainingRun's globally
-  assigned game IDs are preserved when combining shards; generic historical
-  shard loading keeps its original per-round offset behavior.
 * RL policy loss is the clipped optimization objective, **not log loss**. PPO's
   value loss is half squared lambda-target residual; categorical move learning
   uses its own recorded value loss. Existing per-update loss, entropy and KL
@@ -105,9 +96,8 @@ stay in their stage's `diagnostics`, as do the rows of historical exports.
   its recorded post-update batch). Empty-filter updates label unavailable losses.
   Advantage retention, absolute advantages, lambda-target residuals, learning
   rate, reference regularization and collection-KL coefficient remain separate.
-* Progress distinguishes learner iterations (or supervised epochs), native
-  environment decisions, learner transitions, optimizer exposures, games and
-  elapsed run cost. Teacher generation remains on the cost axis. RSS, process CPU
+* Progress distinguishes learner iterations, native environment decisions,
+  learner transitions, optimizer exposures, games and elapsed run cost. RSS, process CPU
   time and host load are resource observations, not evidence of learning quality.
   Throughput is cumulative work divided by observed elapsed cost. Checkpoint age
   appears only when an earlier admitted monitoring export exists. Use the
@@ -194,7 +184,7 @@ costs, and validates every deal/leg and registration. It does not reload old mod
 bytes or claim a new replay. Offline reports still read historical exports'
 retained update rows; rows without per-update timestamps keep their original
 stage/ordinal and are explicitly marked incomplete, and final stage duration is
-never spread over earlier updates. Missing fixed validation, losses or resource
+never spread over earlier updates. Missing losses or resource
 observations cannot be recreated from aggregate results.
 
 ## Experiment comparisons
@@ -223,7 +213,7 @@ uv run --extra artifacts python -m manabot.experiment.artifacts publish \
 ```
 
 The publisher validates all retained stage exports, including rejected artifacts,
-monitoring checkpoints, fixed validation and recovery snapshots. Role names retain
+monitoring checkpoints and recovery snapshots. Role names retain
 that distinction. Equal digests share a content-addressed S3 key. Exact `run.json`
 bytes and the storage manifest are also stored in S3; the adjacent `.receipt.json`
 pins the manifest's URI, digest, size and version when available. Original receipts

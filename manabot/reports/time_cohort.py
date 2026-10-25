@@ -185,7 +185,7 @@ def native_cohort(
         learning_ids = {
             s.id
             for s in leaf.regime.stages
-            if s.operation in {"train_self_play", "train_supervised", "train_compound"}
+            if s.operation in {"train_self_play", "train_compound"}
         }
         updates = (
             sum(s.updates for s in leaf.stages if s.id in learning_ids)

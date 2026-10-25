@@ -74,8 +74,7 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
                     s.collection_seconds + s.learning_seconds for s in prefix
                 )
                 + sum(origin.active_training_seconds for origin in origins)
-                if stage.updates
-                and operation in {"train_self_play", "train_supervised"}
+                if stage.updates and operation == "train_self_play"
                 else None,
                 **{
                     name: sum(getattr(s, name) for s in prefix)

@@ -71,8 +71,7 @@ not wall-clock time since export. Missing time coordinates are unavailable.
 
 Progress is shown separately for each variant and independent training seed.
 Updates are collect/update iterations, including empty-filter skips; planned
-updates come from declared stages. Supervised epoch counters are labeled as
-such; an active-time recipe labels its update safety ceiling separately from
+updates come from declared stages. An active-time recipe labels its update safety ceiling separately from
 the active-hour target. Learner transitions, native decisions and
 optimizer exposures count different work. SPS explicitly means cumulative
 learner transitions divided by recorded training seconds at the latest diagnostic.
@@ -82,8 +81,7 @@ is uncorrected. There is no uncertainty interval for these process measurements.
 RL loss is the latest retained optimized minibatch objective, with policy/value
 and regularization semantics defined by the recipe. It is not predictive log
 loss, is not necessarily comparable across recipes, and can be absent on an
-empty-filter update. Distillation cross-entropy is labeled as such. Do not infer
-strength from either loss. Latest rows without a loss remain unavailable rather
+empty-filter update. Do not infer strength from the loss. Latest rows without a loss remain unavailable rather
 than carrying a stale optimized value forward without a label.
 
 Deeper example in a notebook cell (figures go into the HTML `sections` list):
@@ -153,15 +151,26 @@ unless separately profiled. Diagnostics can include failure accounting, so they
 are not universally pure diagnostic computation. Monitoring exports and recovery
 costs are already inside stage time and are not added again.
 
-Self-play stages can set `execution.profile_collection: true` to retain basic
-host timers in `StageRecord.collection_timings`: observation preparation, policy
-inference and action selection, rollout recording, opponent policy, environment
-step/encoding, and batch assembly. The report nests these beneath collection and
-keeps the residual visible. Seconds and call counts are attempt-local; reused
-collectors start fresh counters at each stage. These intervals include existing
-device waits but are not GPU kernel timings. The option defaults off, adds no
-CUDA synchronization, and does not enable PyTorch tracing. Compare matched
-ordinary runs with it off/on before treating instrumented fractions as typical.
+Self-play stages always retain host phase timers. `StageRecord.collection_timings`
+holds observation preparation, policy inference and action selection, rollout
+recording, opponent policy, environment step/encoding, and batch assembly.
+`StageRecord.learning_timings` holds batch transfer and behavior checks, targets,
+selection and health diagnostics, and per minibatch forward and loss, backward and
+gradient clipping, optimizer step and minibatch diagnostics, plus the EMA update;
+nested phases are keyed by path (`Minibatches/Forward and loss`). The report nests
+both beneath their parent and keeps each level's residual visible as Unattributed.
+Seconds and call counts are attempt-local; reused collectors and learners start
+fresh counters at each stage.
+
+Every phase ends at a point where the code already waits for the device (a
+`.cpu()` copy, a `float()` read, or a finite check), so a phase includes the
+device work it queued and timing adds no CUDA synchronization. They are host
+intervals, not GPU kernel timings or utilization, and PyTorch tracing stays off.
+Learned state, diagnostics and collected batches are identical with timers on or
+off (`tests/training/test_phase_timing.py`). A timer costs about 1 µs, and reading
+cumulative stats about 0.3 ms per update: under 0.02% of a ten-second update.
+`execution.profile_collection` is retained so historical regimes validate; it no
+longer changes behavior.
 
 The main dashboard includes this view. To generate a standalone training-only
 report from saved records in a notebook or script run through `uv run`:
@@ -229,7 +238,7 @@ reverse KL in this recipe. The unregularized surrogate was not saved separately;
 the report does not subtract guessed penalties. The KL panels show unweighted
 nats. Scalar value loss is MSE against lambda targets; categorical value loss is
 cross-entropy against outcome-distribution lambda targets. Neither is an independent
-terminal-outcome test. PPO and distillation retain their own objective semantics.
+terminal-outcome test.
 
 `rows` and `retained` cover the collection batch, unlike the last-minibatch losses.
 The report totals these only where both are present, names the record count, and

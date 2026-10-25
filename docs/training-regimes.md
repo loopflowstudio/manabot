@@ -7,7 +7,6 @@ ETU-91 owns the comparison/ablation protocols and analysis.
 
 ```bash
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
-uv run manabot train --regime-name direct_self_play:search_distillation --seed 197 --out .runs/search-pilot
 ```
 
 Each current experiment is one module, `experiments/<experiment>.py`, next to
@@ -31,13 +30,9 @@ output directory for every attempt; serving checkpoints are not process-resume
 files. Opt-in [bounded CPU self-play recovery](training-recovery.md) uses private
 complete-state snapshots and retains completed multistage work.
 
-Policy stages are `collect_search`, `train_supervised`, and `train_self_play`.
-A supervised stage's `datasets` name earlier collection outputs. Its `initial`
-names an earlier supervised stage, carrying learner and Adam state; each source
-game keeps its identity and validation assignment as the corpus grows. Game IDs
-are unique within the run, and IDs divisible by ten form validation. At least
-one complete game must exist in each partition. Self-play `initial` carries the
-live collector/learner/optimizer within the same execution; streams pause at the
+Policy stages are `train_self_play`, `train_compound` and `import_policy`.
+Self-play `initial` carries the live collector/learner/optimizer within the
+same execution; streams pause at the
 exact update boundary. External checkpoint reuse is not supported as implicit
 resume. Unsupported operations, forward references, and incompatible runtime
 worlds fail validation.
@@ -132,9 +127,8 @@ artifact provenance, not byte-identical stochastic training or exact process
 continuation unless the bounded recovery contract is explicitly selected. A fresh
 execution owns fresh costs; no pre-existing corpus is free.
 
-[Learning-speed protocol](../experiments/training-regimes.md) and
-[ablation protocol](../experiments/ataraxos-mtg-ablations.md) describe the bounded
-smokes and the separately proposed scientific studies.
+The [ablation protocol](../experiments/ataraxos-mtg-ablations.md) describes the
+bounded smoke and the separately proposed scientific study.
 
 ## Integrated bounded proof — 2026-10-04
 
@@ -243,7 +237,7 @@ latency. `skip_trivial` is a separate explicit collection setting. Arena traces
 retain underlying Commands and per-command latency; report complete-game wall
 cost alongside these counts. Fewer exposed prompts alone are not a speedup.
 
-Scientific learning-speed and outcome/bootstrap comparisons belong to ETU-99.
+Scientific outcome/bootstrap comparisons belong to ETU-99.
 Software acceptance uses deterministic fixtures and bounded correctness/integration
 checks; it does not require another training study. The retained comparison smoke
 uses the existing arena and offline notebook/report path:
@@ -280,7 +274,7 @@ name a prior TrainingRun in the same VerifyStore; omit it for a policy stage in
 this run. Complete semantic receipt replay, artifact admission, failed-attempt
 retention and measured collection/diagnostic costs use the ordinary executor.
 No weights change. Scalar and categorical expected signed values are supported;
-compound, belief-input and supervised win-logit policy sources are unsupported.
+compound and belief-input policy sources are unsupported.
 
 The [omitted-control protocol](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic)
 provides the bounded command and analysis contract. Reports compare retained and
@@ -332,18 +326,13 @@ incompatible inputs fail and retain a failed TrainingRun attempt.
 Admission copies exact source bytes into the destination run before loading.
 The imported stage exposes only the selected `raw` or `ema` artifact and retains
 its `source_run` JSON artifact. Downstream stages recheck these hashes. Set
-`CollectBelief.weights` and `CollectLocalUpdate.weights` to that same selection;
-`TrainBelief` continues to consume the resulting dataset normally. Local-search
-samplers must still originate from that same policy and weight identity.
+`CollectBelief.weights` to that same selection; `TrainBelief` continues to
+consume the resulting dataset normally. Local-search samplers must still
+originate from that same policy and weight identity.
 
-`TrainSupervised(initial="policy", initial_weights="ema", ...)` can initialize
-from an imported EMA artifact; `initial_weights="raw"` remains the historical
-default and does not alter existing recipe digests. This starts fresh Adam,
-not producer optimizer or collector continuation. Local-target distillation
-requires signed-outcome producer value semantics. Imported compound policies
-can feed the existing belief/search collectors, but ordinary flat supervised
-training and compound EMA remain unsupported. Live self-play continuation and
-selection diagnostics retain their existing stage restrictions. An EMA import
+Imported compound policies can feed belief collection; compound EMA remains
+unsupported. Live self-play continuation and selection diagnostics retain their
+existing stage restrictions. An EMA import
 never masquerades as raw or changes `last-complete-raw` selection.
 
 ### Start self-play from a pretrained policy

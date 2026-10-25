@@ -2,7 +2,7 @@
 
 Covers the RolloutPool bindings (slot layout, batched stepping, scoring),
 the batched sampler (valid-action guarantees), the K-stream vector driver
-(seat balancing), and soft distillation targets.
+(seat balancing).
 """
 
 import numpy as np
@@ -20,7 +20,6 @@ from manabot.sim.rollout import (
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
-from manabot.training.supervised.data import soft_targets_from_scores
 from manabot.verify.util import INTERACTIVE_DECK
 
 
@@ -176,14 +175,3 @@ class TestPolicyRolloutPlayer:
         assert player.last_scores.max() <= 1.0
         # The chosen action must be playable in the real env.
         env.step(action)
-
-
-class TestSoftTargets:
-    def test_padding_masked_and_temperature_sharpens(self):
-        scores = torch.tensor([[0.5, 0.6, -1.0, -1.0]])
-        sharp = soft_targets_from_scores(scores, 0.02)
-        flat = soft_targets_from_scores(scores, 1.0)
-        for probs in (sharp, flat):
-            assert probs[0, 2:].sum().item() < 1e-6
-            assert abs(probs.sum().item() - 1.0) < 1e-5
-        assert sharp[0, 1] > flat[0, 1] > 0.5

@@ -22,7 +22,7 @@ from manabot.env.failures import (
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim import datagen, rollout
+from manabot.sim import rollout
 from manabot.training import execution
 from manabot.training.regime import (
     Learning,
@@ -34,11 +34,6 @@ from manabot.training.rollout import compound, selection_data
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
-from tests.training.game_error_fixtures import (
-    PaymentMismatchEnv,
-    _bounded_fixture_replay,
-    _payment_match,
-)
 
 
 def _model(*, compound_decisions: bool = False) -> ActorCritic:
@@ -397,52 +392,33 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
     assert result["original_outcome"] == "execution_outcome_unknown"
 
 
-def test_distillation_failure_uses_scalar_capture(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    class RejectingPlayer:
-        last_scores: np.ndarray | None = None
-
-        def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-            offers = json.loads(env._engine.semantic_decision_frame_json())["offers"]
-            return max(
-                range(len(offers)),
-                key=lambda i: {"play_land": 3, "cast": 2}.get(offers[i]["verb"], 0),
-            )
-
-    monkeypatch.setattr(
-        datagen, "make_player", lambda *args, **kwargs: (RejectingPlayer(), None)
-    )
+def test_search_slot_failures_replay(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
-    monkeypatch.setattr(managym, "Env", PaymentMismatchEnv)
-    with (
-        capture_scope(scope),
-        pytest.raises(managym.AgentError, match="fixture payment mismatch"),
-    ):
-        datagen.generate_selfplay_shard(
-            num_games=1,
-            teacher_spec={"kind": "random"},
+    with capture_scope(scope):
+        env = Env(
+            Match(),
+            ObservationSpace(),
+            Reward(RewardConfig()),
             seed=24,
-            match_config=_payment_match(),
+            auto_reset=False,
+            enable_profiler=False,
+            enable_behavior_tracking=False,
         )
-    assert read_failure(scope.paths[0]).context["producer"] == "distill"
-    result = _bounded_fixture_replay(
-        "manabot.training.state.game_errors", scope.paths[0], "--attempt", 1
-    )
-    assert result["results"][0]["matches_error"]
-    original = scope.paths[0].read_bytes()
-    repaired = _bounded_fixture_replay(
-        "manabot.training.state.game_errors",
-        scope.paths[0],
-        "--attempt",
-        1,
-        repaired=True,
-    )["results"][0]
-    assert repaired["status"] == "advanced"
-    assert repaired["matches_binding"] and repaired["at_retained_failure"]
-    assert repaired["matches_error"] is None
-    assert repaired["original_outcome"] == "failed"
-    assert scope.paths[0].read_bytes() == original
+        env.failure_context.update(game_index=11)
+        env.reset(seed=24)
+        pool = env.rollout_pool(1, 1, 197, 100)
+        buffers = rollout._allocate_buffers(ObservationSpace(), pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots)
+        assert pool.encode_active()
+        with pytest.raises(managym.AgentError):
+            pool.step_active([-1] * pool.num_slots)
+        with pytest.raises(managym.AgentError):
+            env.step(-1)
+    assert read_failure(scope.paths[0]).mode == "search"
+    for path in scope.paths:
+        assert read_failure(path).context["game_index"] == 11
+        result = _bounded(path)["results"][0]
+        assert result["matches_error"] and result["at_retained_failure"]
 
 
 def test_capture_write_failure_does_not_mask_native_error(

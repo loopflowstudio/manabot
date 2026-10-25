@@ -20,7 +20,7 @@ from manabot.belief.sampling_data import (
     SamplerGame,
     Split,
 )
-from manabot.training.supervised.belief import (
+from manabot.belief.sampling_fit import (
     compare_exact_reference,
     evaluate_sampler,
     evaluate_sampler_cohort,

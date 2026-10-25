@@ -57,7 +57,6 @@ main engine. The loop is declared as data and executed by one runner:
         │
         v
  TrainingRun ── train_self_play ──> raw + EMA checkpoints (world-bound)
-        │       collect_search / train_supervised   (search distillation)
         │       collect_belief / train_belief       (hidden-hand samplers)
         │
         ├── VerifyStore: resolved recipe, seed streams, source identity,
@@ -86,8 +85,8 @@ main engine. The loop is declared as data and executed by one runner:
   frozen policy's own complete games. They never feed hidden truth to the
   acting policy ([belief sampler](belief-sampler.md)).
 - **Search as an improvement step.** Local search uses the frozen policy for
-  continuations and sampled hands for hidden state. Its result can be distilled
-  back into the policy ([local policy search](local-policy-search.md)).
+  continuations and sampled hands for hidden state at play time
+  ([local policy search](local-policy-search.md)).
 - **Encoding is identity.** An observation/action shape change is a new world
   ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
   nightly learnability check guards against inputs that make distinct choices
@@ -132,7 +131,7 @@ The labels in this document are precise:
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
 | Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
-| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, search collection, supervised distillation, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
+| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, compound self-play, policy import, selection diagnostics, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
 | Evaluation | Checkpoint monitoring and named tournaments score checkpoints against fixed anchors (random, scripted greedy, `heuristic`) on paired deals with both decks and seats, replay-verifying every game. INT-18's world-pinned rated arena (2026-07-18, 720 games, five anchors) predates the current world and has not been rerun. | Greedy is nearing saturation; `heuristic` is exploratory, not yet a frozen anchor. | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
 | Study | Academy identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Academy presents it without becoming another replay or belief engine. |
 

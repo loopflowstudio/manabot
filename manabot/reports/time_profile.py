@@ -6,7 +6,7 @@ chronological order. Recovery copies, overlapping counters and missing timestamp
 remain explicit instead of becoming fabricated work or zero-cost intervals.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html import escape
@@ -14,6 +14,7 @@ import math
 
 from manabot.experiment.execution import ExperimentRun
 from manabot.reports.records import ReportRun
+from manabot.training.records import PhaseTiming
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,29 @@ def _partition(name: str, seconds: float, parts: Sequence[TimeSlice]) -> TimeSli
     if remainder > 0:
         children += (TimeSlice("Unattributed", remainder),)
     return TimeSlice(name, seconds, children)
+
+
+def _nested(name: str, seconds: float, timings: Mapping[str, PhaseTiming]) -> TimeSlice:
+    """Partition `seconds` by path-keyed phases ("A", "A/B"), recursively.
+
+    Each level keeps its own Unattributed remainder, so untimed work between
+    nested timers stays visible rather than being spread over its siblings.
+    """
+    top = sorted({path.split("/", 1)[0] for path in timings})
+    parts = []
+    for phase in top:
+        below = {
+            path.split("/", 1)[1]: timing
+            for path, timing in timings.items()
+            if path.startswith(f"{phase}/")
+        }
+        total = (
+            timings[phase].seconds
+            if phase in timings
+            else sum(t.seconds for p, t in below.items() if "/" not in p)
+        )
+        parts.append(_nested(phase, total, below) if below else TimeSlice(phase, total))
+    return _partition(name, seconds, parts)
 
 
 def training_profiles(runs: Sequence[ReportRun]) -> tuple[TrainingProfile, ...]:
@@ -118,21 +142,13 @@ def training_profiles(runs: Sequence[ReportRun]) -> tuple[TrainingProfile, ...]:
                     ),
                 ):
                     if field in stage.model_fields_set:
-                        if (
-                            field == "collection_seconds"
-                            and stage.collection_timings is not None
-                        ):
+                        timings = {
+                            "collection_seconds": stage.collection_timings,
+                            "learning_seconds": stage.learning_timings,
+                        }.get(field)
+                        if timings:
                             try:
-                                costs.append(
-                                    _partition(
-                                        label,
-                                        value,
-                                        [
-                                            TimeSlice(name, timing.seconds)
-                                            for name, timing in stage.collection_timings.items()
-                                        ],
-                                    )
-                                )
+                                costs.append(_nested(label, value, timings))
                             except ValueError as error:
                                 warnings.append(str(error))
                                 costs.append(TimeSlice(label, value))

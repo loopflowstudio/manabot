@@ -235,8 +235,6 @@ def _producer(checkpoint: Mapping[str, Any]) -> str:
         stage = f" {extra['stage_id']}" if extra.get("stage_id") else ""
         weights = f" ({extra['weights']})" if extra.get("weights") else ""
         return f"regime run {extra['run_id']}{stage}{weights}"
-    if isinstance(extra, Mapping):
-        return "supervised distillation"
     if checkpoint["hypers"].get("train_hypers"):
         return "manabot train"
     return "unknown"

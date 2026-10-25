@@ -7,24 +7,35 @@ a target side by seat: from seat 0 it burns itself with Igneous Inspiration.
 
 `HeuristicPlayer` keeps v1 for every prompt it has no rule for and adds:
 
-- Mana: play a land, then cast the castable spell with the highest mana value
-  that has a worthwhile use. The engine only offers affordable casts, so
+- Mana: play a land, crack fetch lands, then cast the castable spell with the
+  highest mana value that has a worthwhile use, one spell at a time (its own
+  spell resolves before the next). The engine only offers affordable casts, so
   repeated highest-first casting spends as much mana as the offers allow.
   Kicker is paid when untapped lands cover spell plus kicker.
-- Targets: effect polarity is derived from the semantic card source (damage,
-  bounce, counter and exile are harmful; pumps, untaps and keyword grants are
-  beneficial). Harmful effects go to the opponent's side, beneficial ones to
-  its own. Removal is held until it kills something (with the damage the
-  available mana allows), counters until the opponent has a spell on the stack.
-- Combat: attack with a creature unless the opponent has an untapped creature
-  that can block it, kill it and survive, or attack with everything when
-  unblockable damage is lethal. Block when the blocker kills and survives,
-  trade when the attacker costs at least as much, and chump only against
-  lethal damage.
+- Instant timing: nothing in its own upkeep or draw step. Instants without a
+  target that matters now (card draw, selection) and draw or life abilities
+  wait for the opponent's end step, so the turn's mana goes to permanents first.
+- Targets: effect polarity is derived from the semantic card sources (damage,
+  destroy, bounce, counter and exile are harmful; pumps, untaps and keyword
+  grants are beneficial). Harmful effects go to the opponent's side, beneficial
+  ones to its own. Removal is held until it kills something (with the damage
+  the available mana and graveyard Lessons allow), burn that can hit players
+  until it kills a creature or the opponent, counters until the opponent has a
+  spell on the stack.
+- Card choices: Learn takes a Lesson (removal while the opponent has creatures);
+  discards are spare lands or else the costliest card, optional ones declined;
+  a look-and-select keeps a land while short of four.
+- Combat: hold back the toughest attackers while the opponent's swing back
+  would be lethal; attack with a creature unless the opponent has an untapped
+  creature that can block it, kill it and survive, or with everything when
+  unblockable damage is lethal. Blocks are planned once per combat, one
+  blocker per attacker, largest attackers first: kill and survive, trade up,
+  absorb for free; then chump the largest attackers while the rest is lethal.
 - Own combat tricks: a pump in hand with mana to cast it lets one dominated
   creature attack anyway. After blocks, pumps are cast only where they change
-  a one-on-one fight or make unblocked damage lethal. The opponent's tricks are
-  ignored: they depend on a hidden hand.
+  a one-on-one fight or make unblocked damage lethal, and self-pump abilities
+  go on unblocked attackers. The opponent's tricks are ignored: the Elemental
+  lists hold too few for a hidden-hand estimate to change a decision.
 - Optional costs (ward, "unless pays"): pay when offered.
 
 Combat assignments come from the observation's attacker/blocker events, whose
@@ -34,7 +45,8 @@ sources. Creature identity uses the visible card definitions; a permanent
 without one counts as a creature when its toughness is positive.
 
 This lives outside `players.py` because arena registrations pin that file's
-bytes as the v1 and demo-search source identity; v1 stays frozen."""
+bytes as the v1 and demo-search source identity; v1 stays frozen.
+"""
 
 from __future__ import annotations
 
@@ -48,34 +60,48 @@ from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, 
 import numpy as np
 
 from manabot.env import Env
-from manabot.sim.action.targeting import inspect_target
 from manabot.sim.players import ScriptedGreedyPlayer
 import managym
 
 Polarity = Literal["harmful", "beneficial"]
 
-
-# The shared research catalog: the product two-deck definitions unchanged, plus
-# research cards such as Lightning Bolt. A targeted spell missing from here would
-# fall back to v1's seat-ordered target and could hit its own side.
-SEMANTIC_SOURCE = (
-    Path(__file__).resolve().parents[2] / "content/semantic/v1/complexity.source.json"
+# Card programs the player reads, first definition of a name winning: the shared
+# research catalog (the product two-deck definitions plus research cards such as
+# Lightning Bolt) and the Elemental world's ten decks. A targeted spell missing
+# from these falls back to v1's seat-ordered target and can hit its own side.
+_CONTENT = Path(__file__).resolve().parents[2] / "content/semantic"
+SEMANTIC_SOURCES = (
+    _CONTENT / "v1/complexity.source.json",
+    _CONTENT / "w11/elemental_world.source.json",
 )
-
 
 # Ops that act on a target role, by what they do to that target's controller.
 HARMFUL_OPS = frozenset(
     {
         "deal_damage",
+        "deal_damage_value",
         "deal_power_damage",
-        "return_to_hand",
-        "counter_unless_pays",
+        "destroy",
+        "exile",
+        "exile_with_controller_token",
         "exile_until_source_leaves",
+        "return_to_hand",
+        "return_to_hand_draw_if_controlled",
+        "counter_spell",
+        "counter_unless_pays",
+        "discard_target_player",
     }
 )
-
-BENEFICIAL_OPS = frozenset({"untap", "grant_keywords", "earthbend"})
-
+BENEFICIAL_OPS = frozenset(
+    {
+        "untap",
+        "grant_keywords",
+        "earthbend",
+        "buff_target_value",
+        "cant_be_blocked_target",
+        "add_subtype",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Card knowledge derived from the semantic source
@@ -93,6 +119,8 @@ class TargetedSpell:
     # Damage dealt to the target without and with kicker; 0 for no damage.
     damage: int = 0
     kicked_damage: int = 0
+    # Damage also grows by one per Lesson in the caster's graveyard.
+    lesson_damage: bool = False
     # Power/toughness added to each target until end of turn.
     pump: tuple[int, int] = (0, 0)
 
@@ -125,9 +153,21 @@ def _damage(ops: list[dict[str, Any]], roles: set[str], kicked: bool) -> int:
             if isinstance(value, list) and value and isinstance(value[0], dict):
                 if "op" in value[0]:
                     best = max(best, _damage(value, roles, kicked))
-        if op["op"] == "deal_damage" and op.get("target") in roles:
+        if op.get("target") not in roles:
+            continue
+        if op["op"] == "deal_damage":
             best = max(best, op["amount"])
+        elif op["op"] == "deal_damage_value" and "base" in op["amount"]:
+            best = max(best, op["amount"]["base"])
     return best
+
+
+def _lesson_damage(ops: list[dict[str, Any]], roles: set[str]) -> bool:
+    return any(
+        op["op"] == "deal_damage_value"
+        and op["amount"].get("predicate") == {"kind": "subtype", "value": "Lesson"}
+        for op in _target_ops(ops, roles)
+    )
 
 
 def _op_polarity(op: dict[str, Any]) -> Polarity | None:
@@ -155,7 +195,9 @@ def derive_targeted_spells(source: dict[str, Any]) -> dict[str, TargetedSpell]:
                 continue
             roles = {t["role"] for t in targets}
             ops = _target_ops(program["ops"], roles)
-            polarities = {_op_polarity(op) for op in ops}
+            # Ops with no polarity (such as "exile if it dies") ride along with
+            # the effect that decides the side.
+            polarities = {_op_polarity(op) for op in ops} - {None}
             pumps = [op for op in ops if op["op"] == "modify_pt"]
             spells[definition["registry_name"]] = TargetedSpell(
                 polarity=polarities.pop() if len(polarities) == 1 else None,
@@ -168,6 +210,7 @@ def derive_targeted_spells(source: dict[str, Any]) -> dict[str, TargetedSpell]:
                 ),
                 damage=_damage(program["ops"], roles, kicked=False),
                 kicked_damage=_damage(program["ops"], roles, kicked=True),
+                lesson_damage=_lesson_damage(program["ops"], roles),
                 pump=(
                     sum(op.get("power", 0) for op in pumps),
                     sum(op.get("toughness", 0) for op in pumps),
@@ -182,14 +225,73 @@ def heuristic_source_paths() -> list[Path]:
     return [
         Path(__file__).resolve(),
         sim / "players.py",
-        sim / "action/targeting.py",
-        SEMANTIC_SOURCE,
+        *SEMANTIC_SOURCES,
     ]
 
 
 @cache
+def _sources() -> tuple[dict[str, Any], ...]:
+    return tuple(json.loads(path.read_text()) for path in SEMANTIC_SOURCES)
+
+
+def _definitions() -> list[dict[str, Any]]:
+    return [d for source in _sources() for d in source["definitions"]]
+
+
+@cache
+def instant_names() -> frozenset[str]:
+    """Card names whose definition is an instant, by semantic source."""
+    return frozenset(
+        d["registry_name"]
+        for d in _definitions()
+        if "instant" in d.get("characteristics", {}).get("types", [])
+    )
+
+
+@dataclass(frozen=True)
+class Abilities:
+    """Card names by when their activated ability is worth its cost."""
+
+    # As soon as offered: fetch lands.
+    prompt: frozenset[str]
+    # With spare mana at the opponent's end step: draw, life.
+    spare: frozenset[str]
+    # On an unblocked attacker after blocks: self-pumps.
+    pump: frozenset[str]
+
+
+@cache
+def abilities() -> Abilities:
+    prompt: set[str] = set()
+    spare: set[str] = set()
+    pump: set[str] = set()
+    for definition in _definitions():
+        name = definition["registry_name"]
+        for program in definition.get("programs", []):
+            if program["kind"] != "activated":
+                continue
+            ops = program["ops"]
+            kinds = {op["op"] for op in ops}
+            if kinds <= {"search_basic_lands"}:
+                prompt.add(name)
+            elif kinds <= {"draw_cards", "gain_life"}:
+                spare.add(name)
+            elif all(
+                op["op"] == "modify_pt"
+                and op.get("target") == "source"
+                and op.get("power", 0) > 0
+                for op in ops
+            ):
+                pump.add(name)
+    return Abilities(frozenset(prompt), frozenset(spare), frozenset(pump))
+
+
+@cache
 def targeted_spells() -> dict[str, TargetedSpell]:
-    return derive_targeted_spells(json.loads(SEMANTIC_SOURCE.read_text()))
+    spells: dict[str, TargetedSpell] = {}
+    for source in reversed(_sources()):
+        spells.update(derive_targeted_spells(source))
+    return spells
 
 
 # ---------------------------------------------------------------------------
@@ -215,19 +317,101 @@ class _Body:
         )
 
 
+@dataclass(frozen=True)
+class _Offers:
+    action_space_type: int
+    actions: list[managym.Action]
+    focus: list[int]
+
+
+class _Observation:
+    """One decision's native observation, each field read at most once.
+
+    A native field read converts its whole list into new Python objects, so
+    repeated reads of the same field used to dominate a decision's time. The
+    fields every decision uses are read up front; the rest on first use.
+    """
+
+    def __init__(self, native: managym.Observation) -> None:
+        space = native.action_space
+        self.native = native
+        self.action_space = _Offers(
+            int(space.action_space_type), space.actions, list(space.focus)
+        )
+        self.turn: managym.Turn = native.turn
+        self.agent: managym.Player = native.agent
+        self.opponent: managym.Player = native.opponent
+        self.recent_events: list[managym.EventData] = native.recent_events
+        self._lists: dict[str, list[Any]] = {}
+
+    def _list(self, name: str) -> list[Any]:
+        found = self._lists.get(name)
+        if found is None:
+            found = self._lists[name] = getattr(self.native, name)
+        return found
+
+    @property
+    def agent_cards(self) -> list[managym.Card]:
+        return self._list("agent_cards")
+
+    @property
+    def opponent_cards(self) -> list[managym.Card]:
+        return self._list("opponent_cards")
+
+    @property
+    def agent_permanents(self) -> list[managym.Permanent]:
+        return self._list("agent_permanents")
+
+    @property
+    def opponent_permanents(self) -> list[managym.Permanent]:
+        return self._list("opponent_permanents")
+
+    @property
+    def stack_objects(self) -> list[managym.StackObject]:
+        return self._list("stack_objects")
+
+    @property
+    def agent_sideboard(self) -> list[managym.SideboardCard]:
+        return self._list("agent_sideboard")
+
+
 class _Board:
     """Viewer-relative facts about one observation."""
 
-    def __init__(self, raw: managym.Observation) -> None:
+    def __init__(self, native: managym.Observation) -> None:
+        raw = _Observation(native)
         self.raw = raw
-        self.cards = {int(c.id): c for c in raw.agent_cards + raw.opponent_cards}
-        self.by_key = {
-            int(c.registry_key): c for c in raw.agent_cards + raw.opponent_cards
-        }
         self.own_id = int(raw.agent.id)
-        self.permanents = {
-            int(p.id): p for p in raw.agent_permanents + raw.opponent_permanents
-        }
+        # Built on first use: most priority passes never need them.
+        self._cards: dict[int, managym.Card] | None = None
+        self._by_key: dict[int, managym.Card] | None = None
+        self._permanents: dict[int, managym.Permanent] | None = None
+
+    @property
+    def cards(self) -> dict[int, managym.Card]:
+        if self._cards is None:
+            self._cards = {
+                int(c.id): c for c in self.raw.agent_cards + self.raw.opponent_cards
+            }
+        return self._cards
+
+    @property
+    def by_key(self) -> dict[int, managym.Card]:
+        if self._by_key is None:
+            self._by_key = {
+                int(c.registry_key): c
+                for c in self.raw.agent_cards + self.raw.opponent_cards
+            }
+        return self._by_key
+
+    @property
+    def permanents(self) -> dict[int, managym.Permanent]:
+        if self._permanents is None:
+            self._permanents = {
+                int(p.id): p
+                for p in self.raw.agent_permanents + self.raw.opponent_permanents
+            }
+        return self._permanents
 
     def is_creature(self, permanent: managym.Permanent) -> bool:
         card = self.by_key.get(int(permanent.registry_key))
@@ -261,12 +445,40 @@ class _Board:
     def hand(self) -> list[managym.Card]:
         return [c for c in self.raw.agent_cards if int(c.zone) == ZoneEnum.HAND]
 
+    def own_turn(self) -> bool:
+        return int(self.raw.turn.active_player_id) == self.own_id
+
+    def lands_in_play(self) -> int:
+        return sum(
+            1
+            for p in self.raw.agent_permanents
+            if (card := self.by_key.get(int(p.registry_key))) is not None
+            and card.card_types.is_land
+        )
+
+    def graveyard_lessons(self) -> int:
+        return int(self.raw.agent.graveyard_lessons)
+
+    def own_spell_on_stack(self) -> bool:
+        return any(
+            int(o.kind) == int(managym.StackObjectKindEnum.SPELL)
+            and int(o.controller_id) == self.own_id
+            for o in self.raw.stack_objects
+        )
+
     def opponent_spell_on_stack(self) -> bool:
         return any(
             int(o.kind) == int(managym.StackObjectKindEnum.SPELL)
             and int(o.controller_id) != self.own_id
             for o in self.raw.stack_objects
         )
+
+
+def _spell_damage(board: _Board, spell: TargetedSpell, kicked: bool) -> int:
+    damage = spell.kicked_damage if kicked else spell.damage
+    if spell.lesson_damage:
+        damage += board.graveyard_lessons()
+    return damage
 
 
 def _dies(damage: int, deathtouch: bool, body: _Body) -> bool:
@@ -317,14 +529,15 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         self._kicked: dict[int, bool] = {}
         self._turn = -1
         self._attack_pool: set[int] | None = None
+        self._held: set[int] = set()
         self._blocks: dict[int, set[int]] = {}
+        self._block_plan: dict[int, int] | None = None
         self._trick_reserved = False
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-        raw = env.last_raw_obs
-        board = _Board(raw)
+        board = _Board(env.last_raw_obs)
         self._observe(board)
-        kind = int(raw.action_space.action_space_type)
+        kind = board.raw.action_space.action_space_type
         choice: int | None = None
         if kind == ActionSpaceEnum.PRIORITY:
             choice = self._priority(board)
@@ -336,6 +549,12 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             choice = self._block(board)
         elif kind == ActionSpaceEnum.PAY_OR_NOT:
             choice = self._pay(board)
+        elif kind == ActionSpaceEnum.LEARN:
+            choice = self._learn(board)
+        elif kind == ActionSpaceEnum.DISCARD:
+            choice = self._discard(board)
+        elif kind == ActionSpaceEnum.LOOK_AND_SELECT:
+            choice = self._select(board)
         return choice if choice is not None else super().act(env, obs)
 
     def _observe(self, board: _Board) -> None:
@@ -345,7 +564,9 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         if turn != self._turn:
             self._turn = turn
             self._attack_pool = None
+            self._held = set()
             self._blocks = {}
+            self._block_plan = None
             self._trick_reserved = False
         for event in board.raw.recent_events:
             if int(event.event_type) == EventTypeEnum.BLOCKERS_DECLARED:
@@ -357,22 +578,97 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     # Priority -------------------------------------------------------------
 
     def _priority(self, board: _Board) -> int | None:
-        raw = board.raw
-        land = _first(raw, ActionEnum.PRIORITY_PLAY_LAND)
+        # One pass over the offers: most priority prompts offer only a pass.
+        land = passing = None
+        casts: list[tuple[int, int]] = []
+        activations: list[tuple[int, int]] = []
+        for index, action in enumerate(board.raw.action_space.actions):
+            kind = int(action.action_type)
+            if kind == ActionEnum.PRIORITY_PASS_PRIORITY:
+                passing = index
+            elif kind == ActionEnum.PRIORITY_PLAY_LAND:
+                land = index if land is None else land
+            elif kind == ActionEnum.PRIORITY_CAST_SPELL:
+                focus = action.focus
+                if len(focus) == 1:
+                    casts.append((index, int(focus[0])))
+            elif kind == ActionEnum.PRIORITY_ACTIVATE_ABILITY:
+                focus = action.focus
+                if focus:
+                    activations.append((index, int(focus[0])))
         if land is not None:
             return land
-        casts = [
-            (int(board.cards[int(a.focus[0])].mana_cost.mana_value), index)
-            for index, a in enumerate(raw.action_space.actions)
-            if int(a.action_type) == ActionEnum.PRIORITY_CAST_SPELL
-            and len(a.focus) == 1
-            and int(a.focus[0]) in board.cards
-        ]
-        for _, index in sorted(casts, key=lambda c: (-c[0], c[1])):
-            card = board.cards[int(raw.action_space.actions[index].focus[0])]
-            if self._worth_casting(board, card):
+        if not casts and not activations:
+            return passing
+        if board.own_spell_on_stack():
+            # Let it resolve first: a second removal spell would otherwise pick
+            # the same, already doomed target.
+            return passing
+        known = abilities()
+        fetch = self._ability(board, activations, known.prompt)
+        if fetch is not None:
+            return fetch
+        step = int(board.raw.turn.step)
+        if board.own_turn() and step == StepEnum.COMBAT_DECLARE_BLOCKERS:
+            unblocked = {
+                a
+                for a, blockers in self._blocks.items()
+                if not blockers and a in board.permanents and board.permanents[a].tapped
+            }
+            pump = self._ability(
+                board, [a for a in activations if a[1] in unblocked], known.pump
+            )
+            if pump is not None:
+                return pump
+        ranked = sorted(
+            (
+                (-int(board.cards[card_id].mana_cost.mana_value), index, card_id)
+                for index, card_id in casts
+                if card_id in board.cards
+            )
+        )
+        for _, index, card_id in ranked:
+            card = board.cards[card_id]
+            if self._timely(board, card) and self._worth_casting(board, card):
                 return index
-        return _first(raw, ActionEnum.PRIORITY_PASS_PRIORITY)
+        if not board.own_turn() and step == StepEnum.ENDING_END:
+            spare = self._ability(board, activations, known.spare)
+            if spare is not None:
+                return spare
+        return passing
+
+    def _ability(
+        self, board: _Board, activations: list[tuple[int, int]], names: frozenset[str]
+    ) -> int | None:
+        """The first offered activation whose source card is one of `names`."""
+        for index, source_id in activations:
+            source = board.permanents.get(source_id)
+            card = board.by_key.get(int(source.registry_key)) if source else None
+            if card is not None and card.name in names:
+                return index
+        return None
+
+    def _timely(self, board: _Board, card: managym.Card) -> bool:
+        """Whether this priority window suits an instant; other spells only
+        arrive at sorcery timing.
+
+        Nothing is gained by casting in one's own upkeep or draw step. Instants
+        without a target that matters now (card draw, selection) wait for the
+        opponent's end step, so the turn's mana goes to permanents first and
+        what is left still works.
+        """
+        if card.name not in instant_names():
+            return True
+        step = int(board.raw.turn.step)
+        if board.own_turn() and step in (
+            StepEnum.BEGINNING_UPKEEP,
+            StepEnum.BEGINNING_DRAW,
+        ):
+            return False
+        spell = targeted_spells().get(card.name)
+        if spell is not None and spell.polarity is not None:
+            return True
+        return not board.own_turn() and step == StepEnum.ENDING_END
 
     def _worth_casting(self, board: _Board, card: managym.Card) -> bool:
         spell = targeted_spells().get(card.name)
@@ -382,10 +678,16 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             return bool(self._pump_targets(board, spell))
         if spell.selector in {"spell", "spell_or_permanent"}:
             return board.opponent_spell_on_stack()
-        if spell.selector == "creature_or_player":
-            return True
-        if spell.kicked_damage > 0:
-            damage = spell.kicked_damage if board.can_kick(card) else spell.damage
+        kicked = spell.kicked_damage > 0 and board.can_kick(card)
+        damage = _spell_damage(board, spell, kicked)
+        if damage > 0:
+            # Burn that can hit players is held for a creature it kills, or
+            # the last points of life.
+            if (
+                spell.selector == "creature_or_player"
+                and damage >= board.raw.opponent.life
+            ):
+                return True
             return any(
                 _dies(damage, False, _Body.of(p)) for p in board.creatures(own=False)
             )
@@ -407,6 +709,73 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
                 raw, ActionEnum.PAY_COST if kick else ActionEnum.DECLINE_CHOICE
             )
         return _first(raw, ActionEnum.PAY_COST)
+
+    # Card choices -----------------------------------------------------------
+
+    def _learn(self, board: _Board) -> int | None:
+        """Take a Lesson rather than rummage: removal while the opponent has
+        creatures, otherwise card advantage."""
+        raw = board.raw
+        removal_wanted = bool(board.creatures(own=False))
+        # Lesson offers name sideboard candidates, not visible cards.
+        lessons = {int(c.candidate_id): c.name for c in raw.agent_sideboard}
+        best: tuple[int, int] | None = None
+        for index, action in enumerate(raw.action_space.actions):
+            if int(action.action_type) != ActionEnum.LEARN_TAKE_LESSON:
+                continue
+            name = lessons.get(int(action.focus[0])) if action.focus else None
+            spell = targeted_spells().get(name) if name is not None else None
+            removal = spell is not None and spell.polarity == "harmful"
+            rank = 2 if removal == removal_wanted else 1
+            if best is None or rank > best[0]:
+                best = (rank, index)
+        if best is not None:
+            return best[1]
+        return self._discard(board)
+
+    def _discard(self, board: _Board) -> int | None:
+        """Discard a land once five are in play, else the costliest card; an
+        optional discard is declined when nothing is spare."""
+        raw = board.raw
+        options: list[tuple[int, int]] = []
+        decline = None
+        for index, action in enumerate(raw.action_space.actions):
+            if int(action.action_type) == ActionEnum.DECLINE_CHOICE:
+                decline = index
+                continue
+            card = board.cards.get(int(action.focus[0])) if action.focus else None
+            if card is None:
+                continue
+            if card.card_types.is_land:
+                rank = 100 if board.lands_in_play() >= 5 else -1
+            else:
+                rank = int(card.mana_cost.mana_value)
+            options.append((rank, index))
+        if not options:
+            return decline
+        rank, index = max(options)
+        if decline is not None and rank < 100:
+            return decline
+        return index
+
+    def _select(self, board: _Board) -> int | None:
+        """Keep a land while short of four, else the costliest spell."""
+        raw = board.raw
+        short = (
+            board.lands_in_play() + sum(1 for c in board.hand() if c.card_types.is_land)
+            < 4
+        )
+        options: list[tuple[int, int]] = []
+        for index, action in enumerate(raw.action_space.actions):
+            card = board.cards.get(int(action.focus[0])) if action.focus else None
+            if card is None or int(action.action_type) == ActionEnum.DECLINE_CHOICE:
+                continue
+            if card.card_types.is_land:
+                rank = 100 if short else -1
+            else:
+                rank = int(card.mana_cost.mana_value)
+            options.append((rank, index))
+        return max(options)[1] if options else None
 
     # Combat tricks ----------------------------------------------------------
 
@@ -481,19 +850,15 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
 
     def _target(self, board: _Board) -> int | None:
         raw = board.raw
-        prompt = inspect_target(raw, 0)
-        source = (
-            board.cards.get(int(raw.action_space.focus[0]))
-            if raw.action_space.focus
-            else None
+        source = next(
+            (board.cards[i] for i in raw.action_space.focus if i in board.cards), None
         )
-        spell = targeted_spells().get(prompt.source or "") if prompt else None
-        if spell is None or spell.polarity is None or spell.side_restricted:
+        spell = targeted_spells().get(source.name) if source is not None else None
+        if spell is None or spell.polarity is None:
             return None
         wanted = "opponent" if spell.polarity == "harmful" else "own"
-        damage = spell.damage
-        if source is not None and self._kicked.get(int(source.id)):
-            damage = spell.kicked_damage
+        kicked = source is not None and self._kicked.get(int(source.id), False)
+        damage = _spell_damage(board, spell, kicked)
         pumps = (
             self._pump_targets(board, spell) if spell.polarity == "beneficial" else []
         )
@@ -515,18 +880,30 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     def _offer_side(
         self, board: _Board, index: int
     ) -> Literal["own", "opponent"] | None:
-        """Viewer-relative side; stack spells use card ownership as control."""
-        choice = inspect_target(board.raw, index)
-        if choice is None:
+        """Viewer-relative side of a player, permanent or stack-spell target.
+
+        Stack spells use card ownership as control: this pool has no
+        control-changing spells.
+        """
+        action = board.raw.action_space.actions[index]
+        if int(action.action_type) != ActionEnum.CHOOSE_TARGET:
             return None
-        if choice.target_kind != "unresolved":
-            return choice.side
-        focus = board.raw.action_space.actions[index].focus
-        if len(focus) != 1 or int(focus[0]) not in board.cards:
+        focus = action.focus
+        if len(focus) != 1:
             return None
-        # This pool has no control-changing spells, so owner is controller.
-        owner = int(board.cards[int(focus[0])].owner_id)
-        return "own" if owner == board.own_id else "opponent"
+        target = int(focus[0])
+        if target == board.own_id:
+            return "own"
+        if target == int(board.raw.opponent.id):
+            return "opponent"
+        permanent = board.permanents.get(target)
+        if permanent is not None:
+            controller = int(permanent.controller_id)
+        elif target in board.cards:
+            controller = int(board.cards[target].owner_id)
+        else:
+            return None
+        return "own" if controller == board.own_id else "opponent"
 
     def _target_value(
         self,
@@ -543,7 +920,10 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             # A stack spell is what a held counter or bounce waits for. A
             # player ranks below a creature that removal kills, above one it
             # does not.
-            return (3,) if target in board.cards else (1,)
+            if target in board.cards:
+                return (3,)
+            # Burn to the face wins outright when it is lethal.
+            return (4,) if damage >= board.raw.opponent.life else (1,)
         if spell.polarity == "beneficial":
             if target in pumps:
                 return (2, len(pumps) - pumps.index(target))
@@ -565,6 +945,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
                 for p in board.creatures(own=True)
                 if not p.tapped and (not p.is_summoning_sick or p.keywords.haste)
             }
+            self._held = self._defenders_to_hold(board)
         blockers = [p for p in board.creatures(own=False) if not p.tapped]
         unblockable = sum(
             p.power
@@ -574,6 +955,8 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         )
         if unblockable >= raw.opponent.life:
             return _declared(raw, True)
+        if int(attacker.id) in self._held:
+            return _declared(raw, False)
         dominators = [
             b
             for b in blockers
@@ -592,43 +975,116 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
                 dominators = []
         return _declared(raw, not dominators)
 
+    def _defenders_to_hold(self, board: _Board) -> set[int]:
+        """Attack-pool creatures to keep home so the swing back is not lethal.
+
+        Every opposing creature untaps and may attack; each defender is assumed
+        to stop one of the largest attackers. The toughest creatures stay home
+        first, as they block best.
+        """
+        incoming = sorted((p.power for p in board.creatures(own=False)), reverse=True)
+        assert self._attack_pool is not None
+        defenders = sum(
+            1 for p in board.creatures(own=True) if int(p.id) not in self._attack_pool
+        )
+        candidates = sorted(
+            (p for p in board.creatures(own=True) if int(p.id) in self._attack_pool),
+            key=lambda p: (-p.toughness, p.power),
+        )
+        held: set[int] = set()
+        for creature in candidates:
+            if sum(incoming[defenders:]) < board.raw.agent.life:
+                break
+            held.add(int(creature.id))
+            defenders += 1
+        return held
+
     def _block(self, board: _Board) -> int | None:
+        """Serve this blocker's part of one plan made for the whole combat."""
         raw = board.raw
         actions = raw.action_space.actions
-        attackers = {
-            int(a.focus[1]): board.permanents[int(a.focus[1])]
-            for a in actions
-            if len(a.focus) == 2 and int(a.focus[1]) in board.permanents
-        }
-        incoming = sum(p.power for p in attackers.values())
-        options: list[tuple[int, int, int]] = []
+        if self._block_plan is None:
+            self._block_plan = self._plan_blocks(board)
+        blocker_id = next((int(a.focus[0]) for a in actions if len(a.focus) >= 1), None)
+        target = self._block_plan.get(blocker_id) if blocker_id is not None else None
         for index, action in enumerate(actions):
-            if len(action.focus) != 2:
-                continue
-            blocker = board.permanents.get(int(action.focus[0]))
-            attacker = attackers.get(int(action.focus[1]))
-            if blocker is None or attacker is None:
-                continue
-            attacker_dies, blocker_dies = _fight(_Body.of(attacker), _Body.of(blocker))
-            if attacker_dies and not blocker_dies:
-                rank = 3
-            elif attacker_dies and board.mana_value(attacker) >= board.mana_value(
-                blocker
-            ):
-                rank = 2
-            elif not blocker_dies:
-                rank = 1  # Absorbs damage for free.
-            elif incoming >= raw.agent.life:
-                rank = 0  # Chump only against lethal.
-            else:
-                continue
-            options.append((rank, attacker.power, index))
-        if options:
-            return max(options)[2]
+            if len(action.focus) == 2 and int(action.focus[1]) == target:
+                return index
         return next((i for i, a in enumerate(actions) if len(a.focus) == 1), None)
 
+    def _plan_blocks(self, board: _Board) -> dict[int, int]:
+        """Blocker id to attacker id, at most one blocker per attacker.
 
-def _first(raw: managym.Observation, action_type: ActionEnum) -> int | None:
+        First the blocks that win (kill and survive), then trades up, then free
+        absorptions, larger attackers first within each. Then, while the
+        unblocked damage is lethal, the cheapest remaining creatures chump the
+        largest attackers.
+        """
+        # The offers name what this blocker can block; tapped recorded attackers
+        # add any it cannot (fliers). Recent events can still carry an earlier
+        # turn's attack, so an untapped one is not counted.
+        offered = {
+            int(a.focus[1]) for a in board.raw.action_space.actions if len(a.focus) == 2
+        }
+        attackers = [
+            p
+            for p in board.creatures(own=False)
+            if int(p.id) in offered or (int(p.id) in self._blocks and p.tapped)
+        ]
+        attackers.sort(key=lambda p: -p.power)
+        blockers = [p for p in board.creatures(own=True) if not p.tapped]
+        pairs: list[tuple[int, int, int, int, int]] = []
+        for attacker in attackers:
+            for blocker in blockers:
+                if not _can_block(blocker, attacker):
+                    continue
+                attacker_dies, blocker_dies = _fight(
+                    _Body.of(attacker), _Body.of(blocker)
+                )
+                if attacker_dies and not blocker_dies:
+                    rank = 3
+                elif attacker_dies and board.mana_value(attacker) >= board.mana_value(
+                    blocker
+                ):
+                    rank = 2
+                elif not blocker_dies:
+                    rank = 1
+                else:
+                    continue
+                pairs.append(
+                    (
+                        rank,
+                        attacker.power,
+                        -board.mana_value(blocker),
+                        int(blocker.id),
+                        int(attacker.id),
+                    )
+                )
+        plan: dict[int, int] = {}
+        blocked: set[int] = set()
+        for *_, blocker_id, attacker_id in sorted(pairs, reverse=True):
+            if blocker_id not in plan and attacker_id not in blocked:
+                plan[blocker_id] = attacker_id
+                blocked.add(attacker_id)
+        unblocked = [a for a in attackers if int(a.id) not in blocked]
+        spare = sorted(
+            (b for b in blockers if int(b.id) not in plan),
+            key=lambda b: (board.mana_value(b), b.power),
+        )
+        incoming = sum(a.power for a in unblocked)
+        for attacker in unblocked:
+            if incoming < board.raw.agent.life:
+                break
+            chump = next((b for b in spare if _can_block(b, attacker)), None)
+            if chump is None:
+                continue
+            spare.remove(chump)
+            plan[int(chump.id)] = int(attacker.id)
+            incoming -= attacker.power
+        return plan
+
+
+def _first(raw: _Observation, action_type: ActionEnum) -> int | None:
     return next(
         (
             index
@@ -639,7 +1095,7 @@ def _first(raw: managym.Observation, action_type: ActionEnum) -> int | None:
     )
 
 
-def _declared(raw: managym.Observation, value: bool) -> int | None:
+def _declared(raw: _Observation, value: bool) -> int | None:
     return next(
         (
             index

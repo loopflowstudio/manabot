@@ -105,12 +105,7 @@ Notes:
 - `cargo test --all-features` can fail in environments without Python dev/link symbols; treat that as environment setup, not core engine correctness.
 - Record any unavailable tooling (e.g., missing `pytest`) explicitly in the gate summary.
 
-## Local challenger and shared history
-
-For changes to the bounded challenger runner, include
-`uv run pytest tests/sim/test_train_challenger.py -q`. Reject nonfinite wall
-limits before creating output or launching a worker; never run training just
-to test malformed budget arguments.
+## Shared game history
 
 For history changes, exercise `game-history.spec.ts` against an isolated built
 SPA/ASGI instance using `academy/README.md#isolated-browser-validation`. Include empty results,

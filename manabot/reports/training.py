@@ -95,27 +95,7 @@ def training_dashboard(
             else:
                 missing_coordinates += 1
             row["availability/original_coordinates"] = bool(coordinate)
-            if specification.operation == "train_supervised":
-                row["objective/meaning"] = "teacher cross-entropy (nats)"
-                row["objective/training_target"] = specification.target
-                if run.fixed_validation is not None:
-                    row["objective/fixed_validation_target"] = (
-                        run.fixed_validation.policy_target_kind
-                    )
-                mapping = {
-                    "train_policy_loss": "distillation/train_cross_entropy",
-                    "train_policy_kl": "distillation/train_teacher_kl",
-                    "validation/policy_loss": "distillation/growing_cross_entropy",
-                    "validation/policy_kl": "distillation/growing_teacher_kl",
-                    "fixed_validation/policy_loss": "distillation/fixed_cross_entropy",
-                    "fixed_validation/policy_kl": "distillation/fixed_teacher_kl",
-                }
-                flattened = _scalars(diagnostic)
-                for source, target in mapping.items():
-                    row[f"availability/{target}"] = source in flattened
-                    if source in flattened:
-                        row[target] = flattened[source]
-            elif specification.operation in {"train_self_play", "train_compound"}:
+            if specification.operation in {"train_self_play", "train_compound"}:
                 row["objective/meaning"] = "clipped policy objective; not log loss"
                 for metric in (
                     "loss",
@@ -184,9 +164,6 @@ def training_dashboard(
             "error": run.error,
             "history_incomplete": bool(missing_coordinates),
             "rows_without_original_coordinates": missing_coordinates,
-            "fixed_validation": run.fixed_validation.model_dump(mode="json")
-            if run.fixed_validation
-            else None,
             "checkpoint_interval_seconds": run.monitoring_checkpoint_seconds,
             "checkpoint_interval_updates": run.monitoring_checkpoint_updates,
             "stages": [

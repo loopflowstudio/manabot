@@ -130,6 +130,31 @@ def test_collection_subphases_preserve_parent_total_and_deeper_svg() -> None:
     assert phase_totals([contradictory])["Collection"] == 5
 
 
+def test_learning_subphases_nest_with_a_remainder_at_each_level() -> None:
+    run = _run()
+    learning_seconds = run.stages[0].learning_seconds
+    run.stages[0].learning_timings = {
+        "Targets": PhaseTiming(seconds=0.25, calls=1),
+        "Minibatches": PhaseTiming(seconds=1, calls=1),
+        "Minibatches/Forward and loss": PhaseTiming(seconds=0.25, calls=4),
+        "Minibatches/Backward and gradient clipping": PhaseTiming(seconds=0.5, calls=4),
+    }
+    profile = training_profiles([run])[0]
+    assert not profile.warnings
+    assert profile.root is not None
+    stage = next(p for p in profile.root.children if p.name == "train")
+    learning = next(p for p in stage.children if p.name == "Learning")
+    assert learning.seconds == learning_seconds
+    names = {p.name: p for p in learning.children}
+    assert names["Unattributed"].seconds == learning_seconds - 1.25
+    minibatches = names["Minibatches"]
+    assert {p.name: p.seconds for p in minibatches.children} == {
+        "Forward and loss": 0.25,
+        "Backward and gradient clipping": 0.5,
+        "Unattributed": 0.25,
+    }
+
+
 def test_live_snapshot_keeps_observed_work_without_inventing_stage_duration() -> None:
     run = _run()
     run.status = "running"

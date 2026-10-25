@@ -5,11 +5,14 @@ measurements sample the first optimizer step at iteration 1 and every 25th
 iteration. Safety checks run on every step; absent samples remain absent.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import TypedDict
 
 import torch
 from torch import Tensor, nn
 
+from manabot.infra.profiler import Profiler
 from manabot.model.policy_distribution import NumericalError, require
 
 HEALTH_INTERVAL = 25
@@ -71,7 +74,14 @@ def batch_health(
 
 
 class OptimizerHealth:
-    """Guard Adam and sample its actual effect without altering loss or RNG."""
+    """Guard Adam and sample its actual effect without altering loss or RNG.
+
+    `check` rejects a detached or nonfinite objective; it waits for the loss on
+    the device, so a caller timing its forward pass ends that timer there.
+    `step` then runs backward, clipping and Adam. With a profiler, backward and
+    the optimizer step are timed separately; each ends at a finite check that
+    already waits for the device, so timing adds no synchronization.
+    """
 
     def __init__(
         self,
@@ -79,32 +89,58 @@ class OptimizerHealth:
         optimizer: torch.optim.Optimizer,
         health: NumericalHealth,
         iteration: int,
+        profiler: Profiler | None = None,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.health = health
         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
+        self.profiler = profiler or Profiler(enabled=False)
 
-    def step(self, loss: Tensor, max_norm: float) -> Tensor:
-        try:
+    def check(self, loss: Tensor) -> None:
+        with self._rejecting():
+            self._check(loss)
+
+    def step(self, loss: Tensor, max_norm: float, *, checked: bool = False) -> Tensor:
+        with self._rejecting():
+            if not checked:
+                self._check(loss)
             return self._step(loss, max_norm)
+
+    @contextmanager
+    def _rejecting(self) -> Iterator[None]:
+        try:
+            yield
         except NumericalError as error:
             self.health["rejected_steps"] += 1
             error.health = dict(self.health)
             raise
 
-    def _step(self, loss: Tensor, max_norm: float) -> Tensor:
-        parameters = list(self.model.parameters())
-        self.optimizer.zero_grad(set_to_none=True)
+    def _check(self, loss: Tensor) -> None:
         if not loss.requires_grad:
             raise NumericalError("detached_objective", {"loss": loss})
         require(torch.isfinite(loss), "nonfinite_objective", loss=loss)
+
+    def _step(self, loss: Tensor, max_norm: float) -> Tensor:
+        parameters = list(self.model.parameters())
+        self.optimizer.zero_grad(set_to_none=True)
+        with self.profiler.track("Backward and gradient clipping"):
+            norm, measured = self._backward(loss, parameters, max_norm)
+        with self.profiler.track("Optimizer step"):
+            self._optimize(parameters, measured)
+        return norm
+
+    def _backward(
+        self, loss: Tensor, parameters: list[nn.Parameter], max_norm: float
+    ) -> tuple[Tensor, bool]:
         loss.backward()
         measured = self.measure and not self.health["sampled_steps"]
         grads = [p.grad for p in parameters if p.grad is not None]
         if not grads:
             raise NumericalError("missing_all_gradients", {"loss": loss})
         try:
+            # error_if_nonfinite reads the norm on the host: the device wait
+            # that ends the backward timer.
             norm = torch.nn.utils.clip_grad_norm_(
                 parameters, max_norm, error_if_nonfinite=True
             )
@@ -117,7 +153,6 @@ class OptimizerHealth:
                     if p.grad is not None
                 },
             ) from error
-        before = [p.detach().clone() for p in parameters] if measured else []
         if measured:
             self.health.update(
                 sampled_steps=1,
@@ -134,6 +169,10 @@ class OptimizerHealth:
                 gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
                 frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
             )
+        return norm, measured
+
+    def _optimize(self, parameters: list[nn.Parameter], measured: bool) -> None:
+        before = [p.detach().clone() for p in parameters] if measured else []
         self.optimizer.step()
         finite = torch.stack([torch.isfinite(p).all() for p in parameters]).all()
         if not finite:
@@ -160,4 +199,3 @@ class OptimizerHealth:
             self.health["parameter_relative_delta"] = (
                 float(delta / scale) if scale > 0 else float(delta)
             )
-        return norm
