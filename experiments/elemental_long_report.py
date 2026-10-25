@@ -160,28 +160,12 @@ def load(directory: Path, store: Storage | Path) -> Results:
 # Rating rows and fit
 
 
-def heuristic_rows(updates: int, rows: Sequence[GameRow]) -> list[dict[str, Any]]:
+def rating_rows(a: str, b: str, rows: Sequence[GameRow]) -> list[dict[str, Any]]:
+    """Valid games as `rating.py` rows; `model_*` is player A's side."""
     return [
         {
-            "player_a": player(updates),
-            "player_b": ANCHOR,
-            "player_a_seat": r.model_seat,
-            "score_a": r.score,
-            "truncated": False,
-            "deal_block": r.deal,
-            "deck_a": r.model_deck,
-            "deck_b": r.heuristic_deck,
-        }
-        for r in rows
-        if r.valid and r.score is not None
-    ]
-
-
-def h2h_rows(newer: int, older: int, rows: Sequence[GameRow]) -> list[dict[str, Any]]:
-    return [
-        {
-            "player_a": player(newer),
-            "player_b": player(older),
+            "player_a": a,
+            "player_b": b,
             "player_a_seat": r.model_seat,
             "score_a": r.score,
             "truncated": False,
@@ -201,11 +185,11 @@ def fit_rows(results: Results, *, through: int | None = None) -> list[dict[str, 
         row
         for updates, games in results.heuristic.items()
         if keep(updates)
-        for row in heuristic_rows(updates, games)
+        for row in rating_rows(player(updates), ANCHOR, games)
     ]
     for (newer, older), (role, games) in results.pairs.items():
         if role != "held-out" and keep(newer):
-            rows.extend(h2h_rows(newer, older, games))
+            rows.extend(rating_rows(player(newer), player(older), games))
     return rows
 
 
@@ -226,6 +210,17 @@ class ScoreView(BaseModel):
 def _score(rows: Sequence[GameRow]) -> ScoreView:
     # Wilson intervals over valid rows; `wilson` reads only valid/score.
     return ScoreView.model_validate(wilson(rows).model_dump())  # type: ignore[arg-type]
+
+
+def _by_deck(rows: Sequence[GameRow]) -> dict[str, ScoreView]:
+    return {d: _score([r for r in rows if r.model_deck == d]) for d in DECKS}
+
+
+def _by_seat(rows: Sequence[GameRow]) -> dict[str, ScoreView]:
+    return {
+        "play": _score([r for r in rows if r.model_seat == 0]),
+        "draw": _score([r for r in rows if r.model_seat == 1]),
+    }
 
 
 class PairView(BaseModel):
@@ -261,13 +256,8 @@ def pair_table(results: Results, fit: PopulationFit | None) -> list[PairView]:
                 score=_score(games),
                 predicted=predicted,
                 pearson_z=z,
-                by_newer_deck={
-                    d: _score([r for r in games if r.model_deck == d]) for d in DECKS
-                },
-                by_newer_seat={
-                    "play": _score([r for r in games if r.model_seat == 0]),
-                    "draw": _score([r for r in games if r.model_seat == 1]),
-                },
+                by_newer_deck=_by_deck(games),
+                by_newer_seat=_by_seat(games),
             )
         )
     return views
@@ -498,7 +488,7 @@ class Summary(BaseModel):
 def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
     rows = fit_rows(results)
     fit = boot = None
-    if rows and len(results.heuristic) >= 1:
+    if rows and results.heuristic:
         fit = fit_population(rows, anchor=ANCHOR)
         if replicates:
             boot = bootstrap_population(
@@ -520,13 +510,8 @@ def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
                     else 0
                 ),
                 heuristic=_score(games),
-                heuristic_by_deck={
-                    d: _score([r for r in games if r.model_deck == d]) for d in DECKS
-                },
-                heuristic_by_seat={
-                    "play": _score([r for r in games if r.model_seat == 0]),
-                    "draw": _score([r for r in games if r.model_seat == 1]),
-                },
+                heuristic_by_deck=_by_deck(games),
+                heuristic_by_seat=_by_seat(games),
                 rating=fit.ratings.get(name) if fit else None,
                 rating_interval=boot["ratings"].get(name) if boot else None,
             )

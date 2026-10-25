@@ -124,3 +124,6 @@ Check (2026-10-25 00:50 UTC): focused suite (`test_elemental_long*`, `test_eleme
 `fetch_etude_checkpoint` took per-call partial files (so `_local` caches by digest
 without its own pid rename). The live evaluator runs the pinned `d9fc58df2`, not this.
 Gate owns the wider suites.
+
+Check (2026-10-25 01:05 UTC): report's rating rows and deck/seat breakdowns
+share one helper each; `test_elemental_long_report.py` + `test_elemental_long_eval.py` → 8 passed.
