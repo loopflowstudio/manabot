@@ -1,6 +1,7 @@
 """Exercise the real optional runtime offline with a tiny local causal model."""
 
 from pathlib import Path
+import time
 from typing import Literal
 
 import pytest
@@ -93,7 +94,8 @@ def test_transformers_template_tokens_and_generation(
                             "mrope_section": [1, 1, 2],
                         },
                         bos_token_id=2,
-                        eos_token_id=1,
+                        # Qwen's decoder EOS differs from its chat tokenizer EOS.
+                        eos_token_id=2,
                     ).to_dict(),
                     vision_config=Qwen3_5VisionConfig(
                         depth=1,
@@ -167,6 +169,15 @@ def test_transformers_template_tokens_and_generation(
     assert result.config.enable_thinking == config.enable_thinking
     if architecture == "qwen3_5":
         assert all(a.prompt.text.endswith("<think></think>") for a in result.attempts)
+
+    # Force the tokenizer's EOS through real generation. It must stop at that
+    # token and exclude it from answer text even when decoder EOS is different.
+    runtime.generation.suppress_tokens = [0, 2, 3, 4, 5, 6]
+    response = runtime.generate(encoded, deadline=time.monotonic() + 30)
+    assert response.token_ids == (1,)
+    assert response.text == ""
+    assert response.finish_reason == "eos"
+    runtime.generation.suppress_tokens = None
 
     # The same real tokenizer must preserve an overlong input in its receipt.
     overflow = select(

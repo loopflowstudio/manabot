@@ -94,7 +94,9 @@ Greedy decoding uses a fresh explicit generation configuration, recorded in full
 without inheriting sampling or repetition penalties from the model repository.
 
 An answer must finish with EOS and contain exactly one listed reference after
-whitespace trimming. A generation-limit cutoff remains incomplete even if its
+whitespace trimming. Generation recognizes both the model's declared EOS tokens
+and the tokenizer's EOS, which can differ for chat models such as Qwen3.5.
+A generation-limit cutoff remains incomplete even if its
 text looks legal. An invalid answer receives exactly one repair, preserving the
 original message and the failed answer and appending:
 
@@ -129,6 +131,16 @@ tokens and 18.72 seconds including loading, with null GPU memory. This checks
 pretrained inference and repair on a synthetic input, not Qwen3.5 or L4 capacity.
 The check used Hub access; an offline-only invocation failed during metadata
 lookup and retained a runtime failure without fallback.
+
+The first full-weight Qwen3.5-9B CLI proof on 2026-10-24 used the pinned revision
+above at BF16 on CPU, with one OpenMP thread and a 900-second deadline. On a
+synthetic Magic decision offering cast Lightning Bolt (`A0`) or pass (`A1`), it
+returned exactly `A0` on the initial attempt: 184 prompt tokens, three output
+tokens including the chat EOS, and 195.98 seconds including loading. No repair
+or fallback was used. This verifies model action selection; it does not execute
+a native game action or establish L4 capacity. An earlier invocation exposed
+the distinct model/tokenizer EOS tokens and retained a fallback receipt; the
+runtime now recognizes both declared terminators without relaxing validation.
 
 Implementation references: [Transformers chat templates](https://huggingface.co/docs/transformers/v5.3.0/chat_templating)
 and [Qwen3.5 implementation](https://github.com/huggingface/transformers/blob/v5.3.0/src/transformers/models/qwen3_5/modeling_qwen3_5.py).

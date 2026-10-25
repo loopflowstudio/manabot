@@ -83,11 +83,16 @@ class TransformersRuntime:
             .eval()
         )
         eos = self.model.generation_config.eos_token_id
-        if eos is None:
-            eos = self.tokenizer.eos_token_id
-        if eos is None:
+        self.eos_ids = (
+            set() if eos is None else {eos} if isinstance(eos, int) else set(eos)
+        )
+        # Chat tokenizers can declare a message terminator distinct from the
+        # decoder's end-of-text token (Qwen3.5 does). Both end the answer;
+        # retain other special tokens so they still fail the exact-ref protocol.
+        if self.tokenizer.eos_token_id is not None:
+            self.eos_ids.add(self.tokenizer.eos_token_id)
+        if not self.eos_ids:
             raise ValueError("model/tokenizer must define an EOS token")
-        self.eos_ids = {eos} if isinstance(eos, int) else set(eos)
         pad = self.tokenizer.pad_token_id
         # Use explicit greedy settings instead of inheriting a model's sampling,
         # repetition penalty or beam-search defaults. Retain all effective values.
@@ -95,7 +100,7 @@ class TransformersRuntime:
             do_sample=False,
             num_beams=1,
             max_new_tokens=config.max_new_tokens,
-            eos_token_id=eos,
+            eos_token_id=sorted(self.eos_ids),
             pad_token_id=pad if pad is not None else min(self.eos_ids),
             bos_token_id=self.tokenizer.bos_token_id,
             use_cache=True,
