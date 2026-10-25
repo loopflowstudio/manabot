@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future, as_completed
+from contextlib import nullcontext
 from copy import deepcopy
+from functools import partial
+from itertools import islice
 import math
 from pathlib import Path
 import time
@@ -10,10 +14,12 @@ from typing import Any, Literal
 
 import numpy as np
 
+from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig
+from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.card_evidence import GameTrace, capture_verified_game, retain_evidence
+from manabot.sim.execution import EvalExecution
 from manabot.sim.match import play_game
 from manabot.sim.matchup import (
     SELECTED_SUITE,
@@ -21,11 +27,15 @@ from manabot.sim.matchup import (
     selected_decks,
     selected_match,
 )
+from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.replay import (
-    replay_games,
-    write_trace,
+from manabot.sim.replay import ReplayReceipt, write_trace
+from manabot.sim.serving import (
+    InferenceFailure,
+    InferenceRuntime,
+    PolicyAdmission,
 )
+from manabot.sim.supervision import replay_retained
 from manabot.verify.util import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
@@ -41,9 +51,13 @@ def derive_seed(
     comparison_seed_aliases: dict[str, str] | None = None,
 ) -> int:
     aliases = comparison_seed_aliases or {}
+    seed_key = key.model_dump()
+    if key.seed_compute_envelope_id is not None:
+        seed_key.pop("seed_compute_envelope_id")
+        seed_key["evaluation_compute_envelope_id"] = key.seed_compute_envelope_id
     identity = canonical_sha256(
         {
-            "arena_key": key.model_dump(),
+            "arena_key": seed_key,
             "pair": sorted(aliases.get(member, member) for member in pair),
             "deal_seed": deal_seed,
             "player_id": aliases.get(player_id, player_id),
@@ -65,11 +79,16 @@ def play_cell(
     max_commands: int = 10_000,
     matchup_mode: MatchupMode = "cross",
     authored_matchup: AuthoredMatchup | None = None,
+    execution: EvalExecution | None = None,
+    inference: InferenceRuntime | None = None,
     card_evidence_dir: Path | None = None,
     legs: tuple[int, ...] | None = None,
     keep_game_logs: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-    """Play every deal across the mode's deck/seat legs, or only the given subset.
+    """Play complete deals or an explicit leg subset under bounded supervision.
+
+    Card capture uses verified replay within the same deadline and retains the
+    upstream evidence references for trace_card_tables.
 
     Each game's Command journal under `out_dir/failures/` is kept only when the
     game fails, unless `keep_game_logs`; the cell trace keeps every game.
@@ -127,6 +146,14 @@ def play_cell(
                 raise ValueError(
                     "mirrors require explicit checkpoint deck repetition admission"
                 )
+    if inference is not None:
+        if execution is not None and execution != inference.execution:
+            raise ValueError("conflicting execution declaration")
+        execution = inference.execution
+    if execution is not None:
+        key, (player_a, player_b) = bind_execution(key, (player_a, player_b), execution)
+    elif any("execution" in p.player_spec for p in (player_a, player_b)):
+        raise ValueError("shared registration requires its declared runtime")
     mode_legs = (
         range(8)
         if matchup_mode == "all"
@@ -137,7 +164,15 @@ def play_cell(
     if legs is not None and (not legs or not set(legs) <= set(mode_legs)):
         raise ValueError("selected legs must be a nonempty subset of the mode's legs")
     played_legs = tuple(mode_legs) if legs is None else tuple(sorted(set(legs)))
-    games, rows = [], []
+    games: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    replay_receipts: list[dict[str, Any]] = []
+    replay_errors: list[str] = []
+    card_evidence: list[dict[str, Any]] = []
+    replayed_blocks: set[int] = set()
+    replay_seconds = 0.0
+    work: list[tuple[dict[str, Any], list[PlayerRegistration], Path]] = []
+    perf = EvalPerformance("cell", execution.instrumentation if execution else True)
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
     trace_relative_path = str(Path("traces") / f"{cell_id}.commands.jsonl.gz")
@@ -200,21 +235,137 @@ def play_cell(
             }
             if authored:
                 game["seat_decks"] = list(seat_decks)
-            started = time.perf_counter()
-            game = play_game(
+            work.append(
+                (
+                    game,
+                    seat_players,
+                    out_dir / "failures" / f"{cell_id}.{deal_seed}.{leg}.jsonl",
+                )
+            )
+    owner = (
+        InferenceRuntime(execution, out_dir / "allocation")
+        if execution is not None and inference is None
+        else nullcontext(inference)
+    )
+    with owner as runtime:
+        configs: dict[str, dict[str, Any]] = {}
+        try:
+            if runtime is not None:
+                # Every deal repeats the same deck/seat legs. Admit each setup
+                # once per policy, regardless of the panel's deal count.
+                setups = tuple(
+                    MatchConfig.model_validate(game["match_hypers"])
+                    for game, _, _ in work[: len(played_legs)]
+                )
+                for registration in (player_a, player_b):
+                    if registration.runner_kind == "checkpoint":
+                        config = runtime.admit(
+                            PolicyAdmission(
+                                registration,
+                                checkpoint_paths[registration.player_id],
+                                setups,
+                            )
+                        )
+                        configs[registration.player_id] = config.model_dump()
+
+        except Exception as exc:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            atomic_json(
+                out_dir / "admission-failure.json",
+                {
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "key": key.model_dump(),
+                    "registrations": [p.model_dump() for p in (player_a, player_b)],
+                    "unattempted_games": [g["match_id"] for g, _, _ in work],
+                },
+            )
+            raise
+
+        def run(
+            item: tuple[dict[str, Any], list[PlayerRegistration], Path],
+        ) -> dict[str, Any]:
+            game, registrations, evidence = item
+            if runtime is not None:
+                game["served_observations"] = configs
+                game["execution"] = runtime.execution.model_dump()
+                game["allocation_id"] = runtime.identity
+                game["instrumentation"] = runtime.execution.instrumentation
+            return play_game(
                 game,
-                seat_players,
+                registrations,
                 checkpoint_paths,
                 max_commands,
                 game_seconds,
-                out_dir / "failures" / f"{cell_id}.{deal_seed}.{leg}.jsonl",
+                evidence,
+                inference=runtime,
                 keep_completed=keep_game_logs,
             )
-            seconds = time.perf_counter() - started
+
+        def replay_block(block: int) -> None:
+            """Publish replayed rows only after their immutable shard is retained."""
+            nonlocal replay_seconds
+            block_games = sorted(
+                (g for g in games if g["deal_block"] == block), key=lambda g: g["leg"]
+            )
+            block_rows = sorted(
+                (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
+            )
+            relative = (
+                Path("traces")
+                / f"{cell_id}.{block_games[0]['deal_seed']}.commands.jsonl.gz"
+            )
+            shard = write_trace(out_dir / relative, block_games)
+            started = time.perf_counter()
+            outcome = replay_retained(
+                block_games,
+                min(game_seconds * len(block_games), runtime.execution.remaining())
+                if runtime is not None
+                else game_seconds * len(block_games),
+                card_evidence_dir=card_evidence_dir,
+            )
+            receipts = outcome.receipts
+            if outcome.error is not None:
+                replay_errors.append(outcome.error)
+            if receipts is None:
+                receipts = [
+                    {**ReplayReceipt().to_dict(), "passed": False} for _ in block_games
+                ]
+            replay_receipts.extend(receipts)
+            card_evidence.extend(ref.model_dump() for ref in outcome.card_evidence)
+            for row, receipt in zip(block_rows, receipts, strict=True):
+                row["trace_path"] = str(relative)
+                row["trace_shard_sha256"] = shard["sha256"]
+                row["replay_passed"] = receipt["passed"]
+                row["integrity"]["replay_mismatches"] = sum(
+                    v
+                    for k, v in receipt.items()
+                    if k not in {"games", "decisions", "passed"}
+                )
+            replay_seconds += time.perf_counter() - started
+            perf.record("replay", started)
+            replayed_blocks.add(block)
+            commits = out_dir / "blocks"
+            commits.mkdir(exist_ok=True)
+            atomic_json(
+                commits / f"{block_games[0]['deal_seed']}.json",
+                {
+                    "rows_sha256": canonical_sha256(block_rows),
+                },
+            )
+            # Atomic snapshots contain only fully finalized blocks. A killed
+            # coordinator cannot erase a previously validated complete block.
+            atomic_json(
+                out_dir / "rows.json",
+                [r for r in rows if r["deal_block"] in replayed_blocks],
+            )
+
+        def finalize(game: dict[str, Any]) -> None:
+            block, deal_seed, leg = game["deal_block"], game["deal_seed"], game["leg"]
+            seeds = game["player_seeds"]
+            seat_decks = game.get("seat_decks")
+            seconds = game["execution_seconds"]
             game["game_trace_sha256"] = canonical_sha256(game)
             games.append(game)
-            # Durable completed attempts survive failure of a subsequent game.
-            trace_receipt = write_trace(trace_path, games)
             if game["failure"] is not None:
                 score_a = (
                     None
@@ -277,27 +428,89 @@ def play_cell(
                     "p95": float(np.percentile(values, 95)) if values else None,
                 }
             rows.append(row)
-    trace_receipt["artifact_path"] = trace_relative_path
-    replay_started = time.perf_counter()
-    if card_evidence_dir is None:
-        receipts = [replay_games([game]).to_dict() for game in games]
-    else:
-        receipts = []
-        references = []
-        for game in games:
-            evidence = capture_verified_game(GameTrace(data=game))
-            references.append(retain_evidence(card_evidence_dir, evidence).model_dump())
-            receipts.append(dict(evidence.replay))
-        trace_receipt["card_evidence"] = references
-    replay_payload = {
-        name: sum(r[name] for r in receipts) for name in receipts[0] if name != "passed"
-    }
-    replay_payload["passed"] = all(r["passed"] for r in receipts)
-    replay_payload["seconds"] = time.perf_counter() - replay_started
-    for row, receipt in zip(rows, receipts, strict=True):
-        row["replay_passed"] = receipt["passed"]
-        row["trace_shard_sha256"] = trace_receipt["sha256"]
-        row["integrity"]["replay_mismatches"] = sum(
-            v for k, v in receipt.items() if k not in {"games", "decisions", "passed"}
+            if sum(g["deal_block"] == block for g in games) == len(played_legs):
+                replay_block(block)
+
+        try:
+            if runtime is None:
+                for item in work:
+                    finalize(run(item))
+            else:
+                # Bounded submission: only active slots have futures. Never create a
+                # thread or an IPC queue entry per unstarted game in a large panel.
+                pending_work = iter(work)
+                futures: set[Future[dict[str, Any]]] = set()
+                for item in islice(pending_work, execution.max_active_games):
+                    try:
+                        futures.add(runtime.submit_game(partial(run, item)))
+                    except InferenceFailure:
+                        break
+                while futures:
+                    future = next(as_completed(futures))
+                    futures.remove(future)
+                    try:
+                        finalize(future.result())
+                    except InferenceFailure:
+                        pass  # The final identity set counts all unattempted games.
+                    # submit_game checks allocation health before admitting work.
+                    item = next(pending_work, None)
+                    if item is not None:
+                        try:
+                            futures.add(runtime.submit_game(partial(run, item)))
+                        except InferenceFailure:
+                            pass
+        finally:
+            # Block shards and Command journals retain progress. Build the
+            # diagnostic aggregate once, including on coordinator failure,
+            # rather than recompressing the growing panel after every game.
+            if games:
+                games.sort(key=lambda g: (g["deal_block"], g["leg"]))
+                with perf.span("output_retention"):
+                    trace_receipt = write_trace(trace_path, games)
+                trace_receipt["artifact_path"] = trace_relative_path
+        rows.sort(key=lambda r: (r["deal_block"], r["leg"]))
+        attempted = {g["match_id"] for g in games}
+        unattempted = [
+            g["match_id"] for g, _, _ in work if g["match_id"] not in attempted
+        ]
+        perf.counters["unattempted_games"] = len(unattempted)
+        atomic_json(out_dir / "unattempted.json", unattempted)
+        if not games:
+            perf.write(out_dir / "performance.json")
+            raise InferenceFailure("allocation stopped before any game started")
+        # Incomplete blocks keep replay diagnostics too, but cannot contribute
+        # to an evaluation until every requested leg is valid.
+        for block in sorted({g["deal_block"] for g in games} - replayed_blocks):
+            replay_block(block)
+        if card_evidence_dir is not None:
+            trace_receipt["card_evidence"] = card_evidence
+        replay_payload = {
+            name: sum(r[name] for r in replay_receipts)
+            for name in replay_receipts[0]
+            if name != "passed"
+        }
+        replay_payload["passed"] = all(r["passed"] for r in replay_receipts)
+        replay_payload["seconds"] = replay_seconds
+        if replay_errors:
+            replay_payload["error"] = "; ".join(replay_errors)
+        perf.count("expected_games", len(work))
+        perf.count("legs_per_block", len(work) // len(deal_seeds))
+        perf.count("attempted_games", len(rows))
+        perf.count(
+            "valid_games",
+            sum(r["failure"] is None and r["replay_passed"] for r in rows),
         )
-    return rows, trace_receipt, replay_payload
+        perf.count("failed_games", sum(r["failure"] is not None for r in rows))
+        perf.count("decisions", sum(r["decisions"] for r in rows))
+        perf.write(out_dir / "performance.json")
+        atomic_json(out_dir / "rows.json", rows)
+        if runtime is not None:
+            atomic_json(
+                out_dir / "report-run.json",
+                {
+                    "job": cell_id,
+                    "seed": deal_seeds[0],
+                    "serving_path": str((runtime.directory / "serving.json").resolve()),
+                },
+            )
+        return rows, trace_receipt, replay_payload

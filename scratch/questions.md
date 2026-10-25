@@ -26,6 +26,8 @@ inherited from landed work and are at `1e6015270:scratch/`.
 
 MTG-174/176, MTG-181, MTG-183 and card-evaluation (#360) notes landed on main and
 are retained at `2614317f82dfd993631a13268f008cbe01977bc6:scratch/questions.md`.
+Main's shared-evaluation follow-up and later sync notes are retained at
+`08000b28f17902043782c468e28783dca73aea59:scratch/questions.md`.
 They do not select current work.
 
 # Remote evaluation (2026-10-25)

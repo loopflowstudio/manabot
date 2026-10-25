@@ -7,7 +7,7 @@ import pytest
 
 from manabot.env import Match, ObservationSpace
 from manabot.eval.match import MatchupMode, play_cell
-from manabot.eval.monitor import EvaluationRow
+from manabot.eval.results import EvaluationRow
 from manabot.infra.config import MatchConfig
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.matchup import selected_decks, selected_match

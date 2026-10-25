@@ -92,6 +92,13 @@ jobs:
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
             tests/eval/ -q
 
+      - name: Evaluation Perf report proof
+        if: matrix.group == 'main'
+        run: |
+          npm --prefix academy/ui ci --ignore-scripts
+          npm --prefix academy/ui exec -- playwright install --with-deps chromium
+          ./scripts/verify-eval-performance-report
+
       - name: Enum smoke test
         if: matrix.group == 'main'
         run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
