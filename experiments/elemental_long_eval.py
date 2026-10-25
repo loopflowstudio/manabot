@@ -6,12 +6,15 @@ and unchanged; only where it is played and stored moved.
 
 Checkpoints come from two places, merged by absolute update:
 
-- windows w1/w2: the retired cohort follower's ledger (read-only here), which
-  admitted their digest-checked exports into a local cache;
-- segments w3, w4, …: each one-rental Etude run's tracked checkpoints
-  (`etude.train.read`) and status. The last named run's terminal state settles
-  the seed's endpoint unless the seed is declared to continue (`--continues`),
-  in which case the next segment's run is named on restart.
+- windows w1/w2: `experiments/protocols/elemental-183-windows.json`, the
+  retired cohort follower's digest-checked exports, copied to R2 at the keys
+  the old S3 layout used (`jobs/<job>/runtime/artifacts/sha256/<sha256>`);
+- segments w3, w4, …: each one-rental Etude run's tracked checkpoints and its
+  `state.json` in the tracking bucket (`etude.train.read`). Reading the bucket,
+  not the launcher, lets this run on a machine other than the controller. The
+  last named run's end settles the seed's endpoint unless the seed is declared
+  to continue (`--continues`), in which case the next segment's run is named on
+  restart.
 
 Each admitted checkpoint is an Etude checkpoint agent `uNNNNNN` (its artifact
 digest, the inference code, config `{"updates": N, "bytes": B}`); the heuristic is a code
@@ -29,13 +32,14 @@ Etude fails a match only for an integrity error (wrong bytes, wrong legs).
 `follow` holds the eval run `mtg183-eval`, one unit (a checkpoint's grid or one
 pair, oldest newer checkpoint first) at a time, delivering every match's tables
 to the given storage, and writes `<directory>/state.json` (`EvalState`): the
-admitted checkpoints, the segment's outcome and the endpoint. The report reads
-that state and the tables (`etude.eval.query.statsdb`). It never rents, cancels
-or changes training, and yields while any MTG-181 experiment runs on this machine.
+admitted checkpoints, the final segment's outcome and the endpoint. The report
+reads that state and the tables (`etude.eval.query.statsdb`). It never rents,
+cancels or changes training, and yields while any MTG-181 experiment runs on this
+machine. It runs as an Etude job on the Mac mini (`experiments/protocols/elemental-183-eval-job.json`).
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \
         --directory ~/.manabot/mtg183-eval --until <unix-seconds> \
-        --windows ~/.manabot/mtg183-follow/follow/ledger.json \
+        --windows experiments/protocols/elemental-183-windows.json \
         --storage r2://manabot/evaluations --etude-source <tracking storage> \
         --run <w3 run> --run <w4 run> [--continues]
 """
@@ -57,8 +61,6 @@ from typing import Literal
 from etude.eval.match import Row, Tables, agent, environment, evaluate
 from etude.eval.records import Agent, Environment, Match
 from etude.eval.source import digest_files
-from etude.launch.client import status
-from etude.launch.records import Status
 from etude.run.records import ArtifactRef
 from etude.run.storage import Storage, run_directory, storage_from_uri
 from etude.train.read import read
@@ -137,8 +139,8 @@ class EvalState(BaseModel):
     heuristic_schedule_sha256: str = SCHEDULE_SHA256
     h2h_schedule_sha256: str = H2H_SCHEDULE_SHA256
     checkpoints: dict[int, Checkpoint] = {}
-    # The final segment's terminal Etude outcome, e.g. "failed (deadline)"; None
-    # while it is live or the seed continues. Any outcome settles the seed.
+    # The final segment's tracked end, "finished" or "failed"; None while it is
+    # live or the seed continues. Either settles the seed.
     segment_outcome: str | None = None
     endpoint: int | None = None
     error: str | None = None
@@ -146,44 +148,41 @@ class EvalState(BaseModel):
     done: bool = False
 
 
-def window_checkpoints(ledger: Path) -> list[Checkpoint]:
+def window_checkpoints(path: Path) -> list[Checkpoint]:
     """w1/w2 exports as the retired cohort follower admitted them."""
-    data = json.loads(ledger.read_bytes())
-    found = []
-    for entry in data["checkpoints"].values():
-        path = Path(entry["path"])
-        found.append(
-            Checkpoint(
-                updates=entry["updates"],
-                run=entry["job"],
-                artifact=ArtifactRef(
-                    uri=path.as_uri(),
-                    sha256=entry["sha256"],
-                    size_bytes=path.stat().st_size,
-                ),
-                coordinates=entry["coordinates"],
-            )
-        )
-    return found
+    return [Checkpoint.model_validate(entry) for entry in json.loads(path.read_bytes())]
+
+
+@dataclass(frozen=True)
+class Observed:
+    """What a segment's tracking folder shows: its exports and how it ended."""
+
+    checkpoints: list[CheckpointRecord]
+    # The latest attempt's `state.json` ("finished" or "failed"); None while it
+    # runs, or when it never finished tracking (killed, or its machine lost).
+    ended: str | None
 
 
 @dataclass(frozen=True)
 class SegmentSource:
-    """The segment's Etude run: its tracked checkpoints and its status."""
+    """One segment's Etude run, observed through its tracking bucket."""
 
     run: str
-    checkpoints: Callable[[], list[CheckpointRecord]]
-    status: Callable[[], Status]
+    observe: Callable[[], Observed]
 
 
 def segment_source(source: str, run: str) -> SegmentSource:
     # `read` takes a bare string for a local directory, so name the bucket's storage.
     tracking = storage_from_uri(source)
-    return SegmentSource(
-        run=run,
-        checkpoints=lambda: list(read(tracking, STAGE, run).checkpoints),
-        status=lambda: status(run),
-    )
+
+    def observe() -> Observed:
+        found = read(tracking, STAGE, run)
+        return Observed(
+            checkpoints=list(found.checkpoints),
+            ended=found.state.state if found.state is not None else None,
+        )
+
+    return SegmentSource(run=run, observe=observe)
 
 
 def admit(
@@ -197,25 +196,26 @@ def admit(
 
     Windows come first, then segments in launch order: each segment's initial
     export repeats its parent's endpoint and is skipped. A segment trained if
-    it exported past everything before it; one that ended without training (a
-    machine lost before start) is an error and settles nothing, since its
-    relaunch is a new run, named on restart. Earlier segments ending is the
-    chain's normal course. The last segment's end settles the seed at its last
-    tracked export (even short of its target, with its outcome kept in
-    `segment_outcome` for the report) unless `continues` declares a successor.
+    it exported past everything before it; one that ended without training is
+    an error and settles nothing, since its relaunch is a new run, named on
+    restart. A run whose machine is lost never records an end, so it also
+    waits for that restart. Earlier segments ending is the chain's normal
+    course. The last segment's end settles the seed at its last tracked export
+    (even short of its target, with its end kept in `segment_outcome` for the
+    report) unless `continues` declares a successor.
     """
     for checkpoint in windows:
         state.checkpoints.setdefault(checkpoint.updates, checkpoint)
     state.error = None
     parent = max((checkpoint.updates for checkpoint in windows), default=-1)
-    found: Status | None = None
+    ended: str | None = None
     for segment in segments:
         try:
-            found = segment.status()
-            records = segment.checkpoints()
+            observed = segment.observe()
         except Exception as error:
             state.error = f"{segment.run}: {type(error).__name__}: {error}"
             return
+        records, ended = observed.checkpoints, observed.ended
         for record in records:
             updates = int(record.at["updates"])
             if updates not in state.checkpoints:
@@ -226,13 +226,12 @@ def admit(
                     coordinates=dict(record.at),
                 )
         reached = max((int(record.at["updates"]) for record in records), default=-1)
-        if found.done and reached <= parent:
-            state.error = f"{segment.run}: ended {found.outcome} without training"
+        if ended is not None and reached <= parent:
+            state.error = f"{segment.run}: ended {ended} without training"
             return
         parent = max(parent, reached)
-    if found is not None and found.done and not continues:
-        cause = f" ({found.cause})" if found.cause else ""
-        state.segment_outcome = f"{found.outcome}{cause}"
+    if ended is not None and not continues:
+        state.segment_outcome = ended
     if state.segment_outcome and state.checkpoints and state.endpoint is None:
         state.endpoint = max(state.checkpoints)
 
