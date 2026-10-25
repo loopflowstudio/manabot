@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM harness — design review</title>
+  <style>
+    :root { color-scheme: light; --ink:#202321; --muted:#59605a; --line:#d9ddd8; --accent:#245a42; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:#fcfcfa; color:var(--ink); font:17px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:850px; margin:0 auto; padding:52px 30px 64px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:clamp(30px,5vw,42px); line-height:1.15; letter-spacing:-.035em; margin:10px 0 18px; }
+    h2 { font-size:25px; line-height:1.3; letter-spacing:-.02em; margin-bottom:18px; }
+    h3 { font-size:17px; margin:24px 0 6px; }
+    p + p { margin-top:12px; }
+    .meta,.source,footer { font-size:13px; color:var(--muted); }
+    .intro { font-size:20px; line-height:1.5; max-width:690px; }
+    a { color:var(--accent); text-underline-offset:3px; }
+    a:focus-visible,summary:focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 24px; margin:24px 0 0; font-size:14px; }
+    section { border-top:1px solid var(--line); padding-top:30px; margin-top:36px; scroll-margin-top:20px; }
+    .flow { margin:20px 0; padding:18px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-size:19px; }
+    .flow span { color:var(--muted); margin:0 8px; }
+    dl { margin:18px 0 0; }
+    .row { display:grid; grid-template-columns:145px 1fr; gap:18px; padding:13px 0; border-bottom:1px solid var(--line); }
+    dt { font-weight:650; }
+    dd { margin:0; }
+    code { font: .92em ui-monospace,SFMono-Regular,Consolas,monospace; }
+    pre { font:15px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; margin:16px 0; padding:20px; background:#f0f2ee; }
+    ol,ul { padding-left:22px; margin:14px 0 0; }
+    li + li { margin-top:10px; }
+    .source { margin-top:15px; overflow-wrap:anywhere; }
+    blockquote { margin:16px 0; padding-left:18px; border-left:2px solid var(--line); }
+    details { margin-top:22px; }
+    summary { cursor:pointer; color:var(--accent); }
+    footer { margin-top:40px; padding-top:20px; border-top:1px solid var(--line); }
+    @media (max-width:550px) { main { padding:30px 20px 40px; } .row { grid-template-columns:1fr; gap:3px; } .flow span { margin:0 3px; } pre { padding:14px; font-size:14px; } }
+    @media print { body { background:white; font-size:11pt; } main { padding:0; max-width:none; } nav { display:none; } section { margin-top:22px; padding-top:18px; } h2,h3 { break-after:avoid; } pre,.row { break-inside:avoid; } a { color:inherit; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="meta">MTG-185 · Concept review · 24 October 2026 · Design only</p>
+    <h1>One decision. See everything.</h1>
+    <p class="intro">Give an untouched LLM a game decision. Get a legal action reference and enough evidence to see how it got there.</p>
+    <p style="margin-top:16px"><strong>Selected for the first demo:</strong> one decision with a fully inspectable record. Complete games come later.</p>
+    <nav aria-label="Review sections"><a href="#interaction">Interaction</a><a href="#recovery">Recovery</a><a href="#choices">Open choices</a><a href="#proof">Proof</a></nav>
+  </header>
+
+  <section id="interaction">
+    <h2>1. What you do</h2>
+    <p><strong>Proposed usage:</strong> supply observation text and all legal references, invoke selection once, inspect the result. Handwritten inputs are enough for this first demo.</p>
+    <div class="flow" aria-label="Decision text and legal references go to the harness, which returns a selection record">Text + legal references <span>→</span> Harness <span>→</span> Selection record</div>
+    <dl>
+      <div class="row"><dt>Decision input</dt><dd>One immutable text prompt and its complete reference list. Apply the model’s own chat template and tokenizer; never truncate silently.</dd></div>
+      <div class="row"><dt>Response attempt</dt><dd>The raw answer, validation error if any, token counts and latency. A repair belongs to the same decision.</dd></div>
+      <div class="row"><dt>Selection record</dt><dd>Chosen reference; origin: <code>initial</code>, <code>retry</code> or <code>fallback</code>; attempts; timing and peak GPU memory. Retain model/tokenizer revisions, template, decoding settings and fallback RNG evidence.</dd></div>
+    </dl>
+    <h3>The ownership boundary</h3>
+    <p><strong>MTG-185</strong> runs the model and returns a selection or explicit failure. <strong>MTG-184</strong> owns observation representation and binding references to Commands. The caller submits the Command through the native authority. Harness selection itself never advances the game.</p>
+    <p class="source">Proposed concepts, not implemented APIs. Source: <a href="llm-finetune.md">working design</a>, “Data structures and key functions” and “First harness review.”</p>
+  </section>
+
+  <section id="recovery">
+    <h2>2. The recovery rule is settled</h2>
+    <p>Accept exactly one listed reference, allowing surrounding whitespace. Commentary, unknown references, multiple references and empty or incomplete answers are invalid.</p>
+    <pre aria-label="Illustrative response paths">Legal references: A0, A1, A2
+
+“A1”                 → A1 · initial
+“I choose A1” → “A1” → A1 · retry
+“I choose A1” → “?”  → seeded uniform draw · fallback</pre>
+    <p class="source">Illustrative paths; not captured model output. Accepted protocol: working design, “Output protocol and recovery.”</p>
+    <p>Allow one repair, using the unchanged observation and action list plus the failed answer and a protocol-only correction. Both attempts have fixed generation limits within one decision deadline.</p>
+    <p><strong>Stop with evidence</strong> on overflow, runtime failure or deadline exhaustion. Stale bindings and engine rejection also stop the caller’s attempt. None of these permits a fallback or another execution.</p>
+    <details>
+      <summary>Exact repair instruction</summary>
+      <blockquote>Invalid response. Return exactly one action reference from the legal-actions list, with no other text.</blockquote>
+      <p class="source">Verbatim from the local working draft, “Output protocol and recovery.” No tactical advice.</p>
+    </details>
+  </section>
+
+  <section id="choices">
+    <h2>3. What still needs a decision</h2>
+    <dl>
+      <div class="row"><dt>Model + runtime</dt><dd>Pick one pinned model and inference runtime. The draft names Qwen3-4B-Instruct-2507 as a candidate; it is not selected or proven to fit.</dd></div>
+      <div class="row"><dt>Limits</dt><dd>Choose context and generation budgets, decoding settings and a decision deadline. Measure complete prompts before freezing the admitted context size.</dd></div>
+      <div class="row"><dt>Execution</dt><dd>Choose where the real-model proof runs. Single-L4 fit is the target; resource allocation remains unselected.</dd></div>
+    </dl>
+    <h3>The main interpretation trap</h3>
+    <p>A legal fallback proves the harness can continue; it does not prove the model understood the decision. Report initial validity, repair success and fallback use separately. Later game scores include the whole cohort and describe <strong>model plus recovery</strong>.</p>
+    <p>Fine-tuning follows observed interface failures. Training targets, objectives and playing-strength evaluation are separate designs.</p>
+  </section>
+
+  <section id="proof">
+    <h2>4. What would make this review pass</h2>
+    <ol>
+      <li><strong>Inspect one real-model decision.</strong> Show exact input and token IDs, raw output, selected reference and origin, model settings, token counts, latency and peak GPU memory.</li>
+      <li><strong>Force the recovery cases.</strong> Demonstrate one repair maximum, unchanged input, reproducible legal fallback after two protocol failures, and explicit stopping on runtime failure or timeout.</li>
+      <li><strong>Measure the operating limit.</strong> Show memory and latency at the largest admitted input before claiming single-L4 fit. One short prompt cannot establish it.</li>
+    </ol>
+    <p style="margin-top:20px"><strong>Evidence now:</strong> a design draft and accepted protocol. The draft records native observation inspection; it contains no real-model or GPU proof. This guide adds no implementation or execution approval.</p>
+  </section>
+
+  <footer>
+    <p>Sources: <a href="llm-finetune.md">working design</a> · <a href="questions.md">open questions</a> · <a href="loopflow://manabot/task/MTG-185">MTG-185</a></p>
+    <p>Local working copy over base/head <code>912771b9484b</code>; unpublished design changes. Jack Heart selected the one-decision demo on 24 October 2026. Other proposals remain proposals.</p>
+  </footer>
+</main>
+</body>
+</html>
