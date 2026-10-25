@@ -51,3 +51,15 @@ They do not select current work or authorize paid execution.
 - Stopped the old follower at 2026-10-25 00:15 UTC instead of after w2 ends:
   it was playing heuristic v1 (not the anchor) against MTG-181's live process
   and no longer admitting exports. w2's tail is admitted by a one-shot `_admit` call.
+
+# MTG-183 launcher and w3 source (2026-10-25)
+
+- Moved the empty schema-1 `~/.etude/launcher.db` aside rather than deleting it.
+  Etude storage `r2` = `r2://manabot/jobs` (cannot be changed later): prefix `jobs`
+  matches the S3 cleanup's `manabot/jobs/mtg183-*` → R2 `jobs/mtg183-*` mapping.
+  On-demand `l4` boots w1/w2's image digest, not Etude's default, so w3's
+  machine matches the lineage.
+- The amendment says w3's source is "a published commit on main", but main
+  squash-merges, so no branch commit reaches main. w3's revision is this
+  branch's pushed code commit, tagged `mtg183-w3-source`; the squash lands the
+  same code on main. Recorded in `elemental-183-w3.json`.

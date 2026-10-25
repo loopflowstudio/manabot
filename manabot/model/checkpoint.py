@@ -6,6 +6,7 @@ and returns an eval-mode model. Optimizer/collector recovery belongs to training
 Historical serialized keys remain unchanged; these are not training snapshots.
 """
 
+import os
 from pathlib import Path
 import tempfile
 from typing import Any, Literal, overload
@@ -56,6 +57,8 @@ def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
     A local file is verified in place and returned. An S3 or R2 object is
     downloaded to `target` through the SDK's storage adapter and verified before
     it is renamed there, so a partial download never becomes a cached policy.
+    Each call writes its own partial file, so concurrent fetches of one target
+    are safe.
     """
     if reference.sha256 is None or reference.size_bytes is None:
         raise ValueError("Etude checkpoint requires a digest and byte count")
@@ -68,8 +71,11 @@ def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
         raise ValueError("Etude checkpoint must name a local file or S3/R2 object")
     storage = storage_from_uri(f"{uri.scheme}://{uri.netloc}")
     key = uri.path.lstrip("/")
-    partial = target.with_name(target.name + ".partial")
-    with partial.open("wb") as file:
+    descriptor, name = tempfile.mkstemp(
+        prefix=f"{target.name}.", suffix=".partial", dir=target.parent
+    )
+    partial = Path(name)
+    with os.fdopen(descriptor, "wb") as file:
         offset = 0
         while offset < reference.size_bytes:
             length = min(8 * 1024 * 1024, reference.size_bytes - offset)

@@ -391,15 +391,15 @@ def _local(seated: Agent) -> LocalCheckpoint:
     updates, size = seated.config["updates"], seated.config["bytes"]
     assert isinstance(updates, int) and isinstance(size, int)
     reference = ArtifactRef(uri=seated.uri, sha256=seated.artifact, size_bytes=size)
-    if seated.uri.startswith("file:"):
-        path = fetch_etude_checkpoint(reference, Path(seated.uri))  # verified in place
-    else:
-        path = cache_directory() / seated.artifact
-        if not path.exists() or file_sha256(path) != seated.artifact:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            # Concurrent workers may fetch one digest; each writes its own file.
-            mine = path.with_name(f"{path.name}.{os.getpid()}")
-            fetch_etude_checkpoint(reference, mine).replace(path)
+    # A local file is verified in place; a remote object is cached by digest.
+    path = cache_directory() / seated.artifact
+    if (
+        seated.uri.startswith("file:")
+        or not path.exists()
+        or file_sha256(path) != seated.artifact
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path = fetch_etude_checkpoint(reference, path)
     return LocalCheckpoint(updates=updates, path=path, sha256=seated.artifact)
 
 
@@ -489,20 +489,25 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
     found: list[Row] = []
     for row in rows:
         score = row.score if row.valid else None
-        for side in (0, 1):
+        sides = (
+            (row.model_deck, row.heuristic_deck, row.model_seat, score),
+            (
+                row.heuristic_deck,
+                row.model_deck,
+                1 - row.model_seat,
+                None if score is None else 1.0 - score,
+            ),
+        )
+        for player, (deck, opponent_deck, seat, player_score) in enumerate(sides):
             found.append(
                 {
-                    "player": side,
+                    "player": player,
                     "unit": kind,
                     "deal": row.deal,
-                    "deck": row.model_deck if side == 0 else row.heuristic_deck,
-                    "opponent_deck": row.heuristic_deck
-                    if side == 0
-                    else row.model_deck,
-                    "seat": row.model_seat if side == 0 else 1 - row.model_seat,
-                    "score": None
-                    if score is None
-                    else (score if side == 0 else 1.0 - score),
+                    "deck": deck,
+                    "opponent_deck": opponent_deck,
+                    "seat": seat,
+                    "score": player_score,
                     "valid": row.valid,
                     "terminated": row.terminated,
                     "truncated": row.truncated,

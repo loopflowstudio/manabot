@@ -44,24 +44,41 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 - Protocol amendment "heuristic v2, Etude eval, R2" (2026-10-25 00:00 UTC).
 - `fetch_etude_checkpoint` takes an `ArtifactRef` and reads S3 or R2.
 
+## Etude launcher (2026-10-25 00:20 UTC)
+
+`~/.etude/launcher.db` was schema 1 (2026-10-15) with 0 runs/rentals/sessions;
+moved aside to `launcher.db.schema1-20261025`, and 0.2.1 created schema 10.
+Registered: storage `r2` = `r2://manabot/jobs`; provider `runpod` (storage r2);
+on-demand `l4` (NVIDIA L4, 6 vCPU, 48 GB, 50 GB disk, max 1, ≤ $0.60/h, w1/w2's
+image digest `cb154fcc…`, startup 900 s, delivery 300 s). Keys: `RUNPOD_API_KEY`
+from Doppler `etude/prd`, R2 (incl. `R2_API_TOKEN`) from `manabot/prd`.
+`etude availability --rent l4`: $0.59/h, rentable (00:17 UTC).
+
+## Evaluator (running since 2026-10-25 00:22 UTC)
+
+launchd `gg.manabot.mtg183.eval` (plist in `~/Library/LaunchAgents`) runs
+`elemental_long_eval` under `doppler run -p manabot -c prd` from the pinned
+checkout `/Users/jack/.manabot/mtg183-eval-source` (`d9fc58df2`), directory
+`/Users/jack/.manabot/mtg183-eval`, `--windows` the old ledger (re-read every
+poll), `--storage r2://manabot/evaluations`, `--until 1793584946`. It yields
+while any experiment from MTG-181's checkout runs (MTG-181 switched to
+`elemental_181_new_heuristic`; the old name-based yield missed it). First poll
+admitted 48 checkpoints (0…2,300).
+
 ## Remains, in order
 
-1. After w2 ends (01:47 UTC): admit w2's remaining exports into the old ledger
-   once, without playing: from the pinned checkout, hold `owner.lock` and call
-   `experiments.elemental_long_follow._admit`, then write the ledger. Do not
-   restart the launchd follower (its loop plays pending v1 units).
-2. Start `elemental_long_eval` from a pinned checkout of this change
-   (`--windows` the old ledger, `--storage r2://manabot/evaluations`, Doppler
-   `manabot/prd` for R2 keys; `--etude-source/--run` added once w3 exists).
-3. Fetch w2's final run.json and raw/EMA/Adam exports, `stage` them to R2 Etude
-   storage, compute hours/target/max_usd per the amendment, commit
-   `elemental-183-w3.json`. `uv run etude storages` refuses: `~/.etude/launcher.db`
-   "was written by another version of etude" — resolve before launch (do not delete it blindly).
-4. Land this change on main; launch w3 (`rent="l4"`, one attempt, R2 storage);
-   restart the evaluator with `--etude-source/--run`.
-5. S3 cleanup below (after w2 staged), then point w1/w2 checkpoints at R2 URIs
+1. After w2 ends (01:47 UTC): one-shot `_admit` of w2's tail into the old ledger
+   from the pinned old checkout under `owner.lock`; the evaluator picks it up.
+2. Fetch w2's final run.json and raw/EMA/Adam (`fetch_job_file`), `stage` them to
+   `r2://manabot/jobs` under `mtg183/w2`, compute hours/target/max_usd per the
+   amendment (w1 receipt $7.2252; w2 from its deletion receipt), commit
+   `elemental-183-w3.json`; its revision is a pushed commit kept reachable by tag
+   (main squash-merges).
+3. Land on main; launch w3 (`launch(job, rent="l4")`, one attempt) with a standing
+   `etude controller run`; restart the evaluator with `--etude-source/--run`.
+4. S3 cleanup below (after w2 staged), then point w1/w2 checkpoints at R2 URIs
    (identity unchanged).
-6. Results report, publish evidence with `manabot.data publish`, manifest,
+5. Results report, publish evidence with `manabot.data publish`, manifest,
    protocol Results pointer.
 
 ## Proposed Wave memory (not written; standalone realign leaves `.lf/wave/` read-only)
@@ -99,5 +116,8 @@ after w2 ends, report data via `manabot.data publish`.
 **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`); recorded
 in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
 
-Check (2026-10-25): focused suite (`test_elemental_long*`, `test_elemental_grid`,
-`test_etude_job`) → 31 passed after `Unit.older`; the wider 49-test set passed before it. Gate owns the wider suites.
+Check (2026-10-25 00:55 UTC): focused suite (`test_elemental_long*`, `test_elemental_grid`,
+`test_etude_job`) → 31 passed, `tests/sim/test_tracking.py` → 4 passed, after
+`fetch_etude_checkpoint` took per-call partial files (so `_local` caches by digest
+without its own pid rename). The live evaluator runs the pinned `d9fc58df2`, not this.
+Gate owns the wider suites.
