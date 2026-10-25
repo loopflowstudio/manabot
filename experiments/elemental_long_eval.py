@@ -187,9 +187,11 @@ def admit(
     """Record every known export and whether the segment's run has ended.
 
     Windows come first: the segment's initial export repeats w2's endpoint and
-    is skipped. Any terminal Etude state settles the segment; a run that stops
-    short of its target still ends the seed at its last tracked export, and its
-    state stays in `segment_outcome` for the report.
+    is skipped. A terminal run that exported past the windows settles the
+    segment; one that stops short of its target still ends the seed at its last
+    tracked export, and its state stays in `segment_outcome` for the report. A
+    run that ends without training (a machine lost before start) settles
+    nothing: its relaunch is a new run, named on restart.
     """
     for checkpoint in windows:
         state.checkpoints.setdefault(checkpoint.updates, checkpoint)
@@ -211,7 +213,11 @@ def admit(
                 artifact=record.artifact,
                 coordinates=dict(record.at),
             )
-    if found is not None and found.done:
+    parent = max((checkpoint.updates for checkpoint in windows), default=-1)
+    trained = any(int(record.at["updates"]) > parent for record in records)
+    if found is not None and found.done and not trained:
+        state.error = f"{segment.run}: ended {found.outcome} without training"
+    elif found is not None and found.done:
         cause = f" ({found.cause})" if found.cause else ""
         state.segment_outcome = f"{found.outcome}{cause}"
     if state.segment_outcome and state.checkpoints and state.endpoint is None:

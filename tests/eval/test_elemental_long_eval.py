@@ -108,6 +108,19 @@ def test_segment_joins_windows_and_settles_when_terminal(tmp_path: Path) -> None
     assert state.error is None
 
 
+def test_segment_lost_before_training_does_not_end_the_seed(tmp_path: Path) -> None:
+    windows = window_checkpoints(_ledger(tmp_path, (2500, 2550)))
+    segment = SegmentSource(
+        run="w3",
+        checkpoints=lambda: [_record(tmp_path / "2550.pt", 2550)],
+        status=lambda: _status("done", "lost"),
+    )
+    state = EvalState()
+    admit(state, windows, segment)
+    assert state.segment_outcome is None and state.endpoint is None
+    assert state.error == "w3: ended lost without training"
+
+
 def _state(tmp_path: Path, updates: tuple[int, ...], endpoint: int | None) -> EvalState:
     return EvalState(
         checkpoints={
