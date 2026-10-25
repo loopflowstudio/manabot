@@ -1,8 +1,8 @@
 # LLM observation language
 
-Status: representation demo available, 2026-10-24. Latest omission cleanup
-passes 13 focused tests and all 33 native execute/replay alternatives.
-Broader delivery verification remains as recorded below; nothing published or merged.
+Status: prompt accepted; preparing publication, 2026-10-25. Latest omission
+cleanup passes 13 focused tests and all 33 native execute/replay alternatives.
+Jack Heart requested proceeding to verification and publication after review.
 MTG-184 owns representation; MTG-185 owns the parallel model harness. No Wave
 is selected. Copied from the llm-finetune design conversation on 2026-10-24.
 
@@ -525,19 +525,32 @@ The full learnability diagnostic retained an **error**, not a pass, at
 held-out checks passed, then reward-driven PPO collection exceeded its 300-second
 deadline. The total diagnostic took 402.5 seconds wall time and 71.5 seconds CPU;
 concurrent local test/training processes were observed. Contention is a possible
-cause, not a verified diagnosis. Do not widen frozen diagnostic budgets or
-substitute the `--pr` subset. A successful full diagnostic remains a delivery
-verification dependency; it does not prevent inspecting the retained native
-representation demo. No model inference or playing-strength result is claimed.
+cause, not a verified diagnosis. This is retained historical failure evidence,
+not a pass. No model inference or playing-strength result is claimed.
 
-No publication or landing is authorized in this implementation step. The focused
-checks below are completed; parent gate owns the broader checks once:
+The earlier diagnostic dependency is superseded by upstream PR #372
+(`b3681297f16e27a9e42b5e49f4fe928292fe0bb2`): Jack Heart requested removal of the
+learnability verifier, its PPO control and CI workflows. Main's revised AGENTS.md
+requires the retained current-world/admission/monitoring and choice-separability
+checks instead. Sync to `66b8fb3e7` retained this removal; no verifier is being
+restored or diagnostic budget relaxed. The post-sync validation includes
+`tests/model/test_choice_separability.py` with the other Python checks below.
+Rust sources are unchanged by sync, so their passing debug/Clippy evidence holds.
+
+Publication for review is now authorized; merge is not. Validation commands:
+
+Post-sync gate, 2026-10-25: **101 passed in 139.18s** for the combined Python
+selection below plus choice separability (`.runs/mtg-184-post-sync-tests.log`).
+Exact integration CI selection: **614 collected** (`.runs/mtg-184-ci-collection.log`).
+Ruff lint/format and diff whitespace checks pass. No native source changed
+during sync; the prior complete debug Rust and Clippy passes remain applicable.
+Human prompt review is accepted; real LLM inference remains MTG-185's scope.
 
 - `uv run --extra dev pytest tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py tests/test_package_boundaries.py -q`
 - `cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings`
 - `cargo test --manifest-path managym/Cargo.toml` (debug, including frozen conformance).
 - Shared-input regression: `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`.
-- `uv run python -m manabot.verify.learnability --out .runs/learnability/mtg-184-gate` (full diagnostic, no `--pr`). Existing tensor shape/world are unchanged; retain this as the design's conservative shared-input regression boundary.
+- `uv run --extra dev pytest tests/model/test_choice_separability.py -q` (retained upstream input-identity check).
 
 Review the retained prompts for understandable labels and field coverage. No
 browser is required. MTG-185 owns real tokenizer/chat-template overflow checks,
@@ -567,10 +580,10 @@ interactive driver `.runs/text-observation/interactive/demo.py` was launched
 with an origin-bound environment (tool session 22618); its continued liveness
 must be checked before any later interaction. No LLM was loaded. Action
 execution evidence remains the automated 33-alternative native replay proof,
-not a human playthrough. Recommended next action: retain this accepted prompt
-format for harness integration and resolve the recorded full learnability
-verification dependency before delivery. Acceptance here does not establish
-model performance or successful PPO verification.
+not a human playthrough. The accepted prompt format is retained for harness
+integration. The original recommendation to resolve full learnability
+verification is superseded by the upstream removal documented above.
+Acceptance here does not establish model performance or successful PPO verification.
 
 Measure prompt tokens p50/p95/max by decision family, section contribution,
 action count and overflow fraction. Later report initial/repaired response rates
