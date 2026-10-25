@@ -68,10 +68,9 @@ Reward is win or loss only: our shaped rewards lost to it
 **Hidden information and search.** Belief samplers learn a distribution over
 the opponent's hidden cards from a frozen policy's own games
 ([belief sampler](docs/belief-sampler.md)). Search samples hands from that
-belief, uses the frozen policy for continuations, and distills its choices
-back into the policy ([local policy search](docs/local-policy-search.md)).
-This runs end to end but has not yet shown a strength gain over the policy
-alone.
+belief and uses the frozen policy for continuations at play time
+([local policy search](docs/local-policy-search.md)). It has not yet shown a
+strength gain over the policy alone.
 
 **Evaluation by head-to-head play.** Trained agents play each other. A
 *Tournament* file names a roster of checkpoints and fixed opponents, and the
