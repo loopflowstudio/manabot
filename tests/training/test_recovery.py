@@ -33,16 +33,23 @@ def tracked_updates(run: TrainingRun, source: Path) -> list[MetricRow]:
 def assert_learning_metrics_equal(
     left: TrainingRun, right: TrainingRun, source: Path
 ) -> None:
-    """Recovery preserves learning facts, while elapsed cost and host samples vary."""
+    """Recovery preserves learning facts, while elapsed cost and host samples vary.
+
+    `coordinates/` holds host samples and `time/` each update's phase seconds.
+    """
     left_rows, right_rows = (
         tracked_updates(left, source),
         tracked_updates(right, source),
     )
     assert left_rows
-    for a, b in zip(left_rows, right_rows, strict=True):
-        assert {k: v for k, v in a.items() if not k.startswith("coordinates/")} == {
-            k: v for k, v in b.items() if not k.startswith("coordinates/")
+
+    def learned(row: MetricRow) -> MetricRow:
+        return {
+            k: v for k, v in row.items() if not k.startswith(("coordinates/", "time/"))
         }
+
+    for a, b in zip(left_rows, right_rows, strict=True):
+        assert learned(a) == learned(b)
         for name in (
             "updates",
             "environment_decisions",
