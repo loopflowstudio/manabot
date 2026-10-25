@@ -21,3 +21,9 @@ inherited from landed work and are at `1e6015270:scratch/`.
 - Etude's stock RunPod image has no Rust; `TrainingJob.job` now installs
   rustup 1.98.1 and syncs in setup (the retired bootstrap's toolchain).
 - Seed 18601 chosen to follow MTG-181's 1810x numbering.
+- 2026-10-25: retry on new on-demand `l4-etude` (Etude stock image with
+  python3.12) instead of editing the shared `l4` record, which other sessions
+  may use. Its old image cannot boot Etude 0.2.2 pods; Jack Heart may want `l4` fixed.
+- Pulling two ~28 GB RunPod images for rehearsal filled this host's disk
+  (133 MiB free) and killed the follower mid-group (no failed record written);
+  images removed. Do not rehearse with full images on this host again.

@@ -15,8 +15,10 @@ once it appears in Etude storage (R2), then MTG-181's matched-update UR/GW cells
 
     uv run python -m experiments.mtg186 identity
     uv run python -m experiments.mtg186 quote --revision <commit>
-    doppler run -p etude -c prd -- uv run python -m experiments.mtg186 launch --revision <commit>
-    doppler run -p manabot -c prd -- uv run python -m experiments.mtg186 follow
+    doppler run -p manabot -c prd -- doppler run -p etude -c prd -- uv run python -m experiments.mtg186 launch --revision <commit>
+    doppler run -p manabot -c prd -- doppler run -p etude -c prd -- uv run --extra artifacts python -m experiments.mtg186 follow --run <run>
+
+Launching and following need Etude's RunPod key and the R2 keys.
 """
 
 import argparse
@@ -63,7 +65,7 @@ RESULTS = ROOT / "experiments/data/mtg186/grids"
 
 SEED = 18601
 COHORT = "mtg186"
-RENT = "l4"
+RENT = "l4-etude"
 # MTG-181's longest seed reached 616 updates; exports match its 200-update cadence.
 MILESTONES = (200, 400, 600)
 # Inclusive authorization for the Task: training, setup, failures and evaluation.
