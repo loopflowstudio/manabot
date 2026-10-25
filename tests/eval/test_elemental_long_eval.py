@@ -49,7 +49,7 @@ def _record(path: Path, updates: int) -> CheckpointRecord:
     )
 
 
-def _ledger(tmp_path: Path, updates: tuple[int, ...]) -> Path:
+def _windows_file(tmp_path: Path, updates: tuple[int, ...]) -> Path:
     """A windows file as `elemental-183-windows.json` holds w1/w2."""
     entries = [
         Checkpoint(
@@ -75,7 +75,7 @@ def _segment(
 
 
 def test_segment_joins_windows_and_settles_when_terminal(tmp_path: Path) -> None:
-    windows = window_checkpoints(_ledger(tmp_path, (2500, 2550)))
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2550)))
     exports = [_record(tmp_path / f"{u}.pt", u) for u in (2550, 2600)]
     ended: list[str | None] = [None]
     segment = _segment("w3", exports, ended)
@@ -94,7 +94,7 @@ def test_segment_joins_windows_and_settles_when_terminal(tmp_path: Path) -> None
 
 
 def test_segment_ended_before_training_does_not_end_the_seed(tmp_path: Path) -> None:
-    windows = window_checkpoints(_ledger(tmp_path, (2500, 2550)))
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2550)))
     segment = _segment("w3", [_record(tmp_path / "2550.pt", 2550)], ["failed"])
     state = EvalState()
     admit(state, windows, [segment])
@@ -103,7 +103,7 @@ def test_segment_ended_before_training_does_not_end_the_seed(tmp_path: Path) -> 
 
 
 def test_continuing_seed_settles_only_at_its_last_segment(tmp_path: Path) -> None:
-    windows = window_checkpoints(_ledger(tmp_path, (2500, 2534)))
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2534)))
     w3 = _segment(
         "w3",
         [_record(tmp_path / f"w3-{u}.pt", u) for u in (2534, 2550, 2600)],
@@ -129,7 +129,7 @@ def test_continuing_seed_settles_only_at_its_last_segment(tmp_path: Path) -> Non
 def test_later_segment_ended_before_training_does_not_end_the_seed(
     tmp_path: Path,
 ) -> None:
-    windows = window_checkpoints(_ledger(tmp_path, (2534,)))
+    windows = window_checkpoints(_windows_file(tmp_path, (2534,)))
     w3 = _segment("w3", [_record(tmp_path / "w3.pt", 2600)], ["finished"])
     w4 = _segment("w4", [_record(tmp_path / "w4.pt", 2600)], ["failed"])
     state = EvalState()
@@ -263,7 +263,7 @@ def _fake_play(match: Match) -> Tables:
 
 
 def test_follow_plays_every_unit_through_the_endpoint(tmp_path: Path) -> None:
-    ledger = _ledger(tmp_path, (0, 50))
+    windows_file = _windows_file(tmp_path, (0, 50))
     segment = _segment("w3", [_record(tmp_path / "100.pt", 100)], ["finished"])
     played: list[str] = []
 
@@ -274,7 +274,7 @@ def test_follow_plays_every_unit_through_the_endpoint(tmp_path: Path) -> None:
     state = follow(
         tmp_path / "eval",
         until=float("inf"),
-        windows=lambda: window_checkpoints(ledger),
+        windows=window_checkpoints(windows_file),
         segments=[segment],
         storages=[],
         play_match=counted,

@@ -700,7 +700,7 @@ def follow(
     directory: Path,
     until: float,
     *,
-    windows: Callable[[], list[Checkpoint]],
+    windows: Sequence[Checkpoint],
     segments: Sequence[SegmentSource],
     continues: bool = False,
     storages: Sequence[Storage],
@@ -729,7 +729,7 @@ def follow(
         if time.time() - polled > poll_seconds:
             polled = time.time()
             try:
-                admit(state, windows(), segments, continues=continues)
+                admit(state, windows, segments, continues=continues)
             except Exception as error:
                 state.error = f"admission: {type(error).__name__}: {error}"
             state.observed_at = time.time()
@@ -785,7 +785,7 @@ def main() -> None:
     this.follow(
         args.directory.expanduser().resolve(),
         args.until,
-        windows=lambda: this.window_checkpoints(args.windows.expanduser()),
+        windows=this.window_checkpoints(args.windows.expanduser()),
         segments=[this.segment_source(args.etude_source, run) for run in args.run],
         continues=args.continues,
         storages=[storage_from_uri(args.storage)],
