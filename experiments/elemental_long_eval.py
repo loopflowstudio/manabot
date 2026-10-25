@@ -177,9 +177,11 @@ class SegmentSource:
 
 
 def segment_source(source: str, run: str) -> SegmentSource:
+    # `read` takes a bare string for a local directory, so name the bucket's storage.
+    tracking = storage_from_uri(source)
     return SegmentSource(
         run=run,
-        checkpoints=lambda: list(read(source, STAGE, run).checkpoints),
+        checkpoints=lambda: list(read(tracking, STAGE, run).checkpoints),
         status=lambda: status(run),
     )
 
