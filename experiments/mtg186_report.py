@@ -2,9 +2,9 @@
 
 Reads the follower's grid results (`experiments/data/mtg186/grids/`), MTG-181's
 endpoint grids against the same heuristic (`experiments/data/mtg181/new-heuristic/`)
-and the training run's TrainingRun receipt, and writes `report.md` and
-`summary.json` beside the grids. Every number in the report comes from those
-files; nothing is selected.
+and the training run's TrainingRun receipt, and writes `tables.md` and
+`summary.json` beside the grids. Every number comes from those files; nothing
+is selected.
 
     uv run python -m experiments.mtg186_report --run-json <TrainingRun run.json> \
         --usd <inclusive dollars> --mtg181 experiments/data/mtg181/new-heuristic \
@@ -85,7 +85,10 @@ class Report(BaseModel):
 
 
 def _rows_by_seat(groups: Path, x: str, y: str, seat: int) -> Score:
-    """Per-cell play/draw from retained group rows; summaries keep only grid totals."""
+    """Per-cell play/draw from retained group rows; summaries keep only grid totals.
+
+    Missing rows (no retained groups) read as an empty score.
+    """
     target = groups / f"{x}--{y}--seat{seat}" / "games.json"
     if not target.exists():
         return wilson([])
@@ -102,7 +105,7 @@ def _row(
 ) -> Row:
     seats = {
         f"{name}_{label}": (
-            _rows_by_seat(groups, x, y, seat) if groups is not None else wilson([])
+            wilson([]) if groups is None else _rows_by_seat(groups, x, y, seat)
         )
         for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True)
         for label, seat in (("play", 0), ("draw", 1))
@@ -191,7 +194,6 @@ def build(
         result = Result.model_validate_json(path.read_text())
         point = result.point
         scope = "grid" if point.cells is None else "urgw"
-        groups = follow_groups / path.stem
         rows.append(
             _row(
                 point.trial,
@@ -199,7 +201,7 @@ def build(
                 point.updates,
                 scope,
                 result.summary,
-                groups if groups.exists() else None,
+                follow_groups / path.stem,
             )
         )
         if point.trial == "mtg186" and scope == "grid":
@@ -209,14 +211,7 @@ def build(
         end = other.endpoint
         groups = None if mtg181_groups is None else mtg181_groups / path.stem / "groups"
         rows.append(
-            _row(
-                "mtg181",
-                end.seed,
-                end.updates,
-                "grid",
-                other.summary,
-                groups if groups is not None and groups.exists() else None,
-            )
+            _row("mtg181", end.seed, end.updates, "grid", other.summary, groups)
         )
         grids[f"MTG-181 {end.seed} u{end.updates}"] = other.summary
     report = Report(

@@ -30,9 +30,11 @@ inherited from landed work and are at `1e6015270:scratch/`.
 - 2026-10-24 sync onto main (#368/#369): kept this branch's `experiments/elemental_grid.py`
   byte-for-byte (its `cells` subset; main's unused `games` subset dropped), so its
   pinned MTG-186 digest still matches. `manabot/experiment/job.py` now also carries
-  main's `LearnerContinuation`, so it no longer matches `mtg186-identity.json`;
-  run the MTG-186 follower from its pre-merge revision (`2362b48a2`). The
-  frozen identity record stays as evidence.
+  main's `LearnerContinuation`, so it no longer matches `mtg186-identity.json`.
+  That record pins the training source (2de27b5c9, already launched); the
+  follower does not check it, and the merge leaves the evaluation path
+  unchanged, so follower restarts from HEAD are acceptable. The frozen
+  identity record stays as evidence.
 
 # Inherited notes
 
