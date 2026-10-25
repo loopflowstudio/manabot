@@ -18,7 +18,14 @@ from typing import Literal
 from urllib.parse import unquote, urlsplit
 
 from etude.eval.match import EvalRun, Row, Tables, agent
-from etude.eval.records import Agent, Environment, Match, RoundRobin
+from etude.eval.records import (
+    Agent,
+    CheckpointKey,
+    CheckpointRef,
+    Environment,
+    Match,
+    RoundRobin,
+)
 from etude.eval.tournament import hold
 from etude.run.declaration import declare
 from etude.run.records import ArtifactRef
@@ -127,10 +134,13 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
         checkpoint = None
         if player.runner_kind == "checkpoint":
             path = spec.checkpoints[player.player_id].resolve()
-            checkpoint = ArtifactRef(
-                uri=path.as_uri(),
-                sha256=player.checkpoint_sha256,
-                size_bytes=player.checkpoint_bytes,
+            checkpoint = CheckpointRef(
+                key=CheckpointKey(address=path.as_uri()),
+                artifact=ArtifactRef(
+                    uri=path.as_uri(),
+                    sha256=player.checkpoint_sha256,
+                    size_bytes=player.checkpoint_bytes,
+                ),
             )
         entrants.append(
             agent(
@@ -149,15 +159,17 @@ def play_card_match(match: Match) -> Tables:
     paths: dict[str, str] = {}
     for entrant, player in zip(match.agents, players, strict=True):
         if entrant.kind == "checkpoint":
-            uri = urlsplit(entrant.uri or "")
+            seated = entrant.artifact
+            uri = urlsplit(seated.uri if seated else "")
             if (
-                uri.scheme != "file"
+                seated is None
+                or uri.scheme != "file"
                 or uri.netloc
-                or entrant.artifact != player.checkpoint_sha256
+                or seated.sha256 != player.checkpoint_sha256
             ):
                 raise ValueError("checkpoint must be admitted local bytes")
             path = Path(unquote(uri.path))
-            verify_file(path, entrant.artifact, player.checkpoint_bytes)
+            verify_file(path, seated.sha256, player.checkpoint_bytes)
             paths[player.player_id] = str(path)
     root = Path(os.environ["MANABOT_CARD_OUTPUT"])
     attempts = root / "arena" / match.key

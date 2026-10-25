@@ -77,7 +77,7 @@ class Results:
 # Player 0's row of every game, with both seats' agents.
 _GAMES = """
     select g.*, a.name as subject, a."config.updates" as newer,
-        o.name as opponent, o."config.updates" as older, o.agent as opponent_agent
+        o.name as opponent, o."config.updates" as older, t.source as opponent_source
     from games g
     join seats s on s.run = g.run and s.match = g.match and s.player = 0
     join agents a on a.agent = s.agent
@@ -97,13 +97,15 @@ def load(directory: Path, store: Storage | Path) -> Results:
         found = [dict(zip(names, row)) for row in cursor.fetchall()]
     finally:
         db.close()
-    anchor = heuristic_agent().identity
+    # The anchor is a code agent: its key is its name, and its source digest
+    # tells heuristic versions apart.
+    anchor = heuristic_agent().version.source
     # (newer, older or None, unit kind) → deal → row
     played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
     for row in found:
         if row["opponent"] == HEURISTIC:
             # Only the current heuristic anchors the curve (protocol amendment).
-            if row["opponent_agent"] != anchor:
+            if row["opponent_source"] != anchor:
                 continue
             key = (int(row["newer"]), None, row["unit"])
         else:

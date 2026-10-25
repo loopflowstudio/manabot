@@ -217,8 +217,8 @@ def capture_verified_game(trace: GameTrace) -> GameEvidence:
 def retain_evidence(directory: Path, evidence: GameEvidence) -> EvidenceRef:
     """Write a game's evidence once, named by its content.
 
-    It lives under `artifacts/`, which Etude delivery (etude-sdk 0.2.4 and
-    later) sends once and never re-reads.
+    It lives under `artifacts/`, which Etude delivery sends once and never
+    re-reads, so a run with thousands of games costs one upload per game.
     """
     body = gzip.compress(
         canonical_json(evidence.model_dump(mode="json", by_alias=True)), mtime=0
