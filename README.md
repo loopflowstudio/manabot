@@ -10,7 +10,7 @@ It has two halves:
   per-player observations that keep hidden information hidden. Python bindings
   come through PyO3.
 - **manabot** (Python): the agents. It includes self-play training, search,
-  belief models over hidden cards, and an arena for evaluating checkpoints
+  belief models over hidden cards, and evaluation tools for checkpoints
   against fixed opponents.
 
 We are currently focusing on a very small but fairly complicated set of decks:
@@ -68,16 +68,15 @@ Reward is win or loss only: our shaped rewards lost to it
 **Hidden information and search.** Belief samplers learn a distribution over
 the opponent's hidden cards from a frozen policy's own games
 ([belief sampler](docs/belief-sampler.md)). Search samples hands from that
-belief, uses the frozen policy for continuations, and distills its choices
-back into the policy ([local policy search](docs/local-policy-search.md)).
-This runs end to end but has not yet shown a strength gain over the policy
-alone.
+belief and uses the frozen policy for continuations at play time
+([local policy search](docs/local-policy-search.md)). It has not yet shown a
+strength gain over the policy alone.
 
 **Evaluation by head-to-head play.** Trained agents play each other. A
 *Tournament* file names a roster of checkpoints and fixed opponents, and the
 runner plays every pairing on the same held-out deals, with both decks and
-both seats ([head-to-head](experiments/head-to-head.md)). The arena fits
-ratings across the whole population (`manabot/arena/`), and a rule-based
+both seats ([head-to-head](experiments/head-to-head.md)). The evaluation library fits
+ratings across the whole population (`manabot/eval/`), and a rule-based
 `heuristic` bot gives a stable reference point across runs. Every game is
 replay-verified.
 
@@ -190,7 +189,7 @@ not comparable with today's checkpoints:
 | Path | What it is |
 |---|---|
 | `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
-| `manabot/` | Agents: models, training, search, beliefs, arena, verification ([README](manabot/README.md)) |
+| `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Card and deck definitions compiled to a typed IR |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/repository-archive.md) |

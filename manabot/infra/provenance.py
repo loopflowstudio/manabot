@@ -15,6 +15,7 @@ from managym.experience import UNVERSIONED_CONTENT_HASH
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
 
@@ -38,19 +39,6 @@ RECORDED_ASSET_MANIFEST = (
 
 class ContractError(ValueError):
     """The checked-in experiment contract does not match the runtime."""
-
-
-def canonical_sha256(payload: Any) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def file_sha256(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as source:
-        while chunk := source.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 RECORDED_ASSET_MANIFEST_HASH = file_sha256(RECORDED_ASSET_MANIFEST)

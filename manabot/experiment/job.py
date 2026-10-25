@@ -99,10 +99,9 @@ def run_worker() -> TrainingRun:
     for key in ("ETUDE_RUN", "ETUDE_TRACK_DIR"):
         if not environment.get(key):
             raise ValueError(f"missing launcher identity: {key}")
-    if (
-        environment.get("ETUDE_CHECKPOINT")
-        or float(environment.get("ETUDE_FROM_VALUE", "0")) != 0
-    ):
+    # A continuation is handed its parent's policy checkpoint, which cannot
+    # restore collector/optimizer state; RunContext refuses a retry likewise.
+    if environment.get("ETUDE_CONTINUES"):
         raise ValueError("policy artifacts cannot resume collector/optimizer state")
     spec = TrainingJob.model_validate_json(
         Path(environment["ETUDE_CONFIG"]).read_text()

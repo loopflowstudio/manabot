@@ -1,6 +1,5 @@
 """Inference players for scalar simulation; model admission lives in model.checkpoint."""
 
-from collections import Counter
 from enum import Enum
 from typing import Dict
 
@@ -9,11 +8,6 @@ import torch
 
 # Local imports
 from manabot.model.actor_critic import ActorCritic
-
-# -----------------------------------------------------------------------------
-# Model Loading
-# -----------------------------------------------------------------------------
-
 
 # -----------------------------------------------------------------------------
 # Player Classes
@@ -35,43 +29,10 @@ class Player:
         self.name = name
         self.player_type = player_type
         self.device = "cpu"
-        self.wins = 0
-        self.games = 0
-        self.action_history = []  # Track actions for analysis
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from observation."""
         raise NotImplementedError
-
-    @property
-    def win_rate(self) -> float:
-        """Calculate win rate."""
-        return self.wins / self.games if self.games > 0 else 0.0
-
-    def record_result(self, won: bool) -> None:
-        """Record game result."""
-        self.games += 1
-        if won:
-            self.wins += 1
-
-    def record_action(self, action: int, obs: Dict[str, np.ndarray]) -> None:
-        """Record an action for later analysis."""
-        self.action_history.append((action, obs.get("actions", []).shape[0]))
-
-    def get_action_distribution(self) -> Dict[str, float]:
-        """Get distribution of action types."""
-        if not self.action_history:
-            return {}
-
-        action_counts = Counter([action for action, _ in self.action_history])
-        total = len(self.action_history)
-        return {
-            f"action_{action}": count / total for action, count in action_counts.items()
-        }
-
-    def reset_history(self) -> None:
-        """Reset action history."""
-        self.action_history = []
 
     def to(self, device: str) -> "Player":
         """Move player to specified device."""
@@ -87,14 +48,11 @@ class ModelPlayer(Player):
         name: str,
         agent: ActorCritic,
         deterministic: bool = False,
-        record_logits: bool = False,
     ):
         super().__init__(name, PlayerType.MODEL)
         self.agent = agent
         self.deterministic = deterministic
         self.device = next(agent.parameters()).device
-        self.record_logits = record_logits
-        self.logits_history = [] if record_logits else None
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from model."""
@@ -106,39 +64,10 @@ class ModelPlayer(Player):
 
         # Get action from model
         with torch.no_grad():
-            logits, _ = self.agent(tensor_obs)
-            if self.record_logits:
-                assert self.logits_history is not None
-                self.logits_history.append(logits.detach().cpu().numpy())
-
             action, _, _, _ = self.agent.get_action_and_value(
                 tensor_obs, deterministic=self.deterministic
             )
-
-            # Record the action for analysis
-            action_value = action.item()
-            self.record_action(action_value, obs)
-            return action_value
-
-    def get_action_confidence(self) -> Dict[str, float]:
-        """Get statistics about action confidence."""
-        if not self.logits_history:
-            return {}
-
-        # Calculate softmax probabilities
-        probs = []
-        for logits in self.logits_history:
-            # Apply softmax to get probabilities
-            exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
-            probs.append(exp_logits / np.sum(exp_logits, axis=1, keepdims=True))
-
-        # Calculate statistics
-        chosen_probs = [p.max() for p in probs]
-        return {
-            "mean_confidence": np.mean(chosen_probs),
-            "min_confidence": np.min(chosen_probs),
-            "max_confidence": np.max(chosen_probs),
-        }
+            return action.item()
 
     def to(self, device: str) -> "ModelPlayer":
         """Move player and model to device."""
@@ -159,9 +88,7 @@ class RandomPlayer(Player):
         if len(valid_actions) == 0:
             raise ValueError("No valid actions available")
 
-        action = int(np.random.choice(valid_actions))
-        self.record_action(action, obs)
-        return action
+        return int(np.random.choice(valid_actions))
 
 
 class DefaultPlayer(Player):

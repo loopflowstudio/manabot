@@ -14,8 +14,8 @@ import shutil
 
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Match
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.training.records import TrainingRun
@@ -27,7 +27,6 @@ from manabot.training.regime import (
     TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
-    TrainSupervised,
 )
 
 
@@ -98,7 +97,7 @@ def admit_policy(
     )
     record = next((s for s in source.stages if s.id == stage.source_stage), None)
     if (
-        not isinstance(definition, (TrainSelfPlay, TrainSupervised, TrainCompound))
+        not isinstance(definition, (TrainSelfPlay, TrainCompound))
         or record is None
         or record.status != "completed"
     ):
@@ -147,13 +146,7 @@ def admit_policy(
     }.items():
         if metadata.get(key) != expected:
             raise ValueError(f"published checkpoint producer metadata mismatch: {key}")
-    expected_value = (
-        "win_logit"
-        if isinstance(definition, TrainSupervised)
-        and not definition.target.startswith("local_")
-        else "signed_outcome"
-    )
-    if metadata.get("value_semantic") != expected_value:
+    if metadata.get("value_semantic") != "signed_outcome":
         raise ValueError("published checkpoint value semantics mismatch")
     if stage.weights == "ema":
         averaging = metadata.get("averaging")
@@ -169,13 +162,6 @@ def admit_policy(
             raise ValueError("published EMA averaging identity mismatch")
     elif metadata.get("averaging") is not None:
         raise ValueError("published raw checkpoint declares averaged weights")
-    if expected_value != "signed_outcome" and any(
-        isinstance(s, TrainSupervised)
-        and s.initial == name
-        and s.target.startswith("local_")
-        for s in regime.stages
-    ):
-        raise ValueError("local distillation requires signed-outcome initial weights")
     return AdmittedPolicy(
         checkpoint=admitted,
         source_run=receipt,

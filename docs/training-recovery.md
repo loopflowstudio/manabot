@@ -55,8 +55,8 @@ attributable exploratory work.
 Recovery is opt-in for bounded CPU self-play stages, including multistage chains
 that retain the latest collector or start a fresh learner. Set `schedule_clock`
 to `iteration_fraction` and `recovery_max_microsteps` to an explicit journal
-ceiling. Every stage must be `train_self_play`; supervised, compound, collection
-and belief-training stages cannot opt into recovery. MPS/CUDA are unsupported.
+ceiling. Every stage must be `train_self_play`; compound, collection and
+belief-training stages cannot opt into recovery. MPS/CUDA are unsupported.
 Ataraxos move stages may retain `run_elapsed_budget`: their learning-rate and tau
 formulas use absolute collection/update iteration regardless of that serialized
 field. Recovery rejects other elapsed-time learning schedules.

@@ -270,13 +270,3 @@ class RaggedPolicyDecoder:
             )
         if any(isinstance(score, bool) or not math.isfinite(score) for score in scores):
             raise StructuredPolicyError(f"{label} scores must all be finite numbers")
-
-
-def decode_projection(
-    projection: Mapping[str, Any], *, seed: int, decision_ordinal: int
-) -> tuple[RaggedOfferBatch, DecodedSubmission]:
-    """Convenience entry point used by the benchmark harness."""
-
-    batch = flatten_projection(projection)
-    scores = SeededSemanticScorer(seed).score(batch, decision_ordinal)
-    return batch, RaggedPolicyDecoder().decode(batch, scores)

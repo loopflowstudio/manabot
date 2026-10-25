@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.execution import execute_regime

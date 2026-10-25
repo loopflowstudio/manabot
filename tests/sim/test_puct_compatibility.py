@@ -8,19 +8,15 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.arena.match import _execute_game
-from manabot.arena.models import (
-    PlayerRegistration,
-    SearchSemantics,
-    canonical_sha256,
-    file_sha256,
-)
-from manabot.arena.players import build_player
-from manabot.arena.replay import replay_games
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.sim.match import _execute_game
+from manabot.sim.players import build_player
+from manabot.sim.registration import PlayerRegistration, SearchSemantics
+from manabot.sim.replay import replay_games
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.sim.search.compound import advance_compound, project_compound
 from manabot.sim.search.puct import (

@@ -38,7 +38,7 @@ honestly. Three decisions anchor the design:
                  │                        │                        │
                  └────────────────────────┼────────────────────────┘
                                           v
-             checkpoints ──> arena / anchor evaluation ──> receipts
+             checkpoints ──> evaluation against anchors ──> receipts
 
                          inspection UI (Academy, optional)
 
@@ -57,7 +57,6 @@ main engine. The loop is declared as data and executed by one runner:
         │
         v
  TrainingRun ── train_self_play ──> raw + EMA checkpoints (world-bound)
-        │       collect_search / train_supervised   (search distillation)
         │       collect_belief / train_belief       (hidden-hand samplers)
         │
         ├── VerifyStore: resolved recipe, seed streams, source identity,
@@ -86,8 +85,8 @@ main engine. The loop is declared as data and executed by one runner:
   frozen policy's own complete games. They never feed hidden truth to the
   acting policy ([belief sampler](belief-sampler.md)).
 - **Search as an improvement step.** Local search uses the frozen policy for
-  continuations and sampled hands for hidden state. Its result can be distilled
-  back into the policy ([local policy search](local-policy-search.md)).
+  continuations and sampled hands for hidden state at play time
+  ([local policy search](local-policy-search.md)).
 - **Encoding is identity.** An observation/action shape change is a new world
   ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
   nightly learnability check guards against inputs that make distinct choices
@@ -132,7 +131,7 @@ The labels in this document are precise:
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
 | Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
-| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, search collection, supervised distillation, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
+| Learning | `TrainingRegime`/`TrainingRun` execute declared stages (self-play, compound self-play, policy import, selection diagnostics, belief collection and fitting) with world-bound raw/EMA checkpoints and VerifyStore provenance. The batched self-play baseline uses a selectable Ataraxos-adapted rule with PPO as a control. | Technique screens, model-size and batching studies, and remote GPU cohorts continue. | Belief-conditioned policy/value, search-improved targets, and shared artifact manifests verified by every loader. |
 | Evaluation | Checkpoint monitoring and named tournaments score checkpoints against fixed anchors (random, scripted greedy, `heuristic`) on paired deals with both decks and seats, replay-verifying every game. INT-18's world-pinned rated arena (2026-07-18, 720 games, five anchors) predates the current world and has not been rerun. | Greedy is nearing saturation; `heuristic` is exploratory, not yet a frozen anchor. | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
 | Study | Academy identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Academy presents it without becoming another replay or belief engine. |
 
@@ -286,7 +285,7 @@ The durable learning and evaluation identities are:
 | `CheckpointManifest` | manabot | Exact weight bytes plus model, history/memory, belief, Observation/action ABI, dataset/run, target, seed, and inference-profile identities. |
 | `OpponentPoolManifest` | manabot | Immutable registered opponents and a versioned selection policy. A sampled opponent is recorded per match. |
 | `PlayerRegistration` | manabot | Immutable algorithm/checkpoint bytes, world, information boundary, compute class, and seed policy. |
-| `ArenaKey` | manabot | World, content suite, viewer boundary, arena/rating versions, frozen anchor cohort, and compute class. |
+| `EvaluationKey` | manabot | World, content suite, viewer boundary, evaluation/rating versions, frozen anchor cohort, and compute class. |
 | `DecisionEvidence` | manabot evidence consumed by Academy | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
 | `StudyReturnReceipt` | Academy adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
 
@@ -625,18 +624,27 @@ exploiters. Selection is a manabot training policy, not an arena rating rule or
 managym behavior. No recurrent memory, belief state, branch, or RNG stream is
 shared between seats or matches.
 
-### 9. Arena evaluation, skill estimation, and promotion
+### 9. Evaluation, skill estimation, and promotion
 
-Development evaluation answers a pairwise question and remains useful. Arena
-admission registers a candidate under one `ArenaKey`, plays a declared frozen
+`sim` owns registered policies, bounded execution, replay and native card facts.
+`eval` owns admission, schedules, result schemas, ratings, GIH reduction/query
+and MTG Arena log export. `experiment` owns checkpoint staging and followers.
+Simulation imports none of evaluation, training, experiment or reports. Canonical
+byte identities live in `infra.identity`. The former `manabot.arena` package
+is removed without import shims. Frozen wire fields (`arena_key`,
+`arena_version`), seed identifiers, source-path contracts and artifact paths keep
+their recorded meaning; new evaluations bind the relocated source bytes.
+
+Development evaluation answers a pairwise question and remains useful. Evaluation
+admission registers a candidate under one `EvaluationKey`, plays a declared frozen
 cohort on exact paired deals with seats swapped, and records Commands, outcomes,
 competencies, calibration, latency, throughput, and cost.
 
 INT-6's intended estimator is a regularized Bradley–Terry-style population
 model with order effects and paired-deal block bootstrap. The estimator and
-prior are part of `ArenaKey`; raw matrix, connectivity, residuals, and
+prior are part of `EvaluationKey`; raw matrix, connectivity, residuals, and
 uncertainty remain visible. “Elo” is acceptable product shorthand only when it
-does not imply portability across arenas. Promotion is an immutable receipt
+does not imply portability across evaluation cohorts. Promotion is an immutable receipt
 over all declared strength, safety, competency, and systems gates.
 
 ### 10. Projecting evidence into Study

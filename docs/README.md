@@ -9,7 +9,7 @@ training loop, and who owns which truth. Experiment reports live in
 
 | Doc | What |
 |---|---|
-| [training-regimes.md](training-regimes.md) | `TrainingRegime` recipes and stages: self-play, search collection, distillation, belief fitting |
+| [training-regimes.md](training-regimes.md) | `TrainingRegime` recipes and stages: self-play, compound decisions, policy import, belief fitting |
 | [training-experiments.md](training-experiments.md) | Declaring comparisons between recipes |
 | [ataraxos.md](ataraxos.md) | The Ataraxos-adapted move-learning rule, and how it differs from the paper |
 | [numerical-health.md](numerical-health.md) | Policy numerics and update-health diagnostics |
@@ -26,7 +26,7 @@ training loop, and who owns which truth. Experiment reports live in
 | Doc | What |
 |---|---|
 | [belief-sampler.md](belief-sampler.md) | Hidden-hand samplers fit from a frozen policy's games |
-| [local-policy-search.md](local-policy-search.md) | Frozen-policy local search and distillation |
+| [local-policy-search.md](local-policy-search.md) | Frozen-policy local search at play time |
 | [frozen-policy-attacks.md](frozen-policy-attacks.md) | Training exploiters against a frozen policy |
 | [checkpoint-scenarios.md](checkpoint-scenarios.md) | Tactical scoring of checkpoints on constructed positions |
 | [experiment-execution.md](experiment-execution.md) / [experiment-metrics.md](experiment-metrics.md) | Running an Experiment comparison and reading its report |

@@ -60,10 +60,9 @@ jobs:
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 tests/env/ tests/agent/ tests/model/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
-            tests/sim/test_structured_policy.py \
+            tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
-            tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
-            tests/training/test_local_service.py \
+            tests/training/test_matchups.py \
             tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
@@ -90,7 +89,8 @@ jobs:
         run: |
           uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
-            tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py -q
+            tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/eval/ -q
 
       - name: Enum smoke test
         if: matrix.group == 'main'

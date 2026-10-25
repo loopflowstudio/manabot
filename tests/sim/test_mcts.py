@@ -10,8 +10,6 @@ from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim.data import ROOT_VALUE_KEY, VISIT_COUNT_KEY, load_shards
-from manabot.sim.datagen import generate_selfplay_shard
 from manabot.sim.search.flat_mc import make_player
 from manabot.sim.search.puct import (
     AgentLeafEvaluator,
@@ -202,7 +200,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
         )
 
 
-def test_player_publishes_visit_and_value_targets() -> None:
+def test_player_plays_a_most_visited_action() -> None:
     root = _fresh_engine(seed=37)
     player = DeterminizedPuctPlayer(8, worlds=2, seed=41)
 
@@ -211,44 +209,14 @@ def test_player_publishes_visit_and_value_targets() -> None:
 
     action = player.act(_Wrapper(), {})
     assert 0 <= action < root.action_count()
-    assert player.last_visit_counts is not None
+    result = player.last_result
+    assert result is not None
     assert player.last_scores is not None
-    assert player.last_root_value is not None
-    assert int(player.last_visit_counts.sum()) == 8
-    assert player.last_visit_counts[action] == player.last_visit_counts.max()
+    assert int(result.visit_counts.sum()) == 8
+    assert result.visit_counts[action] == result.visit_counts.max()
     assert player.stats.simulations == 8
     assert player.stats.decisions == 1
     assert player.stats.tree_nodes > player.worlds
     assert player.stats.worlds_sampled == player.worlds
     assert player.stats.max_depth_sum >= 1
     assert player.stats.max_depth_max >= 1
-
-
-def test_selfplay_shard_records_real_tree_targets(tmp_path: Path) -> None:
-    shard = tmp_path / "shard_00.npz"
-    summary = generate_selfplay_shard(
-        num_games=1,
-        teacher_spec={
-            "kind": "determinized_puct",
-            "sims": 4,
-            "worlds": 1,
-            "c_puct": 1.5,
-        },
-        seed=43,
-        out_path=shard,
-    )
-    dataset = load_shards([shard])
-
-    assert summary["policy_target_kind"] == "visit_distribution"
-    assert summary["value_target_kind"] == "root_value"
-    assert VISIT_COUNT_KEY in dataset
-    assert ROOT_VALUE_KEY in dataset
-    assert np.all(dataset[VISIT_COUNT_KEY].sum(axis=1) == 4)
-    assert np.all((dataset[ROOT_VALUE_KEY] >= 0) & (dataset[ROOT_VALUE_KEY] <= 1))
-    assert np.all(dataset[VISIT_COUNT_KEY][dataset["actions_valid"] <= 0] == 0)
-    chosen = dataset[VISIT_COUNT_KEY][
-        np.arange(len(dataset["action"])), dataset["action"].astype(np.int64)
-    ]
-    assert np.all(chosen == dataset[VISIT_COUNT_KEY].max(axis=1))
-    assert summary["search"]["tree_nodes"] > summary["search"]["worlds_sampled"]
-    assert summary["search"]["max_depth_max"] >= 1

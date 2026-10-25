@@ -24,12 +24,13 @@ import uuid
 from pydantic import JsonValue
 import torch
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import Checkpoint, MonitorProtocol
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.checkpoint_evaluation import Checkpoint
 from manabot.experiment.config import Experiment
 from manabot.experiment.evaluation_queue import CheckpointQueue, stop_process_group
 from manabot.experiment.execution import ExperimentRun, HardwareInventory, RegimeAttempt
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import source_bundle_sha256
 from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import execute_regime

@@ -21,9 +21,9 @@ from etude.run.records import RunFile as EtudeRunFile
 from matplotlib.figure import Figure
 from pydantic import ConfigDict, JsonValue, TypeAdapter
 
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.monitor import MonitorResult
+from manabot.eval.monitor import MonitorResult
 from manabot.experiment.execution import ExperimentRun
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.reports.learning import DASHBOARD_CSS, learning_story
 from manabot.reports.records import ReportRun, RetainedRun
 from manabot.reports.study import ScientificStudy
@@ -716,13 +716,9 @@ def write_dashboard(
         latest = metrics[-1] if metrics else {}
         updates = latest.get("progress/updates")
         planned = sum(getattr(s, "updates", 0) for s in run.regime.stages)
-        loss_key = next(
-            (k for k in ("rl/loss", "distillation/train_cross_entropy") if k in latest),
-            None,
-        )
         loss = (
-            f"{loss_key}: {_number(latest[loss_key])}"
-            if loss_key
+            f"rl/loss: {_number(latest['rl/loss'])}"
+            if "rl/loss" in latest
             else "unavailable (no optimized loss)"
         )
         rows.append(

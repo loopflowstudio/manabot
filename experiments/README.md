@@ -15,11 +15,10 @@ instruments.
 | [ataraxos_mini](ataraxos_mini.py) | `ataraxos_mini`, `:mirror_screen_baseline`, `:sustained_baseline_source` | `manabot train` |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
 | [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/ataraxos.md)) | `manabot train` |
-| [direct_self_play](direct_self_play.py) | `direct_self_play`, `:search_distillation` ([learning speed](training-regimes.md)) | `python -m experiments.direct_self_play` |
+| [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
 | [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler`, `:learned_belief_local_search` ([guide](../docs/belief-sampler.md)) | `manabot train` |
-| [frozen_policy_local_update](frozen_policy_local_update.py) | `frozen_policy_local_update` ([guide](../docs/local-policy-search.md)) | `manabot train` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/belief-sampler.md)) | `manabot train` |
 | [heuristic_strength](heuristic_strength.py) | heuristic against a checkpoint, optional search ([report](heuristic-strength.md)) | `python -m experiments.heuristic_strength` |
 
 Reports of finished studies stay as the record. The runners, contracts, plans

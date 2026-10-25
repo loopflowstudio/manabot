@@ -12,8 +12,8 @@ from typing import Literal
 from matplotlib.figure import Figure
 from pydantic import BaseModel, ConfigDict
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import ArenaRow
+from manabot.eval.monitor import EvaluationRow
+from manabot.infra.identity import canonical_sha256
 from manabot.reports.analysis import paired_uncertainty
 
 
@@ -44,7 +44,7 @@ class StudyCell(_Saved):
     variant: str = "raw"
     phase: str = "development"
     scheduled_games: int
-    rows: list[ArenaRow]
+    rows: list[EvaluationRow]
     replay: dict[str, int | float | bool]
 
     @property

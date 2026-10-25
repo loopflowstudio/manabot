@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, JsonValue, model_validator
 
-from manabot.arena.monitor import MonitorProtocol
+from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (

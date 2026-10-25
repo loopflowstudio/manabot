@@ -10,7 +10,6 @@ rollouts preclude an equilibrium guarantee. Receipts are private training data.
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
@@ -19,7 +18,7 @@ import time
 from typing import Literal
 
 import managym._managym as native
-from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
+from managym.decision import DecisionFrame, Observation, SemanticTransition
 from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
@@ -52,7 +51,6 @@ from manabot.sim.search.compound import (
     CompoundRollout,
     advance_compound,
     project_compound,
-    sample_suffix,
 )
 from manabot.sim.search.sampling import (
     HandBatch,
@@ -402,18 +400,6 @@ class LocalUpdateReceipt:
         payload.pop("seconds")
         payload.pop("belief_seconds")
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-
-    def mixing_diagnostics(self) -> dict[str, float]:
-        """Root-local nats and probability distances, not bluffing quality."""
-        target, base = np.asarray(self.target), np.asarray(self.base)
-        support = base > 0
-        target, base = target[support], base[support]
-        return {
-            "target_entropy": float(-(target * np.log(target)).sum()),
-            "base_entropy": float(-(base * np.log(base)).sum()),
-            "kl_to_base": float((target * np.log(target / base)).sum()),
-            "policy_l1": float(np.abs(target - base).sum()),
-        }
 
 
 _RECEIPT_ADAPTER = TypeAdapter(LocalUpdateReceipt)
@@ -884,7 +870,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
         self.history: ViewerHistory | None = None
         self.compound_cursor: CompoundCursor | None = None
         self.compound_projection: CompoundProjection | None = None
-        self.base_pending: deque[Command] = deque()
         self._decision_limit: float = float("inf")
 
     def start_game(self, env: Env, seat: int) -> None:
@@ -893,7 +878,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
         self.last_receipt = None
         self.compound_cursor = None
         self.compound_projection = None
-        self.base_pending.clear()
         self.history = None
         self.tracker = None
         if self.teacher.hand_sampler is not None:
@@ -972,28 +956,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
     def _check_deadline(self) -> None:
         if time.perf_counter() >= self._decision_limit:
             raise TimeoutError("local search deadline exceeded; target unavailable")
-
-    def base_action(self, rng: np.random.Generator) -> int:
-        """Collection samples one whole base declaration and drains its Commands."""
-        if self.last_receipt is None:
-            raise RuntimeError("search must precede base-policy collection")
-        projection = self.compound_projection
-        if projection is None:
-            return int(
-                rng.choice(len(self.last_receipt.base), p=self.last_receipt.base)
-            )
-        if not self.base_pending:
-            generator = torch.Generator().manual_seed(int(rng.integers(0, 2**63)))
-            self.base_pending.extend(
-                sample_suffix(
-                    self.teacher.agent,
-                    projection.cursor,
-                    generator,
-                    self._check_deadline,
-                )
-            )
-        command = self.base_pending.popleft()
-        return projection.action_index(command)
 
     def act(self, env: Env, obs: dict[str, NDArray[np.float32]]) -> int:
         del obs
