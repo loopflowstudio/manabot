@@ -1,10 +1,13 @@
-"""Copy-weighted GIH reduction and evaluation exclusion accounting."""
+"""Copy-weighted card counts per game, and their normalized table rows.
+
+`reduce_cards` owns the counting rules. `normalize` splits its rows into the
+three author tables an evaluation delivers: `card_plays` (one row per game and
+player, with the game's facts), `card_counts` (per card in that game) and
+`cards` (names for card keys)."""
 
 from __future__ import annotations
 
 from collections import Counter
-
-from pydantic import Field
 
 from manabot.infra.identity import StrictModel
 from manabot.sim.card_evidence import GameEvidence, Seat
@@ -12,31 +15,10 @@ from manabot.sim.card_evidence import GameEvidence, Seat
 METRIC_VERSION = "gih-copies-v1"
 
 
-class MatchExclusions(StrictModel):
-    crash: int = Field(default=0, ge=0)
-    timeout: int = Field(default=0, ge=0)
-    truncated: int = Field(default=0, ge=0)
-    replay_failed: int = Field(default=0, ge=0)
-    failed_match: int = Field(default=0, ge=0)
-    unobserved: int = Field(default=0, ge=0)
-
-
-class CardMatchError(ValueError):
-    """Small typed exclusion summary retained in Etude's failed-match record."""
-
-    def __init__(self, outcomes: dict[str, int]) -> None:
-        self.outcomes = MatchExclusions.model_validate(outcomes)
-        super().__init__(outcomes)
-
-    def __str__(self) -> str:
-        return self.outcomes.model_dump_json(exclude_defaults=True)
-
-
 class CardGame(StrictModel):
     player: Seat
     game: str
     deal: int
-    leg: int
     card: str
     name: str
     definition: int
@@ -87,7 +69,6 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
                     player=participants.index(game.seat_players[seat]),
                     game=game.game,
                     deal=game.deal,
-                    leg=game.leg,
                     card=f"{capture.content_digest}:{definition}",
                     name=definitions[definition].name,
                     definition=definition,
@@ -105,3 +86,50 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
                 )
             )
     return rows
+
+
+PLAY_FIELDS = (
+    "player",
+    "game",
+    "deal",
+    "deck",
+    "opponent_deck",
+    "on_play",
+    "eligible",
+    "outcome",
+    "win",
+    "content",
+    "metric_version",
+)
+COUNT_FIELDS = (
+    "player",
+    "game",
+    "card",
+    "deck_copies",
+    "opening_copies",
+    "drawn_copies",
+    "gih_copies",
+)
+# Etude rows name a player, so a card's name row is keyed by whose deck held it.
+CARD_FIELDS = ("player", "card", "content", "definition", "name")
+
+
+class CardRows(StrictModel):
+    plays: list[dict[str, int | float | str | bool | None]]
+    counts: list[dict[str, int | float | str | bool | None]]
+    cards: list[dict[str, int | float | str | bool | None]]
+
+
+def normalize(rows: list[CardGame]) -> CardRows:
+    """One `card_plays` row per (game, player); counts and names keyed by card."""
+    plays: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
+    cards: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
+    counts = []
+    for row in rows:
+        data = row.model_dump()
+        plays.setdefault((row.game, row.player), {f: data[f] for f in PLAY_FIELDS})
+        cards.setdefault((row.card, row.player), {f: data[f] for f in CARD_FIELDS})
+        counts.append({f: data[f] for f in COUNT_FIELDS})
+    return CardRows(
+        plays=list(plays.values()), counts=counts, cards=list(cards.values())
+    )
