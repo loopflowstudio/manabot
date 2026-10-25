@@ -11,13 +11,8 @@ inherited from landed work and are at `1e6015270:scratch/`.
 - Training restricted to UR/GW with the existing `cross-balanced` per-stream
   strata. The native uniform sampler admits only the full ten-deck roster;
   extending it was judged larger than the brief's "compatibility change".
-- MTG-181 matched-update comparison plays only its two UR/GW cells (100
-  games each) at updates 200/400/600, not full grids: the brief asks for the
-  same cells at matched updates; full grids would need ~7 extra hours of a
-  loaded host. MTG-181's full endpoint grids come from its addendum.
-- The heuristic's source digest changed with the `arena`→`sim` move (one
-  import line), so per-game player seeds differ from MTG-181's addendum; deals
-  and seats stay paired.
+- Heuristic-grid notes (matched-update cells, heuristic digest, u0 replay)
+  are obsolete after the head-to-head steer; see git history before 5b89224b6.
 - Etude's stock RunPod image has no Rust; `TrainingJob.job` now installs
   rustup 1.98.1 and syncs in setup (the retired bootstrap's toolchain).
 - Seed 18601 chosen to follow MTG-181's 1810x numbering.
@@ -41,9 +36,11 @@ inherited from landed work and are at `1e6015270:scratch/`.
 MTG-174/176, MTG-183 and card-evaluation (#360) notes landed on main and are
 retained at `884249024948:scratch/questions.md`. They do not select current work.
 
-# MTG-186 u0 replay (2026-10-25)
+# Remote evaluation (2026-10-25)
 
-- Assumed that the protocol's no-replay rule does not cover groups that never
-  started a game. The 181 u0 groups that hit a SyntaxError (mid-merge checkout)
-  are being played again, and their failures are kept as evidence. The
-  alternative was to report u0 as 96% invalid. See the protocol's evaluation note.
+- Superseded by Jack Heart's head-to-head steer: no heuristic grids at all.
+- Head-to-head design choices left open by the steer: the four UR/GW
+  combinations share 250 deals; the rest block draws 500 ordered pairs with
+  replacement and plays each deal on the play and on the draw (exact balance).
+- Hand-written Etude Job (not an Etude eval Benchmark); results are JSON
+  outputs, not statsdb tables.

@@ -3386,6 +3386,42 @@
    "sha256": "1552dd5ad43bf9bfa3fc96042ac3b639e9bb71470a8a86103f97651570de91a7",
    "bytes": 673
   },
+  "experiments/data/mtg186/pairings/endpoint.json": {
+   "sha256": "a04e0d657193baf4cb0523cd92f318e1c3da0a0178a6b56264b2387d4c4a678f",
+   "bytes": 605978
+  },
+  "experiments/data/mtg186/pairings/u200.json": {
+   "sha256": "4a1f76c26e5ffe923234bbc3716d5fbf33af1a5cd2880edf0c0710d400a44e7c",
+   "bytes": 605791
+  },
+  "experiments/data/mtg186/pairings/u400.json": {
+   "sha256": "9a2c5a350335ec21624d007f1a9b4f2eee025b6863925a655f54b5a6ba658d43",
+   "bytes": 605975
+  },
+  "experiments/data/mtg186/pairings/u600.json": {
+   "sha256": "9d6e497d69b3772f2fd58efa74b81a64062432b7d513766c59d46956d8ce5f64",
+   "bytes": 605075
+  },
+  "experiments/data/mtg186/report.md": {
+   "sha256": "d33f5ffbc8521e5914a7330fd5c9d2f083c98a922a6328827a2f6faf14b60133",
+   "bytes": 5736
+  },
+  "experiments/data/mtg186/summary.json": {
+   "sha256": "1844f39bcc19585f93c2bcc81f9a336f3edc9dfa6d1c7bc74b15df4efbd1b140",
+   "bytes": 9010
+  },
+  "experiments/data/mtg186/tables.md": {
+   "sha256": "723f74365abed1baa087743385f0e68a83e4eccac52db1c0802bfa917739f483",
+   "bytes": 2245
+  },
+  "experiments/data/mtg186/training/numerical-validation.json": {
+   "sha256": "7d200142897fcec2369da7e5979bd7c385b54661ac48cb9ef984ac563307e7d3",
+   "bytes": 631
+  },
+  "experiments/data/mtg186/training/run.json": {
+   "sha256": "f7388d3acb9e877575facec3cf48548e76f54979e673298e4203efd20fe38dd6",
+   "bytes": 17056
+  },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310
