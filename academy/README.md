@@ -34,9 +34,8 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: trained opponents — the configured `candidate.json`
-  bundle and the checkpoint catalog (`GET /api/opponents`), both chosen by
-  exact SHA-256 and verified before play
+- **`opponent.py`**: trained opponents — the checkpoint catalog
+  (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only
@@ -124,9 +123,8 @@ uv run uvicorn academy.server:app --port 8000
 
 The [local challenger workflow](../docs/local-trained-challenger.md)
 covers the built same-origin server, feedback, and read-only SQL.
-Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
 
-Any other trained checkpoint is selectable from the Opponent menu. The table
+Any trained checkpoint is selectable from the Opponent menu. The table
 lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
 and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
 Tournament files, separated by `:` — with world, model shape, training step

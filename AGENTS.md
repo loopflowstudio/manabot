@@ -143,10 +143,7 @@ checks required by the affected package and workflow.
   the local files. Verify with
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
-  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
-  and run the full diagnostic with
-  `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
-  The `--pr` subset omits reward-driven PPO and cannot verify that path.
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
 - Remote credential tests require the `artifacts` extra. Validate dependency
   changes in an isolated environment so locally installed extras cannot hide
   missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.

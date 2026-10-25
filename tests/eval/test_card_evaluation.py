@@ -250,14 +250,15 @@ def _db(
         "create table seats (run varchar, match varchar, player bigint, agent varchar)"
     )
     db.execute(
-        "create table agents (agent varchar, name varchar, kind varchar, artifact varchar,"
+        "create table agents (agent varchar, name varchar, kind varchar,"
+        " checkpoint varchar, artifact varchar,"
         " uri varchar, config json)"
     )
     db.execute("create table matches (run varchar, match varchar, state varchar)")
     names = {name for _, pair, _ in matches for name in pair}
     for name in names:
         db.execute(
-            "insert into agents values (?, ?, 'code', ?, null, null)",
+            "insert into agents values (?, ?, 'code', null, ?, null, null)",
             [f"id-{name}", name, "a" * 64],
         )
     for match, pair, rows in matches:

@@ -4,6 +4,7 @@ pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;
 pub mod decision;
+pub mod decision_capture;
 mod decision_context;
 pub mod experience;
 pub mod flow;

@@ -15,7 +15,7 @@
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { checkpointChoice, gameStore } from '$lib/game.svelte';
+  import { gameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
@@ -46,13 +46,6 @@
       const data: OpponentCatalog = await response.json();
       trainedOpponents = data.opponents;
       catalogError = data.catalog_error;
-      // A server-configured candidate is the table's default opponent.
-      const configured = data.opponents.find(
-        (opponent) => opponent.source === 'candidate' && opponent.available,
-      );
-      if (configured && !demoName && !gameStore.observation) {
-        gameStore.setOpponentChoice(checkpointChoice(configured.sha256));
-      }
     } catch {
       catalogError = 'Trained opponents could not be loaded.';
     }

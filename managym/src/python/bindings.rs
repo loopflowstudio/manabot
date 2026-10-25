@@ -1923,6 +1923,25 @@ impl PyObservation {
     }
 }
 
+/// Opaque origin binding. JSON is portable evidence; only this live handle can
+/// authorize submission back to its originating Env and reset generation.
+#[cfg(feature = "python")]
+#[pyclass(name = "DecisionCapture", frozen)]
+pub struct PyDecisionCapture {
+    source: Arc<Mutex<Env>>,
+    generation: u64,
+    capture: crate::decision_capture::DecisionCapture,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyDecisionCapture {
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.capture)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
 #[cfg(feature = "python")]
 #[pyclass(name = "Env")]
 pub struct PyEnv {
@@ -2948,6 +2967,67 @@ impl PyEnv {
         serde_json::to_string(&context).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    #[pyo3(signature = (viewer, history_capacity=0))]
+    fn capture_decision(
+        &self,
+        viewer: usize,
+        history_capacity: usize,
+    ) -> PyResult<PyDecisionCapture> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyDecisionCapture {
+            source: Arc::clone(&self.inner),
+            generation: env.capture_generation,
+            capture: env
+                .capture_decision(viewer, history_capacity)
+                .map_err(map_agent_err)?,
+        })
+    }
+
+    /// Validate origin and all included input facts under the same lock as the
+    /// ordinary Command execution. A clone or a reset is a different authority.
+    fn execute_captured_command_json(
+        &self,
+        capture: &PyDecisionCapture,
+        command_json: &str,
+    ) -> PyResult<String> {
+        self.reject_guarded_mutation("Env.execute_captured_command_json")?;
+        if !Arc::ptr_eq(&self.inner, &capture.source) {
+            return Err(PyAgentError::new_err(
+                "wrong_origin: capture belongs to another environment/branch",
+            ));
+        }
+        let command: SemanticCommand = serde_json::from_str(command_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if env.capture_generation != capture.generation {
+            return Err(PyAgentError::new_err(
+                "stale_capture: environment was reset",
+            ));
+        }
+        let current = env
+            .capture_decision(
+                capture.capture.observation.identity.viewer as usize,
+                capture.capture.history.capacity,
+            )
+            .map_err(|error| PyAgentError::new_err(format!("stale_capture: {error}")))?;
+        if current.digest != capture.capture.digest {
+            return Err(PyAgentError::new_err(
+                "stale_capture: captured input has changed",
+            ));
+        }
+        let transition = env
+            .execute_semantic_command(&command)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Composite viewer-safe Observation for `viewer`, as canonical JSON.
     fn semantic_observation_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
@@ -3518,6 +3598,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStructuredOfferSet>()?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
+    m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

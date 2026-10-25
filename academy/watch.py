@@ -33,9 +33,9 @@ class WatchStep(TypedDict):
 
 
 class WatchRequest(BaseModel):
-    players: list[
-        Literal["random", "passive", "greedy", "heuristic", "search", "checkpoint"]
-    ] = Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    players: list[Literal["random", "passive", "greedy", "heuristic", "search"]] = (
+        Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
     seed: int = Field(default=0, ge=0, lt=2**64)

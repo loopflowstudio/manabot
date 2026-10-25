@@ -1,0 +1,167 @@
+"""Native representation proofs: visibility, complete choices and safe execution."""
+
+from hashlib import sha256
+import json
+from pathlib import Path
+
+from managym.decision import SemanticContractError
+from managym.decision_capture import DecisionInput
+import pytest
+
+from manabot.semantic.text_observation import (
+    RepresentationOverflow,
+    TextEncodingError,
+    capture_text_decision,
+    render_decision,
+    resolve_action,
+    submit_response,
+)
+from manabot.verify.text_observation import priority_root, run_demo
+import managym
+
+
+def test_native_decision_demo_retains_all_alternatives_and_collision(
+    tmp_path: Path,
+) -> None:
+    run_demo(tmp_path)
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    counts = summary["legal_alternatives_executed_and_replayed"]
+    assert all(
+        counts[name] >= 2
+        for name in (
+            "priority",
+            "target",
+            "combat",
+            "blockers",
+            "selection",
+            "mode",
+            "optional_payment",
+        )
+    )
+    assert summary["schema_6_collision_preserved"]
+    assert summary["captured_continuations_and_text_distinct"]
+    assert summary["equal_current_state_distinct_history"]
+    assert summary["expired_history_links_explicit"]
+    left = (tmp_path / "payment_left/prompt.txt").read_text()
+    right = (tmp_path / "payment_right/prompt.txt").read_text()
+    assert "Selected targets in order:" in left and left != right
+    blockers = (tmp_path / "blockers/prompt.txt").read_text()
+    actions = blockers.split("Legal actions:\n", 1)[1]
+    assert "Do not block with" in actions and "Block " in actions
+    assert "; declaration" not in actions
+    assert "; mode none" not in actions and "; ability none" not in actions
+    assert "Source: none" not in blockers and "Chosen mode: none" not in blockers
+    assert "power/toughness unavailable" not in blockers
+    assert "power/toughness 2/2" in blockers
+    modes = (tmp_path / "mode/prompt.txt").read_text().split("Legal actions:\n", 1)[1]
+    assert all(f"mode {index}" in modes for index in (1, 2, 3))
+    assert "kicker {4}" in (tmp_path / "optional_payment/prompt.txt").read_text()
+
+
+def test_hidden_hand_permutations_do_not_change_input_or_text() -> None:
+    env = priority_root(("Lightning Bolt", "Lightning Bolt"), ("Mountain", "Gray Ogre"))
+    initial = capture_text_decision(env, history_capacity=32)
+    actor = DecisionInput.model_validate_json(
+        initial.capture_json
+    ).observation.identity.viewer
+    changed = 0
+    for seed in range(8):
+        branch = env.clone_env()
+        before = branch.state_digest()
+        branch.determinize(seed, actor)
+        changed += branch.state_digest() != before
+        decision = capture_text_decision(branch, history_capacity=32)
+        assert decision.capture_json == initial.capture_json
+        assert decision.text == initial.text
+    assert changed > 0
+
+
+def test_reset_and_offline_capture_cannot_execute() -> None:
+    env = managym.Env(seed=23, skip_trivial=False)
+    players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
+    env.reset(players)
+    decision = capture_text_decision(env)
+    env.reset(players)
+    assert capture_text_decision(env).capture_digest == decision.capture_digest
+    before = env.state_digest()
+    with pytest.raises(SemanticContractError, match="reset"):
+        submit_response(env, decision, "A0")
+    with pytest.raises(SemanticContractError, match="no live origin"):
+        submit_response(env, render_decision(decision.capture_json), "A0")
+    assert env.state_digest() == before
+
+
+def test_complete_prompt_budgets_fail_without_truncation_or_execution() -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    decision = capture_text_decision(env)
+    before = env.state_digest()
+    with pytest.raises(RepresentationOverflow):
+        capture_text_decision(env, max_bytes=len(decision.text.encode()) - 1)
+    with pytest.raises(RepresentationOverflow):
+        decision.check_token_budget(lambda text: len(text.split()), 1)
+    assert decision.check_token_budget(lambda text: len(text.split()), 100_000) > 1
+    assert env.state_digest() == before
+
+
+@pytest.mark.parametrize(
+    "mutation", ("version", "extra", "unbound", "action", "overflow_history", "digest")
+)
+def test_unsupported_or_inconsistent_capture_fails_closed(mutation: str) -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    if mutation == "version":
+        payload["capture_version"] = 2
+    elif mutation == "extra":
+        payload["observation"]["viewer_state"]["agent"]["secret_future_field"] = 1
+    elif mutation == "unbound":
+        payload["definitions"] = {}
+    elif mutation == "action":
+        payload["observation"]["viewer_state"]["action_space"]["actions"].pop()
+    elif mutation == "overflow_history":
+        payload["history"]["capacity"] = 33
+    del payload["digest"]
+    digest = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    payload["digest"] = "invalid" if mutation == "digest" else digest
+    with pytest.raises(TextEncodingError):
+        render_decision(json.dumps(payload))
+
+
+def test_duplicate_card_choices_have_distinct_aliases_and_commands() -> None:
+    env = priority_root(("Lightning Bolt", "Lightning Bolt"), ("Mountain", "Mountain"))
+    decision = capture_text_decision(env)
+    casts = [
+        action for action in decision.actions if action.description.startswith("Cast ")
+    ]
+    assert len(casts) == 2
+    assert casts[0].description != casts[1].description
+    assert (
+        resolve_action(decision, casts[0].reference).offer_id
+        != resolve_action(decision, casts[1].reference).offer_id
+    )
+
+
+def test_digest_rejects_changed_input_even_when_revision_is_unchanged() -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    decision = capture_text_decision(env)
+    captured = DecisionInput.model_validate_json(decision.capture_json)
+    env.scenario_set_life(captured.observation.identity.viewer, 19)
+    current = DecisionInput.model_validate_json(capture_text_decision(env).capture_json)
+    assert (
+        current.observation.identity.revision == captured.observation.identity.revision
+    )
+    before = env.state_digest()
+    with pytest.raises(SemanticContractError, match="stale_capture"):
+        submit_response(env, decision, "A0")
+    assert env.state_digest() == before
+
+
+def test_capture_object_key_order_does_not_change_text() -> None:
+    env = priority_root(("Lightning Bolt",), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    reordered = json.dumps(json.loads(decision.capture_json), sort_keys=True)
+    assert render_decision(reordered).text == decision.text

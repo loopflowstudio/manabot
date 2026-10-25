@@ -40,7 +40,7 @@ layer: current-world Allies/Lessons self-play (128 updates by default), its hori
 checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
 collection/update iterations (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not optimizer
-calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
+calls. The same recipe drives the [nightly learning check](../.github/workflows/baseline.yml).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with
@@ -109,7 +109,7 @@ learnable from any start. The local and baseline recipes enable it; the
 ordinary baseline recipe is `baseline-v3`.
 Omitted, the field serializes as the historical additive policy, so frozen
 recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
-keep their meaning. The learnability gate trains the same FiLM policy.
+keep their meaning.
 
 An observation/action-shape or rules-meaning change is a world version.
 The current development world is **w13** (`managym.WORLD_VERSION`); its rules, tensor shape,
@@ -324,11 +324,6 @@ protocol serialization. A native authored roster does not itself admit a neural
 policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
 
-The [learnability diagnostic](../docs/nightly-learnability.md) trains
-three shared tiny generic policies, fans out identity/capacity assertions, and
-checks reward-driven production PPO plus checkpoint reload. Its credential-free
-CPU runner and failure reports are separate from full-game strength evidence.
-
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
 `ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
 owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
@@ -395,3 +390,19 @@ For a standalone, inspectable pretrained-model decision over supplied text and
 legal references, see the optional [LLM harness](../docs/llm-harness.md). It owns
 protocol recovery and inference evidence; observation rendering and Command
 execution remain outside it.
+
+### Native decision text
+
+`semantic.text_observation.capture_text_decision(env, history_capacity=32)`
+produces deterministic English and exact legal A references from one native
+capture. `submit_response(env, decision, "A0")` parses an exact reference and
+atomically checks origin, reset generation and current captured facts before
+executing the ordinary Command. A cloned Env needs its own capture. Retained
+JSON can be rendered with `render_decision` but cannot authorize submission.
+
+Run the local response-stub proof with
+`uv run python -m manabot.verify.text_observation --out .runs/text-observation`.
+It retains native inputs, prompts, bindings, malformed/stale checks and execution
+receipts. This uses bounded public policy history v1; it loads no model and has
+no writable model memory. Tokenizer/model recovery belongs to the caller;
+`TextDecision.check_token_budget` checks the complete prompt without truncation.

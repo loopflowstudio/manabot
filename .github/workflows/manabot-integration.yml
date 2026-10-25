@@ -60,6 +60,7 @@ jobs:
           uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
+            tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_matchups.py \
