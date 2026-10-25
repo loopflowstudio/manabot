@@ -151,18 +151,38 @@ played under different pins are not comparable.
   (local copies in `~/.manabot/mtg183-w3-final/`).
 - Amendment 21:39 UTC + `experiments/protocols/elemental-183-w4.json`: 46.0 h,
   max $27.32, target 5,950, quote $0.59/h at 21:29 UTC.
-- Check: `tests/training/test_{etude_job,learning_state,pretrained}.py`,
-  `tests/eval/test_elemental_long.py` → 43 passed (21:30 UTC). Gate owns the rest.
+- After the spec: eval job spec runs `manabot.infra.source` first so card rows
+  name their commit (`7357c669f`); branch merged main (`a60fb5690`, batched
+  checkpoint evaluation `b7b49467b`). Uncommitted compress pass: one `remaining()`
+  serves the watchdog and the graceful stop, so a recoverable regime's stage
+  watchdog now also triggers the graceful stop. w4 is not recoverable and its
+  regime/stage walls are equal (163,200 s), so the pinned `5d676d6df` behaves
+  the same; w4 keeps that pin.
+- Check (2026-10-25 22:09 UTC, load ≈ 225): `tests/training/test_{etude_job,learning_state,pretrained}.py`,
+  `tests/eval/test_elemental_long.py` → 42 passed, 1 failed on its 30 s subprocess
+  timeout (`test_worker_runs_real_learner…`), which passed alone (31 s).
+
+- Concept review (2026-10-25, headless): no change. A learner continuation
+  has two declared forms, complete (raw/EMA/Adam of a `completed`/`paused`
+  parent) and raw-only (one monitoring export of a parent that may be
+  `interrupted`, recording reset roles); the graceful stop makes the complete
+  form the normal path and leaves raw-only for crashes. `paused` keeps one
+  meaning across safe pause and the wall-bounded stop (short of target, complete
+  learner state; reports call it `allocation_deadline`). The compress pass's
+  single `remaining()` brings the graceful stop in line with the watchdog clocks
+  it races. No open product choice.
 
 ## Remains, in order
 
-1. Launch w4 (operator session; not launched here): push branch + tag
-   `mtg183-w4-source` (Etude bundles the revision), move the launchd controller
-   to a 0.2.6 checkout, `etude ondemand max l4 2` if MTG-186 holds the slot,
-   `Run` from `elemental-183-w4.json` with seed 18301.
-2. Then relaunch the eval job (`mtg183-eval-cards`, currently `493438ce31d1`,
-   revision `fb71050cf`) with `--run e7d47d8b220f --run <w4>` and no
-   `--continues`. Relaunched never-trained w4 attempts replace its `--run`.
+0. Commit the compress pass (training refactor above) on the branch.
+1. Launch w4 (operator session; not launched here): push tag
+   `mtg183-w4-source` (branch is pushed; the tag is not on origin), move the
+   launchd controller to a 0.2.6 checkout (`5d676d6df` pins 0.2.6),
+   `etude ondemand max l4 2` if MTG-186 holds the slot, `Run` from
+   `elemental-183-w4.json` with seed 18301.
+2. Then relaunch the eval job (`mtg183-eval-cards`, currently `493438ce31d1`)
+   from the spec at `7357c669f` or later with `--run e7d47d8b220f --run <w4>`
+   and no `--continues`. Relaunched never-trained w4 attempts replace its `--run`.
 3. S3 cleanup below (w1/w2 checkpoint bytes already copied to R2 at their target keys).
 4. Results report: mark the 3,250 discontinuity on the update axis (amendment
    21:39 UTC). Publish evidence with `manabot.data publish`, manifest, protocol
@@ -243,3 +263,24 @@ amendment before that allocation).
 - Launched with the pinned 0.2.2 client (`~/.manabot/mtg183-eval-source/.venv`)
   so the controller DB w3 depends on is untouched. The w4 relaunch keeps
   revision fb71050cf, adding `--run <w4>`.
+
+## State 2026-10-25 ~23:10 UTC (operator)
+
+- w3 `e7d47d8b220f` failed on its wall deadline at 3,264, $6.31; no final
+  learner state. Jack Heart chose: continue from w3's raw export at 3,250, EMA
+  := raw, fresh Adam (amendment `684844866`, code `5d676d6df`).
+- w4 `f3748bcabac8` launched ~22:41 UTC on rented L4 ($0.59/h; 46 h, $27.32,
+  target 5,950), trained past 3,250 (3,271 at 23:08). Controller moved to
+  etude-sdk 0.2.6 (checkout `~/.manabot/mtg183-eval-source` at
+  `mtg183-w4-source`; DB backed up first in the session scratchpad).
+- Evaluator: card-data run `mtg183-eval-cards`. Job `493438ce31d1` failed
+  (git rev-parse in archive source) → spec binds source bundle (`7357c669f`);
+  `9285aaf43fea` ran, then cancelled for the w4 relaunch; now `67dbde0c325d`
+  (spec `fa22c130a`: `--run e7d47d8b220f --run f3748bcabac8`, no
+  `--continues`), revision fb71050cf, state `~/.manabot/mtg183-eval-cards`.
+  Keep fb71050cf: HEAD's checkpoint agent keys differ (would replay).
+- Etude bugs: a stuck owned-SSH session (Etude Task 07e13b; worked around by
+  record_refusal). Launch to an owned pool while the controller holds the lock
+  fails "busy"; use `queue`.
+- Laptop: killed 32 orphaned `yes` processes (since 08:38 UTC, ~7.7 cores).
+  lf relay idle-sweep CPU filed as LOO-598.
