@@ -2,6 +2,10 @@
 
 Polish and validate only the current branch scope.
 
+**NEVER intentionally induce load for testing.** Follow the resource and
+subprocess rules in [TESTING.md](../../TESTING.md), including for benchmarks,
+debugging and demos.
+
 ## Required checks for training recovery
 
 Run `uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`
