@@ -30,15 +30,16 @@ ELO = {0: 700.0, 100: 1300.0, 200: 1500.0, 400: 1900.0, 800: 2150.0}
 HEURISTIC = 1000.0
 
 
-def _strength(updates: object) -> float:
-    return HEURISTIC if updates is None else ELO[int(updates)]  # type: ignore[call-overload]
+def _strength(name: str) -> float:
+    """A rated checkpoint `uNNNNNN`'s strength, or the heuristic's."""
+    return HEURISTIC if name == "heuristic" else ELO[int(name[1:])]
 
 
 def _play(match: Match) -> Tables:
     """Bradley-Terry games between the seated strengths, seeded by the match."""
     rng = random.Random(match.seed)
     conditions = Conditions.model_validate(match.conditions)
-    a, b = (_strength(agent.config.get("updates")) for agent in match.agents)
+    a, b = (_strength(agent.name) for agent in match.agents)
     rows = [
         GameRow(
             model_deck=conditions.deck,

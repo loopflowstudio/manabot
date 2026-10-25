@@ -72,14 +72,16 @@ Update rows need no follower. A local run writes its Etude run under
 `etude launch` it is the launcher's run in `ETUDE_TRACK_DIR`. A recovery attempt
 continues its parent's Etude run in place, so one run holds every attempt and a
 later attempt's rows replace the earlier one's from the update it resumed at.
-Inspect locally with:
+The run's experiment is the stage's id unless the job names one
+(`TrainingJob.experiment`). Draw it with the experiment's file:
 
 ```bash
-uv run etude reports write --source .runs/example
+uv run etude report experiments/elemental.py --source .runs/example --open
 ```
 
 Rows use Etude's flat names: `loss`, `numerical/optimizer_steps`,
-`coordinates/learner_transitions`. Selection groups and self-play outcomes are
+`coordinates/learner_transitions`, and each update's phase seconds under
+`time/` (`time/collection`, `time/learning/minibatches/forward_and_loss`). Selection groups and self-play outcomes are
 keyed, as `selection_groups/<action type>/<terminal distance>/rows` and
 `self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline reports read
 them back through `manabot.training.update_metrics.read_updates`, which finds a

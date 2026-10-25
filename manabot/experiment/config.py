@@ -388,11 +388,15 @@ class Experiment:
     schedule: ExperimentSchedule | None = None
     jobs: tuple[PlannedRun, ...] = ()
 
-    def runs(self, *, repo: pathlib.Path, revision: str) -> tuple[Run, ...]:
-        """Each planned run as an Etude training run; launching is the caller's.
+    def runs(
+        self, *, experiment: str, repo: pathlib.Path, revision: str
+    ) -> tuple[Run, ...]:
+        """Each planned run as an Etude training run of `experiment`; launching is the caller's.
 
-        Pure: nothing is submitted. Queue or launch the result with
-        `etude.launch.client.queue_cohort`, or return it from a launch file.
+        Pure: nothing is submitted. `experiment` is the stem of the experiment
+        file that returns these runs from its `runs()`, so `etude eval` and
+        `etude report` find them. Queue or launch the result with
+        `etude.launch.client.queue_cohort`, or with `etude launch FILE`.
         """
         if self.schedule is not None and self.jobs:
             raise ValueError("choose local schedule or launched runs")
@@ -406,6 +410,7 @@ class Experiment:
             case = cases[binding.case]
             job = TrainingJob(
                 regime=case.regime,
+                experiment=experiment,
                 milestones=binding.milestones,
                 validate_numerics=binding.validate_numerics,
             ).job(

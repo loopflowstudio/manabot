@@ -42,7 +42,7 @@ def specification() -> TrainingJob:
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = 2
     stage.transitions = 4
-    return TrainingJob(regime=regime, milestones=(1,))
+    return TrainingJob(regime=regime, experiment="fixture", milestones=(1,))
 
 
 def worker_environment(
@@ -84,7 +84,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="lifetime"):
         spec.job(repo=tmp_path, revision="fixture-commit", max_hours=0.0001)
     with pytest.raises(ValueError, match="milestones"):
-        TrainingJob(regime=spec.regime, milestones=(2,))
+        TrainingJob(regime=spec.regime, experiment="fixture", milestones=(2,))
 
 
 def test_worker_runs_real_learner_and_reports_admitted_policy(
@@ -169,7 +169,7 @@ def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> 
             ),
         ),
     )
-    runs = experiment.runs(repo=tmp_path, revision="fixture-commit")
+    runs = experiment.runs(experiment="plans", repo=tmp_path, revision="fixture-commit")
     assert [run.seed for run in runs] == [11, 12]
     assert [run.params for run in runs] == [{"case": "plans-control"}] * 2
     assert [run.job.max_hours for run in runs] == [1, 2]
@@ -246,7 +246,12 @@ def test_continuation_trains_parent_learner_to_absolute_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     continuation, inputs = staged_continuation(tmp_path, 2)
-    spec = TrainingJob(regime=ema_regime(4), milestones=(3,), continuation=continuation)
+    spec = TrainingJob(
+        regime=ema_regime(4),
+        experiment="fixture",
+        milestones=(3,),
+        continuation=continuation,
+    )
     job = spec.job(repo=tmp_path, revision="fixture-commit", max_hours=1)
     assert {(i.name, i.key) for i in job.inputs} == {
         ("parent-run.json", "mtg-fixture/parent-run.json"),
@@ -270,7 +275,9 @@ def test_continuation_refuses_a_parent_at_another_update(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     continuation, inputs = staged_continuation(tmp_path, 1)
-    spec = TrainingJob(regime=ema_regime(4), continuation=continuation)
+    spec = TrainingJob(
+        regime=ema_regime(4), experiment="fixture", continuation=continuation
+    )
     worker_environment(tmp_path, monkeypatch, spec)
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
     with pytest.raises(ValueError, match="different update"):
@@ -280,7 +287,7 @@ def test_continuation_refuses_a_parent_at_another_update(
     worker_environment(
         tmp_path,
         monkeypatch,
-        TrainingJob(regime=ema_regime(4), continuation=at_parent),
+        TrainingJob(regime=ema_regime(4), experiment="fixture", continuation=at_parent),
     )
     monkeypatch.setenv("ETUDE_SEED", "12251")
     with pytest.raises(ValueError, match="parent's seed"):
@@ -293,13 +300,20 @@ def test_continuation_refuses_a_parent_at_another_update(
 def test_continuation_milestones_follow_the_parent(tmp_path: Path) -> None:
     continuation, _ = staged_continuation(tmp_path, 2)
     with pytest.raises(ValueError, match="milestones"):
-        TrainingJob(regime=ema_regime(4), milestones=(2,), continuation=continuation)
+        TrainingJob(
+            regime=ema_regime(4),
+            experiment="fixture",
+            milestones=(2,),
+            continuation=continuation,
+        )
     with pytest.raises(ValueError, match="before the update target"):
-        TrainingJob(regime=ema_regime(2), continuation=continuation)
+        TrainingJob(
+            regime=ema_regime(2), experiment="fixture", continuation=continuation
+        )
     without_ema = ema_regime(4)
     stage = without_ema.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     assert isinstance(stage.learning, DampedPolicyLearning)
     stage.learning.ema = None
     with pytest.raises(ValueError, match="EMA"):
-        TrainingJob(regime=without_ema, continuation=continuation)
+        TrainingJob(regime=without_ema, experiment="fixture", continuation=continuation)

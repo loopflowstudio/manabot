@@ -13,6 +13,7 @@ commit 8e7df92e4). The seed continues as Etude segments (Jack Heart,
 target. This module freezes those segments, the export cadence and the
 evaluation design:
 
+- `recipe` — the frozen recipe to an update target and watchdog;
 - `stage_parent` / `segment_job` — a parent's exports as Etude inputs, and the
   segment that continues them;
 - `rated_updates` — the checkpoints that are evaluated and rated;
@@ -107,6 +108,29 @@ def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinua
     )
 
 
+def recipe(
+    updates: int,
+    *,
+    hours: float,
+    finalization_seconds: float = 600,
+    setup_seconds: float = 1800,
+) -> TrainingRegime:
+    """The frozen MTG-181 recipe trained to an absolute `updates` target in `hours`.
+
+    Only the endpoint and the watchdog change. `setup_seconds` leaves room for
+    machine setup and the numerics gate inside the allocation.
+    """
+    regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = updates
+    # Damped-policy rates follow the absolute iteration, not updates/endpoint,
+    # so moving the endpoint leaves the learning schedule unchanged.
+    regime.wall_seconds = hours * 3600 - setup_seconds - finalization_seconds
+    stage.execution.wall_seconds = regime.wall_seconds
+    return TrainingRegime.model_validate(regime.model_dump(mode="json"))
+
+
 def segment_job(
     continuation: LearnerContinuation,
     updates: int,
@@ -115,23 +139,20 @@ def segment_job(
     finalization_seconds: float = 600,
     setup_seconds: float = 1800,
 ) -> TrainingJob:
-    """The frozen recipe continued to an absolute `updates` target.
+    """The parent's recipe, streams and seed continued to an absolute `updates` target.
 
-    Only the endpoint and the watchdog change; the learning recipe, streams and
-    seed are the parent's. `setup_seconds` leaves room for machine setup and the
-    numerics gate inside the allocation.
+    Segments track under `STAGE`, as w3 did, so the evaluation follower finds
+    each one's checkpoints.
     """
-    regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = updates
-    # Damped-policy rates follow the absolute iteration, not updates/endpoint,
-    # so moving the endpoint leaves the parent's learning schedule unchanged.
-    regime.wall_seconds = hours * 3600 - setup_seconds - finalization_seconds
-    stage.execution.wall_seconds = regime.wall_seconds
     first = (continuation.from_update // CADENCE + 1) * CADENCE
     return TrainingJob(
-        regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
+        regime=recipe(
+            updates,
+            hours=hours,
+            finalization_seconds=finalization_seconds,
+            setup_seconds=setup_seconds,
+        ),
+        experiment=STAGE,
         milestones=tuple(range(first, updates, CADENCE)),
         finalization_seconds=finalization_seconds,
         validate_numerics=True,
