@@ -90,7 +90,7 @@ from manabot.training.state.recovery import (
     save_update,
     settle_orphan,
 )
-from manabot.training.update_metrics import metric_row
+from manabot.training.update_metrics import metric_row, phase_seconds, time_since
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -231,6 +231,7 @@ def execute_regime(
     pause_path: Path | None = None,
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
+    experiment: str | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -239,6 +240,9 @@ def execute_regime(
     cannot cover the slowest update so far plus this reserve, the stage stops,
     exports raw/EMA/Adam as usual and the run ends `paused` short of its
     target, so a successor can continue its complete learner state.
+
+    Each self-play stage's metrics are an Etude run of `experiment`, or of an
+    experiment named for the stage when it is None.
     """
     regime = validate_regime(regime)
     game_error_recovery = any(
@@ -364,6 +368,7 @@ def execute_regime(
             stop_path=stop_path,
             stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
+            experiment=experiment,
         )
 
 
@@ -383,6 +388,7 @@ def _execute_regime(
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
+    experiment: str | None = None,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -1246,6 +1252,7 @@ def _execute_regime(
                             device=stage.execution.device,
                             log_level="WARNING",
                         ),
+                        experiment=experiment or stage.id,
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,
@@ -1362,6 +1369,7 @@ def _execute_regime(
                 snapshot = None
                 incident_learner = learner
                 slowest_update = 0.0
+                timed = phase_seconds(record)
                 for update_index in range(first_update, stage.updates):
                     if stage.active_seconds is not None and (
                         record.collection_seconds + record.learning_seconds
@@ -1471,14 +1479,16 @@ def _execute_regime(
                         collector.stats.learner_transitions - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        metric_row(diagnostic),
+                        metric_row(diagnostic) | time_since(timed, spent),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
                         ),
                     )
+                    timed = spent
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds

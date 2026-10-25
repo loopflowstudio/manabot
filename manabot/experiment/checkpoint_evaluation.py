@@ -9,26 +9,18 @@ import time
 
 import psutil
 
-from manabot.eval.match import play_cell
+from manabot.eval.admission import register_anchor, register_checkpoint
+from manabot.eval.evaluation import evaluate
+from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
-from manabot.eval.monitor import (
-    OPPONENT_NAMES,
-    EvaluationRow,
-    MonitorProtocol,
-    MonitorResult,
-    _opponent_source_sha256,
-    _summarize,
-)
+from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
-from manabot.model.checkpoint import load_checkpoint
-from manabot.sim import players as players
-from manabot.sim.matchup import (
-    SELECTED_SUITE,
-    selected_match,
-)
-from manabot.sim.registration import PlayerRegistration
+from manabot.infra.identity import canonical_sha256
+from manabot.infra.provenance import source_bundle_sha256
+from manabot.sim import players
+from manabot.sim.execution import EvalExecution
+from manabot.sim.matchup import SELECTED_SUITE, selected_match
+from manabot.sim.serving import InferenceRuntime
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
 
@@ -96,14 +88,11 @@ def checkpoint_manifest(
     artifact: ArtifactReference,
     coordinates: TrainingCoordinates,
     protocol: MonitorProtocol,
+    *,
+    execution: EvalExecution | None = None,
 ) -> MonitorResult:
     """Admit exact checkpoint bytes and runtime identities before playing games."""
     path = Path(artifact["path"]).resolve()
-    if (
-        path.stat().st_size != artifact["bytes"]
-        or file_sha256(path) != artifact["sha256"]
-    ):
-        raise ValueError("checkpoint differs from recorded artifact")
     matchup = protocol.authored_matchup
     expected_match = matchup.match() if matchup else selected_match()
     suite = matchup.content_suite if matchup else SELECTED_SUITE
@@ -111,10 +100,19 @@ def checkpoint_manifest(
         expected_match.model_dump()
     ):
         raise ValueError("monitoring requires its exact declared authored setup")
-    agent, space = load_checkpoint(str(path))
-    runtime = runtime_fingerprints(
-        run.seed, match_config=run.regime.match, observation_space=space
+    admission = register_checkpoint(
+        path,
+        match=run.regime.match,
+        content_suite=suite,
+        player_id="monitor-checkpoint",
+        display_name="Monitored checkpoint",
+        training_seed=run.seed,
+        artifact_id=f"monitor/{artifact['sha256']}",
+        expected_sha256=artifact["sha256"],
+        expected_bytes=artifact["bytes"],
+        allow_deck_repetition=protocol.include_mirrors,
     )
+    runtime = admission.identities
     for name in (
         "world",
         "observation_abi_sha256",
@@ -139,44 +137,11 @@ def checkpoint_manifest(
             *sorted((Path(__file__).resolve().parents[1] / "eval").glob("*.py")),
         ]
     )
-    common = dict(
-        information_boundary="acting-viewer",
-        world=run.regime.world,
-        content_suite=suite,
-        observation_abi_sha256=run.identities["observation_abi_sha256"],
-        action_abi_sha256=run.identities["action_abi_sha256"],
-        matchup_sha256=run.identities["matchup_sha256"],
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-    )
-    candidate = PlayerRegistration(
-        **common,
-        player_id="monitor-checkpoint",
-        display_name="Monitored checkpoint",
-        role="challenger",
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "deterministic": False,
-            "device": "cpu",
-            "batch_size": 1,
-            **({"allow_deck_repetition": True} if protocol.include_mirrors else {}),
-        },
-        compute_class_id="policy-cpu-one-thread-one-pass",
-        checkpoint_sha256=artifact["sha256"],
-        checkpoint_bytes=artifact["bytes"],
-        parameter_count=sum(parameter.numel() for parameter in agent.parameters()),
-        training_seed=run.seed,
-        artifact_id=f"monitor/{artifact['sha256']}",
-    )
-    opponent = PlayerRegistration(
-        **common,
+    candidate = admission.registration
+    opponent = register_anchor(
+        candidate,
+        protocol.opponent,
         player_id="monitor-" + protocol.opponent.replace("_", "-"),
-        display_name=OPPONENT_NAMES[protocol.opponent],
-        role="anchor",
-        runner_kind="code",
-        player_spec={"kind": protocol.opponent},
-        compute_class_id=protocol.opponent.replace("_", "-") + "-cpu-v1",
-        source_sha256=_opponent_source_sha256(protocol.opponent),
     )
     key = EvaluationKey(
         world=run.regime.world,
@@ -188,6 +153,10 @@ def checkpoint_manifest(
         anchor_cohort_sha256=canonical_sha256(opponent.model_dump()),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
+    if execution is not None:
+        key, (candidate, opponent) = bind_execution(
+            key, (candidate, opponent), execution
+        )
     return MonitorResult(
         purpose=protocol.result_purpose,
         run_id=run.id,
@@ -212,8 +181,14 @@ def evaluate_checkpoint(
     *,
     protocol: MonitorProtocol | None = None,
     concurrent_activity: str = "unknown; host load is not contention attribution",
+    execution: EvalExecution | None = None,
+    inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
+    if inference is not None:
+        if execution is not None and execution != inference.execution:
+            raise ValueError("conflicting execution declaration")
+        execution = inference.execution
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
     started_unix = time.time()
@@ -221,7 +196,11 @@ def evaluate_checkpoint(
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
         result = checkpoint_manifest(
-            run, artifact, coordinates, protocol or MonitorProtocol()
+            run,
+            artifact,
+            coordinates,
+            protocol or MonitorProtocol(),
+            execution=execution,
         )
     except Exception as exc:
         atomic_json(
@@ -241,29 +220,26 @@ def evaluate_checkpoint(
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     try:
-        for block, seed in enumerate(result.protocol.deal_seeds):
+        panels = (
+            [result.protocol.deal_seeds]
+            if execution
+            else [(seed,) for seed in result.protocol.deal_seeds]
+        )
+        for block, seeds in enumerate(panels):
             directory = output_dir / f"deal-{block:03d}"
-            directory.mkdir()
             # The arena persists command traces after every attempted game.
-            rows, trace, replay = play_cell(
-                key=result.key,
-                player_a=result.candidate,
-                player_b=result.opponent,
-                deal_seeds=(seed,),
+            panel = evaluate(
+                _request(result, tuple(seeds)),
                 out_dir=directory,
-                checkpoint_paths={result.candidate.player_id: result.artifact["path"]},
-                game_seconds=result.protocol.game_seconds,
-                max_commands=result.protocol.max_commands,
-                matchup_mode="all" if result.protocol.include_mirrors else "cross",
-                authored_matchup=result.protocol.authored_matchup,
+                execution=execution,
+                inference=inference,
             )
-            atomic_json(directory / "rows.json", rows)
-            atomic_json(directory / "trace.json", trace)
-            atomic_json(directory / "replay.json", replay)
-            for raw in rows:
-                row = EvaluationRow.model_validate(raw)
+            for row in panel.rows:
                 row.trace_path = str(Path(directory.name) / row.trace_path)
                 result.rows.append(row)
+            if panel.error:
+                result.error = panel.error
+                break
             atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"

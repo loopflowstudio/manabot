@@ -24,6 +24,10 @@ A segment ends before its wall budget rather than at it: the stage stops at an
 update boundary once another update plus `stop_reserve_seconds` no longer fits,
 exports raw/EMA/Adam and ends `paused`. That paused segment is a successful
 attempt reporting the update it reached, and its successor continues normally.
+
+A job's runs track under its `experiment`, the experiment file's stem
+(`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
+find them. Etude's launcher does not yet hand the job file's name to its runs.
 """
 
 from datetime import datetime, timezone
@@ -35,6 +39,7 @@ from pathlib import Path
 import time
 
 from etude.launch.records import Input, Job
+from etude.run.storage import SAFE_NAME
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
@@ -146,6 +151,8 @@ class TrainingJob(Strict):
     """
 
     regime: TrainingRegime
+    # The Etude experiment its runs track under.
+    experiment: str = Field(pattern=SAFE_NAME.pattern)
     milestones: tuple[int, ...] = ()
     finalization_seconds: float = Field(default=30, gt=0)
     # Inside the watchdog: the final raw/EMA/Adam exports after a wall-bounded
@@ -346,6 +353,7 @@ def run_worker() -> TrainingRun:
             int(environment["ETUDE_SEED"]),
             output / "training",
             store,
+            experiment=spec.experiment,
             checkpoint_updates=spec.milestones,
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
