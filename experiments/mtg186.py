@@ -70,6 +70,10 @@ RENT = "l4-etude"
 MILESTONES = (200, 400, 600)
 # Inclusive authorization for the Task: training, setup, failures and evaluation.
 CAP_USD = Decimal(10)
+# Etude cohorts are single-use. The first cohort's only run was lost before
+# start (protocol amendment); the retry's cohort gets the cap that remains.
+LAUNCHES = {"mtg186": Decimal("0.148")}
+LAUNCH = "mtg186-r2"
 # 8.25 hours covers setup, the 7.5-hour training ceiling and finalization. At the
 # on-demand's $0.60/hour ceiling plus storage this is at most about $5.10.
 MAX_HOURS = 8.25
@@ -129,6 +133,7 @@ def identity() -> dict[str, object]:
         "cohort": COHORT,
         "rent": RENT,
         "cap_usd": str(CAP_USD),
+        "launch": LAUNCH,
         "job_usd": str(JOB_USD),
         "max_hours": MAX_HOURS,
         "milestones": list(MILESTONES),
@@ -378,12 +383,13 @@ def main() -> None:
     if not args.revision:
         parser.error("quote and launch need --revision")
     runs = list(train(_clean_revision(args.revision)))
-    priced = quote(runs, rent=RENT, cohort=COHORT, max_usd=CAP_USD)
+    remaining = CAP_USD - sum(LAUNCHES.values())
+    priced = quote(runs, rent=RENT, cohort=LAUNCH, max_usd=remaining)
     print(priced.model_dump_json(indent=2))
     if priced.max_usd > JOB_USD:
         raise SystemExit(f"quote {priced.max_usd} exceeds the job's ${JOB_USD}")
     if args.command == "launch":
-        print(queue_cohort(COHORT, runs, rent=RENT, max_usd=CAP_USD))
+        print(queue_cohort(LAUNCH, runs, rent=RENT, max_usd=remaining))
 
 
 if __name__ == "__main__":

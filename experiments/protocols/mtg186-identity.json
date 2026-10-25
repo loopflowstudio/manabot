@@ -313,6 +313,7 @@
     "seed": 18190001
   },
   "job_usd": "5.50",
+  "launch": "mtg186-r2",
   "max_hours": 8.25,
   "milestones": [
     200,
@@ -396,7 +397,7 @@
   "seed": 18601,
   "sha256": {
     "experiments/elemental_grid.py": "d91027baf18455da2b079759d40aa417b6b2ff3601370a3e4665e3cb7a917cf5",
-    "experiments/mtg186.py": "9e506ad51d4cc486cd2b25afe7f2f200a28a1d62d4c18d3b8f6776dde34cf6a9",
+    "experiments/mtg186.py": "30dee681e54a39771cce45ae91fe646e998275b24565f07517f9c06e6a508dfa",
     "experiments/regimes/elemental-ur-gw-186-v1.json": "6ecb6149dafa4552b1e555d452b14cf4983fb39a68eb49c2196d9fffcc226d35",
     "manabot/eval/match.py": "511d67a773ca44e277195c9a6e93b209955cdbbc9788e3814543146fb9b7bc6a",
     "manabot/experiment/job.py": "aa97fa5906cc4611a033a75e411db49333118ee0ed2659861ae34024fa1588cd",
