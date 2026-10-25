@@ -71,7 +71,7 @@ from experiments.elemental_grid import (
     _legs,
 )
 from experiments.mtg186 import CAP_USD, LAUNCHES, MILESTONES, ROOT, SEED, STORAGE
-from manabot.experiment.job import _TOOLCHAIN, _setup
+from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 import managym
 
@@ -497,8 +497,8 @@ def job(pairing: Pairing, *, revision: str) -> Job:
         raise ValueError("pair schedule differs from its pinned digest")
     return Job(
         name=f"mtg186-pair-{pairing.name}",
-        setup=_setup(""),
-        command=f"{_TOOLCHAIN}\nuv run --locked python -m experiments.mtg186_eval pair",
+        setup=machine_setup(""),
+        command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m experiments.mtg186_eval pair",
         config=PairJob(pairing=pairing).model_dump_json(),
         repo=str(ROOT),
         revision=revision,

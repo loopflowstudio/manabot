@@ -94,16 +94,23 @@ class LearnerContinuation(Strict):
 
 
 RUST_TOOLCHAIN = "1.98.1"
-_TOOLCHAIN = f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}'
+# Etude machine preparation shared by every job that runs repository code.
+TOOLCHAIN_ENV = (
+    f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}'
+)
 
 
-def _setup(extras: str) -> str:
+def machine_setup(extras: str) -> str:
+    """Setup script installing the pinned Rust toolchain and locked venv.
+
+    `extras` is appended verbatim to `uv sync` (e.g. `" --extra dev"`).
+    """
     return (
         "set -eu\n"
         'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
         "https://sh.rustup.rs | sh -s -- -y --profile minimal "
         f"--default-toolchain {RUST_TOOLCHAIN}\n"
-        f"{_TOOLCHAIN}\n"
+        f"{TOOLCHAIN_ENV}\n"
         f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
         f"uv sync --locked --python 3.12{extras}\n"
     )
@@ -213,8 +220,8 @@ class TrainingJob(Strict):
         extras = " --extra dev" if spec.validate_numerics else ""
         return Job(
             name=spec.regime.id,
-            setup=_setup(extras),
-            command=f"{_TOOLCHAIN}\nuv run --locked{extras} python -m manabot.experiment.job",
+            setup=machine_setup(extras),
+            command=f"{TOOLCHAIN_ENV}\nuv run --locked{extras} python -m manabot.experiment.job",
             config=spec.model_dump_json(),
             repo=str(repo.resolve()),
             revision=revision,
