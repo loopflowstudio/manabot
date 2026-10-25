@@ -1,0 +1,134 @@
+# One text decision through an untouched LLM
+
+`manabot.llm` consumes observation text and its complete legal-reference list,
+then returns one inspectable selection record. It does not render observations,
+resolve Commands, advance a game or train a model. The caller remains responsible
+for viewer-safe input, completeness, source identity and native stale/legality
+checks when submitting the selected reference.
+
+Run with explicit input and configuration files:
+
+```sh
+uv run --extra llm python -m manabot.llm \
+  --input decision.json --config inference.json --out .runs/llm/decision.json
+```
+
+The output path must be new. Exit status is zero for any selection, including a
+marked fallback, and one for a runtime, context or deadline failure. Invalid
+input/configuration fails before starting inference. Records can contain private
+observations; retain them with the same access as their source.
+
+An initial handwritten fixture can use this shape; it is not a renderer or a
+captured native observation:
+
+```json
+{
+  "text": "Synthetic protocol fixture. A0 means wait. A1 means continue.",
+  "legal_references": ["A0", "A1"],
+  "representation_id": "handwritten-protocol-fixture-v1",
+  "source_identity": {"fixture": "synthetic; no native world or Command"}
+}
+```
+
+The first playing-model integration is [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B),
+using its unchanged text weights at BF16. Run its pinned configuration on CUDA:
+
+```sh
+uv run --locked --extra llm python -m manabot.llm \
+  --input decision.json --config configs/llm/qwen3.5-9b.json \
+  --out .runs/llm/qwen-decision.json
+```
+
+The configuration pins model and tokenizer to
+`c202236235762e1c871ad0ccb60c8ee5ba337b9a`, explicitly disables thinking through
+the native chat template, and uses a provisional 4,096-token total context,
+32-token response allowance and 120-second decision deadline. Each full prompt,
+including repair, must fit alongside the response allowance. These are starting
+engineering limits, not a measured game corpus budget or a single-L4 fit claim.
+Pre-cache the pinned checkpoint before a timed run; the deadline includes loading.
+Full-weight inference and largest-input/repair memory still need an L4 proof.
+
+The optional runtime pins Transformers 5.3.0. Its `AutoModelForCausalLM` loads
+Qwen3.5's text decoder from the composite checkpoint without instantiating the
+vision encoder. The retained `runtime.model_class` identifies the loaded class.
+`enable_thinking: false` passes the native template option on both attempts;
+omitting it retains a tokenizer's default. Reasoning-output parsing is not
+supported, and enabling thinking is rejected by configuration validation. The
+same generic loader and configuration still support ordinary causal models.
+
+This configuration pins the small model used for the CPU plumbing smoke. Model
+selection and limits are explicit run inputs; this example does not establish a
+scientific baseline or an admitted game-context budget. Both revisions must be
+full, immutable 40-character Hub commit hashes.
+
+```json
+{
+  "model_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "model_revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "tokenizer_id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "tokenizer_revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "device": "cpu",
+  "precision": "float32",
+  "context_tokens": 2048,
+  "max_new_tokens": 32,
+  "deadline_seconds": 120,
+  "fallback_seed": 37,
+  "decoding": "greedy"
+}
+```
+
+CUDA accepts `float32`, `float16` or `bfloat16` as explicitly configured. Loading
+uses safetensors and the installed Transformers implementations, without remote
+Python code, adapters or model modifications. The `llm` extra is optional;
+ordinary manabot imports do not load Transformers. Each command loads one model
+in a fresh worker. The one decision deadline includes downloads, loading,
+tokenization, generation and the optional repair. Pre-cache pinned model bytes
+when measuring inference latency; retained wall time still includes loading.
+
+The model's chat template formats a user message containing the supplied text,
+all legal references and the output instruction. Both attempts tokenize the full
+chat without truncation. Prompt length plus the fixed generation allowance must
+fit `context_tokens`; the repair's longer conversation is checked separately.
+The configured context must also fit the model's declared position limit.
+Greedy decoding uses a fresh explicit generation configuration, recorded in full,
+without inheriting sampling or repetition penalties from the model repository.
+
+An answer must finish with EOS and contain exactly one listed reference after
+whitespace trimming. A generation-limit cutoff remains incomplete even if its
+text looks legal. An invalid answer receives exactly one repair, preserving the
+original message and the failed answer and appending:
+
+> Invalid response. Return exactly one action reference from the legal-actions list, with no other text.
+
+Two invalid answers produce a seeded uniform draw over the original reference
+list. The record distinguishes `initial`, `retry` and `fallback`, and includes
+raw decoded responses, token IDs/counts, template, model/tokenizer revisions,
+precision, generation configuration, per-attempt and total timings, and fallback
+seed/RNG state/index. Only the final EOS terminator is removed from decoded
+response text; other special tokens remain visible to protocol validation.
+
+Runtime failures and exhausted deadlines stop with evidence, without fallback.
+The supervisor terminates a stalled worker and retains its last completed
+snapshot, including a pending fully tokenized prompt when available. Unfinished
+inference cannot supply partial tokens or final memory measurements. CUDA memory
+is PyTorch's peak allocated tensor bytes since loading began, not total device
+usage or reserved memory; CPU records use null. This measurement alone does not
+certify fit on a 24 GB L4. Measure the largest admitted prompt and repair on the
+actual GPU before making that claim.
+
+`attempts[0].validation_error` and the selection origin expose first-response
+validity, repair success and fallback usage. Treat failed attempts separately;
+future playing scores must include fallback games and describe the model plus
+recovery policy. No playing-strength or fine-tuning claim follows from this
+single-decision instrument.
+
+The 2026-10-24 CPU compatibility check used the pinned SmolLM2 example above
+through the CLI on Transformers 5.3.0. Its first response, `A0\nA1`, was rejected;
+the repair returned `A0`. The record retained 88/124 prompt tokens, 6/3 output
+tokens and 18.72 seconds including loading, with null GPU memory. This checks
+pretrained inference and repair on a synthetic input, not Qwen3.5 or L4 capacity.
+The check used Hub access; an offline-only invocation failed during metadata
+lookup and retained a runtime failure without fallback.
+
+Implementation references: [Transformers chat templates](https://huggingface.co/docs/transformers/v5.3.0/chat_templating)
+and [Qwen3.5 implementation](https://github.com/huggingface/transformers/blob/v5.3.0/src/transformers/models/qwen3_5/modeling_qwen3_5.py).
