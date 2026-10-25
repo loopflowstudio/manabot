@@ -1,6 +1,7 @@
 """MTG-183's frozen windows, rated checkpoints and pairing graph."""
 
 from collections import Counter
+import json
 from pathlib import Path
 
 from etude.run.storage import DirectoryStorage
@@ -110,6 +111,20 @@ def test_staging_binds_published_exports_at_the_parent_update(
     (parent / f"{STAGE}-optimizer.pt").write_bytes(b"tampered")
     with pytest.raises(ValueError, match="published optimizer"):
         stage_parent(parent, storage, "mtg183/w3")
+
+
+def test_staging_counts_a_historical_parent_by_its_inline_update_rows(
+    tmp_path: Path,
+) -> None:
+    # w1/w2 were written before StageRecord.updates; their exports keep one
+    # diagnostics row per update and are admitted by digest, never rewritten.
+    parent = _window(tmp_path)
+    record = json.loads((parent / "run.json").read_bytes())
+    stage = record["stages"][0]
+    stage["diagnostics"] = [{"update": i} for i in range(stage.pop("updates"))]
+    (parent / "run.json").write_text(json.dumps(record))
+    continuation = stage_parent(parent, DirectoryStorage(tmp_path / "bucket"), "w")
+    assert continuation.from_update == 2
 
 
 def test_h2h_schedule_is_frozen_and_disjoint_from_the_heuristic_grid() -> None:
