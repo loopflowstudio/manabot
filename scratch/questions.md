@@ -24,10 +24,9 @@ They do not select current work or authorize paid execution.
 - Merged #362's branch instead of rebasing (the steer said rebase): rebasing
   rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
   otherwise keep `8e7df92e4` reachable if the PR is squashed.
-- Superseded 2026-10-25: "one Etude segment to the remaining cap" cannot fit
-  Etude's 43,000 s rental cap; the chain of one-rental segments (amendment
-  02:30 UTC) restores the frozen w1–w7 shape. Hours subtract Etude's 0.25 h
-  setup allowance (its dollar check), not in the 19:00 formula.
+- Etude's 43,000 s rental cap forces a chain of one-rental segments (amendment
+  02:30 UTC), restoring the frozen w1–w7 shape. Segment hours subtract Etude's
+  0.25 h setup allowance (its dollar check), not in the 19:00 formula.
 - Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
   (108/h): conservative, matches the watchdog's clock.
 - The evaluator's `--etude-source/--run` names one run; later segments need it
@@ -40,8 +39,7 @@ They do not select current work or authorize paid execution.
 # MTG-183 Etude eval and R2 (2026-10-25)
 
 - #362 and heuristic v2 are on main and merged here (merge, so `8e7df92e4`
-  stays an ancestor). Publication still waits for `elemental-183-w3.json`
-  (after w2 ends 01:47 UTC).
+  stays an ancestor).
 - Explicit `evaluate` matches, not a `Benchmark`: the design is non-uniform
   (full vs subset grids, a pairing graph over w1/w2 checkpoints Etude never
   tracked), and `curves` cannot place non-Etude checkpoints on training axes.

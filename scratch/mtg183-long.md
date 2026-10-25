@@ -27,8 +27,8 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 
 - Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`, then #360
   (`arena/` split into `sim/` + `eval/`, etude-sdk 0.2.2) at `9871e3545` (pushed).
-- Seed 18301: w1 ended at update 1,325; w2 running to its pod deadline
-  2026-10-25 01:47 UTC (≈ update 2,550). Old cohort controller unloaded.
+- Seed 18301: w1 ended at update 1,325, w2 at 2,534 (below). Old cohort
+  controller unloaded.
 - Old follower `gg.manabot.mtg183.follower` stopped (`launchctl bootout`,
   2026-10-25 00:15 UTC; plist kept). MTG-181's follower had exited and MTG-181
   moved to `elemental_181_new_heuristic`, which the follower's process-name yield
@@ -61,23 +61,16 @@ at 01:26 UTC, run as `doppler run -p etude -c prd -- doppler run -p manabot -c p
 
 launchd `gg.manabot.mtg183.eval` (plist in `~/Library/LaunchAgents`) runs
 `elemental_long_eval` under `doppler run -p manabot -c prd` from the pinned
-checkout `/Users/jack/.manabot/mtg183-eval-source`, directory
+checkout `/Users/jack/.manabot/mtg183-eval-source` (`9871e3545`, etude-sdk 0.2.2,
+`_managym` from this worktree's #360 build), directory
 `/Users/jack/.manabot/mtg183-eval`, `--windows` the old ledger (re-read every
 poll), `--storage r2://manabot/evaluations`, `--until 1793584946`. It yields
-while any experiment from MTG-181's checkout runs (MTG-181 switched to
-`elemental_181_new_heuristic`; the old name-based yield missed it). First poll
-admitted 48 checkpoints (0…2,300). At 00:52 UTC MTG-181's
-`elemental_181_new_heuristic` was still running, so the evaluator had played
-no rows (it logs nothing while yielding; `state.json` refreshes each poll).
-Evaluation wall time depends on when MTG-181 finishes, not on idle capacity.
-#360 changed the agent code identity (`INFERENCE_CODE` names `sim/match.py` and
-`eval/match.py`), so with 0 rows played the pin moved from `d9fc58df2` to
-`9871e3545` (etude-sdk 0.2.2, `_managym` copied from this worktree's build with
-#360's card-capture bindings); `state.json` holds only checkpoint artifacts and
-survived. First poll after restart: 48 checkpoints, no error. Later restarts
-(adding `--etude-source/--run`) keep identities only if the pin's
-`INFERENCE_CODE` files are unchanged; a row played under one pin is not
-comparable to one played under another.
+(silently; `state.json` refreshes each poll) while any experiment from
+MTG-181's checkout runs, so its wall time follows MTG-181, not idle capacity.
+The pin moved from `d9fc58df2` with 0 rows played because #360 changed
+`INFERENCE_CODE` (agent identity). Later restarts (adding `--etude-source/--run`)
+keep identities only if the pin's `INFERENCE_CODE` files are unchanged; rows
+played under different pins are not comparable.
 
 ## w2 end and w3 spec (2026-10-25 02:30 UTC)
 
