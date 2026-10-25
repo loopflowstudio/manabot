@@ -112,9 +112,8 @@ uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXPERI
 and the runtime/content identity its eval run declared, and rebuilds its rows.
 `--replay` also replays each trace. Evidence lives in the eval run's folder at
 `artifacts/evidence/SHA256.json.gz` and travels with ordinary Etude delivery
-(`etude sync`). From etude-sdk 0.2.4, Etude sends files under `artifacts/` once
-and never re-reads them, so delivery stays cheap with thousands of games;
-manabot still pins 0.2.2, where each delivery pass re-hashes them. Earlier runs keep their
+(`etude sync`). Etude sends files under `artifacts/` once and never re-reads
+them, so delivery stays cheap with thousands of games. Earlier runs keep their
 evidence at `evidence/`; their rows name that path. Evidence contains
 copy/incarnation identity, owner/controller, movement source/destination/cause,
 sequence and turn, original commands and hashes, and the replay receipt. These
