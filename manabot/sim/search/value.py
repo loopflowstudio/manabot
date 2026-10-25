@@ -23,8 +23,7 @@ from manabot.env import Env, ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim.data import OBS_KEYS
-from manabot.sim.rollout import _allocate_buffers
+from manabot.sim.rollout import OBS_KEYS, _allocate_buffers
 from manabot.sim.search.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 # -----------------------------------------------------------------------------

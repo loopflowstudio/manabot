@@ -122,8 +122,8 @@ Development server without the launcher:
 uv run uvicorn academy.server:app --port 8000
 ```
 
-The [local trained-challenger workflow](../docs/local-trained-challenger.md)
-covers training, the built same-origin server, feedback, and read-only SQL.
+The [local challenger workflow](../docs/local-trained-challenger.md)
+covers the built same-origin server, feedback, and read-only SQL.
 Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
 
 Any other trained checkpoint is selectable from the Opponent menu. The table

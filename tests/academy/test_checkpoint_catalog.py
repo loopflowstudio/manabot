@@ -126,7 +126,7 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
     assert config["opponent"]["sha256"] == sha256
     assert config["opponent_checkpoint"] == {
         "name": "self-play/step_0",
-        "producer": "supervised distillation",
+        "producer": "unknown",
         "sha256": sha256,
         "source": "runs",
         "world": WORLD,

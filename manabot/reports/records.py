@@ -56,8 +56,7 @@ class RetainedRun(RunRecord[RecordedRegime]):
         learning = {
             stage.id
             for stage in self.regime.stages
-            if stage.operation
-            in {"train_self_play", "train_supervised", "train_compound"}
+            if stage.operation in {"train_self_play", "train_compound"}
         }
         return self._updates_through(learning, stage_id)
 

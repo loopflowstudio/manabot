@@ -4,41 +4,23 @@ import json
 from pathlib import Path
 
 from etude.train.read import read
-import numpy as np
 import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
 from manabot.experiment.evaluation_queue import checkpoints
-from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
     training_dashboard,
 )
-from manabot.sim.data import VISIT_COUNT_KEY, load_shards
-from manabot.training import execution
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import (
-    CollectSearch,
-    TrainingRegime,
-    TrainSelfPlay,
-    TrainSupervised,
-)
-from manabot.training.supervised.search import (
-    CHOSEN_ACTION_TARGET,
-    SearchSupervisedEpochStats,
-    evaluate_search_supervised,
-    train_search_supervised,
-)
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
-from manabot.verify.util import INTERACTIVE_DECK
 import managym
-from tests.training.test_supervised import _dataset
 
 
 def _recipe() -> TrainingRegime:
@@ -85,34 +67,6 @@ def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
     ]
 
 
-def test_fixed_validation_callback_and_leak_rejection() -> None:
-    torch.set_num_threads(1)
-    dataset = _dataset()
-    mask = dataset["game_index"] == 0
-    fixed = {k: v[mask] for k, v in dataset.items()}
-    seen: list[SearchSupervisedEpochStats] = []
-
-    def record(stats: SearchSupervisedEpochStats, model: ActorCritic) -> None:
-        assert isinstance(model, ActorCritic)
-        seen.append(stats)
-
-    _, _, _, history = train_search_supervised(
-        dataset,
-        epochs=2,
-        validation_games={0, 1},
-        batch_size=32,
-        fixed_validation_dataset=fixed,
-        on_epoch=record,
-    )
-    assert seen == history
-    assert all(s.fixed_validation is not None for s in seen)
-    assert all(np.isfinite(s.train_policy_kl) for s in seen)
-    with pytest.raises(ValueError, match="excluded"):
-        train_search_supervised(
-            dataset, epochs=1, validation_games={1}, fixed_validation_dataset=fixed
-        )
-
-
 def test_monitor_exports_do_not_change_learning_and_survive_reload(
     tmp_path: Path,
 ) -> None:
@@ -155,101 +109,13 @@ def test_dashboard_offline_roundtrip() -> None:
         rows=[
             {
                 "progress/observation": 0,
-                "distillation/train_cross_entropy": 0.3,
-                "distillation/growing_cross_entropy": 0.4,
-                "distillation/fixed_cross_entropy": 0.5,
+                "rl/loss": 0.3,
+                "rl/policy_loss": 0.4,
             }
         ],
     )
     reloaded = Dashboard.model_validate_json(dashboard.model_dump_json())
     assert reloaded == dashboard
-
-
-def test_global_game_ids_preserve_fixed_membership_as_shards_grow(
-    tmp_path: Path,
-) -> None:
-    source = _dataset()
-    paths: list[Path] = []
-    for round_index, offset in enumerate((0, 100)):
-        data = {key: value.copy() for key, value in source.items()}
-        data["game_index"] += offset
-        path = tmp_path / f"shard-{round_index}.npz"
-        np.savez_compressed(
-            path, **data, provenance=np.array(json.dumps({"round": round_index}))
-        )
-        paths.append(path)
-    first = load_shards(paths[:1], globally_unique_games=True)
-    growing = load_shards(paths, globally_unique_games=True)
-    np.testing.assert_array_equal(
-        growing["game_index"][: len(first["game_index"])], first["game_index"]
-    )
-    assert set(growing["game_index"]) == set(range(8)) | set(range(100, 108))
-    with pytest.raises(ValueError, match="overlap"):
-        load_shards([paths[0], paths[0]], globally_unique_games=True)
-
-
-def test_executor_streams_fixed_and_growing_validation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = _dataset()
-    mask = source["game_index"] == 0
-    sample = {key: value[mask].copy() for key, value in source.items()}
-    sample[VISIT_COUNT_KEY] = (sample["actions_valid"] > 0).astype(np.float32)
-
-    def collect(**kwargs: object) -> dict[str, object]:
-        path, game = kwargs["out_path"], kwargs["game_offset"]
-        assert isinstance(path, Path) and isinstance(game, int)
-        data = {key: value.copy() for key, value in sample.items()}
-        data["game_index"][:] = game
-        np.savez_compressed(path, **data)
-        return {
-            "terminated": [True],
-            "truncated": [False],
-            "decisions": len(data["game_index"]),
-        }
-
-    monkeypatch.setattr(execution, "generate_selfplay_shard", collect)
-    recipe = TrainingRegime(
-        id="distillation-fixture",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(
-            hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
-        ),
-        agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
-        stages=[
-            CollectSearch(id="data-0", operation="collect_search", games=2),
-            TrainSupervised(
-                id="policy-0",
-                operation="train_supervised",
-                datasets=["data-0"],
-                epochs=1,
-            ),
-            CollectSearch(id="data-1", operation="collect_search", games=10),
-            TrainSupervised(
-                id="policy-1",
-                operation="train_supervised",
-                datasets=["data-0", "data-1"],
-                initial="policy-0",
-                epochs=1,
-            ),
-        ],
-    )
-    with VerifyStore(tmp_path / "run.sqlite") as store:
-        run = execute_regime(
-            recipe, 197, tmp_path / "run", store, checkpoint_seconds=1e-9
-        )
-    assert run.fixed_validation is not None
-    assert run.fixed_validation.games == [0]
-    assert run.updates_through() == 2
-    assert [checkpoint.updates for checkpoint in run.monitoring_checkpoints] == [1, 2]
-    for stage in (run.stages[1], run.stages[3]):
-        assert stage.diagnostics[0]["fixed_validation"]["policy_loss"] >= 0
-        assert stage.diagnostics[0]["validation"]["policy_loss"] >= 0
-        assert stage.diagnostics[0]["coordinates"]["optimizer_exposures"] > 0
-    assert (
-        training_dashboard(run, stage_rows(run, {})).summary["history_incomplete"]
-        is False
-    )
 
 
 def test_publisher_reads_etude_prefix_and_rejects_rewritten_history(
@@ -325,30 +191,6 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
     dashboard.rows[0]["monitor/attempted_games"] = 7
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
-
-
-def test_fixed_reference_target_does_not_change_training_objective() -> None:
-    torch.set_num_threads(1)
-    dataset = _dataset()
-    fixed = {key: value[dataset["game_index"] == 0] for key, value in dataset.items()}
-    ordinary, _, _, _ = train_search_supervised(dataset, epochs=1, validation_games={0})
-    monitored, _, _, history = train_search_supervised(
-        dataset,
-        epochs=1,
-        validation_games={0},
-        fixed_validation_dataset=fixed,
-        fixed_validation_target_kind=CHOSEN_ACTION_TARGET,
-    )
-    for name, value in ordinary.state_dict().items():
-        torch.testing.assert_close(value, monitored.state_dict()[name], rtol=0, atol=0)
-    expected = evaluate_search_supervised(
-        monitored,
-        fixed,
-        np.arange(len(fixed["game_index"])),
-        policy_temperature=0.05,
-        policy_target_kind=CHOSEN_ACTION_TARGET,
-    )
-    assert history[0].fixed_validation == expected
 
 
 def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(

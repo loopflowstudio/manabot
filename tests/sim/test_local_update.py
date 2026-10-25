@@ -21,6 +21,7 @@ from manabot.arena.models import (
 from manabot.arena.replay import replay_games
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
+from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
@@ -35,7 +36,6 @@ from manabot.sim.search.local_update import (
     SamplerArtifact,
     regularized_update,
 )
-from manabot.training.supervised.belief import fit_belief_sampler, save_belief_sampler
 
 
 def small_match() -> MatchConfig:
@@ -138,7 +138,6 @@ def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
         )
         result = teacher.search(swapped, swapped_tracker.posterior, seed=7)
         np.testing.assert_array_equal(receipt.target, result.target)
-    assert receipt.mixing_diagnostics()["target_entropy"] >= 0
     with pytest.raises(TimeoutError):
         teacher.search(env._engine, tracker.posterior, seed=7, deadline=1)
     with pytest.raises(ValueError):

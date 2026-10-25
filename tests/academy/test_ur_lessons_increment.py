@@ -135,21 +135,9 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
         pytest.fail("required choice was not reached")
 
 
-def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> (
-    None
-):
+def test_runtime_fingerprints_refuse_earlier_world_labels() -> None:
     from manabot.infra.provenance import runtime_fingerprints
-    from scripts.train_challenger import world_identity
 
-    identity = world_identity({})
-    assert identity["version"] == "w13"
-    assert identity["content_manifest"]["world_version"] == "w13"
-    assert identity["dims"] == {
-        "player": 40,
-        "card": 41,
-        "permanent": 28,
-        "action_types": 16,
-    }
     for old_world in ("w2", "w3", "w4", "w5", "w6"):
         with pytest.raises(ValueError, match="cannot register"):
             runtime_fingerprints(world=old_world)

@@ -45,7 +45,6 @@ from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
-    CollectSearch,
     TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
@@ -54,11 +53,10 @@ from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
-Study = Literal["learning-speed", "ataraxos-ablations", "compound-decisions"]
+Study = Literal["ataraxos-ablations", "compound-decisions"]
 Arm = Callable[[], TrainingRegime]
 # Arms per study; the protocol binds one resolved recipe digest per arm.
 _ARM_COUNTS: dict[Study, int] = {
-    "learning-speed": 2,
     "ataraxos-ablations": 5,
     "compound-decisions": 4,
 }
@@ -145,11 +143,7 @@ class EvaluationProtocol(BaseModel):
                 raise ValueError(
                     "scientific profiles require all three fixed baselines"
                 )
-            expected_pairs = (
-                {(a, b) for a in self.training_seeds for b in self.training_seeds}
-                if self.study == "learning-speed"
-                else {(s, s) for s in self.training_seeds}
-            )
+            expected_pairs = {(s, s) for s in self.training_seeds}
             if set(self.endpoint_seed_pairs) != expected_pairs or len(
                 self.endpoint_seed_pairs
             ) != len(expected_pairs):
@@ -203,11 +197,7 @@ class ResolvedStudy(BaseModel):
             raise ValueError("resolved plan recipe digests do not match")
         if len({r.id for r in recipes}) != len(recipes):
             raise ValueError("recipe IDs must be unique")
-        if any(
-            sum(s.operation != "collect_search" for s in r.stages)
-            != self.protocol.checkpoint_count
-            for r in recipes
-        ):
+        if any(len(r.stages) != self.protocol.checkpoint_count for r in recipes):
             raise ValueError("every recipe must export the declared checkpoint count")
         if self.protocol.process_seconds > self.allocation_seconds:
             raise ValueError("process deadline exceeds study allocation")
@@ -238,10 +228,7 @@ def smoke_recipe(recipe: TrainingRegime) -> TrainingRegime:
     recipe.agent.hidden_dim = 16
     recipe.agent.num_attention_heads = 2
     for stage in recipe.stages:
-        if isinstance(stage, CollectSearch):
-            stage.simulations = 4
-            stage.worlds = 1
-        elif isinstance(stage, TrainCompound):
+        if isinstance(stage, TrainCompound):
             stage.games_per_update = 1
             stage.updates = 1
             stage.learning.epochs = 1
@@ -249,8 +236,6 @@ def smoke_recipe(recipe: TrainingRegime) -> TrainingRegime:
             stage.transitions = 64
             stage.updates = 2
             stage.learning.epochs = 1
-        else:
-            stage.epochs = 1
     return TrainingRegime.model_validate(recipe.model_dump())
 
 
@@ -269,8 +254,6 @@ def calibration_plan(study: Study, arms: Sequence[Arm]) -> ResolvedStudy:
             if isinstance(stage, TrainSelfPlay):
                 stage.updates = 8
                 stage.transitions = 256
-            elif isinstance(stage, CollectSearch):
-                stage.games = 4
         recipes.append(recipe)
     protocol = EvaluationProtocol(
         study=study,
@@ -293,10 +276,8 @@ def calibration_plan(study: Study, arms: Sequence[Arm]) -> ResolvedStudy:
     )
 
 
-def scientific_plan(
-    calibration: Path | str, prior_seconds: float, reserved_disk_bytes: int = 0
-) -> ResolvedStudy:
-    """Reserve both studies inside 168 hours; extrapolation is not timing proof."""
+def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedStudy:
+    """Reserve the ablation screen inside 168 hours; extrapolation is not timing proof."""
     out = Path(calibration).resolve()
     study = json.loads((out / "study.json").read_text())
     if study["study"] == "compound-decisions":
@@ -306,15 +287,13 @@ def scientific_plan(
     verify_saved_inputs(out, study)
     if study["profile"] != "calibration" or study["status"] != "completed":
         raise ValueError("a completed integrated calibration cohort is required")
-    screen = study["study"] == "ataraxos-ablations"
-    checkpoints = 3 if screen else 4
-    run_budget = (1 if screen else 18) * 3600
-    evaluation_budget = (6 if screen else 24) * 3600
-    allocation = (21 if screen else 132) * 3600
-    # Reserve the other study, four hours of calibration and eleven of recovery.
-    minimum_prior = (4 if screen else 25) * 3600
-    prior_seconds = max(prior_seconds, minimum_prior)
-    if prior_seconds + allocation + (132 * 3600 if screen else 0) > 157 * 3600:
+    checkpoints = 3
+    run_budget = 3600
+    evaluation_budget = 6 * 3600
+    allocation = 21 * 3600
+    # Reserve four hours of calibration and eleven of recovery.
+    prior_seconds = max(prior_seconds, 4 * 3600)
+    if prior_seconds + allocation > 157 * 3600:
         raise ValueError(
             "campaign has insufficient budget; amend allocations before scoring"
         )
@@ -332,66 +311,25 @@ def scientific_plan(
         recipe.wall_seconds = run_budget
         stages = []
         segment = run_budget / checkpoints
-        if isinstance(recipe.stages[0], TrainSelfPlay):
-            template = recipe.stages[0]
-            rate = max(records[s.id]["seconds"] / s.updates for s in recipe.stages)
-            overhead = max(r["export_seconds"] for r in records.values())
-            updates = int((segment * 0.75 - overhead - run["setup_seconds"]) / rate)
-            if updates <= template.updates:
-                raise ValueError("calibration cannot support an expanded RL workload")
-            for index in range(checkpoints):
-                stage = template.model_copy(deep=True)
-                stage.id = f"policy-{index}"
-                stage.initial = f"policy-{index - 1}" if index else None
-                stage.updates = updates
-                stage.execution.wall_seconds = segment
-                stages.append(stage)
-            predicted.append(updates * rate)
-        else:
-            collect = next(s for s in recipe.stages if isinstance(s, CollectSearch))
-            fit = next(s for s in recipe.stages if s.operation == "train_supervised")
-            collect_rate = max(
-                records[s.id]["seconds"] / s.games
-                for s in recipe.stages
-                if isinstance(s, CollectSearch)
-            )
-            # Fit cost grows with the cumulative corpus, including every epoch.
-            fit_rate = max(
-                records[s.id]["seconds"]
-                / sum(
-                    next(t.games for t in recipe.stages if t.id == ref)
-                    for ref in s.datasets
-                )
-                for s in recipe.stages
-                if s.operation == "train_supervised"
-            )
-            games = int(
-                (segment * 0.75 - run["setup_seconds"])
-                / (collect_rate + checkpoints * fit_rate)
-            )
-            if games <= collect.games:
-                raise ValueError(
-                    "calibration cannot support an expanded teacher workload"
-                )
-            for index in range(checkpoints):
-                collection = collect.model_copy(deep=True)
-                collection.id = f"collect-{index}"
-                collection.games = games
-                collection.execution.wall_seconds = (
-                    segment * collect_rate / (collect_rate + checkpoints * fit_rate)
-                )
-                training = fit.model_copy(deep=True)
-                training.id = f"policy-{index}"
-                training.initial = f"policy-{index - 1}" if index else None
-                training.datasets = [f"collect-{i}" for i in range(index + 1)]
-                training.execution.wall_seconds = (
-                    segment - collection.execution.wall_seconds
-                )
-                stages.extend((collection, training))
-            predicted.append(games * (collect_rate + fit_rate))
+        if not isinstance(recipe.stages[0], TrainSelfPlay):
+            raise ValueError("ablation calibration requires self-play arms")
+        template = recipe.stages[0]
+        rate = max(records[s.id]["seconds"] / s.updates for s in recipe.stages)
+        overhead = max(r["export_seconds"] for r in records.values())
+        updates = int((segment * 0.75 - overhead - run["setup_seconds"]) / rate)
+        if updates <= template.updates:
+            raise ValueError("calibration cannot support an expanded RL workload")
+        for index in range(checkpoints):
+            stage = template.model_copy(deep=True)
+            stage.id = f"policy-{index}"
+            stage.initial = f"policy-{index - 1}" if index else None
+            stage.updates = updates
+            stage.execution.wall_seconds = segment
+            stages.append(stage)
+        predicted.append(updates * rate)
         recipe.stages = stages
         recipes.append(TrainingRegime.model_validate(recipe.model_dump()))
-    expected = 5 if screen else 2
+    expected = 5
     if len(recipes) != expected or len({r.id for r in recipes}) != expected:
         raise ValueError("calibration must contain exactly one run per study arm")
     # Charge each measured anchor separately, including process startup and replay.
@@ -411,12 +349,12 @@ def scientific_plan(
     )
     if any(name not in costs for name in (*names, "paired")):
         raise ValueError("calibration must measure all three anchors and paired games")
-    seeds = (601, 1601, 2601) if screen else (5601, 6601, 7601)
-    endpoint_cells = 12 if screen else 9
+    seeds = (601, 1601, 2601)
+    endpoint_cells = 12
     # Scale all pre-scoring counts together; never select by measured score.
     for dev in range(16, 0, -1):
         endpoint_anchor = 2 * dev
-        endpoint_pair = (2 if screen else 8) * dev
+        endpoint_pair = 2 * dev
         estimate = (
             1.25
             * (
@@ -436,8 +374,8 @@ def scientific_plan(
             break
     else:
         raise ValueError("even the smallest evaluation cohort exceeds its allocation")
-    family = 1000000 if screen else 1200000
-    endpoint = 1400000 if screen else 1600000
+    family = 1000000
+    endpoint = 1400000
     # Interior cutoffs are conservative predictions. Actual support is checked by
     # analysis; a slow/fast run never fabricates a point at a nominal budget.
     first = max(predicted) * 1.1
@@ -493,7 +431,7 @@ def scientific_plan(
         measured[category] += size
         projected[category] += size * max(1, factor)
     projected_bytes = int(1.25 * sum(projected.values()))
-    reserve = 4 * 1024**3 + reserved_disk_bytes
+    reserve = 4 * 1024**3
     free = shutil.disk_usage(out).free
     if projected_bytes + reserve > free:
         raise ValueError(
@@ -514,9 +452,7 @@ def scientific_plan(
         endpoint_anchor_deals=tuple(
             range(endpoint + 100000, endpoint + 100000 + endpoint_anchor)
         ),
-        endpoint_seed_pairs=tuple((s, s) for s in seeds)
-        if screen
-        else tuple((a, b) for a in seeds for b in seeds),
+        endpoint_seed_pairs=tuple((s, s) for s in seeds),
         anchors=("random", "scripted-greedy", "puct-64"),
         process_seconds=allocation,
         uncertainty="paired-seed-descriptive",
@@ -1058,7 +994,6 @@ def main(study: Study, arms: Sequence[Arm], argv: Sequence[str] | None = None) -
     parser.add_argument("--plan", type=Path, help="Frozen ResolvedStudy JSON")
     parser.add_argument("--write-plan", type=Path, help="Resolve a plan and stop")
     parser.add_argument("--calibration", type=Path, help="Completed calibration study")
-    parser.add_argument("--companion-plan", type=Path)
     parser.add_argument("--prior-campaign-seconds", type=float, default=0)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--resume", action="store_true")
@@ -1080,17 +1015,7 @@ def main(study: Study, arms: Sequence[Arm], argv: Sequence[str] | None = None) -
         if args.profile == "scientific":
             if args.calibration is None:
                 parser.error("scientific plan generation requires --calibration")
-            reserved = 0
-            if args.companion_plan:
-                companion = ResolvedStudy.model_validate_json(
-                    args.companion_plan.read_text()
-                )
-                if companion.protocol.study == study:
-                    parser.error("companion must be the other study")
-                reserved = companion.projected_disk_bytes
-            plan = scientific_plan(
-                args.calibration, args.prior_campaign_seconds, reserved
-            )
+            plan = scientific_plan(args.calibration, args.prior_campaign_seconds)
             if plan.protocol.study != study:
                 parser.error("calibration belongs to a different study")
         else:
@@ -1104,7 +1029,7 @@ def main(study: Study, arms: Sequence[Arm], argv: Sequence[str] | None = None) -
         args.write_plan.parent.mkdir(parents=True, exist_ok=True)
         atomic_json(args.write_plan, plan.model_dump(mode="json"))
         return
-    if args.calibration or args.prior_campaign_seconds or args.companion_plan:
+    if args.calibration or args.prior_campaign_seconds:
         parser.error("calibration evidence/accounting arguments require --write-plan")
     if args.report_only:
         report(args.report_only.resolve())

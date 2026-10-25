@@ -2,9 +2,9 @@
 
 Two sources supply a table's trained opponent, both chosen by exact SHA-256:
 
-- ``ACADEMY_PLAY_CANDIDATE`` names one ``candidate.json`` bundle from
-  ``scripts/train_challenger.py``, pinned to its recipe, rules runtime, content
-  manifest and decks (``configured_opponent``).
+- ``ACADEMY_PLAY_CANDIDATE`` names one retained ``candidate.json`` challenger
+  bundle, pinned to its recipe, rules runtime, content manifest and decks
+  (``configured_opponent``).
 - The catalog lists checkpoints the researcher trained: everything under the
   manabot runs directory (``MANABOT_RUNS_DIR``, default ``./.runs``) plus the
   files, run directories and Tournament files in ``ACADEMY_PLAY_CHECKPOINTS``

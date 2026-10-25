@@ -12,7 +12,6 @@ from pydantic import (
 )
 
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.sim.search.local_update import LocalSearchConfig
 from manabot.training.state.game_errors import GameErrorPolicy
 
 
@@ -250,49 +249,6 @@ class ProducerCost(Strict):
     stage_id: str
     weights: Literal["raw", "ema"]
     cumulative_seconds: float = Field(ge=0)
-
-
-class CollectSearch(Stage):
-    operation: Literal["collect_search"]
-    policy: Literal["uniform-prior-determinized-puct"] = (
-        "uniform-prior-determinized-puct"
-    )
-    target: Literal["visit_distribution"] = "visit_distribution"
-    games: int = Field(ge=2)
-    simulations: int = Field(default=64, ge=1)
-    worlds: int = Field(default=4, ge=1)
-    max_steps: int = Field(default=2000, ge=1)
-
-
-class CollectLocalUpdate(Stage):
-    """Freeze an admitted raw/EMA policy for sampling-based local targets."""
-
-    operation: Literal["collect_local_update"]
-    policy: str
-    weights: Literal["raw", "ema"] = "raw"
-    games: int = Field(ge=2)
-    max_steps: int = Field(default=2000, ge=1)
-    search: LocalSearchConfig = LocalSearchConfig()
-    sampler: str | None = None
-
-
-class TrainSupervised(Stage):
-    operation: Literal["train_supervised"]
-    trainer: Literal["search_supervised"] = "search_supervised"
-    optimizer: Literal["adam"] = "adam"
-    trainable: Literal["policy"] = "policy"
-    target: Literal[
-        "visit_distribution", "local_soft", "local_argmax", "local_allocation"
-    ] = "visit_distribution"
-    datasets: list[str] = Field(min_length=1)
-    initial: str | None = None
-    # Omit the historical default so existing recipe identities stay unchanged.
-    initial_weights: Literal["raw", "ema"] = Field(
-        default="raw", exclude_if=lambda value: value == "raw"
-    )
-    epochs: int = Field(default=10, ge=1)
-    batch_size: int = Field(default=128, ge=1)
-    learning_rate: float = Field(default=0.001, gt=0)
 
 
 class FrozenOpponent(Strict):
@@ -570,9 +526,6 @@ class TrainCompound(Stage):
 
 Operation = Annotated[
     ImportPolicy
-    | CollectSearch
-    | CollectLocalUpdate
-    | TrainSupervised
     | TrainSelfPlay
     | TrainCompound
     | CollectBelief
@@ -699,14 +652,7 @@ class TrainingRegime(Strict):
             )
         if self.agent.compound_decisions and any(
             not isinstance(
-                stage,
-                (
-                    TrainCompound,
-                    ImportPolicy,
-                    CollectBelief,
-                    TrainBelief,
-                    CollectLocalUpdate,
-                ),
+                stage, (TrainCompound, ImportPolicy, CollectBelief, TrainBelief)
             )
             for stage in self.stages
         ):
@@ -754,12 +700,9 @@ class TrainingRegime(Strict):
                     raise ValueError("selection requires an earlier self-play policy")
                 if stage.weights == "ema" and policy.learning.ema is None:
                     raise ValueError("selection EMA dependency requires EMA weights")
-            if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
+            if isinstance(stage, CollectBelief):
                 policy = previous.get(stage.policy)
-                if not isinstance(
-                    policy,
-                    (TrainSupervised, TrainSelfPlay, TrainCompound, ImportPolicy),
-                ):
+                if not isinstance(policy, (TrainSelfPlay, TrainCompound, ImportPolicy)):
                     raise ValueError(
                         "belief policy must refer to an earlier policy stage"
                     )
@@ -776,73 +719,15 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "belief EMA dependency requires an EMA policy artifact"
                     )
-            if isinstance(stage, CollectLocalUpdate):
-                if (stage.search.sampling == "learned") != (stage.sampler is not None):
-                    raise ValueError("learned local search requires a sampler stage")
-                if stage.sampler is not None:
-                    sampler = previous.get(stage.sampler)
-                    if not isinstance(sampler, TrainBelief):
-                        raise ValueError(
-                            "local sampler must refer to an earlier train_belief stage"
-                        )
-                    data = previous.get(sampler.dataset)
-                    if not isinstance(data, CollectBelief) or (
-                        data.policy,
-                        data.weights,
-                    ) != (stage.policy, stage.weights):
-                        raise ValueError(
-                            "local sampler must use the same frozen policy and weights"
-                        )
             if isinstance(stage, TrainBelief) and not isinstance(
                 previous.get(stage.dataset), CollectBelief
             ):
                 raise ValueError(
                     "belief dataset must refer to an earlier belief collection"
                 )
-            if isinstance(stage, TrainSupervised):
-                if len(stage.datasets) != len(set(stage.datasets)):
-                    raise ValueError("dataset references must be unique")
-                for ref in stage.datasets:
-                    if not isinstance(
-                        previous.get(ref), (CollectSearch, CollectLocalUpdate)
-                    ):
-                        raise ValueError(
-                            f"dataset {ref} must refer to an earlier collection"
-                        )
-                    if stage.target.startswith("local_") != isinstance(
-                        previous[ref], CollectLocalUpdate
-                    ):
-                        raise ValueError(
-                            "supervised target must match collection semantics"
-                        )
             initial = getattr(stage, "initial", None)
             parent = previous.get(initial)
-            if isinstance(stage, TrainSupervised):
-                if isinstance(parent, ImportPolicy):
-                    if stage.initial_weights != parent.weights:
-                        raise ValueError(
-                            "imported initial weights differ from consumer"
-                        )
-                elif stage.initial_weights != "raw":
-                    raise ValueError("EMA initialization requires an imported policy")
-            if isinstance(stage, TrainSupervised) and stage.target.startswith("local_"):
-                if not isinstance(
-                    parent, (TrainSelfPlay, TrainSupervised, ImportPolicy)
-                ) or (
-                    isinstance(parent, TrainSupervised)
-                    and not parent.target.startswith("local_")
-                ):
-                    raise ValueError(
-                        "local distillation requires an earlier signed-value policy"
-                    )
-            elif (
-                initial
-                and type(parent) is not type(stage)
-                and not (
-                    isinstance(stage, TrainSupervised)
-                    and isinstance(parent, ImportPolicy)
-                )
-            ):
+            if initial and type(parent) is not type(stage):
                 raise ValueError(
                     "continuation requires an earlier stage of the same operation"
                 )
@@ -876,8 +761,6 @@ class TrainingRegime(Strict):
                 latest_compound = stage
             if self.agent.value_kind == "categorical_wdl" and (
                 isinstance(stage, TrainCompound)
-                or isinstance(stage, TrainSupervised)
-                and not stage.target.startswith("local_")
                 or isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, DampedPolicyLearning)
             ):

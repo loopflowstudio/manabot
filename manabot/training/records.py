@@ -4,9 +4,9 @@ RunRecord shares retained measurements across execution and report readers.
 TrainingRun binds those measurements to a currently admitted TrainingRegime.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from manabot.training.regime import (
     ArtifactReference,
@@ -16,7 +16,6 @@ from manabot.training.regime import (
     TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
-    TrainSupervised,
 )
 from manabot.training.state.game_errors import GameErrorState
 
@@ -77,8 +76,8 @@ class StageRecord(Strict):
         default=None, exclude_if=lambda value: value is None
     )
     # Completed update iterations in this segment: self-play collect/update
-    # iterations, supervised epochs or compound updates. Imported learning-state
-    # iterations are counted by learning_state_origin, not here.
+    # iterations or compound updates. Imported learning-state iterations are
+    # counted by learning_state_origin, not here.
     updates: int = Field(default=0, ge=0)
     games: int = 0
     environment_decisions: int = 0
@@ -93,10 +92,9 @@ class StageRecord(Strict):
     inputs: dict[str, dict] = {}
     artifacts: dict[str, dict] = {}
     rejected_artifacts: dict[str, dict] = {}
-    # Bounded rows of stages Etude does not track: supervised epochs, collection
-    # games and compound, selection or belief summaries. Self-play update rows
-    # are Etude metrics only (TrainingRun.metrics_run); historical exports
-    # retain theirs here.
+    # Bounded rows of stages Etude does not track: compound, selection or
+    # belief summaries. Self-play update rows are Etude metrics only
+    # (TrainingRun.metrics_run); historical exports retain theirs here.
     diagnostics: list[dict] = []
     error: str | None = None
 
@@ -125,13 +123,6 @@ class MonitoringCheckpoint(TrainingCoordinates):
     ordinal: int
     artifact: ArtifactReference | None = None
     error: str | None = None
-
-
-class FixedValidationCohort(Strict):
-    artifact: ArtifactReference
-    games: list[int]
-    policy_target_kind: str
-    source_inputs: dict[str, ArtifactReference]
 
 
 class RunRecord[RegimeT](Strict):
@@ -191,11 +182,22 @@ class RunRecord[RegimeT](Strict):
     allocation_deadline: float | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
-    fixed_validation: FixedValidationCohort | None = None
     # Folder of the Etude run holding self-play update metrics, named for the
     # run. Recovery children continue their parent's run in place, so one
     # Etude run covers every attempt; readers find it by name under a source.
     metrics_run: str | None = Field(default=None, exclude_if=lambda v: v is None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_empty_fixed_validation(cls, data: Any) -> Any:
+        """Read hash-bound exports from when runs carried a distillation cohort.
+
+        Producer and parent run.json files are admitted by digest and cannot be
+        rewritten. Every non-distillation export holds `"fixed_validation": null`.
+        """
+        if isinstance(data, dict) and data.get("fixed_validation", 0) is None:
+            return {k: v for k, v in data.items() if k != "fixed_validation"}
+        return data
 
     def _updates_through(self, learning: set[str], stage_id: str | None) -> int:
         total = 0
@@ -229,10 +231,10 @@ class TrainingRun(RunRecord[TrainingRegime]):
     """A run whose recipe passes current execution admission."""
 
     def updates_through(self, stage_id: str | None = None) -> int:
-        """Completed learner iterations/epochs; collection records are not updates."""
+        """Completed learner iterations; collection records are not updates."""
         learning = {
             s.id
             for s in self.regime.stages
-            if isinstance(s, (TrainSelfPlay, TrainSupervised, TrainCompound))
+            if isinstance(s, (TrainSelfPlay, TrainCompound))
         }
         return self._updates_through(learning, stage_id)

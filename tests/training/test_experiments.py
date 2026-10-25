@@ -26,9 +26,10 @@ from manabot.experiment.config import (
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.recipes.ataraxos import ataraxos
 from manabot.training.regime import (
-    CollectSearch,
+    ArtifactReference,
     DampedPolicyLearning,
     Execution,
+    ImportPolicy,
     Learning,
 )
 
@@ -294,28 +295,28 @@ def test_compatibility_is_checked_after_independent_components_compose() -> None
 
 
 def test_pipeline_replacement_and_learning_boundary() -> None:
+    artifact: ArtifactReference = {"path": "policy.pt", "sha256": "0" * 64, "bytes": 1}
+    imported = ImportPolicy(
+        operation="import_policy",
+        id="policy",
+        source_run=artifact,
+        source_stage="producer",
+        checkpoint=artifact,
+    )
     result = (
-        Experiment(
-            "teacher",
-            _baseline(),
-            overrides=(
-                Pipeline(
-                    (CollectSearch(operation="collect_search", id="labels", games=2),)
-                ),
-            ),
-        )
+        Experiment("imported", _baseline(), overrides=(Pipeline((imported,)),))
         .resolve()
         .cases[0]
     )
     assert len(result.regime.stages) == 1
-    assert result.regime.stages[0].operation == "collect_search"
+    assert result.regime.stages[0].operation == "import_policy"
     assert all(
         p.origin == "override" for p in result.provenance if p.path[0] == "stages"
     )
     with pytest.raises(ValueError, match="only self-play"):
         Experiment(
             "bad",
-            Baseline.capture("teacher-v1", result.regime),
+            Baseline.capture("imported-v1", result.regime),
             overrides=(LearningRule(Learning()),),
         ).resolve()
 

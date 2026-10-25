@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from experiments.direct_self_play import ARMS as LEARNING_SPEED
+from experiments.ataraxos_ablation import ARMS as ABLATIONS
 from manabot.arena.models import canonical_sha256
 from manabot.experiment import study as regime_study
 from manabot.experiment.study import (
@@ -79,7 +79,10 @@ def test_raw_and_averaged_checkpoints_remain_separate_cost_curves():
 
 
 def test_protocol_rejects_overlap_and_unbound_recipes():
-    kwargs = dict(study="learning-speed", regime_digests=("a" * 64, "b" * 64))
+    kwargs = dict(
+        study="ataraxos-ablations",
+        regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
+    )
     EvaluationProtocol(**kwargs)
     with pytest.raises(ValueError, match="disjoint"):
         EvaluationProtocol(**kwargs, anchor_deals=(910001,))
@@ -184,8 +187,8 @@ def test_report_regeneration_preserves_metrics_without_training(tmp_path):
 
 def test_scientific_profile_requires_replicates_and_explicit_uncertainty():
     kwargs = dict(
-        study="learning-speed",
-        regime_digests=("a" * 64, "b" * 64),
+        study="ataraxos-ablations",
+        regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
         purpose="scientific",
         process_seconds=3600,
         cost_cutoffs_seconds=(600, 1200),
@@ -199,15 +202,13 @@ def test_scientific_profile_requires_replicates_and_explicit_uncertainty():
         anchors=("random", "scripted-greedy", "puct-64"),
         endpoint_paired_deals=(950001,),
         endpoint_anchor_deals=(960001,),
-        endpoint_seed_pairs=tuple(
-            (a, b) for a in (601, 1601, 2601) for b in (601, 1601, 2601)
-        ),
+        endpoint_seed_pairs=tuple((s, s) for s in (601, 1601, 2601)),
     )
     assert len(protocol.training_seeds) == 3
     with pytest.raises(ValueError, match="900 seconds"):
         EvaluationProtocol(
-            study="learning-speed",
-            regime_digests=("a" * 64, "b" * 64),
+            study="ataraxos-ablations",
+            regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
             process_seconds=901,
         )
 
@@ -265,8 +266,8 @@ def test_uncertainty_clusters_training_seeds_and_four_leg_deals():
     assert paired_uncertainty(cells[:3])[0]["status"] == "unavailable"
 
 
-def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeypatch):
-    plan = calibration_plan("learning-speed", LEARNING_SPEED)
+def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
+    plan = calibration_plan("ataraxos-ablations", ABLATIONS)
     entries = []
     for recipe in plan.recipes:
         stages = []
@@ -297,7 +298,7 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
         )
         entries.append(dict(path=str(path)))
     study = dict(
-        study="learning-speed",
+        study="ataraxos-ablations",
         profile="calibration",
         status="completed",
         runs=entries,
@@ -311,7 +312,7 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
                 evaluation_seconds=4,
             )
             for b in (
-                "direct-self-play",
+                "separate-estimators",
                 "random-smoke-anchor",
                 "scripted-greedy-fixed-anchor",
                 "puct-64-fixed-anchor",
@@ -320,16 +321,14 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
     )
     (tmp_path / "study.json").write_text(json.dumps(study))
     resolved = scientific_plan(tmp_path, 0)
-    assert resolved.allocation_seconds == 132 * 3600
-    assert resolved.prior_campaign_seconds == 25 * 3600
-    assert resolved.protocol.checkpoint_count == 4
-    assert len(resolved.protocol.endpoint_seed_pairs) == 9
-    assert resolved.recipes[0]["stages"][0]["games"] > 4
-    assert resolved.recipes[1]["stages"][0]["updates"] > 8
-    assert resolved.recipes[1]["stages"][0]["transitions"] == 256
-    assert resolved.recipes[0]["stages"][-1]["datasets"] == [
-        f"collect-{i}" for i in range(4)
-    ]
+    assert resolved.allocation_seconds == 21 * 3600
+    assert resolved.prior_campaign_seconds == 4 * 3600
+    assert resolved.protocol.checkpoint_count == 3
+    assert len(resolved.protocol.endpoint_seed_pairs) == 3
+    for recipe in resolved.recipes:
+        assert len(recipe["stages"]) == 3
+        assert recipe["stages"][0]["updates"] > 8
+        assert recipe["stages"][0]["transitions"] == 256
     from types import SimpleNamespace
 
     with monkeypatch.context() as patch:
@@ -340,7 +339,7 @@ def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeyp
         with pytest.raises(ValueError, match="storage infeasible"):
             scientific_plan(tmp_path, 0)
     with pytest.raises(ValueError, match="insufficient budget"):
-        scientific_plan(tmp_path, 30 * 3600)
+        scientific_plan(tmp_path, 140 * 3600)
     study["status"] = "failed"
     (tmp_path / "study.json").write_text(json.dumps(study))
     with pytest.raises(ValueError, match="completed integrated"):
@@ -399,9 +398,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         )
 
     monkeypatch.setattr(runner, "play_cell", play_cell)
-    recipes = [smoke_recipe(build()) for build in LEARNING_SPEED]
+    recipes = [smoke_recipe(build()) for build in ABLATIONS]
     protocol = EvaluationProtocol(
-        study="learning-speed",
+        study="ataraxos-ablations",
         regime_digests=tuple(
             canonical_sha256(r.model_dump(mode="json")) for r in recipes
         ),
@@ -437,8 +436,8 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
             dict(path=str(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest())
         )
     failed = dict(
-        a="search-distillation",
-        b="direct-self-play",
+        a="rl-control",
+        b="separate-estimators",
         training_seed=197,
         b_training_seed=197,
         phase="development",
@@ -450,7 +449,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         trace=None,
     )
     study = dict(
-        study="learning-speed",
+        study="ataraxos-ablations",
         profile="workflow-smoke",
         status="failed",
         seconds=1,
@@ -465,10 +464,10 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         json.dumps([r.model_dump(mode="json") for r in recipes])
     )
     with pytest.raises(RuntimeError, match="incomplete arena cohort"):
-        runner.run_study("learning-speed", LEARNING_SPEED, tmp_path, resume=True)
+        runner.run_study("ataraxos-ablations", ABLATIONS, tmp_path, resume=True)
     saved = json.loads((tmp_path / "study.json").read_text())
-    assert len(calls) == 5
-    assert len(saved["comparisons"]) == 6
+    assert len(calls) == 17
+    assert len(saved["comparisons"]) == 18
     assert saved["comparisons"][0] == failed
     assert saved["status"] == "failed"
 

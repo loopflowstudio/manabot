@@ -716,13 +716,9 @@ def write_dashboard(
         latest = metrics[-1] if metrics else {}
         updates = latest.get("progress/updates")
         planned = sum(getattr(s, "updates", 0) for s in run.regime.stages)
-        loss_key = next(
-            (k for k in ("rl/loss", "distillation/train_cross_entropy") if k in latest),
-            None,
-        )
         loss = (
-            f"{loss_key}: {_number(latest[loss_key])}"
-            if loss_key
+            f"rl/loss: {_number(latest['rl/loss'])}"
+            if "rl/loss" in latest
             else "unavailable (no optimized loss)"
         )
         rows.append(

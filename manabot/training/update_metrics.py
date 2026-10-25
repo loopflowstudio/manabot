@@ -161,7 +161,7 @@ def stage_rows(run: _Run, tracked: Mapping[str, Updates]) -> dict[str, list[Metr
     total = 0
     for record in run.stages:
         operation = stages[record.id].operation
-        if operation not in {"train_self_play", "train_supervised", "train_compound"}:
+        if operation not in {"train_self_play", "train_compound"}:
             result[record.id] = [metric_row(d) for d in record.diagnostics]
             continue
         origin = record.learning_state_origin

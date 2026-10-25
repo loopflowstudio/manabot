@@ -23,6 +23,7 @@ from manabot.belief.sampling_data import (
     read_dataset,
     save_dataset,
 )
+from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.infra import RunContext
@@ -37,13 +38,10 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.sim.data import load_shards
-from manabot.sim.datagen import generate_selfplay_shard
 from manabot.training.learning.compound import optimize_games
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
 from manabot.training.records import (
-    FixedValidationCohort,
     MonitoringCheckpoint,
     NumericalFailure,
     PhaseTiming,
@@ -54,15 +52,12 @@ from manabot.training.regime import (
     ArtifactReference,
     CheckpointCadence,
     CollectBelief,
-    CollectLocalUpdate,
-    CollectSearch,
     CollectSelection,
     ImportPolicy,
     TrainBelief,
     TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
-    TrainSupervised,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.compound import (
@@ -93,11 +88,6 @@ from manabot.training.state.recovery import (
     restore_learning,
     save_update,
     settle_orphan,
-)
-from manabot.training.supervised.belief import fit_belief_sampler, save_belief_sampler
-from manabot.training.supervised.search import (
-    SearchSupervisedEpochStats,
-    train_search_supervised,
 )
 from manabot.training.update_metrics import metric_row
 import managym
@@ -470,7 +460,6 @@ def _execute_regime(
     resources = ExitStack()
     producers = resources.enter_context(ExitStack())
     game_index = 0
-    fixed_validation_dataset: dict[str, np.ndarray] | None = None
     last_monitor_seconds = 0.0
 
     last_export = float("-inf")
@@ -619,10 +608,7 @@ def _execute_regime(
                     "stage_id": record.id,
                     "regime_digest": run.regime_digest,
                     "weights": "raw",
-                    "value_semantic": "win_logit"
-                    if isinstance(stage, TrainSupervised)
-                    and not stage.target.startswith("local_")
-                    else "signed_outcome",
+                    "value_semantic": "signed_outcome",
                 },
             )
             os.replace(target.with_suffix(".tmp"), target)
@@ -776,13 +762,11 @@ def _execute_regime(
                 if memory > stage.execution.memory_bytes:
                     raise MemoryError("training process tree memory limit exceeded")
 
-            references = list(getattr(stage, "datasets", []))
-            if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
+            references = []
+            if isinstance(stage, CollectBelief):
                 references.append(stage.policy)
             if isinstance(stage, TrainBelief):
                 references.append(stage.dataset)
-            if isinstance(stage, CollectLocalUpdate) and stage.sampler is not None:
-                references.append(stage.sampler)
             if getattr(stage, "initial", None):
                 references.append(stage.initial)
             for reference in references:
@@ -805,97 +789,6 @@ def _execute_regime(
                 record.artifacts["source_run"] = admitted.source_run
                 record.producer_cost = admitted.producer_cost
                 record.export_seconds = time.perf_counter() - tick
-            elif isinstance(stage, (CollectSearch, CollectLocalUpdate)):
-                if isinstance(stage, CollectLocalUpdate):
-                    source = next(
-                        item for item in run.stages if item.id == stage.policy
-                    )
-                    frozen = source.artifacts[stage.weights]
-                    teacher_spec = {
-                        "kind": "local_update",
-                        "checkpoint": frozen["path"],
-                        "checkpoint_sha256": frozen["sha256"],
-                        "config": stage.search.model_dump(),
-                    }
-                    if stage.sampler is not None:
-                        sampler_record = next(
-                            item for item in run.stages if item.id == stage.sampler
-                        )
-                        sampler_stage = next(
-                            item for item in regime.stages if item.id == stage.sampler
-                        )
-                        assert isinstance(sampler_stage, TrainBelief)
-                        data_record = next(
-                            item
-                            for item in run.stages
-                            if item.id == sampler_stage.dataset
-                        )
-                        dataset_artifact = data_record.artifacts["dataset"]
-                        if (
-                            file_sha256(dataset_artifact["path"])
-                            != dataset_artifact["sha256"]
-                        ):
-                            raise ValueError("sampler source dataset changed")
-                        dataset = read_dataset(Path(dataset_artifact["path"]))
-                        teacher_spec["sampler"] = {
-                            "path": sampler_record.artifacts["sampler"]["path"],
-                            "sha256": sampler_record.artifacts["sampler"]["sha256"],
-                            "dataset_identity": dataset.identity,
-                            "schema_identity": dataset.schema.identity,
-                            "policy_identity": dataset.policy_identity,
-                            "world_identity": dataset.world_identity,
-                        }
-                else:
-                    teacher_spec = {
-                        "kind": "determinized_puct",
-                        "sims": stage.simulations,
-                        "worlds": stage.worlds,
-                        "max_steps": stage.max_steps,
-                    }
-                shards = []
-                for _ in range(stage.games):
-                    check()
-                    target = out / f"{stage.id}-{game_index}.npz"
-                    temporary = target.with_name(target.stem + ".tmp.npz")
-                    match = (
-                        Match(regime.match).swapped().config
-                        if game_index % 2
-                        else regime.match
-                    )
-                    summary = generate_selfplay_shard(
-                        num_games=1,
-                        teacher_spec=teacher_spec,
-                        max_steps_per_game=stage.max_steps
-                        if isinstance(stage, CollectLocalUpdate)
-                        else 5000,
-                        seed=seeds["collection"],
-                        game_offset=game_index,
-                        out_path=temporary,
-                        match_config=match,
-                        observation_config=regime.observation,
-                        deadline_monotonic=deadline,
-                    )
-                    os.replace(temporary, target)
-                    journal = Path(str(temporary) + ".receipts.jsonl")
-                    if journal.exists():
-                        record.artifacts[f"receipts-{game_index}"] = artifact(journal)
-                    summary["out_path"] = str(target)
-                    record.artifacts[f"game-{game_index}"] = artifact(target)
-                    record.diagnostics.append(summary)
-                    record.games += int(
-                        all(summary["terminated"]) and not any(summary["truncated"])
-                    )
-                    record.environment_decisions += summary["decisions"]
-                    record.collection_seconds = time.perf_counter() - stage_start
-                    summary["coordinates"] = coordinates()
-                    persist(progress=True)
-                    if not all(summary["terminated"]) or any(summary["truncated"]):
-                        raise RuntimeError(
-                            "teacher game lacks authoritative terminal outcome"
-                        )
-                    shards.append(target)
-                    game_index += 1
-                outputs[stage.id] = shards
             elif isinstance(stage, TrainCompound):
                 if stage.initial:
                     agent, optimizer = outputs[stage.initial]
@@ -1586,89 +1479,7 @@ def _execute_regime(
                 self_play_session = (learner, ema, iteration)
                 agent = learner.agent
                 optimizer_state = learner.optimizer.state_dict()
-            else:
-                dataset = load_shards(
-                    [p for ref in stage.datasets for p in outputs[ref]],
-                    globally_unique_games=True,
-                )
-                validation = {
-                    int(g) for g in np.unique(dataset["game_index"]) if int(g) % 10 == 0
-                }
-                if fixed_validation_dataset is None:
-                    mask = np.isin(dataset["game_index"], list(validation))
-                    if not mask.any():
-                        raise ValueError("fixed validation cohort is empty")
-                    fixed_validation_dataset = {
-                        k: v[mask].copy() for k, v in dataset.items()
-                    }
-                    cohort = out / "fixed-validation.npz"
-                    np.savez_compressed(cohort, **fixed_validation_dataset)
-                    run.fixed_validation = FixedValidationCohort(
-                        artifact=artifact(cohort),
-                        games=sorted(validation),
-                        policy_target_kind=stage.target,
-                        source_inputs=deepcopy(record.inputs),
-                    )
-                assert run.fixed_validation is not None
-                validation.update(
-                    int(g) for g in fixed_validation_dataset["game_index"]
-                )
-                previous = outputs.get(stage.initial, {})
-                if stage.initial and not previous:
-                    source = next(
-                        item for item in run.stages if item.id == stage.initial
-                    )
-                    initial_agent, _ = load_checkpoint(
-                        source.artifacts[stage.initial_weights]["path"]
-                    )
-                    previous = {"agent": initial_agent}
-                continuation = {}
-                tick = time.perf_counter()
-
-                def report_epoch(
-                    stats: SearchSupervisedEpochStats, model: ActorCritic
-                ) -> None:
-                    record.actual_device = str(next(model.parameters()).device)
-                    record.learning_seconds = time.perf_counter() - tick
-                    record.optimizer_exposures += int(
-                        (~np.isin(dataset["game_index"], list(validation))).sum()
-                    )
-                    row = asdict(stats)
-                    record.updates += 1
-                    record.diagnostics.append(row)
-                    row["coordinates"] = coordinates()
-                    monitor_checkpoint(model)
-                    persist(progress=True)
-
-                agent, _, _, history = train_search_supervised(
-                    dataset,
-                    policy_target_kind=stage.target,
-                    value_weight=0,
-                    agent_config=regime.agent,
-                    observation_config=regime.observation,
-                    epochs=stage.epochs,
-                    batch_size=stage.batch_size,
-                    lr=stage.learning_rate,
-                    seed=seeds["initialization"],
-                    minibatch_seed=seeds["minibatches"],
-                    validation_games=validation,
-                    initial_agent_state=previous["agent"].state_dict()
-                    if previous
-                    else None,
-                    optimizer_state=previous.get("optimizer_state"),
-                    continuation=continuation,
-                    deadline_monotonic=deadline,
-                    fixed_validation_dataset=fixed_validation_dataset,
-                    fixed_validation_target_kind=run.fixed_validation.policy_target_kind,
-                    on_epoch=report_epoch,
-                )
-                record.learning_seconds = time.perf_counter() - tick
-                record.optimizer_exposures = int(
-                    (~np.isin(dataset["game_index"], list(validation))).sum()
-                ) * len(history)
-                outputs[stage.id] = {"agent": agent, **deepcopy(continuation)}
-                optimizer_state = continuation["optimizer_state"]
-            if isinstance(stage, (TrainSelfPlay, TrainSupervised, TrainCompound)):
+            if isinstance(stage, (TrainSelfPlay, TrainCompound)):
                 tick = time.perf_counter()
                 variants = {"raw": agent}
                 if isinstance(stage, TrainSelfPlay) and ema is not None:
@@ -1693,10 +1504,7 @@ def _execute_regime(
                             if name == "ema"
                             else None,
                             "regime_digest": run.regime_digest,
-                            "value_semantic": "signed_outcome"
-                            if isinstance(stage, (TrainSelfPlay, TrainCompound))
-                            or stage.target.startswith("local_")
-                            else "win_logit",
+                            "value_semantic": "signed_outcome",
                         },
                     )
                     os.replace(temporary, target)
