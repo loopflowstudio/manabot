@@ -515,8 +515,14 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
                 experiment=spec.experiment, subjects=(subject,), on_play=False
             ),
         )
-        # The subject draws in the legs holding the crash: three per run remain.
-        assert drawn.games == 6
+        # Etude orders players by agent identity. Player 0 is on the play in
+        # even legs, which hold the crashed leg 2.
+        (player,) = db.execute(
+            "select distinct s.player from seats s join agents a using (agent)"
+            " where a.name = ?",
+            [subject],
+        ).fetchone()
+        assert drawn.games == (8 if player == 0 else 6)
         both = card_data(db, CardSelection(experiment=spec.experiment))
         assert both.games == 28 and len(both.subjects) == 2
     with statsdb("other-experiment", tmp_path) as db:
