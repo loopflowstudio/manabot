@@ -1,0 +1,42 @@
+{
+ "amendment": "2026-10-25 04:34 UTC: evaluation on the Mac mini",
+ "pool": "mini",
+ "segments": [
+  "e7d47d8b220f"
+ ],
+ "continues": true,
+ "until": "2026-11-02T02:02:26Z",
+ "run": {
+  "job": {
+   "setup": "set -eu\ntest -x \"$HOME/.cargo/bin/rustup\" || curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.98.1\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nrustup toolchain install 1.98.1 --profile minimal\nuv sync --locked --python 3.12 --extra artifacts --extra evaluation\n",
+   "cleanup": null,
+   "stop_seconds": 120.0,
+   "cleanup_seconds": null,
+   "runtime": null,
+   "command": "set -eu\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nDOPPLER_TOKEN=\"$(cat \"$HOME/.config/manabot/doppler-prd.token\")\" exec doppler run --config-dir \"$HOME/.config/manabot/doppler\" -- \\\n  uv run --locked --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \\\n  --directory \"$HOME/.manabot/mtg183-eval\" --until 1793584946 \\\n  --windows experiments/protocols/elemental-183-windows.json \\\n  --storage r2://manabot/evaluations --etude-source r2://manabot/jobs \\\n  --run e7d47d8b220f --continues\n",
+   "max_hours": 190.0,
+   "max_usd": null,
+   "name": "mtg183-elemental-eval",
+   "until": null,
+   "config": null,
+   "repo": "/Users/jack/src/manabot.mtg-183-train-one-long",
+   "revision": "39b02876e347adf5cf93e8ed77e716796a71c3ed",
+   "max_attempts": 1,
+   "inputs": [],
+   "environment": [
+    {
+     "name": "OMP_NUM_THREADS",
+     "value": "1"
+    },
+    {
+     "name": "MKL_NUM_THREADS",
+     "value": "1"
+    }
+   ]
+  },
+  "seed": null,
+  "params": {},
+  "source": null,
+  "id": null
+ }
+}
