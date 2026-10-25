@@ -1,0 +1,31 @@
+name: Card evaluation scale proof
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: managym -> target
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - name: Build native engine
+        run: uv run --extra play --extra evaluation maturin develop --release --manifest-path managym/Cargo.toml
+      - name: Verify 1024 native games and retained rebuild
+        run: |
+          mkdir -p .runs
+          uv run --extra evaluation python -m manabot.eval.cards verify --games 1024 --out .runs/card-verification > .runs/card-verification-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: card-verification
+          path: |
+            .runs/card-verification
+            .runs/card-verification-result.json

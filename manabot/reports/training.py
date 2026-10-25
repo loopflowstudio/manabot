@@ -20,9 +20,9 @@ from etude.train.records import Step
 from etude.train.run import seal_runs, track
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from manabot.arena.models import canonical_sha256
-from manabot.arena.monitor import MonitorResult
+from manabot.eval.monitor import MonitorResult
 from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
 from manabot.reports.records import ReportRun
 from manabot.training.state.recovery import attempt_lock
 from manabot.training.update_metrics import MetricRow

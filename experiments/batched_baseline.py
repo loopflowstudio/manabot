@@ -2,9 +2,9 @@
 
 from typing import Literal
 
-from manabot.arena.match import selected_match
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
+from manabot.sim.matchup import selected_match
 from manabot.training.regime import (
     Execution,
     IterationSchedule,

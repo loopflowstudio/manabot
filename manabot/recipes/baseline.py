@@ -13,8 +13,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from manabot.arena.match import selected_match
-from manabot.arena.monitor import MonitorProtocol
+from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.config import Baseline, Experiment
 from manabot.experiment.evaluation_queue import MonitoringBudget
 from manabot.experiment.execution import (
@@ -26,6 +25,7 @@ from manabot.experiment.execution import (
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK
+from manabot.sim.matchup import selected_match
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,

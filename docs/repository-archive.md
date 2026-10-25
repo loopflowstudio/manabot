@@ -69,15 +69,24 @@ those historical executions.
 - `semantic/learning.py` projects rules programs into model inputs; despite its
   name it is used by current model/world/catalog code. It is not the retired
   structural-probe trainer.
-- `verify/first_light.py` is a read-only historical-result renderer, not another
-  optimizer. `remote/_legacy.py` still has active CLI callers. Retiring either
-  requires removing a supported consumer, not just deleting an orphan import.
+- `remote/_legacy.py` still has active CLI callers. Retiring it requires
+  removing a supported consumer, not just deleting an orphan import.
 - Browser visual references, protocol fixtures, model fixtures and the rules
   audit index have current consumers. They are not moved merely because they
   are large. The retained Comprehensive Rules PDF is a reference document, not
   experiment output.
 
-The next architectural cleanup is the mixed `arena/` package: game play/replay
-belongs with simulation, evaluation statistics with evaluation, and checkpoint
-followers with experiment orchestration. Its rename/split is not part of this
-retirement pass.
+The mixed `arena/` package was subsequently removed on 2026-10-23, completing
+the naming direction deferred from MTG-179. Reusable game execution, replay,
+registration and policies live in `sim/`; protocols, admission, statistics and
+comparisons live in `eval/`; checkpoint staging and followers live in
+`experiment/`. Current imports and CLIs use those owners without compatibility
+shims. Frozen receipts keep their arena-named fields and original source paths.
+
+A dead-code sweep on 2026-10-23 removed modules whose only consumers were their
+own tests (the first-light renderer, the MTG-174 local evaluator chain, the
+launchd local runner, arena competency/profile helpers, remote export progress,
+pooled data generation, Study evidence projection, the selected-BranchDriver
+teacher) together with unreferenced functions they left behind. Frozen
+protocols, receipts and benchmark notes that name those paths are unchanged;
+recover the code from git history.

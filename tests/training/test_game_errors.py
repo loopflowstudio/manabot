@@ -14,21 +14,18 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.arena import match as arena_match
-from manabot.arena.models import (
-    ArenaContract,
-    PlayerRegistration,
-    canonical_sha256,
-    file_sha256,
-)
-from manabot.arena.replay import read_game_journal, write_trace
 from manabot.env import Match, ObservationSpace, Reward
+from manabot.eval.models import EvaluationContract
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
     RewardConfig,
 )
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.sim import match as simulation
+from manabot.sim.registration import PlayerRegistration
+from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.returns import transition_gae
@@ -550,7 +547,7 @@ def _payment_game_worker(
     max_commands: int,
 ) -> None:
     managym.Env = PaymentMismatchEnv
-    arena_match._game_worker(
+    simulation._game_worker(
         connection, game, registrations, checkpoint_paths, max_commands
     )
 
@@ -572,11 +569,11 @@ def _lost_payment_worker(
                 time.sleep(60)
             os._exit(7)
 
-    arena_match._execute_game(game, registrations, checkpoint_paths, max_commands, send)
+    simulation._execute_game(game, registrations, checkpoint_paths, max_commands, send)
 
 
 def _arena_fixture() -> tuple[dict[str, Any], list[PlayerRegistration]]:
-    contract = ArenaContract.model_validate_json(
+    contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_text()
     )
     players = list(contract.anchors[:2])
@@ -605,8 +602,8 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
 ) -> None:
     game, players = _arena_fixture()
     journal = tmp_path / "attempt.jsonl"
-    monkeypatch.setattr(arena_match, "_game_worker", _payment_game_worker)
-    failed = arena_match._bounded_game(game, players, {}, 1000, 20, journal)
+    monkeypatch.setattr(simulation, "_game_worker", _payment_game_worker)
+    failed = simulation.play_game(game, players, {}, 1000, 20, journal)
     assert "fixture payment mismatch" in failed["failure"]
     assert failed["winner"] is None and failed["failed_player_id"] is None
     pending = failed["pending_decision"]
@@ -623,7 +620,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     original = trace.read_bytes(), journal.read_bytes()
     # Install the same deterministic payment fixture in a fresh interpreter;
     # --worker runs the CLI's worker body under this outer hard process bound.
-    reproduced = _bounded_fixture_replay("manabot.arena.replay", trace, "--game", 1)
+    reproduced = _bounded_fixture_replay("manabot.sim.replay", trace, "--game", 1)
     assert reproduced["matches_binding"] and reproduced["matches_error"]
     assert reproduced["at_retained_failure"]
     assert reproduced["original_outcome"] == failed["failure"]
@@ -654,9 +651,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
             modified["game_trace_sha256"] = canonical_sha256(modified)
             write_trace(diagnostic, [modified])
         before = diagnostic.read_bytes()
-        replay = _bounded_fixture_replay(
-            "manabot.arena.replay", diagnostic, "--game", 1
-        )
+        replay = _bounded_fixture_replay("manabot.sim.replay", diagnostic, "--game", 1)
         assert replay["status"] == (
             "prefix_failed" if variant == "prefix" else "failed"
         )
@@ -678,7 +673,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
         [
             sys.executable,
             "-m",
-            "manabot.arena.replay",
+            "manabot.sim.replay",
             str(trace),
             "--game",
             "1",
@@ -694,7 +689,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     assert json.loads(timeout.stdout)["status"] == "replay_timeout"
     # Keep the same fixture execution path and repair its payment arithmetic.
     repaired = _bounded_fixture_replay(
-        "manabot.arena.replay", trace, "--game", 1, repaired=True
+        "manabot.sim.replay", trace, "--game", 1, repaired=True
     )
     assert repaired["status"] == "advanced"
     assert repaired["matches_binding"] and repaired["at_retained_failure"]
@@ -710,7 +705,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     )
     write_trace(tmp_path / "tampered.jsonl.gz", [tampered])
     mismatch = _bounded_fixture_replay(
-        "manabot.arena.replay", tmp_path / "tampered.jsonl.gz", "--game", 1
+        "manabot.sim.replay", tmp_path / "tampered.jsonl.gz", "--game", 1
     )
     assert mismatch["status"] == "pending_mismatch"
     assert mismatch["matches_binding"] is False
@@ -724,9 +719,9 @@ def test_arena_lost_worker_retains_acknowledged_command(
 ) -> None:
     game, players = _arena_fixture()
     game["test_hang"] = hang
-    monkeypatch.setattr(arena_match, "_game_worker", _lost_payment_worker)
+    monkeypatch.setattr(simulation, "_game_worker", _lost_payment_worker)
     journal = tmp_path / "attempt.jsonl"
-    result = arena_match._bounded_game(game, players, {}, 1000, 5, journal)
+    result = simulation.play_game(game, players, {}, 1000, 5, journal)
     assert result["termination_reason"] == ("timeout" if hang else "crash")
     assert result["pending_decision"]["revision"] == 0
     retained = read_game_journal(journal)
@@ -741,7 +736,7 @@ def test_arena_lost_worker_retains_acknowledged_command(
     unknown = read_game_journal(unobserved)
     assert unknown["failure"] == "execution_outcome_unknown"
     original = unobserved.read_bytes()
-    replay = _bounded_fixture_replay("manabot.arena.replay", unobserved, "--game", 1)
+    replay = _bounded_fixture_replay("manabot.sim.replay", unobserved, "--game", 1)
     assert replay["status"] == "advanced"
     assert replay["original_outcome"] == "execution_outcome_unknown"
     assert replay["matches_error"] is None

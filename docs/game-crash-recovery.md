@@ -175,8 +175,8 @@ labels it `execution_outcome_unknown`, not an engine failure or completed game.
 Replay a failure from a cell trace or its one-game journal:
 
 ```sh
-uv run python -m manabot.arena.replay .runs/arena/traces/CELL.commands.jsonl.gz --game 1 --seconds 30
-uv run python -m manabot.arena.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
+uv run python -m manabot.sim.replay .runs/arena/traces/CELL.commands.jsonl.gz --game 1 --seconds 30
+uv run python -m manabot.sim.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
 ```
 
 The subprocess bound includes prefix reconstruction and the pending native step.

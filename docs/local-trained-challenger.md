@@ -96,11 +96,11 @@ this local workflow does not deploy anything.
 
 ## Evaluate the selected matchup
 
-Use the existing arena's bounded instrument command on the authored Allies
+Use the bounded evaluation instrument command on the authored Allies
 versus Lessons setup, including both sideboards:
 
 ```bash
-uv run python -m manabot.arena.evaluate \
+uv run python -m manabot.eval.evaluate \
   --out-dir .runs/allies-lessons-arena-1 --deal-seeds 83001
 ```
 
@@ -127,7 +127,7 @@ parameter count, training seed, immutable artifact ID and explicit inference
 spec (`checkpoint`, `deterministic`, `cpu`, batch size 1). Compute the setup and
 ABI fingerprints with `runtime_fingerprints(match_hypers=selected_match(),
 observation_space=loaded_space, world="w4")`; both are existing Python APIs.
-The ordinary checkpoint loader supplies `loaded_space`; the arena retains its
+The ordinary checkpoint loader supplies `loaded_space`; the simulator retains its
 bounds in every trace. No checkpoint port or loader bypass is performed.
 Stochastic policies are reseeded per player decision, with the exact seed in
 the trace. Treat an untrained fixture as a fixture, never as training evidence.

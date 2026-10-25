@@ -370,8 +370,3 @@ class SharedTableV1ConformanceBundle(ProtocolModel):
 def shared_table_schema() -> dict[str, object]:
     """Return the checked Draft 2020-12 control schema."""
     return SharedTableV1ConformanceBundle.model_json_schema()
-
-
-def request_types() -> tuple[str, ...]:
-    """Closed operation vocabulary used by both validation and dispatch."""
-    return REQUEST_TYPES

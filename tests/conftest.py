@@ -4,13 +4,23 @@ Retained experiment data lives in S3 (see experiments/README.md). A test that
 reads it fetches the paths it names; where the store cannot be read (no
 credentials or network) it is skipped with the command that would fetch them.
 Bytes that fail verification fail the test.
+
+Every test gets its own ``ETUDE_HOME``, so Etude's kept statistics databases
+and launcher state never reach the developer's home directory.
 """
+
+from pathlib import Path
 
 import pytest
 
 from manabot.data import ROOT, DataUnavailable, fetch_data
 
 _fetched: set[tuple[str, ...]] = set()
+
+
+@pytest.fixture(autouse=True)
+def _etude_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "etude-home"))
 
 
 def pytest_configure(config: pytest.Config) -> None:
