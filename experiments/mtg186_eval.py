@@ -543,6 +543,22 @@ def collect(name: str, run: str) -> PairResult | None:
     return result
 
 
+def _drive(run: str, every: float) -> None:
+    """Keep `etude wait` driving `run` until its status is done.
+
+    `etude wait` can outlive a finished run (observed with u200), so the run's
+    own status decides when to stop it.
+    """
+    driver = subprocess.Popen(["etude", "wait", run], cwd=ROOT)
+    try:
+        while not status(run).done and driver.poll() is None:
+            time.sleep(min(every, 60))
+    finally:
+        if driver.poll() is None:
+            driver.terminate()
+            driver.wait()
+
+
 def follow(revision: str, every: float = 300) -> None:
     """Launch each pairing once both checkpoints exist; drive, collect; until all four.
 
@@ -560,7 +576,7 @@ def follow(revision: str, every: float = 300) -> None:
         state = _state()
         for name, run in state.runs.items():
             if not (RESULTS / f"{name}.json").exists() and not status(run).done:
-                subprocess.run(["etude", "wait", run], cwd=ROOT, check=False)
+                _drive(run, every)
             if not (RESULTS / f"{name}.json").exists() and status(run).done:
                 outcome = "collected" if collect(name, run) else "no result"
                 print(f"{name} ({run}): {outcome}", flush=True)
