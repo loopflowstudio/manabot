@@ -10,7 +10,7 @@ random seed; deals are fixed per game. Every checkpoint therefore plays the same
 `schedule` is the frozen game list and `SCHEDULE_SHA256` pins it. `evaluate`
 plays one checkpoint by running bounded subprocess workers (`python -m
 experiments.elemental_grid`), one per (cell, seat) group, through the
-replay-checked `play_cell`. `summarize` turns retained rows into cell,
+replay-checked arena `play_cell`. `summarize` turns retained rows into cell,
 row, column and overall scores with 95% Wilson intervals; `grid_table` renders
 that summary as HTML for the training report.
 
@@ -299,11 +299,10 @@ def evaluate(
     *,
     workers: int = WORKERS,
     root: Path | None = None,
-    cells: frozenset[tuple[str, str]] | None = None,
+    games: Sequence[Game] | None = None,
 ) -> list[GameRow]:
-    """Play the whole grid, or only the given (model deck, heuristic deck) cells.
-
-    Completed groups are reused after an interruption.
+    """Play the whole grid (or a declared subset of its games); completed groups
+    are reused after an interruption.
 
     A group's retained `games.json` is its durable result. A group that failed
     or timed out is retained as `failed.json` and counts its games as invalid;
@@ -311,8 +310,9 @@ def evaluate(
     """
     root = root or Path(__file__).resolve().parents[1]
     directory.mkdir(parents=True, exist_ok=True)
+    games = schedule() if games is None else games
     pending = []
-    for group in groups(scheduled(cells)):
+    for group in groups(games):
         target = directory / _group_name(group)
         if (
             not (target / "games.json").exists()
@@ -357,24 +357,13 @@ def evaluate(
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(run, pending))
-    return collect(directory, cells)
+    return collect(directory, games)
 
 
-def scheduled(cells: frozenset[tuple[str, str]] | None = None) -> list[Game]:
-    """The frozen schedule, optionally restricted to some cells; never reordered."""
-    return [
-        game
-        for game in schedule()
-        if cells is None or (game.model_deck, game.heuristic_deck) in cells
-    ]
-
-
-def collect(
-    directory: Path, cells: frozenset[tuple[str, str]] | None = None
-) -> list[GameRow]:
+def collect(directory: Path, games: Sequence[Game] | None = None) -> list[GameRow]:
     """Retained rows for every scheduled game; failed groups become invalid rows."""
     rows: list[GameRow] = []
-    for group in groups(scheduled(cells)):
+    for group in groups(schedule() if games is None else games):
         target = directory / _group_name(group)
         if (target / "games.json").exists():
             found = [

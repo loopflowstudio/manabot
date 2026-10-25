@@ -575,9 +575,11 @@ def follow(revision: str, every: float = 300) -> None:
     while True:
         state = _state()
         for name, run in state.runs.items():
-            if not (RESULTS / f"{name}.json").exists() and not status(run).done:
+            if (RESULTS / f"{name}.json").exists():
+                continue
+            if not status(run).done:
                 _drive(run, every)
-            if not (RESULTS / f"{name}.json").exists() and status(run).done:
+            if status(run).done:
                 outcome = "collected" if collect(name, run) else "no result"
                 print(f"{name} ({run}): {outcome}", flush=True)
         available = [p for p in pairings() if p.name not in state.runs]

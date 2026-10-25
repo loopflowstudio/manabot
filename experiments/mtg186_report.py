@@ -12,12 +12,12 @@ games are counted, never replaced. Nothing is selected.
 """
 
 import argparse
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from experiments.elemental_grid import GameRow, Score, wilson
+from experiments.elemental_grid import Score, wilson
 from experiments.mtg186_eval import GW, ORDER, RESULTS, UR, PairResult
 from manabot.training.records import TrainingRun
 
@@ -66,32 +66,35 @@ class Report(BaseModel):
     rows: list[Row]
 
 
-def _urgw(row: GameRow) -> bool:
-    return (row.model_deck, row.heuristic_deck) in ((UR, GW), (GW, UR))
-
-
 def row(result: PairResult) -> Row:
-    rows = result.rows
-
-    def score(keep: Callable[[GameRow], bool]) -> Score:
-        return wilson([r for r in rows if keep(r)])
+    def score(urgw: bool, deck: str | None = None, seat: int | None = None) -> Score:
+        """MTG-186's score on UR/GW (or the rest), optionally on one deck or seat."""
+        return wilson(
+            [
+                r
+                for r in result.rows
+                if ((r.model_deck, r.heuristic_deck) in ((UR, GW), (GW, UR))) == urgw
+                and deck in (None, r.model_deck)
+                and seat in (None, r.model_seat)
+            ]
+        )
 
     return Row(
         pairing=result.pairing.name,
         mtg186_updates=result.pairing.mtg186.updates,
         mtg181_updates=result.pairing.mtg181.updates,
-        urgw=score(_urgw),
-        mtg186_on_ur=score(lambda r: _urgw(r) and r.model_deck == UR),
-        mtg186_on_gw=score(lambda r: _urgw(r) and r.model_deck == GW),
-        mtg186_on_play=score(lambda r: _urgw(r) and r.model_seat == 0),
-        mtg186_on_draw=score(lambda r: _urgw(r) and r.model_seat == 1),
-        ur_play=score(lambda r: _urgw(r) and r.model_deck == UR and r.model_seat == 0),
-        ur_draw=score(lambda r: _urgw(r) and r.model_deck == UR and r.model_seat == 1),
-        gw_play=score(lambda r: _urgw(r) and r.model_deck == GW and r.model_seat == 0),
-        gw_draw=score(lambda r: _urgw(r) and r.model_deck == GW and r.model_seat == 1),
-        rest=score(lambda r: not _urgw(r)),
-        rest_on_play=score(lambda r: not _urgw(r) and r.model_seat == 0),
-        rest_on_draw=score(lambda r: not _urgw(r) and r.model_seat == 1),
+        urgw=score(True),
+        mtg186_on_ur=score(True, deck=UR),
+        mtg186_on_gw=score(True, deck=GW),
+        mtg186_on_play=score(True, seat=0),
+        mtg186_on_draw=score(True, seat=1),
+        ur_play=score(True, UR, 0),
+        ur_draw=score(True, UR, 1),
+        gw_play=score(True, GW, 0),
+        gw_draw=score(True, GW, 1),
+        rest=score(False),
+        rest_on_play=score(False, seat=0),
+        rest_on_draw=score(False, seat=1),
         play_seconds=result.seconds,
     )
 

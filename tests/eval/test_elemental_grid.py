@@ -1,4 +1,4 @@
-"""MTG-181's frozen grid assigns every scheduled deck and seat through real evaluation legs."""
+"""MTG-181's frozen grid assigns every scheduled deck and seat through real arena legs."""
 
 from collections import Counter
 from pathlib import Path
