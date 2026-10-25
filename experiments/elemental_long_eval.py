@@ -8,8 +8,10 @@ Checkpoints come from two places, merged by absolute update:
 
 - windows w1/w2: the retired cohort follower's ledger (read-only here), which
   admitted their digest-checked exports into a local cache;
-- segment w3: the Etude run's tracked checkpoints (`etude.train.read`), and its
-  status, whose terminal state settles the seed's endpoint.
+- segments w3, w4, …: each one-rental Etude run's tracked checkpoints
+  (`etude.train.read`) and status. The last named run's terminal state settles
+  the seed's endpoint unless the seed is declared to continue (`--continues`),
+  in which case the next segment's run is named on restart.
 
 Each admitted checkpoint is an Etude checkpoint agent `uNNNNNN` (its artifact
 digest, the inference code, config `{"updates": N, "bytes": B}`); the heuristic is a code
@@ -34,7 +36,8 @@ or changes training, and yields while any MTG-181 experiment runs on this machin
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \
         --directory ~/.manabot/mtg183-eval --until <unix-seconds> \
         --windows ~/.manabot/mtg183-follow/follow/ledger.json \
-        --storage r2://manabot/evaluations --etude-source <tracking storage> --run <w3 run>
+        --storage r2://manabot/evaluations --etude-source <tracking storage> \
+        --run <w3 run> --run <w4 run> [--continues]
 """
 
 from __future__ import annotations
@@ -124,7 +127,7 @@ def player(updates: int) -> str:
 
 class Checkpoint(BaseModel):
     updates: int
-    # The window's job (w1/w2) or the segment's Etude run (w3).
+    # The window's job (w1/w2) or the segment's Etude run (w3, w4, …).
     run: str
     artifact: ArtifactRef
     coordinates: dict[str, JsonValue]
@@ -134,8 +137,8 @@ class EvalState(BaseModel):
     heuristic_schedule_sha256: str = SCHEDULE_SHA256
     h2h_schedule_sha256: str = H2H_SCHEDULE_SHA256
     checkpoints: dict[int, Checkpoint] = {}
-    # The segment's terminal Etude outcome, e.g. "failed (deadline)"; None while
-    # it is live. Any outcome settles the segment.
+    # The final segment's terminal Etude outcome, e.g. "failed (deadline)"; None
+    # while it is live or the seed continues. Any outcome settles the seed.
     segment_outcome: str | None = None
     endpoint: int | None = None
     error: str | None = None
@@ -182,42 +185,50 @@ def segment_source(source: str, run: str) -> SegmentSource:
 
 
 def admit(
-    state: EvalState, windows: Sequence[Checkpoint], segment: SegmentSource | None
+    state: EvalState,
+    windows: Sequence[Checkpoint],
+    segments: Sequence[SegmentSource],
+    *,
+    continues: bool = False,
 ) -> None:
-    """Record every known export and whether the segment's run has ended.
+    """Record every known export and whether the seed's last segment has ended.
 
-    Windows come first: the segment's initial export repeats w2's endpoint and
-    is skipped. A terminal run that exported past the windows settles the
-    segment; one that stops short of its target still ends the seed at its last
-    tracked export, and its state stays in `segment_outcome` for the report. A
-    run that ends without training (a machine lost before start) settles
-    nothing: its relaunch is a new run, named on restart.
+    Windows come first, then segments in launch order: each segment's initial
+    export repeats its parent's endpoint and is skipped. A segment trained if
+    it exported past everything before it; one that ended without training (a
+    machine lost before start) is an error and settles nothing, since its
+    relaunch is a new run, named on restart. Earlier segments ending is the
+    chain's normal course. The last segment's end settles the seed at its last
+    tracked export (even short of its target, with its outcome kept in
+    `segment_outcome` for the report) unless `continues` declares a successor.
     """
     for checkpoint in windows:
         state.checkpoints.setdefault(checkpoint.updates, checkpoint)
-    if segment is None:
-        return
-    try:
-        found: Status | None = segment.status()
-        records = segment.checkpoints()
-        state.error = None
-    except Exception as error:
-        found, records = None, []
-        state.error = f"{segment.run}: {type(error).__name__}: {error}"
-    for record in records:
-        updates = int(record.at["updates"])
-        if updates not in state.checkpoints:
-            state.checkpoints[updates] = Checkpoint(
-                updates=updates,
-                run=segment.run,
-                artifact=record.artifact,
-                coordinates=dict(record.at),
-            )
+    state.error = None
     parent = max((checkpoint.updates for checkpoint in windows), default=-1)
-    trained = any(int(record.at["updates"]) > parent for record in records)
-    if found is not None and found.done and not trained:
-        state.error = f"{segment.run}: ended {found.outcome} without training"
-    elif found is not None and found.done:
+    found: Status | None = None
+    for segment in segments:
+        try:
+            found = segment.status()
+            records = segment.checkpoints()
+        except Exception as error:
+            state.error = f"{segment.run}: {type(error).__name__}: {error}"
+            return
+        for record in records:
+            updates = int(record.at["updates"])
+            if updates not in state.checkpoints:
+                state.checkpoints[updates] = Checkpoint(
+                    updates=updates,
+                    run=segment.run,
+                    artifact=record.artifact,
+                    coordinates=dict(record.at),
+                )
+        reached = max((int(record.at["updates"]) for record in records), default=-1)
+        if found.done and reached <= parent:
+            state.error = f"{segment.run}: ended {found.outcome} without training"
+            return
+        parent = max(parent, reached)
+    if found is not None and found.done and not continues:
         cause = f" ({found.cause})" if found.cause else ""
         state.segment_outcome = f"{found.outcome}{cause}"
     if state.segment_outcome and state.checkpoints and state.endpoint is None:
@@ -676,7 +687,8 @@ def follow(
     until: float,
     *,
     windows: Callable[[], list[Checkpoint]],
-    segment: SegmentSource | None,
+    segments: Sequence[SegmentSource],
+    continues: bool = False,
     storages: Sequence[Storage],
     play_match: Callable[[Match], Tables] = play,
     workers: int = WORKERS,
@@ -703,7 +715,7 @@ def follow(
         if time.time() - polled > poll_seconds:
             polled = time.time()
             try:
-                admit(state, windows(), segment)
+                admit(state, windows(), segments, continues=continues)
             except Exception as error:
                 state.error = f"admission: {type(error).__name__}: {error}"
             state.observed_at = time.time()
@@ -743,9 +755,15 @@ def main() -> None:
     parser.add_argument("--windows", type=Path, required=True)
     parser.add_argument("--storage", required=True)
     parser.add_argument("--etude-source")
-    parser.add_argument("--run")
+    # Segment runs in launch order; repeat for each segment.
+    parser.add_argument("--run", action="append", default=[])
+    parser.add_argument(
+        "--continues",
+        action="store_true",
+        help="another segment follows the last --run; its end does not settle the seed",
+    )
     args = parser.parse_args()
-    if (args.etude_source is None) != (args.run is None):
+    if (args.etude_source is None) != (not args.run):
         parser.error("--etude-source and --run go together")
     # Imported by name so spawned workers unpickle `play` from this module, not __main__.
     from experiments import elemental_long_eval as this
@@ -754,9 +772,8 @@ def main() -> None:
         args.directory.expanduser().resolve(),
         args.until,
         windows=lambda: this.window_checkpoints(args.windows.expanduser()),
-        segment=None
-        if args.run is None
-        else this.segment_source(args.etude_source, args.run),
+        segments=[this.segment_source(args.etude_source, run) for run in args.run],
+        continues=args.continues,
         storages=[storage_from_uri(args.storage)],
         play_match=this.play,
     )

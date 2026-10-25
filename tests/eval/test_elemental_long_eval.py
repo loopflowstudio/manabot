@@ -96,14 +96,14 @@ def test_segment_joins_windows_and_settles_when_terminal(tmp_path: Path) -> None
         status=lambda: _status(phase[0], phase[1]),
     )
     state = EvalState()
-    admit(state, windows, segment)
+    admit(state, windows, [segment])
     # The segment's initial export repeats w2's endpoint; the window keeps it.
     assert state.checkpoints[2550].run == "mtg183-elemental-long-w2"
     assert state.checkpoints[2600].run == "w3"
     assert state.segment_outcome is None and state.endpoint is None
     # A segment that stops short of its target still ends the seed.
     phase[:] = ["done", "failed"]
-    admit(state, windows, segment)
+    admit(state, windows, [segment])
     assert state.segment_outcome == "failed" and state.endpoint == 2650
     assert state.error is None
 
@@ -116,9 +116,58 @@ def test_segment_lost_before_training_does_not_end_the_seed(tmp_path: Path) -> N
         status=lambda: _status("done", "lost"),
     )
     state = EvalState()
-    admit(state, windows, segment)
+    admit(state, windows, [segment])
     assert state.segment_outcome is None and state.endpoint is None
     assert state.error == "w3: ended lost without training"
+
+
+def test_continuing_seed_settles_only_at_its_last_segment(tmp_path: Path) -> None:
+    windows = window_checkpoints(_ledger(tmp_path, (2500, 2534)))
+    w3 = SegmentSource(
+        run="w3",
+        checkpoints=lambda: [
+            _record(tmp_path / f"w3-{u}.pt", u) for u in (2534, 2550, 2600)
+        ],
+        status=lambda: _status("done", "failed"),
+    )
+    w4: list[CheckpointRecord] = [_record(tmp_path / "w4-2600.pt", 2600)]
+    phase = ["running", None]
+    segment = SegmentSource(
+        run="w4",
+        checkpoints=lambda: w4,
+        status=lambda: _status(phase[0], phase[1]),
+    )
+    state = EvalState()
+    # w3 has ended, but the seed was declared to continue: nothing settles.
+    admit(state, windows, [w3], continues=True)
+    assert state.endpoint is None and state.error is None
+    # Restarted naming w4 as the final segment: w3's end is the chain's course.
+    admit(state, windows, [w3, segment])
+    assert state.endpoint is None and state.checkpoints[2600].run == "w3"
+    w4.append(_record(tmp_path / "w4-2650.pt", 2650))
+    phase[:] = ["done", "succeeded"]
+    admit(state, windows, [w3, segment])
+    assert state.checkpoints[2650].run == "w4"
+    assert state.segment_outcome == "succeeded" and state.endpoint == 2650
+
+
+def test_later_segment_lost_before_training_does_not_end_the_seed(
+    tmp_path: Path,
+) -> None:
+    windows = window_checkpoints(_ledger(tmp_path, (2534,)))
+    w3 = SegmentSource(
+        run="w3",
+        checkpoints=lambda: [_record(tmp_path / "w3.pt", 2600)],
+        status=lambda: _status("done", "failed"),
+    )
+    w4 = SegmentSource(
+        run="w4",
+        checkpoints=lambda: [_record(tmp_path / "w4.pt", 2600)],
+        status=lambda: _status("done", "lost"),
+    )
+    state = EvalState()
+    admit(state, windows, [w3, w4])
+    assert state.endpoint is None and state.error == "w4: ended lost without training"
 
 
 def _state(tmp_path: Path, updates: tuple[int, ...], endpoint: int | None) -> EvalState:
@@ -263,7 +312,7 @@ def test_follow_plays_every_unit_through_the_endpoint(tmp_path: Path) -> None:
         tmp_path / "eval",
         until=float("inf"),
         windows=lambda: window_checkpoints(ledger),
-        segment=segment,
+        segments=[segment],
         storages=[],
         play_match=counted,
         workers=1,
