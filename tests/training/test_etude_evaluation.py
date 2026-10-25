@@ -1,6 +1,7 @@
 """Etude retains complete arena deal blocks and stable checkpoint-independent protocols."""
 
 from pathlib import Path
+import time
 from typing import Any
 
 import pytest
@@ -13,8 +14,11 @@ from etude.eval.query import statsdb  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
 from manabot.eval import benchmark as evaluation
+from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.execution import bind_execution
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.infra.identity import file_sha256
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 
 
@@ -68,24 +72,63 @@ def test_checkpoint_progress_does_not_change_benchmark(tmp_path: Path) -> None:
     assert evaluation.benchmark(first) == evaluation.benchmark(second)
 
 
+def test_allocation_window_does_not_change_model_or_benchmark(tmp_path: Path) -> None:
+    original = _admission(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60)
+    benchmarks = []
+    for settings in (
+        execution,
+        execution.model_copy(
+            update={"deadline_unix": time.time() + 3600, "instrumentation": False}
+        ),
+        execution.model_copy(update={"max_batch_rows": 1}),
+    ):
+        manifest = original.model_copy(deep=True)
+        manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
+            manifest.key, (manifest.candidate, manifest.opponent), settings
+        )
+        benchmarks.append(evaluation.benchmark(manifest))
+    assert benchmarks[0] == benchmarks[1]
+    assert benchmarks[0] != benchmarks[2]
+    assert "execution" not in original.candidate.player_spec
+
+
+@pytest.mark.parametrize("shared", [False, True])
 def test_etude_resumes_complete_deals_and_report_counts_them(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shared: bool
 ) -> None:
     manifest = _admission(tmp_path)
     played: list[int] = []
+    execution = (
+        EvalExecution(deadline_unix=time.time() + 60, max_active_games=1)
+        if shared
+        else None
+    )
 
     def play_cell(
         **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
         deal = kwargs["deal_seeds"][0]
         played.append(deal)
-        return _play_rows(manifest, deal, kwargs["out_dir"]), {}, {}
+        bound = manifest.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        return _play_rows(bound, deal, kwargs["out_dir"]), {}, {}
 
-    monkeypatch.setattr(evaluation, "play_cell", play_cell)
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    monkeypatch.setattr(InferenceEndpoint, "play_cell", staticmethod(play_cell))
     target = tmp_path / "evaluations" / "one"
-    evaluation.evaluate(manifest, target)
-    evaluation.evaluate(manifest, target)
+    evaluation.evaluate(manifest, target, execution=execution)
+    if execution is not None:
+        execution = execution.model_copy(update={"deadline_unix": time.time() + 3600})
+    evaluation.evaluate(manifest, target, execution=execution)
     assert sorted(played) == [101, 102]
+    if shared:
+        assert len(list((target / "allocation").glob("*/execution.json"))) == 2
     db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
         points = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
@@ -110,7 +153,7 @@ def test_failed_deal_retains_evidence_and_etude_failure(
         rows[0]["replay_passed"] = False
         return rows, {}, {}
 
-    monkeypatch.setattr(evaluation, "play_cell", play_cell)
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
     with pytest.raises(Exception, match="match_failed"):
         evaluation.evaluate(manifest, tmp_path / "evaluations/one")
     assert list((tmp_path / "track").rglob("*.failed.json"))

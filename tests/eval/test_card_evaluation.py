@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import duckdb
@@ -47,6 +48,7 @@ from manabot.sim.card_evidence import (
     read_evidence,
     retain_evidence,
 )
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
@@ -809,8 +811,10 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
     assert json.loads(embedded)["variants"].keys() == variants.keys()
 
 
+@pytest.mark.parametrize("shared", [False, True])
 def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
     tmp_path: Path,
+    shared: bool,
 ) -> None:
     """An eval that calls `play_cell` itself adds card tables with one call."""
     spec = verification_spec(8)
@@ -837,6 +841,9 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
             authored_matchup=spec.authored_matchup,
             matchup_mode="all",
             legs=(0, 1),
+            execution=EvalExecution(deadline_unix=time.time() + 120)
+            if shared
+            else None,
             card_evidence_dir=root,
         )
         own = {

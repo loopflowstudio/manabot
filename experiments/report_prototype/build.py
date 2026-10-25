@@ -959,12 +959,51 @@ def write(out: Path) -> Path:
     return out / "report.html"
 
 
+def write_evaluations(directories: list[Path], out: Path) -> Path:
+    """Render real arena receipts using the same page, controls and icicles."""
+    from manabot.reports.evaluation import project_evaluations
+
+    experiment = project_evaluations(directories)
+    out.mkdir(parents=True, exist_ok=True)
+    for asset in ASSETS:
+        shutil.copyfile(ROOT / asset, out / asset)
+    evidence = out / "evidence"
+    evidence.mkdir(exist_ok=True)
+    copied: dict[str, str] = {}
+
+    def retain(source: str) -> str:
+        if source not in copied:
+            target = evidence / f"{len(copied)}-{Path(source).name}"
+            shutil.copyfile(source, target)
+            copied[source] = str(target.relative_to(out))
+        return copied[source]
+
+    for run in experiment["eval_performance"]["runs"]:
+        run["evidence"] = retain(run["evidence"])
+        run["optimization"]["evidence"] = run["evidence"]
+    for allocation in experiment["eval_performance"]["allocations"]:
+        allocation["evidence"] = retain(allocation["evidence"])
+        allocation["serving"]["traces"] = [
+            retain(path) for path in allocation["serving"]["traces"]
+        ]
+    (out / "data.js").write_text(
+        "window.REPORT=" + json.dumps({"experiments": [experiment]}) + ";\n"
+    )
+    return out / "report.html"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--out", type=Path, default=REPOSITORY / ".runs/report-prototype"
     )
-    print(write(parser.parse_args().out))
+    parser.add_argument("--eval-receipt", type=Path, action="append", default=[])
+    args = parser.parse_args()
+    print(
+        write_evaluations(args.eval_receipt, args.out)
+        if args.eval_receipt
+        else write(args.out)
+    )
 
 
 if __name__ == "__main__":

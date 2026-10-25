@@ -31,6 +31,9 @@ class EvaluationKey(StrictModel):
     rating_prior_sha256: str = Field(pattern=SHA256_PATTERN)
     anchor_cohort_sha256: str = Field(pattern=SHA256_PATTERN)
     evaluation_compute_envelope_id: str
+    seed_compute_envelope_id: str | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
 
 class Schedule(StrictModel):

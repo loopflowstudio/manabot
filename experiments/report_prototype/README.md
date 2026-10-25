@@ -54,3 +54,22 @@ picker switches between:
 - `definitions.py`: the report vocabulary and the three report definitions.
 - `build.py`: reads the sources above and writes the page folder.
 - `report.html`, `model.js`, `charts.js`: the page, its query layer and charts.
+
+Arena receipts also feed this same Perf surface:
+
+```sh
+uv run python -m experiments.report_prototype.build \
+  --eval-receipt .runs/eval/panel --out .runs/eval/report
+```
+
+Repeat `--eval-receipt` for job/seed comparison. This reads real receipts without
+fetching training studies, running games or manufacturing timing subdivisions.
+Coverage-aware seed aggregation omits unavailable children from the partition
+and labels their measured population. Evaluation adds shared-allocation
+accounting, request/batch timelines and diagnostic trace links. See
+[shared evaluation](../../docs/shared-evaluation.md) for receipt and calibration
+contracts. This remains the executable report prototype, not a claim of
+production Etude report integration.
+Cell and inference-allocation timers exclude the local CLI's earlier checkpoint
+preparation. Their throughput and unavailable cost fields do not establish
+whole-job cost or end-to-end speedups; see the linked measurement boundaries.

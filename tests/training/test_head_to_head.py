@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import pytest
@@ -9,8 +10,11 @@ import pytest
 pytest.importorskip("etude.eval.match")
 
 from manabot.eval import duel as duel_eval
+from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.match import derive_seed
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.files import atomic_json
+from manabot.sim.execution import EvalExecution
 from tests.training.test_etude_evaluation import _admission, _play_rows
 
 
@@ -33,10 +37,20 @@ def _duel(tmp_path: Path) -> duel_eval.Duel:
     return duel_eval.Duel(two_seat=first, one_seat=first.model_copy(deep=True))
 
 
+@pytest.mark.parametrize("shared", [False, True])
 def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shared: bool
 ) -> None:
     duel = _duel(tmp_path)
+    candidate, opponent = duel_eval.registrations(duel)
+    seed_key = duel.two_seat.key.model_copy(
+        update={"anchor_cohort_sha256": opponent.identity_sha256}
+    )
+    execution = (
+        EvalExecution(deadline_unix=time.time() + 60, max_active_games=1)
+        if shared
+        else None
+    )
     target = tmp_path / "evaluations" / "1000"
     target.mkdir(parents=True)
     atomic_json(target / "duel.json", duel.model_dump(mode="json"))
@@ -52,19 +66,37 @@ def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
         )
         assert set(kwargs["checkpoint_paths"]) == {"one-seat", "two-seat"}
         seed = kwargs["deal_seeds"][0]
+        pair = (candidate.player_id, opponent.player_id)
+        assert derive_seed(
+            kwargs["key"], pair, seed, candidate.player_id
+        ) == derive_seed(seed_key, pair, seed, candidate.player_id)
         played.append(seed)
-        return _play_rows(duel.two_seat, seed, kwargs["out_dir"]), {}, {}
+        manifest = duel.two_seat.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        return _play_rows(manifest, seed, kwargs["out_dir"]), {}, {}
 
-    monkeypatch.setattr(duel_eval, "play_cell", play_cell)
-    duel_eval.evaluate(target / "duel.json")
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    monkeypatch.setattr(InferenceEndpoint, "play_cell", staticmethod(play_cell))
+    duel_eval.evaluate(target / "duel.json", execution=execution)
     result = json.loads((target / "result.json").read_bytes())
     assert len(played) == 25
     assert result["groups"]["all"]["games"] == 200
     assert [
         result["groups"][label]["games"] for label in ("LvA", "AvL", "LvL", "AvA")
     ] == [50] * 4
-    duel_eval.evaluate(target / "duel.json")
+    if execution is not None:
+        execution = execution.model_copy(
+            update={"deadline_unix": time.time() + 3600, "instrumentation": False}
+        )
+    duel_eval.evaluate(target / "duel.json", execution=execution)
     assert len(played) == 25
+    if shared:
+        assert len(list((target / "allocation").glob("*/execution.json"))) == 2
     assert json.loads((target / "result.json").read_bytes())["etude"]["skipped"] == 25
 
 

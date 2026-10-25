@@ -4,6 +4,7 @@ Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -17,11 +18,15 @@ import numpy as np
 from pydantic import BaseModel
 
 from manabot.eval.benchmark import Conditions, evaluation_tables
-from manabot.eval.match import play_cell
-from manabot.eval.monitor import EvaluationRow, MonitorResult
+from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
+from manabot.eval.evaluation import EvaluationRequest, evaluate as evaluate_panel
+from manabot.eval.execution import bind_execution
+from manabot.eval.monitor import MonitorResult
+from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.execution import EvalExecution
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.records import TrainingCoordinates
 from manabot.training.regime import ArtifactReference
@@ -99,31 +104,34 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
     )
 
 
-def play(match: Match) -> Tables:
+def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
     if match.agents[0].artifact != candidate.checkpoint_sha256:
         raise ValueError("Etude candidate differs from admitted checkpoint")
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    out.mkdir(parents=True, exist_ok=True)
-    rows, trace, replay = play_cell(
-        key=conditions.key,
-        player_a=candidate,
-        player_b=opponent,
-        deal_seeds=(conditions.deal,),
+    result = evaluate_panel(
+        EvaluationRequest(
+            key=conditions.key,
+            candidate=candidate,
+            opponent=opponent,
+            deal_seeds=(conditions.deal,),
+            checkpoint_paths={
+                candidate.player_id: duel.two_seat.artifact["path"],
+                opponent.player_id: duel.one_seat.artifact["path"],
+            },
+            game_seconds=conditions.game_seconds,
+            max_commands=conditions.max_commands,
+            matchup_mode="all",
+            purpose="repeated-development-comparison",
+        ),
         out_dir=out,
-        checkpoint_paths={
-            candidate.player_id: duel.two_seat.artifact["path"],
-            opponent.player_id: duel.one_seat.artifact["path"],
-        },
-        game_seconds=conditions.game_seconds,
-        max_commands=conditions.max_commands,
-        matchup_mode="all",
+        inference=inference,
     )
-    for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
-        atomic_json(out / f"{name}.json", value)
-    return evaluation_tables([EvaluationRow.model_validate(row) for row in rows])
+    if result.error:
+        raise ValueError(result.error)
+    return evaluation_tables(result.rows)
 
 
 def summarize(directory: Path) -> dict[str, ScoreGroup]:
@@ -174,9 +182,24 @@ def summarize(directory: Path) -> dict[str, ScoreGroup]:
     return groups
 
 
-def evaluate(path: Path) -> None:
+def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
     duel = Duel.model_validate_json(path.read_bytes())
     duel.validate_inputs()
+    _, original_opponent = registrations(duel)
+    # Bind the opponent cohort before changing its compute declaration: it is
+    # part of the historical seed authority, just like the original envelope.
+    key = duel.two_seat.key.model_copy(
+        update={"anchor_cohort_sha256": original_opponent.identity_sha256}
+    )
+    if execution is not None:
+        key, _ = bind_execution(key, (), execution)
+        for manifest in (duel.two_seat, duel.one_seat):
+            manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
+                manifest.key, (manifest.candidate, manifest.opponent), execution
+            )
+        derived = path.parent / "duel-execution.json"
+        atomic_json(derived, duel.model_dump(mode="json"))
+        path = derived
     directory = path.parent
     candidate, opponent = registrations(duel)
     os.environ["MANABOT_DUEL"] = str(path.resolve())
@@ -222,13 +245,7 @@ def evaluate(path: Path) -> None:
                 conditions=tuple(
                     Conditions(
                         deal=seed,
-                        key=duel.two_seat.key.model_copy(
-                            update={
-                                "anchor_cohort_sha256": canonical_sha256(
-                                    opponent.model_dump()
-                                )
-                            }
-                        ),
+                        key=key,
                         game_seconds=600,
                         max_commands=10000,
                     ).model_dump(mode="json")
@@ -238,18 +255,20 @@ def evaluate(path: Path) -> None:
             ),
         ),
     )
-    result = hold(
-        benchmark,
-        experiment=EXPERIMENT,
-        play=play,
-        checkpoint=ArtifactRef(
-            uri=Path(duel.two_seat.artifact["path"]).resolve().as_uri(),
-            sha256=duel.two_seat.artifact["sha256"],
-            size_bytes=duel.two_seat.artifact["bytes"],
-        ),
-        directory=directory.parent.parent / "track",
-        workers=1,
-    )
+    with callback_allocation(execution, directory / "allocation") as inference:
+        result = hold(
+            benchmark,
+            experiment=EXPERIMENT,
+            play=partial(play, inference=inference) if inference else play,
+            checkpoint=ArtifactRef(
+                uri=Path(duel.two_seat.artifact["path"]).resolve().as_uri(),
+                sha256=duel.two_seat.artifact["sha256"],
+                size_bytes=duel.two_seat.artifact["bytes"],
+            ),
+            directory=directory.parent.parent / "track",
+            workers=execution.max_active_games if execution else 1,
+        )
+
     atomic_json(
         directory / "result.json",
         DuelResult(

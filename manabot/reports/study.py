@@ -12,7 +12,7 @@ from typing import Literal
 from matplotlib.figure import Figure
 from pydantic import BaseModel, ConfigDict
 
-from manabot.eval.monitor import EvaluationRow
+from manabot.eval.results import EvaluationRow
 from manabot.infra.identity import canonical_sha256
 from manabot.reports.analysis import paired_uncertainty
 

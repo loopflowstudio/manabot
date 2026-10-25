@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Literal
 from matplotlib.figure import Figure
 import numpy as np
 
-from manabot.eval.monitor import EvaluationRow, MonitorResult, RateInterval
+from manabot.eval.monitor import MonitorResult
+from manabot.eval.results import EvaluationRow, RateInterval
 from manabot.infra.identity import canonical_sha256
 
 if TYPE_CHECKING:
