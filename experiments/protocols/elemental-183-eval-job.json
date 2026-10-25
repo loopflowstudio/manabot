@@ -1,10 +1,11 @@
 {
- "amendment": "2026-10-25: card data from every evaluation game (run mtg183-eval-cards)",
+ "amendment": "2026-10-25: card data (run mtg183-eval-cards); follows w3 and w4, the last segment",
  "pool": "mini",
  "segments": [
-  "e7d47d8b220f"
+  "e7d47d8b220f",
+  "f3748bcabac8"
  ],
- "continues": true,
+ "continues": false,
  "until": "2026-11-02T02:02:26Z",
  "run": {
   "job": {
@@ -13,7 +14,7 @@
    "stop_seconds": 120.0,
    "cleanup_seconds": null,
    "runtime": null,
-   "command": "set -eu\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nDOPPLER_TOKEN=\"$(cat \"$HOME/.config/manabot/doppler-prd.token\")\" exec doppler run --config-dir \"$HOME/.config/manabot/doppler\" -- \\\n  uv run --locked --extra artifacts --extra evaluation sh -c 'python -m manabot.infra.source && exec python -m experiments.elemental_long_eval \"$@\"' evaluator \\\n  --directory \"$HOME/.manabot/mtg183-eval-cards\" --until 1793584946 \\\n  --windows experiments/protocols/elemental-183-windows.json \\\n  --storage r2://manabot/evaluations --etude-source r2://manabot/jobs \\\n  --run e7d47d8b220f --continues\n",
+   "command": "set -eu\nexport PATH=\"$HOME/.cargo/bin:$PATH\" RUSTUP_TOOLCHAIN=1.98.1\nDOPPLER_TOKEN=\"$(cat \"$HOME/.config/manabot/doppler-prd.token\")\" exec doppler run --config-dir \"$HOME/.config/manabot/doppler\" -- \\\n  uv run --locked --extra artifacts --extra evaluation sh -c 'python -m manabot.infra.source && exec python -m experiments.elemental_long_eval \"$@\"' evaluator \\\n  --directory \"$HOME/.manabot/mtg183-eval-cards\" --until 1793584946 \\\n  --windows experiments/protocols/elemental-183-windows.json \\\n  --storage r2://manabot/evaluations --etude-source r2://manabot/jobs \\\n  --run e7d47d8b220f --run f3748bcabac8\n",
    "max_hours": 190.0,
    "max_usd": null,
    "name": "mtg183-elemental-eval",
