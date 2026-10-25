@@ -30,6 +30,7 @@ def _variant(data: CardData) -> dict[str, object]:
     return {
         "games": data.games,
         "deals": data.deals,
+        "runs": len(data.runs),
         "win_rate": data.win_rate,
         "excluded": data.excluded,
         "failed_matches": data.failed_matches,
@@ -294,7 +295,7 @@ select { max-width: 100%; }
       ["Games", variant.games.toLocaleString()],
       ["Deals", variant.deals.toLocaleString()],
       ["Win rate", pct(variant.win_rate)],
-      ["Runs", data.runs.length],
+      ["Runs", variant.runs],
       ["Excluded", excluded + (variant.failed_matches ? `, ${variant.failed_matches} failed matches` : "")],
     ].map(([k, v]) => `<span>${k} <strong>${String(v).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])}</strong></span>`).join("");
     const query = $("search").value.trim().toLowerCase();
@@ -326,7 +327,23 @@ select { max-width: 100%; }
     }));
     if (!list.length) rows.replaceChildren(Object.assign(document.createElement("tr"), { innerHTML: `<td class="empty" colspan="${columns.length}">No cards match.</td>` }));
   }
-  [...filters, "search", "minimum"].forEach((id) => $(id).addEventListener("input", render));
+  // Filters live in the URL hash, so a link opens the same view.
+  const fromHash = () => {
+    const given = new URLSearchParams(location.hash.slice(1));
+    filters.forEach((id) => {
+      const value = given.get(id) ?? "";
+      if ([...$(id).options].some((o) => o.value === value)) $(id).value = value;
+    });
+  };
+  const toHash = () => {
+    const given = new URLSearchParams();
+    filters.forEach((id) => { if ($(id).value) given.set(id, $(id).value); });
+    history.replaceState(null, "", given.toString() ? `#${given}` : location.pathname);
+  };
+  filters.forEach((id) => $(id).addEventListener("input", () => { toHash(); render(); }));
+  ["search", "minimum"].forEach((id) => $(id).addEventListener("input", render));
+  window.addEventListener("hashchange", () => { fromHash(); render(); });
+  fromHash();
   render();
 })();
 </script>
