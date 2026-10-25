@@ -374,3 +374,26 @@ change. Inputs are staged at the bucket-root keys the spec names
 (`r2://manabot/mtg183/w2/`, same digests). The machine is Etude's stock L4
 image (`runpod/pytorch@sha256:4d1721e6…`); the protocol fixes the L4, not
 the image.
+
+## Amendment, 2026-10-25 (its commit time), before any evaluation game: evaluation on the Mac mini
+
+Jack Heart, 2026-10-25: evaluation leaves the laptop. `elemental_long_eval`
+runs as an Etude job on the Mac mini (`mini-heart.local`, M1, 8 cores), an
+owned machine in Etude pool `mini` at $0; no CPU is rented. The design,
+schedules and digests, agents (identified by artifact digest and inference
+code, not location), the heuristic v2 anchor, the eval run
+(`mtg183-elemental-eval` / `mtg183-eval`) and its R2 tables are unchanged. No
+evaluation game had been played anywhere before the move. Yielding to
+MTG-181's follower was a laptop rule and does not apply on the mini.
+
+- w1/w2 checkpoints are read from R2 copies of the cohort follower's
+  digest-checked exports, at the keys S3 used
+  (`r2://manabot/jobs/<job>/runtime/artifacts/sha256/<sha256>`), listed in
+  `experiments/protocols/elemental-183-windows.json`; every copy was read back
+  and its digest verified.
+- Segment exports and ends come from the tracking bucket
+  (`r2://manabot/jobs`): a segment ends when its run records `state.json`. The
+  evaluator follows every segment run in launch order and is told when the
+  chain continues, so a segment's end settles the seed only when it is the
+  last; each new segment's run is added by relaunching the eval job, which
+  keeps its state directory on the mini.
