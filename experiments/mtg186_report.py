@@ -1,52 +1,27 @@
-"""MTG-186 report: the UR-vs-GW specialist against MTG-181's ten-deck seeds.
+"""MTG-186 report: the UR-vs-GW specialist head-to-head against MTG-181 seed 18101.
 
-Reads the remote evaluation's results (`experiments/data/mtg186/grids/`) and
-game rows (`games/`, see `experiments.mtg186_eval`), MTG-181's endpoint grids
-against the same heuristic (`experiments/data/mtg181/new-heuristic/`, where the
-remote evaluation did not play them) and the training run's TrainingRun receipt, and writes `tables.md` and
-`summary.json` beside the grids. Every number comes from those files; nothing
-is selected.
+Reads each collected pairing (`experiments/data/mtg186/pairings/`, see
+`experiments.mtg186_eval`) and the training run's TrainingRun receipt, and writes
+`tables.md` and `summary.json` beside the pairings. Every score is MTG-186's
+(win 1, draw ½, loss 0) over valid games with a 95% Wilson interval; invalid
+games are counted, never replaced. Nothing is selected.
 
-    uv run python -m experiments.mtg186_report --run-json <TrainingRun run.json> \
-        --usd <inclusive dollars> --mtg181 experiments/data/mtg181/new-heuristic \
-        [--mtg181-groups <MTG-181 new-heuristic group directory>]
+    uv run python -m experiments.mtg186_report --run-json <TrainingRun run.json> --usd <inclusive dollars>
 
 `report.md` is written by hand from the generated `tables.md` and `summary.json`.
 """
 
 import argparse
-from collections.abc import Sequence
-import json
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from experiments.elemental_grid import (
-    DECKS,
-    GameRow,
-    Score,
-    Summary,
-    grid_table,
-    wilson,
-)
-from experiments.mtg186_eval import RESULTS, Result, group_rows
+from experiments.elemental_grid import GameRow, Score, wilson
+from experiments.mtg186_eval import GW, ORDER, RESULTS, UR, PairResult
 from manabot.training.records import TrainingRun
 
 OUT = RESULTS.parent
-CELLS = (("elemental_ur", "elemental_gw"), ("elemental_gw", "elemental_ur"))
-
-
-class MTG181Endpoint(BaseModel):
-    seed: int
-    job: str
-    updates: int
-    sha256: str
-
-
-class MTG181Result(BaseModel):
-    endpoint: MTG181Endpoint
-    schedule_sha256: str
-    summary: Summary
 
 
 class Training(BaseModel):
@@ -64,19 +39,25 @@ class Training(BaseModel):
 
 
 class Row(BaseModel):
-    """One checkpoint's view: training-cell scores, play/draw and overall."""
+    """One pairing: MTG-186's scores on UR/GW (and its splits) and on the rest."""
 
-    trial: str
-    seed: int
-    updates: int
-    scope: str
-    ur_vs_gw: Score
-    gw_vs_ur: Score
-    ur_vs_gw_play: Score
-    ur_vs_gw_draw: Score
-    gw_vs_ur_play: Score
-    gw_vs_ur_draw: Score
-    overall: Score | None
+    pairing: str
+    mtg186_updates: int
+    mtg181_updates: int
+    urgw: Score
+    mtg186_on_ur: Score
+    mtg186_on_gw: Score
+    mtg186_on_play: Score
+    mtg186_on_draw: Score
+    # The four combinations: MTG-186's deck and whether it is on the play.
+    ur_play: Score
+    ur_draw: Score
+    gw_play: Score
+    gw_draw: Score
+    rest: Score
+    rest_on_play: Score
+    rest_on_draw: Score
+    play_seconds: float
 
 
 class Report(BaseModel):
@@ -85,42 +66,33 @@ class Report(BaseModel):
     rows: list[Row]
 
 
-def _seat_score(groups: Path | str | None, x: str, y: str, seat: int) -> Score:
-    """Per-cell play/draw from retained group rows; summaries keep only grid totals.
-
-    `groups` is a collected point's name (its games archive) or MTG-181's
-    retained group directory. Missing rows read as an empty score.
-    """
-    if isinstance(groups, str):
-        return wilson(group_rows(groups, x, y, seat))
-    if (
-        groups is None
-        or not (path := groups / f"{x}--{y}--seat{seat}" / "games.json").exists()
-    ):
-        return wilson([])
-    return wilson([GameRow.model_validate(r) for r in json.loads(path.read_text())])
+def _urgw(row: GameRow) -> bool:
+    return (row.model_deck, row.heuristic_deck) in ((UR, GW), (GW, UR))
 
 
-def _row(
-    trial: str,
-    seed: int,
-    updates: int,
-    scope: str,
-    summary: Summary,
-    groups: Path | str | None,
-) -> Row:
-    scores: dict[str, Score] = {}
-    for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True):
-        scores[name] = summary.cells[x][y]
-        scores[f"{name}_play"] = _seat_score(groups, x, y, 0)
-        scores[f"{name}_draw"] = _seat_score(groups, x, y, 1)
+def row(result: PairResult) -> Row:
+    rows = result.rows
+
+    def score(keep: Callable[[GameRow], bool]) -> Score:
+        return wilson([r for r in rows if keep(r)])
+
     return Row(
-        trial=trial,
-        seed=seed,
-        updates=updates,
-        scope=scope,
-        overall=summary.overall if scope == "grid" else None,
-        **scores,
+        pairing=result.pairing.name,
+        mtg186_updates=result.pairing.mtg186.updates,
+        mtg181_updates=result.pairing.mtg181.updates,
+        urgw=score(_urgw),
+        mtg186_on_ur=score(lambda r: _urgw(r) and r.model_deck == UR),
+        mtg186_on_gw=score(lambda r: _urgw(r) and r.model_deck == GW),
+        mtg186_on_play=score(lambda r: _urgw(r) and r.model_seat == 0),
+        mtg186_on_draw=score(lambda r: _urgw(r) and r.model_seat == 1),
+        ur_play=score(lambda r: _urgw(r) and r.model_deck == UR and r.model_seat == 0),
+        ur_draw=score(lambda r: _urgw(r) and r.model_deck == UR and r.model_seat == 1),
+        gw_play=score(lambda r: _urgw(r) and r.model_deck == GW and r.model_seat == 0),
+        gw_draw=score(lambda r: _urgw(r) and r.model_deck == GW and r.model_seat == 1),
+        rest=score(lambda r: not _urgw(r)),
+        rest_on_play=score(lambda r: not _urgw(r) and r.model_seat == 0),
+        rest_on_draw=score(lambda r: not _urgw(r) and r.model_seat == 1),
+        play_seconds=result.seconds,
     )
 
 
@@ -143,111 +115,88 @@ def training(path: Path) -> Training:
     )
 
 
-def _fmt(score: Score | None) -> str:
-    if score is None or score.score is None:
-        return "—"
+def _fmt(score: Score) -> str:
+    if score.score is None:
+        return f"— ({score.invalid} invalid)"
     invalid = f", {score.invalid} invalid" if score.invalid else ""
-    return f"{score.score:.2f} [{score.low:.2f}, {score.high:.2f}]{invalid}"
+    return f"{score.score:.3f} [{score.low:.3f}, {score.high:.3f}] n={score.valid}{invalid}"
 
 
-def _table(rows: Sequence[Row]) -> str:
+def _table(rows: Sequence[Row], columns: Sequence[tuple[str, str]]) -> str:
     lines = [
-        "| Trial | Seed | Update | UR vs h-GW | (play / draw) | GW vs h-UR | (play / draw) | Overall |",
-        "|---|---:|---:|---|---|---|---|---|",
+        "| Pairing | " + " | ".join(title for title, _ in columns) + " |",
+        "|---|" + "---|" * len(columns),
     ]
-    for r in sorted(rows, key=lambda r: (r.trial != "mtg186", r.updates, r.seed)):
+    for r in rows:
+        values = (_fmt(getattr(r, field)) for _, field in columns)
         lines.append(
-            f"| {r.trial} | {r.seed} | {r.updates} | {_fmt(r.ur_vs_gw)} | "
-            f"{_fmt(r.ur_vs_gw_play)} / {_fmt(r.ur_vs_gw_draw)} | {_fmt(r.gw_vs_ur)} | "
-            f"{_fmt(r.gw_vs_ur_play)} / {_fmt(r.gw_vs_ur_draw)} | {_fmt(r.overall)} |"
+            f"| MTG-186 u{r.mtg186_updates} vs 18101 u{r.mtg181_updates} | "
+            + " | ".join(values)
+            + " |"
         )
     return "\n".join(lines)
 
 
-def _margins(summaries: dict[str, Summary]) -> str:
-    names = list(summaries)
-    head = (
-        "| Deck | "
-        + " | ".join(f"{n}: model plays | {n}: heuristic plays" for n in names)
-        + " |"
-    )
-    rule = "|---|" + "---:|---:|" * len(names)
-    lines = [head, rule]
-    for deck in DECKS:
-        cells = []
-        for name in names:
-            s = summaries[name]
-            for score in (s.model_decks[deck], s.heuristic_decks[deck]):
-                cells.append("—" if score.score is None else f"{score.score:.3f}")
-        lines.append(
-            f"| {deck.removeprefix('elemental_').upper()} | " + " | ".join(cells) + " |"
-        )
-    return "\n".join(lines)
-
-
-def build(
-    run_json: Path | None, usd: float | None, mtg181: Path, mtg181_groups: Path | None
-) -> tuple[Report, dict[str, Summary]]:
-    """Rows for every evaluated checkpoint, and the full grids by label."""
-    rows: list[Row] = []
-    grids: dict[str, Summary] = {}
-    for path in sorted(RESULTS.glob("*.json")):
-        result = Result.model_validate_json(path.read_text())
-        point = result.point
-        scope = "grid" if point.cells is None else "urgw"
-        rows.append(
-            _row(
-                point.trial,
-                point.seed,
-                point.updates,
-                scope,
-                result.summary,
-                path.stem,
-            )
-        )
-        if scope == "grid":
-            label = "MTG-186" if point.trial == "mtg186" else f"MTG-181 {point.seed}"
-            grids[f"{label} u{point.updates}"] = result.summary
-    for path in sorted(mtg181.glob("*.json")):
-        other = MTG181Result.model_validate_json(path.read_text())
-        end = other.endpoint
-        if f"MTG-181 {end.seed} u{end.updates}" in grids:
-            continue
-        groups = None if mtg181_groups is None else mtg181_groups / path.stem / "groups"
-        rows.append(
-            _row("mtg181", end.seed, end.updates, "grid", other.summary, groups)
-        )
-        grids[f"MTG-181 {end.seed} u{end.updates}"] = other.summary
-    report = Report(
+def build(run_json: Path | None, usd: float | None) -> Report:
+    found = {
+        p.stem: PairResult.model_validate_json(p.read_text())
+        for p in RESULTS.glob("*.json")
+    }
+    return Report(
         training=training(run_json) if run_json is not None else None,
         inclusive_usd=usd,
-        rows=rows,
+        rows=[row(found[name]) for name in ORDER if name in found],
     )
-    return report, grids
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-json", type=Path)
     parser.add_argument("--usd", type=float)
-    parser.add_argument("--mtg181", type=Path, required=True)
-    parser.add_argument("--mtg181-groups", type=Path)
     args = parser.parse_args()
-    report, grids = build(args.run_json, args.usd, args.mtg181, args.mtg181_groups)
+    report = build(args.run_json, args.usd)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "summary.json").write_text(report.model_dump_json(indent=2) + "\n")
-    parts = [
+    tables = [
         "# MTG-186 results (generated tables)",
         "",
-        "## UR/GW cells",
+        "Scores are MTG-186's against MTG-181 seed 18101, valid games only, 95% Wilson.",
         "",
-        _table(report.rows),
+        "## UR/GW (1,000 games) and the rest (1,000 games)",
+        "",
+        _table(
+            report.rows,
+            (
+                ("UR/GW", "urgw"),
+                ("MTG-186 on UR", "mtg186_on_ur"),
+                ("MTG-186 on GW", "mtg186_on_gw"),
+                ("Rest, pooled", "rest"),
+            ),
+        ),
+        "",
+        "## UR/GW by play/draw",
+        "",
+        _table(
+            report.rows,
+            (
+                ("On the play", "mtg186_on_play"),
+                ("On the draw", "mtg186_on_draw"),
+                ("UR, play", "ur_play"),
+                ("UR, draw", "ur_draw"),
+                ("GW, play", "gw_play"),
+                ("GW, draw", "gw_draw"),
+            ),
+        ),
+        "",
+        "## Rest by play/draw",
+        "",
+        _table(
+            report.rows,
+            (("On the play", "rest_on_play"), ("On the draw", "rest_on_draw")),
+        ),
     ]
-    if grids:
-        parts += ["", "## Deck margins", "", _margins(grids), "", "## Grids", ""]
-        parts += [grid_table(s, name) for name, s in grids.items()]
-    (OUT / "tables.md").write_text("\n".join(parts) + "\n")
-    print(_table(report.rows))
+    (OUT / "tables.md").write_text("\n".join(tables) + "\n")
+    print("\n".join(tables))
 
 
 if __name__ == "__main__":
