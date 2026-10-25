@@ -58,11 +58,15 @@ def worker_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Train
 
 def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     spec = specification()
-    job = spec.job(repo=tmp_path, revision="fixture-commit", max_hours=1)
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
     assert job.max_attempts == 1
     assert job.until == "updates=2"
     assert job.config is not None
-    assert TrainingJob.model_validate_json(job.config) == spec
+    frozen = TrainingJob.model_validate_json(job.config)
+    # Etude unpacks the commit without .git; the config carries its bundle.
+    assert frozen.source_bundle is not None
+    assert "manabot/experiment/job.py" in frozen.source_bundle.files
+    assert frozen.model_copy(update={"source_bundle": None}) == spec
     assert job.runs(11, 12)[1].seed == 12
     # Stock machines lack Rust; setup installs the pinned toolchain before the
     # locked sync builds the engine, and the command keeps it on PATH.
@@ -73,12 +77,12 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
     gated = TrainingJob(
         regime=spec.regime, milestones=(1,), validate_numerics=True
-    ).job(repo=tmp_path, revision="fixture-commit", max_hours=1)
+    ).job(repo=ROOT, revision="HEAD", max_hours=1)
     assert gated.setup is not None and "--extra dev" in gated.setup
     assert "uv run --locked --extra dev python" in gated.command
     assert not list(tmp_path.iterdir())
     with pytest.raises(ValueError, match="lifetime"):
-        spec.job(repo=tmp_path, revision="fixture-commit", max_hours=0.0001)
+        spec.job(repo=ROOT, revision="HEAD", max_hours=0.0001)
     with pytest.raises(ValueError, match="milestones"):
         TrainingJob(regime=spec.regime, milestones=(2,))
 

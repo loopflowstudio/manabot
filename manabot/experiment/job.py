@@ -7,7 +7,9 @@ entry point does not claim portable optimizer/collector recovery from a policy.
 
 Etude's stock machine supplies uv but no Rust, while maturin builds the native
 engine during the locked sync. The job's setup installs the pinned toolchain and
-syncs once; the command reuses that toolchain if uv must rebuild.
+syncs once; the command reuses that toolchain if uv must rebuild. Etude unpacks
+the commit without `.git`, so the job also carries the commit's source bundle,
+which the worker verifies and binds before anything reads source identity.
 """
 
 from datetime import datetime, timezone
@@ -22,6 +24,7 @@ from etude.launch.records import Job
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
+from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainingRegime, TrainSelfPlay
@@ -51,6 +54,11 @@ class TrainingJob(Strict):
     finalization_seconds: float = Field(default=30, gt=0)
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Frozen by `job` from the exact revision; absent only for local workers,
+    # which read source identity from their git checkout.
+    source_bundle: SourceBundle | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def admit(self) -> "TrainingJob":
@@ -92,9 +100,11 @@ class TrainingJob(Strict):
         The selected machine must already provide the pinned native extension.
         Revision is explicit; no working-tree snapshot silently enters science.
         """
-        spec = TrainingJob.model_validate(self.model_dump())
         if not revision.strip():
             raise ValueError("an explicit source revision is required")
+        spec = TrainingJob.model_validate(
+            {**self.model_dump(), "source_bundle": bundle_at(repo, revision)}
+        )
         if not math.isfinite(max_hours) or max_hours * 3600 < (
             spec.regime.wall_seconds + spec.finalization_seconds
         ):
@@ -133,6 +143,9 @@ def run_worker() -> TrainingRun:
         or float(environment["ETUDE_UNTIL_VALUE"]) != spec.updates
     ):
         raise ValueError("launcher target differs from the frozen regime")
+    # Bind the unpacked archive before anything reads source identity.
+    if spec.source_bundle is not None:
+        bind_etude_source()
     deadline = datetime.fromisoformat(environment["ETUDE_DEADLINE"])
     if deadline.tzinfo is None:
         raise ValueError("launcher deadline must include timezone")
