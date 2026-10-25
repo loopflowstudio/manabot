@@ -222,9 +222,10 @@ def admit(
         except Exception as error:
             state.error = f"{segment.run}: {type(error).__name__}: {error}"
             return
-        records, ended = observed.checkpoints, observed.ended
-        for record in records:
+        ended, reached = observed.ended, -1
+        for record in observed.checkpoints:
             updates = int(record.at["updates"])
+            reached = max(reached, updates)
             if updates not in state.checkpoints:
                 state.checkpoints[updates] = Checkpoint(
                     updates=updates,
@@ -232,7 +233,6 @@ def admit(
                     artifact=record.artifact,
                     coordinates=dict(record.at),
                 )
-        reached = max((int(record.at["updates"]) for record in records), default=-1)
         if ended is not None and reached <= parent:
             state.error = f"{segment.run}: ended {ended} without training"
             return

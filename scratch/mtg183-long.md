@@ -116,23 +116,44 @@ played under different pins are not comparable.
 - launchd: `gg.manabot.mtg183.controller` (`etude controller run`, KeepAlive);
   `gg.manabot.mtg183.w3-launch` (`~/.manabot/mtg183-controller/launch_w3.py`,
   `runs.json`) exited 0 once w3 stepped; it is w3-specific.
-- Evaluator follows a chain of segments (`1edd082aa`): `--run` repeats in
-  launch order; `--continues` keeps the seed open after the last named run
-  ends (no endpoint). Pin `/Users/jack/.manabot/mtg183-eval-source` at
-  `1edd082aa` (`INFERENCE_CODE`, environment files, `uv.lock` unchanged since
-  `9871e3545`), plist `--etude-source r2://manabot/jobs --run e7d47d8b220f
-  --continues` (restarted 2026-10-25 ~04:20 UTC). state.json: 53 exports, no
-  error; still 0 rows (yields to MTG-181).
+- Evaluator on the Mac mini (amendment 04:34 UTC): Etude run `ac6c45760d88`
+  (pool `mini`, owned, $0; spec `experiments/protocols/elemental-183-eval-job.json`,
+  revision `39b02876e`), started ~04:45 UTC, state in mini `~/.manabot/mtg183-eval`.
+  R2 keys from a read-only Doppler service token `mtg183-eval-mini` (manabot/prd)
+  in mini `~/.config/manabot/doppler-prd.token` (keychain unreachable over SSH;
+  `--config-dir ~/.config/manabot/doppler`). w1/w2 checkpoints copied from the
+  follower cache to R2 at their S3 keys (`jobs/<job>/runtime/artifacts/sha256/…`,
+  53 read back and verified), listed in `elemental-183-windows.json`. Segment
+  ends come from the tracking bucket's `state.json`, not Etude status. Admitted
+  54 exports (…2,550). MTG-181's evaluation also runs on the mini; no yield.
+  `failures/*.jsonl` in arena evidence are pre-game crash-safe logs, not failures.
+- First mini match delivered 06:48 UTC (`r2://manabot/evaluations/mtg183-eval/`):
+  500 valid games, u000000 0.112 vs heuristic v2 on its row; a unit (200 groups)
+  takes ~2 h on the shared mini; admission polls only between units.
+- Laptop evaluator stopped 04:44 UTC with 0 matches played, LaunchAgent removed
+  06:50 UTC (plist kept at `~/.manabot/mtg183-eval/…removed-20261025`); the segment reader
+  had read a local path named `r2:/…` (fixed `b668e92d2`), so w3 exports were
+  first admitted at 04:40 UTC.
 - Spend: w1 $7.2252 + w2 $7.2358 + non-training launches ≈ $0.60 + w3 ≤ $6.99.
 
 ## Remains, in order
 
-1. Check w3's first export (2,550) reaches state.json from run `e7d47d8b220f`.
-2. After each segment: fetch run.json/raw/EMA/Adam, `stage` (bucket-root keys),
-   size and commit `elemental-183-w<N+1>.json`, launch, then add its `--run` to
-   the plist and restart; drop `--continues` when it is the last segment
-   (stop per amendment). A relaunch replaces the never-trained run's `--run`.
-3. S3 cleanup below, then point w1/w2 checkpoints at R2 URIs (identity unchanged).
+1. w4 = one rental to the remaining cap (amendment 05:14 UTC, `cf1ee4eb6`; Jack
+   Heart: Etude cap removed, pin etude-sdk 0.2.6). Before w3 ends: merge main once
+   #373 lands (done 06:0x UTC: merged, then etude-sdk 0.2.6 `51572801b`; it ports `elemental_long_eval` to 0.2.4 agent keys and the report
+   anchor to `seats.source`); after the merge the 0.2.6 bump passes the
+   MTG-183 eval/long/report/source tests (21 passed, 06:55 UTC; w3 at update
+   2,732, ~$1.20). After w3 ends (~15:50 UTC): move the launchd
+   controller (`gg.manabot.mtg183.controller`, now on the 0.2.2 venv in
+   `~/.manabot/mtg183-eval-source`) to a 0.2.6 checkout; fetch/stage w3's
+   run.json/raw/EMA/Adam (bucket-root keys); size and commit
+   `elemental-183-w4.json`; tag the source; launch.
+2. Then relaunch the eval job at the SAME revision `39b02876e` (0.2.2, identities
+   unchanged) with command `--run e7d47d8b220f --run <w4>` and no `--continues`:
+   `etude cancel ac6c45760d88`, edit `elemental-183-eval-job.json`'s command,
+   launch to pool `mini` (state persists on the mini). Relaunched never-trained
+   w4 attempts replace its `--run`.
+3. S3 cleanup below (w1/w2 checkpoint bytes already copied to R2 at their target keys).
 4. Results report, publish evidence with `manabot.data publish`, manifest,
    protocol Results pointer. Card statistics (#368/#369) are not adopted by this
    frozen eval run (agent identities would change); the next new eval run adopts them.
