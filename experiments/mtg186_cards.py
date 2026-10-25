@@ -567,7 +567,7 @@ def summary(db: "duckdb.DuckDBPyConnection") -> CardSummary:
     )
 
 
-def report(source: Path = OUT / "eval") -> None:
+def write_tables(source: Path = OUT / "eval") -> None:
     """Both models' card tables (text and page) and the head-to-head summary."""
     # Card queries need duckdb (the `evaluation` extra); recipe discovery imports
     # every experiment module without it, so they load only here.
@@ -612,7 +612,7 @@ def main() -> None:
             parser.error("collect needs --run")
         print(collect(args.run))
     else:
-        report()
+        write_tables()
 
 
 if __name__ == "__main__":
