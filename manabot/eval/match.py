@@ -67,8 +67,12 @@ def play_cell(
     authored_matchup: AuthoredMatchup | None = None,
     card_evidence_dir: Path | None = None,
     legs: tuple[int, ...] | None = None,
+    keep_game_logs: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Play every deal across the mode's deck/seat legs, or only the given subset.
+
+    Each game's Command journal under `out_dir/failures/` is kept only when the
+    game fails, unless `keep_game_logs`; the cell trace keeps every game.
 
     `legs` selects a subset of the mode's legs for every deal, for designs that
     assign one seat and deck pair per game instead of playing whole deals.
@@ -204,6 +208,7 @@ def play_cell(
                 max_commands,
                 game_seconds,
                 out_dir / "failures" / f"{cell_id}.{deal_seed}.{leg}.jsonl",
+                keep_completed=keep_game_logs,
             )
             seconds = time.perf_counter() - started
             game["game_trace_sha256"] = canonical_sha256(game)

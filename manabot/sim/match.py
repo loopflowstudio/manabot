@@ -245,8 +245,16 @@ def play_game(
     max_commands: int,
     game_seconds: float,
     evidence_path: Path | None = None,
+    keep_completed: bool = False,
 ) -> dict[str, Any]:
-    """Retain attempted Commands before native code can hang or kill its worker."""
+    """Retain attempted Commands before native code can hang or kill its worker.
+
+    The journal at `evidence_path` is written as the game runs, so a hung or
+    killed worker (or a lost parent) still leaves its attempted Commands. A game
+    that settles without failure deletes its journal unless `keep_completed`:
+    its trace already holds every decision, and per-game journals dominate
+    evaluation disk use.
+    """
     started = time.monotonic()
 
     def retain(kind: str, value: Any) -> None:
@@ -318,3 +326,9 @@ def play_game(
         receiver.close()
         game["execution_seconds"] = time.monotonic() - started
         retain("settled", game)
+        if (
+            evidence_path is not None
+            and game["failure"] is None
+            and not keep_completed
+        ):
+            evidence_path.unlink()
