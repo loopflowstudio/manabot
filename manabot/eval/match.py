@@ -83,11 +83,18 @@ def play_cell(
     inference: InferenceRuntime | None = None,
     card_evidence_dir: Path | None = None,
     legs: tuple[int, ...] | None = None,
+    keep_game_logs: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Play complete deals or an explicit leg subset under bounded supervision.
 
     Card capture uses verified replay within the same deadline and retains the
     upstream evidence references for trace_card_tables.
+
+    Each game's Command journal under `out_dir/failures/` is kept only when the
+    game fails, unless `keep_game_logs`; the cell trace keeps every game.
+
+    `legs` selects a subset of the mode's legs for every deal, for designs that
+    assign one seat and deck pair per game instead of playing whole deals.
     """
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
@@ -291,6 +298,7 @@ def play_cell(
                 game_seconds,
                 evidence,
                 inference=runtime,
+                keep_completed=keep_game_logs,
             )
 
         def replay_block(block: int) -> None:

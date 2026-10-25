@@ -311,6 +311,7 @@ def play_game(
     max_commands: int,
     game_seconds: float,
     evidence_path: Path | None = None,
+    keep_completed: bool = False,
     *,
     inference: InferenceRuntime | None = None,
 ) -> dict[str, Any]:
@@ -323,4 +324,5 @@ def play_game(
         evidence_path,
         worker=_game_worker,
         inference=inference,
+        keep_completed=keep_completed,
     )

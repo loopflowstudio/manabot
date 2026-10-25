@@ -91,7 +91,7 @@ def _scored(directory: Path) -> dict[tuple[int, str, str], dict]:
     return scored
 
 
-def report(scored: dict[tuple[int, str, str], dict]) -> str:
+def format_tables(scored: dict[tuple[int, str, str], dict]) -> str:
     lines = [
         "Score vs heuristic (mean over seeds; seed SD; seeds scored)"
         " and mean training hours to the scored checkpoint",
@@ -239,7 +239,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     scored = _scored(args.directory.resolve())
-    print(report(scored))
+    print(format_tables(scored))
     if args.figure is not None:
         figure(scored, args.figure)
 

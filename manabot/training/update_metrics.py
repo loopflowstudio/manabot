@@ -7,16 +7,22 @@ selection group or matchup keeps its name instead of a list position.
 `read_updates` reads runs' Etude rows under a directory once, and `stage_rows`
 splits a run's rows by stage, from Etude for tracked self-play stages and from
 the record's retained rows for every other stage.
+
+`phase_seconds` and `time_since` give each row the seconds its update spent
+in collection and learning, nested by "/" under `time/` for Etude's flame
+graph. They are differences of the stage record's cumulative phase timers, so
+the record stays the one measurement and each row its per-update share.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
+import re
 from typing import Protocol
 
 from etude.run.listing import runs
 from etude.train.read import RunData, read
 
-from manabot.training.records import StageRecord
+from manabot.training.records import PhaseTiming, StageRecord
 
 type MetricValue = float | int | str | bool
 type MetricRow = dict[str, MetricValue]
@@ -61,6 +67,48 @@ def metric_row(diagnostic: Mapping[str, object]) -> MetricRow:
     row: MetricRow = {}
     _flatten(diagnostic, "", row)
     return row
+
+
+def phase_seconds(record: StageRecord) -> dict[str, float]:
+    """A stage's cumulative collection and learning seconds as `time/` metric keys.
+
+    Profiler subphases nest below their phase by path, in lower snake case:
+    learning's `Minibatches/Forward and loss` is
+    `time/learning/minibatches/forward_and_loss`.
+    """
+    found = {
+        "time/collection": record.collection_seconds,
+        "time/learning": record.learning_seconds,
+    }
+    for phase, timings in (
+        ("collection", record.collection_timings),
+        ("learning", record.learning_timings),
+    ):
+        found |= _subphases(phase, timings or {})
+    return found
+
+
+def _subphases(phase: str, timings: Mapping[str, PhaseTiming]) -> dict[str, float]:
+    return {
+        f"time/{phase}/"
+        + "/".join(
+            re.sub(r"[^a-z0-9]+", "_", part.lower()).strip("_")
+            for part in path.split("/")
+        ): timing.seconds
+        for path, timing in timings.items()
+    }
+
+
+def time_since(before: Mapping[str, float], now: Mapping[str, float]) -> MetricRow:
+    """Seconds each timer gained between two `phase_seconds` readings.
+
+    A timer that went down was restarted, as a new attempt's profiler is
+    under a resumed stage's totals, so all of its value is new.
+    """
+    return {
+        key: value - before.get(key, 0.0) if value >= before.get(key, 0.0) else value
+        for key, value in now.items()
+    }
 
 
 def _flatten(value: object, name: str, row: MetricRow) -> None:

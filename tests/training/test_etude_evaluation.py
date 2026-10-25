@@ -196,6 +196,21 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
         "LvA",
         "AvL",
     ]
+    # The candidate plays Lessons in legs 0 and 3, so a deck matrix puts those
+    # games in its Lessons column against the heuristic's Allies row.
+    candidate = [row for row in projected if row["player"] == 0]
+    assert {row["game"] for row in candidate if row["deck"] == "ur_lessons"} == {
+        0,
+        3,
+        4,
+        5,
+    }
+    named = {"L": "ur_lessons", "A": "gw_allies"}
+    for row in projected:
+        assert (row["deck"], row["opponent_deck"]) == (
+            named[row["matchup"][0]],
+            named[row["matchup"][-1]],
+        )
     corrupted = rows[0].model_dump(mode="json")
     corrupted["player_a_seat"] = 1
     rows[0] = evaluation.EvaluationRow.model_validate(corrupted)

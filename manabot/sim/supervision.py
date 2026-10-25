@@ -76,8 +76,13 @@ def supervise_game(
     *,
     worker: Callable[..., None],
     inference: InferenceRuntime | None = None,
+    keep_completed: bool = False,
 ) -> dict[str, Any]:
-    """Retain attempted Commands before native code can hang or kill its worker."""
+    """Retain attempted Commands before native code can hang or kill its worker.
+
+    Successful games discard their journal unless `keep_completed`; their
+    returned trace holds every decision. Failed games always keep the journal.
+    """
     with _game_slot(inference, game.get("match_id")):
         started = time.monotonic()
         perf = EvalPerformance(
@@ -194,6 +199,12 @@ def supervise_game(
             perf.record("worker_wall", started, request=game.get("match_id"))
             game["supervision_performance"] = perf.snapshot()
             retain("settled", game)
+            if (
+                evidence_path is not None
+                and game["failure"] is None
+                and not keep_completed
+            ):
+                evidence_path.unlink()
 
 
 @dataclass(frozen=True)
