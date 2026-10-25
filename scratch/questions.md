@@ -24,9 +24,14 @@ They do not select current work or authorize paid execution.
 - Merged #362's branch instead of rebasing (the steer said rebase): rebasing
   rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
   otherwise keep `8e7df92e4` reachable if the PR is squashed.
-- One Etude segment (w3) to the remaining cap rather than several ~12 h ones:
-  fewer stream restarts and setup/gate costs, no Etude-output→input chaining.
-  A failure keeps every export tracked up to it.
+- Superseded 2026-10-25: "one Etude segment to the remaining cap" cannot fit
+  Etude's 43,000 s rental cap; the chain of one-rental segments (amendment
+  02:30 UTC) restores the frozen w1–w7 shape. Hours subtract Etude's 0.25 h
+  setup allowance (its dollar check), not in the 19:00 formula.
+- Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
+  (108/h): conservative, matches the watchdog's clock.
+- The evaluator's `--etude-source/--run` names one run; later segments need it
+  to read several runs (or one restart per segment). Not built yet.
 - Follower reads w3's checkpoints with `etude.train.read.read(source, "self-play", run)`:
   the tracked experiment is the stage id (`RunContext` name). The tracking
   storage URI is an explicit CLI argument; not verified against a live run.

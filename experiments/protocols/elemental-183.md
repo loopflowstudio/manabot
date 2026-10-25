@@ -317,3 +317,37 @@ and in any case before MTG-181's follower exits; it never plays a game.
 ends and w3 has staged w2's learner state, w1/w2's retained objects move from
 S3 to R2; checkpoint agents are identified by digest, not location, so moving
 their bytes does not change any match.
+
+## Amendment, 2026-10-25 02:30 UTC, before allocation: segments of one rental each
+
+w2 ended at its deadline (01:47 UTC) at update 2,534 (`paused`); its receipts
+are $7.2358 (training $7.2198, guardian $0.0161), so w1 and w2 together cost
+$14.4611. Etude rents a machine for at most 43,000 seconds (its 12-hour
+storage-session ceiling), so the single w3 run above cannot fit one rental,
+and `max_attempts=1` gives it no second one. The continuation is therefore a
+chain of Etude segments, as w1–w7 were planned under the cohort: w3, w4, …
+Each continues its predecessor's final export through the same
+`stage_parent` / `segment_job` path, with the same recipe, seed and cadence;
+collector, game and RNG streams restart at every boundary.
+
+For each segment, with `remaining` = $50 − every earlier receipt − $1.30:
+
+- Hours: the lesser of 11.6 (43,000 s less the on-demand's 900 s setup
+  allowance, rounded down to a tenth) and `remaining` ÷ the quoted L4 price
+  − 0.25 h, rounded down to a tenth. Etude prices a rental as its price ×
+  (hours + 0.25 h of setup).
+- Dollars: `max_usd` = the lesser of `remaining` and the on-demand's $0.60
+  ceiling × (hours + 0.25), rounded down to a cent.
+- Update target: the parent update + 0.9 × w2's measured rate × (hours − 0.7),
+  rounded down to a multiple of 50. w2's rate is 1,209 updates in its stage's
+  42,033 s: 103.55 updates per hour.
+- A segment's spec (`experiments/protocols/elemental-183-w<N>.json`) is
+  committed before it is allocated; the next one is sized from receipts only
+  after its predecessor has ended. A segment that is not worth its setup
+  (under 2 hours) is not launched.
+
+The chain ends when the remaining dollars allow no further segment, or when a
+segment ends without a final export (failure before its first export, or
+refusal); the endpoint is then the last tracked export of the last segment
+that produced one. No segment is retried. The evaluator admits every
+segment's exports by absolute update and settles when the chain ends.

@@ -79,22 +79,35 @@ survived. First poll after restart: 48 checkpoints, no error. Later restarts
 `INFERENCE_CODE` files are unchanged; a row played under one pin is not
 comparable to one played under another.
 
+## w2 end and w3 spec (2026-10-25 02:30 UTC)
+
+- w2 ended 01:47 UTC at update 2,534 (`paused`), $7.2358. One-shot `_admit`
+  (old checkout, under `owner.lock`) took the ledger to 53 exports, 0…2,534
+  (copy `ledger-before-tail-admit-20261025T0150Z.json`).
+- w2's run.json/raw/EMA/Adam fetched to `~/.manabot/mtg183-w2-final/parent`,
+  staged to `r2://manabot/jobs/mtg183/w2/`, each verified by sha256.
+- Staging first bound update 1,325: #365 made `StageRecord.updates` explicit and
+  `TrainingRun` read w1/w2's records as 0 updates (the worker's admission would
+  also have refused the parent). Fixed in `418eb456c` (rule moved from
+  `RetainedRun` to `RunRecord`; tagged `mtg183-w3-source`); local admission of
+  the real w2 record then gave iteration 2,534.
+- Etude caps a rental at 43,000 s, so one 57.7 h w3 cannot run (worker would
+  refuse its deadline). Amendment "segments of one rental each" (02:30 UTC):
+  a chain w3, w4, … sized from receipts. w3: 11.6 h, $7.11, target 3,500;
+  quoted $6.99 at $0.59/h. Spec `experiments/protocols/elemental-183-w3.json`.
+- Launch as `Run(job, seed=18301)` (the worker needs `ETUDE_SEED`); MTG-186 holds
+  the shared `l4` on-demand's one slot, so `etude ondemand max l4 2` before launch.
+
 ## Remains, in order
 
-1. After w2 ends (01:47 UTC): one-shot `_admit` of w2's tail into the old ledger
-   from the pinned old checkout under `owner.lock`; the evaluator picks it up.
-2. Fetch w2's final run.json and raw/EMA/Adam (`fetch_job_file`), `stage` them to
-   `r2://manabot/jobs` under `mtg183/w2`, compute hours/target/max_usd per the
-   amendment (w1 receipt $7.2252; w2 from its deletion receipt), commit
-   `elemental-183-w3.json`; its revision is a pushed commit kept reachable by tag
-   (main squash-merges).
-3. Land on main; launch w3 (`launch(job, rent="l4")`, one attempt) with a standing
-   `etude controller run`; restart the evaluator with `--etude-source/--run`,
-   keeping a pin whose `INFERENCE_CODE` files match `9871e3545` (else re-pin
-   only while no rows exist).
-4. S3 cleanup below (after w2 staged), then point w1/w2 checkpoints at R2 URIs
-   (identity unchanged).
-5. Results report, publish evidence with `manabot.data publish`, manifest,
+1. Land on main; launch w3 (`launch(Run(job, seed=18301), rent="l4")`) with a
+   standing `etude controller run`; restart the evaluator with
+   `--etude-source/--run` on a pin whose `INFERENCE_CODE` files match `9871e3545`.
+2. After each segment ends: fetch its final run.json/raw/EMA/Adam from Etude,
+   `stage` them under `mtg183/w<N>`, size and commit `elemental-183-w<N+1>.json`,
+   launch; stop per the amendment. The evaluator must admit every segment's run.
+3. S3 cleanup below, then point w1/w2 checkpoints at R2 URIs (identity unchanged).
+4. Results report, publish evidence with `manabot.data publish`, manifest,
    protocol Results pointer.
 
 ## Proposed Wave memory (not written; standalone realign leaves `.lf/wave/` read-only)
