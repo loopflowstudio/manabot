@@ -24,8 +24,9 @@ inherited from landed work and are at `1e6015270:scratch/`.
   images removed. Do not rehearse with full images on this host again.
 # Inherited notes
 
-MTG-174/176, MTG-183 and card-evaluation (#360) notes landed on main and are
-retained at `884249024948:scratch/questions.md`. They do not select current work.
+MTG-174/176, MTG-181, MTG-183 and card-evaluation (#360) notes landed on main and
+are retained at `2614317f82dfd993631a13268f008cbe01977bc6:scratch/questions.md`.
+They do not select current work.
 
 # Remote evaluation (2026-10-25)
 
