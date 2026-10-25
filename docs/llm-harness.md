@@ -192,3 +192,25 @@ Etude-verified Linux CPython 3.12 engine binary at `$ETUDE_INPUTS_DIR/native.so`
 its source must match the checkout's native code and content. The initial test
 uses the passing PR #376 release wheel, with that source comparison retained.
 Etude's rental/job limits bound paid execution, including setup and cleanup.
+
+The reusable `experiments/llm_game.py` recipe takes `native_artifact` and
+`native_source` receipt paths. It checks the artifact identity and requires an
+empty native-source/content diff from the CI build before making a job. Setup
+installs dependencies once; `UV_NO_SYNC=1` prevents the typed run command from
+rebuilding the project after the verified engine has been copied. The first
+remote run predated that environment setting and did one extra package build.
+
+Measured L4 result, 2026-10-25 (Etude run `4c2a54fdfaac`): Qwen won the seed-23
+functional game in 308 decisions, including 160 model selections, all valid on
+the initial response. No repairs or fallbacks occurred. All 308 Commands replayed
+to the same terminal state on the worker and again locally. Game time was 280.55
+seconds; median model decision 1.96 seconds, maximum 2.52 seconds, loading 10.04
+seconds. The largest actual prompt was 4,329 tokens. Cold model acquisition and
+checksum verification took 87.52 seconds, outside game timing.
+
+Peak allocated Torch tensors were 19,063,865,344 bytes. One-second `nvidia-smi`
+samples reached 22,494 of 23,034 MiB total device memory (about 22.0 of 22.5 GiB).
+The game fits this L4, with limited observed headroom; this is not proof of every
+8,192-token initial/repair prompt or stronger models fitting. The rental ended
+after one successful attempt, with Etude reporting approximately $0.08. Its
+ephemeral remote cache ended with it; local verified bytes remain cached.
