@@ -71,8 +71,11 @@ from experiments.elemental_grid import (
     _legs,
 )
 from experiments.mtg186 import CAP_USD, LAUNCHES, MILESTONES, ROOT, SEED, STORAGE
+from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.registration import PlayerRegistration
 import managym
 
 RESULTS = ROOT / "experiments/data/mtg186/pairings"
@@ -255,21 +258,13 @@ class PairRequest(BaseModel):
     output: Path
 
 
-def play_pair_group(request: PairRequest) -> list[GameRow]:
-    """MTG-186 as player A through the grid's deck/seat legs; rows are A's."""
-    import torch
-
-    from manabot.eval.match import play_cell
-    from manabot.eval.models import EvaluationKey
+def arena(
+    a: Player, b: Player, matchup: AuthoredMatchup, arena_version: str
+) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration]:
+    """The arena key and byte-checked registrations: MTG-186 is A, MTG-181 is B."""
     from manabot.infra.provenance import runtime_fingerprints
     from manabot.model.checkpoint import load_checkpoint
-    from manabot.sim.matchup import AuthoredMatchup
-    from manabot.sim.registration import PlayerRegistration
 
-    torch.set_num_threads(1)
-    group = request.group
-    role_a, role_b, leg = _legs(group)
-    matchup = AuthoredMatchup(pack_key=PACK, role_a=role_a, role_b=role_b)
     fingerprints = runtime_fingerprints(match_config=matchup.match())
     common = dict(
         world=managym.WORLD_VERSION,
@@ -307,18 +302,32 @@ def play_pair_group(request: PairRequest) -> list[GameRow]:
             artifact_id=f"{checkpoint.trial}/{checkpoint.sha256}",
         )
 
-    a = register("mtg186", request.a, "challenger")
-    b = register("mtg181", request.b, "anchor")
+    reg_a = register("mtg186", a, "challenger")
+    reg_b = register("mtg181", b, "anchor")
     key = EvaluationKey(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
-        arena_version="mtg186-pair-v1",
+        arena_version=arena_version,
         rating_model_version="unrated",
         rating_prior_sha256=canonical_sha256({}),
-        anchor_cohort_sha256=canonical_sha256(b.model_dump()),
+        anchor_cohort_sha256=canonical_sha256(reg_b.model_dump()),
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
+    return key, reg_a, reg_b
+
+
+def play_pair_group(request: PairRequest) -> list[GameRow]:
+    """MTG-186 as player A through the grid's deck/seat legs; rows are A's."""
+    import torch
+
+    from manabot.eval.match import play_cell
+
+    torch.set_num_threads(1)
+    group = request.group
+    role_a, role_b, leg = _legs(group)
+    matchup = AuthoredMatchup(pack_key=PACK, role_a=role_a, role_b=role_b)
+    key, a, b = arena(request.a, request.b, matchup, "mtg186-pair-v1")
     request.output.mkdir(parents=True, exist_ok=False)
     rows, trace, replay = play_cell(
         key=key,
