@@ -1,82 +1,85 @@
-# LLM harness questions and assumptions — 2026-10-24
+# Inherited notes
 
-Current accepted direction, protocol, engineering settings and retained proof
-live in `scratch/llm-finetune.md`. This checkout owns MTG-185; MTG-184 owns the
-representation. No Wave is associated. Jack Heart requested both Task sessions
-in cmux, then authorized harness pursuit after the HTML review. The later
-Qwen3.5-9B BF16 selection and provisional context resolve the historical model
-choice blocker; measured L4 capacity remains outstanding.
+MTG-174/MTG-176 preflight, payment-repair and recovery assumptions are retained at
+`003644bda6d3ed2e1e6754186960b135ff815e76:scratch/{questions,elemental-baseline-preflight,elemental-mana-repair}.md`.
+They do not select current work or authorize paid execution.
 
-- Corpus/world and an authorized GPU execution environment remain open. No paid
-  allocation or full-weight download is selected. The provisional complete-input
-  limit is 4,096 tokens, 32 response tokens and 120 seconds including loading;
-  optimize from evidence without truncating inputs or repairs.
-- MTG-184 must settle current-state-only versus visible history and review real
-  prompts before freezing templated English, aliases and card-text deduplication.
-  Empty native events and absent policy history do not establish tensor-policy
-  input parity. Resolve missing meanings at the shared observation authority.
-- Interface-only fitting needs an objective designed from untouched-model failures.
-  Random targets teach randomness; expert action targets teach strategy.
-- Trying more models, reasoning-output support and quantization remain follow-ups.
-  “Sample models” does not select stochastic decoding. Reasoning needs native
-  channel/final-answer boundaries and explicit budgets; the current exact-reference
-  protocol and single protocol-only repair remain unchanged.
+# MTG-183 assumptions (2026-10-23)
 
-## Historical context
+- A RunPod job cannot exceed twelve hours, so "one long seed" is one cohort of
+  chained `last-complete` learner-state continuations (MTG-165's $50 ladder
+  pattern). Collector/RNG streams restart at each of six boundaries.
+- Controller is this laptop; the Mac mini (`mini-heart.local`) did not resolve.
+  Guardians bound every rental, so controller downtime only delays successors.
+- MTG-182 not merged: deadline-abandoned games at each window cutoff are read as
+  deadline pauses (protocol), not game errors.
+- Rated spacing, references (200, 2,000), held-out skip-one pairs, 10 games per
+  cell for pairs/subset grids and the saturation rule are this session's choices,
+  not Jack Heart's numbers.
+- Local evaluation yields while MTG-181's follower runs (Task: do not disturb it).
+- The 0.03 practical saturation margin (amendment) is this session's choice.
 
-Inherited MTG-174/176/180/182 notes remain at
-`912771b9484bddf282bd11183d2f14dfbbbb8d67:scratch/questions.md`,
-`912771b9484bddf282bd11183d2f14dfbbbb8d67:scratch/elemental-baseline-preflight.md` and
-`912771b9484bddf282bd11183d2f14dfbbbb8d67:scratch/elemental-mana-repair.md`.
-They do not select work for MTG-185.
+# MTG-183 Etude continuation (2026-10-24)
 
-The pre-Graph sync conflicts were resolved preserving both the upstream sim/eval
-migration and harness CI/README additions. Earlier implementation and CPU proof
-remain the baseline; do not replay them. Inherited card-evaluation plans/evidence
-remain at `1e601527094601e5f152d866fbdf9f924c33e954:scratch/17lands-for-bots.md`,
-that commit's `scratch/17lands-for-bots-evidence.md` and `scratch/questions.md`.
-Their cross-run/Etude direction and outstanding gates belong to that work.
+- Merged #362's branch instead of rebasing (the steer said rebase): rebasing
+  rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
+  otherwise keep `8e7df92e4` reachable if the PR is squashed.
+- Etude's 43,000 s rental cap forces a chain of one-rental segments (amendment
+  02:06 UTC), restoring the frozen w1–w7 shape. Segment hours subtract Etude's
+  0.25 h setup allowance (its dollar check), not in the 19:00 formula.
+- Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
+  (108/h): conservative, matches the watchdog's clock.
+- The evaluator's `--etude-source/--run` names one run; later segments need it
+  to read several runs (or one restart per segment). Not built yet.
+- Follower reads w3's checkpoints with `etude.train.read.read(source, "self-play", run)`:
+  the tracked experiment is the stage id (`RunContext` name). The tracking
+  storage URI is an explicit CLI argument; not verified against a live run.
+- Staged-object reuse compares digests by downloading the object (simple, small files).
 
-## Publication scope — 2026-10-24
+# MTG-183 Etude eval and R2 (2026-10-25)
 
-Publish the standalone harness, its configuration, dependency/CI wiring, tests
-and documentation. Preserve all scratch edits, additions and inherited deletions
-locally rather than including historical working notes in the product PR.
-The Task steer permits publication with measured L4 capacity outstanding; that
-is still required for Task completion. Cached-model verification of the 5.3.0
-runtime is a compatibility check, not replacement or relabeling of the earlier
-4.57.6 CPU evidence.
+- #362 and heuristic v2 are on main and merged here (merge, so `8e7df92e4`
+  stays an ancestor).
+- Explicit `evaluate` matches, not a `Benchmark`: the design is non-uniform
+  (full vs subset grids, a pairing graph over w1/w2 checkpoints Etude never
+  tracked), and `curves` cannot place non-Etude checkpoints on training axes.
+- One Etude match per grid row (20 groups, ~500 or ~100 games): 10 R2 match
+  deliveries per unit instead of 200; a restart loses at most the in-flight rows.
+- Eval tables at `r2://manabot/evaluations/` (run folder `mtg183-eval/`): my
+  choice of prefix. `state.json` (checkpoints, endpoint) stays local beside the
+  run and is published with the report.
+- Checkpoint agent code identity = `manabot/model`, `manabot/env`,
+  `manabot/arena/match.py`, `experiments/elemental_grid.py`; editing those in
+  the evaluator's pinned checkout would start new agents, so pin it.
+- Stopped the old follower at 2026-10-25 00:15 UTC instead of after w2 ends:
+  it was playing heuristic v1 (not the anchor) against MTG-181's live process
+  and no longer admitting exports. w2's tail is admitted by a one-shot `_admit` call.
 
-Publication verification: `lf sync` succeeded after a transient index lock.
-Ruff lint and format checks passed. The isolated `dev,llm` run passed all 36
-harness tests. The affected harness/CI/release/package suite passed 84 tests and
-found a retired `manabot/arena/__pycache__` directory left by the upstream move;
-the cache was preserved at `.runs/llm/publication-smoke/retired-arena-cache`, and
-all six package-boundary tests then passed. The exact main integration command
-collected 618 tests without collisions. No Rust source or world changed.
+# MTG-183 launcher and w3 source (2026-10-25)
 
-The 5.3.0 CLI compatibility receipt is
-`.runs/llm/publication-smoke/decision-transformers-5.3-online.json`:
-pinned SmolLM2, `A0\nA1` repaired to `A0`, 88/124 input tokens,
-6/3 output tokens, 18.72 seconds, null GPU memory. The offline-only failure
-receipt is retained alongside it. Qwen pretrained CUDA/L4 inference, largest
-complete prompt/repair capacity and game integration remain unverified.
+- Moved the empty schema-1 `~/.etude/launcher.db` aside rather than deleting it.
+  Etude storage `r2` = `r2://manabot/jobs` (cannot be changed later): prefix `jobs`
+  matches the S3 cleanup's `manabot/jobs/mtg183-*` → R2 `jobs/mtg183-*` mapping.
+  On-demand `l4` boots w1/w2's image digest, not Etude's default, so w3's
+  machine matches the lineage.
+- The amendment says w3's source is "a published commit on main", but main
+  squash-merges, so no branch commit reaches main. w3's revision is this
+  branch's pushed code commit, tagged `mtg183-w3-source`; the squash lands the
+  same code on main. Recorded in `elemental-183-w3.json`.
 
-## Review sync — 2026-10-24
+# MTG-183 sync onto #360 (2026-10-24)
 
-After publication, main advanced to `8842490249484dd7085229bcb922a50d061c61fb`.
-`lf sync` merged the code cleanly as `5a6a98136`; automatic scratch restoration
-failed because upstream also removed inherited notes and changed questions.
-Restored this Task's questions, design and HTML from retained stash
-`8b46fceda264589af9a86e2b75e2f643e0005f8e`, without reintroducing already-removed
-historical files. Upstream questions remain at that main commit and are copied
-to `.runs/llm/sync-20261024/upstream-questions.md`; their unrelated work is not
-selected here. The retained stash remains available.
+- #360 split `arena/` into `sim/` and `eval/`. The branch's `legs` subset moved
+  onto `manabot.eval.match.play_cell`. The evaluator's `INFERENCE_CODE` now names
+  `manabot/sim/match.py` and `manabot/eval/match.py` in place of the removed
+  `manabot/arena/match.py`, so its checkpoint agent identities change. The
+  evaluator had played no rows, so at 2026-10-25 ~01:30 UTC its pinned checkout
+  moved from `d9fc58df2` to `9871e3545` (etude-sdk 0.2.2, the merged worktree's
+  `_managym` build with #360's card-capture bindings) before any row existed. The frozen
+  `experiments/protocols/elemental-183*` files keep the old paths as evidence.
+- `etude-sdk` follows main's 0.2.2 (the steer asked for 0.2.1, which is older than main's).
 
-Post-sync verification: `uv run --no-sync pytest tests/llm
-tests/semantic/test_elemental_world.py tests/test_package_boundaries.py -q`
-passed 59 tests; three supervisor tests exhausted their 2-second deadlines before
-worker evidence arrived. The isolated `uv run --no-sync pytest
-tests/llm/test_llm_runner.py -q -x` rerun passed all five supervisor tests in
-7.54 seconds. No code or timeout was changed to obtain the pass. Record the
-initial timing failures rather than claiming a clean combined run.
+# Card evaluation (#360, landed)
+
+The 17Lands/GIH design, investigation and implementation defaults landed with #360;
+they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evidence,questions}.md`.
