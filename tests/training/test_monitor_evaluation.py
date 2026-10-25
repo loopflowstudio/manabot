@@ -395,9 +395,17 @@ def test_real_arena_checkpoint_outcomes(
 
 def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
     manifest = _manifest()
+    match = selected_match()
+    run = TrainingRun.model_construct(
+        id="failed-admission",
+        seed=manifest.training_seed,
+        regime=TrainingRegime.model_construct(match=match),
+        identities={"matchup_sha256": canonical_sha256(match.model_dump())},
+    )
+    manifest.artifact["path"] = str(tmp_path / "missing.pt")
     with pytest.raises(FileNotFoundError):
         checkpoint_evaluation.evaluate_checkpoint(
-            TrainingRun.model_construct(id="failed-admission"),
+            run,
             manifest.artifact,
             manifest.coordinates,
             tmp_path / "attempt",

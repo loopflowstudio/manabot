@@ -65,12 +65,16 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
         metadata = (
             json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
         )
+        rows = json.loads((directory / "rows.json").read_text())
+        # Rows reference immutable block shards; the aggregate panel trace is
+        # diagnostic evidence, not another population of games.
         games = [
             game
-            for path in sorted((directory / "traces").glob("*.commands.jsonl.gz"))
+            for path in sorted(
+                {directory / row["trace_path"] for row in rows if "trace_path" in row}
+            )
             for game in read_trace(path)
         ]
-        rows = json.loads((directory / "rows.json").read_text())
         elapsed = receipt["elapsed_seconds"]
         counters = receipt["counters"]
         decisions = counters.get("decisions", 0)

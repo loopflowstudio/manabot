@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from manabot.eval.match import play_cell
+from manabot.infra.files import exclusive_file_lock
 from manabot.sim.execution import EvalExecution
 from manabot.sim.serving import InferenceRuntime
 
@@ -50,7 +51,13 @@ class _CallbackSupervisor:
     def play_cell(
         self, kwargs: dict[str, Any]
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-        return play_cell(**kwargs, inference=self.runtime)
+        directory = Path(kwargs["out_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        with exclusive_file_lock(directory / ".execution.lock"):
+            if (directory / ".sealed").exists():
+                raise RuntimeError("evaluation attempt has been sealed")
+            (directory / ".execution-started").touch(exist_ok=False)
+            return play_cell(**kwargs, inference=self.runtime)
 
 
 class CallbackEndpoint:

@@ -20,7 +20,13 @@ from manabot.eval.admission import (
     register_anchor,
     register_checkpoint,
 )
-from manabot.eval.evaluation import EvaluationRequest, evaluate_local
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    EvaluationResult,
+    continue_evaluation,
+    evaluate_local,
+    evaluation_status,
+)
 from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
@@ -127,6 +133,15 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument(
         "--request", type=Path, help="Previously admitted EvaluationRequest JSON"
     )
+    source.add_argument(
+        "--continue",
+        dest="continuation",
+        type=Path,
+        help="Evaluation panel directory whose missing blocks to finish",
+    )
+    source.add_argument(
+        "--status", type=Path, help="Inspect retained evaluation progress"
+    )
     parser.add_argument(
         "--opponent",
         default="heuristic",
@@ -144,7 +159,9 @@ def main(argv: list[str] | None = None) -> int:
         help="AuthoredMatchup JSON; default selected Allies/Lessons setup",
     )
     parser.add_argument("--include-mirrors", action="store_true")
-    parser.add_argument("--out", type=Path, required=True, help="New attempt directory")
+    parser.add_argument(
+        "--out", type=Path, help="New evaluation directory (fresh repeat)"
+    )
     parser.add_argument(
         "--seconds",
         type=float,
@@ -153,11 +170,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--game-seconds", type=float, default=120)
     parser.add_argument("--max-commands", type=int, default=10_000)
-    parser.add_argument("--workers", type=int, default=2)
-    parser.add_argument("--batch-rows", type=int, default=16)
-    parser.add_argument("--resident-mib", type=int, default=1024)
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--batch-rows", type=int)
+    parser.add_argument("--resident-mib", type=int)
     args = parser.parse_args(argv)
-    if args.request and (
+    if (args.request or args.continuation or args.status) and (
         args.opponent != "heuristic"
         or args.deal_seed
         or args.matchup
@@ -166,15 +183,50 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_commands != 10_000
     ):
         parser.error(
-            "--request already fixes opponents, deals, matchup and game limits"
+            "saved evaluation already fixes opponents, deals, matchup and game limits"
         )
+    if args.continuation or args.status:
+        if any(
+            value is not None
+            for value in (args.workers, args.batch_rows, args.resident_mib)
+        ):
+            parser.error("saved evaluation fixes workers, batch rows and residency")
+        if args.out:
+            parser.error("--out is only for a fresh evaluation")
+        directory = args.continuation or args.status
+        try:
+            result = evaluation_status(directory)
+            if args.continuation:
+                if args.seconds <= 0:
+                    parser.error("--seconds must be positive")
+                if result.execution is None or result.execution.device != "cpu":
+                    raise ValueError(
+                        "local continuation requires an existing CPU execution"
+                    )
+                # Retain the numerical contract; only the attempt deadline changes.
+                limits = EvalExecution.model_validate(
+                    {
+                        **result.execution.model_dump(),
+                        "deadline_unix": time.time() + args.seconds,
+                    }
+                )
+                result = continue_evaluation(directory, execution=limits)
+            return _describe(result, directory)
+        except Exception as exc:
+            print(f"incomplete: {exc}; evidence: {directory}")
+            return 1
+    if args.out is None:
+        parser.error("a fresh evaluation requires --out")
     # EvalExecution rejects nonfinite/invalid budgets before creating output.
     limits = EvalExecution(
         device="cpu",
         deadline_unix=time.time() + args.seconds,
-        max_active_games=args.workers,
-        max_batch_rows=args.batch_rows,
-        resident_model_bytes=args.resident_mib * 2**20,
+        max_active_games=args.workers if args.workers is not None else 2,
+        max_batch_rows=args.batch_rows if args.batch_rows is not None else 16,
+        resident_model_bytes=(
+            args.resident_mib if args.resident_mib is not None else 1024
+        )
+        * 2**20,
     )
     if args.seconds <= 0:
         parser.error("--seconds must be positive")
@@ -241,8 +293,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"incomplete: {exc}; evidence: {args.out}")
         return 1
+    return _describe(result, args.out / "panel")
+
+
+def _describe(result: EvaluationResult, directory: Path) -> int:
+    request = result.request
     print(
-        f"{result.status}: {len(result.rows)}/{request.expected_games} games; evidence: {args.out}"
+        f"{result.status}: {len(result.complete_deals())}/{len(request.deal_seeds)} complete deals; "
+        f"{len(result.rows)}/{request.expected_games} games; evidence: {directory}"
     )
     if result.score is not None:
         deals = len(request.deal_seeds)

@@ -1,11 +1,13 @@
 """Local evidence uses the shared arena without training or cloud execution."""
 
 from collections.abc import Iterator
+from contextlib import ExitStack
 import json
 import multiprocessing as mp
 from pathlib import Path
 import subprocess
 import time
+from typing import Any
 
 import pytest
 import torch
@@ -14,15 +16,20 @@ from manabot.eval.endpoint import CallbackEndpoint
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
+    continue_evaluation,
     evaluate,
     evaluate_local,
+    evaluation_status,
 )
 from manabot.eval.local import checkpoint_request, main as local_main
 from manabot.eval.models import EvaluationContract
 from manabot.eval.results import EvaluationRow
 from manabot.eval.serving_benchmark import Panel, _panel_worker, _select_profile_roots
+from manabot.infra.files import atomic_json, exclusive_file_lock
+from manabot.infra.identity import canonical_sha256
 from manabot.sim.execution import EvalExecution
-from manabot.sim.replay import read_trace
+from manabot.sim.match import play_game
+from manabot.sim.replay import read_trace, write_trace
 from manabot.sim.serving import InferenceRuntime
 from tests.eval.test_batched_eval import fixture_policy
 
@@ -188,7 +195,11 @@ def test_calibration_rejects_partial_replayed_cohort(
         **kwargs: object,
     ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
         rows = _replayed_rows(request)[:-1]
-        return [row.model_dump(mode="json") for row in rows], {}, {"passed": True}
+        return (
+            [row.model_dump(mode="json") for row in rows],
+            {"artifact_path": rows[0].trace_path},
+            {"passed": True},
+        )
 
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
     receiver, sender = mp.Pipe(duplex=False)
@@ -283,6 +294,27 @@ if __name__ == "__main__":
     assert serving["counters"]["catalog_builds"] == 1
     assert (out / "panel/performance.json").exists()
     assert (out / "panel/report-run.json").exists()
+    evidence = {p: p.read_bytes() for p in (out / "panel").rglob("*") if p.is_file()}
+    for operation in ("--status", "--continue"):
+        inspected = subprocess.run(
+            [
+                "uv",
+                "run",
+                "python",
+                str(guard),
+                operation,
+                str(out / "panel"),
+                "--seconds",
+                "30",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=40,
+        )
+        assert inspected.returncode == 0, inspected.stdout + inspected.stderr
+        assert "1/1 complete deals" in inspected.stdout
+    assert all(p.read_bytes() == content for p, content in evidence.items())
+    assert not (out / "panel/attempts").exists()
 
 
 def test_local_and_managed_share_admission_seeds_and_incomplete_results(
@@ -449,3 +481,204 @@ def test_cli_saved_request_retains_deadline_result(tmp_path: Path) -> None:
         result.request.candidate.checkpoint_sha256
         == request.candidate.checkpoint_sha256
     )
+
+
+def _publish_blocks(directory: Path, rows: list[EvaluationRow]) -> None:
+    """Synthetic finalized evidence for lifecycle tests; no game strength claim."""
+
+    (directory / "blocks").mkdir(exist_ok=True)
+    for seed in {row.deal_seed for row in rows}:
+        block = sorted(
+            (row for row in rows if row.deal_seed == seed), key=lambda r: r.leg
+        )
+        relative = f"traces/{seed}.commands.jsonl.gz"
+        trace = write_trace(
+            directory / relative, [{"deal_seed": seed, "fixture": True}]
+        )
+        for row in block:
+            row.trace_path = relative
+            row.trace_shard_sha256 = trace["sha256"]
+        atomic_json(
+            directory / "blocks" / f"{seed}.json",
+            {
+                "rows_sha256": canonical_sha256(
+                    [row.model_dump(mode="json") for row in block]
+                ),
+            },
+        )
+    atomic_json(directory / "rows.json", [row.model_dump(mode="json") for row in rows])
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_continuation_finishes_missing_sixty_without_replacing_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    managed: bool,
+) -> None:
+
+    request = _anchor_request(tuple(range(100)))
+    limits = EvalExecution(deadline_unix=time.time() + 90)
+    bound = request.bind(limits)
+    cohorts: list[tuple[int, ...]] = []
+
+    def runner(
+        **kwargs: object,
+    ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+        seeds, directory = kwargs["deal_seeds"], kwargs["out_dir"]
+        assert isinstance(seeds, tuple) and isinstance(directory, Path)
+        cohorts.append(seeds)
+        selected = bound.model_copy(update={"deal_seeds": seeds})
+        rows = _replayed_rows(selected)
+        if len(cohorts) == 1:
+            # Forty complete deals plus a partial 41st. Publish before failure,
+            # just as incremental replay does if later execution stops.
+            _publish_blocks(directory, rows[:81])
+            raise TimeoutError("interrupted after forty complete blocks")
+        _publish_blocks(directory, rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {"passed": True}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", runner)
+    monkeypatch.setattr("manabot.eval.endpoint.play_cell", runner)
+    out = tmp_path / "evaluation"
+    with ExitStack() as stack:
+        endpoint = None
+        if managed:
+            runtime = stack.enter_context(
+                InferenceRuntime(limits, tmp_path / "runtime")
+            )
+            endpoint = stack.enter_context(CallbackEndpoint(runtime))
+        first = evaluate(request, out_dir=out, execution=limits, inference=endpoint)
+        assert first.status == "incomplete" and first.error
+        status = evaluation_status(out)
+        assert status.complete_deals() == tuple(range(40))
+        assert status.score is None
+        before = {
+            p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()
+        }
+        if endpoint is not None:
+            with pytest.raises(FileExistsError):
+                endpoint.play_cell(out_dir=out)
+        second = continue_evaluation(out, execution=limits, inference=endpoint)
+        if endpoint is not None:
+            with pytest.raises(RuntimeError, match="sealed"):
+                endpoint.play_cell(out_dir=out)
+        assert second.status == "completed"
+        assert second.evaluation_id == first.evaluation_id
+        assert len(second.rows) == 200
+        assert second.score is not None and second.score.mean == 0.5
+        assert cohorts == [tuple(range(100)), tuple(range(40, 100))]
+        assert all((out / name).read_bytes() == data for name, data in before.items())
+        assert all((out / row.trace_path).is_file() for row in second.rows)
+        assert continue_evaluation(out, execution=limits, inference=endpoint) == second
+        assert len(cohorts) == 2
+        # A full repeat has another logical identity and executes the full cohort.
+        fresh = evaluate(
+            request, out_dir=tmp_path / "repeat", execution=limits, inference=endpoint
+        )
+        assert fresh.evaluation_id != first.evaluation_id
+        assert cohorts[-1] == tuple(range(100))
+
+
+def test_continuation_rejects_contract_drift_corruption_and_competing_writers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    request = _anchor_request((1, 2))
+    limits = EvalExecution(deadline_unix=time.time() + 30)
+    bound = request.bind(limits)
+
+    def runner(
+        **kwargs: object,
+    ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+        directory = kwargs["out_dir"]
+        assert isinstance(directory, Path)
+        rows = _replayed_rows(bound)[:2]
+        _publish_blocks(directory, rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", runner)
+    out = tmp_path / "evaluation"
+    evaluate(request, out_dir=out, execution=limits)
+    with pytest.raises(ValueError, match="same execution contract"):
+        continue_evaluation(out, execution=limits.model_copy(update={"device": "cuda"}))
+    with pytest.raises(ValueError, match="frozen evaluation"):
+        continue_evaluation(
+            out,
+            execution=limits,
+            request=request.model_copy(update={"deal_seeds": (1, 3)}),
+        )
+    with exclusive_file_lock(out / ".evaluation.lock"):
+        with pytest.raises(RuntimeError, match="active attempt"):
+            continue_evaluation(out, execution=limits)
+    # A managed supervisor can outlive its callback process. Its execution
+    # claim prevents another attempt from racing still-publishing evidence.
+    with exclusive_file_lock(out / ".execution.lock"):
+        with pytest.raises(RuntimeError, match="active attempt"):
+            continue_evaluation(out, execution=limits)
+    assert not (out / "attempts").exists()
+    rows = json.loads((out / "rows.json").read_bytes())
+    rows[0]["score_a"] = 0.0
+    atomic_json(out / "rows.json", rows)
+    with pytest.raises(ValueError, match="rows digest"):
+        evaluation_status(out)
+    rows[0]["score_a"] = 1.0
+    atomic_json(out / "rows.json", rows)
+    (out / rows[0]["trace_path"]).write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="trace digest"):
+        continue_evaluation(out, execution=limits)
+
+
+def test_status_recovers_published_blocks_after_coordinator_death_and_rejects_duplicates(
+    tmp_path: Path,
+) -> None:
+
+    request = _anchor_request((1, 2))
+    original = EvaluationResult(
+        request=request, evaluation_id="retained", status="running"
+    )
+    out = tmp_path / "evaluation"
+    out.mkdir()
+    atomic_json(out / "evaluation.json", original.model_dump(mode="json"))
+    _publish_blocks(out, _replayed_rows(request)[:2])
+    assert evaluation_status(out).complete_deals() == (1,)
+    duplicate = out / "attempts/000001"
+    duplicate.mkdir(parents=True)
+    atomic_json(duplicate / "evaluation.json", original.model_dump(mode="json"))
+    _publish_blocks(duplicate, _replayed_rows(request)[:2])
+    with pytest.raises(ValueError, match="duplicate completed"):
+        evaluation_status(out)
+
+
+def test_incremental_replay_retains_first_block_when_later_game_crashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    # Real bounded native games and replay, with a coordinator failure injected
+    # after the first complete deal. No checkpoint or scientific evaluation.
+    request = _anchor_request((777, 778))
+    calls = 0
+
+    def interrupted(game: dict[str, Any], *args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise RuntimeError("coordinator interrupted")
+        return play_game(game, *args, **kwargs)
+
+    monkeypatch.setattr("manabot.eval.match.play_game", interrupted)
+    out = tmp_path / "evaluation"
+    first = evaluate(request, out_dir=out)
+    assert first.error and "coordinator interrupted" in first.error
+    assert evaluation_status(out).complete_deals() == (777,)
+    cell = "__".join(sorted((request.candidate.player_id, request.opponent.player_id)))
+    aggregate = out / "traces" / f"{cell}.commands.jsonl.gz"
+    assert len(read_trace(aggregate)) == 2  # diagnostics also survive interruption
+    original_trace = aggregate.read_bytes()
+    completed = continue_evaluation(out)
+    assert completed.status == "completed"
+    assert calls == 5  # two retained games, injected failure, two missing games
+    assert completed.complete_deals() == (777, 778)
+    assert all(read_trace(out / row.trace_path) for row in completed.rows)
+    assert aggregate.read_bytes() == original_trace

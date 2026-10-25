@@ -15,11 +15,14 @@ from etude.eval.tournament import curves  # noqa: E402
 
 from manabot.eval import benchmark as evaluation
 from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.evaluation import evaluation_status
 from manabot.eval.execution import bind_execution
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.results import EvaluationRow
 from manabot.infra.identity import file_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
+from tests.eval.test_local_evaluation import _publish_blocks
 
 
 def _admission(tmp_path: Path) -> MonitorResult:
@@ -198,3 +201,56 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
     rows[0] = evaluation.EvaluationRow.model_validate(corrupted)
     with pytest.raises(ValueError, match="deck/seat assignment"):
         evaluation.evaluation_tables(rows)
+
+
+def test_etude_explicit_reentry_continues_failed_deal_and_keeps_completed_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    manifest = _admission(tmp_path)
+    played: list[int] = []
+    interrupted = True
+
+    def play_cell(
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        deal = kwargs["deal_seeds"][0]
+        played.append(deal)
+        bound = manifest.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(bound, deal, kwargs["out_dir"])
+        ]
+        if interrupted and deal == 102:
+            rows[-1].replay_passed = False
+        _publish_blocks(kwargs["out_dir"], rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    target = tmp_path / "evaluations/one"
+    with pytest.raises(Exception, match="match_failed"):
+        evaluation.evaluate(manifest, target)
+    panels = list((target / "arena").iterdir())
+    before = {
+        p: p.read_bytes() for panel in panels for p in panel.rglob("*") if p.is_file()
+    }
+    interrupted = False
+    evaluation.evaluate(manifest, target)
+    assert played.count(101) == 1 and played.count(102) == 2
+    assert all(p.read_bytes() == content for p, content in before.items())
+    assert all(evaluation_status(panel).status == "completed" for panel in panels)
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
+    try:
+        point = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
+            0
+        ].points[0]
+        assert point.rows == 16 and point.matches == 2 and point.value == 0.5
+    finally:
+        db.close()

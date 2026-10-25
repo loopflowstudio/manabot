@@ -157,7 +157,13 @@ def play_cell(
     if legs is not None and (not legs or not set(legs) <= set(mode_legs)):
         raise ValueError("selected legs must be a nonempty subset of the mode's legs")
     played_legs = tuple(mode_legs) if legs is None else tuple(sorted(set(legs)))
-    games, rows = [], []
+    games: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    replay_receipts: list[dict[str, Any]] = []
+    replay_errors: list[str] = []
+    card_evidence: list[dict[str, Any]] = []
+    replayed_blocks: set[int] = set()
+    replay_seconds = 0.0
     work: list[tuple[dict[str, Any], list[PlayerRegistration], Path]] = []
     perf = EvalPerformance("cell", execution.instrumentation if execution else True)
     pair = (player_a.player_id, player_b.player_id)
@@ -287,6 +293,64 @@ def play_cell(
                 inference=runtime,
             )
 
+        def replay_block(block: int) -> None:
+            """Publish replayed rows only after their immutable shard is retained."""
+            nonlocal replay_seconds
+            block_games = sorted(
+                (g for g in games if g["deal_block"] == block), key=lambda g: g["leg"]
+            )
+            block_rows = sorted(
+                (r for r in rows if r["deal_block"] == block), key=lambda r: r["leg"]
+            )
+            relative = (
+                Path("traces")
+                / f"{cell_id}.{block_games[0]['deal_seed']}.commands.jsonl.gz"
+            )
+            shard = write_trace(out_dir / relative, block_games)
+            started = time.perf_counter()
+            outcome = replay_retained(
+                block_games,
+                min(game_seconds * len(block_games), runtime.execution.remaining())
+                if runtime is not None
+                else game_seconds * len(block_games),
+                card_evidence_dir=card_evidence_dir,
+            )
+            receipts = outcome.receipts
+            if outcome.error is not None:
+                replay_errors.append(outcome.error)
+            if receipts is None:
+                receipts = [
+                    {**ReplayReceipt().to_dict(), "passed": False} for _ in block_games
+                ]
+            replay_receipts.extend(receipts)
+            card_evidence.extend(ref.model_dump() for ref in outcome.card_evidence)
+            for row, receipt in zip(block_rows, receipts, strict=True):
+                row["trace_path"] = str(relative)
+                row["trace_shard_sha256"] = shard["sha256"]
+                row["replay_passed"] = receipt["passed"]
+                row["integrity"]["replay_mismatches"] = sum(
+                    v
+                    for k, v in receipt.items()
+                    if k not in {"games", "decisions", "passed"}
+                )
+            replay_seconds += time.perf_counter() - started
+            perf.record("replay", started)
+            replayed_blocks.add(block)
+            commits = out_dir / "blocks"
+            commits.mkdir(exist_ok=True)
+            atomic_json(
+                commits / f"{block_games[0]['deal_seed']}.json",
+                {
+                    "rows_sha256": canonical_sha256(block_rows),
+                },
+            )
+            # Atomic snapshots contain only fully finalized blocks. A killed
+            # coordinator cannot erase a previously validated complete block.
+            atomic_json(
+                out_dir / "rows.json",
+                [r for r in rows if r["deal_block"] in replayed_blocks],
+            )
+
         def finalize(game: dict[str, Any]) -> None:
             block, deal_seed, leg = game["deal_block"], game["deal_seed"], game["leg"]
             seeds = game["player_seeds"]
@@ -294,9 +358,6 @@ def play_cell(
             seconds = game["execution_seconds"]
             game["game_trace_sha256"] = canonical_sha256(game)
             games.append(game)
-            # Durable completed attempts survive failure of a subsequent game.
-            with perf.span("output_retention"):
-                write_trace(trace_path, games)
             if game["failure"] is not None:
                 score_a = (
                     None
@@ -359,35 +420,46 @@ def play_cell(
                     "p95": float(np.percentile(values, 95)) if values else None,
                 }
             rows.append(row)
+            if sum(g["deal_block"] == block for g in games) == len(played_legs):
+                replay_block(block)
 
-        if runtime is None:
-            for item in work:
-                finalize(run(item))
-        else:
-            # Bounded submission: only active slots have futures. Never create a
-            # thread or an IPC queue entry per unstarted game in a large panel.
-            pending_work = iter(work)
-            futures: set[Future[dict[str, Any]]] = set()
-            for item in islice(pending_work, execution.max_active_games):
-                try:
-                    futures.add(runtime.submit_game(partial(run, item)))
-                except InferenceFailure:
-                    break
-            while futures:
-                future = next(as_completed(futures))
-                futures.remove(future)
-                try:
-                    finalize(future.result())
-                except InferenceFailure:
-                    pass  # The final identity set counts all unattempted games.
-                # submit_game checks allocation health before admitting work.
-                item = next(pending_work, None)
-                if item is not None:
+        try:
+            if runtime is None:
+                for item in work:
+                    finalize(run(item))
+            else:
+                # Bounded submission: only active slots have futures. Never create a
+                # thread or an IPC queue entry per unstarted game in a large panel.
+                pending_work = iter(work)
+                futures: set[Future[dict[str, Any]]] = set()
+                for item in islice(pending_work, execution.max_active_games):
                     try:
                         futures.add(runtime.submit_game(partial(run, item)))
                     except InferenceFailure:
-                        pass
-        games.sort(key=lambda g: (g["deal_block"], g["leg"]))
+                        break
+                while futures:
+                    future = next(as_completed(futures))
+                    futures.remove(future)
+                    try:
+                        finalize(future.result())
+                    except InferenceFailure:
+                        pass  # The final identity set counts all unattempted games.
+                    # submit_game checks allocation health before admitting work.
+                    item = next(pending_work, None)
+                    if item is not None:
+                        try:
+                            futures.add(runtime.submit_game(partial(run, item)))
+                        except InferenceFailure:
+                            pass
+        finally:
+            # Block shards and Command journals retain progress. Build the
+            # diagnostic aggregate once, including on coordinator failure,
+            # rather than recompressing the growing panel after every game.
+            if games:
+                games.sort(key=lambda g: (g["deal_block"], g["leg"]))
+                with perf.span("output_retention"):
+                    trace_receipt = write_trace(trace_path, games)
+                trace_receipt["artifact_path"] = trace_relative_path
         rows.sort(key=lambda r: (r["deal_block"], r["leg"]))
         attempted = {g["match_id"] for g in games}
         unattempted = [
@@ -398,43 +470,21 @@ def play_cell(
         if not games:
             perf.write(out_dir / "performance.json")
             raise InferenceFailure("allocation stopped before any game started")
-        trace_receipt = write_trace(trace_path, games)
-        trace_receipt["artifact_path"] = trace_relative_path
-        replay_started = time.perf_counter()
-        outcome = replay_retained(
-            games,
-            min(game_seconds * len(games), runtime.execution.remaining())
-            if runtime is not None
-            else game_seconds * len(games),
-            card_evidence_dir=card_evidence_dir,
-        )
-        receipts, replay_error = outcome.receipts, outcome.error
+        # Incomplete blocks keep replay diagnostics too, but cannot contribute
+        # to an evaluation until every requested leg is valid.
+        for block in sorted({g["deal_block"] for g in games} - replayed_blocks):
+            replay_block(block)
         if card_evidence_dir is not None:
-            trace_receipt["card_evidence"] = [
-                ref.model_dump() for ref in outcome.card_evidence
-            ]
-        if receipts is None:
-            # No comparison was possible: retain unavailable replay rather than
-            # fabricate mismatch counts or drop completed gameplay evidence.
-            receipts = [{**ReplayReceipt().to_dict(), "passed": False} for _ in games]
+            trace_receipt["card_evidence"] = card_evidence
         replay_payload = {
-            name: sum(r[name] for r in receipts)
-            for name in receipts[0]
+            name: sum(r[name] for r in replay_receipts)
+            for name in replay_receipts[0]
             if name != "passed"
         }
-        replay_payload["passed"] = all(r["passed"] for r in receipts)
-        replay_payload["seconds"] = time.perf_counter() - replay_started
-        if replay_error is not None:
-            replay_payload["error"] = replay_error
-        for row, receipt in zip(rows, receipts, strict=True):
-            row["replay_passed"] = receipt["passed"]
-            row["trace_shard_sha256"] = trace_receipt["sha256"]
-            row["integrity"]["replay_mismatches"] = sum(
-                v
-                for k, v in receipt.items()
-                if k not in {"games", "decisions", "passed"}
-            )
-        perf.record("replay", replay_started)
+        replay_payload["passed"] = all(r["passed"] for r in replay_receipts)
+        replay_payload["seconds"] = replay_seconds
+        if replay_errors:
+            replay_payload["error"] = "; ".join(replay_errors)
         perf.count("expected_games", len(work))
         perf.count("legs_per_block", len(work) // len(deal_seeds))
         perf.count("attempted_games", len(rows))

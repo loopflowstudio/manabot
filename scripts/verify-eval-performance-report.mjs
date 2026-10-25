@@ -6,7 +6,12 @@ import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
 const directory = await mkdtemp(join(tmpdir(), 'eval-perf-'));
-const tree = (native = true) => ({name: 'workers', seconds: 10, status: 'recorded', category: 'run', source: 'fixture receipt', children: native ? [{name: 'native_and_encoding', seconds: 4, status: 'recorded', category: 'eval', source: 'fixture receipt'}] : []});
+const tree = (native = true) => ({name: 'workers', seconds: 10, status: 'recorded', category: 'run', source: 'fixture receipt', children: [
+  ...(native ? [{name: 'native_and_encoding', seconds: 4, status: 'recorded', category: 'eval', source: 'fixture receipt'}] : []),
+  {name: 'inference_round_trip', seconds: 3, status: 'recorded', category: 'eval', source: 'fixture receipt'},
+  {name: 'command_durable_acknowledgement', seconds: 1, status: 'recorded', category: 'eval', source: 'fixture receipt'},
+  {name: 'unattributed', seconds: native ? 2 : 6, status: 'derived', category: 'unattributed', source: 'fixture receipt'},
+]});
 const span = {name: 'forward_host', start: 1, end: 2, process: 42, thread: 1, request: 'request-1', batch: 'batch-1'};
 const experiment = {
   id: 'evaluation-performance', title: 'Evaluation performance', question: 'Equal-work evaluation', source: 'Test fixtures, not performance evidence', synthetic: false,
@@ -32,6 +37,14 @@ try {
   assert.deepEqual(errors, []);
   assert.match(await page.locator('#perf-body').innerText(), /1\/2 seeds measured/);
   assert.match(await page.locator('#perf-body').innerText(), /never zero/);
+  assert.match(await page.locator('#perf-body').innerText(), /Concurrent games overlap/);
+  assert.match(await page.locator('#perf-body').innerText(), /Game engine/);
+  assert.match(await page.locator('#perf-body').innerText(), /Evidence and replay/);
+  assert.match(await page.locator('#perf-body').innerText(), /Other and unmeasured/);
+  assert.equal(await page.getByRole('button', {name: 'During games', exact: true}).getAttribute('aria-pressed'), 'true');
+  await page.locator('.fn').filter({hasText: /^Inference ·/}).first().click();
+  assert.match(await page.locator('#perf-body').innerText(), /inference_round_trip · 3.0 s/);
+  await page.getByRole('button', {name: 'All', exact: true}).first().click();
   assert.equal(await page.locator('.rbtn .tag').innerText(), 'baseline');
   await page.getByRole('button', {name: 'Per 1M decisions', exact: true}).first().click();
   assert.match(await page.locator('#perf-body').innerText(), /per 1M evaluation decisions/);

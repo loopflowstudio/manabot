@@ -26,7 +26,12 @@ from pydantic import BaseModel
 
 from manabot.eval.benchmark import Conditions, evaluation_tables
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
-from manabot.eval.evaluation import EvaluationRequest, evaluate as evaluate_panel
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    continue_evaluation,
+    evaluate as evaluate_panel,
+    evaluation_status,
+)
 from manabot.eval.execution import bind_execution
 from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
@@ -119,23 +124,24 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
         raise ValueError("Etude candidate differs from admitted checkpoint")
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    result = evaluate_panel(
-        EvaluationRequest(
-            key=conditions.key,
-            candidate=candidate,
-            opponent=opponent,
-            deal_seeds=(conditions.deal,),
-            checkpoint_paths={
-                candidate.player_id: duel.two_seat.artifact["path"],
-                opponent.player_id: duel.one_seat.artifact["path"],
-            },
-            game_seconds=conditions.game_seconds,
-            max_commands=conditions.max_commands,
-            matchup_mode="all",
-            purpose="repeated-development-comparison",
-        ),
-        out_dir=out,
-        inference=inference,
+    request = EvaluationRequest(
+        key=conditions.key,
+        candidate=candidate,
+        opponent=opponent,
+        deal_seeds=(conditions.deal,),
+        checkpoint_paths={
+            candidate.player_id: duel.two_seat.artifact["path"],
+            opponent.player_id: duel.one_seat.artifact["path"],
+        },
+        game_seconds=conditions.game_seconds,
+        max_commands=conditions.max_commands,
+        matchup_mode="all",
+        purpose="repeated-development-comparison",
+    )
+    result = (
+        continue_evaluation(out, request=request, inference=inference)
+        if out.exists()
+        else evaluate_panel(request, out_dir=out, inference=inference)
     )
     if result.error:
         raise ValueError(result.error)
@@ -143,11 +149,18 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
 
 
 def summarize(directory: Path) -> dict[str, ScoreGroup]:
-    rows = [
-        EvaluationRow.model_validate(row)
-        for path in sorted((directory / "arena").glob("*/rows.json"))
-        for row in json.loads(path.read_bytes())
-    ]
+    rows: list[EvaluationRow] = []
+    for panel in sorted((directory / "arena").glob("*/")):
+        if (panel / "evaluation.json").exists():
+            # A failed first attempt may have no rows.json. The evaluation
+            # authority still finds complete blocks in subsequent attempts.
+            rows.extend(evaluation_status(panel).rows)
+        elif (panel / "rows.json").exists():
+            # Historical panels predate the evaluation/attempt contract.
+            rows.extend(
+                EvaluationRow.model_validate(value)
+                for value in json.loads((panel / "rows.json").read_bytes())
+            )
     if (
         len(rows) != 200
         or not all(row.valid for row in rows)

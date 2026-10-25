@@ -29,7 +29,11 @@ from etude.run.records import ArtifactRef
 from pydantic import BaseModel
 
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
-from manabot.eval.evaluation import EvaluationRequest, evaluate as evaluate_panel
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    continue_evaluation,
+    evaluate as evaluate_panel,
+)
 from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorResult
@@ -138,20 +142,21 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    result = evaluate_panel(
-        EvaluationRequest(
-            key=conditions.key,
-            candidate=candidate,
-            opponent=opponent,
-            deal_seeds=(conditions.deal,),
-            checkpoint_paths={candidate.player_id: str(path)},
-            game_seconds=conditions.game_seconds,
-            max_commands=conditions.max_commands,
-            matchup_mode="all",
-            purpose="repeated-development-comparison",
-        ),
-        out_dir=out,
-        inference=inference,
+    request = EvaluationRequest(
+        key=conditions.key,
+        candidate=candidate,
+        opponent=opponent,
+        deal_seeds=(conditions.deal,),
+        checkpoint_paths={candidate.player_id: str(path)},
+        game_seconds=conditions.game_seconds,
+        max_commands=conditions.max_commands,
+        matchup_mode="all",
+        purpose="repeated-development-comparison",
+    )
+    result = (
+        continue_evaluation(out, request=request, inference=inference)
+        if out.exists()
+        else evaluate_panel(request, out_dir=out, inference=inference)
     )
     if result.error:
         raise ValueError(result.error)

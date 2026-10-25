@@ -1,5 +1,10 @@
 # Shared evaluation compute
 
+Reconciled — 2026-10-24: explicit complete-block continuation is the implemented
+deliverable increment after PR #370. The accepted two-hour cloud startup gate
+remains required follow-up work in Etude; it is not part of the completed
+continuation claim. Its installed 0.2.4 capability gap is detailed below.
+
 Accepted for pursuit — 2026-10-24. Jack Heart approved the design and said
 “all sounds good. lets pursue”. Deliver the complete single-machine shared
 inference and performance-report keystone through its internal slices in one PR.
@@ -7,11 +12,13 @@ The named later increments remain follow-ups. Hardware, numerical/performance
 benchmark thresholds and spending remain unselected; no paid execution is
 authorized. Standalone work; no Task or Wave selected.
 
-Software complete — 2026-10-24: the full runtime/report keystone and generic
-local API are implemented against the upstream sim/eval split, Etude 0.2.2 and
-card-evidence reporting. Sync succeeded after ordinary staging (supplied outcome).
-Broad validation, report browser proof and representative CPU/CUDA performance
-acceptance remain gates; no measured whole-job gain or capacity choice is claimed.
+The runtime/report foundation and generic local API remain implemented against
+the upstream sim/eval split. Sync merged main `66b8fb3e7` through `003df4e6f`,
+bringing Etude 0.2.4 and explicit checkpoint identities; restored continuation
+and activity-chart changes are retained. Broad validation and representative
+CPU/CUDA performance acceptance remain gates. The accepted browser overview and
+its existing proof are recorded in `eval-perf-demo.md`; no measured whole-job
+gain or capacity choice is claimed.
 
 ## What to build
 
@@ -151,6 +158,12 @@ estimated cost distinct. Show allocation-level idle/shared overhead once; job
 views expose an explicit allocation method and unallocated cost instead of
 charging every concurrent request the full machine price.
 
+Accepted demo decision, Jack Heart, 2026-10-24: “Yes, keep this overview”.
+The default groups activities as Inference / Game engine / Evidence / Other
+(visible labels expand the last two to Evidence and replay / Other and unmeasured).
+Detailed phases remain behind drill-down. This changes presentation, not clocks,
+coverage or retained resource keys; overlapping intervals remain separate.
+
 Retain these stages: queue/admission; startup/model load/catalog preparation;
 native stepping and observation encoding; Python input assembly; IPC;
 batch formation; host-to-device copy; inference; sampling; device-to-host return;
@@ -269,14 +282,18 @@ Duel retains its study-specific validation. Local preparation/CLI lives in
 The public evaluator atomically claims a fresh panel directory, rejecting even
 empty existing directories before evidence writes or execution. Local, monitor,
 benchmark and Duel wrappers leave that ownership to it. Reusing completed Etude
-deals still skips execution; rerunning an attempted panel needs a new directory.
+deals still skips execution; explicit continuation retains new attempt directories
+under the same evaluation, while fresh full repeats require a new evaluation directory.
 The CLI reports the observed score but no confidence interval for one deal:
 resampling correlated legs cannot estimate between-deal uncertainty. Stored
 bootstrap values and frozen monitor/Duel statistics retain their definitions.
 
 **Capacity comparison.** Test scale-to-zero allocations, a small warm pool, and
 a warm baseline plus bursts against the same arrivals and requested outcomes.
-The working hypothesis is a warm baseline plus bursts, not an approved purchase.
+For Jack Heart's clarified cadence of a few experiments per week, the working
+hypothesis is now one on-demand host that drains a group of comparisons and shuts
+down. A warm baseline plus bursts remains a candidate if measured demand or
+latency requirements justify idle capacity; neither is an approved purchase.
 Compare recurring checkpoint pairs first, then a rotating recent-checkpoint set,
 then growth-size pairs and mixed/heuristic cases. Same architecture with different
 weights still requires separate policy batches. Measure occupancy per checkpoint,
@@ -406,220 +423,185 @@ Completed report cut: `experiments/report_prototype/report.html::jobTiming`
 uses coverage-aware aggregation instead of missing-child-as-zero averages.
 Job/seed alignment and training panels remain; fixtures include unequal coverage.
 
-## Internal slices
+## Published foundation
 
-1. Complete: scalar instrumentation, real Perf projection, bounded supervisor and
-   shared finalization.
-2. Complete: resident inference/catalog caching, per-request RNG, bounded batching
-   and failure handling; monitoring, benchmark, Duel and generic local consumers.
-3. Software complete, acceptance pending: the four-ablation calibration runner
-   and CPU fixture proof exist. Representative CPU/CUDA panels, numerical and
-   performance thresholds, whole-job costs and a measured optimization decision
-   remain unestablished.
+PR #370 is the completed runtime/report keystone, at
+`79506de9cae0182653e251767d35ffba5427c066`. Its integration history, full acceptance
+plan and prior concept review remain in that commit. Uncommitted design detail
+before this curation is preserved in Git blob
+`1dcb52e5bbdf3747342bc89b95d0cb17e519cd40`; questions and evidence are preserved in
+`d8c8916accba563add0badbfd2cf30970958ca91` and
+`7bae0e735e83f08273f093dbea10422ed6f416db`. No measured throughput gain, CUDA
+acceptance, hardware selection or paid work follows from its software checks.
 
-Implementation status — 2026-10-24: the runtime/report and local-seam deletion
-targets above are complete. `sim/execution.py`, `serving.py` and `supervision.py`
-own execution admission, resident `PolicyInference` scopes, bounded policy batches,
-per-row CPU sampling and killable game/replay processes. Shared finalization
-retains journals, Commands and original statistical units. Local CLI preparation
-runs in a bounded child with incomplete receipts on admission/deadline failure.
+## Continuation selected — 2026-10-24
 
-Monitoring sends multi-deal panels; benchmark/duel callbacks use an authenticated
-local endpoint because pinned Etude runs callbacks in spawned processes. One
-allocation owns the executor, queued submissions, native slots and serving
-process. Scalar/frozen protocols keep their original declarations. Derived
-executions retain `seed_compute_envelope_id`, preserving the original pair/deal/
-player seed authority across ablations while declaring new execution identities.
-Registration and Etude benchmark identities use only `EvalCompute`; allocation
-deadlines and instrumentation no longer fragment identical comparisons or cause
-Etude tournament-resume conflicts. Full `EvalExecution` remains in allocation
-and game receipts. Completed deal reuse is the same evidence, never a new
-performance sample; the direct calibration runner still executes fresh attempts.
-Benchmark/duel callbacks share one lifetime helper and retain a separate allocation
-directory on each invocation, including calls that reuse completed Etude deals.
-Duel cohort hashing precedes execution binding so its original opponent remains
-the seed authority too. The bounded sender thread stays outside the futures lock;
-a stopped service with a pipe-filling payload must still time out and be reaped.
-The call budget is the minimum of configured request limit, caller deadline and
-allocation remainder, shared by capacity waiting and reply waiting. Policy keys
-and execution parsing occur once per game; final retained identities alone own
-unattempted counts.
-Service errors stop unstarted work without inventing player forfeits. Unattempted
-identities and unavailable replay survive explicitly in receipts.
+Jack Heart selected explicit continuation after interruption at 40/100 complete
+valid deals: finish the missing 60 under one evaluation, retain every attempt,
+and count each block once. A fresh full repeat remains separate and is not
+automatically an independent sample. The implementation contract below replaces
+the earlier proposed API/storage discussion, preserved in Git blob
+`e68c00105a4f023642db5b8b753473a93787af0f`.
 
-`sim/performance.py` and `reports/evaluation.py` feed real receipts into the
-existing report assets; missing-child-as-zero aggregation is removed. Timelines
-join requests/batches, shared cost appears once, partial coverage is visible,
-and optimization hypotheses name measured phases, dependencies and validation.
-Serial scalar cells alone receive an elimination bound. Diagnostic CPU/CUDA
-traces and CUDA event durations are separate from ordinary host timings.
-Cell timing starts after initial comparison validation and snapshots after replay;
-allocation timing spans runtime construction/shutdown. Both exclude local CLI
-checkpoint preparation. The CLI deadline includes preparation, but is not an
-elapsed-time receipt. `evaluation_seconds` also excludes cohort statistics and
-final receipt writing. Serving resident-load counts omit earlier admission loads.
-No provider provisioning, complete paid lifetime or billing amount is measured.
-The exact boundaries and later compute/queue/allocation intents are retained in
-`docs/shared-evaluation.md`; current reports support interval-scoped throughput,
-not whole-job cost or an end-to-end speedup claim.
-`eval/serving_benchmark.py` validates a frozen four-ablation plan, interleaves
-three repetitions, retains failures and performs matched-root numerical and
-instrumentation on/off checks in memory/deadline-bounded subprocesses.
-Its named panels carry the public request rather than a parallel player/deal
-schema. Early admission failures retain their evaluation receipt; report projection
-requires retained rows and timings, and numerical probes require an actual trace.
-Calibration materializes only the declared root prefix, without unused root hashes
-or a separate warmup option. Runtime admission checks each repeated deck/seat setup
-once per policy, independent of the panel's deal count.
+An **evaluation** owns requested evidence; an **attempt** owns execution and failure
+receipts. Keep allocation lifetime/limits/accounting internal: running or continuing
+an evaluation needs no public allocation creation. Local execution uses the shared
+result authority without scheduling/provider machinery; Etude owns managed
+scheduling/cache, never a second Manabot durable queue. No native-state resume,
+automatic retry, mixed numerical contracts or frozen-evidence migration is implied.
 
-CPU fixture evidence includes multirow batches, one resident model/catalog,
-two-policy separation, eviction, stale replies, service death/hang, unchanged
-per-row RNG, native replay through a spawned callback, a complete checkpoint
-monitor block and real report projection. The controlled retained-root check
-covers all four modes without selecting or running a scientific benchmark.
-CUDA parity is an explicit skipped test here. Representative hardware, model
-mix, numerical/performance acceptance thresholds and billing are not supplied;
-no throughput/cost improvement or cross-device trajectory equivalence is claimed.
-The full affected suites and representative calibration remain owned by gate;
-no training, paid execution, durable queue or publication occurred.
+### Compute policy — startup threshold accepted, hardware draft, 2026-10-24
 
-Later independently valuable increments: **Etude queue** (durable API, priority
-rules, claims, producer cutover); **compute policy and cluster operation**
-(scale-to-zero vs warm pool vs baseline-plus-burst, budget windows, idle policy,
-replenishment and whole-allocation accounting); **adaptive evaluation allocation**
-(checkpoint thinning/expansion and statistically justified stopping); **further
-serving** (compound/search support, output caching, native inference or specialized
-kernels when measurements justify them).
-Each receives its own design. No follow-up Tasks are filed here.
+Accepted decision, Jack Heart, 2026-10-24: “aiming for at least 2hrs of use before
+spinning up an eval server makes sense”. Default cloud startup waits for enough
+eligible queued evaluation work to occupy the proposed host for at least two
+useful hours. Estimate time from the requested checkpoint mix and measured host
+throughput, not a universal game count. This is a backlog target, not a minimum
+billed lifetime: if work finishes early, retain results and release idle compute.
+Local laptop checks remain independent. Urgent overrides and maximum queue wait
+remain open policy choices; no automatic exception is selected. With the assumed
+3–5 minute startup, two useful hours puts startup at about 2.4–4.0% of total time.
+The policy is accepted design intent; provisioning is not implemented by this
+decision, and hardware and spending remain unselected.
 
-## Done when and measure
+Jack Heart asks for the cheapest reasonable throughput for “a few experiments a
+week”. Proposed first topology: existing laptop CPU for small checks; one rented
+GPU host for queued checkpoint comparisons, with native games, heuristics,
+inference and replay colocated. Keep both opponents resident during each session,
+fill policy-specific batches from concurrent games, retain results externally,
+then release compute. This preserves the shared-pool direction without assuming
+continuous paid capacity. Experiments per week alone does not determine hours:
+checkpoint count, deal count and time to a result remain necessary sizing inputs.
 
-`tests/eval/test_batched_eval.py` and the shared monitor integration prove one model load and
-one catalog build per resident policy, one forward for an assembled multirow
-batch, two-policy separation, bounded partial-batch flush, eviction, stale replies,
-deadline/native/service failures, per-row RNG independence, numerical parity and
-complete replayed blocks through real callers. CPU tests run headlessly; CUDA
-tests run on a capable runner and cannot be inferred from CPU success.
+First comparison candidates are a modest 24 GB GPU host (A5000 class) and a faster
+consumer GPU host (5090 class), with measured CPU quota/performance and enough
+RAM. A 48 GB A6000-class host is a memory candidate if two policies, catalogs and
+batch workspaces need it. These are benchmark candidates, not proven fit or a
+purchase selection. Existing training evidence favors commodity hardware over
+H100 among its measured hosts, but does not establish eval performance. CPU-only
+remains a measured baseline; small policies may not repay GPU/IPC overhead.
 
-`tests/eval/test_eval_performance.py` covers: timing-tree accounting, overlapping
-intervals, missing/mixed coverage, cost attribution, batch/transfer counters,
-bounded instrumentation and trace joins. Instrumentation-on/off comparison uses
-identical request schedules so timing-induced batch changes are not misreported
-as RNG corruption. Never require a performance threshold on a loaded CI host.
-Headless `./scripts/verify-eval-performance-report` renders recorded,
-incomplete and overlapping fixtures through the existing report surface and
-checks job comparison, resource/normalization controls, drill-down, timeline,
-missing-data labels and optimization evidence links. No display or paid machine
-is required. When a native diagnostic change is needed, apply the repository's
-debug Rust, clippy, formatting and atomic-extension-rebuild checks.
+Current advertised Runpod examples are $0.27/h A5000, $0.59/h A6000 and $1.19/h
+5090, subject to host availability and additional charges. At an illustrative
+12 billed hours/week these cost $3.24, $7.08 and $14.28; 168 hours cost $45.36,
+$99.12 and $199.92. This is arithmetic, not a runtime forecast. Dated sources and
+host resources are in the evidence file. Compare total paid cost per valid
+complete block at acceptable latency, including startup, replay, failures and
+storage. Interruptible capacity becomes a candidate once completed-block
+continuation and durable evidence are proven on the selected managed route.
+No rental or calibration run is selected here.
 
-Remaining gate validation:
+Startup amortization: for paid startup duration S and useful execution duration W,
+startup's share is S/(S+W). At most 10% requires W >= 9S; at most 5% requires
+W >= 19S. An illustrative 3–5 minute startup therefore needs 27–45 useful minutes
+or 57–95 useful minutes, respectively. Startup is unmeasured on the proposed
+hosts. Historical local probe012 completed 32 games in 67.693 command seconds
+(about 28 games/minute); using that only as a scale illustration gives roughly
+800–1,300 games at 10%, or 1,600–2,700 at 5%. It used a 384×8 initialization
+against anchors, not current learned checkpoint pairs or shared CUDA serving,
+and repeated existing deals. These are execution counts, not independent samples
+or a current throughput forecast. Measure paid startup separately from unbilled
+provisioning delay; retain shutdown/upload cost in whole-session accounting.
 
-```sh
-uv run --extra dev --extra artifacts --extra evaluation --extra reports pytest tests/eval/ tests/sim/ tests/model/test_inference.py tests/training/test_monitor_evaluation.py tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py tests/training/test_automatic_game_capture.py tests/training/test_checkpoint_queue.py tests/test_package_boundaries.py -q
-./scripts/verify-eval-performance-report
-```
+## Continuation implementation plan — 2026-10-24
 
-Expected: all pass, including new tests collected with existing modules. The
-headless `manabot.eval.serving_benchmark` entry point is implemented,
-using retained-root selection and `sim.replay.replay_prefix` for matched inputs:
+Accepted behavior: Jack Heart authorized this follow-up in the current conversation.
+One logical evaluation retains every attempt; continuation executes only missing
+complete blocks. Fresh repeats use a fresh directory. Allocation remains internal.
 
-```sh
-uv run --extra evaluation python -m manabot.eval.serving_benchmark --plan .runs/eval-serving/plan.json --out .runs/eval-serving/result
-```
+Concrete reversible persistence decision: retain the first attempt at the existing
+evaluation directory and later attempts under `attempts/<sequence>/`. The initial
+`evaluation.json` freezes the full request and identity; it is never rewritten by
+continuation. Status is derived from retained attempt receipts and durable rows,
+not a second mutable progress database. A UUID distinguishes logical repeats.
+A nonblocking OS file lock fences writers on this shared filesystem, including
+managed callbacks. Process death releases it; no expiring lease can admit a stale
+writer. Cross-host object-store claims are not implemented by this local lock.
 
-The frozen plan supplies admitted checkpoints/registrations, deal blocks, device,
-all four execution configurations, three interleaved repetitions, numerical
-tolerances, time/memory caps and an adoption threshold. Missing fields fail before
-execution. This design does not create a benchmark allocation. Compare cold scalar, resident-only,
-resident+catalog-cache, and batched configurations on the same panels, including
-small and larger models and two-checkpoint mixtures. Retain every repetition and
-failure, actual batch occupancy, game/replay time, CPU/RSS/VRAM and input/output
-agreement. Optimize valid completed blocks per paid machine-hour and time to a
-requested result; model-call speed alone does not satisfy the goal. No numerical
-speedup target or hardware selection is accepted yet.
+`EvaluationResult` owns block validation and cohort statistics. It validates every
+row against the request before selecting complete valid blocks. Each seed contributes
+once; conflicting duplicate blocks fail closed. Attempts may change deadline and
+instrumentation, not compute identity, player bytes, setup or scientific limits.
+Paths may be relocated only after verifying registered bytes. Incomplete blocks
+are rerun whole. Status references original trace paths instead of copying evidence.
 
-Integration cut completed — 2026-10-24: reconciled stash `187271122326af8955746647d11d3790975c649a`
-onto main `884249024` (original base `07a091bca`). `sim.match.play_game` and
-`sim.supervision` own native execution; `eval.match.play_cell` owns paired games,
-leg subsets, row finalization and optional upstream card evidence. Serving config,
-runtime and counters remain in `sim`; comparison binding, requests/results, local
-CLI, calibration and allocation callback transport belong to `eval`. Training
-admission/execution stays in `experiment.checkpoint_evaluation`; upstream removed
-supervised training. Etude 0.2.2 experiment identity and current source paths apply.
-Frozen source contracts and serialized arena fields remain unchanged.
-Calibration selects roots locally and reconstructs them through `sim.replay`;
-no retired profiling module is restored. Local evaluation imports callback
-transport only for type checking, so it has no runtime callback dependency.
+`play_cell` replays and durably publishes each finished block while other games
+continue. Immutable per-block traces permit safe reuse even if the process dies
+before the full panel returns. The existing final aggregate trace remains the
+panel-level diagnostic/calibration artifact. Reports read the row-referenced shards
+to avoid counting aggregate and block traces twice. One runtime still batches
+across concurrently active blocks; no per-block model reload or serialized scheduler.
 
-Delete — do not maintain (integration, completed): removed all guessed new `sim` comparison
-modules, obsolete `arena/models.py` and `arena/monitor.py`, the old combined
-match implementation, duplicated monitor row/statistics/admission and the old
-calibration profile dependency. Preserve native supervision/failure fixtures,
-shared request validation, fresh-attempt directory ownership, one-deal CLI
-uncertainty, card evidence/report APIs, subset-leg execution and source identities.
+Public operations: existing `evaluate` starts a fresh evaluation;
+`evaluation_status(directory)` reconstructs progress;
+`continue_evaluation(directory, execution=..., inference=...)` explicitly runs the
+missing cohort. Local CLI adds `--continue` and `--status`; continuation uses the
+frozen compute settings and a fresh deadline. Managed benchmark/Duel callbacks
+use the same continuation operation on explicit re-entry into an existing match.
+Etude retains match scheduling/cache; Manabot validates underlying evidence and
+never submits a second queue. A managed callback is one Etude complete deal;
+a multi-deal managed endpoint request uses the same shared evaluation authority.
 
-Integration fixes also drain pending worker messages after observed exit,
-preventing a poll/exit race from losing player attribution or completed replay.
-The deterministic native-exit regression failed before that fix.
+Delete — do not maintain (follow-up, completed): all-or-nothing end-of-panel
+replay in `eval.match.play_cell`, the separate cohort-validation loop, and managed
+callbacks' existing-directory failure on explicit re-entry are removed. Incremental
+replay preserves final trace/card evidence, subsets, failures and Perf receipts;
+ordinary `evaluate` still requires fresh output. No frozen evidence or queue is deleted.
+`EvaluationResult._complete_blocks` indexes rows by deal/leg once for validation,
+statistics and continuation, without repeated cohort scans or registration hashing.
+Duel summaries discover evaluation receipts even when the first attempt published
+no rows; only historical panels use the rows-only reader. Per-game regeneration of
+the growing aggregate trace is removed: immutable block shards and fsynced Command
+journals retain progress, and `play_cell` writes the diagnostic aggregate once on
+settlement, including coordinator exceptions. No deletion target remains in this cut. The durable-queue producer cutover above still belongs to later work.
 
-Integration and compression are staged; sync succeeded after ordinary staging.
-Earlier stash errors are historical, not current blockers. Software completion
-does not satisfy the remaining broad suites or representative
-CPU/CUDA acceptance. Hardware, model pairs/growth sizes, numerical tolerance,
-latency/budget targets and improvement/overhead thresholds remain unselected.
-No scientific training or paid work is selected.
+Cloud startup gap, re-inspected in installed `etude-sdk==0.2.4`, 2026-10-24:
+`etude.launch.scheduler.Scheduler._plan` first fills idle sessions, then selects
+an eligible run for a new rental. Rental lifetime uses `Job.max_hours`, cohort
+pending-job ceilings divided by available parallel slots, setup allowance and
+dollar caps. None estimates useful work. `OnDemand` and `launch.client` expose no
+measured host/model backlog threshold or estimator hook. `eval.tournament.hold`
+executes callbacks on existing compute; `CheckpointQueue` monitors local
+subprocesses. Neither owns server startup admission.
 
-Check: prior `uv run --no-sync pytest tests/eval/test_local_evaluation.py tests/eval/test_batched_eval.py -k 'calibration or rejects_repeat or describes_deal or concurrent_deal_blocks or execution_binding or benchmark_missing' -q` → 9 passed (73s), with lint/format/compile/calibration CLI checks; reused integration's 77 focused checks, 3 process regressions and 137-test collection. Reconciliation adds only documentation; CLI/import and whitespace checks recorded in the evidence. `./scripts/verify-eval-performance-report` passed after reconciliation (exit 0). Gate/CI retains broad suites; representative CPU/CUDA acceptance awaits a declared hardware/benchmark plan.
+The remaining implementation owner is Etude's launch scheduler: estimate eligible
+remaining evaluation work for the proposed host/model mix, then gate new rental
+creation at >=7200 useful seconds under the existing supply lock, before
+`_session` and the store's `plan`. Reuse of already available compute stays
+independent of this startup gate. `_tick_supply` already ends non-kept idle
+sessions; the target must not become a minimum billed lifetime. Manabot still
+needs measured workload estimates and integration with that upstream capability.
+No second queue or provider helper is needed. Urgent overrides and maximum wait
+remain unresolved decisions; neither is silently enabled.
 
-## Concept review — 2026-10-24
+### Agreement with the synced base
 
-Outcome: no design change and no open product choice within this keystone.
-Review against Jack Heart's accepted experience found the implemented ownership
-and interaction consistent with it. This records a review conclusion, not new
-approval, performance acceptance or a selection of the parent's next step.
+Benchmark and Duel seat training exports with
+`CheckpointRef(key=CheckpointKey(run=run_id, name=filename), artifact=ArtifactRef(...))`.
+Call sites read `agent.artifact.sha256`/`.uri`, not the old digest/string fields.
+The checkpoint key remains distinct from its byte location; equal bytes under
+different keys are distinct Etude entrants. Continuation preserves the Manabot
+request/compute identity and verifies relocated bytes. It does not migrate old
+Etude match keys or add a sample when the SDK reuses a completed match.
 
-The user chooses opponents, setup and complete deal blocks, then inspects one
-attempt's evidence. Checkpoint-versus-checkpoint at growing model sizes remains
-the primary workload; a laptop checkpoint-versus-heuristic check uses the same
-contract with a smaller declared sample. The existing usage examples in
-`docs/shared-evaluation.md` express that experience without a new user-facing
-queue, training record or callback concept on the local path.
+Upstream card evidence lives at `artifacts/evidence/<digest>.json.gz` beneath the
+eval run root. Etude 0.2.4 delivers these immutable artifacts once; no checkpoint
+namespace or index-only publication is substituted. Incremental replay retains
+card references in the diagnostic trace, and selected-match manifests enumerate
+the actual row-referenced block shards. Frozen panel trace locators remain valid.
 
-| User action | Concept and state | API and owner |
-|---|---|---|
-| Choose local checkpoints or an anchor and explicit deals | Admitted registrations in an `EvaluationRequest` | `eval.local.checkpoint_request`; shared `eval.admission` |
-| Run a bounded laptop check | Fresh attempt, completed or incomplete | `eval.evaluation.evaluate_local`; `sim` owns inference, games and replay |
-| Run the comparison inside a managed allocation | Same request/result semantics; shared resident policies and capacity | `evaluate(..., inference=...)`; callback transport stays in `eval`, training coordinates in `experiment.checkpoint_evaluation` |
-| Inspect a failure and try again | Retained old attempt plus a new attempt directory | CLI `--request ... --out <new-directory>` or the same request passed to `evaluate`; no in-place evidence replacement |
+Focused proof: synthetic 40/100 interruption followed by local and managed
+continuation, whole-block retry, duplicate/contract/tamper rejection, lock fencing,
+crash recovery from published blocks, fresh repeats and offline CLI; small real
+native/endpoint fixtures verify incremental replay. Full affected suites belong
+to gate. Cloud threshold integration remains blocked on the upstream SDK owner.
 
-Normal execution preserves the useful distinctions: a comparison requests
-evidence, a deal block groups correlated legs, and a policy batch shares inference.
-Neither concurrency nor cached models changes the statistical population. Exact
-policy identity keeps different weights separate; per-decision RNG and recorded
-Commands retain their authority across callers. Card evidence and reporting,
-explicit lower-level leg subsets, and Duel's study restrictions remain with
-their existing owners rather than becoming local-check requirements.
+Compression's completed checks cover the missing-row Duel summary, checkpoint
+admission failure fixture, native interruption, concurrent blocks with one resident
+model, and removal of repeated aggregate compression. Its wider focused run had
+47 passes and one source-identity conflict caused by an edit between execution
+and cache reuse; the stable-source rerun passed. Those results remain evidence,
+not post-sync checks or hardware proof. Broad suites remain with gate; the browser
+proof is retained in `eval-perf-demo.md` without changing the parent report/script.
 
-Failure and recovery also fit the accepted contract. Admission failure or a
-deadline retains an incomplete receipt; started games retain journals and
-Commands, unstarted work remains explicit, and unavailable replay cannot become
-a valid result. Service failure cannot become a player forfeit. Retrying uses
-fresh output and revalidates the same requested bytes and cohort. It does not
-resume native state or silently combine partial attempts. Completed Etude deal
-reuse remains reference to existing evidence, never another sample or a fresh
-throughput measurement.
-
-Counterexamples remain constraints: four correlated legs from one deal cannot
-establish between-deal uncertainty; identical architecture cannot make distinct
-checkpoint weights one batchable policy; and a warm allocation's timer cannot
-describe full local preparation or paid machine lifetime. The CLI's one-deal
-qualification, retained historical bootstrap fields, policy keys and explicit
-timer coverage preserve these distinctions. None calls for a new product choice.
-
-Next proof remains gate/CI's full affected suites. Representative growth-size
-checkpoint pairs, CPU/CUDA numerical behavior, latency and whole-job cost need
-the separately declared calibration plan before capacity or speedup claims.
-Those inputs do not block the opt-in software boundary. Durable queues, cluster
-policy and adaptive allocation remain independent follow-ups; this review
-selects no hardware, execution, publication or merge.
+Check: `uv run --no-sync pytest tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py tests/eval/test_local_evaluation.py -k "etude or direct or continuation or status_recovers" -q` — 16 passed, 16 deselected; `uv run --no-sync pytest tests/eval/test_card_evaluation.py::test_any_evaluation_can_deliver_card_data_beside_its_own_tables -q` — 2 passed; `git diff --check` passed. Installed SDK admission and manifest paths were source-inspected; broad suites and representative CPU/CUDA calibration remain with gate.

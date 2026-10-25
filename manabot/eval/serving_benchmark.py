@@ -14,6 +14,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import islice
+import json
 import multiprocessing as mp
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -390,7 +391,12 @@ def _panel_worker(
             {
                 "passed": result.status == "completed",
                 "games": len(result.rows),
-                "trace": str(directory / result.rows[0].trace_path)
+                "trace": str(
+                    directory
+                    / json.loads((directory / "trace.json").read_bytes())[
+                        "artifact_path"
+                    ]
+                )
                 if result.rows
                 else None,
                 "error": result.error,

@@ -151,8 +151,9 @@ result = evaluate_local(
 values, checkpoint paths, exact deals and matchup settings. Its registrations
 retain their original seed authority when bound to compute. An unknown checkpoint
 training seed remains `None`; it is never inferred from evaluation deals. The CLI
-saves `request.json`, which can be passed to `--request` for another bounded
-attempt. Use a new output directory for each attempt.
+saves `request.json`, which can be passed to `--request` with a new output
+directory for a fresh full repeat. Repeated seeds do not become independent
+samples merely because execution is fresh.
 
 `evaluate(request, out_dir=..., inference=...)` is the same execution entry point
 used by monitoring and managed benchmark/Duel callbacks. It accepts an existing
@@ -173,6 +174,51 @@ between-deal uncertainty. Native journals, Commands, source identities, replay a
 records use the existing arena formats under the panel directory. A CLI panel
 is at `<out>/panel`; pass that directory to the report builder below. A small local
 check is labeled `local-check-not-admission`, not promotion or held-out evidence.
+
+## Continue an interrupted evaluation
+
+```sh
+uv run python -m manabot.eval.local --status .runs/local-check/panel
+uv run python -m manabot.eval.local --continue .runs/local-check/panel --seconds 300
+```
+
+After 40 of 100 valid complete deals, continuation runs only the missing 60.
+The local command reads the original opponents, setup, seeds and compute settings;
+only the deadline changes. It needs no scheduler, cloud credentials or callback.
+A partial deal is rerun whole. Inspection reports completed deals and produces
+paired-deal intervals only when the full requested cohort is complete.
+
+Typed callers use `evaluation_status(directory)` and
+`continue_evaluation(directory, execution=limits)`. Managed callers pass their
+existing `inference` runtime or endpoint instead. Deadline and instrumentation
+can change, but CPU/CUDA, numerical settings, batching and residency limits must
+match the original compute contract. Changing the request requires a fresh
+evaluation. Relocated checkpoint paths may be supplied explicitly; their digest
+and size are rechecked before continuation.
+
+The first attempt's `evaluation.json` freezes the logical identity and full
+request. Continuations retain new receipts beneath `attempts/<sequence>/` and
+never replace earlier traces or results. `evaluation_status` derives the current
+result from these attempts; the initial receipt continues to describe its own
+attempt. Each completed block has an immutable Command shard and a row digest.
+Replay publishes blocks incrementally, so coordinator failure cannot discard
+already published blocks. Corrupt evidence and duplicate completed blocks fail
+validation. Original attempts retain incomplete games and their failure details;
+those games do not enter the combined statistical population.
+
+Filesystem claims admit one writer. Managed execution also claims its attempt;
+continuation refuses a still-running supervisor and seals old attempts against
+delayed callbacks. These are local filesystem claims, not distributed leases.
+Moving an evaluation requires retaining its entire directory, including block
+receipts, traces and attempts. Historical receipts without a continuation identity
+remain readable; they are not silently upgraded or combined.
+
+Etude still owns match scheduling and its completed-match cache. Explicitly
+re-entering a benchmark or Duel continues a failed match through this validator;
+a successful cached match adds no sample. The callback transport can also run a
+multi-deal request through the same API. This does not provision remote compute
+or create a second durable queue. Performance receipts remain per attempt;
+reusing prior blocks does not create another throughput measurement.
 
 ## Performance evidence
 
@@ -203,8 +249,11 @@ uv run python -m experiments.report_prototype.build \
 Repeat `--eval-receipt` to compare jobs/seeds. `report-run.json` can supply a job,
 seed and shared serving receipt path; ordinary callers retain that join.
 The report copies its evidence links and diagnostic traces into its output.
-Its resource selector separates cell elapsed, summed worker elapsed, process CPU
-and shared serving. Missing seed timers are never averaged as zeros. Shared
+It defaults to During games, grouping measured phases into Inference, Game engine,
+Evidence and replay, and Other and unmeasured; selecting an activity reveals its
+phases. Comparison elapsed, Game CPU usage and Inference service expose separate
+clocks. Concurrent game time and inference waits overlap other views and cannot
+be added into one elapsed total. Missing seed timers are never averaged as zeros. Shared
 allocation cost appears once, remains explicitly unallocated to jobs, and never
 turns an estimated dollar value into a bill. No production Etude report API is
 claimed.
@@ -268,6 +317,24 @@ checkpoint-versus-heuristic checks retain the same evaluation semantics without
 training, cloud, queue or callback machinery. The single-machine inference and
 real Perf reporting software is implemented; CPU fixture evidence does not
 establish CUDA parity, capacity suitability or a performance gain.
+
+The accepted cloud startup policy is a target of at least two hours of estimated
+eligible useful work on the chosen host/model mix before a server starts. It is
+not a game-count threshold or a minimum paid lifetime: idle compute should be
+released when work finishes. Hardware, spending, urgent overrides and maximum
+queue wait remain unselected.
+
+That startup gate remains **required follow-up work**, separate from the
+implemented continuation increment. Inspection of Etude SDK 0.2.4 on 2026-10-24
+found that `Scheduler._plan` sizes rentals from job/cohort time ceilings,
+parallel slots, setup allowance and dollar caps. `OnDemand` and the public client
+expose no measured useful-backlog threshold or estimator hook. `tournament.hold`
+runs on existing compute and cannot gate provisioning. Etude's launch scheduler
+must check eligible remaining useful seconds for the host/model mix under its
+existing supply lock before creating a new rental; Manabot needs measured
+workload estimates for that integration. Reusing existing compute and releasing
+non-kept idle sessions remain independent of the startup threshold. Local checks
+remain independent too; no alternate queue substitutes for this capability.
 
 The following increments remain designs to settle, not selected infrastructure:
 

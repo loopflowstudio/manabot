@@ -219,20 +219,51 @@ function card(host, title, sub, cls = '') {
 const CAT = {run: '--t-run', stage: '--t-stage', learning: '--t-learn', collection: '--t-collect', export: '--t-export', setup: '--t-setup', eval: '--t-eval', wait: '--t-wait', unattributed: '--t-other'};
 function hexMix(a, b, t) { const h = x => x.replace('#', '').match(/../g).map(v => parseInt(v, 16)); const pa = h(a), pb = h(b); return `rgb(${pa.map((c, i) => Math.round(c + (pb[i] - c) * t)).join(',')})`; }
 const dur = s => s >= 3600 ? (s / 3600).toFixed(2) + ' h' : s >= 60 ? (s / 60).toFixed(1) + ' min' : s.toFixed(s < 1 ? 2 : 1) + ' s';
+// Evaluation activities group existing, compatible timers only. Inference wait
+// in a game must never be added to the serving process time it overlaps.
+const EVAL_RESOURCES = {
+  'Worker elapsed (sum, overlaps)': ['During games', 'Time summed across game processes, including waits. Concurrent games overlap: this is a breakdown of game activity, not how long the comparison took. Inference includes queueing, communication and model execution.'],
+  'Cell elapsed': ['Comparison elapsed', 'Elapsed time for this comparison panel through replay. Excludes earlier checkpoint preparation and server provisioning. Game activity happens inside this interval; do not add the two totals.'],
+  'Worker CPU (sum)': ['Game CPU usage', 'CPU time consumed by game processes, summed across cores. Excludes waiting and the separate inference process; phase-level CPU attribution is unavailable.'],
+  'Serving host elapsed': ['Inference service', 'Time inside the shared inference process. Host timers include required waits and are not GPU compute measurements. This overlaps inference waiting in the game activity chart.'],
+};
+const EVAL_ACTIVITIES = [
+  {name: 'Inference', category: 'learning', phases: ['inference_round_trip', 'scalar_policy', 'forward_host', 'input_assembly', 'input_admission_and_transfer_host', 'output_transfer_host', 'sampling'], note: 'Includes model decisions and measured input/output work. During games, this includes queueing and communication, not just model compute.'},
+  {name: 'Game engine', category: 'collection', phases: ['native_reset_and_encoding', 'native_step_and_encoding', 'native_and_encoding', 'frame_projection'], note: 'Rules execution and building observations; these measurements do not isolate binding overhead.'},
+  {name: 'Evidence and replay', category: 'export', phases: ['command_validation', 'command_durable_acknowledgement', 'output_retention', 'replay'], note: 'Validating and durably recording decisions, retaining results, and replay verification where measured in this view.'},
+  {name: 'Other and unmeasured', category: 'unattributed', phases: [], note: 'Startup, coordination, and time without a more specific measurement. Missing measurements are not zero.'},
+];
+function evaluationActivityTree(tree, resource) {
+  if (!EVAL_RESOURCES[resource]) return tree;
+  const children = tree.children || [];
+  const grouped = EVAL_ACTIVITIES.map(activity => {
+    const members = children.filter(child => {
+      const owner = EVAL_ACTIVITIES.find(a => a.phases.includes(child.name)) || EVAL_ACTIVITIES.at(-1);
+      return owner === activity;
+    });
+    if (!members.length) return null;
+    return {name: activity.name, seconds: members.reduce((sum, child) => sum + child.seconds, 0),
+      status: 'derived', category: activity.category, source: 'Grouped retained timers',
+      note: activity.note, children: members};
+  }).filter(Boolean);
+  return {...tree, name: EVAL_RESOURCES[resource][0], children: grouped.length ? grouped : undefined};
+}
 function renderFlame(c, e, runs, panel) {
   const scale = S.fscale || panel.scale, resources = panel.resource ? [panel.resource] : [...new Set(e.timing.map(t => t.resource))];
-  if (!panel.resource && !resources.includes(S.fres)) S.fres = resources[0];
+  const evaluation = e.decision_unit === 'evaluation';
+  if (!panel.resource && !resources.includes(S.fres)) S.fres = evaluation && resources.includes('Worker elapsed (sum, overlaps)') ? 'Worker elapsed (sum, overlaps)' : resources[0];
   const selectedResource = panel.resource || S.fres;
   const bar = node('div', 'fl-bar'), crumbs = node('div', 'crumbs');
   const path = S.fpath ? S.fpath.split('/') : [];
   const rootBtn = node('button', null, 'All'); rootBtn.onclick = () => { S.fpath = ''; render(); }; crumbs.appendChild(rootBtn);
   path.forEach((name, i) => { crumbs.append(' › '); if (i === path.length - 1) crumbs.appendChild(node('b', null, name)); else { const b = node('button', null, name); b.onclick = () => { S.fpath = path.slice(0, i + 1).join('/'); render(); }; crumbs.appendChild(b); } });
   const res = node('div', 'seg'), sc = node('div', 'seg');
-  for (const r of resources) { const b = node('button', null, r); b.setAttribute('aria-pressed', String(S.fres === r)); b.onclick = () => { S.fres = r; S.fpath = ''; render(); }; res.appendChild(b); }
+  for (const r of resources) { const b = node('button', null, evaluation ? EVAL_RESOURCES[r]?.[0] || r : r); b.setAttribute('aria-pressed', String(selectedResource === r)); b.onclick = () => { S.fres = r; S.fpath = ''; render(); }; res.appendChild(b); }
   for (const [v, label] of [['share', 'Share'], ['total', 'Total'], ['per_decision', 'Per 1M decisions']]) { const b = node('button', null, label); b.setAttribute('aria-pressed', String(scale === v)); b.onclick = () => { S.fscale = v; render(); }; sc.appendChild(b); }
   bar.append(crumbs, res, sc); c.appendChild(bar);
+  if (evaluation && EVAL_RESOURCES[selectedResource]) c.appendChild(node('p', 'fl-explanation', EVAL_RESOURCES[selectedResource][1] + ' Width shows time; click an activity to see its measured phases.'));
   const find = (n, names) => { let cur = n; for (const name of names) { cur = (cur.children || []).find(x => x.name === name); if (!cur) return null; } return cur; };
-  const items = runs.map(r => ({r, t: r.get(selectedResource)})).filter(x => x.t);
+  const items = runs.map(r => { const t = r.get(selectedResource); return {r, t: t && evaluation ? {...t, tree: evaluationActivityTree(t.tree, selectedResource)} : t}; }).filter(x => x.t);
   const missing = runs.filter(r => !r.get(selectedResource));
   const factor = t => scale === 'per_decision' ? (t.decisions ? 1e6 / t.decisions : 0) : 1;
   const focus = items.map(x => ({...x, f: find(x.t.tree, path)}));
@@ -263,7 +294,8 @@ function renderFlame(c, e, runs, panel) {
       if (n.note) notes.add(`${r.label} · ${n.name}: ${n.note}`);
       if (n.status === 'uninstrumented') notes.add(`Not instrumented inside ${pathTo(t.tree, n).slice(-2, -1)[0] || f.name}: ${n.name}`);
       let cx = x;
-      for (const ch of n.children || []) { const cw = w * ch.seconds / n.seconds; place(ch, cx, cw, d + 1); cx += cw; }
+      // Activity overview stays one level deep; drilling reveals raw phases.
+      for (const ch of (evaluation && !path.length && d >= 1 ? [] : n.children || [])) { const cw = w * ch.seconds / n.seconds; place(ch, cx, cw, d + 1); cx += cw; }
     };
     place(f, 0, span, 0);
     fl.style.height = (depth + 1) * 26 + 'px';

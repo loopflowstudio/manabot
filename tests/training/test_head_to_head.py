@@ -11,10 +11,13 @@ pytest.importorskip("etude.eval.match")
 
 from manabot.eval import duel as duel_eval
 from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
 from manabot.eval.match import derive_seed
 from manabot.eval.monitor import MonitorProtocol
+from manabot.eval.results import EvaluationRow
 from manabot.infra.files import atomic_json
 from manabot.sim.execution import EvalExecution
+from tests.eval.test_local_evaluation import _publish_blocks
 from tests.training.test_etude_evaluation import _admission, _play_rows
 
 
@@ -78,7 +81,12 @@ def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
                 "opponent": kwargs["player_b"],
             }
         )
-        return _play_rows(manifest, seed, kwargs["out_dir"]), {}, {}
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(manifest, seed, kwargs["out_dir"])
+        ]
+        _publish_blocks(kwargs["out_dir"], rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {}
 
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
     monkeypatch.setattr(InferenceEndpoint, "play_cell", staticmethod(play_cell))
@@ -113,3 +121,46 @@ def test_duel_rejects_unequal_updates_runtime_and_bytes(tmp_path: Path) -> None:
     Path(duel.one_seat.artifact["path"]).write_bytes(b"tampered")
     with pytest.raises(ValueError, match="artifact bytes differ"):
         duel.validate_inputs()
+
+
+@pytest.mark.parametrize("historical", [False, True])
+def test_summary_reads_continuation_after_empty_attempt_and_historical_rows(
+    tmp_path: Path, historical: bool
+) -> None:
+    manifest = _admission(tmp_path)
+    for seed in range(101, 126):
+        panel = tmp_path / "arena" / str(seed)
+        panel.mkdir(parents=True)
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(manifest, seed, panel)
+        ]
+        if historical:
+            atomic_json(
+                panel / "rows.json", [row.model_dump(mode="json") for row in rows]
+            )
+            continue
+        original = EvaluationResult(
+            request=EvaluationRequest(
+                key=manifest.key,
+                candidate=manifest.candidate,
+                opponent=manifest.opponent,
+                checkpoint_paths={
+                    manifest.candidate.player_id: manifest.artifact["path"]
+                },
+                deal_seeds=(seed,),
+                matchup_mode="all",
+            ),
+            evaluation_id=str(seed),
+            error="interrupted before publishing a block",
+        )
+        atomic_json(panel / "evaluation.json", original.model_dump(mode="json"))
+        attempt = panel / "attempts/000001"
+        attempt.mkdir(parents=True)
+        _publish_blocks(attempt, rows)
+        retained = original.model_copy(update={"rows": rows, "error": None})
+        atomic_json(attempt / "evaluation.json", retained.model_dump(mode="json"))
+        assert not (panel / "rows.json").exists()
+    groups = duel_eval.summarize(tmp_path)
+    assert groups["all"].games == 200
+    assert [groups[label].games for label in ("LvA", "AvL", "LvL", "AvA")] == [50] * 4

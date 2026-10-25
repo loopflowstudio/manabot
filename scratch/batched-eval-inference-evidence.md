@@ -1,37 +1,36 @@
 # Evaluation design evidence — 2026-10-24
 
-## Final implementation reconciliation — 2026-10-24
+## Intermittent capacity price check — 2026-10-24
 
-The supplied outcome records successful sync after ordinary staging. The checkout
-has base `884249024`, staged integration/compression and no unresolved index
-conflicts; earlier stash errors are historical. Software is complete. Reused
-evidence: 77 focused integration checks, 3 process regressions, 137-test collection,
-then 9 compression checks plus lint/format/compile and calibration CLI help.
-These are prior outcomes, not new test runs or full-suite certification.
+[Runpod's pricing page](https://www.runpod.io/pricing), marked updated October 8,
+2026, advertises Pods including A5000 24 GB / 9 vCPU / 25 GB RAM at $0.27/h;
+A6000 48 GB / 9 vCPU / 50 GB RAM at $0.59/h; 5090 32 GB / 9 vCPU / 35 GB RAM
+at $1.19/h. These are displayed configurations, not live reservations or
+guaranteed available offers; storage and other charges are additional.
+Illustrative 12-hour weekly compute totals are $3.24/$7.08/$14.28, versus
+$45.36/$99.12/$199.92 at 168 hours. No experiment runtime is inferred.
 
-Source inspection confirms:
+[Vast pricing](https://vast.ai/pricing) describes market-dependent rates and
+interruptible instances that may be reclaimed. Its static page did not expose
+a usable GPU-specific quote. It is a comparison candidate, not evidence of a
+lower total cost for this workload. Continuation and off-host evidence retention
+must work on the chosen route before interruption savings can be assessed.
 
-- `eval/local.py` owns `checkpoint_request` and the module CLI;
-  `eval/evaluation.py` owns `EvaluationRequest`, `EvaluationResult`, `evaluate`
-  and `evaluate_local`. `sim.execution.EvalExecution` is the shared limit type.
-  Local imports omit training/experiment, callback transport and hosted adapters.
-  The old `manabot.arena` package is absent; frozen arena wire fields remain.
-- `InferenceRuntime.infer` blocks on bounded multiplexed requests; `submit_game`
-  returns a future. Proposed public `submit`/`receive` and `ServingReceipt` names
-  never became APIs; `EvalPerformance` snapshots own the receipts.
-- `local.main` sets the deadline before checkpoint preparation, then calls the
-  evaluator. `match.play_cell` starts its timer after initial validation and
-  snapshots after replay. Runtime construction/shutdown owns allocation elapsed;
-  neither interval includes earlier CLI admission loads. `evaluation_seconds`
-  stops before cohort statistics and final receipt persistence. These intervals
-  are not total CLI latency, paid lifetime or whole-job cost. Runtime cost fields
-  have no billing/rate inputs. The report's numerator includes only supplied cells.
-- Etude 0.2.2, upstream card-evidence capture/projection, subset-leg execution and
-  study-specific Duel/monitor rules remain intact. No source or test repair was
-  needed in this reconciliation; durable usage docs now preserve the named later
-  compute-policy/cluster, queue and adaptive-allocation increments.
+Historical `experiments/worker-scaling.md` favors its measured 5090 host over
+its H100 host in training rows per rental dollar, excluding setup. The document
+also records sensitivity to host CPU and native/input work. This supports a
+commodity-GPU/CPU-balanced eval trial, not a measured eval winner. The current
+software has no representative CPU/CUDA eval calibration or whole-bill result.
 
-Check: `uv run --no-sync python -m manabot.eval.local --help` and a fresh `uv run --no-sync python` import probe passed (documented symbols, excluded managed imports, absent arena); `git diff --check` passed. No games or broad tests rerun. Broad suites/report browser proof remain with gate/CI; CUDA and representative performance acceptance need hardware and a declared benchmark plan. No whole-job speedup, capacity choice or automatic adoption follows from CPU fixtures.
+Check: documentation-only refinement; `git diff --check` passed. No runtime,
+hardware or paid evaluation checks run.
+
+## Published foundation
+
+PR #370 at `79506de9cae0182653e251767d35ffba5427c066` owns the completed
+runtime/report keystone. Full reconciliation and prior checks are retained in
+Git blob `7bae0e735e83f08273f093dbea10422ed6f416db`. Its focused CPU evidence
+never established current GPU throughput, a capacity choice or whole-job gain.
 
 ## Compute and local-entry follow-up — 2026-10-24
 
@@ -126,40 +125,53 @@ Context lookup: `lf task status --json` on 2026-10-24 returned
 `Error: this checkout has no Task`. The supplied context manifest has no Wave.
 No placement lookup, Task creation, launch, rental, training or evaluation followed.
 
-## Historical performance-report and boundary inspection
+Historical report/boundary inspection is preserved in Git blob
+`7bae0e735e83f08273f093dbea10422ed6f416db`; current ownership and measured limits
+are in the design and `docs/shared-evaluation.md`.
 
-These observations describe the pre-implementation design baseline. The final
-implementation replaces the missing-child aggregation noted below; source
-references and external mechanism evidence are retained, not newly reverified.
+## Publication check — 2026-10-24
 
-- `experiments/report_prototype/{README.md,definitions.py,build.py,report.html}`:
-  Python-authored report definitions, per-job seed aggregation, baseline styling,
-  resource-selectable icicles with shared drill-down and total/share/per-million
-  learner-decision normalization. `TimeNode` separates recorded, derived,
-  uninstrumented and hypothetical measurements. Real seat-comparison inputs do
-  not have the detailed training split; the Elemental timing example is synthetic.
-  The prototype is explicitly not the production Etude report.
-- At that baseline, `report.html::jobTiming` substituted zero for missing child nodes
-  when averaging across seeds. The eval projection must expose coverage rather
-  than copy this behavior. No prototype code was changed during design.
-- `manabot/infra/profiler.py` owns hierarchical host timers;
-  `tests/training/test_phase_timing.py` verifies state preservation without added
-  synchronization. This is a reusable contract, not a GPU execution timer.
-- `managym/src/python/bindings.rs::step` includes native stepping and conversion
-  into Python observation/info values. `vector_env_bindings.rs::step_into_buffers`
-  already offers a coarser native boundary, including encoded output writes.
-  Neither inspection nor a whole-call timer measures pure FFI overhead. Preserve
-  arena evidence before adopting a vector transport.
-- `uv.lock` pins training Torch 2.10.0 (CUDA 12.8 wheel on Linux). Consulted
-  [PyTorch 2.10 CUDA semantics](https://docs.pytorch.org/docs/2.10/notes/cuda.html):
-  GPU work is asynchronous, device timing needs events or synchronization, and
-  graph replay can reduce host launch overhead. Routine host timers must not be
-  labeled device compute time; synchronized diagnostic trials change execution.
-- [PyTorch 2.10 compilation](https://docs.pytorch.org/docs/2.10/generated/torch.compile.html)
-  documents `reduce-overhead` CUDA graphs, extra workspace costs, applicability
-  limits and recompilation. These support a bounded experiment before a custom
-  runtime, not a promised speedup on Manabot's dynamic batch shapes.
-- [PyO3 performance guidance](https://pyo3.rs/main/performance.html) identifies
-  conversion/allocation and interpreter attachment costs. This is mechanism
-  guidance, not a benchmark of this repository's pinned extension or evidence
-  that moving model inference to Rust would remove CPU/GPU transfers.
+The first publication attempt stopped before `lf pr publish`: `lf sync` succeeded without conflicts,
+with main `66b8fb3e7` already integrated through `003df4e6f`. The accepted
+continuation and activity-chart changes remain staged. PR #370 is open, ready,
+at `003df4e6f`, with auto-merge absent. The local demo on port 8767 remains running.
+
+The broader publication-time run was:
+
+```sh
+uv run --no-sync pytest tests/eval/test_local_evaluation.py tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py tests/eval/test_card_evaluation.py tests/eval/test_eval_performance.py tests/infra/test_ci_selection.py tests/infra/test_release.py tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved -q
+```
+
+It reached **37 passed, 1 failed**, then was interrupted to inspect the failure;
+this is not a completed suite. `test_native_evaluation_resumes_delivers_and_audits`
+retained eight 60-second timeouts with successful replay, then `card_data` failed
+with `BinderException: Referenced column "win" not found`. Its all-excluded
+Etude table lacks the nullable win column. `card_query.py` and
+`card_evaluation.py` are unchanged from main; no baseline reproduction was run,
+so this observation does not establish when the bug was introduced. The native
+test also expects eligible card statistics, which this all-timeout run cannot
+provide. Neither the query nor the success assertion was weakened for publication.
+
+The original failure was under pytest-579's temporary output; later pytest
+retention cleanup removed it. The query failure was reproduced cheaply through
+Etude with all-excluded fixture games before fixing it. `card_data` now returns
+the retained exclusions and no rates when there are no eligible player-games,
+without requiring an all-null `win` column. Eligible-game queries still require
+their win data. Regressions cover crash, timeout, truncation, replay failure and
+empty filtered selections through Etude's real schema inference.
+
+Native success was verified separately with the unchanged 60-second limits:
+all eight games terminated in 1.7–5.2 seconds, replayed, delivered and audited.
+Evidence is in `.runs/card-native-audit-proof`; a preceding one-leg diagnostic
+is in `.runs/card-native-probe`. The earlier timeouts' cause is unestablished;
+the query fix does not change execution or time limits. All card tests now pass
+across two focused invocations; this is not a completed rerun of the original
+combined command. The separate required
+two-hour useful-backlog scheduler gate remains unimplemented as documented.
+Scoped Ruff checks, formatting (28 files), and staged diff whitespace checks passed.
+The remaining lightweight selection (performance projection, CI selection,
+release contracts and the corrected admission-failure fixture) then passed:
+`uv run --no-sync pytest tests/eval/test_eval_performance.py tests/infra/test_ci_selection.py tests/infra/test_release.py tests/training/test_monitor_evaluation.py::test_checkpoint_admission_failure_is_saved -q`
+— 48 passed in 1.52 seconds.
+
+Check: `uv run --no-sync pytest tests/eval/test_card_evaluation.py::test_native_evaluation_resumes_delivers_and_audits -q --basetemp .runs/card-native-audit-proof` — 1 passed in 50.28s; `uv run --no-sync pytest tests/eval/test_card_evaluation.py -k 'not native_evaluation_resumes' -q --basetemp .runs/card-publication-proof` — 33 passed in 65.37s; scoped Ruff and whitespace checks passed.

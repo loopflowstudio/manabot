@@ -438,6 +438,42 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
         assert len(audit(db, delivered).problems) == 1
 
 
+@pytest.mark.parametrize("outcome", ["crash", "timeout", "truncated", "replay_failed"])
+def test_all_excluded_games_have_no_card_rates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    spec = verification_spec(8)
+    assert spec.authored_matchup is not None
+    runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
+    monkeypatch.setattr(
+        evaluation,
+        "play_card_match",
+        _fixture_play(runtime, {leg: {"outcome": outcome} for leg in range(8)}),
+    )
+    evaluate_cards(spec, tmp_path)
+    selection = CardSelection(
+        experiment=spec.experiment, subjects=(spec.players[0].player_id,)
+    )
+    with statsdb(spec.experiment, tmp_path) as db:
+        # Etude omits a column when every retained value is null.
+        assert "win" not in {
+            row[0] for row in db.execute("describe card_plays").fetchall()
+        }
+        data = card_data(db, selection)
+        assert (data.games, data.deals, data.win_rate, data.cards) == (0, 0, None, ())
+        assert data.excluded == {outcome: 8}
+        assert sum(data.opponents.values()) == 8
+        assert data.subjects and data.runs == (spec.run,)
+        assert data.failed_matches == 0
+        empty = card_data(db, selection.model_copy(update={"deck": "absent"}))
+        assert (empty.games, empty.win_rate, empty.cards, empty.excluded) == (
+            0,
+            None,
+            (),
+            {},
+        )
+
+
 def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
