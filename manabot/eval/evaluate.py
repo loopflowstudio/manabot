@@ -387,7 +387,16 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "source_stable": source_stable,
             "promotion_eligible": False,
             "admission_eligible": False,
-            "traces": portable_trace_receipts([trace]),
+            "traces": portable_trace_receipts(
+                [
+                    {
+                        "artifact_path": relative,
+                        "sha256": file_sha256(args.out_dir / relative),
+                        "games": sum(row["trace_path"] == relative for row in rows),
+                    }
+                    for relative in sorted({row["trace_path"] for row in rows})
+                ]
+            ),
             "artifacts": artifact_receipts(
                 args.out_dir,
                 [

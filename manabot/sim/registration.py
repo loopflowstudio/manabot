@@ -8,6 +8,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.identity import SHA256_PATTERN, StrictModel, canonical_sha256
+from manabot.sim.execution import EvalCompute
 from manabot.sim.search.branch import branch_backend
 
 type WorldVersion = Literal[
@@ -38,6 +39,7 @@ class PlayerRegistration(StrictModel):
     checkpoint_sha256: str | None = Field(default=None, pattern=SHA256_PATTERN)
     checkpoint_bytes: int | None = Field(default=None, gt=0)
     parameter_count: int | None = Field(default=None, gt=0)
+    # Producer metadata may be unavailable for a standalone policy export.
     training_seed: int | None = None
     artifact_id: str | None = None
     evidence_class: Literal["production", "fixture"] = "production"
@@ -68,7 +70,6 @@ class PlayerRegistration(StrictModel):
                 self.checkpoint_sha256,
                 self.checkpoint_bytes,
                 self.parameter_count,
-                self.training_seed,
                 self.artifact_id,
             )
             if any(value is None for value in required):
@@ -87,6 +88,19 @@ class PlayerRegistration(StrictModel):
                     "device": "cpu",
                     "batch_size": 1,
                 }
+                if "execution" in self.player_spec:
+                    execution = EvalCompute.model_validate(
+                        self.player_spec["execution"]
+                    )
+                    expected_checkpoint_spec.update(
+                        device=execution.device,
+                        batch_size=execution.max_batch_rows,
+                        execution=execution.model_dump(),
+                    )
+                    if self.compute_class_id != execution.identity:
+                        raise ValueError(
+                            "checkpoint compute class differs from execution"
+                        )
                 if "allow_deck_repetition" in self.player_spec:
                     if self.player_spec["allow_deck_repetition"] is not True:
                         raise ValueError("deck repetition must be explicitly enabled")

@@ -4,6 +4,7 @@ Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -24,11 +25,20 @@ import numpy as np
 from pydantic import BaseModel
 
 from manabot.eval.benchmark import Conditions, evaluation_tables
-from manabot.eval.match import play_cell
-from manabot.eval.monitor import EvaluationRow, MonitorResult
+from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    continue_evaluation,
+    evaluate as evaluate_panel,
+    evaluation_status,
+)
+from manabot.eval.execution import bind_execution
+from manabot.eval.monitor import MonitorResult
+from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.execution import EvalExecution
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.records import TrainingCoordinates
 from manabot.training.regime import ArtifactReference
@@ -106,20 +116,7 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
     )
 
 
-def _checkpoint(result: MonitorResult) -> CheckpointRef:
-    """A training run's export, keyed by its run and file, read from where it lies."""
-    path = Path(result.artifact["path"]).resolve()
-    return CheckpointRef(
-        key=CheckpointKey(run=result.run_id, name=path.name),
-        artifact=ArtifactRef(
-            uri=path.as_uri(),
-            sha256=result.artifact["sha256"],
-            size_bytes=result.artifact["bytes"],
-        ),
-    )
-
-
-def play(match: Match) -> Tables:
+def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
     seated = match.agents[0].artifact
@@ -127,13 +124,11 @@ def play(match: Match) -> Tables:
         raise ValueError("Etude candidate differs from admitted checkpoint")
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    out.mkdir(parents=True, exist_ok=True)
-    rows, trace, replay = play_cell(
+    request = EvaluationRequest(
         key=conditions.key,
-        player_a=candidate,
-        player_b=opponent,
+        candidate=candidate,
+        opponent=opponent,
         deal_seeds=(conditions.deal,),
-        out_dir=out,
         checkpoint_paths={
             candidate.player_id: duel.two_seat.artifact["path"],
             opponent.player_id: duel.one_seat.artifact["path"],
@@ -141,18 +136,31 @@ def play(match: Match) -> Tables:
         game_seconds=conditions.game_seconds,
         max_commands=conditions.max_commands,
         matchup_mode="all",
+        purpose="repeated-development-comparison",
     )
-    for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
-        atomic_json(out / f"{name}.json", value)
-    return evaluation_tables([EvaluationRow.model_validate(row) for row in rows])
+    result = (
+        continue_evaluation(out, request=request, inference=inference)
+        if out.exists()
+        else evaluate_panel(request, out_dir=out, inference=inference)
+    )
+    if result.error:
+        raise ValueError(result.error)
+    return evaluation_tables(result.rows)
 
 
 def summarize(directory: Path) -> dict[str, ScoreGroup]:
-    rows = [
-        EvaluationRow.model_validate(row)
-        for path in sorted((directory / "arena").glob("*/rows.json"))
-        for row in json.loads(path.read_bytes())
-    ]
+    rows: list[EvaluationRow] = []
+    for panel in sorted((directory / "arena").glob("*/")):
+        if (panel / "evaluation.json").exists():
+            # A failed first attempt may have no rows.json. The evaluation
+            # authority still finds complete blocks in subsequent attempts.
+            rows.extend(evaluation_status(panel).rows)
+        elif (panel / "rows.json").exists():
+            # Historical panels predate the evaluation/attempt contract.
+            rows.extend(
+                EvaluationRow.model_validate(value)
+                for value in json.loads((panel / "rows.json").read_bytes())
+            )
     if (
         len(rows) != 200
         or not all(row.valid for row in rows)
@@ -208,9 +216,24 @@ def _checkpoint(result: MonitorResult) -> CheckpointRef:
     )
 
 
-def evaluate(path: Path) -> None:
+def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
     duel = Duel.model_validate_json(path.read_bytes())
     duel.validate_inputs()
+    _, original_opponent = registrations(duel)
+    # Bind the opponent cohort before changing its compute declaration: it is
+    # part of the historical seed authority, just like the original envelope.
+    key = duel.two_seat.key.model_copy(
+        update={"anchor_cohort_sha256": original_opponent.identity_sha256}
+    )
+    if execution is not None:
+        key, _ = bind_execution(key, (), execution)
+        for manifest in (duel.two_seat, duel.one_seat):
+            manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
+                manifest.key, (manifest.candidate, manifest.opponent), execution
+            )
+        derived = path.parent / "duel-execution.json"
+        atomic_json(derived, duel.model_dump(mode="json"))
+        path = derived
     directory = path.parent
     candidate, opponent = registrations(duel)
     os.environ["MANABOT_DUEL"] = str(path.resolve())
@@ -252,13 +275,7 @@ def evaluate(path: Path) -> None:
                 conditions=tuple(
                     Conditions(
                         deal=seed,
-                        key=duel.two_seat.key.model_copy(
-                            update={
-                                "anchor_cohort_sha256": canonical_sha256(
-                                    opponent.model_dump()
-                                )
-                            }
-                        ),
+                        key=key,
                         game_seconds=600,
                         max_commands=10000,
                     ).model_dump(mode="json")
@@ -268,14 +285,16 @@ def evaluate(path: Path) -> None:
             ),
         ),
     )
-    result = hold(
-        benchmark,
-        experiment=EXPERIMENT,
-        play=play,
-        checkpoint=_checkpoint(duel.two_seat),
-        directory=directory.parent.parent / "track",
-        workers=1,
-    )
+    with callback_allocation(execution, directory / "allocation") as inference:
+        result = hold(
+            benchmark,
+            experiment=EXPERIMENT,
+            play=partial(play, inference=inference) if inference else play,
+            checkpoint=_checkpoint(duel.two_seat),
+            directory=directory.parent.parent / "track",
+            workers=execution.max_active_games if execution else 1,
+        )
+
     atomic_json(
         directory / "result.json",
         DuelResult(

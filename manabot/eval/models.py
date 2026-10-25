@@ -31,6 +31,9 @@ class EvaluationKey(StrictModel):
     rating_prior_sha256: str = Field(pattern=SHA256_PATTERN)
     anchor_cohort_sha256: str = Field(pattern=SHA256_PATTERN)
     evaluation_compute_envelope_id: str
+    seed_compute_envelope_id: str | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
 
 class Schedule(StrictModel):
@@ -368,6 +371,9 @@ class MatchRow(StrictModel):
         trace_path = Path(self.trace_path)
         if trace_path.is_absolute() or ".." in trace_path.parts:
             raise ValueError("match trace locator must stay artifact-relative")
-        if self.trace_path != f"traces/{self.cell_id}.commands.jsonl.gz":
+        if self.trace_path not in {
+            f"traces/{self.cell_id}.commands.jsonl.gz",  # frozen panel evidence
+            f"traces/{self.cell_id}.{self.deal_seed}.commands.jsonl.gz",
+        }:
             raise ValueError("match trace locator does not agree with cell identity")
         return self

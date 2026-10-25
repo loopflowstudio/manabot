@@ -191,20 +191,34 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
             " where not eligible group by outcome"
         ).fetchall()
     )
-    games, wins = db.execute(
-        "select count(*), sum(win) from selected where eligible"
-    ).fetchone() or (0, None)
+    failed = db.execute(
+        "select count(*) from matches m where state = 'failed'"
+        + (f" and run in ({', '.join('?' for _ in runs)})" if runs else " and false"),
+        list(runs),
+    ).fetchone()
+    # Etude omits all-null columns. With no eligible games there may be no
+    # `win` column at all; retain exclusions without querying undefined rates.
+    games = db.execute("select count(*) from selected where eligible").fetchone()[0]
+    if not games:
+        return CardData(
+            selection=selection,
+            subjects=names,
+            opponents=opponents,
+            runs=runs,
+            games=0,
+            deals=0,
+            win_rate=None,
+            excluded=excluded,
+            failed_matches=int(failed[0]) if failed else 0,
+            cards=(),
+        )
+    wins = db.execute("select sum(win) from selected where eligible").fetchone()[0]
     deals = [
         d
         for (d,) in db.execute(
             "select distinct deal from selected where eligible"
         ).fetchall()
     ]
-    failed = db.execute(
-        "select count(*) from matches m where state = 'failed'"
-        + (f" and run in ({', '.join('?' for _ in runs)})" if runs else " and false"),
-        list(runs),
-    ).fetchone()
     # Per card and deal: copies and winning copies, so whole deals resample.
     blocks = db.execute(
         "select c.card, s.deal,"

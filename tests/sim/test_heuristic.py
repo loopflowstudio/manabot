@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -9,7 +10,11 @@ from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, 
 import pytest
 
 from manabot.env import Env
-from manabot.eval.monitor import MonitorProtocol, _opponent_source_sha256
+from manabot.eval.admission import register_anchor
+from manabot.eval.models import EvaluationContract
+from manabot.eval.monitor import MonitorProtocol
+from manabot.infra.identity import file_sha256
+from manabot.sim import players
 from manabot.sim.heuristic import (
     HeuristicPlayer,
     TargetedSpell,
@@ -354,22 +359,18 @@ def test_pays_optional_costs() -> None:
 
 
 def test_v1_monitor_identity_is_unchanged_and_heuristic_has_its_own() -> None:
-    from pathlib import Path
-
-    from manabot.infra.identity import file_sha256
-    from manabot.sim import players as players
-
     assert (
         MonitorProtocol().model_dump()
         == MonitorProtocol(opponent="scripted_greedy").model_dump()
     )
     assert "opponent" not in MonitorProtocol().model_dump()
-    assert _opponent_source_sha256("scripted_greedy") == file_sha256(
-        Path(players.__file__)
-    )
-    assert _opponent_source_sha256("heuristic") != _opponent_source_sha256(
-        "scripted_greedy"
-    )
+    candidate = EvaluationContract.model_validate_json(
+        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
+    ).anchors[0]
+    scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
+    heuristic = register_anchor(candidate, "heuristic", player_id="heuristic")
+    assert scripted.source_sha256 == file_sha256(Path(players.__file__))
+    assert heuristic.source_sha256 != scripted.source_sha256
     assert all(path.exists() for path in heuristic_source_paths())
 
 
