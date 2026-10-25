@@ -9,7 +9,7 @@
   import type { DeckChoice } from '$lib/decks';
   import type { WatchDecision } from '$lib/watch';
   import type { RestoredReplayDecision } from '$lib/replay-index';
-  import type { InteractionOffer, Observation, OpponentCatalog } from '$lib/types';
+  import type { InteractionOffer, Observation } from '$lib/types';
   import type { StudyRetryResponse } from '$lib/study-runtime';
   import { rememberRecordCredential, recordFetch } from '$lib/records';
 
@@ -29,16 +29,14 @@
   let speed = $state(1);
   let busy = $state(false);
   let error = $state('');
-  let trained = $state(false);
   let ready = $state(false);
-  let trainedName = $state('Configured checkpoint');
   let restored = $state<RestoredReplayDecision | null>(null);
   let attempt = $state<string | null>(null);
   let branch = $state<Observation | null>(null);
   let phase = $state<'restored' | 'retried'>('restored');
   let importedGames = $state<unknown[]>([]);
   let selectedGame = $state(0);
-  const choices = ['random', 'greedy', 'heuristic', 'search', 'checkpoint'];
+  const choices = ['random', 'greedy', 'heuristic', 'search'];
 
   async function api<T>(url: string, body?: unknown): Promise<T> {
     const response = await recordFetch(url, {
@@ -55,12 +53,6 @@
 
   onMount(() => {
     ready = true;
-    // A watched `checkpoint` seat plays the server-configured candidate.
-    void fetch('/api/opponents').then(r => r.json()).then((data: OpponentCatalog) => {
-      const configured = data.opponents.find(opponent => opponent.source === 'candidate');
-      trained = configured?.available ?? false;
-      if (configured) trainedName = `${configured.name} · ${configured.sha256.slice(0, 10)}`;
-    }).catch(() => {});
     const selected = new URLSearchParams(location.search).get('trace');
     if (selected) {
       id = selected;
@@ -209,7 +201,7 @@
       {#each [0, 1] as seat}
         <label class="flex flex-col gap-2 type-label">Seat {seat + 1}
           <select bind:value={players[seat]} class="rounded border border-line bg-field p-2">
-            {#each choices as choice}<option value={choice} disabled={choice === 'checkpoint' && !trained}>{choice === 'checkpoint' ? trainedName : choice}</option>{/each}
+            {#each choices as choice}<option value={choice}>{choice}</option>{/each}
           </select>
         </label>
       {/each}
