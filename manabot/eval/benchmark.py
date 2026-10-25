@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 import os
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
 from etude.eval.match import Row, Tables, agent
 from etude.eval.records import (
@@ -30,7 +29,8 @@ from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import EvaluationRow, MonitorResult
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 
@@ -114,20 +114,16 @@ def play(match: Match) -> Tables:
     if len(match.agents) != 2 or match.games != 8:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
     checkpoint, anchor = match.agents
-    seated = checkpoint.artifact
-    uri = urlsplit(seated.uri if seated else "")
-    if seated is None or seated.sha256 is None or uri.scheme != "file" or uri.netloc:
-        raise ValueError("checkpoint must be a verified local file")
-    path = Path(unquote(uri.path))
+    path = local_checkpoint_file(checkpoint)
+    sha256 = file_sha256(path)
     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
     candidate = candidate.model_copy(
         update={
-            "checkpoint_sha256": seated.sha256,
+            "checkpoint_sha256": sha256,
             "checkpoint_bytes": path.stat().st_size,
-            "artifact_id": f"monitor/{seated.sha256}",
+            "artifact_id": f"monitor/{sha256}",
         }
     )
-    verify_file(path, seated.sha256, path.stat().st_size)
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
@@ -181,15 +177,19 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
         if score is None:
             raise ValueError("valid arena row requires a score")
         # Etude's player is a tournament participant, not the native on-play
-        # seat. Deck labels and on-play flags describe that row's participant.
+        # seat. Deck labels and on-play flags describe that row's participant:
+        # `deck` is the deck it actually played, `opponent_deck` the other's.
         for player in (0, 1):
             native_seat = (row.leg + player) % 2
+            deck, opponent_deck = decks[native_seat], decks[1 - native_seat]
             plays.append(
                 {
                     "player": player,
                     "game": row.leg,
                     "score": score if player == 0 else 1.0 - score,
-                    "matchup": labels[(decks[native_seat], decks[1 - native_seat])],
+                    "deck": deck,
+                    "opponent_deck": opponent_deck,
+                    "matchup": labels[(deck, opponent_deck)],
                     "on_play": native_seat == 0,
                     "valid": True,
                 }

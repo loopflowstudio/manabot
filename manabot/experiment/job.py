@@ -16,6 +16,10 @@ the parent's run record and final raw/EMA/Adam exports arrive as digest-checked
 Etude inputs, the worker binds them as the stage's LearningStateImport, and
 training resumes at the parent's absolute update toward the same absolute
 target. Game streams and RNGs restart; this is a new segment, not recovery.
+
+A job's runs track under its `experiment`, the experiment file's stem
+(`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
+find them. Etude's launcher does not yet hand the job file's name to its runs.
 """
 
 from datetime import datetime, timezone
@@ -27,6 +31,7 @@ from pathlib import Path
 import time
 
 from etude.launch.records import Input, Job
+from etude.run.storage import SAFE_NAME
 from pydantic import Field, model_validator
 
 from manabot.experiment.numerics import check_numerics
@@ -124,6 +129,8 @@ class TrainingJob(Strict):
     """
 
     regime: TrainingRegime
+    # The Etude experiment its runs track under.
+    experiment: str = Field(pattern=SAFE_NAME.pattern)
     milestones: tuple[int, ...] = ()
     finalization_seconds: float = Field(default=30, gt=0)
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
@@ -296,6 +303,7 @@ def run_worker() -> TrainingRun:
             int(environment["ETUDE_SEED"]),
             output / "training",
             store,
+            experiment=spec.experiment,
             checkpoint_updates=spec.milestones,
             stop_path=stop,
         )

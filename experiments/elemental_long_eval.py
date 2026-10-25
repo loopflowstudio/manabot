@@ -11,9 +11,15 @@ Checkpoints come from two places, merged by absolute update:
 - segment w3: the Etude run's tracked checkpoints (`etude.train.read`), and its
   status, whose terminal state settles the seed's endpoint.
 
-Each admitted checkpoint is an Etude checkpoint agent `uNNNNNN` (its artifact
-digest, the inference code, config `{"updates": N, "bytes": B}`); the heuristic is a code
-agent over `heuristic_source_paths()`, so v1 and v2 results never pool.
+Each admitted checkpoint is an Etude checkpoint agent `uNNNNNN`, keyed by its
+window or segment run and update; the heuristic is the code agent `heuristic`,
+whose version is the digest of `heuristic_source_paths()`. Under etude-sdk 0.2,
+which the running follower uses, an agent's identity was its digest instead, so
+v1 and v2 heuristic results never pooled.
+
+`play`, `Conditions` and `game_rows` are also what `experiments/elemental.py`
+plays; the follower below remains only until MTG-183's evaluation ends, then
+that file's `eval(state)` replaces it.
 
 `units` turns the design into Etude matches, one per row of a heuristic grid
 or pair schedule (player 0's deck), ten per unit. Player 0 is the rated (or
@@ -254,19 +260,14 @@ def _inference_version() -> Version:
 def checkpoint_agent(checkpoint: Checkpoint) -> Agent:
     """As `etude.eval.match.agent` makes one, with the code's version computed once.
 
-    The key names the export by its run and update, never by where its bytes
-    live. `bytes` follows from the digest; `play` needs it to fetch the artifact.
+    Keyed by its window or segment run and update (`RUN/checkpoints/uNNNNNN`),
+    so where its bytes lie is not part of what it is.
     """
-    assert checkpoint.artifact.sha256 is not None
     return Agent(
         key=AgentKey(
             checkpoint=CheckpointKey(
-                address=f"mtg183:{checkpoint.run}/updates-{checkpoint.updates}"
-            ),
-            config={
-                "updates": checkpoint.updates,
-                "bytes": checkpoint.artifact.size_bytes,
-            },
+                run=checkpoint.run, name=player(checkpoint.updates)
+            )
         ),
         name=player(checkpoint.updates),
         artifact=checkpoint.artifact,
@@ -307,7 +308,8 @@ class Unit:
     matches: tuple[Match, ...]
 
 
-def _h2h_groups(games: Sequence[H2HGame]) -> list[Group]:
+def h2h_groups(games: Sequence[H2HGame]) -> list[Group]:
+    """The cross-checkpoint schedule as grid groups: the newer checkpoint is `model_*`."""
     found: dict[tuple[str, str, int], list[int]] = {}
     for game in games:
         key = (game.newer_deck, game.older_deck, game.newer_seat)
@@ -318,23 +320,29 @@ def _h2h_groups(games: Sequence[H2HGame]) -> list[Group]:
     ]
 
 
+def rows(kind: Kind, found: Sequence[Group]) -> list[Conditions]:
+    """The groups as grid rows: one per player-0 deck, each one match's conditions."""
+    by_deck: dict[str, list[Group]] = {}
+    for group in found:
+        by_deck.setdefault(group.model_deck, []).append(group)
+    return [
+        Conditions(kind=kind, deck=deck, groups=tuple(row))
+        for deck, row in by_deck.items()
+    ]
+
+
 def _matches(
     kind: Kind,
     agents: tuple[Agent, Agent],
     found: Sequence[Group],
 ) -> tuple[Match, ...]:
-    by_deck: dict[str, list[Group]] = {}
-    for group in found:
-        by_deck.setdefault(group.model_deck, []).append(group)
     return tuple(
         Match(
             agents=agents,
-            conditions=Conditions(kind=kind, deck=deck, groups=tuple(row)).model_dump(
-                mode="json"
-            ),
-            games=sum(len(group.deals) for group in row),
+            conditions=row.model_dump(mode="json"),
+            games=sum(len(group.deals) for group in row.groups),
         )
-        for deck, row in by_deck.items()
+        for row in rows(kind, found)
     )
 
 
@@ -357,7 +365,7 @@ def units(state: EvalState) -> list[Unit]:
                 matches=_matches(grid, (agents[updates], anchor), groups(games)),
             )
         )
-    pairs = _h2h_groups(h2h_schedule())
+    pairs = h2h_groups(h2h_schedule())
     for pair in pair_design(rated, state.endpoint):
         found.append(
             Unit(
@@ -382,7 +390,8 @@ def units(state: EvalState) -> list[Unit]:
 
 class LocalCheckpoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    updates: int
+    # The seated agent's name, such as `u000200` or `learner_transitions-512.pt`.
+    name: str
     path: Path
     sha256: str
 
@@ -400,11 +409,8 @@ class H2HRequest(BaseModel):
 def _local(seated: Agent) -> LocalCheckpoint:
     """A checkpoint agent's verified bytes, downloaded once per digest."""
     reference = seated.artifact
-    assert reference is not None and reference.sha256 is not None
-    updates, size = seated.config["updates"], seated.config["bytes"]
-    assert isinstance(updates, int) and isinstance(size, int)
-    if reference.size_bytes is None:
-        reference = reference.model_copy(update={"size_bytes": size})
+    if reference is None or reference.sha256 is None:
+        raise ValueError(f"{seated.name} is not a checkpoint with a digest")
     # A local file is verified in place; a remote object is cached by digest.
     path = cache_directory() / reference.sha256
     if (
@@ -414,7 +420,17 @@ def _local(seated: Agent) -> LocalCheckpoint:
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path = fetch_etude_checkpoint(reference, path)
-    return LocalCheckpoint(updates=updates, path=path, sha256=reference.sha256)
+    return LocalCheckpoint(name=seated.name, path=path, sha256=reference.sha256)
+
+
+def evidence_directory() -> Path:
+    """Where `play` keeps arena evidence: `$MTG183_EVAL_EVIDENCE`, else the
+    launched attempt's output (`$ETUDE_OUTPUT_DIR/arena`), else `.runs/elemental/arena`."""
+    if os.environ.get(EVIDENCE):
+        return Path(os.environ[EVIDENCE])
+    if os.environ.get("ETUDE_OUTPUT_DIR"):
+        return Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena"
+    return ROOT / ".runs/elemental/arena"
 
 
 def play(match: Match) -> Tables:
@@ -426,7 +442,7 @@ def play(match: Match) -> Tables:
     for group in conditions.groups:
         if group.model_deck != conditions.deck:
             raise ValueError("a group plays another deck than its match")
-        output = Path(os.environ[EVIDENCE]) / match.key / f"attempt-{time.time_ns()}"
+        output = evidence_directory() / match.key / f"attempt-{time.time_ns()}"
         rows += _play_group(group, newer, older, output)
     return {"games": game_rows(rows, conditions.kind)}
 
@@ -573,7 +589,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         return PlayerRegistration(
             **common,
             player_id=name,
-            display_name=f"Update {checkpoint.updates}",
+            display_name=checkpoint.name,
             role=role,
             compute_class_id="policy-cpu-one-thread-one-pass",
             runner_kind="checkpoint",

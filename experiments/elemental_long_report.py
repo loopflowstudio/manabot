@@ -3,8 +3,9 @@
 Reads the Etude eval run's `games` table (`experiments.elemental_long_eval`,
 through `etude.eval.query.statsdb` on the storage it delivered to) and the
 evaluation state (`<directory>/state.json`: checkpoints, endpoint, segment
-outcome), and writes `<out>/summary.json`, `<out>/report.md` and the Etude
-metric runs/pages under `<out>/etude`. The analysis is the frozen protocol's
+outcome), and writes `<out>/summary.json` and `<out>/report.md`. The
+heuristic curve beside training is `etude report experiments/elemental.py`'s.
+The analysis is the frozen protocol's
 (experiments/protocols/elemental-183.md, "Rating and analysis"):
 
 - `fit_rows` turns every valid fit-pair and heuristic game into a
@@ -31,10 +32,11 @@ from dataclasses import dataclass
 import itertools
 import math
 from pathlib import Path
-import shutil
 from typing import Any
 
 from etude.eval.query import statsdb
+from etude.eval.records import AgentKey, digest
+from etude.eval.source import digest_files
 from etude.run.storage import Storage, storage_from_uri
 import numpy as np
 from pydantic import BaseModel
@@ -56,6 +58,7 @@ from manabot.eval.rating import (
     bootstrap_population,
     fit_population,
 )
+from manabot.sim.heuristic import heuristic_source_paths
 
 ANCHOR = HEURISTIC
 REPLICATES = 2000
@@ -74,10 +77,10 @@ class Results:
         return sorted(self.heuristic)
 
 
-# Player 0's row of every game, with both seats' agents.
+# Player 0's row of every game, with both seats' agents and the opponent's version.
 _GAMES = """
-    select g.*, a.name as subject, a."config.updates" as newer,
-        o.name as opponent, o."config.updates" as older, t.source as opponent_source
+    select g.*, a.name as subject, o.name as opponent, o.agent as opponent_agent,
+        t.source as opponent_source
     from games g
     join seats s on s.run = g.run and s.match = g.match and s.player = 0
     join agents a on a.agent = s.agent
@@ -85,6 +88,25 @@ _GAMES = """
     join agents o on o.agent = t.agent
     where g.player = 0 and g.run = ?
 """
+
+
+def _updates(name: str) -> int:
+    """A checkpoint agent's update, from its name (`elemental_long_eval.player`)."""
+    if not name.startswith("u") or not name[1:].isdigit():
+        raise ValueError(f"not a rated checkpoint agent: {name}")
+    return int(name[1:])
+
+
+def _current_heuristic() -> set[tuple[str, str | None]]:
+    """The current heuristic's (agent key, source) pairs, as recorded by either SDK.
+
+    etude-sdk 0.2.5 keys the heuristic by name and records its source digest
+    with each match; 0.2 folded that digest into the agent's identity, which
+    0.2.5 reads back as a recorded key with no source.
+    """
+    source = digest_files(heuristic_source_paths())
+    legacy = AgentKey(recorded=digest(["code", source, {}])).encoded
+    return {(heuristic_agent().key.encoded, source), (legacy, None)}
 
 
 def load(directory: Path, store: Storage | Path) -> Results:
@@ -97,19 +119,17 @@ def load(directory: Path, store: Storage | Path) -> Results:
         found = [dict(zip(names, row)) for row in cursor.fetchall()]
     finally:
         db.close()
-    # The anchor is a code agent: its key is its name, and its source digest
-    # tells heuristic versions apart.
-    anchor = heuristic_agent().version.source
+    anchors = _current_heuristic()
     # (newer, older or None, unit kind) → deal → row
     played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
     for row in found:
         if row["opponent"] == HEURISTIC:
             # Only the current heuristic anchors the curve (protocol amendment).
-            if row["opponent_source"] != anchor:
+            if (row["opponent_agent"], row["opponent_source"]) not in anchors:
                 continue
-            key = (int(row["newer"]), None, row["unit"])
+            key = (_updates(row["subject"]), None, row["unit"])
         else:
-            key = (int(row["newer"]), int(row["older"]), "pair")
+            key = (_updates(row["subject"]), _updates(row["opponent"]), "pair")
         target = played.setdefault(key, {})
         if row["deal"] in target:
             raise ValueError(
@@ -611,60 +631,12 @@ def markdown(summary: Summary) -> str:
     return "\n".join(lines) + "\n"
 
 
-def etude(summary: Summary, out: Path) -> list[str]:
-    """Etude metric runs (clock: updates) and their report pages."""
-    from etude.run.records import Clock
-    from etude.train.report import pages, write
-    from etude.train.run import track
-
-    staging = out / "etude-track.partial"
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
-    run = track(
-        experiment="mtg183-elemental-long",
-        run=f"rating-{summary.seed}",
-        seed=summary.seed,
-        kind="evaluation",
-        clocks=[
-            Clock(name="updates", kind="step", meaning="absolute training updates"),
-            Clock(
-                name="learner_transitions",
-                kind="step",
-                meaning="collected learner decisions",
-            ),
-        ],
-        config={"anchor": ANCHOR, "endpoint": summary.endpoint},
-        directory=staging,
-    )
-    for point in summary.curve:
-        values = {"heuristic/overall": point.heuristic.score or 0.0}
-        if point.rating is not None:
-            values["rating/elo"] = point.rating
-        for deck, view in point.heuristic_by_deck.items():
-            values[f"heuristic/model_deck/{deck}"] = view.score or 0.0
-        run.log(
-            values,
-            updates=point.updates,
-            learner_transitions=point.learner_transitions,
-        )
-    run.finish()
-    track_dir = out / "etude-track"
-    shutil.rmtree(track_dir, ignore_errors=True)
-    staging.replace(track_dir)
-    names = []
-    for name, page in pages(track_dir).items():
-        write(page, out / "etude")
-        names.append(name)
-    return names
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--storage", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replicates", type=int, default=REPLICATES)
-    parser.add_argument("--no-etude", action="store_true")
     args = parser.parse_args()
     summary = summarize(
         load(args.directory.expanduser(), storage_from_uri(args.storage)),
@@ -673,8 +645,6 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(summary.model_dump_json(indent=2))
     (args.out / "report.md").write_text(markdown(summary))
-    if not args.no_etude:
-        etude(summary, args.out)
     print(args.out / "report.md")
 
 
