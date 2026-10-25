@@ -20,7 +20,7 @@ evaluation design:
 - `h2h_schedule` / `pair_design` — the cross-checkpoint games and pairing graph.
 
     uv run python -m experiments.elemental_long stage --parent DIR \
-        --storage s3://BUCKET --prefix mtg183/w2 --out continuation.json
+        --storage r2://BUCKET --prefix mtg183/w2 --out continuation.json
     uv run python -m experiments.elemental_long segment \
         --continuation continuation.json --updates N --hours H --max-usd D \
         --revision COMMIT --out job.json
@@ -165,7 +165,9 @@ def rated_updates(latest: int, endpoint: int | None = None) -> tuple[int, ...]:
     return tuple(found)
 
 
-def heuristic_games(updates: int, endpoint: int | None) -> tuple[str, list[Game]]:
+def heuristic_games(
+    updates: int, endpoint: int | None
+) -> tuple[Literal["full", "subset"], list[Game]]:
     """The grid one rated checkpoint plays: `full` or the paired `subset`."""
     if updates in HEURISTIC_FULL or updates == endpoint:
         return "full", schedule()

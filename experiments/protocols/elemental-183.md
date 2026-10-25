@@ -277,3 +277,43 @@ It admits w3's tracked exports by absolute update, settles when the run is
 done, and stops two days after w3's deadline plus the endpoint's units
 (about 9 hours); anything unevaluated then is reported as missing. The report
 shows Etude's run outcome in place of the retired cohort phase.
+
+## Amendment, 2026-10-25 00:00 UTC, before any evaluation result: heuristic v2, Etude eval, R2
+
+Jack Heart, 2026-10-24: move the remaining work to R2 and the new Etude code,
+and anchor the heuristic curve and the rating on **heuristic v2** (`639ab7770`,
+`manabot/arena/heuristic.py` on main). No evaluation game had been played when
+this was written: the follower's ledger held 46 admitted exports and 51 units,
+all queued behind MTG-181's follower.
+
+**Anchor.** Every heuristic game is played against v2. The heuristic agent's
+identity is the digest of `heuristic_source_paths()`, so a game against another
+heuristic version is never pooled with these; the report reads only the
+current one. Heuristic scores here are not comparable with MTG-181's, the
+ladder's or MTG-165's (v1). The prediction above (0.21 at update 0 rising past
+0.79 by 200) was made against v1; against the stronger v2 the curve is expected
+lower, and that prediction is not scored. The other predictions stand.
+
+**Evaluation.** `experiments.elemental_long_eval` replaces the follower
+(`experiments.elemental_long_follow`, deleted). It plays the same design —
+rated set, frozen grid and cross-checkpoint schedules (digests unchanged),
+full/subset grids, pairing graph, game and group wall bounds, and the rule that
+a failed or timed-out group counts its games as invalid and is never replayed —
+as one Etude eval run (`etude.eval.match.evaluate`, experiment
+`mtg183-elemental-eval`, run `mtg183-eval`) on this Mac's CPU at $0. One Etude
+match is one row of a grid or pair schedule (player 0's deck, 20 groups); its
+`games` table holds one row per game and player. Every match's tables are
+delivered to R2 (`r2://manabot/evaluations/`); the report reads them through
+`etude.eval.query.statsdb`. Order, yielding to MTG-181's follower and the stop
+rule are as before. Checkpoints come from the cohort follower's ledger (w1/w2,
+read-only) and w3's Etude run. The rating fit, uncertainty, saturation rule and
+analysis are unchanged.
+
+**Cutover.** The cohort follower stops once its ledger holds w2's final export,
+and in any case before MTG-181's follower exits; it never plays a game.
+`elemental_long_eval` then starts from a pinned checkout of this change.
+
+**Storage.** w3's tracking and checkpoints go to R2 (Etude SDK 0.2.1). After w2
+ends and w3 has staged w2's learner state, w1/w2's retained objects move from
+S3 to R2; checkpoint agents are identified by digest, not location, so moving
+their bytes does not change any match.

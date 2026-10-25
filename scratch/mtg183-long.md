@@ -14,60 +14,49 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 
 ## Delete — do not maintain
 
-- Cohort windows/CLI in `experiments/elemental_long.py` and the follower's
-  S3/cohort admission: deleted with #362's remote system. Frozen job specs
-  `experiments/protocols/elemental-183-job-*.json` stay as w1/w2 evidence.
-- `experiments/elemental_grid.py` and the `play_cell` leg subset are MTG-181's
-  unmerged bytes, copied unchanged; whichever branch lands second keeps one copy.
+- Cohort windows/CLI and the follower's S3/cohort admission: deleted with #362.
+  Frozen job specs `experiments/protocols/elemental-183-job-*.json` stay as w1/w2 evidence.
+- `experiments/elemental_long_follow.py` and its test: deleted (2026-10-25),
+  replaced by `experiments/elemental_long_eval.py` (Etude eval). The pinned
+  checkout `/Users/jack/.manabot/mtg183-source` still runs the old follower
+  until cutover; its ledger is read-only input for w1/w2 checkpoints.
+- `experiments/elemental_grid.py` is MTG-181's unmerged bytes, copied unchanged;
+  whichever branch lands second keeps one copy.
 
-## Exists
+## Exists (2026-10-25 00:00 UTC)
 
-- Seed 18301 on the old cohort system: w1 ended at update 1,325; w2 running to its
-  pod deadline 2026-10-25 01:47 UTC (≈ update 2,550). Cohort controller
-  `manabot.cohort.mtg183-elemental-long` unloaded (plist `.disabled`); w3–w7 never start.
-- Follower `gg.manabot.mtg183.follower` (pinned checkout
-  `/Users/jack/.manabot/mtg183-source`, detached 8e7df92e4; state
-  `/Users/jack/.manabot/mtg183-follow`). Keep `--extra artifacts` on every `uv run`
-  there. Ledger at 2026-10-24 18:56 UTC: 37 exports admitted (0…1,750), 44 units
-  all `queued`, none played — it still yields to MTG-181's grid follower (pid 23706).
-  Its `error` lists w3–w7 `ValueError` (jobs that will never exist); cohort phase
-  stays `running`.
-- This branch (merges #362's head `e0009ad57`; merge, not rebase, keeps
-  `8e7df92e4` an ancestor): `TrainingJob.continuation` in
-  `manabot/experiment/job.py`; `experiments.elemental_long stage`/`segment`;
-  the protocol amendment; follower admission of Etude segment exports.
-- Report: `experiments/elemental_long_report.py` (synthetic test only).
-
-## Concept review (2026-10-24): one Etude segment — implemented
-
-The accepted contract is one learner lineage with exactly one Etude segment (w3):
-"No retry, extension or further segment." The follower now follows one run:
-`--run <etude run>`, adapter `SegmentSource`, `Ledger.segment_outcome` from Etude's
-typed status (any terminal state settles the segment; the report reads it), endpoint
-= max admitted update, so a w3 that fails before its first export leaves w2's final
-update as the endpoint, as the amendment requires. w1/w2 ledger entries unchanged.
-No other concept changes: `LearnerContinuation` (storage keys, pre-launch) vs
-`LearningStateImport` (bound local paths, regime admission) are distinct stages of
-the same import; window (w1/w2, cohort) vs segment (w3, Etude) matches the
-amendment. No open product choice.
+- Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`; etude-sdk 0.2.1.
+- Seed 18301: w1 ended at update 1,325; w2 running to its pod deadline
+  2026-10-25 01:47 UTC (≈ update 2,550). Old cohort controller unloaded.
+- Old follower `gg.manabot.mtg183.follower` (pid 17331, pinned 8e7df92e4, state
+  `/Users/jack/.manabot/mtg183-follow/follow`): 46 exports admitted (0…2,200),
+  51 units, none played; it yields to MTG-181's follower (pid 23706, `--until`
+  2026-10-25 17:31 UTC). It plays heuristic v1, so it must stop before then.
+- `experiments/elemental_long_eval.py`: one Etude eval run (`mtg183-elemental-eval`
+  / `mtg183-eval`), one match per grid row, tables delivered to
+  `r2://manabot/evaluations/`; checkpoints from the old ledger (w1/w2) and w3's
+  Etude run; `<directory>/state.json`. Report reads `statsdb` + state.
+  R2 delivery and `statsdb` read-back verified with a throwaway prefix (deleted);
+  one real game each of heuristic/subset/pair played through `play`.
+- Protocol amendment "heuristic v2, Etude eval, R2" (2026-10-25 00:00 UTC).
+- `fetch_etude_checkpoint` takes an `ArtifactRef` and reads S3 or R2.
 
 ## Remains, in order
 
-1. After w2 ends: fetch w2's final run.json and `self-play-{raw,ema,optimizer}.pt`
-   (pinned checkout's tooling reads the S3 job folder), `stage` them, compute
-   hours/target/max_usd per the amendment, commit `elemental-183-w3.json`.
-2. When #362 is on main: merge main, land this change so w3's source is on main,
-   launch w3 (`rent="l4"`, one attempt).
-3. Follower cutover per the amendment (restart from the w3 commit with
-   `--etude-source`/`--run`, same ledger). The Etude read path
-   (`etude.train.read.read`, tracking URI argument) is unverified against a live run.
-   The live ledger (37 checkpoints, 44 units) loads into the current `Ledger`;
-   its stale `cohort_phase`/`cohort_settled` fields are dropped on first write.
-4. Local evaluation: the protocol expects ~51 h of grids/pairs, mostly overlapping
-   training, but none has started. If MTG-181's follower keeps running, the
-   follower's stop deadline (w3 deadline + 2 days + ~9 h) may leave units missing;
-   they are reported as missing, not dropped.
-5. Results report, publish evidence with `manabot.data publish`, manifest,
+1. After w2 ends (01:47 UTC): check the old ledger holds w2's final export; stop
+   the old follower (`launchctl bootout` its plist) — before 17:31 UTC at the latest.
+2. Start `elemental_long_eval` from a pinned checkout of this change
+   (`--windows` the old ledger, `--storage r2://manabot/evaluations`, Doppler
+   `manabot/prd` for R2 keys; `--etude-source/--run` added once w3 exists).
+3. Fetch w2's final run.json and raw/EMA/Adam exports, `stage` them to R2 Etude
+   storage, compute hours/target/max_usd per the amendment, commit
+   `elemental-183-w3.json`. `uv run etude storages` refuses: `~/.etude/launcher.db`
+   "was written by another version of etude" — resolve before launch (do not delete it blindly).
+4. Land this change on main; launch w3 (`rent="l4"`, one attempt, R2 storage);
+   restart the evaluator with `--etude-source/--run`.
+5. S3 cleanup below (after w2 staged), then point w1/w2 checkpoints at R2 URIs
+   (identity unchanged).
+6. Results report, publish evidence with `manabot.data publish`, manifest,
    protocol Results pointer.
 
 ## Proposed Wave memory (not written; standalone realign leaves `.lf/wave/` read-only)
@@ -82,7 +71,7 @@ amendment. No open product choice.
 - Local evaluation that yields to another Task's follower can stall entirely;
   declare its expected wall time against the real queue, not idle capacity.
 
-Check (2026-10-24): `uv run --extra dev pytest tests/training/test_etude_job.py tests/training/test_learning_state.py tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/sim/test_tracking.py -q` → 39 passed (2026-10-24 realign, at 626360b32).
+Check (2026-10-25): see the end of this file.
 
 ### S3 cleanup (Jack Heart via the Etude storage-cost session, 2026-10-24)
 
@@ -96,34 +85,12 @@ deleted. w3 must stage w2's learner state first. Never start old-system runs.
 
 ### Direction (Jack Heart, 2026-10-24 ~22:30 UTC): R2 and new Etude code wherever possible
 
-"Let's move over to R2 and the new Etude code as much as possible." Applied to
-the remaining MTG-183 work:
-- **w3 on Etude, storing to R2.** Etude v0.2.1 (#33, #36) has R2 launcher and
-  tracking storage plus live checkpoint publishing; Manabot main still pins
-  `etude-sdk==0.2.0`. Bump the pin to 0.2.1 (lock, extras) in this change and
-  point w3's launcher/tracking storage at R2 `manabot`.
-- **Evaluation on Etude eval, not the bespoke follower.** No follower game has
-  been played yet (all units queued), so switching costs no evidence. Express
-  the heuristic grids and the cross-checkpoint pairing graph as Etude
-  `Benchmark`/`Matchup`s (or `etude.eval.match.evaluate` with explicit
-  `Match`es), `play` wrapping the replay-checked arena `play_cell`, run on this
-  Mac (local workers, $0), tables in R2, read back with `statsdb`/`compare`
-  and drawn by `etude report` at each checkpoint's coordinates. Keep the
-  frozen schedules (deal/seat seeds, digests) and the rating fit
-  (`manabot/arena/rating.py`) unchanged; record the change in a protocol
-  amendment before the first result. Retire `experiments/elemental_long_follow.py`
-  once nothing reads it (delete dead code).
-- **w1/w2 artifacts to R2.** After w2 ends: stage w2's learner state for w3,
-  then the S3 cleanup above (copy keepers to R2, verify, delete all versions).
-  Followers then read w1/w2 checkpoints from R2.
-- **Report data** via `manabot.data publish` (now R2).
-- Open question for Jack: which heuristic anchors the curve (v1 frozen in the
-  protocol vs v2 from 639ab7770). Quick 10/cell grid of u2200 vs v2 is running.
-- **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`)
-  anchors MTG-183's heuristic curve and the rating. Record in the protocol
-  amendment before any result; v1 scores (MTG-181, ladder) are not comparable.
-- Side check, outside the protocol (2026-10-24 23:40 UTC): u2200 (w2, sha
-  2c48116f…) vs heuristic v2, first 10 games/cell of the frozen grid schedule,
-  1,000/1,000 valid: model 0.742 [0.714, 0.768]; seat 0 0.733, seat 1 0.751.
-  Hardest heuristic decks GR .54, WR .58, UR .59. Rows in the session scratchpad
-  (quick-grid-u2200-hv2); not results for the report.
+"Let's move over to R2 and the new Etude code as much as possible": w3 on Etude
+storing to R2 (SDK 0.2.1), evaluation as Etude eval with tables in R2 (done:
+`elemental_long_eval`, explicit `Match`es; the frozen schedules and the rating
+fit unchanged), retire the bespoke follower (deleted), w1/w2 artifacts to R2
+after w2 ends, report data via `manabot.data publish`.
+**Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`); recorded
+in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
+
+Check (2026-10-25): `uv run --extra dev --extra evaluation --extra artifacts --extra reports pytest tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/training/test_etude_job.py tests/training/test_learning_state.py tests/sim/test_tracking.py tests/test_package_boundaries.py -q` → 49 passed. Gate owns the wider suites.

@@ -1,9 +1,11 @@
 """MTG-183 report: the heuristic curve, the checkpoint rating and saturation.
 
-Reads the follower's durable results (`<directory>/ledger.json` and each done
-unit's `rows.json`) and writes `<out>/summary.json`, `<out>/report.md` and the
-Etude metric runs/pages under `<out>/etude`. The analysis is the frozen
-protocol's (experiments/protocols/elemental-183.md, "Rating and analysis"):
+Reads the Etude eval run's `games` table (`experiments.elemental_long_eval`,
+through `etude.eval.query.statsdb` on the storage it delivered to) and the
+evaluation state (`<directory>/state.json`: checkpoints, endpoint, segment
+outcome), and writes `<out>/summary.json`, `<out>/report.md` and the Etude
+metric runs/pages under `<out>/etude`. The analysis is the frozen protocol's
+(experiments/protocols/elemental-183.md, "Rating and analysis"):
 
 - `fit_rows` turns every valid fit-pair and heuristic game into a
   `manabot/arena/rating.py` row (player A = newer checkpoint or the rated
@@ -16,8 +18,9 @@ protocol's (experiments/protocols/elemental-183.md, "Rating and analysis"):
 - `triangles` lists significant intransitive cycles; `prefix_stability` refits
   on each prefix of rated checkpoints; `saturation` applies the declared rule.
 
-    uv run --extra artifacts --extra reports python -m experiments.elemental_long_report \
-        --directory /Users/jack/.manabot/mtg183-follow/follow --out experiments/data/mtg183
+    uv run --extra artifacts --extra evaluation --extra reports \
+        python -m experiments.elemental_long_report --directory ~/.manabot/mtg183-eval \
+        --storage r2://manabot/evaluations --out experiments/data/mtg183
 """
 
 from __future__ import annotations
@@ -26,18 +29,27 @@ import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
 import itertools
-import json
 import math
 from pathlib import Path
 import shutil
 from typing import Any
 
+from etude.eval.query import statsdb
+from etude.run.storage import Storage, storage_from_uri
 import numpy as np
 from pydantic import BaseModel
 
 from experiments.elemental_grid import DECKS, GameRow, wilson
-from experiments.elemental_long import SEED
-from experiments.elemental_long_follow import H2HRow, Ledger, Unit
+from experiments.elemental_long import SEED, Role, pair_design
+from experiments.elemental_long_eval import (
+    EXPERIMENT,
+    HEURISTIC,
+    RUN,
+    EvalState,
+    heuristic_agent,
+    player,
+    units,
+)
 from manabot.arena.rating import (
     ELO_FACTOR,
     PopulationFit,
@@ -45,46 +57,103 @@ from manabot.arena.rating import (
     fit_population,
 )
 
-ANCHOR = "heuristic"
+ANCHOR = HEURISTIC
 REPLICATES = 2000
-
-
-def player(updates: int) -> str:
-    return f"u{updates:06d}"
 
 
 @dataclass(frozen=True)
 class Results:
-    ledger: Ledger
+    state: EvalState
     heuristic: dict[int, list[GameRow]]
-    pairs: dict[tuple[int, int], tuple[Unit, list[H2HRow]]]
+    # Newer, older → role and rows; `model_*` is the newer checkpoint.
+    pairs: dict[tuple[int, int], tuple[Role, list[GameRow]]]
+    missing: list[str]
 
     @property
     def rated(self) -> list[int]:
         return sorted(self.heuristic)
 
 
-def load(directory: Path) -> Results:
-    ledger = Ledger.model_validate_json((directory / "ledger.json").read_bytes())
-    heuristic: dict[int, list[GameRow]] = {}
-    pairs: dict[tuple[int, int], tuple[Unit, list[H2HRow]]] = {}
-    for unit in ledger.units.values():
-        path = directory / "units" / unit.key / "rows.json"
-        if unit.phase != "done" or not path.exists():
-            continue
-        raw = json.loads(path.read_text())
-        if unit.kind == "heuristic":
-            rows = [GameRow.model_validate(r) for r in raw]
-            # An endpoint on a cadence update may hold both grids; keep the full one.
-            if len(rows) >= len(heuristic.get(unit.newer, [])):
-                heuristic[unit.newer] = rows
+# Player 0's row of every game, with both seats' agents.
+_GAMES = """
+    select g.*, a.name as subject, a."config.updates" as newer,
+        o.name as opponent, o."config.updates" as older, o.agent as opponent_agent
+    from games g
+    join seats s on s.run = g.run and s.match = g.match and s.player = 0
+    join agents a on a.agent = s.agent
+    join seats t on t.run = g.run and t.match = g.match and t.player = 1
+    join agents o on o.agent = t.agent
+    where g.player = 0 and g.run = ?
+"""
+
+
+def load(directory: Path, store: Storage | Path) -> Results:
+    """The state and every stored game; a design unit short of its games is missing."""
+    state = EvalState.model_validate_json((directory / "state.json").read_bytes())
+    db = statsdb(EXPERIMENT, store)
+    try:
+        cursor = db.execute(_GAMES, [RUN])
+        names = [column[0] for column in cursor.description]
+        found = [dict(zip(names, row)) for row in cursor.fetchall()]
+    finally:
+        db.close()
+    anchor = heuristic_agent().identity
+    # (newer, older or None, unit kind) → deal → row
+    played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
+    for row in found:
+        if row["opponent"] == HEURISTIC:
+            # Only the current heuristic anchors the curve (protocol amendment).
+            if row["opponent_agent"] != anchor:
+                continue
+            key = (int(row["newer"]), None, row["unit"])
         else:
-            assert unit.older is not None
-            pairs[(unit.newer, unit.older)] = (
-                unit,
-                [H2HRow.model_validate(r) for r in raw],
+            key = (int(row["newer"]), int(row["older"]), "pair")
+        target = played.setdefault(key, {})
+        if row["deal"] in target:
+            raise ValueError(
+                f"{row['subject']} v {row['opponent']}: deal {row['deal']} twice"
             )
-    return Results(ledger, heuristic, pairs)
+        target[row["deal"]] = GameRow(
+            model_deck=row["deck"],
+            heuristic_deck=row["opponent_deck"],
+            model_seat=row["seat"],
+            deal=row["deal"],
+            score=row["score"],
+            valid=row["valid"],
+            terminated=row["terminated"],
+            truncated=row["truncated"],
+            failure=row.get("failure"),
+            decisions=row["decisions"],
+            model_decisions=0,
+            seconds=row["seconds"],
+        )
+    rows = {key: sorted(g.values(), key=lambda r: r.deal) for key, g in played.items()}
+    heuristic: dict[int, list[GameRow]] = {}
+    for (newer, _, kind), games in sorted(
+        rows.items(), key=lambda i: i[0][2] == "full"
+    ):
+        if kind != "pair":
+            # An endpoint on a subset cadence update holds both grids; keep the full one.
+            heuristic[newer] = games
+    roles = {
+        (p.newer, p.older): p.role
+        for p in pair_design(tuple(sorted(heuristic)), state.endpoint)
+    }
+    pairs = {
+        (newer, older): (roles.get((newer, older), "consecutive"), games)
+        for (newer, older, kind), games in rows.items()
+        if kind == "pair" and older is not None
+    }
+    have = {
+        f"pair-{n:06d}-v-{o:06d}" if k == "pair" else f"heuristic-{n:06d}-{k}": len(g)
+        for (n, o, k), g in rows.items()
+    }
+    missing = sorted(
+        u.key
+        for u in units(state)
+        if have.get(u.key, 0) < sum(m.games for m in u.matches)
+    )
+    return Results(state, heuristic, pairs, missing)
 
 
 # ---------------------------------------------------------------------------
@@ -108,17 +177,17 @@ def heuristic_rows(updates: int, rows: Sequence[GameRow]) -> list[dict[str, Any]
     ]
 
 
-def h2h_rows(newer: int, older: int, rows: Sequence[H2HRow]) -> list[dict[str, Any]]:
+def h2h_rows(newer: int, older: int, rows: Sequence[GameRow]) -> list[dict[str, Any]]:
     return [
         {
             "player_a": player(newer),
             "player_b": player(older),
-            "player_a_seat": r.newer_seat,
+            "player_a_seat": r.model_seat,
             "score_a": r.score,
             "truncated": False,
             "deal_block": r.deal,
-            "deck_a": r.newer_deck,
-            "deck_b": r.older_deck,
+            "deck_a": r.model_deck,
+            "deck_b": r.heuristic_deck,
         }
         for r in rows
         if r.valid and r.score is not None
@@ -134,8 +203,8 @@ def fit_rows(results: Results, *, through: int | None = None) -> list[dict[str, 
         if keep(updates)
         for row in heuristic_rows(updates, games)
     ]
-    for (newer, older), (unit, games) in results.pairs.items():
-        if unit.role != "held-out" and keep(newer):
+    for (newer, older), (role, games) in results.pairs.items():
+        if role != "held-out" and keep(newer):
             rows.extend(h2h_rows(newer, older, games))
     return rows
 
@@ -154,7 +223,7 @@ class ScoreView(BaseModel):
     invalid: int
 
 
-def _score(rows: Sequence[GameRow] | Sequence[H2HRow]) -> ScoreView:
+def _score(rows: Sequence[GameRow]) -> ScoreView:
     # Wilson intervals over valid rows; `wilson` reads only valid/score.
     return ScoreView.model_validate(wilson(rows).model_dump())  # type: ignore[arg-type]
 
@@ -172,12 +241,12 @@ class PairView(BaseModel):
 
 def pair_table(results: Results, fit: PopulationFit | None) -> list[PairView]:
     views = []
-    for (newer, older), (unit, games) in sorted(results.pairs.items()):
+    for (newer, older), (role, games) in sorted(results.pairs.items()):
         valid = [r for r in games if r.valid and r.score is not None]
         predicted = z = None
         if fit is not None and {player(newer), player(older)} <= set(fit.ratings):
             probabilities = [
-                predict(fit, player(newer), player(older), r.newer_seat) for r in valid
+                predict(fit, player(newer), player(older), r.model_seat) for r in valid
             ]
             if valid:
                 predicted = float(np.mean(probabilities))
@@ -188,16 +257,16 @@ def pair_table(results: Results, fit: PopulationFit | None) -> list[PairView]:
             PairView(
                 newer=newer,
                 older=older,
-                role=unit.role or "",
+                role=role,
                 score=_score(games),
                 predicted=predicted,
                 pearson_z=z,
                 by_newer_deck={
-                    d: _score([r for r in games if r.newer_deck == d]) for d in DECKS
+                    d: _score([r for r in games if r.model_deck == d]) for d in DECKS
                 },
                 by_newer_seat={
-                    "play": _score([r for r in games if r.newer_seat == 0]),
-                    "draw": _score([r for r in games if r.newer_seat == 1]),
+                    "play": _score([r for r in games if r.model_seat == 0]),
+                    "draw": _score([r for r in games if r.model_seat == 1]),
                 },
             )
         )
@@ -233,13 +302,13 @@ class HeldOut(BaseModel):
 
 def held_out(results: Results, fit: PopulationFit) -> HeldOut:
     predictions, scores = [], []
-    for (newer, older), (unit, games) in results.pairs.items():
-        if unit.role != "held-out":
+    for (newer, older), (role, games) in results.pairs.items():
+        if role != "held-out":
             continue
         for r in games:
             if r.valid and r.score is not None:
                 predictions.append(
-                    predict(fit, player(newer), player(older), r.newer_seat)
+                    predict(fit, player(newer), player(older), r.model_seat)
                 )
                 scores.append(r.score)
     p = np.clip(np.asarray(predictions), 1e-9, 1 - 1e-9)
@@ -374,7 +443,7 @@ def saturation(
         if played is not None:
             games = played[1]
             pair = _score(
-                games if deck is None else [r for r in games if r.newer_deck == deck]
+                games if deck is None else [r for r in games if r.model_deck == deck]
             )
     exists = (
         u_h is not None
@@ -435,11 +504,11 @@ def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
             boot = bootstrap_population(
                 rows, replicates=replicates, seed=SEED, anchor=ANCHOR
             )
-    endpoint = results.ledger.endpoint
+    endpoint = results.state.endpoint
     curve = []
     for updates in results.rated:
         games = results.heuristic[updates]
-        checkpoint = results.ledger.checkpoints.get(updates)
+        checkpoint = results.state.checkpoints.get(updates)
         name = player(updates)
         curve.append(
             CurvePoint(
@@ -467,7 +536,7 @@ def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
     return Summary(
         seed=SEED,
         endpoint=endpoint,
-        segment_outcome=results.ledger.segment_outcome,
+        segment_outcome=results.state.segment_outcome,
         rated=results.rated,
         curve=curve,
         seat0_elo=fit.seat0_elo if fit else None,
@@ -493,9 +562,7 @@ def summarize(results: Results, *, replicates: int = REPLICATES) -> Summary:
         ]
         if endpoint is not None and endpoint in results.heuristic
         else [],
-        missing_units=sorted(
-            u.key for u in results.ledger.units.values() if u.phase != "done"
-        ),
+        missing_units=results.missing,
     )
 
 
@@ -607,11 +674,15 @@ def etude(summary: Summary, out: Path) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--storage", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replicates", type=int, default=REPLICATES)
     parser.add_argument("--no-etude", action="store_true")
     args = parser.parse_args()
-    summary = summarize(load(args.directory), replicates=args.replicates)
+    summary = summarize(
+        load(args.directory.expanduser(), storage_from_uri(args.storage)),
+        replicates=args.replicates,
+    )
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(summary.model_dump_json(indent=2))
     (args.out / "report.md").write_text(markdown(summary))

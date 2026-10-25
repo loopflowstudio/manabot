@@ -32,10 +32,19 @@ They do not select current work or authorize paid execution.
   storage URI is an explicit CLI argument; not verified against a live run.
 - Staged-object reuse compares digests by downloading the object (simple, small files).
 
-# MTG-183 publication held (2026-10-24 19:25 UTC)
+# MTG-183 Etude eval and R2 (2026-10-25)
 
-- Not published: the branch carries #362's whole unmerged diff (#362 still open,
-  head 38ddc7153, merged here at 05ac39fa4), and `elemental-183-w3.json` cannot be
-  committed until w2 ends (2026-10-25 01:47 UTC). A ready PR against main now
-  would be a dependent PR that could land #362 ahead of its own review. Publish
-  after #362 is on main and w3's spec is committed (plan steps 1–2).
+- #362 and heuristic v2 are on main and merged here (merge, so `8e7df92e4`
+  stays an ancestor). Publication still waits for `elemental-183-w3.json`
+  (after w2 ends 01:47 UTC).
+- Explicit `evaluate` matches, not a `Benchmark`: the design is non-uniform
+  (full vs subset grids, a pairing graph over w1/w2 checkpoints Etude never
+  tracked), and `curves` cannot place non-Etude checkpoints on training axes.
+- One Etude match per grid row (20 groups, ~500 or ~100 games): 10 R2 match
+  deliveries per unit instead of 200; a restart loses at most the in-flight rows.
+- Eval tables at `r2://manabot/evaluations/` (run folder `mtg183-eval/`): my
+  choice of prefix. `state.json` (checkpoints, endpoint) stays local beside the
+  run and is published with the report.
+- Checkpoint agent code identity = `manabot/model`, `manabot/env`,
+  `manabot/arena/match.py`, `experiments/elemental_grid.py`; editing those in
+  the evaluator's pinned checkout would start new agents, so pin it.

@@ -11,6 +11,7 @@ import tempfile
 from typing import Any, Literal, overload
 from urllib.parse import unquote, urlsplit
 
+from etude.run.records import ArtifactRef
 from etude.run.storage import storage_from_uri
 from etude.train.records import CheckpointRecord
 import torch
@@ -39,24 +40,23 @@ import managym
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
     """Admit the exact policy named by an Etude checkpoint record.
 
-    Require digest and size before loading weights. Local SDK snapshots and S3
+    Require digest and size before loading weights. Local SDK snapshots and S3/R2
     destinations share the same admission; neither names nor tags select a model.
     """
     record = CheckpointRecord.model_validate_json(record_path.read_bytes())
     with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
         return load_checkpoint(
-            str(fetch_etude_checkpoint(record, Path(directory) / "policy.pt"))
+            str(fetch_etude_checkpoint(record.artifact, Path(directory) / "policy.pt"))
         )
 
 
-def fetch_etude_checkpoint(record: CheckpointRecord, target: Path) -> Path:
-    """The verified local bytes of a recorded checkpoint; loads no weights.
+def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
+    """The verified local bytes of an Etude checkpoint artifact; loads no weights.
 
-    A local file is verified in place and returned. An S3 object is downloaded to
-    `target` through the SDK's storage adapter and verified before it is renamed
-    there, so a partial download never becomes a cached policy.
+    A local file is verified in place and returned. An S3 or R2 object is
+    downloaded to `target` through the SDK's storage adapter and verified before
+    it is renamed there, so a partial download never becomes a cached policy.
     """
-    reference = record.artifact
     if reference.sha256 is None or reference.size_bytes is None:
         raise ValueError("Etude checkpoint requires a digest and byte count")
     uri = urlsplit(reference.uri)
@@ -64,9 +64,9 @@ def fetch_etude_checkpoint(record: CheckpointRecord, target: Path) -> Path:
         path = Path(unquote(uri.path))
         verify_file(path, reference.sha256, reference.size_bytes)
         return path
-    if uri.scheme != "s3" or uri.query or uri.fragment or not uri.netloc:
-        raise ValueError("Etude checkpoint must name a local file or S3 object")
-    storage = storage_from_uri(f"s3://{uri.netloc}")
+    if uri.scheme not in {"s3", "r2"} or uri.query or uri.fragment or not uri.netloc:
+        raise ValueError("Etude checkpoint must name a local file or S3/R2 object")
+    storage = storage_from_uri(f"{uri.scheme}://{uri.netloc}")
     key = uri.path.lstrip("/")
     partial = target.with_name(target.name + ".partial")
     with partial.open("wb") as file:
