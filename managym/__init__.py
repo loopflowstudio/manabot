@@ -8,6 +8,7 @@ sys.modules[__name__] = _engine
 for _name in (
     "_managym",
     "decision",
+    "decision_capture",
     "enums",
     "experience",
     "experience_projection",

@@ -1,54 +1,36 @@
-# Card evaluation design — 2026-10-23
+# MTG-184 unresolved choices — 2026-10-24
 
-- Interactive correction from Jack Heart: MTG-179 already accepted retiring the
-  mixed `arena/` name because it conflicts with MTG Arena. Its detailed split was
-  deferred, not rejected. Reusable play/replay/policies belong in `sim/`, evaluation
-  and card statistics in `eval/`, checkpoint followers in `experiment/`. This
-  change missed that direction; the working design now records the required
-  consumer cutover and removal. The review itself moved no code; the subsequent explicit migration request
-  authorized and completed the direct cutover. `manabot/arena/` is removed,
-  simulation imports no higher layers, and frozen serialized identities survive.
+Current design and accepted direction: `scratch/llm-finetune.md`. This checkout
+owns representation; MTG-185 owns the harness. Jack Heart requested both Task
+sessions in cmux, then “launch pursue” after concept review on 2026-10-24.
+No model, Wave or paid allocation is selected.
 
-- Jack Heart selected card ranking by GIH as the first result, with future
-  17Lands-style API expansion and fidelity in the data-processing path.
-- Implementation design: `scratch/17lands-for-bots.md`; investigation:
-  `scratch/17lands-for-bots-evidence.md`. Jack Heart subsequently requested the
-  pursuit after review; the dated implementation defaults below settle engineering choices.
-- Engineering defaults: CLI/SQL first, one subject model
-  and explicit evaluation scope, existing authored deck layouts, true draws
-  excluded and reported separately, no implicit minimum-sample filter.
-- Arena compatibility initially means a versioned, offline-tested log subset
-  parsed by the pinned public 17Lands client. Full downstream metric parity
-  remains unproved without reference fixtures; copying parser hand sightings
-  directly into GIH would be incorrect.
-- Native cards need a verified mapping to Arena printing IDs for export.
-  Missing mappings cannot be invented. Rankings use content-bound native IDs.
-- No Wave or Task was named; standalone design needs no placement lookup.
+- **Shared input contract:** after Jack Heart requested getting this ready to
+  demo, the implementation selects a separately versioned native capture of
+  observation, continuation, definitions and optional public history, taken
+  atomically and hashed with world/content identity. Preserve schema-6 evidence;
+  reuse existing fact owners. This resolves the engineering choice exposed by
+  `scratch/observation_collision.py`; the counterexample now passes with distinct capture digests and text. The demo uses declared public history v1 up to 32 records and no writable
+  model memory. Renderer and local demo are implemented; broader verification belongs to parent gate.
+- **Comparison configuration:** select the trained comparator and history
+  treatment. Jack Heart directed matching non-LLM input and excluded writable
+  memory for the untrained model. The proposed bounded public-history treatment
+  and previous-state alternative remain unselected; neither implies full parity.
+- **Model and measurements:** model/tokenizer, prompt budget, corpus/world,
+  comparator artifact, hardware, sample sizes, performance targets and allocation
+  remain open. Qwen3-4B-Instruct-2507 is a candidate, not measured single-L4 fit.
+  Jack Heart requested performance and size comparisons; no benchmark ran.
+- **Interface fitting:** measure the untouched model first. The fitting objective
+  is open: random choices teach randomness and expert choices teach strategy.
+  The accepted exact-reference, single-repair, seeded-uniform fallback protocol
+  is specified once in the design, including its reporting and failure limits.
 
-Prior MTG-176 recovery assumptions, sync provenance and remote-proof limits
-remain at `003644bda6d3ed2e1e6754186960b135ff815e76:scratch/questions.md`.
-They do not select current work or authorize paid execution.
+Historical notes and uncommitted-input preservation paths are recorded once in
+the design's **Delete — do not maintain** section. Resolving the sync conflict
+preserved these MTG-184 questions; the shared-input engineering choice is resolved.
 
-## GIH implementation defaults — 2026-10-23
-
-- Jack Heart's launch request supersedes the earlier design-only note. The
-  keystone keeps CLI/SQL, copy-weighted draws, and the existing eight-leg authored
-  matrices; no later metrics, API, UI, paid execution or external submissions.
-- Installed `etude-sdk[eval]==0.2.0` supports the inspected evaluation APIs.
-  Its delivery only includes metrics/checkpoints/tables/matches, not arbitrary
-  artifacts. Evidence therefore lives under the evaluation's `evidence/`;
-  explicit evaluation publication copies and verifies these immutable bytes via
-  Etude Storage before delivering Etude's indexes. Plain `etude sync` alone is
-  not a card-evidence publication command. This fills a concrete SDK gap without
-  another match scheduler, database, or evidence store.
-- Use the existing `evaluation` extra in commands. Confidence intervals resample
-  whole deal seeds across all selected pairings. Native capture is private,
-  setup-enabled and absent from clones. No rule/world version change is intended.
-- The pinned public client reports mulligan counts of -1 when no mulligan prompt
-  exists. Preserve that unavailable value; do not invent a mulligan decision.
-  Exported logs document this bounded subset and cannot certify server metrics.
-- Scheduled-admission default (2026-10-23): freeze the native content digest
-  alongside world, engine source and content-manifest identities in the existing
-  unreleased Etude environment. Missing identity fails admission; never infer it
-  from the reader's runtime or rewrite historical evidence. Deck/seat validation
-  uses the existing authored matrix, including complete deck and sideboard setup.
+- **Reversible implementation bounds:** capture v1 defaults to history off;
+  demo explicitly uses public history v1 with 32 rows. The renderer has a 262,144
+  byte admission ceiling and a complete-prompt tokenizer callback; this byte
+  ceiling is an engineering guard, not a selected model context budget. Prompt
+  token counting must include the harness chat template before inference.
