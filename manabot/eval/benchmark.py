@@ -15,7 +15,15 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from etude.eval.match import Row, Tables, agent
-from etude.eval.records import Benchmark, Environment, Match, Matchup, Model
+from etude.eval.records import (
+    Benchmark,
+    CheckpointKey,
+    CheckpointRef,
+    Environment,
+    Match,
+    Matchup,
+    Model,
+)
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import BaseModel
@@ -113,19 +121,20 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     if len(match.agents) != 2 or match.games != 8:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
     checkpoint, anchor = match.agents
-    uri = urlsplit(checkpoint.uri or "")
-    if checkpoint.kind != "checkpoint" or uri.scheme != "file" or uri.netloc:
+    seated = checkpoint.artifact
+    uri = urlsplit(seated.uri if seated else "")
+    if seated is None or seated.sha256 is None or uri.scheme != "file" or uri.netloc:
         raise ValueError("checkpoint must be a verified local file")
     path = Path(unquote(uri.path))
     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
     candidate = candidate.model_copy(
         update={
-            "checkpoint_sha256": checkpoint.artifact,
+            "checkpoint_sha256": seated.sha256,
             "checkpoint_bytes": path.stat().st_size,
-            "artifact_id": f"monitor/{checkpoint.artifact}",
+            "artifact_id": f"monitor/{seated.sha256}",
         }
     )
-    verify_file(path, checkpoint.artifact, path.stat().st_size)
+    verify_file(path, seated.sha256, path.stat().st_size)
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
@@ -219,10 +228,14 @@ def evaluate(
             benchmark(manifest),
             experiment=BENCHMARK,
             play=partial(play, inference=inference) if inference else play,
-            checkpoint=ArtifactRef(
-                uri=path.as_uri(),
-                sha256=manifest.artifact["sha256"],
-                size_bytes=manifest.artifact["bytes"],
+            # The training run's export, wherever its bytes are read from.
+            checkpoint=CheckpointRef(
+                key=CheckpointKey(run=manifest.run_id, name=path.name),
+                artifact=ArtifactRef(
+                    uri=path.as_uri(),
+                    sha256=manifest.artifact["sha256"],
+                    size_bytes=manifest.artifact["bytes"],
+                ),
             ),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,

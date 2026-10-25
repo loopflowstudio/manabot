@@ -10,8 +10,15 @@ import os
 from pathlib import Path
 
 from etude.eval.match import EvalRun, Tables, agent
-from etude.eval.records import Benchmark, Environment, Match, Matchup, Model
-from etude.eval.source import digest_files
+from etude.eval.records import (
+    Benchmark,
+    CheckpointKey,
+    CheckpointRef,
+    Environment,
+    Match,
+    Matchup,
+    Model,
+)
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 import numpy as np
@@ -107,7 +114,8 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
 def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
-    if match.agents[0].artifact != candidate.checkpoint_sha256:
+    seated = match.agents[0].artifact
+    if seated is None or seated.sha256 != candidate.checkpoint_sha256:
         raise ValueError("Etude candidate differs from admitted checkpoint")
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
@@ -182,6 +190,19 @@ def summarize(directory: Path) -> dict[str, ScoreGroup]:
     return groups
 
 
+def _checkpoint(result: MonitorResult) -> CheckpointRef:
+    """A training run's export, keyed by its run and file, read from where it lies."""
+    path = Path(result.artifact["path"]).resolve()
+    return CheckpointRef(
+        key=CheckpointKey(run=result.run_id, name=path.name),
+        artifact=ArtifactRef(
+            uri=path.as_uri(),
+            sha256=result.artifact["sha256"],
+            size_bytes=result.artifact["bytes"],
+        ),
+    )
+
+
 def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
     duel = Duel.model_validate_json(path.read_bytes())
     duel.validate_inputs()
@@ -228,16 +249,12 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
                 name="two-seat vs one-seat",
                 players=(
                     Model(
-                        code=digest_files(code),
+                        code=code,
                         config={"registration": candidate.model_dump(mode="json")},
                     ),
                     agent(
                         "one-seat",
-                        checkpoint=ArtifactRef(
-                            uri=Path(duel.one_seat.artifact["path"]).resolve().as_uri(),
-                            sha256=duel.one_seat.artifact["sha256"],
-                            size_bytes=duel.one_seat.artifact["bytes"],
-                        ),
+                        checkpoint=_checkpoint(duel.one_seat),
                         code=code,
                         config={"registration": opponent.model_dump(mode="json")},
                     ),
@@ -260,11 +277,7 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
             benchmark,
             experiment=EXPERIMENT,
             play=partial(play, inference=inference) if inference else play,
-            checkpoint=ArtifactRef(
-                uri=Path(duel.two_seat.artifact["path"]).resolve().as_uri(),
-                sha256=duel.two_seat.artifact["sha256"],
-                size_bytes=duel.two_seat.artifact["bytes"],
-            ),
+            checkpoint=_checkpoint(duel.two_seat),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,
         )

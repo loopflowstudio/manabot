@@ -46,8 +46,7 @@ constants; gradients flow through current policy and value outputs only.
 configurable discount and separate policy/value lambdas. It normalizes advantages
 over selected actor rows, shuffles minibatches over multiple epochs and uses
 half squared scalar value error with a configurable coefficient. Reverse KL to
-the reference and collection behavior are explicit regularizers. This control
-is used by the full reward-driven learnability proof.
+the reference and collection behavior are explicit regularizers.
 
 `DampedPolicyLearning(gradient="damped_policy")` uses undiscounted same-player
 returns, separate policy/value lambdas, absolute-advantage selection, one ordered

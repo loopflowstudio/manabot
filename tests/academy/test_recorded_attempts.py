@@ -104,35 +104,6 @@ def test_explicit_deal_reproduces_and_recording_failure_is_visible(
         game.current_recovery("explicit_resync")
 
 
-def test_changed_candidate_cannot_replace_playable_match(tmp_path, monkeypatch):
-    import hashlib
-
-    from academy.opponent import Opponent
-
-    checkpoint = tmp_path / "policy.pt"
-    checkpoint.write_bytes(b"pinned bytes")
-    opponent = Opponent(
-        "Pinned opponent",
-        "producer",
-        hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
-        checkpoint,
-        False,
-        {},
-        {},
-    )
-    monkeypatch.setattr(server, "configured_opponent", lambda: opponent)
-    game = server.GameSession(trace_dir=tmp_path)
-    game.new_game({"villain_type": "passive", "seed": 79})
-    before = game.current_recovery("explicit_resync")["frame"]
-    checkpoint.write_bytes(b"different bytes")
-    with pytest.raises(ValueError, match="changed"):
-        game.new_game(
-            {"villain_type": "checkpoint", "opponent_sha256": opponent.sha256}
-        )
-    assert game.current_recovery("explicit_resync")["frame"] == before
-    assert rows(tmp_path)[0]["status"] == "active"
-
-
 def test_generated_deal_seed_reproduces_control_opponent_decisions(
     tmp_path, monkeypatch
 ):

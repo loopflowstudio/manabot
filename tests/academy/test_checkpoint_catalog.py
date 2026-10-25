@@ -17,7 +17,6 @@ from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoi
 @pytest.fixture()
 def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path / "traces")
-    monkeypatch.delenv("ACADEMY_PLAY_CANDIDATE", raising=False)
     monkeypatch.delenv("ACADEMY_PLAY_CHECKPOINTS", raising=False)
     monkeypatch.setenv("MANABOT_RUNS_DIR", str(tmp_path / ".runs"))
     server.SESSION_REGISTRY.clear()
@@ -135,3 +134,15 @@ def test_chosen_checkpoint_plays_either_deck_and_is_recorded(
         "checkpoint": str((runs / "self-play" / "step_0.pt").resolve()),
         "deterministic": False,
     }
+
+
+def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
+    checkpoint = runs / "self-play" / "step_0.pt"
+    sha256 = _sha(checkpoint)
+    game = server.GameSession(trace_dir=trace_store.TRACES_DIR)
+    game.new_game({"villain_type": "passive", "seed": 79})
+    before = game.current_recovery("explicit_resync")["frame"]
+    checkpoint.write_bytes(b"different bytes")
+    with pytest.raises(ValueError, match="no longer available"):
+        game.new_game({"villain_type": "checkpoint", "opponent_sha256": sha256})
+    assert game.current_recovery("explicit_resync")["frame"] == before
