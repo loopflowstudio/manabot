@@ -1,8 +1,9 @@
 """MTG-186 report: the UR-vs-GW specialist against MTG-181's ten-deck seeds.
 
-Reads the follower's grid results (`experiments/data/mtg186/grids/`), MTG-181's
-endpoint grids against the same heuristic (`experiments/data/mtg181/new-heuristic/`)
-and the training run's TrainingRun receipt, and writes `tables.md` and
+Reads the remote evaluation's results (`experiments/data/mtg186/grids/`) and
+game rows (`games/`, see `experiments.mtg186_eval`), MTG-181's endpoint grids
+against the same heuristic (`experiments/data/mtg181/new-heuristic/`, where the
+remote evaluation did not play them) and the training run's TrainingRun receipt, and writes `tables.md` and
 `summary.json` beside the grids. Every number comes from those files; nothing
 is selected.
 
@@ -28,7 +29,7 @@ from experiments.elemental_grid import (
     grid_table,
     wilson,
 )
-from experiments.mtg186 import RESULTS, ROOT, Result
+from experiments.mtg186_eval import RESULTS, Result, group_rows
 from manabot.training.records import TrainingRun
 
 OUT = RESULTS.parent
@@ -84,11 +85,14 @@ class Report(BaseModel):
     rows: list[Row]
 
 
-def _seat_score(groups: Path | None, x: str, y: str, seat: int) -> Score:
+def _seat_score(groups: Path | str | None, x: str, y: str, seat: int) -> Score:
     """Per-cell play/draw from retained group rows; summaries keep only grid totals.
 
-    Missing rows (no retained groups) read as an empty score.
+    `groups` is a collected point's name (its games archive) or MTG-181's
+    retained group directory. Missing rows read as an empty score.
     """
+    if isinstance(groups, str):
+        return wilson(group_rows(groups, x, y, seat))
     if (
         groups is None
         or not (path := groups / f"{x}--{y}--seat{seat}" / "games.json").exists()
@@ -103,7 +107,7 @@ def _row(
     updates: int,
     scope: str,
     summary: Summary,
-    groups: Path | None,
+    groups: Path | str | None,
 ) -> Row:
     scores: dict[str, Score] = {}
     for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True):
@@ -185,7 +189,6 @@ def build(
     run_json: Path | None, usd: float | None, mtg181: Path, mtg181_groups: Path | None
 ) -> tuple[Report, dict[str, Summary]]:
     """Rows for every evaluated checkpoint, and the full grids by label."""
-    follow_groups = ROOT / ".runs/mtg186/follow/groups"
     rows: list[Row] = []
     grids: dict[str, Summary] = {}
     for path in sorted(RESULTS.glob("*.json")):
@@ -199,14 +202,17 @@ def build(
                 point.updates,
                 scope,
                 result.summary,
-                follow_groups / path.stem,
+                path.stem,
             )
         )
-        if point.trial == "mtg186" and scope == "grid":
-            grids[f"MTG-186 u{point.updates}"] = result.summary
+        if scope == "grid":
+            label = "MTG-186" if point.trial == "mtg186" else f"MTG-181 {point.seed}"
+            grids[f"{label} u{point.updates}"] = result.summary
     for path in sorted(mtg181.glob("*.json")):
         other = MTG181Result.model_validate_json(path.read_text())
         end = other.endpoint
+        if f"MTG-181 {end.seed} u{end.updates}" in grids:
+            continue
         groups = None if mtg181_groups is None else mtg181_groups / path.stem / "groups"
         rows.append(
             _row("mtg181", end.seed, end.updates, "grid", other.summary, groups)
