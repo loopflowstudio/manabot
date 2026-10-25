@@ -23,9 +23,10 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 - `experiments/elemental_grid.py` is MTG-181's unmerged bytes, copied unchanged;
   whichever branch lands second keeps one copy.
 
-## Exists (2026-10-25 00:52 UTC)
+## Exists (2026-10-25 01:30 UTC)
 
-- Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`; etude-sdk 0.2.1.
+- Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`, then #360
+  (`arena/` split into `sim/` + `eval/`, etude-sdk 0.2.2) at `9871e3545` (pushed).
 - Seed 18301: w1 ended at update 1,325; w2 running to its pod deadline
   2026-10-25 01:47 UTC (≈ update 2,550). Old cohort controller unloaded.
 - Old follower `gg.manabot.mtg183.follower` stopped (`launchctl bootout`,
@@ -52,13 +53,15 @@ Registered: storage `r2` = `r2://manabot/jobs`; provider `runpod` (storage r2);
 on-demand `l4` (NVIDIA L4, 6 vCPU, 48 GB, 50 GB disk, max 1, ≤ $0.60/h, w1/w2's
 image digest `cb154fcc…`, startup 900 s, delivery 300 s). Keys: `RUNPOD_API_KEY`
 from Doppler `etude/prd`, R2 (incl. `R2_API_TOKEN`) from `manabot/prd`.
-`etude availability --rent l4`: $0.59/h, rentable (00:17 UTC).
+`etude availability --rent l4`: $0.59/h, rentable (00:17 UTC; again under 0.2.2
+at 01:26 UTC, run as `doppler run -p etude -c prd -- doppler run -p manabot -c prd
+--preserve-env=RUNPOD_API_KEY -- uv run etude …`).
 
-## Evaluator (running since 2026-10-25 00:22 UTC)
+## Evaluator (running since 2026-10-25 00:22 UTC; re-pinned ~01:25 UTC)
 
 launchd `gg.manabot.mtg183.eval` (plist in `~/Library/LaunchAgents`) runs
 `elemental_long_eval` under `doppler run -p manabot -c prd` from the pinned
-checkout `/Users/jack/.manabot/mtg183-eval-source` (`d9fc58df2`), directory
+checkout `/Users/jack/.manabot/mtg183-eval-source`, directory
 `/Users/jack/.manabot/mtg183-eval`, `--windows` the old ledger (re-read every
 poll), `--storage r2://manabot/evaluations`, `--until 1793584946`. It yields
 while any experiment from MTG-181's checkout runs (MTG-181 switched to
@@ -67,6 +70,14 @@ admitted 48 checkpoints (0…2,300). At 00:52 UTC MTG-181's
 `elemental_181_new_heuristic` was still running, so the evaluator had played
 no rows (it logs nothing while yielding; `state.json` refreshes each poll).
 Evaluation wall time depends on when MTG-181 finishes, not on idle capacity.
+#360 changed the agent code identity (`INFERENCE_CODE` names `sim/match.py` and
+`eval/match.py`), so with 0 rows played the pin moved from `d9fc58df2` to
+`9871e3545` (etude-sdk 0.2.2, `_managym` copied from this worktree's build with
+#360's card-capture bindings); `state.json` holds only checkpoint artifacts and
+survived. First poll after restart: 48 checkpoints, no error. Later restarts
+(adding `--etude-source/--run`) keep identities only if the pin's
+`INFERENCE_CODE` files are unchanged; a row played under one pin is not
+comparable to one played under another.
 
 ## Remains, in order
 
@@ -78,7 +89,9 @@ Evaluation wall time depends on when MTG-181 finishes, not on idle capacity.
    `elemental-183-w3.json`; its revision is a pushed commit kept reachable by tag
    (main squash-merges).
 3. Land on main; launch w3 (`launch(job, rent="l4")`, one attempt) with a standing
-   `etude controller run`; restart the evaluator with `--etude-source/--run`.
+   `etude controller run`; restart the evaluator with `--etude-source/--run`,
+   keeping a pin whose `INFERENCE_CODE` files match `9871e3545` (else re-pin
+   only while no rows exist).
 4. S3 cleanup below (after w2 staged), then point w1/w2 checkpoints at R2 URIs
    (identity unchanged).
 5. Results report, publish evidence with `manabot.data publish`, manifest,
@@ -119,11 +132,8 @@ after w2 ends, report data via `manabot.data publish`.
 **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`); recorded
 in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
 
-Check (2026-10-25 00:50 UTC): focused suite (`test_elemental_long*`, `test_elemental_grid`,
-`test_etude_job`) → 31 passed, `tests/sim/test_tracking.py` → 4 passed, after
-`fetch_etude_checkpoint` took per-call partial files (so `_local` caches by digest
-without its own pid rename). The live evaluator runs the pinned `d9fc58df2`, not this.
-Gate owns the wider suites.
-
-Check (2026-10-25 01:05 UTC): report's rating rows and deck/seat breakdowns
-share one helper each; `test_elemental_long_report.py` + `test_elemental_long_eval.py` → 8 passed.
+Check (2026-10-25 01:25 UTC, at `9871e3545`, load average ≈ 200 from MTG-181):
+`tests/eval/test_elemental_long{,_report,_eval}.py`, `test_elemental_grid.py`,
+`tests/training/test_etude_job.py` → 30 passed, 1 failed
+(`test_worker_runs_real_learner_and_reports_admitted_policy`: its 30 s subprocess
+timeout expired under that load; rerun when the machine is idle, gate owns it).
