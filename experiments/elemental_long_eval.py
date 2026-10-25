@@ -59,8 +59,15 @@ import time
 from typing import Literal
 
 from etude.eval.match import Row, Tables, agent, environment, evaluate
-from etude.eval.records import Agent, Environment, Match
-from etude.eval.source import digest_files
+from etude.eval.records import (
+    Agent,
+    AgentKey,
+    CheckpointKey,
+    Environment,
+    Match,
+    Version,
+    version_of,
+)
 from etude.run.records import ArtifactRef
 from etude.run.storage import Storage, run_directory, storage_from_uri
 from etude.train.read import read
@@ -258,26 +265,30 @@ def eval_environment() -> Environment:
 
 
 @cache
-def _inference_code() -> str:
-    return digest_files(INFERENCE_CODE)
+def _inference_version() -> Version:
+    return version_of(INFERENCE_CODE)
 
 
 def checkpoint_agent(checkpoint: Checkpoint) -> Agent:
-    """As `etude.eval.match.agent` makes one, with the code digest computed once.
+    """As `etude.eval.match.agent` makes one, with the code's version computed once.
 
-    `bytes` follows from the digest; `play` needs it to fetch the artifact.
+    The key names the export by its run and update, never by where its bytes
+    live. `bytes` follows from the digest; `play` needs it to fetch the artifact.
     """
     assert checkpoint.artifact.sha256 is not None
     return Agent(
+        key=AgentKey(
+            checkpoint=CheckpointKey(
+                address=f"mtg183:{checkpoint.run}/updates-{checkpoint.updates}"
+            ),
+            config={
+                "updates": checkpoint.updates,
+                "bytes": checkpoint.artifact.size_bytes,
+            },
+        ),
         name=player(checkpoint.updates),
-        kind="checkpoint",
-        artifact=checkpoint.artifact.sha256,
-        uri=checkpoint.artifact.uri,
-        code=_inference_code(),
-        config={
-            "updates": checkpoint.updates,
-            "bytes": checkpoint.artifact.size_bytes,
-        },
+        artifact=checkpoint.artifact,
+        version=_inference_version(),
     )
 
 
@@ -406,20 +417,22 @@ class H2HRequest(BaseModel):
 
 def _local(seated: Agent) -> LocalCheckpoint:
     """A checkpoint agent's verified bytes, downloaded once per digest."""
-    assert seated.kind == "checkpoint" and seated.uri is not None
+    reference = seated.artifact
+    assert reference is not None and reference.sha256 is not None
     updates, size = seated.config["updates"], seated.config["bytes"]
     assert isinstance(updates, int) and isinstance(size, int)
-    reference = ArtifactRef(uri=seated.uri, sha256=seated.artifact, size_bytes=size)
+    if reference.size_bytes is None:
+        reference = reference.model_copy(update={"size_bytes": size})
     # A local file is verified in place; a remote object is cached by digest.
-    path = cache_directory() / seated.artifact
+    path = cache_directory() / reference.sha256
     if (
-        seated.uri.startswith("file:")
+        reference.uri.startswith("file:")
         or not path.exists()
-        or file_sha256(path) != seated.artifact
+        or file_sha256(path) != reference.sha256
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path = fetch_etude_checkpoint(reference, path)
-    return LocalCheckpoint(updates=updates, path=path, sha256=seated.artifact)
+    return LocalCheckpoint(updates=updates, path=path, sha256=reference.sha256)
 
 
 def play(match: Match) -> Tables:

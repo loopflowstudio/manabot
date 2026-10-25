@@ -1,27 +1,41 @@
-"""Explicit-cohort card queries over Etude tables, with shared-deal uncertainty.
+"""Card statistics over an experiment's kept database, with shared-deal uncertainty.
 
-Each query selects one run and subject agent. A deal is the bootstrap unit across
-all opponents and seat/deck legs, including deals with zero card opportunities."""
+`card_data` selects games from every eval run of one experiment (Etude
+`statsdb`) and reports 17Lands-style columns per card. Players come from
+Etude's `seats` and `agents` tables, so subjects and opponents are joins, never
+fields copied into card rows. Queries trust the rows admitted when each match
+was played; `audit` re-reads and re-verifies the retained evidence on request.
+
+Counts are copies: a game with two copies of a card in hand counts twice. `GP`
+and `GNS` count games. Only eligible games (a winner, a passed replay) carry a
+win; the rest are reported by outcome. A deal is the bootstrap unit across every
+run, opponent and seat/deck leg, including deals with zero card opportunities.
+"""
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
-import json
-from operator import attrgetter
+from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 
-from etude.eval.query import estimate, statsdb
+import duckdb
+from etude.eval.query import estimate
 from etude.eval.records import Match, TournamentRun, assemble
 from etude.run.listing import as_storage, places
 from etude.run.storage import Storage
 
 from manabot.eval.card_metrics import (
+    COUNT_FIELDS,
     METRIC_VERSION,
-    CardGame,
-    MatchExclusions,
+    PLAY_FIELDS,
+    normalize,
     reduce_cards,
 )
-from manabot.eval.card_schedule import admit_card_match
+from manabot.eval.card_schedule import (
+    CardConditions,
+    admit_card_game,
+    admit_card_runtime,
+)
 from manabot.infra.identity import StrictModel
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
@@ -29,286 +43,361 @@ from manabot.sim.card_evidence import (
     GameEvidence,
     read_evidence,
 )
+from manabot.sim.replay import replay_games
 
 
-class CardQuery(StrictModel):
-    run: str
-    player: str
+class CardSelection(StrictModel):
+    """Which games to pool. Empty tuples select everything in the experiment.
+
+    A subject or opponent is an agent's key, its name, its checkpoint's key
+    (such as `RUN/checkpoints/NAME`), or a prefix (at least eight characters)
+    of its checkpoint digest.
+    """
+
+    experiment: str
+    subjects: tuple[str, ...] = ()
     opponents: tuple[str, ...] = ()
+    runs: tuple[str, ...] = ()
+    commits: tuple[str, ...] = ()
+    on_play: bool | None = None
     deck: str | None = None
     opponent_deck: str | None = None
-    on_play: bool | None = None
-    partial: bool = False
 
 
-class Completeness(StrictModel):
-    scheduled: int
-    completed: int
-    failed: int
-    pending: int
-    scheduled_games: int
-    failed_games: int
-
-    @property
-    def complete(self) -> bool:
-        return self.scheduled == self.completed
+class Rate(StrictModel):
+    count: int
+    rate: float | None
 
 
-class CardRank(StrictModel):
+class CardStats(StrictModel):
     card: str
     name: str
-    rate: float | None
-    interval: tuple[float, float] | None
-    qualifying_copies: int
-    winning_copies: int
-    games: int
-    excluded_games: int
-    # Stable game IDs join card_evidence, never ephemeral local paths.
-    evidence_games: tuple[str, ...]
+    gp: Rate
+    oh: Rate
+    gd: Rate
+    gih: Rate
+    gih_interval: tuple[float, float] | None
+    gns: Rate
+    # Copy-weighted GIH WR minus GNS WR, in percentage points.
+    iwd: float | None
 
 
-class CardRanking(StrictModel):
-    selection: CardQuery
-    subject: str
-    environment: str
+class CardData(StrictModel):
+    """`games` counts player-games: without a subject, each game counts once per side."""
+
+    selection: CardSelection
     metric_version: str = METRIC_VERSION
     capture_version: int = CAPTURE_VERSION
-    completeness: Completeness
-    complete: bool
-    opponent_mix: dict[str, int]
-    excluded_outcomes: dict[str, int]
-    cards: tuple[CardRank, ...]
+    subjects: dict[str, str]
+    opponents: dict[str, int]
+    runs: tuple[str, ...]
+    games: int
+    deals: int
+    win_rate: float | None
+    excluded: dict[str, int]
+    failed_matches: int
+    cards: tuple[CardStats, ...]
 
 
-def evidence_prefix(source: Storage, run: str) -> str:
-    """Locate a run's evidence, rejecting replicas with conflicting schedules."""
-    folders = places(source).get(run, [])
-    if not folders:
-        raise ValueError(f"evaluation run unavailable: {run}")
-    # Etude allows replicated runs. Equal content-addressed evidence can be
-    # read from any replica; conflicting manifests are never silently merged.
-    manifests = {
-        folder: source.get(folder + "tournament.json")
-        for folder in folders
-        if folder + "tournament.json" in source.keys(folder)
-    }
-    if len(set(manifests.values())) != 1:
-        raise ValueError("card evidence unavailable or conflicting evaluation schedule")
-    return next(iter(manifests))
+def _agents(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
+    known = db.execute(
+        "select agent, name, checkpoint, artifact from agents"
+    ).fetchall()
+    found: list[str] = []
+    for value in values:
+        matches = [
+            agent
+            for agent, name, checkpoint, artifact in known
+            if value in (agent, name, checkpoint)
+            or (len(value) >= 8 and (artifact or "").startswith(value))
+        ]
+        if not matches:
+            raise ValueError(f"no agent in this experiment matches {value!r}")
+        found.extend(matches)
+    return found
 
 
-def run_experiment(source: Storage, prefix: str) -> str:
-    """The experiment an evaluation run declared, which names its database."""
-    return json.loads(source.get(prefix + "run.json"))["experiment"]
+def selected_games(
+    db: duckdb.DuckDBPyConnection, selection: CardSelection
+) -> tuple[str, list[object]]:
+    """The selected (run, match, player) games as SQL, with its parameters."""
+    where = ["true"]
+    parameters: list[object] = []
+
+    def among(column: str, values: Sequence[object]) -> None:
+        where.append(f"{column} in ({', '.join('?' for _ in values)})")
+        parameters.extend(values)
+
+    if selection.subjects:
+        among("s.agent", _agents(db, selection.subjects))
+    if selection.opponents:
+        among("o.agent", _agents(db, selection.opponents))
+    if selection.runs:
+        among("p.run", selection.runs)
+    if selection.commits:
+        where.append(
+            "(" + " or ".join("p.source_commit like ?" for _ in selection.commits) + ")"
+        )
+        parameters.extend(f"{commit}%" for commit in selection.commits)
+    for column, value in (
+        ("p.on_play", selection.on_play),
+        ("p.deck", selection.deck),
+        ("p.opponent_deck", selection.opponent_deck),
+    ):
+        if value is not None:
+            where.append(f"{column} = ?")
+            parameters.append(value)
+    return (
+        "select p.*, s.agent as subject, o.agent as opponent from card_plays p"
+        " join seats s on s.run = p.run and s.match = p.match and s.player = p.player"
+        " join seats o on o.run = p.run and o.match = p.match"
+        " and o.player = 1 - p.player"
+        f" where {' and '.join(where)}"
+    ), parameters
 
 
-def evidence_refs(source: Storage | Path | str, run: str) -> list[EvidenceRef]:
-    store = as_storage(source)
-    experiment = run_experiment(store, evidence_prefix(store, run))
-    with statsdb(experiment, store) as db:
-        if "card_evidence" not in {r[0] for r in db.execute("show tables").fetchall()}:
-            raise ValueError("card evidence unavailable (outcome-only evaluation)")
-        rows = db.execute(
-            "select distinct path, sha256, bytes, game from card_evidence where run = ?",
-            [run],
+def _has_cards(db: duckdb.DuckDBPyConnection) -> bool:
+    tables = {row[0] for row in db.execute("show tables").fetchall()}
+    return {"card_plays", "card_counts", "cards"} <= tables
+
+
+def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardData:
+    """17Lands-style card columns for the selected games of one experiment."""
+    if not _has_cards(db):
+        raise ValueError("this experiment has no card evaluations")
+    sql, parameters = selected_games(db, selection)
+    db.execute(f"create or replace temp table selected as {sql}", parameters)
+    names = dict(
+        db.execute(
+            "select agent, name from agents where agent in"
+            " (select distinct subject from selected)"
         ).fetchall()
-        return [EvidenceRef(path=p, sha256=h, bytes=b, game=g) for p, h, b, g in rows]
+    )
+    opponents = dict(
+        db.execute(
+            "select a.name, count(*) from selected s"
+            " join agents a on a.agent = s.opponent group by a.name"
+        ).fetchall()
+    )
+    runs = tuple(
+        r
+        for (r,) in db.execute(
+            "select distinct run from selected order by run"
+        ).fetchall()
+    )
+    excluded = dict(
+        db.execute(
+            "select outcome, count(distinct run || '/' || game) from selected"
+            " where not eligible group by outcome"
+        ).fetchall()
+    )
+    games, wins = db.execute(
+        "select count(*), sum(win) from selected where eligible"
+    ).fetchone() or (0, None)
+    deals = [
+        d
+        for (d,) in db.execute(
+            "select distinct deal from selected where eligible"
+        ).fetchall()
+    ]
+    failed = db.execute(
+        "select count(*) from matches m where state = 'failed'"
+        + (f" and run in ({', '.join('?' for _ in runs)})" if runs else " and false"),
+        list(runs),
+    ).fetchone()
+    # Per card and deal: copies and winning copies, so whole deals resample.
+    blocks = db.execute(
+        "select c.card, s.deal,"
+        " count(*) filter (where c.deck_copies > 0),"
+        " coalesce(sum(s.win) filter (where c.deck_copies > 0), 0),"
+        " sum(c.opening_copies), sum(c.opening_copies * s.win),"
+        " sum(c.drawn_copies), sum(c.drawn_copies * s.win),"
+        " sum(c.gih_copies), sum(c.gih_copies * s.win),"
+        " count(*) filter (where c.deck_copies > 0 and c.gih_copies = 0),"
+        " coalesce(sum(s.win) filter (where c.deck_copies > 0 and c.gih_copies = 0), 0)"
+        " from card_counts c join selected s"
+        " on c.run = s.run and c.match = s.match and c.player = s.player"
+        " and c.game = s.game"
+        " where s.eligible group by c.card, s.deal"
+    ).fetchall()
+    by_card: dict[str, dict[int, tuple[float, ...]]] = defaultdict(dict)
+    for card, deal, *sums in blocks:
+        by_card[card][deal] = tuple(float(v or 0) for v in sums)
+    labels = dict(db.execute("select distinct card, name from cards").fetchall())
+    stats = []
+    for card, per_deal in by_card.items():
+        totals = [sum(values[i] for values in per_deal.values()) for i in range(10)]
+
+        def rate(count: float, won: float) -> Rate:
+            return Rate(count=int(count), rate=won / count if count else None)
+
+        gih = estimate(
+            [
+                (per_deal.get(d, (0.0,) * 10)[7], per_deal.get(d, (0.0,) * 10)[6])
+                for d in deals
+            ]
+        )
+        gns = rate(totals[8], totals[9])
+        gih_rate = gih[0] if gih else None
+        stats.append(
+            CardStats(
+                card=card,
+                name=labels.get(card, card),
+                gp=rate(totals[0], totals[1]),
+                oh=rate(totals[2], totals[3]),
+                gd=rate(totals[4], totals[5]),
+                gih=Rate(count=int(totals[6]), rate=gih_rate),
+                gih_interval=gih[1] if gih else None,
+                gns=gns,
+                iwd=None
+                if gih_rate is None or gns.rate is None
+                else 100 * (gih_rate - gns.rate),
+            )
+        )
+    stats.sort(key=lambda s: (s.gih.rate is None, -(s.gih.rate or 0), s.name))
+    return CardData(
+        selection=selection,
+        subjects=names,
+        opponents=opponents,
+        runs=runs,
+        games=int(games or 0),
+        deals=len(deals),
+        win_rate=float(wins) / games if games else None,
+        excluded=excluded,
+        failed_matches=int(failed[0]) if failed else 0,
+        cards=tuple(stats),
+    )
+
+
+# ---- Evidence: export and audit ----------------------------------------------
+
+
+def _folder(store: Storage, run: str, key: str) -> str:
+    """The folder of `run` that holds `key`; replicas hold the same bytes."""
+    for folder in places(store).get(run, []):
+        if folder + key in store.keys(folder):
+            return folder
+    raise ValueError(f"evidence unavailable for run {run}: {key}")
 
 
 def load_game(
-    source: Storage | Path | str, run: str, reference: EvidenceRef
+    db: duckdb.DuckDBPyConnection, source: Storage | Path | str, run: str, game: str
 ) -> GameEvidence:
+    """One game's retained evidence, verified against its admitted digest."""
     store = as_storage(source)
-    prefix = evidence_prefix(store, run)
-    return read_evidence(store.get(prefix + reference.path), reference)
+    found = db.execute(
+        "select distinct evidence, evidence_sha256, evidence_bytes from card_plays"
+        " where run = ? and game = ?",
+        [run, game],
+    ).fetchall()
+    if len(found) != 1:
+        raise ValueError("run and game must identify exactly one retained game")
+    path, digest, size = found[0]
+    ref = EvidenceRef(path=path, sha256=digest, bytes=size, game=game)
+    return read_evidence(store.get(_folder(store, run, path) + path), ref)
 
 
-def _selected_schedule(
-    held: TournamentRun, query: CardQuery
-) -> tuple[str, list[Match]]:
-    all_matches = [scheduled.match for scheduled in assemble([held]).schedule()]
-    agents = {a.identity: a for match in all_matches for a in match.agents}
-
-    def resolve(value: str) -> str:
-        found = [
-            identity
-            for identity, agent in agents.items()
-            if value in (identity, agent.name)
-        ]
-        if len(found) != 1:
-            raise ValueError(f"agent must identify exactly one entrant: {value}")
-        return found[0]
-
-    subject = resolve(query.player)
-    opponents = {resolve(opponent) for opponent in query.opponents}
-    if subject in opponents:
-        raise ValueError("subject cannot be its own opponent")
-    matches = [
-        match
-        for match in all_matches
-        if subject in {a.identity for a in match.agents}
-        and (not opponents or any(a.identity in opponents for a in match.agents))
-    ]
-    if not matches:
-        raise ValueError("empty selected schedule")
-    return subject, matches
+class AuditResult(StrictModel):
+    games: int
+    replayed: int
+    problems: tuple[str, ...]
 
 
-def rank_cards(source: Storage | Path | str, query: CardQuery) -> CardRanking:
+def audit(
+    db: duckdb.DuckDBPyConnection, source: Storage | Path | str, *, replay: bool = False
+) -> AuditResult:
+    """Re-read every admitted game's evidence and rebuild its card rows.
+
+    Checks bytes and that the stored rows equal the reducer's. A card
+    evaluation's game is also bound to its scheduled match and to the runtime
+    its eval run declared; another evaluation's game is rebuilt with the
+    participants its rows name. `replay` also re-runs each trace.
+    """
     store = as_storage(source)
-    prefix = evidence_prefix(store, query.run)
-    held = TournamentRun.model_validate_json(store.get(prefix + "tournament.json"))
-    if held.tournament.environment.config.get("metric_version") != METRIC_VERSION:
-        raise ValueError("card evidence unavailable or incompatible metric version")
-    subject, schedule = _selected_schedule(held, query)
-    with statsdb(run_experiment(store, prefix), store) as db:
-        records = db.execute(
-            "select match, state, error from matches where run = ?", [query.run]
-        ).fetchall()
-        states = {key: state for key, state, _ in records}
-        errors = {key: error for key, state, error in records if state == "failed"}
-        failed_outcomes: Counter[str] = Counter()
-        for match in schedule:
-            if states.get(match.key) == "failed":
-                error = errors.get(match.key) or ""
-                if error.startswith("CardMatchError: "):
-                    failed_outcomes.update(
-                        MatchExclusions.model_validate_json(
-                            error.removeprefix("CardMatchError: ")
-                        ).model_dump(exclude_defaults=True)
-                    )
-                else:
-                    failed_outcomes["unobserved"] += match.games
-        completeness = Completeness(
-            scheduled=len(schedule),
-            completed=sum(states.get(m.key) == "done" for m in schedule),
-            failed=sum(states.get(m.key) == "failed" for m in schedule),
-            pending=sum(m.key not in states for m in schedule),
-            scheduled_games=sum(m.games for m in schedule),
-            failed_games=sum(
-                m.games for m in schedule if states.get(m.key) == "failed"
-            ),
-        )
-        if not completeness.complete and not query.partial:
-            raise ValueError(
-                f"selected schedule incomplete: {completeness.model_dump()}; use partial explicitly"
+    columns = {r[0] for r in db.execute("describe card_plays").fetchall()}
+    participant = "participant" if "participant" in columns else "null"
+    plays = db.execute(
+        "select run, match, game, evidence, evidence_sha256, evidence_bytes,"
+        f" list({participant} order by player)"
+        " from card_plays group by all order by run, match, game"
+    ).fetchall()
+    held: dict[str, tuple[dict[str, Match], TournamentRun] | None] = {}
+    problems: list[str] = []
+    replayed = 0
+    for run, match_key, game_id, path, digest, size, named in plays:
+        try:
+            if run not in held:
+                held[run] = _card_schedule(store, run)
+            ref = EvidenceRef(path=path, sha256=digest, bytes=size, game=game_id)
+            game = read_evidence(store.get(_folder(store, run, path) + path), ref)
+            schedule = held[run]
+            if schedule is not None and match_key in schedule[0]:
+                participants = admit_card_game(game, schedule[0][match_key])
+                admit_card_runtime(game, schedule[1].tournament.environment)
+            elif len(named) == 2 and all(named):
+                participants = (named[0], named[1])
+            else:
+                raise ValueError("no schedule or participants to rebuild this game")
+            if any(named) and tuple(named) != participants:
+                raise ValueError("stored participants differ from the schedule")
+            expected = normalize(reduce_cards(game, participants))
+            stored_plays = _rows(db, "card_plays", PLAY_FIELDS, run, match_key, game_id)
+            stored_counts = _rows(
+                db, "card_counts", COUNT_FIELDS, run, match_key, game_id
             )
-        tables = {r[0] for r in db.execute("show tables").fetchall()}
-        if completeness.completed and not {"card_games", "card_evidence"} <= tables:
-            raise ValueError("card evidence unavailable (outcome-only evaluation)")
-        rows: list[CardGame] = []
-        opponents_by_game: dict[str, str] = {}
-        for match in schedule:
-            if states.get(match.key) != "done":
-                continue
-            player = next(
-                i for i, a in enumerate(match.agents) if a.identity == subject
-            )
-            raw_refs = db.execute(
-                "select path, sha256, bytes, game from card_evidence where run = ? and match = ? and player = ?",
-                [query.run, match.key, player],
-            ).fetchall()
-            games: list[GameEvidence] = []
-            for path, digest, size, game_id in raw_refs:
-                ref = EvidenceRef(path=path, sha256=digest, bytes=size, game=game_id)
-                games.append(read_evidence(store.get(prefix + path), ref))
-            names = admit_card_match(games, match, held.tournament.environment)
-            expected = [
-                row
-                for game in games
-                for row in reduce_cards(game, names)
-                if row.player == player
-            ]
-            for game in games:
-                opponents_by_game[game.game] = match.agents[1 - player].identity
-            columns = list(CardGame.model_fields)
-            raw = db.execute(
-                "select "
-                + ", ".join(f'"{c}"' for c in columns)
-                + " from card_games where run = ? and match = ? and player = ?",
-                [query.run, match.key, player],
-            ).fetchall()
-            actual = [
-                CardGame.model_validate(dict(zip(columns, row, strict=True)))
-                for row in raw
-            ]
+            if stored_plays != _sorted(expected.plays) or stored_counts != _sorted(
+                expected.counts
+            ):
+                raise ValueError("stored card rows differ from retained evidence")
+            if replay:
+                if not replay_games([game.trace.data]).passed:
+                    raise ValueError("retained trace no longer replays")
+                replayed += 1
+        except (ValueError, KeyError) as problem:
+            problems.append(f"{run}/{game_id}: {problem}")
+    return AuditResult(games=len(plays), replayed=replayed, problems=tuple(problems))
 
-            key = attrgetter("game", "card")
-            if sorted(actual, key=key) != sorted(expected, key=key):
-                raise ValueError("card tables differ from retained evidence")
-            rows.extend(actual)
-    selected = [
-        r
-        for r in rows
-        if (query.deck is None or r.deck == query.deck)
-        and (query.opponent_deck is None or r.opponent_deck == query.opponent_deck)
-        and (query.on_play is None or r.on_play == query.on_play)
-    ]
-    if rows and not selected:
-        raise ValueError("filters select no games")
-    return summarize_cards(
-        selected,
-        query,
-        subject,
-        held.tournament.environment.identity,
-        completeness,
-        opponents_by_game,
-        dict(failed_outcomes),
+
+def _card_schedule(
+    store: Storage, run: str
+) -> tuple[dict[str, Match], TournamentRun] | None:
+    """A card evaluation's scheduled matches by key; None for any other eval run."""
+    try:
+        folder = _folder(store, run, "tournament.json")
+    except ValueError:
+        return None
+    tournament = TournamentRun.model_validate_json(
+        store.get(folder + "tournament.json")
     )
+    matches = {s.match.key: s.match for s in assemble([tournament]).schedule()}
+    if not all(_is_card_match(m) for m in matches.values()):
+        return None
+    return matches, tournament
 
 
-def summarize_cards(
-    rows: list[CardGame],
-    query: CardQuery,
-    subject: str,
-    environment: str,
-    completeness: Completeness,
-    opponents: dict[str, str],
-    failed_outcomes: dict[str, int] | None = None,
-) -> CardRanking:
-    by_card: dict[str, list[CardGame]] = defaultdict(list)
-    games: dict[str, CardGame] = {}
-    for row in rows:
-        if row.metric_version != METRIC_VERSION:
-            raise ValueError("incompatible metric version")
-        by_card[row.card].append(row)
-        games[row.game] = row
-    # Zeros are real blocks: dropping games where a card was not seen would
-    # condition the uncertainty estimate on the observed denominator.
-    deals = sorted({r.deal for r in rows})
-    rankings = []
-    for card, values in by_card.items():
-        eligible = [r for r in values if r.eligible]
-        copies: Counter[int] = Counter()
-        wins: Counter[int] = Counter()
-        for row in eligible:
-            copies[row.deal] += row.gih_copies
-            wins[row.deal] += (row.win or 0) * row.gih_copies
-        result = estimate([(wins[deal], copies[deal]) for deal in deals])
-        rankings.append(
-            CardRank(
-                card=card,
-                name=values[0].name,
-                rate=result[0] if result else None,
-                interval=result[1] if result else None,
-                qualifying_copies=copies.total(),
-                winning_copies=wins.total(),
-                games=sum(r.gih_copies > 0 for r in eligible),
-                excluded_games=sum(not r.eligible for r in values),
-                evidence_games=tuple(sorted(r.game for r in eligible if r.gih_copies)),
-            )
-        )
-    excluded = Counter(r.outcome for r in games.values() if not r.eligible)
-    excluded.update(failed_outcomes or {})
-    return CardRanking(
-        selection=query,
-        subject=subject,
-        environment=environment,
-        completeness=completeness,
-        complete=completeness.complete,
-        opponent_mix=dict(Counter(opponents[g] for g in games)),
-        excluded_outcomes=dict(excluded),
-        cards=tuple(
-            sorted(rankings, key=lambda r: (r.rate is None, -(r.rate or 0), r.card))
-        ),
-    )
+def _is_card_match(match: Match) -> bool:
+    try:
+        CardConditions.model_validate(match.conditions)
+    except ValueError:
+        return False
+    return True
+
+
+def _sorted(rows: Sequence[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(rows, key=lambda r: tuple(str(v) for v in r.values()))
+
+
+def _rows(
+    db: duckdb.DuckDBPyConnection,
+    table: str,
+    fields: Sequence[str],
+    run: str,
+    match: str,
+    game: str,
+) -> list[dict[str, object]]:
+    columns = ", ".join(f'"{f}"' for f in fields)
+    found = db.execute(
+        f"select {columns} from {table} where run = ? and match = ? and game = ?",
+        [run, match, game],
+    ).fetchall()
+    return _sorted([dict(zip(fields, row, strict=True)) for row in found])

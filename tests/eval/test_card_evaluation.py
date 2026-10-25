@@ -1,12 +1,18 @@
-"""GIH semantics, retained evidence admission, and real Etude completion/resume."""
+"""Card counts, per-game admission, experiment pooling and the card data page."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+import json
 from pathlib import Path
 from typing import Any
 
-from etude.eval.match import Row, Tables, evaluate
+import duckdb
+from etude.eval.match import Tables, evaluate
+from etude.eval.query import statsdb
 from etude.eval.records import Agent, Environment, Match
+from etude.run.declaration import declare
+from etude.run.delivery import sync
 from etude.run.storage import DirectoryStorage
 from pydantic import JsonValue
 import pytest
@@ -14,25 +20,26 @@ import torch
 
 from manabot.env import Match as EnvMatch, ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
-from manabot.eval.card_evaluation import evaluate_cards, publish_cards
-from manabot.eval.card_metrics import METRIC_VERSION, CardMatchError, reduce_cards
+from manabot.eval.card_evaluation import card_tables, evaluate_cards, trace_card_tables
+from manabot.eval.card_metrics import CardGame, normalize, reduce_cards
+from manabot.eval.card_page import page_data, write_page
 from manabot.eval.card_query import (
-    CardQuery,
-    CardRanking,
-    Completeness,
-    evidence_refs,
-    rank_cards,
-    summarize_cards,
+    AuditResult,
+    CardData,
+    CardSelection,
+    audit,
+    card_data,
+    load_game,
 )
-from manabot.eval.card_schedule import CardConditions, admit_card_match
+from manabot.eval.card_schedule import CardConditions, admit_card_runtime
 from manabot.eval.cards import verification_spec
+from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.card_evidence import (
-    CAPTURE_VERSION,
     CapturedCards,
     GameEvidence,
     GameTrace,
@@ -46,7 +53,11 @@ from manabot.sim.replay import ReplayReceipt
 
 
 def card_fixture(
-    *, winner: int | None = 0, leg: int = 0, deal: int = 1
+    *,
+    winner: int | None = 0,
+    leg: int = 0,
+    deal: int = 1,
+    players: tuple[str, str] = ("player-one", "player-two"),
 ) -> GameEvidence:
     def card(
         copy: int, owner: int, zone: str, incarnation: int = 0
@@ -107,8 +118,8 @@ def card_fixture(
         )
     )
     setup = MatchConfig(
-        hero="player-one",
-        villain="player-two",
+        hero=players[0],
+        villain=players[1],
         hero_deck={"Mountain": 3},
         villain_deck={"Forest": 2},
     )
@@ -116,7 +127,7 @@ def card_fixture(
         match_id=f"fixture-{deal}-{leg}",
         deal_seed=deal,
         leg=leg,
-        seat_players=["player-one", "player-two"],
+        seat_players=list(players),
         seat_decks=["red", "green"],
         match_hypers=setup.model_dump(),
         winner=winner,
@@ -194,24 +205,104 @@ def _rebind_fixture(raw: dict[str, Any]) -> GameEvidence:
     return GameEvidence.model_validate(raw)
 
 
-def _fixture_tables(games: list[GameEvidence], match: Match, root: Path) -> Tables:
-    tables: dict[str, list[Row]] = {"card_games": [], "card_evidence": []}
-    names = tuple(agent.name for agent in match.agents)
-    for game in games:
-        ref = retain_evidence(root, game)
-        tables["card_games"].extend(
-            row.model_dump() for row in reduce_cards(game, names)
+def _fixture_play(
+    runtime: dict[str, JsonValue],
+    change: dict[int, dict[str, Any]] | None = None,
+) -> Any:
+    """A `play` that retains synthetic games for every leg, edited per leg."""
+
+    def play(match: Match) -> Tables:
+        root = Path(evaluation.os.environ["MANABOT_CARD_OUTPUT"])
+        games = []
+        for leg in range(8):
+            game = _scheduled_fixture(match, leg, runtime)
+            if change and leg in change:
+                raw = game.model_dump(mode="json", by_alias=True)
+                raw.update(change[leg])
+                game = _rebind_fixture(raw)
+            games.append((retain_evidence(root, game), game))
+        return card_tables(match, games)
+
+    return play
+
+
+def _db(
+    matches: Sequence[tuple[str, tuple[str, str], list[CardGame]]],
+) -> duckdb.DuckDBPyConnection:
+    """The statsdb tables card queries read, built straight from reducer rows."""
+    db = duckdb.connect()
+    db.execute(
+        "create table card_plays (run varchar, match varchar, player bigint, game varchar,"
+        " deal bigint, deck varchar, opponent_deck varchar, on_play boolean,"
+        " eligible boolean, outcome varchar, win bigint, content varchar,"
+        " metric_version varchar, source_commit varchar)"
+    )
+    db.execute(
+        "create table card_counts (run varchar, match varchar, player bigint, game varchar,"
+        " card varchar, deck_copies bigint, opening_copies bigint, drawn_copies bigint,"
+        " gih_copies bigint)"
+    )
+    db.execute(
+        "create table cards (run varchar, match varchar, player bigint, card varchar,"
+        " content varchar, definition bigint, name varchar)"
+    )
+    db.execute(
+        "create table seats (run varchar, match varchar, player bigint, agent varchar)"
+    )
+    db.execute(
+        "create table agents (agent varchar, name varchar, kind varchar,"
+        " checkpoint varchar, artifact varchar,"
+        " uri varchar, config json)"
+    )
+    db.execute("create table matches (run varchar, match varchar, state varchar)")
+    names = {name for _, pair, _ in matches for name in pair}
+    for name in names:
+        db.execute(
+            "insert into agents values (?, ?, 'code', null, ?, null, null)",
+            [f"id-{name}", name, "a" * 64],
         )
-        for player in (0, 1):
-            tables["card_evidence"].append(
-                dict(
-                    player=player,
-                    **ref.model_dump(),
-                    capture_version=CAPTURE_VERSION,
-                    metric_version=METRIC_VERSION,
-                )
+    for match, pair, rows in matches:
+        db.execute("insert into matches values ('run', ?, 'done')", [match])
+        for player, name in enumerate(pair):
+            db.execute(
+                "insert into seats values ('run', ?, ?, ?)",
+                [match, player, f"id-{name}"],
             )
-    return tables
+        normal = normalize(rows)
+        for play in normal.plays:
+            db.execute(
+                "insert into card_plays values ('run', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'abc')",
+                [
+                    match,
+                    *(
+                        play[f]
+                        for f in (
+                            "player",
+                            "game",
+                            "deal",
+                            "deck",
+                            "opponent_deck",
+                            "on_play",
+                            "eligible",
+                            "outcome",
+                            "win",
+                            "content",
+                            "metric_version",
+                        )
+                    ),
+                ],
+            )
+        for count in normal.counts:
+            db.execute(
+                "insert into card_counts values ('run', ?, ?, ?, ?, ?, ?, ?, ?)",
+                [match, *count.values()],
+            )
+        for card in normal.cards:
+            db.execute(
+                "insert into cards values ('run', ?, ?, ?, ?, ?, ?)",
+                [match, *card.values()],
+            )
+    return db
 
 
 def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
@@ -226,60 +317,35 @@ def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
         red.gih_copies,
     ) == (1, 3, 2, 2, 4)
     assert red.win == 1
-    loss = next(
-        r
-        for r in reduce_cards(
-            card_fixture(winner=1, deal=2), ("player-two", "player-one")
-        )
+    losing = reduce_cards(card_fixture(winner=1, deal=2), ("player-two", "player-one"))
+    # One observed copy in the losing game: 4/5 of copies, not 1/2 of games.
+    losing = [
+        r.model_copy(update={"opening_copies": 1, "drawn_copies": 0, "gih_copies": 1})
         if r.name == "Mountain"
-    )
-    # One observed copy in the losing game: 4/5, not 1/2 game presence.
-    loss = loss.model_copy(
-        update={"opening_copies": 1, "drawn_copies": 0, "gih_copies": 1}
-    )
-    result = summarize_cards(
-        [red, loss],
-        CardQuery(run="fixture", player="player-one"),
-        "one",
-        "env",
-        Completeness(
-            scheduled=2,
-            completed=2,
-            failed=0,
-            pending=0,
-            scheduled_games=2,
-            failed_games=0,
-        ),
-        {red.game: "two", loss.game: "two"},
-    )
-    assert result.cards[0].rate == 0.8
-    assert result.cards[0].qualifying_copies == 5
-    assert result.cards[0].games == 2
-    assert result.cards[0].interval is not None
-    assert result.opponent_mix == {"two": 2}
+        else r
+        for r in losing
+    ]
+    db = _db([("one", ("two", "one"), rows), ("two", ("two", "one"), losing)])
+    data = card_data(db, CardSelection(experiment="fixture", subjects=("one",)))
+    mountain = next(c for c in data.cards if c.name == "Mountain")
+    assert mountain.gih.rate == 0.8 and mountain.gih.count == 5
+    assert (mountain.oh.count, mountain.oh.rate) == (3, 2 / 3)
+    assert (mountain.gd.count, mountain.gd.rate) == (2, 1.0)
+    assert (mountain.gp.count, mountain.gp.rate) == (2, 0.5)
+    assert mountain.gns.count == 0 and mountain.iwd is None
+    assert mountain.gih_interval is not None
+    assert data.opponents == {"two": 2}
+    assert data.subjects == {"id-one": "one"}
 
 
 def test_draws_zero_denominator_and_missing_facts_are_explicit(tmp_path: Path) -> None:
     game = card_fixture(winner=None)
     rows = reduce_cards(game, game.seat_players)
     assert all(not r.eligible and r.win is None for r in rows)
-    result = summarize_cards(
-        rows[:1],
-        CardQuery(run="fixture", player="player-one"),
-        "one",
-        "env",
-        Completeness(
-            scheduled=1,
-            completed=1,
-            failed=0,
-            pending=0,
-            scheduled_games=1,
-            failed_games=0,
-        ),
-        {game.game: "two"},
-    )
-    assert result.cards[0].rate is None
-    assert result.excluded_outcomes == {"draw": 1}
+    db = _db([("one", ("player-one", "player-two"), rows)])
+    data = card_data(db, CardSelection(experiment="fixture", subjects=("player-one",)))
+    assert data.cards == () and data.games == 0
+    assert data.excluded == {"draw": 1}
     ref = retain_evidence(tmp_path, game)
     assert read_evidence((tmp_path / ref.path).read_bytes(), ref) == game
     assert retain_evidence(tmp_path, game) == ref
@@ -298,12 +364,12 @@ def test_draws_zero_denominator_and_missing_facts_are_explicit(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("corruption", "error"),
     [
-        ("games", "complete eight-leg deal"),
-        ("participants", "complete eight-leg deal"),
+        ("games", "eight legs per deal"),
+        ("participants", "eight legs per deal"),
         ("name", "participant differs from registration"),
     ],
 )
-def test_execution_and_admission_reject_invalid_participant_schedule(
+def test_execution_rejects_invalid_participant_schedule(
     corruption: str, error: str
 ) -> None:
     spec = verification_spec(8)
@@ -331,160 +397,237 @@ def test_execution_and_admission_reject_invalid_participant_schedule(
             max_commands=spec.max_commands,
         ).model_dump(mode="json"),
     )
-    # Both paths reject the schedule before executing or loading any games.
     with pytest.raises(ValueError, match=error):
         evaluation.play_card_match(match)
-    with pytest.raises(ValueError, match=error):
-        admit_card_match([], match, Environment(name="fixture", files="a" * 64))
 
 
-def test_native_evaluation_resume_query_and_delivered_rebuild(tmp_path: Path) -> None:
+def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
     spec = verification_spec(8)
-    result = evaluate_cards(spec, tmp_path / "source")
+    source = tmp_path / "source"
+    result = evaluate_cards(spec, source)
     assert result.played == 1
-    query = CardQuery(run=spec.run, player=spec.players[0].player_id)
-    ranking = rank_cards(tmp_path / "source", query)
-    assert ranking.complete and ranking.cards
-    assert ranking.completeness.completed == 1
-    assert sum(ranking.opponent_mix.values()) == 8
-    resumed = evaluate_cards(spec, tmp_path / "source")
-    assert (resumed.played, resumed.skipped) == (0, 1)
-    filtered = rank_cards(
-        tmp_path / "source",
-        query.model_copy(update={"on_play": True, "deck": "elemental_ug"}),
+    selection = CardSelection(
+        experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
-    assert sum(filtered.opponent_mix.values()) == 2
-    refs = evidence_refs(tmp_path / "source", spec.run)
-    assert len(refs) == 8
-    # Every command/frame/state/outcome still agrees when capture is enabled.
-    for ref in refs[:1]:
-        game = read_evidence(
-            (tmp_path / "source" / spec.run / ref.path).read_bytes(), ref
+    with statsdb(spec.experiment, source) as db:
+        data = card_data(db, selection)
+        assert data.cards and sum(data.opponents.values()) == 8
+        filtered = card_data(
+            db, selection.model_copy(update={"on_play": True, "deck": "elemental_ug"})
         )
+        assert sum(filtered.opponents.values()) == 2
+        checked = audit(db, source, replay=True)
+        assert (checked.games, checked.replayed, checked.problems) == (8, 8, ())
+        run, game_id, path = db.execute(
+            "select run, game, evidence from card_plays order by game limit 1"
+        ).fetchone()
+        # Capture leaves every command, frame, state and outcome unchanged.
+        game = load_game(db, source, run, game_id)
         assert capture_verified_game(game.trace) == game
-    target = DirectoryStorage(tmp_path / "delivered")
-    # Etude discovers nested runs; evidence must use the same discovered prefix.
-    publish_cards(tmp_path, target)
-    assert rank_cards(target, query) == ranking
-    ref = refs[0]
-    (tmp_path / "delivered" / spec.run / ref.path).unlink()
-    with pytest.raises(FileNotFoundError):
-        rank_cards(target, query)
+    resumed = evaluate_cards(spec, source)
+    assert (resumed.played, resumed.skipped) == (0, 1)
+    # Ordinary Etude delivery carries the evidence with the tables.
+    delivered = tmp_path / "delivered"
+    assert sync(source, storages=[DirectoryStorage(delivered)]) == {}
+    with statsdb(spec.experiment, delivered) as db:
+        assert card_data(db, selection) == data
+        assert audit(db, delivered).problems == ()
+        next(delivered.rglob(Path(path).name)).unlink()
+        assert len(audit(db, delivered).problems) == 1
 
 
-@pytest.mark.parametrize("known_failure", [False, True])
-def test_interrupted_schedule_and_partial_query_use_etude_records(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, known_failure: bool
+def test_failed_games_are_exclusions_and_failed_matches_are_counted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No games/inference: exercise real SDK records, failed resume and scalar storage."""
     spec = verification_spec(16)
     assert spec.authored_matchup is not None
     runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
-    attempts: list[int] = []
-    fail = True
+    fixture = _fixture_play(
+        runtime, {3: {"outcome": "crash"}, 5: {"outcome": "timeout"}}
+    )
+    calls = 0
 
     def play(match: Match) -> Tables:
-        nonlocal fail
-        deal = int(match.conditions["deal"])
-        attempts.append(deal)
-        if len(attempts) == 2 and fail:
-            fail = False
-            if known_failure:
-                raise CardMatchError({"timeout": 1, "failed_match": 7})
+        nonlocal calls
+        calls += 1
+        if calls == 2:
             raise RuntimeError("interrupted fixture")
-        root = Path(evaluation.os.environ["MANABOT_CARD_OUTPUT"])
-        return _fixture_tables(
-            [_scheduled_fixture(match, leg, runtime) for leg in range(8)], match, root
-        )
+        return fixture(match)
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
     with pytest.raises(Exception, match="match_failed"):
         evaluate_cards(spec, tmp_path)
-    query = CardQuery(run=spec.run, player=spec.players[0].player_id)
-    with pytest.raises(ValueError, match="schedule incomplete"):
-        rank_cards(tmp_path, query)
-    partial = rank_cards(tmp_path, query.model_copy(update={"partial": True}))
-    assert not partial.complete
-    assert partial.excluded_outcomes == (
-        {"timeout": 1, "failed_match": 7} if known_failure else {"unobserved": 8}
+    selection = CardSelection(
+        experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
-    assert (
-        partial.completeness.scheduled,
-        partial.completeness.completed,
-        partial.completeness.failed,
-    ) == (2, 1, 1)
+    with statsdb(spec.experiment, tmp_path) as db:
+        data = card_data(db, selection)
+    # The crash and timeout leave six eligible games of their deal, not zero.
+    assert data.games == 6 and data.excluded == {"crash": 1, "timeout": 1}
+    assert data.failed_matches == 1
     retried = evaluate_cards(spec, tmp_path)
     assert (retried.played, retried.skipped) == (1, 1)
-    complete = rank_cards(tmp_path, query)
-    assert complete.complete and sum(complete.opponent_mix.values()) == 16
-    assert len(attempts) == 3
-    # Replicated delivery contributes each completed match exactly once.
-    publish_cards(tmp_path, DirectoryStorage(tmp_path / "replica"))
-    assert rank_cards(tmp_path, query) == complete
-    with pytest.raises(ValueError, match="exactly one entrant"):
-        rank_cards(tmp_path, query.model_copy(update={"player": "absent"}))
+    with statsdb(spec.experiment, tmp_path) as db:
+        data = card_data(db, selection)
+    assert data.games == 12 and data.failed_matches == 0
+    with pytest.raises(ValueError, match="no agent in this experiment"):
+        with statsdb(spec.experiment, tmp_path) as db:
+            card_data(db, selection.model_copy(update={"subjects": ("absent",)}))
+
+
+def test_runs_pool_into_their_experiment_and_filters_narrow_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = verification_spec(8)
+    assert spec.authored_matchup is not None
+    runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
+    monkeypatch.setattr(
+        evaluation, "play_card_match", _fixture_play(runtime, {2: {"outcome": "crash"}})
+    )
+    commits = iter(["1" * 40, "2" * 40, "3" * 40])
+    for run, deals, experiment in (
+        ("first", (1,), spec.experiment),
+        ("second", (2,), spec.experiment),
+        ("elsewhere", (3,), "other-experiment"),
+    ):
+        commit = next(commits)
+        monkeypatch.setattr(evaluation, "source_commit", lambda c=commit: c)
+        evaluate_cards(
+            spec.model_copy(
+                update={"run": run, "deals": deals, "experiment": experiment}
+            ),
+            tmp_path,
+        )
+    subject = spec.players[0].player_id
+    with statsdb(spec.experiment, tmp_path) as db:
+        pooled = card_data(
+            db, CardSelection(experiment=spec.experiment, subjects=(subject,))
+        )
+        assert pooled.runs == ("first", "second") and pooled.deals == 2
+        assert pooled.games == 14 and pooled.excluded == {"crash": 2}
+        one = card_data(
+            db,
+            CardSelection(
+                experiment=spec.experiment, subjects=(subject,), commits=("2222",)
+            ),
+        )
+        assert one.runs == ("second",) and one.games == 7
+        drawn = card_data(
+            db,
+            CardSelection(
+                experiment=spec.experiment, subjects=(subject,), on_play=False
+            ),
+        )
+        # Etude orders players by agent identity. Player 0 is on the play in
+        # even legs, which hold the crashed leg 2.
+        (player,) = db.execute(
+            "select distinct s.player from seats s join agents a using (agent)"
+            " where a.name = ?",
+            [subject],
+        ).fetchone()
+        assert drawn.games == (8 if player == 0 else 6)
+        both = card_data(db, CardSelection(experiment=spec.experiment))
+        assert both.games == 28 and len(both.subjects) == 2
+    with statsdb("other-experiment", tmp_path) as db:
+        assert card_data(db, CardSelection(experiment="other-experiment")).runs == (
+            "elsewhere",
+        )
 
 
 @pytest.mark.parametrize(
     ("corruption", "error"),
     [
         ("deal", "scheduled deal"),
-        ("duplicate_leg", "every scheduled leg"),
         ("seat", "seat/deck assignment"),
         ("deck_label", "seat/deck assignment"),
         ("deck_setup", "seat/deck assignment"),
-        ("content_digest", "runtime/content identity"),
-        ("content_manifest_sha256", "runtime/content identity"),
-        ("engine_source_sha256", "runtime/content identity"),
-        ("world", "runtime/content identity"),
         ("observation_abi_sha256", "runtime setup/ABI"),
         ("matchup_sha256", "runtime setup/ABI"),
     ],
 )
-def test_schedule_admission_rejects_consistent_misassociation_after_delivery(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str, error: str
+def test_each_game_is_admitted_against_its_schedule(
+    tmp_path: Path, corruption: str, error: str
 ) -> None:
     spec = verification_spec(8)
     assert spec.authored_matchup is not None
     runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
-
-    def play(match: Match) -> Tables:
-        games = [_scheduled_fixture(match, leg, runtime) for leg in range(8)]
-        raw = games[1].model_dump(mode="json", by_alias=True)
-        if corruption == "deal":
-            raw["deal"] += 1
-        elif corruption == "duplicate_leg":
-            # Keep eight unique game IDs but repeat an entire seat/deck leg.
-            raw = games[0].model_dump(mode="json", by_alias=True)
-            raw["game"] = games[1].game
-        elif corruption == "seat":
-            raw["seat_players"].reverse()
-            raw["setup"].update(
-                hero=raw["seat_players"][0], villain=raw["seat_players"][1]
+    match = Match(
+        agents=tuple(
+            Agent(
+                name=p.player_id,
+                kind="code",
+                artifact="a" * 64,
+                config={"registration": p.model_dump(mode="json")},
             )
-        elif corruption == "deck_label":
-            raw["seat_decks"].reverse()
-        elif corruption == "deck_setup":
-            raw["setup"]["hero_deck"] = {"Mountain": 60}
-        else:
-            raw["trace"]["data"]["runtime_identities"][corruption] = "b" * 64
-            if corruption == "content_digest":
-                raw["cards"]["capture"]["content_digest"] = "b" * 64
-        games[1] = _rebind_fixture(raw)
-        # Reducer rows and immutable hashes agree with the misassociated artifact.
-        return _fixture_tables(
-            games, match, Path(evaluation.os.environ["MANABOT_CARD_OUTPUT"])
-        )
+            for p in spec.players
+        ),
+        games=8,
+        conditions=CardConditions(
+            deal=spec.deals[0],
+            key=spec.key,
+            authored_matchup=spec.authored_matchup,
+            game_seconds=spec.game_seconds,
+            max_commands=spec.max_commands,
+        ).model_dump(mode="json"),
+    )
+    raw = _scheduled_fixture(match, 1, runtime).model_dump(mode="json", by_alias=True)
+    if corruption == "deal":
+        raw["deal"] += 1
+    elif corruption == "seat":
+        raw["seat_players"].reverse()
+        raw["setup"].update(hero=raw["seat_players"][0], villain=raw["seat_players"][1])
+    elif corruption == "deck_label":
+        raw["seat_decks"].reverse()
+    elif corruption == "deck_setup":
+        raw["setup"]["hero_deck"] = {"Mountain": 60}
+    else:
+        raw["trace"]["data"]["runtime_identities"][corruption] = "b" * 64
+    game = _rebind_fixture(raw)
+    with pytest.raises(ValueError, match=error):
+        card_tables(match, [(retain_evidence(tmp_path, game), game)])
 
-    monkeypatch.setattr(evaluation, "play_card_match", play)
-    source = tmp_path / "source"
-    evaluate_cards(spec, source)
-    delivered = DirectoryStorage(tmp_path / "delivered")
-    publish_cards(source, delivered)
-    for store in (DirectoryStorage(source), delivered):
-        for participant in spec.players:
-            with pytest.raises(ValueError, match=error):
-                rank_cards(store, CardQuery(run=spec.run, player=participant.player_id))
+
+@pytest.mark.parametrize(
+    "field",
+    ["content_digest", "content_manifest_sha256", "engine_source_sha256", "world"],
+)
+def test_audit_binds_games_to_their_declared_runtime(field: str) -> None:
+    spec = verification_spec(8)
+    assert spec.authored_matchup is not None
+    runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
+    identity = {key: runtime[key] for key in evaluation.RUNTIME_FIELDS}
+    environment = Environment(
+        name="fixture",
+        files=canonical_sha256(identity),
+        config={**identity, "capture_version": 1, "metric_version": "gih-copies-v1"},
+    )
+    match = Match(
+        agents=tuple(
+            Agent(
+                name=p.player_id,
+                kind="code",
+                artifact="a" * 64,
+                config={"registration": p.model_dump(mode="json")},
+            )
+            for p in spec.players
+        ),
+        games=8,
+        conditions=CardConditions(
+            deal=spec.deals[0],
+            key=spec.key,
+            authored_matchup=spec.authored_matchup,
+            game_seconds=spec.game_seconds,
+            max_commands=spec.max_commands,
+        ).model_dump(mode="json"),
+    )
+    game = _scheduled_fixture(match, 0, runtime)
+    admit_card_runtime(game, environment)
+    raw = game.model_dump(mode="json", by_alias=True)
+    raw["trace"]["data"]["runtime_identities"][field] = "b" * 64
+    if field == "content_digest":
+        raw["cards"]["capture"]["content_digest"] = "b" * 64
+    with pytest.raises(ValueError, match="declared runtime/content identity"):
+        admit_card_runtime(_rebind_fixture(raw), environment)
 
 
 def test_loaded_evidence_rejects_capture_from_another_content(tmp_path: Path) -> None:
@@ -546,40 +689,44 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
         }
     )
     evaluate_cards(spec, tmp_path / "evaluation")
-    ranking = rank_cards(
-        tmp_path / "evaluation", CardQuery(run=spec.run, player=candidate.player_id)
-    )
-    assert ranking.complete and sum(ranking.opponent_mix.values()) == 8
-    assert any(card.qualifying_copies > card.games for card in ranking.cards)
+    with statsdb(spec.experiment, tmp_path / "evaluation") as db:
+        # The checkpoint digest selects the subject, as an artifact would.
+        data = card_data(
+            db,
+            CardSelection(
+                experiment=spec.experiment, subjects=(file_sha256(path)[:12],)
+            ),
+        )
+    assert sum(data.opponents.values()) + sum(data.excluded.values()) == 8
+    # Some card had more qualifying copies than games in which a copy was seen.
+    assert any(c.gih.count > c.gp.count - c.gns.count for c in data.cards)
 
 
 def test_uncertainty_keeps_the_same_deal_across_opponents_together() -> None:
-    template = reduce_cards(card_fixture(), ("player-one", "player-two"))[0]
-    rows = [
-        template.model_copy(
-            update={"game": f"{deal}-{opponent}", "deal": deal, "win": opponent}
-        )
-        for deal in (1, 2)
-        for opponent in (0, 1)
-    ]
-    ranking = summarize_cards(
-        rows,
-        CardQuery(run="fixture", player="one"),
-        "one",
-        "env",
-        Completeness(
-            scheduled=4,
-            completed=4,
-            failed=0,
-            pending=0,
-            scheduled_games=4,
-            failed_games=0,
-        ),
-        {r.game: r.game.split("-")[1] for r in rows},
+    matches = []
+    for deal in (1, 2):
+        for opponent in ("zero", "one"):
+            winner = 0 if opponent == "zero" else 1
+            game = card_fixture(
+                winner=winner,
+                deal=deal,
+                leg=0 if opponent == "zero" else 2,
+                players=("subject", opponent),
+            )
+            matches.append(
+                (
+                    f"{deal}-{opponent}",
+                    ("subject", opponent),
+                    reduce_cards(game, ("subject", opponent)),
+                )
+            )
+    data = card_data(
+        _db(matches), CardSelection(experiment="fixture", subjects=("subject",))
     )
-    assert ranking.cards[0].rate == 0.5
-    assert ranking.cards[0].interval == (0.5, 0.5)
-    assert ranking.opponent_mix == {"0": 2, "1": 2}
+    mountain = next(c for c in data.cards if c.name == "Mountain")
+    assert mountain.gih.rate == 0.5
+    assert mountain.gih_interval == (0.5, 0.5)
+    assert data.opponents == {"zero": 2, "one": 2}
 
 
 @pytest.mark.parametrize("outcome", ["crash", "timeout", "truncated", "replay_failed"])
@@ -589,7 +736,7 @@ def test_invalid_outcomes_never_receive_win_rate_credit(outcome: str) -> None:
     assert all(not row.eligible and row.win is None for row in rows)
 
 
-def test_historical_outcome_only_evaluation_reports_unavailable(tmp_path: Path) -> None:
+def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
     def outcome_only(match: Match) -> Tables:
         return {"plays": [{"player": 0, "score": 1.0}]}
 
@@ -601,40 +748,134 @@ def test_historical_outcome_only_evaluation_reports_unavailable(tmp_path: Path) 
         run="old",
         directory=tmp_path,
     )
-    with pytest.raises(ValueError, match="card evidence unavailable"):
-        rank_cards(tmp_path, CardQuery(run="old", player="one"))
+    with statsdb("old", tmp_path) as db:
+        with pytest.raises(ValueError, match="no card evaluations"):
+            card_data(db, CardSelection(experiment="old"))
 
 
-def test_scale_verifier_rejects_second_participant_table_corruption(
+def test_verifier_fails_when_the_audit_finds_a_problem(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    spec = verification_spec(8)
-    game = card_fixture()
-
     def evaluated(spec: evaluation.CardEvaluationSpec, directory: Path) -> None:
         pass
 
-    def ranking(source: Path, query: CardQuery) -> CardRanking:
-        if query.player == spec.players[1].player_id:
-            raise ValueError("card tables differ from retained evidence")
-        return summarize_cards(
-            reduce_cards(game, game.seat_players)[:1],
-            query,
-            query.player,
-            "fixture",
-            Completeness(
-                scheduled=1,
-                completed=1,
-                failed=0,
-                pending=0,
-                scheduled_games=8,
-                failed_games=0,
-            ),
-            {game.game: spec.players[1].player_id},
+    def data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardData:
+        return CardData(
+            selection=selection,
+            subjects={},
+            opponents={},
+            runs=(),
+            games=8,
+            deals=1,
+            win_rate=0.5,
+            excluded={},
+            failed_matches=0,
+            cards=(),
+        )
+
+    def audited(
+        db: duckdb.DuckDBPyConnection, source: Path, *, replay: bool
+    ) -> AuditResult:
+        return AuditResult(
+            games=8, replayed=8, problems=("run/game: stored card rows differ",)
         )
 
     monkeypatch.setattr(cards_cli, "evaluate_cards", evaluated)
-    monkeypatch.setattr(cards_cli, "rank_cards", ranking)
-    # The second subject's corrupt table must fail before trace verification.
-    with pytest.raises(ValueError, match="card tables differ from retained evidence"):
+    monkeypatch.setattr(cards_cli, "card_data", data)
+    monkeypatch.setattr(cards_cli, "audit", audited)
+    with pytest.raises(ValueError, match="stored card rows differ"):
         cards_cli.verify(8, tmp_path)
+
+
+def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
+    matches = []
+    for deal, leg in ((1, 0), (2, 1), (3, 2)):
+        pair = ("subject", "rival") if leg != 1 else ("rival", "subject")
+        game = card_fixture(winner=deal % 2, deal=deal, leg=leg, players=pair)
+        matches.append((f"m{deal}", pair, reduce_cards(game, pair)))
+    db = _db(matches)
+    selection = CardSelection(experiment="fixture <demo>", subjects=("subject",))
+    data = page_data(db, selection)
+    variants = data["variants"]
+    assert isinstance(variants, dict)
+    assert "||||" in variants and "subject|rival|play|red|green" in variants
+    assert variants["||||"]["games"] == card_data(db, selection).games
+    assert data["subjects"] == ["subject"] and data["opponents"] == ["rival"]
+    path = write_page(db, selection, tmp_path / "cards.html")
+    html = path.read_text()
+    assert "<title>fixture &lt;demo&gt; · card data</title>" in html
+    embedded = html.split('<script id="card-data" type="application/json">')[1].split(
+        "</script>"
+    )[0]
+    assert json.loads(embedded)["variants"].keys() == variants.keys()
+
+
+def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
+    tmp_path: Path,
+) -> None:
+    """An eval that calls `play_cell` itself adds card tables with one call."""
+    spec = verification_spec(8)
+    first, second = spec.players
+    root = declare(
+        experiment="grid-like",
+        clocks=(),
+        run="grid",
+        kind="evaluation",
+        directory=tmp_path,
+    ).root
+
+    def play(match: Match) -> Tables:
+        out = root / "games" / match.key
+        out.mkdir(parents=True)
+        rows, trace, _ = play_cell(
+            key=spec.key,
+            player_a=first,
+            player_b=second,
+            deal_seeds=(int(match.conditions["deal"]),),
+            out_dir=out,
+            game_seconds=spec.game_seconds,
+            max_commands=spec.max_commands,
+            authored_matchup=spec.authored_matchup,
+            matchup_mode="all",
+            legs=(0, 1),
+            card_evidence_dir=root,
+        )
+        own = {
+            "games": [{"player": 0, "score": float(r["score_a"] or 0)} for r in rows]
+        }
+        return {
+            **own,
+            **trace_card_tables(root, trace, (first.player_id, second.player_id)),
+        }
+
+    evaluate(
+        experiment="grid-like",
+        environment=Environment(name="grid", files="a" * 64),
+        matches=[
+            Match(
+                agents=(
+                    Agent(name=first.player_id, kind="code", artifact="b" * 64),
+                    Agent(name=second.player_id, kind="code", artifact="c" * 64),
+                ),
+                conditions={"deal": spec.deals[0]},
+            )
+        ],
+        play=play,
+        run="grid",
+        directory=tmp_path,
+    )
+    with statsdb("grid-like", tmp_path) as db:
+        data = card_data(
+            db, CardSelection(experiment="grid-like", subjects=(first.player_id,))
+        )
+        assert data.games + sum(data.excluded.values()) == 2 and data.cards
+        assert {r[0] for r in db.execute("show tables").fetchall()} >= {
+            "games",
+            "card_plays",
+        }
+        checked = audit(db, tmp_path)
+        assert (checked.games, checked.problems) == (2, ())
+        db.execute("update card_counts set gih_copies = gih_copies + 1")
+        assert len(audit(db, tmp_path).problems) == 2
+    with pytest.raises(ValueError, match="card_evidence_dir"):
+        trace_card_tables(root, {}, (first.player_id, second.player_id))

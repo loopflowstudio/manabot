@@ -193,7 +193,7 @@ def test_agent_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
             )
         }
     )
-    assert checkpoint_agent(moved).identity == local.identity
+    assert checkpoint_agent(moved).key == local.key
 
 
 def test_failed_group_is_stored_as_invalid_games(

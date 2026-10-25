@@ -13,7 +13,6 @@ training loop, and who owns which truth. Experiment reports live in
 | [training-experiments.md](training-experiments.md) | Declaring comparisons between recipes |
 | [ataraxos.md](ataraxos.md) | The Ataraxos-adapted move-learning rule, and how it differs from the paper |
 | [numerical-health.md](numerical-health.md) | Policy numerics and update-health diagnostics |
-| [nightly-learnability.md](nightly-learnability.md) | The nightly check that catches indistinguishable-input regressions |
 | [recent-events.md](recent-events.md) | Optional viewer-safe recent-event history as model input |
 | [training-calibration.md](training-calibration.md) | Measuring complete-loop training cost |
 | [training-recovery.md](training-recovery.md) | Recovering interrupted CPU self-play |
