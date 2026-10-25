@@ -1,12 +1,14 @@
 """Etude scheduling and delivery for replay-derived card statistics.
 
 One match is the existing eight-leg authored arena matrix for one deal. Etude
-owns completion, retries and scalar tables. Evidence is stored before table
-admission; publication explicitly copies it because SDK 0.2 sync omits it."""
+owns completion, retries and scalar tables; every eval run names the experiment
+whose database it joins. Each game's evidence is written under the eval run's
+folder, which Etude delivery carries with its tables. Games are admitted one at
+a time: a crash, timeout or failed replay is an ineligible `card_plays` row,
+never a reason to drop the rest of its deal."""
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 import os
@@ -19,17 +21,14 @@ from etude.eval.match import EvalRun, Row, Tables, agent
 from etude.eval.records import Agent, Environment, Match, RoundRobin
 from etude.eval.tournament import hold
 from etude.run.declaration import declare
-from etude.run.delivery import sync
-from etude.run.listing import places
 from etude.run.records import ArtifactRef
-from etude.run.storage import DirectoryStorage, Storage
 from pydantic import Field, model_validator
 
-from manabot.eval.card_metrics import METRIC_VERSION, CardMatchError, reduce_cards
-from manabot.eval.card_query import evidence_prefix, evidence_refs
+from manabot.eval.card_metrics import METRIC_VERSION, normalize, reduce_cards
 from manabot.eval.card_schedule import (
     RUNTIME_FIELDS,
     CardConditions,
+    admit_card_game,
     card_match_players,
 )
 from manabot.eval.evaluate import (
@@ -38,19 +37,25 @@ from manabot.eval.evaluate import (
 )
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
-from manabot.eval.monitor import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.sim.card_evidence import CAPTURE_VERSION, EvidenceRef, read_evidence
+from manabot.infra.source import source_commit, source_dirty
+from manabot.sim.card_evidence import (
+    CAPTURE_VERSION,
+    EvidenceRef,
+    GameEvidence,
+    read_evidence,
+)
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
 
-EXPERIMENT = "gih-card-evaluation"
+NAME = r"^[A-Za-z0-9][A-Za-z0-9._=-]{0,199}$"
 
 
 class CardEvaluationSpec(StrictModel):
-    run: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._=-]{0,199}$")
+    experiment: str = Field(pattern=NAME)
+    run: str = Field(pattern=NAME)
     key: EvaluationKey
     players: tuple[PlayerRegistration, ...] = Field(min_length=2)
     checkpoints: dict[str, Path] = Field(default_factory=dict)
@@ -158,7 +163,7 @@ def play_card_match(match: Match) -> Tables:
     attempts = root / "arena" / match.key
     attempts.mkdir(parents=True, exist_ok=True)
     attempt = Path(tempfile.mkdtemp(prefix="attempt-", dir=attempts))
-    rows, trace, _ = play_cell(
+    _, trace, _ = play_cell(
         key=conditions.key,
         player_a=players[0],
         player_b=players[1],
@@ -171,60 +176,58 @@ def play_card_match(match: Match) -> Tables:
         authored_matchup=conditions.authored_matchup,
         card_evidence_dir=root,
     )
-    if (
-        len(rows) != 8
-        or {r["leg"] for r in rows} != set(range(8))
-        or not all(EvaluationRow.model_validate(r).valid for r in rows)
-    ):
-        excluded: Counter[str] = Counter()
-        for row in rows:
-            reason = (
-                "replay_failed"
-                if not row["replay_passed"]
-                else "timeout"
-                if row["termination_reason"] == "timeout"
-                else "truncated"
-                if row["truncated"]
-                else "crash"
-                if row["failure"]
-                else "failed_match"
-            )
-            excluded[reason] += 1
-        excluded["unobserved"] += max(0, match.games - len(rows))
-        raise CardMatchError(dict(excluded))
-    tables: dict[str, list[Row]] = {"plays": [], "card_games": [], "card_evidence": []}
-    participants = (players[0].player_id, players[1].player_id)
-    for raw in trace["card_evidence"]:
-        ref = EvidenceRef.model_validate(raw)
-        game = read_evidence((root / ref.path).read_bytes(), ref)
-        if not game.replay["passed"]:
-            raise ValueError("replay failed; card tables unavailable")
-        for row in reduce_cards(game, participants):
-            tables["card_games"].append(row.model_dump())
-        for player, participant in enumerate(participants):
-            seat = game.seat_players.index(participant)
-            tables["card_evidence"].append(
-                {
-                    "player": player,
-                    **ref.model_dump(),
-                    "capture_version": CAPTURE_VERSION,
-                    "metric_version": METRIC_VERSION,
-                    "trace_sha256": game.trace_sha256,
-                    "replay_sha256": game.replay_sha256,
-                }
-            )
+    return card_tables(
+        match,
+        [
+            (ref, read_evidence((root / ref.path).read_bytes(), ref))
+            for ref in map(EvidenceRef.model_validate, trace["card_evidence"])
+        ],
+    )
+
+
+def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> Tables:
+    """Admit each retained game and project it into Etude tables.
+
+    `plays` is the shared outcome table; the card tables are normalized by
+    `card_metrics.normalize`, with each game's evidence reference and source
+    commit on its `card_plays` rows.
+    """
+    tables: dict[str, list[Row]] = {
+        "plays": [],
+        "card_plays": [],
+        "card_counts": [],
+        "cards": [],
+    }
+    provenance = {"source_commit": source_commit(), "source_dirty": source_dirty()}
+    for ref, game in games:
+        participants = admit_card_game(game, match)
+        rows = normalize(reduce_cards(game, participants))
+        evidence = {
+            "evidence": ref.path,
+            "evidence_sha256": ref.sha256,
+            "evidence_bytes": ref.bytes,
+            "trace_sha256": game.trace_sha256,
+            "replay_sha256": game.replay_sha256,
+            "capture_version": CAPTURE_VERSION,
+            **provenance,
+        }
+        tables["card_plays"].extend({**play, **evidence} for play in rows.plays)
+        tables["card_counts"].extend(rows.counts)
+        tables["cards"].extend(rows.cards)
+        for play in rows.plays:
             tables["plays"].append(
                 {
-                    "player": player,
+                    "player": play["player"],
                     "game": game.game,
-                    "leg": game.leg,
-                    "score": 0.5 if game.winner is None else float(game.winner == seat),
-                    "on_play": seat == 0,
-                    "deck": game.seat_decks[seat],
-                    "opponent_deck": game.seat_decks[1 - seat],
-                    "valid": True,
+                    "score": 0.5 if game.winner is None else float(play["win"] or 0),
+                    "on_play": play["on_play"],
+                    "deck": play["deck"],
+                    "opponent_deck": play["opponent_deck"],
+                    "valid": play["eligible"] or game.outcome == "draw",
                 }
             )
+    if not tables["card_plays"]:
+        raise ValueError("match retained no card evidence")
     return tables
 
 
@@ -235,9 +238,9 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
     # File names and the compiled extension's platform bytes are not environment semantics.
     identity = {key: runtime[key] for key in RUNTIME_FIELDS}
     tournament = RoundRobin(
-        name=EXPERIMENT,
+        name=spec.experiment,
         environment=Environment(
-            name=EXPERIMENT,
+            name=spec.experiment,
             files=canonical_sha256(identity),
             config={
                 **identity,
@@ -258,7 +261,7 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
         games=8,
     )
     declared = declare(
-        experiment=EXPERIMENT,
+        experiment=spec.experiment,
         clocks=(),
         run=spec.run,
         kind="evaluation",
@@ -269,36 +272,9 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
     ):
         return hold(
             tournament,
-            experiment=EXPERIMENT,
+            experiment=spec.experiment,
             play=play_card_match,
             enter=entrants,
             workers=spec.workers,
             directory=directory,
         )
-
-
-def publish_cards(directory: Path, destination: Storage) -> None:
-    """Copy validated evidence first, then Etude tables and completion records.
-
-    SDK 0.2 sync does not include arbitrary artifacts. A repeated publication is
-    harmless: content-addressed evidence is immutable and Etude owns table delivery.
-    No network destination is selected implicitly.
-    """
-    source = DirectoryStorage(directory)
-    run_directories: set[Path] = set()
-    for run in places(source):
-        prefix = evidence_prefix(source, run)
-        run_directories.add(directory / Path(prefix).parent)
-        for ref in evidence_refs(source, run):
-            body = source.get(prefix + ref.path)
-            read_evidence(body, ref)
-            destination.put(f"{run}/{ref.path}", body)
-            read_evidence(destination.get(f"{run}/{ref.path}"), ref)
-    # Query discovery is recursive; SDK sync expects immediate run children.
-    failures = {
-        run: errors
-        for parent in sorted(run_directories)
-        for run, errors in sync(parent, storages=(destination,)).items()
-    }
-    if failures:
-        raise RuntimeError(f"evaluation publication incomplete: {failures}")
