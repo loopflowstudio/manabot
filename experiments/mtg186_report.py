@@ -89,10 +89,12 @@ def _seat_score(groups: Path | None, x: str, y: str, seat: int) -> Score:
 
     Missing rows (no retained groups) read as an empty score.
     """
-    target = None if groups is None else groups / f"{x}--{y}--seat{seat}" / "games.json"
-    if target is None or not target.exists():
+    if (
+        groups is None
+        or not (path := groups / f"{x}--{y}--seat{seat}" / "games.json").exists()
+    ):
         return wilson([])
-    return wilson([GameRow.model_validate(r) for r in json.loads(target.read_text())])
+    return wilson([GameRow.model_validate(r) for r in json.loads(path.read_text())])
 
 
 def _row(
@@ -103,20 +105,18 @@ def _row(
     summary: Summary,
     groups: Path | None,
 ) -> Row:
-    seats = {
-        f"{name}_{label}": _seat_score(groups, x, y, seat)
-        for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True)
-        for label, seat in (("play", 0), ("draw", 1))
-    }
+    scores: dict[str, Score] = {}
+    for name, (x, y) in zip(("ur_vs_gw", "gw_vs_ur"), CELLS, strict=True):
+        scores[name] = summary.cells[x][y]
+        scores[f"{name}_play"] = _seat_score(groups, x, y, 0)
+        scores[f"{name}_draw"] = _seat_score(groups, x, y, 1)
     return Row(
         trial=trial,
         seed=seed,
         updates=updates,
         scope=scope,
-        ur_vs_gw=summary.cells[CELLS[0][0]][CELLS[0][1]],
-        gw_vs_ur=summary.cells[CELLS[1][0]][CELLS[1][1]],
         overall=summary.overall if scope == "grid" else None,
-        **seats,
+        **scores,
     )
 
 
