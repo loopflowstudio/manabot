@@ -84,9 +84,7 @@ def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> Non
 
 
 def test_launched_runs_track_under_the_file_stem(tmp_path: Path) -> None:
-    runs = read_job_file(
-        EXPERIMENTS / "seat_comparison.py", ["--revision", "fixture-commit"]
-    )
+    runs = read_job_file(EXPERIMENTS / "seat_comparison.py", ["--revision", "HEAD"])
     jobs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]
     assert {job.experiment for job in jobs} == {"seat_comparison"}
     assert sorted({run.job.name for run in runs}) == [
