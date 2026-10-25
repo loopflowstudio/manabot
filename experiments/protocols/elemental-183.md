@@ -351,3 +351,26 @@ segment ends without a final export (failure before its first export, or
 refusal); the endpoint is then the last tracked export of the last segment
 that produced one. No segment is retried. The evaluator admits every
 segment's exports by absolute update and settles when the chain ends.
+
+## Amendment, 2026-10-25 04:00 UTC, before learning: launches that never trained
+
+No w3 attempt has taken a learning step. Etude run `a04845f2548b` booted w1/w2's
+image, which lacks python3.12, and was deleted at its startup deadline
+(~$0.15); `9fe2a28ddbf3` was refused for capacity ($0); `3828021cbc80` booted
+Etude's stock image but its inputs were staged under the storage's `jobs/`
+prefix, while Etude reads an input key from the bucket root. A worker bug left
+the attempt waiting instead of failing, so its pod was deleted by hand
+(~$0.44). `cf7dec5040bc` then failed its numerics gate in 0.3 s because the job
+synced without the dev extra (no `pytest`).
+
+"No segment is retried" governs segments that learned. A launch that ends
+before its first learning update — lost before start, refused, or failed in
+setup or the numerics gate — is not a segment. It is relaunched with the same
+recipe, seed, continuation, target and limits, and its cost counts against
+the $50 cap. w3 is re-frozen at `3317a8dec` (tag `mtg183-w3-source-2`), which
+adds MTG-186's stock-image setup (pinned Rust, `--extra dev`) and git-free
+source bundle; only the job's setup, command, revision and `source_bundle`
+change. Inputs are staged at the bucket-root keys the spec names
+(`r2://manabot/mtg183/w2/`, same digests). The machine is Etude's stock L4
+image (`runpod/pytorch@sha256:4d1721e6…`); the protocol fixes the L4, not
+the image.
