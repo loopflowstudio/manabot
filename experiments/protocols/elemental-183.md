@@ -375,7 +375,7 @@ change. Inputs are staged at the bucket-root keys the spec names
 image (`runpod/pytorch@sha256:4d1721e6…`); the protocol fixes the L4, not
 the image.
 
-## Amendment, 2026-10-25 (its commit time), before any evaluation game: evaluation on the Mac mini
+## Amendment, 2026-10-25 04:34 UTC (its commit time), before any evaluation game: evaluation on the Mac mini
 
 Jack Heart, 2026-10-25: evaluation leaves the laptop. `elemental_long_eval`
 runs as an Etude job on the Mac mini (`mini-heart.local`, M1, 8 cores), an
