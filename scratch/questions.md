@@ -29,8 +29,9 @@ They do not select current work or authorize paid execution.
   0.25 h setup allowance (its dollar check), not in the 19:00 formula.
 - Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
   (108/h): conservative, matches the watchdog's clock.
-- The evaluator's `--etude-source/--run` names one run; later segments need it
-  to read several runs (or one restart per segment). Not built yet.
+- The evaluator reads several segment runs; `--continues` (operator-declared)
+  rather than a budget rule decides whether the last run's end settles the seed,
+  since the successor's run id only exists after its launch.
 - Follower reads w3's checkpoints with `etude.train.read.read(source, "self-play", run)`:
   the tracked experiment is the stage id (`RunContext` name). The tracking
   storage URI is an explicit CLI argument; not verified against a live run.
@@ -83,3 +84,29 @@ They do not select current work or authorize paid execution.
 
 The 17Lands/GIH design, investigation and implementation defaults landed with #360;
 they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evidence,questions}.md`.
+
+# MTG-183 w3 relaunch (2026-10-25 03:51 UTC)
+
+- Read "No segment is retried" as covering segments that learned; launches that
+  never took a learning step are relaunched (amendment 03:51 UTC). The literal
+  reading would have ended the seed at 2,534 on infrastructure bugs, against
+  Jack Heart's direction to continue it within the cap.
+- Took MTG-186's three Etude worker fixes verbatim; whichever of MTG-183/MTG-186
+  lands second resolves the identical hunks.
+- Deleted stuck pod `ublorrai3gb3ea` through RunPod's API: `etude terminate`
+  refuses a machine with a run, and the worker would never pick up the attempt
+  (Etude `Courier.bring_in` records the new inbox before fetching inputs, so a
+  failed fetch never retries). Worth an Etude PR.
+
+# MTG-183 evaluation on the Mac mini (2026-10-25)
+
+- Segment end is the tracking bucket's `state.json` (Etude's controller DB is on
+  the laptop). A segment killed without finishing tracking never ends there;
+  the operator then names its successor or drops `--continues` by relaunch.
+- Doppler service token on the mini (read-only, manabot/prd) is this session's
+  choice for R2 keys; Etude gives jobs no storage keys. Revoke `mtg183-eval-mini`
+  when evaluation ends.
+- No yield to MTG-181 on the mini (Jack Heart: the laptop-only yield no longer
+  applies), though MTG-181's evaluation shares the mini's 8 cores; games have a
+  600 s bound and take seconds.
+- The eval job's `max_attempts=1`, `max_hours=190` (to `--until`).
