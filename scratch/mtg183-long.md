@@ -218,3 +218,19 @@ Filed as Etude task ee6e73 (code workflow launched). `OnDemand.max_rental_second
 = 43,000 is stale (grants: S3 36 h, R2 7 d). Once released and pinned, w4+ can
 run as one rental to the remaining cap instead of ~11.6 h segments (protocol
 amendment before that allocation).
+
+## Direction (Jack Heart, 2026-10-25 ~14:20 UTC): card stats going forward
+
+- Amendment `fb71050cf`: every eval game also delivers card tables
+  (`trace_card_tables`, participants `model`/`heuristic` and `newer`/`older`),
+  evidence under the run folder's `artifacts/`. Job spec `3d7bb2a54`.
+- Current code's match keys differ from the 0.2.2 run's (0 of 110 overlap), so
+  it is a new run `mtg183-eval-cards`, state `~/.manabot/mtg183-eval-cards` on
+  the mini, replaying from the start (~8 h to catch up to where `mtg183-eval`
+  was). `ac6c45760d88` cancelled ~14:35 UTC; `mtg183-eval` kept as superseded,
+  a reproduction check for the replayed units.
+- Smoke (2 grid + 2 pair games on real R2 checkpoints): card tables present,
+  ~44 KB evidence/game.
+- Launched with the pinned 0.2.2 client (`~/.manabot/mtg183-eval-source/.venv`)
+  so the controller DB w3 depends on is untouched. The w4 relaunch keeps
+  revision fb71050cf, adding `--run <w4>`.
