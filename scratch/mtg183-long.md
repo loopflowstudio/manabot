@@ -23,7 +23,7 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 - `experiments/elemental_grid.py` is MTG-181's unmerged bytes, copied unchanged;
   whichever branch lands second keeps one copy.
 
-## Exists (2026-10-25 01:30 UTC)
+## Exists (2026-10-25 02:15 UTC)
 
 - Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`, then #360
   (`arena/` split into `sim/` + `eval/`, etude-sdk 0.2.2) at `9871e3545` (pushed).
@@ -72,7 +72,7 @@ The pin moved from `d9fc58df2` with 0 rows played because #360 changed
 keep identities only if the pin's `INFERENCE_CODE` files are unchanged; rows
 played under different pins are not comparable.
 
-## w2 end and w3 spec (2026-10-25 02:30 UTC)
+## w2 end and w3 spec (2026-10-25 02:06 UTC)
 
 - w2 ended 01:47 UTC at update 2,534 (`paused`), $7.2358. One-shot `_admit`
   (old checkout, under `owner.lock`) took the ledger to 53 exports, 0…2,534
@@ -85,9 +85,14 @@ played under different pins are not comparable.
   `RetainedRun` to `RunRecord`; tagged `mtg183-w3-source`); local admission of
   the real w2 record then gave iteration 2,534.
 - Etude caps a rental at 43,000 s, so one 57.7 h w3 cannot run (worker would
-  refuse its deadline). Amendment "segments of one rental each" (02:30 UTC):
+  refuse its deadline). Amendment "segments of one rental each" (02:06 UTC,
+  its commit time; first stamped a future 02:30 UTC, corrected before allocation;
+  tag `mtg183-w3-spec` = `4eaa59988` still carries the old stamp):
   a chain w3, w4, … sized from receipts. w3: 11.6 h, $7.11, target 3,500;
   quoted $6.99 at $0.59/h. Spec `experiments/protocols/elemental-183-w3.json`.
+- Evaluator `state.json` (02:06 UTC poll) holds all 53 exports; still 0 rows
+  (yielding to MTG-181's `elemental_181_new_heuristic`). The ledger's `error`
+  lists ValueErrors for the old cohort's never-run w3–w7 windows: historical.
 - Launch as `Run(job, seed=18301)` (the worker needs `ETUDE_SEED`); MTG-186 holds
   the shared `l4` on-demand's one slot, so `etude ondemand max l4 2` before launch.
 

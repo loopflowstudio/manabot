@@ -318,7 +318,7 @@ ends and w3 has staged w2's learner state, w1/w2's retained objects move from
 S3 to R2; checkpoint agents are identified by digest, not location, so moving
 their bytes does not change any match.
 
-## Amendment, 2026-10-25 02:30 UTC, before allocation: segments of one rental each
+## Amendment, 2026-10-25 02:06 UTC, before allocation: segments of one rental each
 
 w2 ended at its deadline (01:47 UTC) at update 2,534 (`paused`); its receipts
 are $7.2358 (training $7.2198, guardian $0.0161), so w1 and w2 together cost

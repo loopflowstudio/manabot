@@ -25,7 +25,7 @@ They do not select current work or authorize paid execution.
   rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
   otherwise keep `8e7df92e4` reachable if the PR is squashed.
 - Etude's 43,000 s rental cap forces a chain of one-rental segments (amendment
-  02:30 UTC), restoring the frozen w1–w7 shape. Segment hours subtract Etude's
+  02:06 UTC), restoring the frozen w1–w7 shape. Segment hours subtract Etude's
   0.25 h setup allowance (its dollar check), not in the 19:00 formula.
 - Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
   (108/h): conservative, matches the watchdog's clock.
