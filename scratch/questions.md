@@ -48,3 +48,6 @@ They do not select current work or authorize paid execution.
 - Checkpoint agent code identity = `manabot/model`, `manabot/env`,
   `manabot/arena/match.py`, `experiments/elemental_grid.py`; editing those in
   the evaluator's pinned checkout would start new agents, so pin it.
+- Stopped the old follower at 2026-10-25 00:15 UTC instead of after w2 ends:
+  it was playing heuristic v1 (not the anchor) against MTG-181's live process
+  and no longer admitting exports. w2's tail is admitted by a one-shot `_admit` call.

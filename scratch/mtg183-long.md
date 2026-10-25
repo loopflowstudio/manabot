@@ -28,10 +28,13 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 - Branch merged main (#362, heuristic v2 `639ab7770`) at `261c62027`; etude-sdk 0.2.1.
 - Seed 18301: w1 ended at update 1,325; w2 running to its pod deadline
   2026-10-25 01:47 UTC (≈ update 2,550). Old cohort controller unloaded.
-- Old follower `gg.manabot.mtg183.follower` (pid 17331, pinned 8e7df92e4, state
-  `/Users/jack/.manabot/mtg183-follow/follow`): 46 exports admitted (0…2,200),
-  51 units, none played; it yields to MTG-181's follower (pid 23706, `--until`
-  2026-10-25 17:31 UTC). It plays heuristic v1, so it must stop before then.
+- Old follower `gg.manabot.mtg183.follower` stopped (`launchctl bootout`,
+  2026-10-25 00:15 UTC; plist kept). MTG-181's follower had exited and MTG-181
+  moved to `elemental_181_new_heuristic`, which the follower's process-name yield
+  does not match, so at 23:49 UTC it began `heuristic-000000-full` against
+  heuristic v1 and stopped admitting exports mid-unit. Those partial v1 groups
+  are not evidence. Ledger `/Users/jack/.manabot/mtg183-follow/follow/ledger.json`
+  (copy `ledger-before-stop-20261025T0015Z.json` beside it): 48 exports admitted, 0…2,200+.
 - `experiments/elemental_long_eval.py`: one Etude eval run (`mtg183-elemental-eval`
   / `mtg183-eval`), one match per grid row, tables delivered to
   `r2://manabot/evaluations/`; checkpoints from the old ledger (w1/w2) and w3's
@@ -43,8 +46,10 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
 
 ## Remains, in order
 
-1. After w2 ends (01:47 UTC): check the old ledger holds w2's final export; stop
-   the old follower (`launchctl bootout` its plist) — before 17:31 UTC at the latest.
+1. After w2 ends (01:47 UTC): admit w2's remaining exports into the old ledger
+   once, without playing: from the pinned checkout, hold `owner.lock` and call
+   `experiments.elemental_long_follow._admit`, then write the ledger. Do not
+   restart the launchd follower (its loop plays pending v1 units).
 2. Start `elemental_long_eval` from a pinned checkout of this change
    (`--windows` the old ledger, `--storage r2://manabot/evaluations`, Doppler
    `manabot/prd` for R2 keys; `--etude-source/--run` added once w3 exists).
@@ -66,12 +71,13 @@ Etude after w2", 2026-10-24 19:00 UTC). It stays the authority; this note tracks
   `TrainingJob.continuation` (raw/EMA/Adam + parent run record, refusing another
   parent update or seed; collector/RNG streams restart).
 - Run long-lived followers from a detached pinned checkout so the Task branch can move.
+- Yielding by another Task's process name fails silently when that Task
+  switches scripts; MTG-183's follower then played a stale anchor and stopped
+  admitting exports. Admission and play should not share one blocking loop.
 - The report's synthetic test showed a strict "gain not significant" saturation
   rule never fires at 5,000 paired games; use a practical margin.
 - Local evaluation that yields to another Task's follower can stall entirely;
   declare its expected wall time against the real queue, not idle capacity.
-
-Check (2026-10-25): see the end of this file.
 
 ### S3 cleanup (Jack Heart via the Etude storage-cost session, 2026-10-24)
 
@@ -93,7 +99,5 @@ after w2 ends, report data via `manabot.data publish`.
 **Anchor decided (Jack Heart, 2026-10-24): heuristic v2** (`639ab7770`); recorded
 in the protocol amendment. v1 scores (MTG-181, ladder) are not comparable.
 
-Check (2026-10-25): `uv run --extra dev --extra evaluation --extra artifacts --extra reports pytest tests/arena/test_elemental_long*.py tests/arena/test_elemental_grid.py tests/training/test_etude_job.py tests/training/test_learning_state.py tests/sim/test_tracking.py tests/test_package_boundaries.py -q` → 49 passed. Gate owns the wider suites.
-
-Compress (2026-10-25): `Unit.older` replaces parsing the pair key for unit order;
-focused suite (`test_elemental_long*`, `test_elemental_grid`, `test_etude_job`) → 31 passed.
+Check (2026-10-25): focused suite (`test_elemental_long*`, `test_elemental_grid`,
+`test_etude_job`) → 31 passed after `Unit.older`; the wider 49-test set passed before it. Gate owns the wider suites.
