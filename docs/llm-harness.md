@@ -144,3 +144,51 @@ runtime now recognizes both declared terminators without relaxing validation.
 
 Implementation references: [Transformers chat templates](https://huggingface.co/docs/transformers/v5.3.0/chat_templating)
 and [Qwen3.5 implementation](https://github.com/huggingface/transformers/blob/v5.3.0/src/transformers/models/qwen3_5/modeling_qwen3_5.py).
+
+## Cached full-game GPU proof
+
+Prepare the pinned checkpoint separately from inference:
+
+```sh
+uv run --extra llm python -m manabot.llm.cache \
+  --config configs/llm/qwen3.5-9b-game.json \
+  --manifest configs/llm/qwen3.5-9b-cache.json --out cache.json
+```
+
+The manifest pins publisher LFS sizes and SHA-256 hashes for every shard. Add
+`--offline` to verify an existing cache without Hub access. Set `HF_HOME` to a
+reusable disk location before both preparation and execution. A new remote
+machine still needs its first transfer; a local cache is not a remote cache,
+and ephemeral rental disks do not survive deletion.
+
+`InferenceSession` loads one worker once, then applies the existing selection
+protocol to successive decisions. Loading has its own deadline; each decision
+has a hard parent-owned deadline. A timeout retains progress and closes the
+session without selecting an action or automatically restarting. Generation
+does not retain conversational or KV state across game decisions.
+
+`manabot.verify.llm_game` connects the native text renderer and revision-bound
+Commands to that session. Its functional fixture is a 60-card mirror of 24
+Mountains, 24 Gray Ogres and 12 Lightning Bolts, Qwen in seat zero against a
+seeded uniform random opponent. This is a small engine test deck, not a
+constructed-format deck or a playing-strength benchmark. Native trivial-decision
+skipping is disabled; public history v1/32 is declared, and there is no writable
+model memory. Every executed Command is checked against a second native replay.
+
+The separate game configuration admits 8,192 tokens because a local 426-decision
+random control reached 5,118 prompt tokens. Inputs and repairs are never clipped;
+overflow stops the game explicitly. This budget is not a capacity certificate.
+Game limits, model failures and replay divergence retain incomplete summaries.
+The random control can run without loading a model:
+
+```sh
+uv run python -m manabot.verify.llm_game --random-control --out .runs/llm-control
+```
+
+The L4 entry point runs offline after setup, records loading separately from
+decision latency, samples total device memory with `nvidia-smi`, and packs full
+decision evidence into `game.tar.gz`. `scripts/llm-game-setup.sh` expects an
+Etude-verified Linux CPython 3.12 engine binary at `$ETUDE_INPUTS_DIR/native.so`;
+its source must match the checkout's native code and content. The initial test
+uses the passing PR #376 release wheel, with that source comparison retained.
+Etude's rental/job limits bound paid execution, including setup and cleanup.
