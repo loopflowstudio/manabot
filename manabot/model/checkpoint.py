@@ -6,11 +6,13 @@ and returns an eval-mode model. Optimizer/collector recovery belongs to training
 Historical serialized keys remain unchanged; these are not training snapshots.
 """
 
+import os
 from pathlib import Path
 import tempfile
 from typing import Any, Literal, overload
 from urllib.parse import unquote, urlsplit
 
+from etude.run.records import ArtifactRef
 from etude.run.storage import storage_from_uri
 from etude.train.records import CheckpointRecord
 import torch
@@ -39,36 +41,52 @@ import managym
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
     """Admit the exact policy named by an Etude checkpoint record.
 
-    Require digest and size before loading weights. Local SDK snapshots and S3
+    Require digest and size before loading weights. Local SDK snapshots and S3/R2
     destinations share the same admission; neither names nor tags select a model.
     """
-    reference = CheckpointRecord.model_validate_json(record_path.read_bytes()).artifact
+    record = CheckpointRecord.model_validate_json(record_path.read_bytes())
+    with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
+        return load_checkpoint(
+            str(fetch_etude_checkpoint(record.artifact, Path(directory) / "policy.pt"))
+        )
+
+
+def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
+    """The verified local bytes of an Etude checkpoint artifact; loads no weights.
+
+    A local file is verified in place and returned. An S3 or R2 object is
+    downloaded to `target` through the SDK's storage adapter and verified before
+    it is renamed there, so a partial download never becomes a cached policy.
+    Each call writes its own partial file, so concurrent fetches of one target
+    are safe.
+    """
     if reference.sha256 is None or reference.size_bytes is None:
         raise ValueError("Etude checkpoint requires a digest and byte count")
     uri = urlsplit(reference.uri)
     if uri.scheme == "file" and uri.netloc in {"", "localhost"}:
         path = Path(unquote(uri.path))
         verify_file(path, reference.sha256, reference.size_bytes)
-        return load_checkpoint(str(path))
-    if uri.scheme != "s3" or uri.query or uri.fragment or not uri.netloc:
-        raise ValueError("Etude checkpoint must name a local file or S3 object")
-    # The SDK's storage adapter owns remote access. Verification happens before
-    # torch admission, and a partial download never becomes a cached policy.
-    storage = storage_from_uri(f"s3://{uri.netloc}")
+        return path
+    if uri.scheme not in {"s3", "r2"} or uri.query or uri.fragment or not uri.netloc:
+        raise ValueError("Etude checkpoint must name a local file or S3/R2 object")
+    storage = storage_from_uri(f"{uri.scheme}://{uri.netloc}")
     key = uri.path.lstrip("/")
-    with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
-        path = Path(directory) / "policy.pt"
-        with path.open("wb") as target:
-            offset = 0
-            while offset < reference.size_bytes:
-                length = min(8 * 1024 * 1024, reference.size_bytes - offset)
-                block = storage.get_range(key, offset, length)
-                if len(block) != length:
-                    raise ValueError("incomplete Etude checkpoint download")
-                target.write(block)
-                offset += length
-        verify_file(path, reference.sha256, reference.size_bytes)
-        return load_checkpoint(str(path))
+    descriptor, name = tempfile.mkstemp(
+        prefix=f"{target.name}.", suffix=".partial", dir=target.parent
+    )
+    partial = Path(name)
+    with os.fdopen(descriptor, "wb") as file:
+        offset = 0
+        while offset < reference.size_bytes:
+            length = min(8 * 1024 * 1024, reference.size_bytes - offset)
+            block = storage.get_range(key, offset, length)
+            if len(block) != length:
+                raise ValueError("incomplete Etude checkpoint download")
+            file.write(block)
+            offset += length
+    verify_file(partial, reference.sha256, reference.size_bytes)
+    partial.replace(target)
+    return target
 
 
 @overload

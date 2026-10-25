@@ -199,6 +199,26 @@ class RunRecord[RegimeT](Strict):
             return {k: v for k, v in data.items() if k != "fixed_validation"}
         return data
 
+    @model_validator(mode="before")
+    @classmethod
+    def _count_retained_updates(cls, data: Any) -> Any:
+        """Exports written before StageRecord.updates kept one row per update.
+
+        A continuation admits such a parent by digest, so its absolute update
+        comes from those inline rows rather than a rewritten record.
+        """
+        if isinstance(data, dict) and isinstance(data.get("stages"), list):
+            data = dict(data)
+            data["stages"] = [
+                {"updates": len(stage["diagnostics"]), **stage}
+                if isinstance(stage, dict)
+                and "updates" not in stage
+                and isinstance(stage.get("diagnostics"), list)
+                else stage
+                for stage in data["stages"]
+            ]
+        return data
+
     def _updates_through(self, learning: set[str], stage_id: str | None) -> int:
         total = 0
         for stage in self.stages:

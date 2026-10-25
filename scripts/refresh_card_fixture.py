@@ -93,7 +93,7 @@ def http_get(url: str) -> bytes:
     req = urllib.request.Request(
         url,
         headers={
-            "User-ActorCritic": USER_AGENT,
+            "User-Agent": USER_AGENT,
             "Accept": "application/json",
             "Accept-Encoding": "gzip",
         },
