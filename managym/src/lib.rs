@@ -1,5 +1,7 @@
 pub mod agent;
 pub mod benchmark;
+#[cfg(feature = "benchmark")]
+pub mod benchmark_allocations;
 pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;

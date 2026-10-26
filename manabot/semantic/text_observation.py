@@ -14,7 +14,6 @@ from typing import Callable
 
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
-    Action,
     CardReference,
     DecisionInput,
     DecisionObject,
@@ -29,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-1"
+REPRESENTATION_VERSION = "manabot-text-2"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -147,14 +146,15 @@ class TextDecision:
 
 
 def _enum(values: tuple[str, ...], index: int) -> str:
+    index = int(index)
     if not 0 <= index < len(values):
         raise TextEncodingError(f"unsupported enum value {index}")
     return values[index]
 
 
-def _keywords(value: Keywords) -> str:
+def _keywords(value: Keywords | managym.Keywords) -> str:
     return ", ".join(
-        key.replace("_", " ") for key, enabled in value.model_dump().items() if enabled
+        key.replace("_", " ") for key in Keywords.model_fields if getattr(value, key)
     )
 
 
@@ -170,7 +170,7 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
-def _mana(cost: ManaCost | None) -> str:
+def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     if cost is None:
         return "no mana cost"
     if len(cost.cost) not in (6, 7) or any(value < 0 for value in cost.cost):
@@ -208,18 +208,19 @@ def _mana(cost: ManaCost | None) -> str:
             + "}"
         )
     return (symbols or "{0}") + (
-        " (Lesson spending context)" if cost.spend_on_lesson else ""
+        " (Lesson spending context)" if getattr(cost, "spend_on_lesson", False) else ""
     )
 
 
 class _Renderer:
     def __init__(self, capture: DecisionInput) -> None:
         self.capture = capture
-        self.state = capture.observation.viewer_state
+        self.state = managym.Observation.from_json(
+            json.dumps(capture.observation.viewer_state)
+        )
         self.names: dict[int, str] = {}
         self.seats: dict[int, str] = {}
         self.objects: dict[tuple[int, int], str] = {}
-        self.stack: dict[int, str] = {}
         self.definitions = {
             int(key): f"D{index + 1}"
             for index, key in enumerate(sorted(capture.definitions, key=int))
@@ -242,10 +243,6 @@ class _Renderer:
                 self.objects[link.permanent_id, link.incarnation] = label
         for index, card in enumerate(self.state.agent_sideboard):
             self.names[card.candidate_id] = f"O{index + 1} ({card.name})"
-        self.stack = {
-            item.stack_object_id: f"S{index + 1}"
-            for index, item in enumerate(self.state.stack_objects)
-        }
 
     def name(self, identity: int) -> str:
         try:
@@ -287,8 +284,21 @@ class _Renderer:
         )
         return f"{definition}, owner {self.seats[value.owner]}, {zone}, {link}"
 
-    def action(self, action: Action) -> str:
-        kind = _enum(_VERBS, action.type)
+    def fact_reference(self, reference: managym.VisibleReference) -> str:
+        if reference.player is not None:
+            if reference.object is not None or reference.definition is not None:
+                raise TextEncodingError("player reference carries object fields")
+            return self.seats[reference.player]
+        if reference.object is not None:
+            if reference.definition is None:
+                raise TextEncodingError("current object reference lacks its definition")
+            return self.name(reference.object)
+        if reference.definition is not None:
+            return self.definition(reference.definition) + " (no current object link)"
+        return "unavailable or expired object"
+
+    def action(self, action: managym.Action) -> str:
+        kind = _enum(_VERBS, int(action.action_type))
         focus = [self.name(identity) for identity in action.focus]
         first = focus[0] if focus else ""
         if (
@@ -354,47 +364,88 @@ class _Renderer:
             label += f". Native description: {action.description}"
         return label
 
-    def render(self) -> tuple[str, tuple[TextAction, ...]]:
-        capture, state = self.capture, self.state
-        identity, frame = capture.observation.identity, capture.observation.decision
-        if (
-            frame.revision != identity.revision
-            or frame.actor != identity.viewer
-            or state.agent.player_index != identity.viewer
-            or capture.continuation.actor != frame.actor
-            or state.game_over
-            or state.recent_events
-            or capture.observation.events
-            or capture.continuation.recent_facts
-        ):
-            raise TextEncodingError(
-                "inconsistent acting decision or unsupported event increment"
-            )
-        if capture.continuation.stage not in _STAGES:
-            raise TextEncodingError("unsupported continuation stage")
-        if (
-            not 0 <= capture.history.capacity <= 32
-            or len(capture.history.rows) > capture.history.capacity
-        ):
-            raise TextEncodingError("invalid public history bound")
-        if len(frame.offers) != len(state.action_space.actions) or not frame.offers:
-            raise TextEncodingError("incomplete action/offer binding")
-        if len({offer.id for offer in frame.offers}) != len(frame.offers):
-            raise TextEncodingError("duplicate offer identity")
-        if any(card.zone == 1 for card in state.opponent_cards):
-            raise TextEncodingError("opponent hand identity in capture")
-        lines = [
-            "You are choosing one legal action in the current game.",
-            "Return only one listed action reference, such as A0. No other text.",
-            "All legal alternatives are listed. Further choices occur only when offered.",
-            "Optional details are shown when provided; unavailable facts are marked explicitly.",
-            "",
-            f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, state.turn.phase)}. Step: {_enum(_STEPS, state.turn.step)}.",
-            f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
-            f"Decision: {_enum(_SPACES, state.action_space.type)}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
-            "",
-            "Players:",
+    def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
+        source = self.fact_reference(relation.source)
+        details = [
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision'), relation.kind)}",
+            f"controller {self.seats[relation.controller]}",
+            f"source {source}",
         ]
+        if relation.parent is not None:
+            details.append(f"parent R{relation.parent + 1}")
+        details += _selectors(relation.mode, relation.ability)
+        if relation.kicked:
+            details.append("kicker included")
+        if relation.active_clause is not None:
+            details.append(f"active target clause {relation.active_clause + 1}")
+        if relation.decision:
+            details.append(
+                _enum(
+                    (
+                        "none",
+                        "resolving payment",
+                        "mana activation cost",
+                        "mana output",
+                        "sacrifice",
+                        "select milled",
+                        "search",
+                        "optional discard and draw",
+                        "scry",
+                        "inspect and select",
+                        "mode",
+                        "Learn",
+                        "discard",
+                        "legend rule",
+                    ),
+                    relation.decision,
+                )
+            )
+        if relation.cost is not None:
+            details.append(
+                "remaining cost "
+                + _mana(
+                    ManaCost(
+                        cost=list(relation.cost),
+                        mana_value=sum(relation.cost) + len(relation.hybrid),
+                        hybrid=[list(pair) for pair in relation.hybrid],
+                        spend_on_lesson=relation.lesson,
+                    )
+                )
+            )
+            details.append(
+                f"waterbend {_yes(relation.waterbend)}; may decline {_yes(relation.can_decline)}"
+            )
+        for target in relation.targets:
+            details.append(
+                f"target clause {target.clause + 1}: {self.fact_reference(target.reference)}"
+            )
+        if relation.context is not None:
+            details.append("trigger context " + self.fact_reference(relation.context))
+        if relation.sacrifice is not None:
+            details.append(
+                "reserved sacrifice " + self.fact_reference(relation.sacrifice)
+            )
+        if relation.resolutions_this_turn:
+            details.append(
+                f"ability resolutions this turn {relation.resolutions_this_turn}"
+            )
+        for output in relation.mana_outputs:
+            for restricted, amounts in (
+                (False, output.mana),
+                (True, output.lesson),
+            ):
+                if any(amounts):
+                    cost = ManaCost(
+                        cost=[*amounts, 0],
+                        mana_value=sum(amounts),
+                        spend_on_lesson=restricted,
+                    )
+                    details.append(f"output mode {output.mode + 1}: {_mana(cost)}")
+        return "; ".join(details) + "."
+
+    def _players_lines(self) -> list[str]:
+        state = self.state
+        lines: list[str] = []
         for player in (state.agent, state.opponent):
             if (
                 len(player.zone_counts) != 7
@@ -441,33 +492,43 @@ class _Renderer:
                     )
                     + "."
                 )
-        lines += [
-            "Opponent's other hand identities and both library orders are unavailable.",
-            "",
-            "Visible cards (separate aliases for separate copies):",
-        ]
+        return lines
+
+    def _cards_lines(self) -> list[str]:
+        state = self.state
+        lines: list[str] = []
         for card in state.agent_cards + state.opponent_cards:
             flags = ", ".join(
                 key.removeprefix("is_").replace("_", " ")
-                for key, enabled in card.card_types.model_dump().items()
-                if enabled
+                for key in (
+                    "is_castable",
+                    "is_permanent",
+                    "is_non_land_permanent",
+                    "is_non_creature_permanent",
+                    "is_spell",
+                    "is_creature",
+                    "is_land",
+                    "is_planeswalker",
+                    "is_enchantment",
+                    "is_artifact",
+                    "is_kindred",
+                    "is_battle",
+                )
+                if getattr(card.card_types, key)
             )
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
                 optional += f"; printed keywords {keywords}"
             lines.append(
-                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, card.zone)}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
+                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
         if not state.agent_cards and not state.opponent_cards:
             lines.append("Empty.")
-        lines += ["", "Owned outside-game candidates:"]
-        for card in state.agent_sideboard:
-            lines.append(
-                f"{self.name(card.candidate_id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}. Rules: {card.text_box or '(empty)'}"
-            )
-        if not state.agent_sideboard:
-            lines.append("Empty.")
-        lines += ["", "Battlefield effective state:"]
+        return lines
+
+    def _permanents_lines(self) -> list[str]:
+        state = self.state
+        lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
             optional = ""
             if permanent.temp_subtypes:
@@ -479,37 +540,116 @@ class _Renderer:
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
-        lines += ["", "Stack (native order, top to bottom):"]
-        for item in state.stack_objects:
-            targets: list[str] = []
-            for target in item.targets:
-                ids = (
-                    target.player_id,
-                    target.permanent_id,
-                    target.stack_object_id,
-                    target.card_id,
+        return lines
+
+    def _definitions_lines(self) -> list[str]:
+        capture = self.capture
+        lines: list[str] = []
+        for key in sorted(capture.definitions, key=int):
+            definition = capture.definitions[key]
+            types = " ".join(definition.supertypes + definition.types.types)
+            optional = ""
+            if definition.power is not None and definition.toughness is not None:
+                optional += (
+                    f"; power/toughness {definition.power}/{definition.toughness}"
                 )
-                _enum(("player", "permanent", "stack", "card"), target.kind)
-                selected = ids[target.kind]
-                if selected is None or sum(value is not None for value in ids) != 1:
-                    raise TextEncodingError("inconsistent stack target")
-                targets.append(
-                    self.stack[selected] if target.kind == 2 else self.name(selected)
-                )
-            source = (
-                "unavailable"
-                if item.source_permanent_id is None
-                else self.name(item.source_permanent_id)
+            elif definition.power is not None:
+                optional += f"; power {definition.power}"
+            elif definition.toughness is not None:
+                optional += f"; toughness {definition.toughness}"
+            if definition.subtypes:
+                optional += f"; subtypes {', '.join(definition.subtypes)}"
+            if keywords := _keywords(definition.keywords):
+                optional += f"; keywords {keywords}"
+            if definition.kicker is not None:
+                optional += f"; kicker {_mana(definition.kicker)}"
+            if definition.ward is not None:
+                optional += f"; ward {_mana(definition.ward)}"
+            lines.append(
+                f"{self.definition(int(key))} — {definition.name}. {types}; cost {_mana(definition.mana_cost)}{optional}; unlisted keywords false; token {_yes(definition.is_token)}. Rules: {definition.text_box or '(empty)'}"
             )
+        return lines
+
+    def render(self) -> tuple[str, tuple[TextAction, ...]]:
+        capture, state = self.capture, self.state
+        identity, frame = capture.observation, capture.observation.decision
+        if frame is None:
+            raise TextEncodingError("no acting decision")
+        if (
+            frame.revision != identity.revision
+            or frame.actor != identity.viewer
+            or state.agent.player_index != identity.viewer
+            or capture.continuation.actor != frame.actor
+            or state.game_over
+            or state.recent_events
+            or capture.observation.events
+            or capture.continuation.recent_facts
+        ):
+            raise TextEncodingError(
+                "inconsistent acting decision or unsupported event increment"
+            )
+        if capture.continuation.stage not in _STAGES:
+            raise TextEncodingError("unsupported continuation stage")
+        if (
+            not 0 <= capture.history.capacity <= 32
+            or len(capture.history.rows) > capture.history.capacity
+        ):
+            raise TextEncodingError("invalid public history bound")
+        if len(frame.offers) != len(state.action_space.actions) or not frame.offers:
+            raise TextEncodingError("incomplete action/offer binding")
+        if len({offer["id"] for offer in frame.offers}) != len(frame.offers):
+            raise TextEncodingError("duplicate offer identity")
+        if any(card.zone == 1 for card in state.opponent_cards):
+            raise TextEncodingError("opponent hand identity in capture")
+        lines = [
+            "You are choosing one legal action in the current game.",
+            "Return only one listed action reference, such as A0. No other text.",
+            "All legal alternatives are listed. Further choices occur only when offered.",
+            "Optional details are shown when provided; unavailable facts are marked explicitly.",
+            "",
+            f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
+            f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
+            f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
+            "",
+            "Players:",
+        ]
+        lines.extend(self._players_lines())
+        lines += [
+            "Opponent's other hand identities and both library orders are unavailable.",
+            "",
+            "Visible cards (separate aliases for separate copies):",
+        ]
+        lines.extend(self._cards_lines())
+        lines += ["", "Owned outside-game candidates:"]
+        for card in state.agent_sideboard:
+            lines.append(
+                f"{self.name(card.candidate_id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}. Rules: {card.text_box or '(empty)'}"
+            )
+        if not state.agent_sideboard:
+            lines.append("Empty.")
+        lines += ["", "Battlefield effective state:"]
+        lines.extend(self._permanents_lines())
+        lines += ["", "Stack (native order, top to bottom):"]
+        for index, item in enumerate(state.stack_objects):
+            stack_frame = capture.frames[index]
+            if stack_frame.kind != int(item.kind) + 1:
+                raise TextEncodingError("stack/continuation order mismatch")
+            # Frozen schema 6 lacks target incarnation/clause information. The
+            # shared native frames are authoritative for current relationships.
+            targets = [
+                f"clause {target.clause + 1}: {self.fact_reference(target.reference)}"
+                for target in stack_frame.targets
+            ]
+            source = self.fact_reference(stack_frame.source)
             details = [
                 f"controller {self.name(item.controller_id)}",
-                f"source permanent {source}",
+                f"source {source}",
             ]
             details.extend(_selectors(item.chosen_mode, item.ability_index))
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(
-                f"{self.stack[item.stack_object_id]}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_card_registry_key)}]; {'; '.join(details)}."
+                f"S{index + 1}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_card_registry_key)}]; {'; '.join(details)}."
             )
         if not state.stack_objects:
             lines.append("Empty.")
@@ -539,29 +679,7 @@ class _Renderer:
         if context.mana_cost is not None:
             lines.append(f"Outstanding mana cost: {context.mana_cost}.")
         lines += ["", "Bound public card definitions:"]
-        for key in sorted(capture.definitions, key=int):
-            definition = capture.definitions[key]
-            types = " ".join(definition.supertypes + definition.types.types)
-            optional = ""
-            if definition.power is not None and definition.toughness is not None:
-                optional += (
-                    f"; power/toughness {definition.power}/{definition.toughness}"
-                )
-            elif definition.power is not None:
-                optional += f"; power {definition.power}"
-            elif definition.toughness is not None:
-                optional += f"; toughness {definition.toughness}"
-            if definition.subtypes:
-                optional += f"; subtypes {', '.join(definition.subtypes)}"
-            if keywords := _keywords(definition.keywords):
-                optional += f"; keywords {keywords}"
-            if definition.kicker is not None:
-                optional += f"; kicker {_mana(definition.kicker)}"
-            if definition.ward is not None:
-                optional += f"; ward {_mana(definition.ward)}"
-            lines.append(
-                f"{self.definition(int(key))} — {definition.name}. {types}; cost {_mana(definition.mana_cost)}{optional}; unlisted keywords false; token {_yes(definition.is_token)}. Rules: {definition.text_box or '(empty)'}"
-            )
+        lines.extend(self._definitions_lines())
         lines += [
             "",
             f"Public policy history v1: chronological suffix, capacity {capture.history.capacity} records; no writable model memory.",
@@ -572,21 +690,29 @@ class _Renderer:
             )
         if not capture.history.rows:
             lines.append("Empty." if capture.history.capacity else "History disabled.")
+        if capture.frames:
+            lines += ["", "Current stack and continuation relations:"]
+            lines.extend(
+                self.relation(index, relation)
+                for index, relation in enumerate(capture.frames)
+            )
         lines += ["", "Legal actions:"]
         actions: list[TextAction] = []
         for index, (offer, descriptor) in enumerate(
             zip(frame.offers, state.action_space.actions, strict=True)
         ):
             if (
-                offer.actor != frame.actor
-                or offer.choices
-                or offer.verb != _enum(_VERBS, descriptor.type)
+                offer["actor"] != frame.actor
+                or offer["choices"]
+                or offer["source"] is not None
+                or offer["help"] is not None
+                or offer["verb"] != _enum(_VERBS, int(descriptor.action_type))
             ):
                 raise TextEncodingError("unsupported or inconsistent native offer")
             description = self.action(descriptor)
             reference = f"A{index}"
             command = Command(
-                f"text:{capture.digest}:{reference}", frame.revision, offer.id
+                f"text:{capture.digest}:{reference}", frame.revision, offer["id"]
             )
             actions.append(TextAction(reference, description, command))
             lines.append(f"{reference} — {description}.")

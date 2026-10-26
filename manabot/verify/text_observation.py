@@ -60,13 +60,13 @@ def priority_root(
 def _choose(env: managym.Env, verb: str, *, focus_name: str | None = None) -> None:
     decision = capture_text_decision(env, history_capacity=32)
     source = DecisionInput.model_validate_json(decision.capture_json)
-    for offer, action, text_action in zip(
+    assert source.observation.decision is not None
+    for offer, text_action in zip(
         source.observation.decision.offers,
-        source.observation.viewer_state.action_space.actions,
         decision.actions,
         strict=True,
     ):
-        if offer.verb == verb and (
+        if offer["verb"] == verb and (
             focus_name is None or focus_name in text_action.description
         ):
             submit_response(env, decision, text_action.reference)
@@ -104,7 +104,7 @@ def native_fixtures() -> dict[str, managym.Env]:
         if (
             DecisionInput.model_validate_json(
                 capture.capture_json
-            ).observation.viewer_state.action_space.type
+            ).observation.viewer_state["action_space"]["type"]
             == 2
         ):
             break
@@ -117,9 +117,9 @@ def native_fixtures() -> dict[str, managym.Env]:
         state = DecisionInput.model_validate_json(
             decision.capture_json
         ).observation.viewer_state
-        if state.action_space.type == 3:
+        if state["action_space"]["type"] == 3:
             break
-        if state.action_space.type == 2:
+        if state["action_space"]["type"] == 2:
             _choose(blockers, "declare_attacker", focus_name="Attack with ")
         else:
             _choose(blockers, "pass_priority")
@@ -129,17 +129,11 @@ def native_fixtures() -> dict[str, managym.Env]:
     _choose(selection, "cast")
     for _ in range(20):
         capture = capture_text_decision(selection, history_capacity=32)
-        state = DecisionInput.model_validate_json(
-            capture.capture_json
-        ).observation.viewer_state
-        if state.action_space.type == 6:
+        source = DecisionInput.model_validate_json(capture.capture_json)
+        if source.observation.viewer_state["action_space"]["type"] == 6:
             break
-        verbs = [
-            offer.verb
-            for offer in DecisionInput.model_validate_json(
-                capture.capture_json
-            ).observation.decision.offers
-        ]
+        assert source.observation.decision is not None
+        verbs = [offer["verb"] for offer in source.observation.decision.offers]
         _choose(selection, "pay_cost" if "pay_cost" in verbs else "pass_priority")
     else:
         raise AssertionError("selection not reached")
@@ -194,11 +188,11 @@ def history_branches() -> tuple[managym.Env, managym.Env]:
                     capture_text_decision(env, history_capacity=32).capture_json
                 )
                 if (
-                    not current.observation.viewer_state.stack_objects
+                    not current.observation.viewer_state["stack_objects"]
                     and current.continuation.stage == "priority"
                 ):
                     break
-                verbs = [offer.verb for offer in current.observation.decision.offers]
+                verbs = [offer["verb"] for offer in current.observation.decision.offers]
                 _choose(env, "pay_cost" if "pay_cost" in verbs else "pass_priority")
             else:
                 raise AssertionError("spell did not resolve")

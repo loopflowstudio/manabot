@@ -12,7 +12,7 @@ This test suite verifies:
 """
 
 from types import SimpleNamespace
-from typing import Set, Tuple
+from typing import Tuple
 
 import numpy as np
 import pytest
@@ -212,7 +212,7 @@ class TestObservationEncoder:
         )
         assert total_objects == 202
 
-    def get_expected_keys(self) -> Set[str]:
+    def get_expected_keys(self) -> set[str]:
         """Get the complete set of expected keys in an encoded observation."""
         return {
             # Players
@@ -239,9 +239,12 @@ class TestObservationEncoder:
             "events_valid",
             "semantic_cards",
             "known_hand",
+            "relations",
         }
 
-    def test_encode_observation(self, observation_space, observation):
+    def test_encode_observation(
+        self, observation_space: ObservationSpace, observation: managym.Observation
+    ) -> None:
         """Test that encoding produces arrays with correct shapes and no invalid values."""
         encoded = observation_space.encode(observation)
 

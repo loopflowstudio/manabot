@@ -1,13 +1,19 @@
-"""Validated Python mirror of atomic native decision capture v1.
+"""Portable text envelope around native-validated observations and continuation facts.
 
 The native handle owns origin and submission. These strict read-only models admit
 serialized evidence for pure rendering; they cannot reconstruct an origin handle.
 Schema-6 Observation and Command retain their existing owners in decision.py.
+Native deserialization validates viewer fields and continuation frames; Python
+keeps only the portable presentation/content envelope.
 """
 
+import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from managym.decision import Observation
+from pydantic import BaseModel, ConfigDict, SkipValidation, field_validator
+
+import managym
 
 
 class CaptureModel(BaseModel):
@@ -38,21 +44,6 @@ class Keywords(CaptureModel):
     indestructible: bool
 
 
-class CardTypes(CaptureModel):
-    is_castable: bool
-    is_permanent: bool
-    is_non_land_permanent: bool
-    is_non_creature_permanent: bool
-    is_spell: bool
-    is_creature: bool
-    is_land: bool
-    is_planeswalker: bool
-    is_enchantment: bool
-    is_artifact: bool
-    is_kindred: bool
-    is_battle: bool
-
-
 class DefinitionTypes(CaptureModel):
     types: list[str]
 
@@ -70,174 +61,6 @@ class Definition(CaptureModel):
     kicker: ManaCost | None
     ward: ManaCost | None
     is_token: bool
-
-
-class Card(CaptureModel):
-    id: int
-    registry_key: int
-    name: str
-    text_box: str
-    zone: int
-    owner_id: int
-    power: int
-    toughness: int
-    is_token: bool
-    is_legendary: bool
-    is_ally: bool
-    is_lesson: bool
-    ward_cost: int
-    kicker_cost: int
-    card_types: CardTypes
-    keywords: Keywords
-    mana_cost: ManaCost
-
-
-class SideboardCard(CaptureModel):
-    candidate_id: int
-    owner_id: int
-    registry_key: int
-    name: str
-    text_box: str
-
-
-class Permanent(CaptureModel):
-    id: int
-    registry_key: int
-    controller_id: int
-    tapped: bool
-    damage: int
-    is_summoning_sick: bool
-    plus1_counters: int
-    cant_be_blocked_this_turn: bool
-    power: int
-    toughness: int
-    is_animated: bool
-    has_exile_link: bool
-    exile_if_dies_this_turn: bool
-    temp_subtypes: list[str]
-    keywords: Keywords
-
-
-class Player(CaptureModel):
-    player_index: int
-    id: int
-    is_agent: bool
-    is_active: bool
-    life: int
-    zone_counts: list[int]
-    graveyard_lessons: int
-    combat_mana: int
-    mana: list[int]
-    lesson_mana: list[int]
-    known_hand: dict[str, int]
-    sideboard_counts: dict[str, int]
-    remaining_sideboard_counts: dict[str, int]
-
-
-class Turn(CaptureModel):
-    turn_number: int
-    phase: int
-    step: int
-    active_player_id: int
-    agent_player_id: int
-
-
-class Action(CaptureModel):
-    type: int
-    focus: list[int]
-    declared: bool | None
-    mode_index: int | None
-    ability_index: int | None
-    description: str | None = None
-
-
-class ActionSpace(CaptureModel):
-    type: int
-    actions: list[Action]
-
-
-class StackTarget(CaptureModel):
-    kind: int
-    player_id: int | None
-    permanent_id: int | None
-    stack_object_id: int | None
-    card_id: int | None
-
-
-class StackObject(CaptureModel):
-    stack_object_id: int
-    kind: int
-    controller_id: int
-    source_card_registry_key: int
-    source_permanent_id: int | None
-    ability_index: int | None
-    chosen_mode: int | None
-    targets: list[StackTarget]
-
-
-class ViewerState(CaptureModel):
-    game_over: bool
-    won: bool
-    turn: Turn
-    action_space: ActionSpace
-    agent: Player
-    opponent: Player
-    agent_cards: list[Card]
-    opponent_cards: list[Card]
-    agent_sideboard: list[SideboardCard]
-    agent_permanents: list[Permanent]
-    opponent_permanents: list[Permanent]
-    stack_objects: list[StackObject]
-    # Schema-6 composite observations have no transition increments. A future
-    # nonempty increment needs a versioned renderer, not silent omission.
-    recent_events: list[Literal["unsupported"]]
-
-
-class Identity(CaptureModel):
-    schema_version: Literal[6]
-    revision: int
-    viewer: int
-    viewer_state_hash: str
-
-
-class ObjectCandidate(CaptureModel):
-    decision_fingerprint: str
-    offer_id: int
-    role: int
-    candidate_id: int
-
-
-class Commitment(CaptureModel):
-    kind: str
-    card: str | None = None
-
-
-class Offer(CaptureModel):
-    id: int
-    actor: int
-    verb: str
-    label: str
-    source: None
-    help: None
-    confirm_label: str
-    choices: list[Literal["unsupported"]]
-    public_commitment: Commitment | None = None
-
-
-class Frame(CaptureModel):
-    schema_version: Literal[6]
-    revision: int
-    actor: int
-    fingerprint: str
-    offers: list[Offer]
-    object_candidates: list[ObjectCandidate]
-
-
-class Observation(CaptureModel):
-    identity: Identity
-    viewer_state: ViewerState
-    decision: Frame
-    events: list[Literal["unsupported"]]
 
 
 class ObjectRenderId(CaptureModel):
@@ -313,12 +136,29 @@ class PublicHistory(CaptureModel):
 
 
 class DecisionInput(CaptureModel):
-    capture_version: Literal[1]
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
+    )
+
+    capture_version: Literal[2]
     world_version: str
     content_digest: str
-    observation: Observation
+    observation: SkipValidation[Observation]
+    frames: SkipValidation[list[managym.ContinuationFrame]]
     continuation: Continuation
     definitions: dict[str, Definition]
     objects: dict[str, ObjectLink]
     history: PublicHistory
     digest: str
+
+    @field_validator("observation", mode="before")
+    @classmethod
+    def parse_observation(cls, value: object) -> Observation:
+        text = json.dumps(value)
+        managym.validate_observation_json(text)
+        return Observation.from_json(text)
+
+    @field_validator("frames", mode="before")
+    @classmethod
+    def parse_frames(cls, value: object) -> list[managym.ContinuationFrame]:
+        return managym.parse_continuation_frames_json(json.dumps(value))

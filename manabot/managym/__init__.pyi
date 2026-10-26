@@ -65,8 +65,12 @@ class Env:
     def decision_offer_subjects_json(self, viewer: int) -> str: ...
     def presentation_subjects_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
-    def capture_decision(self, viewer: int, history_capacity: int = 0) -> DecisionCapture: ...
-    def execute_captured_command_json(self, capture: DecisionCapture, command_json: str) -> str: ...
+    def capture_decision(
+        self, viewer: int, history_capacity: int = 0
+    ) -> DecisionCapture: ...
+    def execute_captured_command_json(
+        self, capture: DecisionCapture, command_json: str
+    ) -> str: ...
     def observation_for_player(self, player_index: int) -> Observation: ...
     def execute_semantic_command_json(self, command_json: str) -> str: ...
     def hidden_hand_constraints_json(self, viewer: int) -> str: ...
@@ -134,7 +138,9 @@ class Env:
         rollouts: int,
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
-    def encode_observation(self, obs: Observation) -> Dict[str, np.ndarray]: ...
+    def encode_observation(
+        self, obs: Observation, policy_input_version: int = 2
+    ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]
     ) -> None: ...
@@ -443,6 +449,11 @@ class EventData:
     controller_id: int
 
 class Observation:
+    continuation: list[ContinuationFrame]
+
+    @staticmethod
+    def from_json(text: str) -> Observation: ...
+    def continuation_json(self) -> str: ...
     game_over: bool
     won: bool
     turn: Turn
@@ -464,3 +475,41 @@ class AgentError(RuntimeError): ...
 
 WORLD_VERSION: str
 CARD_DEFINITION_COUNT: int
+
+class VisibleReference:
+    object: int | None
+    definition: int | None
+    player: int | None
+
+class ClauseTarget:
+    reference: VisibleReference
+    clause: int
+
+class ContinuationFrame:
+    kind: int
+    decision: int
+    parent: int | None
+    controller: int
+    source: VisibleReference
+    mode: int | None
+    ability: int | None
+    kicked: bool
+    active_clause: int | None
+    targets: list[ClauseTarget]
+    context: VisibleReference | None
+    sacrifice: VisibleReference | None
+    cost: list[int] | None
+    hybrid: list[list[int]]
+    lesson: bool
+    waterbend: bool
+    can_decline: bool
+    mana_outputs: list[ManaOutput]
+    resolutions_this_turn: int
+
+def validate_observation_json(text: str) -> None: ...
+def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...
+
+class ManaOutput:
+    mode: int
+    mana: list[int]
+    lesson: list[int]
