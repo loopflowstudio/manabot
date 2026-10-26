@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import cache
 import json
@@ -142,6 +143,9 @@ EVIDENCE = "MTG183_EVAL_EVIDENCE"
 CARDS = "MTG183_EVAL_CARDS"
 # An `EvalCompute` as JSON: when set, groups play through shared batched inference.
 COMPUTE = "MTG183_EVAL_COMPUTE"
+# How many of a match's groups play at once (default one, in turn); rows keep
+# the groups' order either way.
+GROUP_WORKERS = "MTG183_EVAL_GROUP_WORKERS"
 
 
 def player(updates: int) -> str:
@@ -479,11 +483,17 @@ def play(match: Match) -> Tables:
     cards = Path(os.environ[CARDS])
     rows: list[GameRow] = []
     tables: dict[str, list[Row]] = {}
-    for group in conditions.groups:
-        if group.model_deck != conditions.deck:
-            raise ValueError("a group plays another deck than its match")
+    if any(group.model_deck != conditions.deck for group in conditions.groups):
+        raise ValueError("a group plays another deck than its match")
+
+    def run(group: Group) -> tuple[list[GameRow], dict[str, object] | None]:
         output = evidence_directory() / match.key / f"attempt-{time.time_ns()}"
-        played, trace = _play_group(group, newer, older, output, cards)
+        return _play_group(group, newer, older, output, cards)
+
+    concurrent = int(os.environ.get(GROUP_WORKERS, "1"))
+    with ThreadPoolExecutor(max_workers=concurrent) as pool:
+        played_groups = list(pool.map(run, conditions.groups))
+    for played, trace in played_groups:
         rows += played
         if trace is not None:
             for name, found in trace_card_tables(cards, trace, participants).items():

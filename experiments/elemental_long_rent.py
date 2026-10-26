@@ -40,7 +40,6 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
-import signal
 import subprocess
 import sys
 import tarfile
@@ -60,6 +59,7 @@ from experiments.elemental_long_eval import (
     COMPUTE,
     EVIDENCE,
     EXPERIMENT,
+    GROUP_WORKERS,
     ROOT,
     EvalState,
     Unit,
@@ -87,23 +87,30 @@ WINDOWS = ROOT / "experiments/protocols/elemental-183-windows.json"
 SEGMENTS = ("e7d47d8b220f", "f3748bcabac8")
 # Each rental's $/hour ceiling, which a batch's cap must cover.
 CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60"), "a4500": Decimal("0.40")}
-# cpu3c 32 vCPUs: one single-threaded group worker per vCPU, less two (MTG-186).
-WORKERS = 30
+# cpu3c 32 vCPUs: one single-threaded group worker per vCPU, less two (MTG-186):
+# ten matches at once (a unit has ten), three groups each.
+WORKERS = 10
+GROUP_WORKERS_SCALAR = 3
 # Each batched group plays all its games at once; a few groups share the machine.
 BATCHED = EvalCompute(max_active_games=12, max_batch_rows=16)
 BATCHED_WORKERS = 6
 GPU_RUN = "mtg183-eval-gpu"
 # One machine-wide CUDA service: every concurrent game's decisions share a batch.
-GPU = EvalCompute(device="cuda", max_active_games=256, max_batch_rows=256)
-# Concurrent matches; each plays its groups in turn, so this bounds pending games.
-GPU_WORKERS = 40
+# Each game's native child imports Torch (~225 MB), so active games are sized
+# to the A4500's 32 GB, not to the GPU.
+GPU = EvalCompute(device="cuda", max_active_games=64, max_batch_rows=64)
+# Ten matches, four groups each: enough pending games to keep 64 active.
+GPU_WORKERS = 10
+GROUP_WORKERS_GPU = 4
 Mode = Literal["scalar", "batched", "gpu"]
-# Each mode's eval run, concurrent matches and compute contract.
-MODES: dict[Mode, tuple[str, int, EvalCompute | None]] = {
-    "scalar": (SCALAR_RUN, WORKERS, None),
-    "batched": (BATCHED_RUN, BATCHED_WORKERS, BATCHED),
-    "gpu": (GPU_RUN, GPU_WORKERS, GPU),
+# Each mode's eval run, concurrent matches, groups per match and compute contract.
+MODES: dict[Mode, tuple[str, int, int, EvalCompute | None]] = {
+    "scalar": (SCALAR_RUN, WORKERS, GROUP_WORKERS_SCALAR, None),
+    "batched": (BATCHED_RUN, BATCHED_WORKERS, 1, BATCHED),
+    "gpu": (GPU_RUN, GPU_WORKERS, GROUP_WORKERS_GPU, GPU),
 }
+# A batch starts no unit it would not finish this long before its hours end.
+STOP_SECONDS = 600
 CAP_USD = Decimal("10")
 # A batch's cap must cover its hours and Etude's 15-minute setup allowance at
 # its rental's ceiling; cpu3c is quoted at $0.96/hour, an L4 at $0.59 and an
@@ -125,18 +132,30 @@ class Batch(BaseModel):
     compute: EvalCompute | None
     # Play every group through one machine-wide allocation under `compute`.
     shared: bool = False
+    # Groups of one match playing at once.
+    group_workers: int = 1
     hours: float = 1.0
     # Read by `bind_etude_source` before anything reads source identity.
     source_bundle: SourceBundle
 
 
+class Played(BaseModel):
+    unit: str
+    games: int
+    seconds: float
+
+
 class Receipt(BaseModel):
+    """What a batch played and how fast: units in order, with each unit's wall time."""
+
     run: str
     units: tuple[str, ...]
     games: int
     seconds: float
     workers: int
+    group_workers: int
     compute: EvalCompute | None
+    played: list[Played] = []
     cpus: int | None
     error: str | None
 
@@ -146,7 +165,14 @@ class Ledger(BaseModel):
 
     launched: dict[str, Batch] = {}
     max_usd: dict[str, Decimal] = {}
+    # A finished run's settled cost replaces its cap in the committed total.
+    spent: dict[str, Decimal] = {}
     collected: list[str] = []
+
+    def committed(self) -> Decimal:
+        return sum(
+            (self.spent.get(run, cap) for run, cap in self.max_usd.items()), Decimal(0)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -175,9 +201,6 @@ def _chosen(batch: Batch) -> list[Unit]:
 def machine(batch: Batch) -> None:
     """Play the batch into a local eval run; return its folder and a receipt."""
     bind_etude_source()
-    # Etude's stop signal unwinds through `finally`, so a stopped batch still
-    # returns the matches it stored.
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     inputs = Path(os.environ["ETUDE_INPUTS_DIR"])
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     work = Path(tempfile.mkdtemp(prefix="mtg183-rent-"))
@@ -206,45 +229,70 @@ def machine(batch: Batch) -> None:
             deadline_unix=time.time() + batch.hours * 3600,
         )
         allocation = callback_allocation(execution, work / "allocation")
-    matches: list[Match] = [match for unit in chosen for match in unit.matches]
-    started, error = time.time(), None
+    if batch.group_workers > 1:
+        os.environ[GROUP_WORKERS] = str(batch.group_workers)
+    # Units play one at a time, each with every worker, and the run folder is
+    # returned after each; no unit starts unless the slowest rate so far would
+    # finish it before `STOP_SECONDS` short of the batch's hours.
+    started = time.time()
+    stop = started + batch.hours * 3600 - STOP_SECONDS
+    receipt = Receipt(
+        run=batch.run,
+        units=(),
+        games=0,
+        seconds=0.0,
+        workers=batch.workers,
+        group_workers=batch.group_workers,
+        compute=batch.compute,
+        cpus=os.cpu_count(),
+        error=None,
+    )
     try:
         with allocation as endpoint:
             if endpoint is not None:
                 os.environ[ENDPOINT] = endpoint_environment(endpoint)
-            evaluate(
-                experiment=EXPERIMENT,
-                environment=eval_environment(),
-                matches=matches,
-                play=play,
-                workers=batch.workers,
-                run=batch.run,
-                directory=track,
-            )
+            for unit in chosen:
+                games = sum(match.games for match in unit.matches)
+                rate = min((u.games / u.seconds for u in receipt.played), default=None)
+                if rate is not None and time.time() + games / rate > stop:
+                    break
+                begun = time.time()
+                evaluate(
+                    experiment=EXPERIMENT,
+                    environment=eval_environment(),
+                    matches=unit.matches,
+                    play=play,
+                    workers=batch.workers,
+                    run=batch.run,
+                    directory=track,
+                )
+                receipt.played.append(
+                    Played(unit=unit.key, games=games, seconds=time.time() - begun)
+                )
+                receipt.units += (unit.key,)
+                receipt.games += games
+                receipt.seconds = time.time() - started
+                _deliver(out, root, work, receipt)
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"
+        receipt.error = f"{type(exc).__name__}: {exc}"
         raise
     finally:
-        receipt = Receipt(
-            run=batch.run,
-            units=batch.units,
-            games=sum(match.games for match in matches),
-            seconds=time.time() - started,
-            workers=batch.workers,
-            compute=batch.compute,
-            cpus=os.cpu_count(),
-            error=error,
-        )
+        receipt.seconds = time.time() - started
         print(receipt.model_dump_json(), flush=True)
-        with tarfile.open(out / f"{batch.run}.partial", "w") as archive:
-            archive.add(root, arcname=batch.run)
-        (out / f"{batch.run}.partial").replace(out / f"{batch.run}.tar")
-        # The shared allocation's serving and Perf receipts: where its time went.
-        if (work / "allocation").is_dir():
-            with tarfile.open(out / "allocation.partial", "w") as archive:
-                archive.add(work / "allocation", arcname="allocation")
-            (out / "allocation.partial").replace(out / "allocation.tar")
-        (out / "receipt.json").write_text(receipt.model_dump_json(indent=1) + "\n")
+        _deliver(out, root, work, receipt)
+
+
+def _deliver(out: Path, root: Path, work: Path, receipt: Receipt) -> None:
+    """Replace the returned run folder, allocation receipts and receipt."""
+    with tarfile.open(out / f"{receipt.run}.partial", "w") as archive:
+        archive.add(root, arcname=receipt.run)
+    (out / f"{receipt.run}.partial").replace(out / f"{receipt.run}.tar")
+    # The shared allocation's serving and Perf receipts: where its time went.
+    if (work / "allocation").is_dir():
+        with tarfile.open(out / "allocation.partial", "w") as archive:
+            archive.add(work / "allocation", arcname="allocation")
+        (out / "allocation.partial").replace(out / "allocation.tar")
+    (out / "receipt.json").write_text(receipt.model_dump_json(indent=1) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +444,7 @@ def launch(
     usd = (CEILINGS[rent] * (Decimal(str(hours)) + SETUP_HOURS)).quantize(
         Decimal("0.01")
     )
-    committed = sum(ledger.max_usd.values(), Decimal(0))
+    committed = ledger.committed()
     if committed + usd * len(modes) > CAP_USD:
         raise SystemExit(f"${committed} committed; {len(modes)} more exceed ${CAP_USD}")
     revision = subprocess.check_output(
@@ -424,12 +472,13 @@ def launch(
             taken |= {unit.key for unit in chosen}
         if not chosen:
             break
-        run, workers, compute = MODES[mode]
+        run, workers, group_workers, compute = MODES[mode]
         batch = Batch(
             run=run,
             state=state,
             units=tuple(unit.key for unit in chosen),
             workers=workers,
+            group_workers=group_workers,
             compute=compute,
             shared=mode == "gpu",
             hours=hours,
@@ -498,11 +547,22 @@ def main() -> None:
     launching.add_argument("--unit", action="append", default=[])
     collecting = commands.add_parser("collect")
     collecting.add_argument("run")
+    # A finished run's settled cost, as `etude runs` reports it.
+    settling = commands.add_parser("settle")
+    settling.add_argument("run")
+    settling.add_argument("usd", type=Decimal)
     args = parser.parse_args()
     if args.command == "launch":
         launch(
             args.batch_games, args.mode or ["scalar"], args.hours, args.unit, args.rent
         )
+    elif args.command == "settle":
+        ledger = _ledger()
+        if args.run not in ledger.launched:
+            raise SystemExit(f"{args.run} was not launched here")
+        ledger.spent[args.run] = args.usd
+        LEDGER.write_text(ledger.model_dump_json(indent=1) + "\n")
+        print(f"committed ${ledger.committed()} of ${CAP_USD}")
     else:
         collect(args.run)
 

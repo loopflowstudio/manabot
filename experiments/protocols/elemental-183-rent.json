@@ -2395,6 +2395,7 @@
    "workers": 30,
    "compute": null,
    "shared": false,
+   "group_workers": 1,
    "hours": 1.0,
    "source_bundle": {
     "commit": "5ec846cf3b6231a347780a53d792780504b269d9",
@@ -6336,6 +6337,7 @@
     "resident": true
    },
    "shared": false,
+   "group_workers": 1,
    "hours": 1.0,
    "source_bundle": {
     "commit": "5ec846cf3b6231a347780a53d792780504b269d9",
@@ -10277,6 +10279,7 @@
     "resident": true
    },
    "shared": true,
+   "group_workers": 1,
    "hours": 1.0,
    "source_bundle": {
     "commit": "32fcf94b04c24fb28e24d83f16000f419a765ea0",
@@ -14221,6 +14224,7 @@
     "resident": true
    },
    "shared": true,
+   "group_workers": 1,
    "hours": 1.0,
    "source_bundle": {
     "commit": "32fcf94b04c24fb28e24d83f16000f419a765ea0",
@@ -15763,6 +15767,12 @@
   "35bbdcb5877c": "2.50",
   "307c3a8630af": "0.50",
   "3d37d8fb39f8": "0.50"
+ },
+ "spent": {
+  "9cdf83f65e3f": "0.40",
+  "307c3a8630af": "0.01",
+  "3d37d8fb39f8": "0",
+  "35bbdcb5877c": "0.08"
  },
  "collected": []
 }
