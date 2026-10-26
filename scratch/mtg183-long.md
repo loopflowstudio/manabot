@@ -284,3 +284,9 @@ amendment before that allocation).
   fails "busy"; use `queue`.
 - Laptop: killed 32 orphaned `yes` processes (since 08:38 UTC, ~7.7 cores).
   lf relay idle-sweep CPU filed as LOO-598.
+
+## State 2026-10-26 15:15 UTC (operator)
+- w4 `f3748bcabac8`: update 5,255, ~$9.23, ~125 updates/h (≈2× w3). Expect 5,950 near 21:00 UTC today at ~$12.5.
+- Card evaluator `67dbde0c325d` (mini): 241 matches, 80,000 valid games, 0 invalid/truncated; card_plays/card_counts/cards tables land with every games batch.
+- Reproduction: replayed u0/50/100/150/200 heuristic scores (.065/.304/.441/.490/.545) and pairs match superseded `mtg183-eval` to 3 decimals.
+- New: vs heuristic u250 .563, u300 .584, u350 .606, u400 .609, u600 .676. Adjacent pairs near .5 from u250 on (350v300 .476, 400v350 .518).
