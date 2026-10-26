@@ -386,6 +386,13 @@ live in `infra.identity`. The former `manabot.arena` package is removed. Existin
 serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
 paths preserve their original meaning; current source identities use the new paths.
 
+For a standalone, inspectable pretrained-model decision over supplied text and
+legal references, see the optional [LLM harness](../docs/llm-harness.md). It owns
+protocol recovery and inference evidence; observation rendering and Command
+execution remain outside it.
+
+### Shared evaluation inference
+
 Frozen arena policies can share a bounded, single-machine inference allocation
 through an explicit execution envelope. Monitoring, Etude benchmark and duel
 callers retain native isolation, Commands, replay and original training

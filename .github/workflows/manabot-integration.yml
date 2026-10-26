@@ -57,7 +57,7 @@ jobs:
       - name: Integration tests
         if: matrix.group == 'main'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 tests/env/ tests/agent/ tests/model/ \
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
