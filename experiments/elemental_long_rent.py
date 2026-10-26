@@ -390,6 +390,7 @@ def launch(
     batch, which plays the same games under each compute contract.
     """
     from etude.launch.client import queue_cohort, quote
+    from etude.launch.errors import LauncherError
 
     ledger = _ledger()
     usd = (CEILINGS[rent] * (Decimal(str(hours)) + SETUP_HOURS)).quantize(
@@ -443,7 +444,11 @@ def launch(
     if not runs:
         raise SystemExit("nothing pending")
     cohort = f"mtg183-rent-{int(time.time())}"
-    print(quote(runs, rent=rent, cohort=cohort, max_usd=usd * len(runs)))
+    try:
+        print(quote(runs, rent=rent, cohort=cohort, max_usd=usd * len(runs)))
+    except LauncherError as unavailable:
+        # Queued runs wait for a machine; the cap still bounds what they spend.
+        print(f"queueing to wait: {unavailable}")
     ids = queue_cohort(cohort, runs, rent=rent, max_usd=usd * len(runs))
     for run_id, batch in zip(ids, frozen, strict=True):
         ledger.launched[run_id] = batch
