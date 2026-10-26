@@ -107,6 +107,10 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Saved observation configurations use `ObservationConfig.from_checkpoint` so
+  an absent policy-input version retains v1 semantics. Fresh construction uses
+  the current version. Keep version-specific zero/default exclusions stable:
+  architecture receipts hash the serialized configuration, including omissions.
 
 ## Commands
 

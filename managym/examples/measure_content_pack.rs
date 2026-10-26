@@ -1,11 +1,4 @@
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    collections::BTreeMap,
-    hint::black_box,
-    mem::size_of,
-    sync::atomic::{AtomicU64, Ordering},
-    time::Instant,
-};
+use std::{collections::BTreeMap, hint::black_box, mem::size_of, time::Instant};
 
 use managym::{
     agent::env::Env,
@@ -22,37 +15,12 @@ const ROLLOUT_WORLDS: usize = 4;
 const ROLLOUTS_PER_WORLD: usize = 4;
 const ROLLOUT_STEP_CAP: usize = 2_000;
 
-struct CountingAllocator;
-
-static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
-
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        System.alloc(layout)
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        System.alloc_zeroed(layout)
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(new_size as u64, Ordering::Relaxed);
-        System.realloc(ptr, layout, new_size)
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-    }
-}
-
-#[global_allocator]
-static GLOBAL: CountingAllocator = CountingAllocator;
+#[cfg(not(feature = "benchmark"))]
+#[path = "../src/benchmark_allocations.rs"]
+#[allow(dead_code)] // This example samples cumulative traffic without stopping.
+mod benchmark_allocations;
+#[cfg(feature = "benchmark")]
+use managym::benchmark_allocations;
 
 #[derive(Clone, Copy)]
 struct AllocationSnapshot {
@@ -62,10 +30,8 @@ struct AllocationSnapshot {
 
 impl AllocationSnapshot {
     fn now() -> Self {
-        Self {
-            allocations: ALLOCATIONS.load(Ordering::Relaxed),
-            bytes: ALLOCATED_BYTES.load(Ordering::Relaxed),
-        }
+        let (allocations, bytes) = benchmark_allocations::snapshot();
+        Self { allocations, bytes }
     }
 
     fn since(self) -> Self {
@@ -307,6 +273,7 @@ fn measure_sizes() {
 }
 
 fn main() {
+    benchmark_allocations::start();
     println!("benchmark=w2-179-content-pack-local-diagnostic");
     println!("profile=release");
     println!("seed=377");

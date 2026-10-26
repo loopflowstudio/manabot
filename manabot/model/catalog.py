@@ -163,7 +163,9 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
     if trained != WORLD:
         return f"trained in {trained}, engine is {WORLD}"
     try:
-        observation = ObservationConfig(**checkpoint["hypers"]["observation_hypers"])
+        observation = ObservationConfig.from_checkpoint(
+            checkpoint["hypers"]["observation_hypers"]
+        )
         configs = checkpoint_configs(binding)
         expected = checkpoint_world(configs, ObservationSpace(observation))
     except BaseException as error:  # PyO3 panics on invalid native setups

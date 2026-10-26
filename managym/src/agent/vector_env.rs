@@ -32,6 +32,18 @@ pub struct VectorEnv {
 }
 
 impl VectorEnv {
+    /// Untimed fixture restoration for matched, one-command benchmark samples.
+    /// This API is absent from normal builds and never substitutes for stepping.
+    #[cfg(feature = "benchmark")]
+    pub fn benchmark_load_root(&mut self, root: &Env) -> Result<(), AgentError> {
+        self.validate_ready_for_step()?;
+        self.envs = (0..self.len())
+            .map(|_| root.fork())
+            .collect::<Result<_, _>>()?;
+        self.opponent_policy = OpponentPolicy::None;
+        Ok(())
+    }
+
     pub fn new(
         num_envs: usize,
         seed: u64,

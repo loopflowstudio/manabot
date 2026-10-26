@@ -105,6 +105,7 @@ pub struct Env {
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
     possible_world_space_constructions: AtomicU64,
+    pub(crate) capture_generation: u64,
 }
 
 /// One canonical space prepared for bounded materialization against the same
@@ -189,6 +190,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         }
     }
 
@@ -209,6 +211,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         }
     }
 
@@ -237,6 +240,7 @@ impl Env {
         };
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
+        self.capture_generation += 1;
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
     }
@@ -491,6 +495,18 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
             .decision_context(PlayerId(viewer)))
+    }
+
+    pub fn capture_decision(
+        &self,
+        viewer: usize,
+        history_capacity: usize,
+    ) -> Result<crate::decision_capture::DecisionCapture, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .capture_decision(PlayerId(viewer), history_capacity)
+            .map_err(|error| AgentError(error.to_string()))
     }
 
     /// Project the composite viewer-safe semantic observation for `viewer`.
@@ -857,6 +873,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         })
     }
 
@@ -877,6 +894,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         })
     }
 

@@ -43,6 +43,8 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
+RELATION_ROWS = 64
+RELATION_DIM = 32
 
 
 # -----------------------------------------------------------------------------
@@ -98,6 +100,11 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
+            **(
+                {"relations": (RELATION_ROWS, RELATION_DIM)}
+                if self.config.policy_input_version == 2
+                else {}
+            ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             # Game objects
@@ -246,9 +253,82 @@ class ObservationEncoder:
         else:
             out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
+        if self.config.policy_input_version == 2:
+            out["relations"] = self._encode_relations(obs)
+
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out
+
+    def _encode_relations(self, obs: managym.Observation) -> np.ndarray:
+        """Reference implementation of native current-continuation relation rows."""
+        rows: list[np.ndarray] = []
+        viewer = obs.agent.player_index
+
+        def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
+            row[23] = 0 if value.definition is None else value.definition + 1
+            row[24] = self.object_to_index.get(value.object, -1) + 1
+            if value.player is not None:
+                row[25] = row[24] = 1 if value.player == viewer else 2
+
+        for index, frame in enumerate(obs.continuation):
+            row = np.zeros(RELATION_DIM, dtype=np.float32)
+            row[:5] = (
+                1,
+                index + 1,
+                0 if frame.parent is None else frame.parent + 1,
+                frame.kind,
+                1 if frame.controller == viewer else 2,
+            )
+            row[5] = (
+                0 if frame.source.definition is None else frame.source.definition + 1
+            )
+            row[6] = self.object_to_index.get(frame.source.object, -1) + 1
+            row[7:12] = (
+                0 if frame.mode is None else frame.mode + 1,
+                0 if frame.ability is None else frame.ability + 1,
+                frame.kicked,
+                0 if frame.active_clause is None else frame.active_clause + 1,
+                frame.cost is not None,
+            )
+            if frame.cost is not None:
+                row[12:19] = frame.cost
+            row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
+            row[30] = frame.resolutions_this_turn
+            row[28] = frame.decision
+            row[31] = 1
+            rows.append(row)
+            targets = [(2, target.reference, target.clause) for target in frame.targets]
+            if frame.context is not None:
+                targets.append((3, frame.context, 0))
+            if frame.sacrifice is not None:
+                targets.append((4, frame.sacrifice, 0))
+            for ordinal, (kind, target, clause) in enumerate(targets):
+                target_row = row.copy()
+                target_row[0], target_row[22] = kind, clause + 1
+                target_row[29] = ordinal + 1 if kind == 2 else 1
+                _reference(target_row, target)
+                rows.append(target_row)
+            for pair in frame.hybrid:
+                hybrid = row.copy()
+                hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
+                rows.append(hybrid)
+            for output in frame.mana_outputs:
+                for restricted, amounts in (
+                    (False, output.mana),
+                    (True, output.lesson),
+                ):
+                    produced = row.copy()
+                    produced[0], produced[7] = 6, output.mode + 1
+                    produced[12:18] = amounts
+                    produced[19] = restricted
+                    rows.append(produced)
+        if len(rows) > RELATION_ROWS:
+            raise ValueError("observation capacity exceeded: continuation relations")
+        result = np.zeros((RELATION_ROWS, RELATION_DIM), dtype=np.float32)
+        if rows:
+            result[: len(rows)] = rows
+        return result
 
     # -------------------------------------------------------------------------
     # Players (with validity mask support)

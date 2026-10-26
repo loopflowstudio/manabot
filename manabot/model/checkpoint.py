@@ -131,7 +131,9 @@ def load_checkpoint(
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     config = checkpoint["hypers"]
-    obs_space = ObservationSpace(ObservationConfig(**config["observation_hypers"]))
+    obs_space = ObservationSpace(
+        ObservationConfig.from_checkpoint(config["observation_hypers"])
+    )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))
