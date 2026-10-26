@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import time
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -14,7 +15,7 @@ from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationContract, EvaluationKey
-from manabot.infra.config import ModelConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
@@ -23,7 +24,7 @@ from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.replay import read_trace, replay_environment
+from manabot.sim.replay import read_trace, replay_environment, replay_prefix
 from manabot.sim.serving import (
     DecisionRequest,
     InferenceFailure,
@@ -38,12 +39,14 @@ from managym import WORLD_VERSION
 
 
 def fixture_policy(
-    directory: Path, seed: int = 83
+    directory: Path, seed: int = 83, *, policy_input_version: Literal[1, 2] = 2
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration, Path]:
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
     )
-    space = ObservationSpace()
+    space = ObservationSpace(
+        ObservationConfig(policy_input_version=policy_input_version)
+    )
     torch.manual_seed(seed)
     agent = ActorCritic(
         space,
@@ -102,7 +105,8 @@ def request_for(
             "deal_seed": 83,
             "seat_players": ["a", "b"],
             "match_hypers": selected_match().model_dump(),
-        }
+        },
+        observation_space=ObservationSpace(),
     )
     return DecisionRequest(
         str(seed),
@@ -131,6 +135,33 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
     assert batched[::-1] == sample_rows(logits.flip(0), masks.flip(0), [7, 5], False)
     with pytest.raises(ValueError, match="invalid legal"):
         sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
+
+
+@pytest.mark.parametrize("version", (1, 2))
+def test_served_checkpoint_preserves_input_version(
+    tmp_path: Path, version: Literal[1, 2]
+) -> None:
+    key, player, anchor, path = fixture_policy(tmp_path, policy_input_version=version)
+    _, trace, replay = play_cell(
+        key=key,
+        player_a=player,
+        player_b=anchor,
+        deal_seeds=(831,),
+        out_dir=tmp_path / "panel",
+        checkpoint_paths={player.player_id: str(path)},
+        execution=EvalExecution(deadline_unix=time.time() + 120, max_active_games=1),
+        max_commands=2,
+    )
+    assert replay["passed"]
+    for game in read_trace(Path(trace["path"])):
+        assert len(game["decisions"]) == 2, game.get("failure")
+        assert game["observation_hypers"].get("policy_input_version", 1) == version
+        assert ("policy_input_version" in game["observation_hypers"]) == (version == 2)
+        env, observation = replay_prefix(game, 1)
+        try:
+            assert ("relations" in observation) == (version == 2)
+        finally:
+            env.close()
 
 
 def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:

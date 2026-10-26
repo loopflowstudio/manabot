@@ -73,7 +73,7 @@ def _execute_game(
                 policies[responsible] = PolicyKey.from_registration(
                     registration, execution
                 )
-                config = ObservationConfig.model_validate(
+                config = ObservationConfig.from_checkpoint(
                     game["served_observations"][responsible]
                 )
                 built[responsible] = (None, ObservationSpace(config))

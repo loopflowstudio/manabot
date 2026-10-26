@@ -20,6 +20,12 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3"]
+# Opt-in measurement only; ordinary wheels have no allocation-counter overhead.
+benchmark = []
+
+[[example]]
+name = "bench_observation"
+required-features = ["benchmark"]
 
 [dependencies]
 blake3 = "1"

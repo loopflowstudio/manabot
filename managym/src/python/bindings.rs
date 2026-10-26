@@ -1974,7 +1974,7 @@ impl PyDecisionCapture {
 #[cfg(feature = "python")]
 #[pyclass(name = "Env")]
 pub struct PyEnv {
-    inner: Arc<Mutex<Env>>,
+    pub(crate) inner: Arc<Mutex<Env>>,
     selected_guard: bool,
     prepared_lease: Option<PreparedBranchLease>,
 }

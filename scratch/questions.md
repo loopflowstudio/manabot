@@ -3,7 +3,8 @@
 Current design and accepted direction: `scratch/llm-finetune.md`. This checkout
 owns representation; MTG-185 owns the harness. Jack Heart requested both Task
 sessions in cmux, then “launch pursue” after concept review on 2026-10-24.
-No model, Wave or paid allocation is selected.
+No model or Wave is selected. The separately authorized Runpod performance test
+is complete; its receipts and revised delivery acceptance are recorded below.
 
 - **Accepted revision, 2026-10-25:** Jack Heart accepted fixing the ordinary
   policy's missing continuation input through a shared native observation,
@@ -11,9 +12,14 @@ No model, Wave or paid allocation is selected.
   Rust as needed. The local v2 revision implements the bounded native/model
   path, removes duplicate observation models and preserves legacy admission.
   Focused collision/parity/model and checkpoint proofs pass. Native and vector
-  benchmark receipts live under `.runs/continuation-revision/`; the heavily
-  loaded host cannot establish nonregression. Gate and quiet-host performance
-  acceptance remain before publication.
+  benchmark receipts under `.runs/continuation-revision/` are historical only.
+  Gate completed the 200-game soak and affected correctness suites, repaired
+  full-vector attribution/coverage and collected three fresh serial pairs.
+  The local performance attempt was blocked: measured host load was
+  84–113 on 16 CPUs, with unresolved batch-64 large-action latency signals.
+  The completed Runpod comparison supersedes that acceptance blocker under
+  Jack Heart's 2026-10-26 shipping direction. Exact results and identities are
+  in the design's final gate evidence; small measured overheads remain disclosed.
 
 - **Shared input contract:** after Jack Heart requested getting this ready to
   demo, the implementation selects a separately versioned native capture of
@@ -53,10 +59,27 @@ preserved these MTG-184 questions; the shared-input engineering choice is resolv
   checkpoint configs missing a version explicitly load v1; fresh construction
   defaults to v2. The model embeds relation selectors/references and combines
   their context with both object and action embeddings. Frozen semantic schema
-  6 and world identity remain unchanged. Performance acceptance remains open.
+  6 and world identity remain unchanged. Runpod performance meets the revised
+  shipping acceptance; this does not establish zero overhead.
 
 - **Audit limit, 2026-10-25:** native `Decision::ManaChoice` retains the exact
   output menu and resumed payment, but discards its activation source after
   costs commit. The shared frames expose the outputs and mark the source
   unavailable; they do not infer it from tapped permanents or history. Retaining
   a new rules-state source identity would need separate frozen-world design.
+
+- **Gate measurement protocol, 2026-10-26:** use 128 independently restored,
+  real one-command vector steps per family/batch/arm, after 20 warmups, in three
+  alternating serial pairs. This replaces the passive/action-zero trajectory
+  as the acceptance corpus so priority, target, additional-cost and 33-action
+  roots are provably matched. Root restoration, receipt hashing and allocation
+  profiling are untimed. No model inference or whole-game throughput claim.
+  Allocation scopes are explicit: Rust requests, Torch CPU tensor events and
+  Python traced peak/live bytes; byte attribution is logical output/copy size,
+  not physical memory traffic. Ordinary wheels omit benchmark instrumentation.
+- The final pre-timing corpus audit adds a fifth vector case: the last combat
+  priority pass returns a 33-action postcombat-main observation. The existing
+  33-action input case remains. This distinguishes large offer/capture overhead
+  from actual large-output encoding; all other sample/warmup/pair bounds remain.
+
+- **Delivery direction, 2026-10-26:** Jack Heart approved shipping, authorized up to $2 for a Runpod performance test because this host remains overloaded, and said to ship if it looks normal-ish. Use a stable matched comparison to detect clear repeatable regression; exact timing equality is not required. Retain measurements and terminate the rental.

@@ -7,6 +7,7 @@ Profile the active Rust vector-env path, with or without model inference.
 import argparse
 import json
 
+from bench_observation_support import identity, matched_breakdown
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward, VectorEnv
@@ -120,7 +121,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--num-envs", type=int, default=16)
     parser.add_argument("--steps", type=int, default=2048)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Steady-game seed; the matched decision corpus is fixed at seed 23",
+    )
     parser.add_argument(
         "--with-inference",
         action="store_true",
@@ -128,9 +134,43 @@ def main() -> None:
     )
     parser.add_argument("--policy-input-version", type=int, choices=(1, 2), default=2)
     parser.add_argument(
+        "--matched-corpus",
+        action="store_true",
+        help="Measure identical native priority/target/payment/large-action roots (benchmark feature required)",
+    )
+    parser.add_argument(
         "--json", action="store_true", help="Emit a portable timing receipt"
     )
     args = parser.parse_args()
+    if args.steps < 1 or args.num_envs < 1:
+        parser.error("steps and num-envs must be positive")
+    if args.matched_corpus:
+        if args.with_inference:
+            parser.error(
+                "matched corpus measures environment encoding, without inference"
+            )
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        env = build_env(args.num_envs, args.seed, args.policy_input_version)
+        try:
+            env.reset()
+            before = identity()
+            rows = matched_breakdown(env, args.steps)
+            print(
+                json.dumps(
+                    {
+                        "identity": before,
+                        "identity_after": identity(),
+                        "num_envs": args.num_envs,
+                        "steps": args.steps,
+                        "policy_input_version": args.policy_input_version,
+                        "cases": rows,
+                    }
+                )
+            )
+        finally:
+            env.close()
+        return
 
     stats, sps = run_breakdown(
         num_envs=args.num_envs,

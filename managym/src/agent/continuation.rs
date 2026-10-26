@@ -197,19 +197,18 @@ impl Game {
             ability: object.ability_index(),
             ..ContinuationFrame::default()
         };
-        let clauses: &[usize];
-        match object {
+        let clauses: &[usize] = match object {
             StackObject::Spell(spell) => {
                 frame.kind = 1;
                 frame.source = self.card_reference(spell.card, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
-                clauses = &spell.target_req_indices;
+                &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
                 frame.source = self.visible_reference(ability.source_ref, viewer);
-                clauses = &[];
+                &[]
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
@@ -218,9 +217,9 @@ impl Game {
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
-                clauses = &ability.target_req_indices;
+                &ability.target_req_indices
             }
-        }
+        };
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
@@ -460,7 +459,7 @@ pub fn encode_into(
         });
     }
     out.fill(0.0);
-    let mut rows = out.chunks_exact_mut(RELATION_DIM);
+    let mut rows = out.as_chunks_mut::<RELATION_DIM>().0.iter_mut();
     let link = |reference: VisibleReference| {
         reference
             .object

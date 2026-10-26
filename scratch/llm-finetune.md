@@ -1,11 +1,14 @@
 # LLM observation language
 
-Status: PR #376 published; accepted architecture revision implemented locally,
-2026-10-25. Gate and reliable performance acceptance remain before publication.
+Status: PR #376 published at the earlier capture-v1 revision; accepted shared
+native architecture implemented in `2e1a14fc0`, reconciled on 2026-10-26 after
+merge `ffec2957d` of main `a0dead2b5`. Correctness gate is complete. Runpod's
+27-command matched comparison passes Jack Heart's revised shipping acceptance,
+including the small measured overheads. The earlier overloaded-host timings
+remain diagnostic evidence, superseded for acceptance by the Runpod section below.
 Current code uses policy input v2 and capture v2 while retaining semantic schema
-6 and legacy checkpoint input v1. Earlier capture-v1 passages below retain the
-accepted representation/history decisions; their implementation status is
-superseded by the active revision at the end.
+6 and legacy checkpoint input v1. Representation and prompt presentation are
+accepted; trained comparison/history selection and model experiments remain draft.
 MTG-184 owns representation; MTG-185 owns the parallel model harness. No Wave
 is selected. Copied from the llm-finetune design conversation on 2026-10-24.
 
@@ -14,7 +17,7 @@ trained only enough to connect to the action space, then measured for relatively
 raw playing ability. On 2026-10-24 he accepted exact action-reference output,
 one repair attempt and seeded uniform legal fallback; directed matching the
 non-LLM input without writable memory for the untrained version; and requested
-performance and model-size comparisons. Mechanisms below remain proposals.
+performance and model-size comparisons. Experimental mechanisms remain proposals.
 
 After concept review and the comparison additions, Jack Heart requested “launch
 pursue” on 2026-10-24, superseding the opening hold on execution and authorizing
@@ -23,6 +26,55 @@ select a model, authorize paid experiments
 or transfer harness ownership. Experimental choices stay with their follow-ups.
 
 ## What to build
+
+### Conversational concept review — 2026-10-26
+
+Jack Heart invoked concept-review while gate was running. This review leaves
+that verification undisturbed and adds no implementation or publication launch.
+Accepted requirements remain shared native facts, complete legal choices,
+unchanged legacy checkpoint meaning and measured encoding nonregression.
+
+The experience has three concepts: the acting player's observation (including
+current pending choices), its legal decision, and the Command that commits a
+choice. "Continuation" is current decision context, not another memory system
+or a separate model-controlled state. Tensor rows and English are projections
+of native facts; capture is an atomic evidence/execution binding, not another
+game authority. Native fact extraction/encoding and Python model orchestration
+are separate responsibilities; moving PyTorch or text formatting to Rust is
+not required merely to avoid duplicate schemas.
+
+Draft usage explanation: new training receives current decision context through
+the default observation configuration and native reusable buffers. Loading a
+checkpoint selects the input contract recorded for those weights; it never
+silently upgrades an old policy. A text caller captures one decision, passes
+its complete text to the model, and submits the returned A reference through
+the same captured handle. The caller does not coordinate semantic-schema,
+capture and checkpoint version numbers during ordinary action selection.
+
+Concrete interaction: after choosing a Deadly Precision target, the sacrifice
+decision must still identify that target in both projections. Submitting the
+selected action commits one native Command. Malformed text leaves the game
+unchanged and can receive the already-designed bounded protocol repair. A stale
+or foreign capture is a different failure: discard the answer and obtain a new
+decision; never reinterpret its A reference against a replacement action list.
+Historical JSON can render but cannot regain a live submission handle.
+
+Most consequential remaining distinction: preserved v1 checkpoints still lack
+the new facts. Shared native ownership is not a claim of matched information
+when comparing an LLM to those policies. A matched-input experiment needs a
+policy trained on v2 and an explicit matched history treatment; old checkpoints
+remain useful labeled historical baselines. Such training remains separate and
+is not authorized by this review. Card text versus semantic catalog encoding
+also remains a disclosed representation difference.
+
+Review judgment: the accepted architecture is coherent; no new product choice
+or redesign is required at this boundary. Clarify the usage vocabulary as above.
+Performance remains an unfulfilled acceptance test, not a conceptual assurance:
+report observation construction/encoding separately from the extra model work
+needed to consume context. Encoding timings alone cannot establish unchanged
+end-to-end training throughput. Existing gate owns final-code correctness and
+paired performance evidence. No human approval beyond earlier accepted direction
+is inferred from this review entry.
 
 ### Accepted architecture and performance direction — 2026-10-25
 
@@ -38,9 +90,9 @@ through `vector_env_bindings` and reusable buffers. Python's reference encoder
 is not the training hot path. The revised architecture must preserve that:
 
 Jack Heart explicitly requested "ok, lets pursue this" on 2026-10-25,
-authorizing implementation, review and publication of this revision through
-the pursue Graph in the existing checkout and PR. The prior Graphs are stopped;
-this run implements newly accepted work, not a retry of the retired diagnostic.
+authorizing implementation, review and publication of this revision in the
+existing checkout and PR. Implementation and compression are complete; the
+recovered sync does not create another implementation slice.
 
 - Own viewer-safe continuation facts in native typed observation structures,
   derived from the existing rules authority. Audit stack relationships and
@@ -73,9 +125,10 @@ for encode-only attribution. No regression beyond measurement noise is an
 acceptance target, not an unmeasured promise. Resolve material regressions before
 publication; an overloaded host cannot establish a nonregression claim.
 
-Next proof: the retained counterexample must produce distinct inputs through
-both Rust and Python encoders; the native/Python outputs must agree, the model
-must consume the distinction, and legacy inputs must remain unchanged. The bounded layout and checkpoint admission are now implemented and documented
+Implemented proof: the retained counterexample produces distinct inputs through
+both Rust and Python encoders; native/Python outputs agree, model outputs differ
+and gradients reach the continuation projection, while v1 retains the collision.
+The bounded layout and checkpoint admission are documented
 in `docs/recent-events.md#current-continuation-input`. The active revision below
 retains the remaining performance acceptance; implementation is not a timing claim.
 
@@ -103,37 +156,24 @@ clauses, but is absent from that input and hash. Neither a definition resolver
 nor history-off/snapshot treatment recovers continuation facts. Refusing these
 decisions would leave payment acceptance unfinished.
 
-**Shared-source revision selected for implementation below:** capture and hash
-continuation source, targets with clauses, chosen mode, reserved sacrifice and
-outstanding payment alongside the legal decision. Reuse `decision_context` as
-the facts' owner; do not reconstruct them through an LLM-only side channel.
-Its `recent_facts` are a separate history treatment, not implicitly part of
-current continuation. Bind public definitions to world/content identity: the
-current composite supplies neither, and the manifest has names, not full text.
+Capture v1 first supplied continuation through the separate presentation context.
+The accepted 2026-10-25 revision supersedes that ownership: native
+`agent/continuation.rs` owns typed current facts, consumed by tensor input v2,
+capture v2 and `decision_context` presentation. The capture atomically binds
+schema-6 Observation, shared frames, public definitions, world/content identity
+and optional bounded policy history under the engine lock. Every included fact
+is hashed; stable public definitions/content hashes are cached per native pack.
+Presentation `recent_facts` is excluded; declared public policy history v1 is
+the optional suffix (demo: 32 rows). No writable model memory is added.
 
-Capture v1 now supplies these facts without changing existing schema-6
-consumers, worlds or evidence. Optional non-LLM history matching remains a
-separate comparison choice.
-
-Implementation decision after Jack Heart requested getting this ready to demo:
-use a separately versioned shared native decision capture that binds the existing
-Observation, continuation, public definitions and optional bounded policy history
-atomically. This is an engineering choice under that request, not a claim that
-Jack Heart selected the API spelling. Capture under the engine lock, hash all
-included facts and bind world/content identity. Reuse existing fact owners; the
-capture is an aggregate input, not a second rules authority. The renderer consumes
-it end to end. Preserve the existing schema-6 contract and frozen evidence.
-Use the existing optional public history v1 (up to 32 records) for the demo,
-declaring that treatment explicitly; selecting a trained comparison remains
-separate from this local functional proof. No writable model memory is added.
-Changing the embedded Observation requires `SEMANTIC_DECISION_VERSION`;
-changing capture inclusion/order/digest semantics requires
-`DECISION_CAPTURE_VERSION`. Capture v1 hashes every included fact; schema 6
-remains byte-compatible. No existing consumer migration is required. Existing Commands check revision and
-offer legality, not a complete input digest. The collision proves missing input
-facts, not a failure of revision-staleness rejection. A text binding must retain
-its originating game/branch as well as its captured decision; revisions alone
-do not identify a game across clones.
+The embedded semantic schema remains byte-compatible at version 6; capture
+inclusion/order/digest changes use `DECISION_CAPTURE_VERSION` (now 2). Existing
+worlds and checkpoints retain their meanings. The collision proves missing
+input facts, not broken revision rejection: ordinary Commands check revision
+and legality, while text submission additionally binds originating game/branch,
+reset generation and complete capture digest. Revisions alone do not identify
+a game across clones. Earlier implementation detail remains at
+`e929d4c7c:scratch/llm-finetune.md`.
 
 This is an additive series. The keystone is the representation and binding;
 a parallel model harness consumes that contract. Fine-tuning and playing-strength
@@ -344,16 +384,37 @@ event input in English.
 - No existing LLM runtime or fine-tuning implementation was found. Compound
   decoding is an existing alternative interface, not this initial integration.
 
-Upstream reconciliation, 2026-10-24: `1e6015270` moved paired evaluation to
-`manabot/eval/match.py` and game execution/registration to `manabot/sim/`.
-The playing-evaluation follow-up can reuse those schedules and evidence owners,
-but needs an explicit integration: the current runner receives an integer action
-from `act(env, obs)` and ordinarily calls `env.step(action)`. It does not yet
-accept the proposed text binding and response-attempt evidence. A future adapter
-must preserve the captured Command, selection origin and failure policy; existing
-paired scheduling alone is not an end-to-end LLM evaluation. `912771b94` removed
-supervised policy training, so later interface fitting also remains a new design,
-not an available training path.
+Upstream reconciliation, 2026-10-26: merge `ffec2957d` retains main through
+`a0dead2b5`, including batched checkpoint evaluation/resume (`b7b49467b`) and
+failed-game-only journal retention (`aa6f4652d`). `eval.match.play_cell` now admits
+resident policies before spawning bounded games; `sim.serving.PolicyStore`
+loads through `model.checkpoint`, verifies checkpoint bytes and observation ABI,
+and batches compatible requests. `local_checkpoint_file` keeps verified local
+artifact admission and the TYPE_CHECKING-only managed Agent import; the local
+CLI must still work without training/cloud/callback imports.
+
+Checkpoint loading and catalog discovery use `ObservationConfig.from_checkpoint`.
+So do ordinary/scenario replay roots; the new `sim.replay.replay_prefix` inherits
+that admission for retained-input calibration. Prefix reconstruction is not a
+complete trace-verification receipt. Full replay and pending-failure evidence
+keep their existing owners and frozen meanings.
+
+Reconciliation repair: `eval.match` serializes the admitted configuration with
+`model_dump`, which intentionally omits v1. The new `sim.match` worker had used
+fresh-default `model_validate`, silently reconstructing v2. It now uses
+`from_checkpoint`; bounded serving/replay tests cover absent-version v1 and
+explicit v2. The fresh-input serving fixture now passes an explicit fresh space
+instead of relying on absent retained configuration to mean v2. Neither repair
+changes checkpoint bytes, architecture-receipt exclusions or replay identities.
+
+The LLM follow-up can reuse scheduling, serving measurements and replay owners,
+but still needs an explicit adapter: runners receive integer actions from
+`act(env, obs)` or inference replies, not text-binding/response-attempt evidence.
+The adapter must retain captured Commands, selection origin and failure policy.
+Shared serving is not an LLM integration or this revision's encode-performance
+proof. `912771b94` removed supervised policy training; interface fitting remains
+a new design. The newly retained MTG-181/186 research does not select a comparator
+or authorize relabeling its v1 evidence as v2.
 
 Labels alone are insufficient. Pair offers with action descriptors from the
 same composite observation using their native order contract; validate count,
@@ -371,7 +432,7 @@ keeps the small content/presentation envelope and reuses `decision.Observation`.
 - `TextAction`: reference, description and one exact bound Command.
 - `TextEncodingError`: unsupported schema/field/reference or unavailable meaning.
 - `render_decision(capture_json: str) -> TextDecision`: pure projection of
-  validated, digest-checked capture v1. Bound definitions are inside the capture.
+  validated, digest-checked capture v2. Bound definitions are inside the capture.
   `capture_text_decision(env, history_capacity=...)` attaches the opaque native
   handle. Offline JSON can render but cannot regain submission authority.
 - `resolve_action(decision: TextDecision, response: str) -> Command`: accept
@@ -385,7 +446,7 @@ keeps the small content/presentation envelope and reuses `decision.Observation`.
 Prompt and artifact versions bind native world/content/schema and renderer
 identity. The harness separately binds model/tokenizer revisions, chat template,
 precision, decoding settings and actual token IDs. This adds a derived format,
-with its own capture-v1 compatibility/versioning boundary. Historical worlds and checkpoints retain their existing
+with its own capture-v2 compatibility/versioning boundary. Historical worlds and checkpoints retain their existing
 meaning; the renderer version cannot stand in for a shared schema migration.
 
 ## Delete — do not maintain
@@ -475,14 +536,14 @@ Maps are normalized by definition key; ordered native lists retain their order.
 | --- | --- |
 | `capture_version`, `world_version`, `content_digest`, `digest` | Binding-only, retained with exact input; digest checked before rendering. |
 | Observation identity: schema/revision/viewer/hash; frame schema/revision/actor/fingerprint | Binding-only; actor/revision consistency checked, perspective rendered. |
-| `events`, `recent_events`, continuation `recent_facts` | Must be empty in v1. Legacy prose history deliberately excluded; optional policy history is the sole declared suffix. |
+| `events`, `recent_events`, presentation continuation `recent_facts` | Must be empty in the text contract. Legacy prose history deliberately excluded; optional policy history is the sole declared suffix. |
 | `game_over`, `won`; turn number/phase/step/active/agent | Rendered explicitly; player IDs resolve to You/Opponent. |
 | Player life, zone counts, graveyard Lessons, mana, restricted Lesson mana, combat expiry total, known-hand minima, initial/remaining sideboard counts | Rendered with units and definition aliases, including zeros/empties. `is_agent`/`is_active` rendered; `id`/`player_index` bind roles. |
 | Cards: name, text, zone, owner, power/toughness, token/legendary/Ally/Lesson, ward/kicker values, all card-type and keyword flags, mana cost/value/hybrid | Rendered. False type flags stated collectively; absent keywords mean false. IDs bind aliases, registry keys bind D references. Effective battlefield state remains separate from printed card facts. |
 | Outside candidates: candidate/owner/definition/name/text | O aliases and rendered owner/definition/rules; never fabricated in-game objects. |
 | Permanents: controller/tapped/damage/sickness/counters/effective P/T, animation, exile link, exile-if-dies, unblockability, temporary subtypes/effective keywords | Every field rendered; IDs and registry keys resolve to the same C/D aliases as backing cards. |
 | Stack: ordered IDs/kind/controller/definition/source permanent/ability/mode/targets | S aliases, native top-to-bottom order; all selectors and ordered target relations rendered. Missing source stays unavailable. |
-| Continuation: actor/stage/instruction/source, targets with clauses, sacrifice reservation, mana cost, mode | All facts rendered; entity/display/incarnation IDs only resolve exact aliases. Expired objects do not acquire a returned object's alias. |
+| Continuation: native frames plus actor/stage/instruction/source, targets with clauses, sacrifice reservation, mana cost, mode | Shared native frames and presentation are rendered; frame order, parents, mana outputs/restrictions and resolving ability count remain explicit. Entity/display/incarnation IDs only resolve exact aliases. Expired objects do not acquire a returned object's alias. |
 | Bound definitions: name/rules/mana/types/supertypes/subtypes/keywords/P/T/kicker/ward/token | All rendered; cost mana value is redundant with cost symbols. These are native public characteristics, not a second executable rules program. |
 | Visible `objects` card/permanent/incarnation joins | Binding-only alias joins; projected only for already-visible cards. |
 | History version/capacity and ordered kind/amount/source/target; reference kind/definition/owner/zone/current link | All rendered; unavailable and expired links explicit. Uses existing native history admission and at most 32 rows, no ledger reconstruction or model memory. |
@@ -558,12 +619,14 @@ or randomly initialized model for the trained reference. Report a history-on
 variant separately if the selected trained checkpoint has history off; never
 change its expected inputs and call it the same checkpoint.
 
-Local architecture measurement, 2026-10-24: a fresh instance of the checked-in
+Historical architecture measurement, 2026-10-24: a fresh instance of the then
 `baseline-v3` configuration has **193,794 parameters**, **775,176 FP32 parameter
 bytes** and **37,410 buffer bytes**. The resolved configuration and architecture
 receipt are in `.runs/llm-observation-baseline-size.json`. This counts the current
-architecture without loading trained weights; it is not playing evidence or
-the selected trained comparator. The selected LLM's exact count and measured
+input-v1 architecture without loading trained weights; it is not the current
+input-v2 parameter count, playing evidence or the selected trained comparator.
+A fresh v2 architecture measurement remains necessary for a v2 size comparison.
+The selected LLM's exact count and measured
 serving memory remain with MTG-185's model selection.
 
 | Comparison | Retained measurements |
@@ -639,37 +702,24 @@ relax its budget; use current AGENTS.md admission/monitoring/choice-separability
 checks. No successful PPO result follows from the removal.
 
 Human prompt review is accepted. MTG-185 owns actual tokenizer/chat-template
-budgets, model loading, repair/fallback and runtime/GPU measurements. Publication
-for review is authorized but remains conditional on the current gate and reliable
-paired performance acceptance; merge and paid resources are not authorized.
+budgets, model loading, repair/fallback and runtime/GPU measurements. Jack Heart's
+2026-10-26 direction authorizes landing after the final gate and the bounded
+Runpod test recorded below. Parent owns rental cleanup and waited landing;
+this gate performs no publication, merge or additional paid execution.
 
 ## Measure and evidence
 
-### Interactive demo — 2026-10-24
+### Accepted prompt review — 2026-10-24
 
-Jack Heart invoked `demo` after accepting omission of absent optional fields.
-The live native blocker fixture is now presented in this conversation: one
-2/2 Gray Ogre can block either of two distinct attacking 2/2 Gray Ogres or
-decline to block. The complete generated prompt is retained at
-`.runs/text-observation/interactive/0-prompt.txt`, with exact capture at
-`.runs/text-observation/interactive/0-input.json`. The displayed excerpt keeps
-all three legal actions; the linked file is the actual full model input.
-
-Jack Heart asked where the game was; the presentation was clarified as a local
-native process with a chat/text interface, without a visible board. At his
-request the complete prompt above was opened in the default text editor. He
-then said "ok this is fine". This accepts the displayed full prompt and its
-omission of absent optional metadata; no further text redesign is requested.
-
-No human action reference was selected or executed in this review. The
-interactive driver `.runs/text-observation/interactive/demo.py` was launched
-with an origin-bound environment (tool session 22618); its continued liveness
-must be checked before any later interaction. No LLM was loaded. Action
-execution evidence remains the automated 33-alternative native replay proof,
-not a human playthrough. The accepted prompt format is retained for harness
-integration. The original recommendation to resolve full learnability
-verification is superseded by the upstream removal documented above.
-Acceptance here does not establish model performance or successful PPO verification.
+Jack Heart reviewed the complete native blocker prompt and accepted its
+presentation and omission of absent optional metadata ("ok this is fine").
+One Gray Ogre could block either distinct attacking Gray Ogre or decline; all
+three actions remained explicit. Exact prompt/capture:
+`.runs/text-observation/interactive/0-{prompt.txt,input.json}`. The review used
+native text without a visible board or LLM; no human action was executed.
+Execution evidence remains the automated 33-alternative replay proof. This
+accepts presentation, not model performance or PPO verification. Historical
+interaction detail remains at `2e1a14fc0:scratch/llm-finetune.md`.
 
 Measure prompt tokens p50/p95/max by decision family, section contribution,
 action count and overflow fraction. Later report initial/repaired response rates
@@ -678,44 +728,328 @@ Set no playing-strength gate for the representation itself.
 
 `scratch/questions.md` indexes remaining experimental choices.
 
-## Active implementation revision — 2026-10-25
+## Current revision and remaining gate — 2026-10-26
 
-The bounded layout and checkpoint rule are recorded in questions. Native
-`ContinuationFrame` is a current-observation fact, not another rules transaction.
-The audit includes public stack clauses/context and suspended payment frames,
-which the existing presentation context does not fully expose.
+Implemented at `2e1a14fc0`: native stack/announcement/resolution and nested mana
+frames, 64×32 reusable relation rows, object/catalog embedding joins, actual
+mana outputs/restrictions and resolving ability count. Capture v2 reuses native
+facts and cached definitions; duplicate Python observation models and independent
+presentation extraction are removed. Layout: `docs/recent-events.md`. The
+post-sync serving repair above completes the bounded reconciliation change.
+No Wave is associated; Wave files remain read-only.
 
-The deletion cut above is complete. No Wave was selected or edited. The
-implementation uses typed native frames for stack/announcement/resolution and
-nested mana obligations, 64×32 reusable relation rows, and shared catalog/object
-embeddings, actual mana outputs/restrictions and the resolving ability count. Public definition construction
-and content hashing are cached per immutable native pack. The full layout is in
-`docs/recent-events.md`.
+Retained implementation evidence: collision, parity, gradients and checkpoint
+checks passed; historical ActorCritic at `e929d4c7c` exactly matched v1 weights
+and policy/value outputs on 12 fixtures; all 228 legacy native arrays matched
+(`.runs/continuation-revision/{legacy-model,legacy-input}.json`). Compression
+retained 24 passing Python cases, 27 native decision cases, and 24 exact
+capture/prompt/context/schema-6 comparisons (`.runs/compress-snapshot-reuse/`).
+The old 621-test collection predates the evaluation sync. These are focused
+proofs, not the current full gate. The formerly interrupted 200-game parity soak is now complete: six tests
+passed in `observation-gate-20261026-final/parity.log`; see Gate execution below.
 
-Remaining: gate's affected suites (including debug Rust/Clippy, current-world
-admission and monitoring, model and recovery checks) and a quiet-host paired
-performance acceptance. Publication remains conditional on those checks; no
-merge, model choice or paid run is selected.
+### Gate-owned correctness commands
 
-The implementation's focused collision, parity, gradients and checkpoint checks
-passed; integration CI collected 621 tests. Historical ActorCritic at `e929d4c7c`
-exactly matches v1 weights and policy/value outputs on 12 native fixtures, and all
-228 legacy native input arrays match (`.runs/continuation-revision/legacy-model.json`
-and `legacy-input.json`). The interrupted 200-game parity soak remains gate-owned;
-five explicit buffer/vector parity nodes passed. Full earlier notes are preserved
-in `.runs/compress-review-2026-10-25/llm-finetune.md`.
+From the repository root, against the current extension. Native rebuild when
+needed uses `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+and the AGENTS.md atomic cp312 wheel-member install; no in-place overwrite of
+a loaded extension. Debug checks remain required even with a release extension.
 
-Check, 2026-10-25: `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` + atomic install → pass; `cargo test --manifest-path managym/Cargo.toml --lib decision` → 27 passed; `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py tests/verify/test_continuation_input.py tests/academy/test_decision_surface.py -q` → 24 passed; 12 fixtures × two history/viewer treatments → 24 captures, prompts, contexts and semantic observations each exactly unchanged; Ruff, Rust formatting and whitespace → pass. Evidence and pre-edit notes/diff: `.runs/compress-snapshot-reuse/`; earlier native/reference input comparisons: `.runs/compress-review-2026-10-25/`. Gate owns full debug/Clippy, affected suites, interrupted parity soak and quiet-host performance acceptance.
+```sh
+cargo fmt --manifest-path managym/Cargo.toml --check
+cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path managym/Cargo.toml
+uv run --extra dev --extra play --extra notebook --extra artifacts --extra reports --extra evaluation pytest tests/env/ tests/agent/ tests/model/ tests/test_package_boundaries.py tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py tests/verify/test_continuation_input.py tests/verify/test_checkpoint_scenarios.py tests/academy/test_decision_surface.py -q
+uv run --extra dev pytest tests/verify/test_observation_parity.py -q
+uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q
+uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py tests/training/test_learning_state.py -q
+uv run --extra dev --extra artifacts --extra evaluation --extra reports pytest tests/eval/ tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py tests/training/test_checkpoint_queue.py -q
+uv run python -m manabot.verify.text_observation --out .runs/text-observation-gate-v2
+uv run --extra dev ruff check manabot/sim/match.py tests/eval/test_batched_eval.py
+uv run --extra dev ruff format --check manabot/sim/match.py tests/eval/test_batched_eval.py
+git diff --check
+```
 
-Performance receipts: `.runs/continuation-revision/` retains the source baseline,
-release build logs, identical native corpus hashes, allocation/byte counters,
-three alternating paired encode-only and full-vector runs (batch 1/64), plus
-current code and host metadata. The v1-after-refactor arm separates refactoring
-from added facts. Relation buffers add 8,192 bytes per encoded observation;
-pre-sizing the object lookup reduces encode allocation count to one. Full-vector
-allocation attribution is not measured. The host's load average was about 181
-with unrelated CPU saturation; timings vary several-fold, so these are diagnostic
-receipts, **not nonregression acceptance**. A quiet-host repeat and any material
-regression repair remain mandatory before publication. The final nested-payment parent-order correction and continuation helper extraction postdate these timing receipts.
-Earlier failed benchmark
-attempts and pre-final-shape receipts are retained separately in that directory.
+The parity-file command includes `test_observation_parity` (200 games) and all
+buffer/vector checks. Current `.github/workflows/manabot-integration.yml` owns
+its exact main/long/evaluation selections and collection; the historical count
+is not a gate target. Changed-file lint and the affected correctness selections completed below;
+the broader integration matrix retains its own CI result. Headless browser Perf proof belongs to CI's existing
+`./scripts/verify-eval-performance-report`; it does not block this reconciliation.
+
+### Gate-owned performance evidence
+
+Existing `.runs/continuation-revision/` timings are historical diagnostics only.
+They retain baseline `e929d4c7c`, corpus hashes, allocation/byte counters and
+three alternating before/v1-refactor/v2 pairs at batch 1/64. Measurements were
+highly variable under contention and predate final nested-parent ordering and
+helper/snapshot reuse corrections. A lower later load reading is not acceptance.
+The measured relation buffer adds 8,192 bytes per observation; native encode
+allocation count was one. Neither fact establishes full-vector cost.
+
+The historical passive/action-zero recipe has been superseded by the matched
+five-case vector runner and native encoder receipts documented in
+`docs/recent-events.md`. The measured baseline is a fresh export of `e929d4c7c`
+with only the retained measurement overlay. Both native examples use the
+`benchmark` feature; both measured extensions use `python,benchmark`, release,
+CPython 3.12 and the same compiler. Counting is disabled during timing, though
+the opt-in allocator wrapper remains compiled into both arms. Normal wheels
+exclude that wrapper and the fixture APIs.
+
+The paired command and completed results are recorded below. Unlike the earlier
+recipe, it checks per-family inputs, Commands, legacy tensors and resulting
+states across all arms, including a 33-action **output**. Source manifests,
+executable/extension hashes, compiler/runtime identities and allocation/byte
+attribution accompany every run. No historical receipt was rewritten.
+
+Acceptance still requires identical seeded inputs and action sequences across
+before/v1-refactor/v2 arms, both batch sizes, same release compiler/profile,
+hardware, threads and buffer settings; allocations, bytes written, latency and
+throughput; per-family paired samples and observed noise, including failed
+attempts. Compare before→refactor separately from refactor→v2. Any material
+regression needs repair and remeasurement before publication. No synthetic load
+is permitted (TESTING.md); only bounded actual-workload measurement. No paid
+execution or playing-strength experiment is selected.
+
+No representation product decision is needed. Comparator/history/model choices
+remain draft follow-ups in questions. Publication remains conditional on gate
+and performance acceptance; merge is not authorized.
+
+Check, 2026-10-26: `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_batched_eval.py::test_served_checkpoint_preserves_input_version tests/eval/test_batched_eval.py::test_residency_catalog_batching_parity_and_eviction tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q` → 4 passed; focused Ruff → pass; full gate/parity soak/performance → deferred to gate.
+
+### Gate execution — 2026-10-26
+
+Fresh evidence owner: `.runs/observation-gate-20261026-final/`. Historical
+`.runs/continuation-revision/` receipts were preserved. The baseline was freshly
+exported from `e929d4c7c` into `before/`, without a worktree; its measurement-only
+source overlay is retained in `baseline-instrumentation-final.patch`.
+
+Gate repairs: the object-permutation verifier now remaps both continuation
+object-reference columns with the object table. The observation-key fixture
+expects fresh v2 relations; the incompatible checkpoint test now actually
+changes v2 to v1. No model invariant or learning threshold was relaxed. The
+continuation module's two Clippy findings were fixed without changing its
+layout. The existing uncommitted serving/replay compatibility fix was preserved.
+
+Measurement repair: `benchmark` is an opt-in native feature, absent from normal
+wheels. It counts `alloc`, `alloc_zeroed` and `realloc` requests over complete
+vector calls, separately from timing, and permits untimed exact fixture forks.
+The existing allocation test/example share that counter so all-feature builds
+have a single allocator. Native receipts add final encoded/native-input hashes;
+vector receipts retain per-family inputs, Commands, continuation/legacy tensor
+hashes, post-state hashes, allocation scopes and output/copy bytes. The real
+Python failure-capture, synchronization and reward path is included. Each
+positional action is checked against its semantic Command and all output rows
+against the scalar native transition, including transition events. The first
+instrumentation smoke caught an erroneous reread that lost those events; that
+receipt is retained and the measurement code now uses the step's returned input.
+
+The paired runner records source manifests including new files, binary hashes,
+compiler/runtime identities, exact commands, host load and wall/CPU times. It
+rejects mismatched inputs/Commands/legacy outputs and changes during collection.
+Current/baseline smoke inputs, Commands, legacy tensors and resulting states
+match in all four families. The 64-row refactor smoke also passes. These are
+instrumentation checks under concurrent validation, not performance acceptance.
+
+Checks so far (final outcomes below supersede this in-progress list):
+- Affected env/agent/model/semantic/Academy correctness command above → initial
+  339 passed, 1 skipped, 5 failures (`correctness.log`); the five stale verifier
+  expectations were repaired and included in the remaining-suite run.
+- `uv run --extra dev pytest tests/verify/test_observation_parity.py -q` →
+  **6 passed in 53.94s**, including the complete 200-game native/Python soak.
+- `uv run --no-sync python -m manabot.verify.text_observation --out .runs/observation-gate-20261026-final/text-proof`
+  → **33 legal alternatives executed/replayed**, continuation collision and
+  history separation retained (`text-proof.log`).
+- `cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings`
+  → **pass** (`clippy-resolved.log`), after resolving the two continuation
+  lints and allocator conflicts with existing measurement targets.
+- Ruff check and format-check on all 22 changed/new Python files → **pass**.
+- Exact current CI main/long/evaluation selections collected successfully;
+  main **621**, long **27**; logs retain the evaluation per-file counts.
+- The first instrumented build omitted the required `python` feature and failed
+  with `unknown binding type`; the corrected command uses
+  `--features python,benchmark`. Both release extensions are atomically installed
+  from fresh wheels, never overwritten while mapped.
+
+The debug long-game/branch-contract progress warnings were investigated, as
+was the long evaluation run (bounded process sample: `eval-sample.txt`). Both
+selections completed successfully below. No check timeout was overridden.
+Timing collection began after both validation jobs finished.
+
+Completed correctness outcomes:
+- Combined required admission, monitoring, choice-separability, recovery,
+  learning-state, full evaluation and Etude/head-to-head/checkpoint-queue
+  selection, including the repaired observation/world/FiLM files → **308 passed,
+  1 CUDA-only skip in 1965.01s** (`remaining.log`). This includes all five nodes
+  that failed the initial affected-suite run; no learning threshold was changed.
+  The exact selection is retained in `remaining-collection.log` (309 nodes).
+- `cargo test --manifest-path managym/Cargo.toml` → **539 passed, 1 ignored**
+  across 26 targets (`rust-tests.log`). The long debug branch-contract target
+  passed in 291.77s; its 60-second warnings were progress warnings, not timeouts.
+- The changed native Python stub also needed formatting. Ruff lint/format,
+  `cargo fmt --check` and `git diff --check` now pass; exact static command arrays
+  and results are in `static-checks.json`. Subsequent benchmark-only edits were
+  linted/formatted separately before timing.
+- `./scripts/verify-eval-performance-report` remains owned by capable CI under
+  the accepted plan; it was not run or marked passed locally. No frontend or
+  accepted prompt presentation changed in this gate.
+
+The last instrumentation audit added a fifth full-vector case: an ordinary
+priority pass returns and encodes 33 legal actions. The original large-input
+case remains, distinguishing its offer/capture overhead from large-output
+encoding. Batch-64 smoke passed all five cases (`output-coverage-smoke.json`).
+The exact measured baseline overlay is `baseline-instrumentation-paired.patch`.
+
+Fresh serial timing command:
+`uv run --no-sync python scripts/bench_observation_pair.py --before .runs/observation-gate-20261026-final/before --out .runs/observation-gate-20261026-paired --steps 128`.
+It started only after the correctness process exited. Initial measured host load
+was 108.7/114.2/82.1 on 16 logical CPUs, despite only one benchmark child running.
+This is an explicit environment limitation for reliable performance acceptance;
+no other processes were altered and no artificial load was induced.
+
+### Final paired evidence and remaining acceptance
+
+All **27 serial measurement commands passed**: three before/refactor/current
+pairs, each with encode-only and full-vector batches 1/64. The runner confirmed
+identical native inputs, Commands, legacy input/output tensors and resulting
+states in every vector family, and unchanged source/binary identities over the
+whole collection. V2 continuation and tensor digests are retained and checked
+across repeats. Receipts: `.runs/observation-gate-20261026-paired/`; the full
+comparison is `comparison.json`, commands/load/CPU/wall records are
+`commands.json`, and `identity-verified.json` records the final identity check.
+
+These are **diagnostic timings, not a performance pass**. One-minute host load
+ranged **84.40–112.86 on 16 logical CPUs** (Apple M4 Max / Mac16,5). The serial
+children consumed **95.33 CPU-seconds over 268.50 wall-seconds**. Same-source
+variation is large: batch-64 large-input refactor medians were 276.46, 1294.35
+and 267.20 µs/env; its p90 samples reached 2944.68 µs/env. This is consistent
+with severe contention; it does not prove every slowdown is noise.
+
+The batch-64 large-input before→current paired ratios were **1.06, 1.64, 2.09**;
+the large-output ratios were **1.06, 1.73, 1.09**. These remain unresolved
+regression signals. A lower-tail diagnostic for large input was roughly
+165–167 µs/env before versus 171–172 current; that does not waive the requirement
+or establish a statistically meaningful regression under this host condition.
+The Python vector orchestration and native stepping implementation are unchanged
+from the baseline; the measured changes are shared fact projection, encoder
+refactoring and relation-buffer binding. No speculative optimization was made
+from these unstable timings.
+
+The v1-refactor arm uses current native facts but the old tensor layout. Thus
+before→refactor includes shared native projection costs; refactor→current isolates
+the additional relation-buffer path. It is not a claim that native fact
+construction itself has zero cost. Timings use identical allocator wrappers
+with counting disabled; allocation attribution runs separately.
+
+Medians of the three run medians below are µs/environment. Paired ranges are
+current/before (above 1 is slower); retain the individual pairs in the JSON
+rather than treating this summary as a noise-adjusted acceptance statistic.
+
+| Path / batch / case | Before | V1 refactor | V2 current | Paired current/before range |
+| --- | ---: | ---: | ---: | ---: |
+| vector/1/priority | 39.69 | 40.08 | 40.12 | 1.01–1.05 |
+| encode/1/priority | 7.28 | 2.10 | 1.78 | 0.19–0.99 |
+| vector/1/target | 39.27 | 40.81 | 39.90 | 0.96–1.03 |
+| encode/1/target | 9.62 | 1.67 | 2.37 | 0.24–0.54 |
+| vector/1/additional_cost | 46.02 | 38.94 | 39.67 | 0.83–1.02 |
+| encode/1/additional_cost | 4.61 | 2.18 | 2.49 | 0.54–1.11 |
+| vector/1/large_legal | 200.21 | 201.04 | 200.04 | 0.98–1.03 |
+| encode/1/large_legal | 24.03 | 5.09 | 7.76 | 0.29–1.31 |
+| vector/1/large_legal_output | 108.00 | 122.85 | 117.04 | 0.97–1.13 |
+| vector/64/priority | 18.65 | 19.01 | 18.45 | 0.91–1.06 |
+| encode/64/priority | 8.77 | 4.12 | 4.91 | 0.33–0.97 |
+| vector/64/target | 17.33 | 17.53 | 18.59 | 0.80–1.30 |
+| encode/64/target | 6.21 | 4.48 | 4.58 | 0.41–2.60 |
+| vector/64/additional_cost | 17.05 | 18.63 | 17.45 | 0.81–1.17 |
+| encode/64/additional_cost | 9.96 | 5.00 | 4.36 | 0.43–2.05 |
+| vector/64/large_legal | 169.05 | 276.46 | 345.19 | 1.06–2.09 |
+| encode/64/large_legal | 24.00 | 7.95 | 9.22 | 0.34–0.40 |
+| vector/64/large_legal_output | 91.57 | 113.80 | 127.00 | 1.06–1.73 |
+
+Rust allocation and logical buffer-byte evidence is deterministic across the pairs:
+- Encode-only: priority/target/additional-cost allocations drop **3→1**
+  (276→152 requested bytes); large-legal drops **5→1** (1156→584 bytes).
+  V2 adds no native encode allocations over v1-refactor.
+- Full-vector current versus refactor adds **one 80-byte Rust allocation per
+  batch**, at both batch sizes. Full vector includes fact extraction and Python
+  failure capture, not just encode-only counters.
+- At batch 64, large-input Rust requests are **135459→135267→135268** and
+  requested bytes **17934496→17965472→17965552**. Large-output requests are
+  **76195→75939→75940**, bytes **8792736→8756128→8756208**. These counters do
+  not explain a twofold timing increase, but cannot certify latency by themselves.
+- Dense native output is **38130→46322 bytes/environment**: the accepted v2
+  buffer adds **8192 bytes**, or **524288 per batch of 64**. Tensor-sync destination
+  bytes remain **518/environment**. These are logical buffer/copy bytes, not
+  physical bus traffic or a count of repeated stores.
+- Torch CPU allocation events/bytes and Python traced peak/live bytes are
+  retained per family. Python traced peaks are explicitly not cumulative
+  allocation traffic; native allocations are counted by the Rust allocator.
+
+Identity: current HEAD `ffec2957d293348dda1a646b9fe668a6c42e8e67` plus the
+retained uncommitted source manifest/diff; baseline `e929d4c7c` plus
+`baseline-instrumentation-paired.patch`. Both used release Rust **1.98.1**,
+LLVM **22.1.8**, aarch64-apple-darwin, CPython 3.12, one intra-op and one inter-op Torch thread,
+Apple clang **17.0.0**, SDK **26.2**, extension deployment target **11.0**.
+`identity.json` and `toolchain-supplement.json` retain full identities. SHA-256
+of sorted compact source-manifest JSON:
+- before: `ec21a9538357f46cb341a7276f4c009f87dab4bea75d6b0422009f66bba4352b`.
+- current: `4406638f8f821703605b1961b266bcaca76462764add6a7b59008722b948b57e`.
+
+**Remaining blocker:** reliable no-regression acceptance, including resolution
+of the batch-64 large-input/output signals, requires repeating the same fixed
+protocol on a sufficiently quiet equivalent host and profiling/fixing any
+persistent regression. No threshold, corpus or checkpoint semantics may be
+relaxed to obtain a pass. This environment cannot provide that evidence while
+its observed load is 84–113 on 16 CPUs; no authority was given to stop other
+work or acquire resources. Correctness, the interrupted soak and benchmark
+instrumentation are completed here, not deferred back to a future gate.
+Publication remains blocked; no merge, publication, new Graph or worktree was
+performed. The existing serving fix and other contributions remain uncommitted.
+
+After measurement, the normal release extension was rebuilt with only the
+`python` feature and atomically installed. Its benchmark fixture APIs are absent.
+The measured instrumented binary remains retained in `wheels-identity/`; it is
+not relabeled as the normal binary. Normal extension SHA-256:
+`67fe50ec871040491b5d18f62dc12d4a698f9f9b2da0b7242a088c319137ebfa` (`normal-extension.json`).
+
+Final executable source manifests still equal the measured manifest.
+`uv run --no-sync pytest tests/verify/test_continuation_input.py` plus the five
+explicit buffer/vector/parity fixture nodes → **10 passed in 3.05s** on that
+normal extension (`normal-wheel-check.log`). The earlier
+`normal-extension-check.log` ran before the wheel installation completed and is
+not counted as a normal-build proof. The complete 200-game soak remains the
+separate successful `parity.log` receipt. Final `git diff --check` → pass.
+
+### Runpod performance acceptance — 2026-10-26
+
+Jack Heart approved shipping and up to $2 for Runpod, then explicitly directed shipping if results look normal-ish. This supersedes exact no-regression as the delivery blocker; retain small measured overheads honestly. A 32-vCPU / 64-GB CPU pod at $0.96/hour, bounded to one hour and $1.50, ran the unchanged 27-command protocol on AMD EPYC 7763 / Linux x86_64 with Rust 1.98.1, Python 3.12, Torch 2.10 CPU. Both snapshots were rebuilt on the same machine. Only benchmark runner extension-path discovery changed for Linux. Sources were transferred from the current checkout and the already instrumented baseline, with all source/binary hashes retained. The remote git commit identifies a frozen source snapshot, not the published branch head; original checkout HEAD is retained in `.runs/runpod-performance/head.txt`.
+
+All 27 commands passed, with matching inputs, Commands, legacy outputs and post-states; final source/binary identity verification passed. At batch 64, large-input ratios were 1.008/1.018/1.008 and large-output 0.994/0.993/0.992. Other vector ratios ranged 0.978–1.051; current median large-input 173.19 versus 171.77 microseconds/environment, large-output 84.49 versus 85.02. Large-action encode-only improved approximately 20%; small-vector cases retain up to approximately 5% measured overhead. This is normal under the user's revised acceptance, not proof of zero overhead. Host has 256 logical CPUs, the container has 32 assigned CPUs and no quota. It is not an Apple-host equivalence claim, model-throughput benchmark, or playing-strength experiment.
+
+Receipts: `.runs/runpod-performance/evidence/paired/{comparison,commands,identity,identity-verified}.json`; complete build/run log and hardware records in its parent. Rental `cpu32-e23510bb389b`, provider pod `t0sy0vlgm74ozu`; termination requested immediately after downloading the evidence. The full prior correctness gate remains valid; only benchmark-path portability and documentation changed afterward. Continue through final gate and waited landing.
+
+### Final shipping gate — 2026-10-26
+
+**Pass under the revised shipping acceptance.** No production code changed in
+this gate. The branch comparison is the Task's recorded base `a0dead2b5` through
+the current working tree; prior gate receipts are reused rather than repeating
+full suites. The Task API still reports the historical stopped sync failure;
+the recorded merge and completed gate evidence above establish the subsequent
+repair. No Graph was launched or historical effects replayed.
+
+- `uv run --no-sync python -` (runner `source_identity` against both retained manifests) → all 425 current source/content hashes match Runpod; only `scripts/bench_observation_pair.py` differs from the prior local gate manifest.
+- `uv run --no-sync python -` (runner `compare` using the receipt's recorded Linux extension key) → downloaded comparison reproduces exactly; all 27 command return codes are zero and final source/binary verification is true.
+- `uv run --extra dev ruff check scripts/bench_observation_pair.py scripts/bench_observation_support.py scripts/bench_breakdown.py` → pass.
+- `uv run --extra dev ruff format --check scripts/bench_observation_pair.py scripts/bench_observation_support.py scripts/bench_breakdown.py` → all three already formatted.
+- `uv run --no-sync python scripts/bench_observation_pair.py --help` → pass; separate `EXT_SUFFIX` path assertion resolves the installed macOS cp312 extension. Linux execution is covered by the completed remote protocol.
+- `git diff --check` → pass.
+- Prior `cargo test`, affected Python selections, complete parity soak, text proof, Clippy and static receipts → reused on unchanged production source; 539 Rust tests, 308 remaining Python tests, 200 games and 33 legal alternatives as detailed above.
+- `./scripts/verify-eval-performance-report` → remains deferred to capable CI, confirmed in `.github/workflows/manabot-integration.yml`; CUDA-only skip remains unverified locally.
+
+Durable delivery context is in `docs/recent-events.md`: measured overheads,
+source manifest digest, v1 checkpoint semantics, matched-input comparison
+limits, unavailable mana activation source, buffer cost and CI deferrals.
+The earlier `scratch/pr-review.html` is a dated source walkthrough, not the
+current gate verdict; its pre-gate claims are superseded here. Publication and
+waited landing remain with the parent, as does rental cleanup. No paid execution,
+publication or merge occurred in this gate.

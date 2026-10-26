@@ -10,38 +10,7 @@ use managym::{
     state::player::PlayerConfig,
 };
 use sha2::{Digest, Sha256};
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    hint::black_box,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    time::Instant,
-};
-
-struct CountingAllocator;
-static COUNTING: AtomicBool = AtomicBool::new(false);
-static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        unsafe { System.dealloc(ptr, layout) }
-    }
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(size as u64, Ordering::Relaxed);
-        }
-        unsafe { System.realloc(ptr, layout, size) }
-    }
-}
-#[global_allocator]
-static ALLOCATOR: CountingAllocator = CountingAllocator;
+use std::{hint::black_box, time::Instant};
 
 fn root(large: bool) -> (Env, Observation) {
     let mut env = Env::new(23, false, false, false);
@@ -128,9 +97,83 @@ fn bytes(encoded: &EncodedObservation) -> usize {
         + encoded.actions_valid.len()
         + encoded.events_valid.len())
 }
+fn input_digest(observation: &Observation) -> String {
+    let mut hash = Sha256::new();
+    hash.update(observation.to_json());
+    hash.update(serde_json::to_vec(&observation.continuation).unwrap());
+    format!("{hash:x}", hash = hash.finalize())
+}
+
+fn encoded_digest(encoded: &EncodedObservation) -> String {
+    let mut hash = Sha256::new();
+    for value in &encoded.semantic_cards {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.known_hand {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_player {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_player {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_cards {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_cards {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_permanents {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_permanents {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.actions {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.events {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.action_focus {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_player_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_player_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_cards_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_cards_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.agent_permanents_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.opponent_permanents_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.actions_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.events_valid {
+        hash.update(value.to_le_bytes());
+    }
+    for value in &encoded.relations {
+        hash.update(value.to_le_bytes());
+    }
+    format!("{hash:x}", hash = hash.finalize())
+}
+
 fn main() {
-    let mut config = ObservationEncoderConfig::default();
-    config.relations = !std::env::args().any(|arg| arg == "--legacy");
+    let config = ObservationEncoderConfig {
+        relations: !std::env::args().any(|arg| arg == "--legacy"),
+        ..Default::default()
+    };
     let corpus = corpus();
     let digest = format!(
         "{:x}",
@@ -154,9 +197,6 @@ fn main() {
             }
             let repeats = if batch == 1 { 10000 } else { 200 };
             for repetition in 0..5 {
-                ALLOCATIONS.store(0, Ordering::Relaxed);
-                ALLOCATED_BYTES.store(0, Ordering::Relaxed);
-                COUNTING.store(true, Ordering::Relaxed);
                 let start = Instant::now();
                 for _ in 0..repeats {
                     for buffer in &mut buffers {
@@ -165,11 +205,13 @@ fn main() {
                     }
                 }
                 let seconds = start.elapsed().as_secs_f64();
-                COUNTING.store(false, Ordering::Relaxed);
+                managym::benchmark_allocations::start();
+                encode_into(observation, &config, buffers[0].buffers_mut()).unwrap();
+                let (allocations, allocated_bytes) = managym::benchmark_allocations::stop();
                 let count = repeats * batch;
                 println!(
                     "{}",
-                    serde_json::json!({"corpus": digest, "case": name, "actions": observation.action_space.actions.len(), "profile": "release", "batch": batch, "repetition": repetition, "encodes": count, "seconds": seconds, "encodes_per_second": count as f64 / seconds, "ns_per_encode": seconds * 1e9 / count as f64, "allocations_per_encode": ALLOCATIONS.load(Ordering::Relaxed) as f64 / count as f64, "allocated_bytes_per_encode": ALLOCATED_BYTES.load(Ordering::Relaxed) as f64 / count as f64, "bytes_written_per_encode": bytes(&buffers[0])})
+                    serde_json::json!({"corpus": digest, "case": name, "actions": observation.action_space.actions.len(), "profile": "release", "batch": batch, "repetition": repetition, "encodes": count, "seconds": seconds, "encodes_per_second": count as f64 / seconds, "ns_per_encode": seconds * 1e9 / count as f64, "allocations_per_encode": allocations, "allocated_bytes_per_encode": allocated_bytes, "output_bytes_per_encode": bytes(&buffers[0]), "input_digest": input_digest(observation), "encoded_digest": encoded_digest(&buffers[0]), "counting_during_timing": false})
                 );
             }
         }
