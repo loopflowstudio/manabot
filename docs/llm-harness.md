@@ -208,6 +208,12 @@ seconds; median model decision 1.96 seconds, maximum 2.52 seconds, loading 10.04
 seconds. The largest actual prompt was 4,329 tokens. Cold model acquisition and
 checksum verification took 87.52 seconds, outside game timing.
 
+That run used source `e747f0445e31ac08d674f855ad0128a4a722b100`, before
+MTG-184's final capture-v2 renderer landed. Its retained prompts and replay
+belong to that original runtime; they are not a GPU measurement of later
+renderer versions. Reusing the launch recipe requires a native binary built
+from the current source, as enforced by its provenance check.
+
 Peak allocated Torch tensors were 19,063,865,344 bytes. One-second `nvidia-smi`
 samples reached 22,494 of 23,034 MiB total device memory (about 22.0 of 22.5 GiB).
 The game fits this L4, with limited observed headroom; this is not proof of every
