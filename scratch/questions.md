@@ -1,36 +1,40 @@
-# MTG-184 unresolved choices — 2026-10-24
+# MTG-186 questions and assumptions
 
-Current design and accepted direction: `scratch/llm-finetune.md`. This checkout
-owns representation; MTG-185 owns the harness. Jack Heart requested both Task
-sessions in cmux, then “launch pursue” after concept review on 2026-10-24.
-No model, Wave or paid allocation is selected.
+Earlier scratch notes (card evaluation/GIH design, MTG-174/176 history) were
+inherited from landed work and are at `1e6015270:scratch/`.
 
-- **Shared input contract:** after Jack Heart requested getting this ready to
-  demo, the implementation selects a separately versioned native capture of
-  observation, continuation, definitions and optional public history, taken
-  atomically and hashed with world/content identity. Preserve schema-6 evidence;
-  reuse existing fact owners. This resolves the engineering choice exposed by
-  `scratch/observation_collision.py`; the counterexample now passes with distinct capture digests and text. The demo uses declared public history v1 up to 32 records and no writable
-  model memory. Renderer and local demo are implemented; broader verification belongs to parent gate.
-- **Comparison configuration:** select the trained comparator and history
-  treatment. Jack Heart directed matching non-LLM input and excluded writable
-  memory for the untrained model. The proposed bounded public-history treatment
-  and previous-state alternative remain unselected; neither implies full parity.
-- **Model and measurements:** model/tokenizer, prompt budget, corpus/world,
-  comparator artifact, hardware, sample sizes, performance targets and allocation
-  remain open. Qwen3-4B-Instruct-2507 is a candidate, not measured single-L4 fit.
-  Jack Heart requested performance and size comparisons; no benchmark ran.
-- **Interface fitting:** measure the untouched model first. The fitting objective
-  is open: random choices teach randomness and expert choices teach strategy.
-  The accepted exact-reference, single-repair, seeded-uniform fallback protocol
-  is specified once in the design, including its reporting and failure limits.
+- 2026-10-25 compress: `experiments/elemental_grid.py` and its test are back to
+  main's bytes. The `cells` subset served only the retired heuristic grids, and
+  the head-to-head path uses main's `_legs`/`Group`/`GameRow` unchanged. Like
+  `job.py`, the file no longer matches `mtg186-identity.json`, which stays as
+  frozen evidence of the launched training source (2de27b5c9).
+- Training restricted to UR/GW with the existing `cross-balanced` per-stream
+  strata. The native uniform sampler admits only the full ten-deck roster;
+  extending it was judged larger than the brief's "compatibility change".
+- Heuristic-grid notes (matched-update cells, heuristic digest, u0 replay)
+  are obsolete after the head-to-head steer; see git history before 5b89224b6.
+- Etude's stock RunPod image has no Rust; `TrainingJob.job` now installs
+  rustup 1.98.1 and syncs in setup (the retired bootstrap's toolchain).
+- Seed 18601 chosen to follow MTG-181's 1810x numbering.
+- 2026-10-25: retry on new on-demand `l4-etude` (Etude stock image with
+  python3.12) instead of editing the shared `l4` record, which other sessions
+  may use. Its old image cannot boot Etude 0.2.2 pods; Jack Heart may want `l4` fixed.
+- Pulling two ~28 GB RunPod images for rehearsal filled this host's disk
+  (133 MiB free) and killed the follower mid-group (no failed record written);
+  images removed. Do not rehearse with full images on this host again.
+# Inherited notes
 
-Historical notes and uncommitted-input preservation paths are recorded once in
-the design's **Delete — do not maintain** section. Resolving the sync conflict
-preserved these MTG-184 questions; the shared-input engineering choice is resolved.
+MTG-174/176, MTG-181, MTG-183 and card-evaluation (#360) notes landed on main and
+are retained at `2614317f82dfd993631a13268f008cbe01977bc6:scratch/questions.md`.
+Main's shared-evaluation follow-up and later sync notes are retained at
+`08000b28f17902043782c468e28783dca73aea59:scratch/questions.md`.
+They do not select current work.
 
-- **Reversible implementation bounds:** capture v1 defaults to history off;
-  demo explicitly uses public history v1 with 32 rows. The renderer has a 262,144
-  byte admission ceiling and a complete-prompt tokenizer callback; this byte
-  ceiling is an engineering guard, not a selected model context budget. Prompt
-  token counting must include the harness chat template before inference.
+# Remote evaluation (2026-10-25)
+
+- Superseded by Jack Heart's head-to-head steer: no heuristic grids at all.
+- Head-to-head design choices left open by the steer: the four UR/GW
+  combinations share 250 deals; the rest block draws 500 ordered pairs with
+  replacement and plays each deal on the play and on the draw (exact balance).
+- Hand-written Etude Job (not an Etude eval Benchmark); results are JSON
+  outputs, not statsdb tables.

@@ -171,6 +171,9 @@ replacement, preserving earlier games if a later write fails. Both artifacts hav
 private file permissions. Journals are create-only and replay never changes them.
 If the parent disappeared without observing the worker's outcome, journal replay
 labels it `execution_outcome_unknown`, not an engine failure or completed game.
+A game that settles without failure deletes its journal, since the cell trace
+already holds it; pass `keep_game_logs=True` to `play_cell` to keep every
+journal. Journals of failed, timed-out or unobserved games always remain.
 
 Replay a failure from a cell trace or its one-game journal:
 

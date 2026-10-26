@@ -1,15 +1,17 @@
-"""Etude benchmarks backed by replay-verified Manabot simulation.
+"""Etude benchmarks backed by the replay-checked Manabot arena.
 
-One Etude match contains all eight correlated deck/seat legs of one deal. Etude
-owns scheduling, resume, tables and match uncertainty; sim owns bounded execution
-and retained Commands. These inspected deals are development monitoring."""
+One Etude match is one deal with all eight correlated deck/seat legs. Etude
+owns match records, resume, Parquet tables and whole-match uncertainty. Arena
+owns game limits, legal actions and retained command/replay evidence. These
+repeatedly inspected deals are development monitoring, not a held-out study.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from functools import partial
 import os
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
 from etude.eval.match import Row, Tables, agent
 from etude.eval.records import (
@@ -25,12 +27,21 @@ from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.eval.match import play_cell
+from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
+from manabot.eval.evaluation import (
+    EvaluationRequest,
+    continue_evaluation,
+    evaluate as evaluate_panel,
+)
+from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
-from manabot.eval.monitor import EvaluationRow, MonitorResult
+from manabot.eval.monitor import MonitorResult
+from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.model.checkpoint import local_checkpoint_file
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 
@@ -109,44 +120,43 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     )
 
 
-def play(match: Match) -> Tables:
+def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
     if len(match.agents) != 2 or match.games != 8:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
     checkpoint, anchor = match.agents
-    seated = checkpoint.artifact
-    uri = urlsplit(seated.uri if seated else "")
-    if seated is None or seated.sha256 is None or uri.scheme != "file" or uri.netloc:
-        raise ValueError("checkpoint must be a verified local file")
-    path = Path(unquote(uri.path))
+    path = local_checkpoint_file(checkpoint)
+    sha256 = file_sha256(path)
     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
     candidate = candidate.model_copy(
         update={
-            "checkpoint_sha256": seated.sha256,
+            "checkpoint_sha256": sha256,
             "checkpoint_bytes": path.stat().st_size,
-            "artifact_id": f"monitor/{seated.sha256}",
+            "artifact_id": f"monitor/{sha256}",
         }
     )
-    verify_file(path, seated.sha256, path.stat().st_size)
     opponent = PlayerRegistration.model_validate(anchor.config["registration"])
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
-    out.mkdir(parents=True, exist_ok=True)
-    rows, trace, replay = play_cell(
+    request = EvaluationRequest(
         key=conditions.key,
-        player_a=candidate,
-        player_b=opponent,
+        candidate=candidate,
+        opponent=opponent,
         deal_seeds=(conditions.deal,),
-        out_dir=out,
         checkpoint_paths={candidate.player_id: str(path)},
         game_seconds=conditions.game_seconds,
         max_commands=conditions.max_commands,
         matchup_mode="all",
+        purpose="repeated-development-comparison",
     )
-    atomic_json(out / "rows.json", rows)
-    atomic_json(out / "trace.json", trace)
-    atomic_json(out / "replay.json", replay)
-    return evaluation_tables([EvaluationRow.model_validate(row) for row in rows])
+    result = (
+        continue_evaluation(out, request=request, inference=inference)
+        if out.exists()
+        else evaluate_panel(request, out_dir=out, inference=inference)
+    )
+    if result.error:
+        raise ValueError(result.error)
+    return evaluation_tables(result.rows)
 
 
 def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
@@ -181,15 +191,19 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
         if score is None:
             raise ValueError("valid arena row requires a score")
         # Etude's player is a tournament participant, not the native on-play
-        # seat. Deck labels and on-play flags describe that row's participant.
+        # seat. Deck labels and on-play flags describe that row's participant:
+        # `deck` is the deck it actually played, `opponent_deck` the other's.
         for player in (0, 1):
             native_seat = (row.leg + player) % 2
+            deck, opponent_deck = decks[native_seat], decks[1 - native_seat]
             plays.append(
                 {
                     "player": player,
                     "game": row.leg,
                     "score": score if player == 0 else 1.0 - score,
-                    "matchup": labels[(decks[native_seat], decks[1 - native_seat])],
+                    "deck": deck,
+                    "opponent_deck": opponent_deck,
+                    "matchup": labels[(deck, opponent_deck)],
                     "on_play": native_seat == 0,
                     "valid": True,
                 }
@@ -197,29 +211,41 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
     return {"plays": plays}
 
 
-def evaluate(manifest: MonitorResult, directory: Path) -> None:
+def evaluate(
+    manifest: MonitorResult, directory: Path, *, execution: EvalExecution | None = None
+) -> None:
     """Hold one digest-bound benchmark; the parent owns the process deadline."""
     path = Path(manifest.artifact["path"]).resolve()
     verify_file(path, manifest.artifact["sha256"], manifest.artifact["bytes"])
     directory.mkdir(parents=True, exist_ok=True)
     os.environ["ETUDE_OUTPUT_DIR"] = str(directory)
     os.environ["ETUDE_RUN"] = "checkpoint-" + manifest.artifact["sha256"]
-    result = hold(
-        benchmark(manifest),
-        experiment=BENCHMARK,
-        play=play,
-        # The training run's export, wherever its bytes are read from.
-        checkpoint=CheckpointRef(
-            key=CheckpointKey(run=manifest.run_id, name=path.name),
-            artifact=ArtifactRef(
-                uri=path.as_uri(),
-                sha256=manifest.artifact["sha256"],
-                size_bytes=manifest.artifact["bytes"],
+    if execution is not None:
+        manifest = manifest.model_copy(deep=True)
+        manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
+            manifest.key, (manifest.candidate, manifest.opponent), execution
+        )
+        atomic_json(
+            directory / "execution-manifest.json", manifest.model_dump(mode="json")
+        )
+    with callback_allocation(execution, directory / "allocation") as inference:
+        result = hold(
+            benchmark(manifest),
+            experiment=BENCHMARK,
+            play=partial(play, inference=inference) if inference else play,
+            # The training run's export, wherever its bytes are read from.
+            checkpoint=CheckpointRef(
+                key=CheckpointKey(run=manifest.run_id, name=path.name),
+                artifact=ArtifactRef(
+                    uri=path.as_uri(),
+                    sha256=manifest.artifact["sha256"],
+                    size_bytes=manifest.artifact["bytes"],
+                ),
             ),
-        ),
-        directory=directory.parent.parent / "track",
-        workers=1,
-    )
+            directory=directory.parent.parent / "track",
+            workers=execution.max_active_games if execution else 1,
+        )
+
     atomic_json(directory / "result.json", result.model_dump(mode="json"))
 
 
@@ -228,8 +254,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--execution", type=Path)
     args = parser.parse_args()
     evaluate(
         MonitorResult.model_validate_json(args.manifest.read_bytes()),
         args.manifest.parent,
+        execution=EvalExecution.model_validate_json(args.execution.read_bytes())
+        if args.execution
+        else None,
     )

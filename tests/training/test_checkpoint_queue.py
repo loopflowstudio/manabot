@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from manabot.eval.monitor import EvaluationRow, _summarize
+from manabot.eval.monitor import _summarize
+from manabot.eval.results import EvaluationRow
 from manabot.experiment import evaluation_queue as queue
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256

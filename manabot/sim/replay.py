@@ -135,6 +135,33 @@ def replay_environment(
     return env, observation
 
 
+def replay_prefix(
+    game: dict[str, Any],
+    decisions: int,
+    observation_space: ObservationSpace | None = None,
+) -> tuple[Env, dict[str, Any]]:
+    """Reconstruct a retained decision root for matched-input calibration.
+
+    The caller owns closing the returned environment. This uses retained Commands
+    without invoking players; complete trace verification remains replay_games.
+    """
+    if decisions < 0 or decisions > len(game["decisions"]):
+        raise ValueError("replay prefix is outside the retained trace")
+    env, observation = replay_environment(game, observation_space)
+    try:
+        for expected in game["decisions"][:decisions]:
+            command = Command.model_validate(expected["command"])
+            observation, _, terminated, truncated, _ = env.step(int(command.offer_id))
+            if terminated or truncated:
+                raise RuntimeError(
+                    "retained profile root occurs after game termination"
+                )
+        return env, observation
+    except BaseException:
+        env.close()
+        raise
+
+
 def replay_games(
     games: list[dict[str, Any]], *, require_terminal: bool = True
 ) -> ReplayReceipt:
