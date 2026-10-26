@@ -95,7 +95,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
     gated = TrainingJob(
         regime=spec.regime,
-        experiment="fixture",
+        experiment=spec.experiment,
         milestones=(1,),
         validate_numerics=True,
     ).job(repo=ROOT, revision="HEAD", max_hours=1)
