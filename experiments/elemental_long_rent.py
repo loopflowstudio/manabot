@@ -400,7 +400,13 @@ def launch(
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True):
+    # The ledger itself changes with every launch and is not job source.
+    dirty = subprocess.check_output(
+        ["git", "status", "--porcelain", "--", ".", f":!{LEDGER.relative_to(ROOT)}"],
+        cwd=ROOT,
+        text=True,
+    )
+    if dirty:
         raise SystemExit("commit first: the job runs an exact revision")
     state = admitted()
     design = units(state)
