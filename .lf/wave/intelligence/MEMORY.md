@@ -1,5 +1,37 @@
 # intelligence wave memory
 
+## Inference reuse and Resin deferral (b4295a, 2026-10-26)
+
+Jack Heart accepted deferring Resin for Qwen3.5-9B BF16 on L4, prioritizing
+reusable execution ideas for ordinary manabot policies through existing inference
+Tasks. At Resin `08a67226b42701ae2a8244abec250b71f204beaf`, the Qwen deployment
+preset selects a different 27B NVFP4 checkpoint on B200, and the runner separately
+rejects pre-Hopper GPUs. A BF16 loader path does not establish runnable L4 support;
+removing the device guard would not qualify the kernels or numerical behavior.
+The assessment in `docs/resin-assessment.md` retains support sources and revisit
+conditions. No port, model/hardware substitution or paid proof was selected.
+
+MTG-185's retained run `4c2a54fdfaac` establishes one completed sequential
+Transformers game: 160 initial selections, no repairs/fallbacks and 308 replayed
+Commands. Its sampled device headroom was only 540 MiB; a 4,329-token observed
+maximum does not establish configured 8,192-token capacity or concurrent fit.
+This assessment inspected retained evidence without repeating inference/replay.
+Supported alternative documentation is not a latency, capacity or strength
+receipt. Private evidence hashes identify bytes without making them available.
+
+PolicyStore residency, compatible batching, revision-bound replies and scoped
+semantic catalog caching already exist. The accepted order is MTG-188 measurement,
+MTG-189's serving ownership contract, then MTG-190's measured buffer/capture/overlap
+work, coordinated with worker recovery. These are refinements for existing owners,
+not implemented improvements. MTG-191/192 retain supported LLM and prefix work.
+Downloaded weights, compiled artifacts and live model state have different
+identities and lifetimes. Hybrid prefix reuse must restore attention and recurrent
+state at one aligned boundary, with live ownership independent of cache retention.
+Rejection before effects and failure after possible mutation require different
+recovery; neither authorizes retrying a committed native Command. Ordinary
+feed-forward policies do not gain from an LLM KV allocator. Timing claims must
+include complete decisions and distinguish readiness, queueing, prefill and decode.
+
 ## Training consolidation and credit (MTG-179, 2026-10-22)
 
 Jack Heart accepted one maintained RL execution path: TrainingRegime,
