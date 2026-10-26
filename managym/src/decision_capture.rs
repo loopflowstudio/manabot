@@ -1,5 +1,5 @@
 //! Atomic, representation-neutral input for one acting decision. Schema 6 stays
-//! frozen; capture v1 adds existing continuation, content and public-history
+//! frozen; capture v2 shares native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,10 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    agent::{
-        observation::Observation as AgentObservation,
-        policy_history::{HistoryReference, HISTORY_LIMIT},
-    },
+    agent::policy_history::{HistoryReference, HISTORY_LIMIT},
     decision::{Observation, SemanticError},
     experience::DecisionContextView,
     flow::game::Game,
@@ -21,7 +18,7 @@ use crate::{
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
 /// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 1;
+pub const DECISION_CAPTURE_VERSION: u16 = 2;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {
@@ -30,6 +27,7 @@ pub struct DecisionCapture {
     pub content_digest: String,
     pub observation: Observation,
     pub continuation: Option<DecisionContextView>,
+    pub frames: Vec<crate::agent::continuation::ContinuationFrame>,
     pub definitions: BTreeMap<u32, Value>,
     /// Visible physical-card/display-object joins; IDs never confer authorization.
     pub objects: BTreeMap<i32, Value>,
@@ -56,17 +54,12 @@ impl Game {
                 "public history v1 requires 0..32 rows".into(),
             ));
         }
-        let observation = self.semantic_observation(viewer)?;
+        let (observation, agent) = self.semantic_observation_with_input(viewer)?;
         if observation.decision.is_none() {
             return Err(SemanticError::NoActiveDecision);
         }
-        let agent = AgentObservation::for_player(self, viewer);
-        let mut continuation = self.decision_context(viewer);
-        // This legacy prose suffix is a different history treatment. The only
-        // history admitted by capture v1 is policy_history below.
-        if let Some(context) = &mut continuation {
-            context.recent_facts.clear();
-        }
+        // Capture admits only policy history, not the presentation's prose suffix.
+        let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
         for visible in agent.agent_cards.iter().chain(&agent.opponent_cards) {
             let (index, card) = self
@@ -143,25 +136,24 @@ impl Game {
                 "source": reference(&event.source), "target": reference(&event.target)})
             })
             .collect();
+        for frame in &agent.continuation {
+            ids.extend(frame.source.definition);
+            for target in &frame.targets {
+                ids.extend(target.reference.definition);
+            }
+            ids.extend(frame.context.and_then(|r| r.definition));
+            ids.extend(frame.sacrifice.and_then(|r| r.definition));
+        }
         let mut definitions = BTreeMap::new();
         for id in ids {
-            let card = self
+            let definition = self
                 .state
                 .content
-                .definition(CardDefId(id))
+                .public_definition(CardDefId(id))
                 .ok_or_else(|| {
                     SemanticError::IllegalCommand(format!("missing public definition {id}"))
                 })?;
-            definitions.insert(
-                id,
-                json!({
-                    "name": card.name, "text_box": card.text_box,
-                    "mana_cost": card.mana_cost, "types": card.types,
-                    "supertypes": card.supertypes, "subtypes": card.subtypes,
-                    "keywords": card.keywords, "power": card.power, "toughness": card.toughness,
-                    "kicker": card.kicker, "ward": card.ward, "is_token": card.is_token,
-                }),
-            );
+            definitions.insert(id, definition.clone());
         }
         let mut capture = DecisionCapture {
             capture_version: DECISION_CAPTURE_VERSION,
@@ -170,6 +162,7 @@ impl Game {
             observation,
             objects,
             continuation,
+            frames: agent.continuation,
             definitions,
             history: PublicHistory {
                 version: 1,

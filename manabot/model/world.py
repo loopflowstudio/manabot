@@ -15,7 +15,6 @@ from manabot.semantic.policy_catalog import learning_schema_path
 import managym
 
 WORLD = managym.WORLD_VERSION
-POLICY_INPUT_VERSION = 1
 _ROSTER_PACKS = {"elemental-world-v1", "elemental-world-v2"}
 
 
@@ -111,7 +110,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     schema_path = learning_schema_path(compiled["pack_key"] if compiled else None)
     return {
         "world": WORLD,
-        "policy_input_version": POLICY_INPUT_VERSION,
+        "policy_input_version": observation_space.encoder.config.policy_input_version,
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,

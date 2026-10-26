@@ -3,16 +3,18 @@
 //! `Game::decision_context` reads pending native continuations; it never stores
 //! a second payment transaction or changes legality. These facts summarize the
 //! acting player's already-observed actions and current legal decision. The
-//! tensor encoder and frozen semantic observation/digest contracts stay intact.
+//! typed continuation projection is shared with tensor and text inputs; the
+//! frozen semantic observation/digest contract stays intact.
 
 use crate::{
+    agent::continuation::ContinuationFrame,
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
         OfferSubjectView, RequiredNullable, SubjectRef,
     },
     flow::{
         decision::Decision,
-        game::{Game, Payment, PendingChoice},
+        game::{Game, PendingChoice},
     },
     state::game_object::{CardId, PlayerId, Target},
 };
@@ -182,6 +184,48 @@ impl Game {
     /// Only the decision owner receives announcement/private continuation
     /// details. Other viewers receive the public owner/kind and committed facts.
     pub fn decision_context(&self, viewer: PlayerId) -> Option<DecisionContextView> {
+        let frames = self.continuation_frames(viewer);
+        let mut view = self.decision_context_from_frames(viewer, &frames)?;
+        view.recent_facts = self
+            .state
+            .events
+            .iter()
+            .skip(self.state.events.len().saturating_sub(64))
+            .filter_map(|event| {
+                use crate::flow::event::GameEvent;
+                match event {
+                    GameEvent::PermanentSacrificed { card, controller } => Some(format!(
+                        "Seat {} sacrificed {}.",
+                        controller.0 + 1,
+                        self.state.cards[*card].name
+                    )),
+                    GameEvent::SpellCast { card, .. } => Some(format!(
+                        "{} was cast; its announced costs are committed.",
+                        self.state.cards[*card].name
+                    )),
+                    GameEvent::SpellResolved { card } => Some(format!(
+                        "{} finished resolving.",
+                        self.state.cards[*card].name
+                    )),
+                    GameEvent::SpellCountered { card, .. } => {
+                        Some(format!("{} was countered.", self.state.cards[*card].name))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+        let excess = view.recent_facts.len().saturating_sub(12);
+        view.recent_facts.drain(..excess);
+        Some(view)
+    }
+
+    /// Project current facts without the presentation-only event suffix. Capture
+    /// supplies its observation's frames and separately admits policy history.
+    pub(crate) fn decision_context_from_frames(
+        &self,
+        viewer: PlayerId,
+        frames: &[ContinuationFrame],
+    ) -> Option<DecisionContextView> {
         let space = self.action_space()?;
         if self.is_game_over() {
             return None;
@@ -196,189 +240,84 @@ impl Game {
             reserved_sacrifice: RequiredNullable(None),
             mana_cost: RequiredNullable(None),
             chosen_mode: RequiredNullable(None),
-            recent_facts: self
-                .state
-                .events
-                .iter()
-                .skip(self.state.events.len().saturating_sub(64))
-                .filter_map(|event| {
-                    use crate::flow::event::GameEvent;
-                    match event {
-                        GameEvent::PermanentSacrificed { card, controller } => Some(format!(
-                            "Seat {} sacrificed {}.",
-                            controller.0 + 1,
-                            self.state.cards[*card].name
-                        )),
-                        GameEvent::SpellCast { card, .. } => Some(format!(
-                            "{} was cast; its announced costs are committed.",
-                            self.state.cards[*card].name
-                        )),
-                        GameEvent::SpellResolved { card } => Some(format!(
-                            "{} finished resolving.",
-                            self.state.cards[*card].name
-                        )),
-                        GameEvent::SpellCountered { card, .. } => {
-                            Some(format!("{} was countered.", self.state.cards[*card].name))
-                        }
-                        _ => None,
-                    }
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .take(12)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect(),
+            recent_facts: Vec::new(),
         };
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
-        let mut payment = None;
-        match &self.pending_choice {
-            Some(PendingChoice::ManaPayment {
-                payment: pending,
-                sacrifice,
-                alternative,
-                ..
-            }) => {
-                view.stage = "payment".into();
-                view.instruction = "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately.".into();
-                payment = Some(pending.as_ref());
-                view.reserved_sacrifice = RequiredNullable(
-                    sacrifice.and_then(|id| self.decision_target(&Target::Permanent(id))),
-                );
-                let cost = self.payment_mana_cost(viewer, pending, alternative.as_ref());
-                let mut symbols = String::new();
-                if cost.cost[6] > 0 {
-                    symbols.push_str(&format!("{{{}}}", cost.cost[6]));
+        // Presentation consumes the same typed current facts as the native
+        // observation and policy tensors. Only labels and instructions live here.
+        if let Some(frame) = frames
+            .iter()
+            .find(|frame| frame.kind == 4)
+            .or_else(|| frames.iter().find(|frame| frame.kind == 5))
+        {
+            let object = |reference: crate::agent::continuation::VisibleReference| {
+                if let Some(player) = reference.player {
+                    return self.decision_target(&Target::Player(PlayerId(player)));
                 }
-                for (index, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
-                    for _ in 0..cost.cost[index] {
+                let display_id = reference.object? as u32;
+                self.state.cards.iter().enumerate().find_map(|(index, _)| {
+                    self.decision_card(CardId(index))
+                        .filter(|view| view.display_id == display_id)
+                })
+            };
+            view.source = RequiredNullable(object(frame.source));
+            view.targets = frame
+                .targets
+                .iter()
+                .filter_map(|target| {
+                    object(target.reference).map(|object| DecisionTargetView {
+                        object,
+                        clause: target.clause as u32,
+                    })
+                })
+                .collect();
+            view.reserved_sacrifice = RequiredNullable(frame.sacrifice.and_then(object));
+            view.chosen_mode = RequiredNullable(frame.mode.map(|mode| mode as u32));
+            if let Some(cost) = frame.cost {
+                let mut symbols = String::new();
+                if cost[6] > 0 {
+                    symbols.push_str(&format!("{{{}}}", cost[6]));
+                }
+                for (amount, symbol) in cost[..6].iter().zip(["W", "U", "B", "R", "G", "C"]) {
+                    for _ in 0..*amount {
                         symbols.push_str(&format!("{{{symbol}}}"));
                     }
                 }
-                for pip in cost.hybrid {
-                    symbols.push_str(&format!("{{{}/{}}}", pip[0].symbol(), pip[1].symbol()));
+                for pair in &frame.hybrid {
+                    let colors = ["W", "U", "B", "R", "G", "C"];
+                    symbols.push_str(&format!(
+                        "{{{}/{}}}",
+                        colors[pair[0] as usize], colors[pair[1] as usize]
+                    ));
                 }
                 if symbols.is_empty() {
                     symbols.push_str("{0}");
                 }
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
-            Some(PendingChoice::SacrificePayment {
-                payment: pending, ..
-            }) => {
-                view.stage = "additional_cost".into();
-                view.instruction = "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes.".into();
-                payment = Some(pending.as_ref());
-            }
-            Some(PendingChoice::ChooseTargets {
-                card,
-                chosen,
-                chosen_req_indices,
-                mode,
-                ..
-            }) => {
-                view.stage = "targets".into();
-                view.instruction = "Choose a target for the current clause. Previously selected targets remain bound to their clauses.".into();
-                view.source = RequiredNullable(self.decision_card(*card));
-                view.targets = chosen
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, target)| {
-                        self.decision_target(target)
-                            .map(|object| DecisionTargetView {
-                                object,
-                                clause: chosen_req_indices.get(index).copied().unwrap_or(0) as u32,
-                            })
-                    })
-                    .collect();
-                view.chosen_mode = RequiredNullable(mode.map(|mode| mode as u32));
-            }
-            Some(PendingChoice::SpellMode { card, .. }) => {
-                view.stage = "mode".into();
-                view.instruction = "Choose a spell mode.".into();
-                view.source = RequiredNullable(self.decision_card(*card));
-            }
-            Some(PendingChoice::KickerChoice { card, .. }) => {
-                view.stage = "additional_cost".into();
-                view.instruction = "Choose whether to include the kicker cost.".into();
-                view.source = RequiredNullable(self.decision_card(*card));
-            }
-            Some(PendingChoice::ActivatedTarget { permanent, .. }) => {
-                view.stage = "targets".into();
-                view.instruction = "Choose the ability's target.".into();
-                view.source =
-                    RequiredNullable(self.decision_target(&Target::Permanent(*permanent)));
-            }
-            Some(PendingChoice::Waterbend {
-                permanent,
-                remaining_generic,
-                ..
-            }) => {
-                view.stage = "payment".into();
-                view.source =
-                    RequiredNullable(self.decision_target(&Target::Permanent(*permanent)));
-                view.instruction = format!("Pay the activation cost; {remaining_generic} generic remains before colored payment. Submitted taps are committed.");
-            }
-            None => {
-                use crate::agent::action::ActionSpaceKind;
-                let (stage, instruction) = match space.kind {
-                    ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
-                    ActionSpaceKind::DeclareBlocker => ("declare_blockers", "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
-                    _ => ("priority", "Choose an explicit legal offer to commit one decision."),
-                };
-                view.stage = stage.into();
-                view.instruction = instruction.into();
-            }
         }
-        if let Some(payment) = payment {
-            let (card, targets, clauses, mode) = match payment {
-                Payment::Spell {
-                    card,
-                    targets,
-                    mode,
-                    target_req_indices,
-                    ..
-                } => (*card, targets, target_req_indices.clone(), *mode),
-                Payment::Activation {
-                    permanent, targets, ..
-                } => (
-                    self.state.permanents[*permanent].as_ref()?.card,
-                    targets,
-                    vec![0; targets.len()],
-                    None,
-                ),
-            };
-            view.source = RequiredNullable(self.decision_card(card));
-            view.targets = targets
-                .iter()
-                .enumerate()
-                .filter_map(|(index, target)| {
-                    self.decision_target(target)
-                        .map(|object| DecisionTargetView {
-                            object,
-                            clause: clauses.get(index).copied().unwrap_or(0) as u32,
-                        })
-                })
-                .collect();
-            view.chosen_mode = RequiredNullable(mode.map(|mode| mode as u32));
-        }
+        let (stage, instruction) = match &self.pending_choice {
+            Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
+                ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::SacrificePayment { .. }) =>
+                ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+            Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
+                ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
+            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            None => match space.kind {
+                crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
+                crate::agent::action::ActionSpaceKind::DeclareBlocker => ("declare_blockers", "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
+                _ => ("priority", "Choose an explicit legal offer to commit one decision."),
+            },
+        };
+        view.stage = stage.into();
+        view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
-            // A mana ability may interrupt an announced payment. Keep the
-            // payment's source/reservation while explaining the actual choice.
-            if view.source.0.is_none() {
-                view.source = RequiredNullable(
-                    suspended
-                        .frame
-                        .source
-                        .and_then(|card| self.decision_card(card)),
-                );
-            }
             let (stage, instruction) = match &suspended.decision {
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),

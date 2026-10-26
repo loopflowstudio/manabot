@@ -16,7 +16,7 @@ from manabot.semantic.text_observation import (
     resolve_action,
     submit_response,
 )
-from manabot.verify.text_observation import priority_root, run_demo
+from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
 
 
@@ -61,9 +61,7 @@ def test_native_decision_demo_retains_all_alternatives_and_collision(
 def test_hidden_hand_permutations_do_not_change_input_or_text() -> None:
     env = priority_root(("Lightning Bolt", "Lightning Bolt"), ("Mountain", "Gray Ogre"))
     initial = capture_text_decision(env, history_capacity=32)
-    actor = DecisionInput.model_validate_json(
-        initial.capture_json
-    ).observation.identity.viewer
+    actor = DecisionInput.model_validate_json(initial.capture_json).observation.viewer
     changed = 0
     for seed in range(8):
         branch = env.clone_env()
@@ -104,14 +102,25 @@ def test_complete_prompt_budgets_fail_without_truncation_or_execution() -> None:
 
 
 @pytest.mark.parametrize(
-    "mutation", ("version", "extra", "unbound", "action", "overflow_history", "digest")
+    "mutation",
+    (
+        "version",
+        "frame_version",
+        "extra",
+        "unbound",
+        "action",
+        "overflow_history",
+        "digest",
+    ),
 )
 def test_unsupported_or_inconsistent_capture_fails_closed(mutation: str) -> None:
     env = priority_root(("Lightning Bolt",), ("Mountain",))
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)
     if mutation == "version":
-        payload["capture_version"] = 2
+        payload["capture_version"] = 3
+    elif mutation == "frame_version":
+        payload["observation"]["decision"]["schema_version"] = 7
     elif mutation == "extra":
         payload["observation"]["viewer_state"]["agent"]["secret_future_field"] = 1
     elif mutation == "unbound":
@@ -149,11 +158,9 @@ def test_digest_rejects_changed_input_even_when_revision_is_unchanged() -> None:
     env = priority_root(("Lightning Bolt",), ("Mountain",))
     decision = capture_text_decision(env)
     captured = DecisionInput.model_validate_json(decision.capture_json)
-    env.scenario_set_life(captured.observation.identity.viewer, 19)
+    env.scenario_set_life(captured.observation.viewer, 19)
     current = DecisionInput.model_validate_json(capture_text_decision(env).capture_json)
-    assert (
-        current.observation.identity.revision == captured.observation.identity.revision
-    )
+    assert current.observation.revision == captured.observation.revision
     before = env.state_digest()
     with pytest.raises(SemanticContractError, match="stale_capture"):
         submit_response(env, decision, "A0")
@@ -165,3 +172,28 @@ def test_capture_object_key_order_does_not_change_text() -> None:
     decision = capture_text_decision(env)
     reordered = json.dumps(json.loads(decision.capture_json), sort_keys=True)
     assert render_decision(reordered).text == decision.text
+
+
+def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
+    _, env = collision_branches()
+    decision = capture_text_decision(env)
+    submit_response(env, decision, "A0")
+    payload = json.loads(capture_text_decision(env).capture_json)
+    assert payload["frames"][0]["kind"] == 1
+    target = payload["frames"][0]["targets"][0]["reference"]
+    assert target["object"] is not None and target["definition"] is not None
+    # Retained schema 6 cannot distinguish an expired incarnation from the
+    # same physical card's current alias. Current frames deliberately can.
+    target["object"] = None
+    del payload["digest"]
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    text = render_decision(json.dumps(payload)).text
+    stack = text.split("Stack (native order, top to bottom):\n", 1)[1].split("\n\n", 1)[
+        0
+    ]
+    assert "no current object link" in stack
+    assert "targets clause 1: D" in stack

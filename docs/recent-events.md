@@ -131,3 +131,57 @@ contracts, Clippy and focused formatting/lint checks. A direct comparison with
 base `ab1f61c4` preserved all state-dict bytes, architecture receipts and outputs
 for four semantic history-off configurations (scalar/WDL × attention off/on).
 These are correctness fixtures, not scientific training or evaluation evidence.
+
+## Current continuation input
+
+Public history and current continuation are separate inputs. Fresh
+`ObservationConfig` uses policy input v2: a native `relations[64,32]` float32
+buffer represents ordered stack entries, announced targets and clauses, chosen
+modes/abilities, kicker, reserved sacrifice, and suspended payment obligations.
+The version is recorded in checkpoint configuration and world input binding.
+Loading a checkpoint whose observation configuration omits the version selects
+v1, with its original tensors, parameter names and meaning. Loading never trains
+or upgrades those weights. New training must use v2 to receive the added facts.
+
+`agent/continuation.rs` projects the facts from rules state once per observation.
+Only the acting viewer receives private continuation; all viewers retain public
+stack facts. Object links resolve exact visible incarnations. An expired or
+unavailable reference has no current object link. The complete relation table
+must fit; overflow fails encoding instead of truncating targets or frames.
+The Rust vector path writes directly into reusable buffers without JSON or
+Python validation. `env/observation.py` is the matching reference encoder.
+
+Each frame contributes a header, followed by ordered target, trigger-context,
+reserved-sacrifice, hybrid-cost and mana-output rows. Mana-output rows reuse
+the mode, mana amounts and Lesson flag columns for each possible output. Columns are:
+
+| Columns | Meaning |
+| --- | --- |
+| 0–4 | Row kind; frame and parent ordinals (one-based); frame kind; controller role |
+| 5–10 | Source definition and object link (one-based); mode, ability, kicker, active clause |
+| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
+| 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
+| 30–31 | Ability resolutions this turn; row validity |
+
+Zero denotes absent selectors/links and padding. The model joins definitions to
+its existing card catalog, gathers object embeddings for links, and combines
+relation context with object and action embeddings. It never treats transport
+IDs as numeric features. Frame and target order remain numeric ordinal features;
+the channel has no writable memory across decisions.
+
+Atomic text capture v2 retains these same typed frames alongside the unchanged
+schema-6 Observation. Native types validate portable viewer JSON; Python owns
+formatting and the small capture envelope. Public definitions and their content
+digest are cached on the immutable native content pack. Origin-bound submission,
+reset/stale rejection and complete legal Commands retain their existing owners.
+The earlier unreleased capture-v1 prompt evidence remains historical evidence;
+it does not acquire v2 continuation facts.
+
+Measure encode-only behavior with
+`cargo run --release --manifest-path managym/Cargo.toml --example bench_observation`
+(`-- --legacy` isolates the old layout after refactoring). The seeded corpus
+contains priority, target, additional-cost and large-legal positions and reports
+buffer bytes, allocation traffic and repeated latency for batch sizes 1 and 64.
+Use `uv run python scripts/bench_breakdown.py --num-envs 64 --json` for the full
+vector path. Before/after claims require matching source baselines and quiet-host
+paired measurements; an overloaded-host timing is not a nonregression result.

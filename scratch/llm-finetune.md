@@ -1,8 +1,11 @@
 # LLM observation language
 
-Status: prompt accepted; preparing publication, 2026-10-25. Latest omission
-cleanup passes 13 focused tests and all 33 native execute/replay alternatives.
-Jack Heart requested proceeding to verification and publication after review.
+Status: PR #376 published; accepted architecture revision implemented locally,
+2026-10-25. Gate and reliable performance acceptance remain before publication.
+Current code uses policy input v2 and capture v2 while retaining semantic schema
+6 and legacy checkpoint input v1. Earlier capture-v1 passages below retain the
+accepted representation/history decisions; their implementation status is
+superseded by the active revision at the end.
 MTG-184 owns representation; MTG-185 owns the parallel model harness. No Wave
 is selected. Copied from the llm-finetune design conversation on 2026-10-24.
 
@@ -21,13 +24,69 @@ or transfer harness ownership. Experimental choices stay with their follow-ups.
 
 ## What to build
 
+### Accepted architecture and performance direction — 2026-10-25
+
+After the tensor-input collision was demonstrated, Jack Heart accepted fixing
+the shared observation and versioned tensor encoding, with the requirement:
+"not in any way hurting observation encoding's performance, and moving as much
+as necessary to rust". This supersedes treating the LLM-only capture as the
+completed shared-input solution. PR #376 remains unmerged; this is further work
+in the same Task, with the accepted text presentation preserved.
+
+The ordinary training path already uses Rust `observation_encoder::encode_into`
+through `vector_env_bindings` and reusable buffers. Python's reference encoder
+is not the training hot path. The revised architecture must preserve that:
+
+Jack Heart explicitly requested "ok, lets pursue this" on 2026-10-25,
+authorizing implementation, review and publication of this revision through
+the pursue Graph in the existing checkout and PR. The prior Graphs are stopped;
+this run implements newly accepted work, not a retry of the retired diagnostic.
+
+- Own viewer-safe continuation facts in native typed observation structures,
+  derived from the existing rules authority. Audit stack relationships and
+  pending source, target/clause, mode, sacrifice and payment context rather
+  than patching only the demonstrated target case.
+- Encode these facts directly into bounded, reusable tensor buffers in Rust.
+  Integrate them into the policy's actual model input; adding unused tensors is
+  not a fix. Avoid per-step JSON, Pydantic validation, repeated public-definition
+  construction, strings and whole-capture hashing on the tensor training path.
+- Share native facts between tensor and text projections. Python owns model
+  orchestration and the public call surface, not a second full observation
+  schema. Remove the redundant observation/frame hierarchy introduced in
+  `manabot/managym/decision_capture.py` when consumers are moved to the shared
+  native contract; preserve offline validation and origin/staleness rejection.
+- Keep text formatting and portable evidence serialization outside the tensor
+  fast path. Stable public definitions should be reused by content identity.
+- Version changed policy inputs explicitly. Frozen checkpoints and experiment
+  evidence retain their original shapes and meaning; fresh training must use
+  the revised inputs end to end. Do not silently add fields to old checkpoints
+  or claim that old policies can use them without training.
+
+Performance acceptance: retain before/after native encode-only and full vector
+step measurements on identical seeded decision corpora, compiler profile,
+hardware and buffer sizes. Include ordinary priority, target/payment and large
+legal-action positions, both single-env and training batch sizes, with warmup
+and repeated paired runs. Measure allocations, bytes written, latency and
+throughput; separate the cost of newly represented facts from refactoring cost.
+Use `scripts/bench_breakdown.py` for the real vector path and a native benchmark
+for encode-only attribution. No regression beyond measurement noise is an
+acceptance target, not an unmeasured promise. Resolve material regressions before
+publication; an overloaded host cannot establish a nonregression claim.
+
+Next proof: the retained counterexample must produce distinct inputs through
+both Rust and Python encoders; the native/Python outputs must agree, the model
+must consume the distinction, and legacy inputs must remain unchanged. The bounded layout and checkpoint admission are now implemented and documented
+in `docs/recent-events.md#current-continuation-input`. The active revision below
+retains the remaining performance acceptance; implementation is not a timing claim.
+
 A deterministic, viewer-safe English rendering of one native observation and
 its complete legal decision, usable by an untouched LLM through its existing
 tokenizer and bound back to the engine's Commands.
 
 ### Implementation finding — 2026-10-24
 
-`scratch/observation_collision.py` disproves `Observation` as the sole renderer
+The original collision proof (retained at
+`e929d4c7c:scratch/observation_collision.py`) disproves `Observation` as the sole renderer
 input. From an ordinary priority root with Deadly Precision, a Swamp and two
 Gray Ogres (one per player), real Commands cast the spell and choose different
 targets in cloned branches. At the additional-cost decision, **complete schema-6
@@ -192,6 +251,22 @@ do not reconstruct private state or add an LLM-only rules solver.
 
 ## Memory direction: match the non-LLM input
 
+### Verified tensor-input omission — 2026-10-25
+
+During review Jack Heart asked whether the capture implies missing information
+for ordinary agents. Directly encoded both native `collision_branches()` using
+`ObservationSpace.encode(env.observation_for_player(actor))`: all 19 tensor
+fields are identical with both `policy_history_version=0` and `=1`, while the
+selected continuation targets differ. Receipt:
+`.runs/tensor-continuation-collision.json`. This extends the earlier JSON-only
+counterexample to the actual tensor encoder. It proves missing pending-target
+information in this position, not a measured playing-strength loss or the full
+extent of omitted information. The LLM capture exposes facts the current tensor
+policy does not receive. This finding led to the accepted 2026-10-25 shared observation/encoding revision
+above. The local revision now separates this counterexample; full LLM-versus-policy
+input parity still depends on the selected history and representation treatment. Existing
+checkpoints must retain their original input meaning.
+
 The intended experiment asks about relatively raw playing ability. A fresh
 current-state-only prompt also measures a deliberately memoryless policy. That
 can be a useful baseline, but the transport's present omissions should not decide
@@ -287,8 +362,9 @@ every microdecision in v1, including committed costs and later choices.
 
 ## Data structures and key functions
 
-Implemented owner: `manabot/semantic/text_observation.py`; strict shared Python
-input models live in `manabot/managym/decision_capture.py`.
+Implemented owner: `manabot/semantic/text_observation.py`. Native observation
+and continuation types validate portable inputs; `manabot/managym/decision_capture.py`
+keeps the small content/presentation envelope and reuses `decision.Observation`.
 
 - `TextDecision`: representation version, prompt text, typed legal references,
   source Observation identity and immutable Command bindings.
@@ -314,7 +390,38 @@ meaning; the renderer version cannot stand in for a shared schema migration.
 
 ## Delete — do not maintain
 
-Completed removal of unrelated inherited notes; no deletion targets remain:
+Completed deletion cut: removed capture's duplicate Python Observation, Frame,
+ViewerState and card/player/action hierarchy; retained native validation and the
+shared semantic Observation. Replaced `decision_context`'s independent fact
+extraction with projection of native continuation frames. Frozen schema-6 JSON,
+legacy tensor layouts and origin/stale rejection remain.
+
+Removed the superseded `scratch/observation_collision.py`; its native setup and
+assertions now live in `verify.text_observation.collision_branches()` and the
+text/continuation regression tests. The original remains at
+`e929d4c7c:scratch/observation_collision.py`. No exclusive fixture is needed.
+Removed the unused `model.world.POLICY_INPUT_VERSION`; `ObservationConfig`
+owns the selected input version. No remaining deletion target is identified.
+
+Owned encoder buffers expose one mutable view used by allocating encoding and
+benchmarks. Python encoding reads only the supplied observation. The model's
+`shared_context` combines history and continuation. Native collection separates
+public stack, announcement and suspended frames; the renderer separates player,
+card, permanent and definition sections. These boundaries keep visibility/order
+and prompt assembly reviewable without mixing each field's formatting into them.
+Capture reuses the native input returned by semantic projection and feeds its
+frames directly to presentation. Removed its second viewer projection and the
+third continuation extraction, along with building then clearing prose history.
+Presentation retains its own chronological 12-fact suffix without intermediate
+reverse/collect vectors. The renderer derives stack aliases directly from native
+order; its redundant stack-ID lookup is removed. No further obsolete code or
+exclusive fixture is identified.
+
+Pre-edit source, notes and full prompt/capture pairs remain in
+`.runs/compress-input-2026-10-25/` and `.runs/compress-review-2026-10-25/`.
+The latter also retains both viewers' v1/v2 native/reference input arrays.
+
+Historical note removals:
 
 - `scratch/elemental-baseline-preflight.md`, `scratch/elemental-mana-repair.md`
   and historical MTG-174/176/180/182 questions remain at
@@ -328,18 +435,21 @@ Uncommitted originals remain in `.runs/compress-input-2026-10-24/` and
 this consolidation remain in `.runs/compress-review-2026-10-24/`. Keeping MTG-184's
 questions through that conflict selects no card-evaluation work or new contract.
 
-No existing production path is replaced. Do not delete tensor policies, compound
-decoding, shared projection utilities or frozen experiment evidence. Any temporary
+The ordinary tensor policy now consumes the revised input; its v1 layout remains
+only for explicitly admitted legacy checkpoints. Compound decoding, shared
+projection utilities and frozen experiment evidence remain. Any temporary
 hand-written harness examples are superseded by generated fixtures at integration;
 they must not become a second observation renderer.
 
 ## Internal slices
 
-1. **Complete:** atomic capture v1, bound public definitions, continuation and
-   optional native public history v1; schema-6 consumers remain unchanged.
-2. **Complete:** strict pure renderer, origin-bound submission, field audit,
-   native fixture/demo and focused verification. Retained collision still has
-   equal schema-6 observations, now distinct capture digests/continuation/text.
+1. **Implemented:** native current stack/continuation frames, Rust reusable
+   relation buffers, matching Python reference encoding, model consumption and
+   explicit v1/v2 checkpoint admission. Legacy schema-6 bytes remain unchanged.
+2. **Implemented:** capture v2 and native offline validation; removal of duplicate
+   Python observation/frame hierarchy and independent presentation extraction.
+   Origin-bound submission and complete text choices remain. Gate and reliable
+   paired performance acceptance are outstanding.
 3. **MTG-185/follow-up:** token-length census with the selected tokenizer and
    declared game corpus; actual model context budget and inference measurements.
    The complete-prompt token-budget hook rejects overflow without truncation.
@@ -391,8 +501,8 @@ five mana colors, alternative sacrifice/mana costs, three spell modes and option
 Two ordinary Bolt sequences swap public target order and reach identical
 current observations with distinct public-history prompts and expired links.
 Malformed, foreign-branch, stale and reset submissions cannot mutate state.
-The original `scratch/observation_collision.py` also now checks distinct captures
-and text while retaining its original schema-6 counterexample.
+`collision_branches()` and the text/continuation regression tests preserve the
+original schema-6 counterexample, its divergent stack targets and distinct inputs.
 
 ## Parallel increment and follow-ups
 
@@ -512,50 +622,26 @@ the engine's rules authority. Keep manabot independent of Academy. No claim of
 single-L4 fit before measuring the largest admitted inputs. No paid run is part
 of this design work.
 
-## Parent gate and demo review
+## Parent gate evidence and limits
 
-Parent evidence, 2026-10-24: the combined representation, decision-contract,
-package-boundary, current-world admission and monitoring regression run passed
-**89 tests** in 640.44 seconds. Rust formatting and Clippy passed. Full debug
-Rust tests subsequently completed successfully (debug `cargo test`, exit 0,
-including all 316 rules tests).
+The pre-revision gate passed 101 Python cases after syncing to `66b8fb3e7`
+(`.runs/mtg-184-post-sync-tests.log`); integration CI collected 614 tests.
+The prior complete debug Rust suite, including 316 rules tests, and Clippy passed.
+These predate the native policy-input-v2 revision and do not replace its gate.
+Detailed commands and parent receipts remain at `e929d4c7c:scratch/llm-finetune.md`.
 
-The full learnability diagnostic retained an **error**, not a pass, at
-`.runs/learnability/mtg-184-gate/report.md`: all three seeds' capacity fit and
-held-out checks passed, then reward-driven PPO collection exceeded its 300-second
-deadline. The total diagnostic took 402.5 seconds wall time and 71.5 seconds CPU;
-concurrent local test/training processes were observed. Contention is a possible
-cause, not a verified diagnosis. This is retained historical failure evidence,
-not a pass. No model inference or playing-strength result is claimed.
+Contrary evidence remains: `.runs/learnability/mtg-184-gate/report.md` records
+an error after all three seeds passed capacity/held-out fits and PPO collection
+exceeded 300 seconds. Wall/CPU times were 402.5/71.5 seconds; observed contention
+is a possible, unverified cause. PR #372 (`b3681297f16e27a9e42b5e49f4fe928292fe0bb2`)
+subsequently removed this verifier at Jack Heart's request. Do not restore it or
+relax its budget; use current AGENTS.md admission/monitoring/choice-separability
+checks. No successful PPO result follows from the removal.
 
-The earlier diagnostic dependency is superseded by upstream PR #372
-(`b3681297f16e27a9e42b5e49f4fe928292fe0bb2`): Jack Heart requested removal of the
-learnability verifier, its PPO control and CI workflows. Main's revised AGENTS.md
-requires the retained current-world/admission/monitoring and choice-separability
-checks instead. Sync to `66b8fb3e7` retained this removal; no verifier is being
-restored or diagnostic budget relaxed. The post-sync validation includes
-`tests/model/test_choice_separability.py` with the other Python checks below.
-Rust sources are unchanged by sync, so their passing debug/Clippy evidence holds.
-
-Publication for review is now authorized; merge is not. Validation commands:
-
-Post-sync gate, 2026-10-25: **101 passed in 139.18s** for the combined Python
-selection below plus choice separability (`.runs/mtg-184-post-sync-tests.log`).
-Exact integration CI selection: **614 collected** (`.runs/mtg-184-ci-collection.log`).
-Ruff lint/format and diff whitespace checks pass. No native source changed
-during sync; the prior complete debug Rust and Clippy passes remain applicable.
-Human prompt review is accepted; real LLM inference remains MTG-185's scope.
-
-- `uv run --extra dev pytest tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py tests/test_package_boundaries.py -q`
-- `cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings`
-- `cargo test --manifest-path managym/Cargo.toml` (debug, including frozen conformance).
-- Shared-input regression: `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`.
-- `uv run --extra dev pytest tests/model/test_choice_separability.py -q` (retained upstream input-identity check).
-
-Review the retained prompts for understandable labels and field coverage. No
-browser is required. MTG-185 owns real tokenizer/chat-template overflow checks,
-model loading, bounded repair/fallback orchestration and runtime/GPU measurements;
-these are not representation-demo blockers. No model or paid resource was used.
+Human prompt review is accepted. MTG-185 owns actual tokenizer/chat-template
+budgets, model loading, repair/fallback and runtime/GPU measurements. Publication
+for review is authorized but remains conditional on the current gate and reliable
+paired performance acceptance; merge and paid resources are not authorized.
 
 ## Measure and evidence
 
@@ -590,6 +676,46 @@ action count and overflow fraction. Later report initial/repaired response rates
 and fallback usage separately from game outcomes, alongside latency and memory.
 Set no playing-strength gate for the representation itself.
 
-Check, 2026-10-24: focused `pytest tests/semantic/test_text_observation.py -q` → 13 passed; debug `cargo test --manifest-path managym/Cargo.toml decision_capture::tests -- --nocapture` → 1 passed; root `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` → built and cp312 extension atomically replaced; demo and original collision proof → pass. exact main CI invocation with `--collect-only -q` → 614 collected (`.runs/text-observation/ci-collection.log`); Ruff check/format, `cargo fmt --manifest-path managym/Cargo.toml --check` and `git diff --check` → pass. Parent gate owns the remaining commands above.
-
 `scratch/questions.md` indexes remaining experimental choices.
+
+## Active implementation revision — 2026-10-25
+
+The bounded layout and checkpoint rule are recorded in questions. Native
+`ContinuationFrame` is a current-observation fact, not another rules transaction.
+The audit includes public stack clauses/context and suspended payment frames,
+which the existing presentation context does not fully expose.
+
+The deletion cut above is complete. No Wave was selected or edited. The
+implementation uses typed native frames for stack/announcement/resolution and
+nested mana obligations, 64×32 reusable relation rows, and shared catalog/object
+embeddings, actual mana outputs/restrictions and the resolving ability count. Public definition construction
+and content hashing are cached per immutable native pack. The full layout is in
+`docs/recent-events.md`.
+
+Remaining: gate's affected suites (including debug Rust/Clippy, current-world
+admission and monitoring, model and recovery checks) and a quiet-host paired
+performance acceptance. Publication remains conditional on those checks; no
+merge, model choice or paid run is selected.
+
+The implementation's focused collision, parity, gradients and checkpoint checks
+passed; integration CI collected 621 tests. Historical ActorCritic at `e929d4c7c`
+exactly matches v1 weights and policy/value outputs on 12 native fixtures, and all
+228 legacy native input arrays match (`.runs/continuation-revision/legacy-model.json`
+and `legacy-input.json`). The interrupted 200-game parity soak remains gate-owned;
+five explicit buffer/vector parity nodes passed. Full earlier notes are preserved
+in `.runs/compress-review-2026-10-25/llm-finetune.md`.
+
+Check, 2026-10-25: `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` + atomic install → pass; `cargo test --manifest-path managym/Cargo.toml --lib decision` → 27 passed; `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py tests/verify/test_continuation_input.py tests/academy/test_decision_surface.py -q` → 24 passed; 12 fixtures × two history/viewer treatments → 24 captures, prompts, contexts and semantic observations each exactly unchanged; Ruff, Rust formatting and whitespace → pass. Evidence and pre-edit notes/diff: `.runs/compress-snapshot-reuse/`; earlier native/reference input comparisons: `.runs/compress-review-2026-10-25/`. Gate owns full debug/Clippy, affected suites, interrupted parity soak and quiet-host performance acceptance.
+
+Performance receipts: `.runs/continuation-revision/` retains the source baseline,
+release build logs, identical native corpus hashes, allocation/byte counters,
+three alternating paired encode-only and full-vector runs (batch 1/64), plus
+current code and host metadata. The v1-after-refactor arm separates refactoring
+from added facts. Relation buffers add 8,192 bytes per encoded observation;
+pre-sizing the object lookup reduces encode allocation count to one. Full-vector
+allocation attribution is not measured. The host's load average was about 181
+with unrelated CPU saturation; timings vary several-fold, so these are diagnostic
+receipts, **not nonregression acceptance**. A quiet-host repeat and any material
+regression repair remain mandatory before publication. The final nested-payment parent-order correction and continuation helper extraction postdate these timing receipts.
+Earlier failed benchmark
+attempts and pre-final-shape receipts are retained separately in that directory.

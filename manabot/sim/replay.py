@@ -101,7 +101,7 @@ def replay_environment(
         if root != scenario_identity(name):
             raise ValueError("scenario root version/world/source mismatch")
         space = observation_space or ObservationSpace(
-            ObservationConfig(**game["observation_hypers"])
+            ObservationConfig.from_checkpoint(game["observation_hypers"])
         )
         env, observation, _ = build_scenario_env(
             SCENARIOS[name], space, int(game["deal_seed"])
@@ -124,7 +124,9 @@ def replay_environment(
     env = Env(
         match,
         observation_space
-        or ObservationSpace(ObservationConfig(**game.get("observation_hypers", {}))),
+        or ObservationSpace(
+            ObservationConfig.from_checkpoint(game.get("observation_hypers", {}))
+        ),
         Reward(RewardConfig()),
         seed=int(game["deal_seed"]),
         auto_reset=False,

@@ -16,6 +16,7 @@ from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
+from manabot.model.continuation import ContinuationEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
@@ -212,6 +213,12 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
+        self.continuation = (
+            ContinuationEncoder(embed_dim)
+            if enc.config.policy_input_version == 2
+            else None
+        )
+
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
@@ -248,7 +255,9 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "compound checkpoint requires authoritative offers; use ActorCritic.compound"
             )
-        objects, is_agent, validity, history = self._gather_object_embeddings(obs)
+        objects, is_agent, validity, shared_context = self._gather_object_embeddings(
+            obs
+        )
 
         encoded = self._attend_objects(
             objects,
@@ -261,7 +270,7 @@ class ActorCritic(nn.Module):
         post_attention_objects = encoded[:, : validity.shape[1]]
 
         informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, history
+            obs, post_attention_objects, shared_context
         )
         if self.policy_film is not None:
             informed_actions = self._condition_actions(
@@ -347,7 +356,7 @@ class ActorCritic(nn.Module):
         """One viewer-safe root, one ragged action; no intermediate observation."""
         if self.compound_decoder is None:
             raise ValueError("checkpoint has no compound policy")
-        objects, ownership, valid, history = self._gather_object_embeddings(obs)
+        objects, ownership, valid, shared_context = self._gather_object_embeddings(obs)
         if objects.shape[0] != 1:
             raise ValueError("compound decoding requires one root")
         if self.config.attention_on:
@@ -363,7 +372,7 @@ class ActorCritic(nn.Module):
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
-            features = self._gather_informed_actions(obs, objects, history)[
+            features = self._gather_informed_actions(obs, objects, shared_context)[
                 0, : len(batch.offers)
             ]
         return self.compound_decoder(
@@ -404,12 +413,12 @@ class ActorCritic(nn.Module):
         self,
         obs: Dict[str, torch.Tensor],
         post_attention_objects: torch.Tensor,
-        history: torch.Tensor | None,
+        shared_context: torch.Tensor | None,
     ) -> torch.Tensor:
         actions = self.action_embedding(obs["actions"][..., :-1])
-        if history is not None:
+        if shared_context is not None:
             # Focus-free actions also receive the same context without attention.
-            actions = actions + history.unsqueeze(1)
+            actions = actions + shared_context.unsqueeze(1)
         valid_mask = obs["actions_valid"].unsqueeze(-1)
         actions = actions * valid_mask
         actions_with_focus = self._add_focus(
@@ -515,13 +524,29 @@ class ActorCritic(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
-        history = None
+        # History and current continuation both inform objects and focus-free actions.
+        shared_context = None
         if self.recent_events is not None:
             assert self.semantic_cards is not None and definitions is not None
-            history = self.recent_events(
+            shared_context = self.recent_events(
                 obs, objects, definitions, self.semantic_cards.definition_rows
             )
-            objects = objects + history.unsqueeze(1)
+        if self.continuation is not None:
+            rows = obs["relations"]
+            ids = rows[..., [5, 23]]
+            relation_definitions = (
+                self.semantic_cards.embed_definitions(ids, definitions)
+                if self.semantic_cards is not None and definitions is not None
+                else self._generic_definitions(ids)
+            )
+            continuation = self.continuation(rows, objects, relation_definitions)
+            shared_context = (
+                continuation
+                if shared_context is None
+                else shared_context + continuation
+            )
+        if shared_context is not None:
+            objects = objects + shared_context.unsqueeze(1)
 
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
@@ -538,7 +563,7 @@ class ActorCritic(nn.Module):
             )
 
         validity = torch.cat(validity_parts, dim=1)
-        return objects, is_agent, validity, history
+        return objects, is_agent, validity, shared_context
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

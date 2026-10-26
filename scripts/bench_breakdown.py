@@ -5,20 +5,23 @@ Profile the active Rust vector-env path, with or without model inference.
 """
 
 import argparse
+import json
 
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward, VectorEnv
-from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.profiler import Profiler
 from manabot.model import ActorCritic
 
 
-def build_env(num_envs: int, seed: int) -> VectorEnv:
+def build_env(num_envs: int, seed: int, policy_input_version: int = 2) -> VectorEnv:
     return VectorEnv(
         num_envs=num_envs,
         match=Match(),
-        observation_space=ObservationSpace(),
+        observation_space=ObservationSpace(
+            ObservationConfig(policy_input_version=policy_input_version)
+        ),
         reward=Reward(RewardConfig()),
         device="cpu",
         seed=seed,
@@ -31,9 +34,10 @@ def run_breakdown(
     total_steps: int,
     with_inference: bool,
     seed: int,
+    policy_input_version: int = 2,
 ) -> tuple[dict[str, dict[str, float]], float]:
     profiler = Profiler(enabled=True)
-    env = build_env(num_envs, seed)
+    env = build_env(num_envs, seed, policy_input_version)
 
     agent = None
     if with_inference:
@@ -122,6 +126,10 @@ def main() -> None:
         action="store_true",
         help="Include a torch forward pass per step",
     )
+    parser.add_argument("--policy-input-version", type=int, choices=(1, 2), default=2)
+    parser.add_argument(
+        "--json", action="store_true", help="Emit a portable timing receipt"
+    )
     args = parser.parse_args()
 
     stats, sps = run_breakdown(
@@ -129,8 +137,25 @@ def main() -> None:
         total_steps=args.steps,
         with_inference=args.with_inference,
         seed=args.seed,
+        policy_input_version=args.policy_input_version,
     )
-    print_report(stats, sps, args.num_envs, args.steps, args.with_inference)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "seed": args.seed,
+                    "num_envs": args.num_envs,
+                    "steps": args.steps,
+                    "warmup_steps": 20,
+                    "policy_input_version": args.policy_input_version,
+                    "inference": args.with_inference,
+                    "stats": stats,
+                    "steps_per_second": sps,
+                }
+            )
+        )
+    else:
+        print_report(stats, sps, args.num_envs, args.steps, args.with_inference)
 
 
 if __name__ == "__main__":

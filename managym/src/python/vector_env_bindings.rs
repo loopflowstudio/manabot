@@ -40,6 +40,7 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 
 #[cfg(feature = "python")]
 struct ObservationBuffers {
+    relations: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
     agent_player: Py<PyAny>,
@@ -296,6 +297,7 @@ fn event_buffer_config(
         .ok_or_else(|| PyValueError::new_err("missing events"))?
         .getattr("shape")?
         .extract()?;
+    config.relations = buffers.contains("relations")?;
     config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
     if config.policy_history {
         if shape.len() != 3
@@ -319,6 +321,23 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     Ok(ObservationBuffers {
+        relations: if c.relations {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "relations",
+                    &[
+                        n,
+                        crate::agent::continuation::RELATION_ROWS,
+                        crate::agent::continuation::RELATION_DIM,
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -721,6 +740,7 @@ impl<T> SendSlice<T> {
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
+    relations: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
     agent_player: SendSlice<f32>,
@@ -787,6 +807,17 @@ impl SendObservationFieldSlices {
         let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
+            relations: if let Some(buffer) = self.relations {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.relations_len())?,
+                        config.relations_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             // SAFETY: each call uses disjoint per-env rows.
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
             // SAFETY: each call uses disjoint per-env rows.
@@ -914,6 +945,11 @@ fn with_send_write_buffers<R>(
     buffers: &ObservationBuffers,
     f: impl FnOnce(SendWriteBuffers) -> PyResult<R>,
 ) -> PyResult<R> {
+    let relations_buffer = buffers
+        .relations
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "relations"))
+        .transpose()?;
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
@@ -956,6 +992,10 @@ fn with_send_write_buffers<R>(
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
 
     let field_slices = SendObservationFieldSlices {
+        relations: relations_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
+            .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
