@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import duckdb
@@ -47,6 +48,7 @@ from manabot.sim.card_evidence import (
     read_evidence,
     retain_evidence,
 )
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt
@@ -436,6 +438,42 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
         assert len(audit(db, delivered).problems) == 1
 
 
+@pytest.mark.parametrize("outcome", ["crash", "timeout", "truncated", "replay_failed"])
+def test_all_excluded_games_have_no_card_rates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    spec = verification_spec(8)
+    assert spec.authored_matchup is not None
+    runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
+    monkeypatch.setattr(
+        evaluation,
+        "play_card_match",
+        _fixture_play(runtime, {leg: {"outcome": outcome} for leg in range(8)}),
+    )
+    evaluate_cards(spec, tmp_path)
+    selection = CardSelection(
+        experiment=spec.experiment, subjects=(spec.players[0].player_id,)
+    )
+    with statsdb(spec.experiment, tmp_path) as db:
+        # Etude omits a column when every retained value is null.
+        assert "win" not in {
+            row[0] for row in db.execute("describe card_plays").fetchall()
+        }
+        data = card_data(db, selection)
+        assert (data.games, data.deals, data.win_rate, data.cards) == (0, 0, None, ())
+        assert data.excluded == {outcome: 8}
+        assert sum(data.opponents.values()) == 8
+        assert data.subjects and data.runs == (spec.run,)
+        assert data.failed_matches == 0
+        empty = card_data(db, selection.model_copy(update={"deck": "absent"}))
+        assert (empty.games, empty.win_rate, empty.cards, empty.excluded) == (
+            0,
+            None,
+            (),
+            {},
+        )
+
+
 def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -810,8 +848,10 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
     assert json.loads(embedded)["variants"].keys() == variants.keys()
 
 
+@pytest.mark.parametrize("shared", [False, True])
 def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
     tmp_path: Path,
+    shared: bool,
 ) -> None:
     """An eval that calls `play_cell` itself adds card tables with one call."""
     spec = verification_spec(8)
@@ -838,6 +878,9 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
             authored_matchup=spec.authored_matchup,
             matchup_mode="all",
             legs=(0, 1),
+            execution=EvalExecution(deadline_unix=time.time() + 120)
+            if shared
+            else None,
             card_evidence_dir=root,
         )
         own = {

@@ -219,21 +219,53 @@ function card(host, title, sub, cls = '') {
 const CAT = {run: '--t-run', stage: '--t-stage', learning: '--t-learn', collection: '--t-collect', export: '--t-export', setup: '--t-setup', eval: '--t-eval', wait: '--t-wait', unattributed: '--t-other'};
 function hexMix(a, b, t) { const h = x => x.replace('#', '').match(/../g).map(v => parseInt(v, 16)); const pa = h(a), pb = h(b); return `rgb(${pa.map((c, i) => Math.round(c + (pb[i] - c) * t)).join(',')})`; }
 const dur = s => s >= 3600 ? (s / 3600).toFixed(2) + ' h' : s >= 60 ? (s / 60).toFixed(1) + ' min' : s.toFixed(s < 1 ? 2 : 1) + ' s';
+// Evaluation activities group existing, compatible timers only. Inference wait
+// in a game must never be added to the serving process time it overlaps.
+const EVAL_RESOURCES = {
+  'Worker elapsed (sum, overlaps)': ['During games', 'Time summed across game processes, including waits. Concurrent games overlap: this is a breakdown of game activity, not how long the comparison took. Inference includes queueing, communication and model execution.'],
+  'Cell elapsed': ['Comparison elapsed', 'Elapsed time for this comparison panel through replay. Excludes earlier checkpoint preparation and server provisioning. Game activity happens inside this interval; do not add the two totals.'],
+  'Worker CPU (sum)': ['Game CPU usage', 'CPU time consumed by game processes, summed across cores. Excludes waiting and the separate inference process; phase-level CPU attribution is unavailable.'],
+  'Serving host elapsed': ['Inference service', 'Time inside the shared inference process. Host timers include required waits and are not GPU compute measurements. This overlaps inference waiting in the game activity chart.'],
+};
+const EVAL_ACTIVITIES = [
+  {name: 'Inference', category: 'learning', phases: ['inference_round_trip', 'scalar_policy', 'forward_host', 'input_assembly', 'input_admission_and_transfer_host', 'output_transfer_host', 'sampling'], note: 'Includes model decisions and measured input/output work. During games, this includes queueing and communication, not just model compute.'},
+  {name: 'Game engine', category: 'collection', phases: ['native_reset_and_encoding', 'native_step_and_encoding', 'native_and_encoding', 'frame_projection'], note: 'Rules execution and building observations; these measurements do not isolate binding overhead.'},
+  {name: 'Evidence and replay', category: 'export', phases: ['command_validation', 'command_durable_acknowledgement', 'output_retention', 'replay'], note: 'Validating and durably recording decisions, retaining results, and replay verification where measured in this view.'},
+  {name: 'Other and unmeasured', category: 'unattributed', phases: [], note: 'Startup, coordination, and time without a more specific measurement. Missing measurements are not zero.'},
+];
+function evaluationActivityTree(tree, resource) {
+  if (!EVAL_RESOURCES[resource]) return tree;
+  const children = tree.children || [];
+  const grouped = EVAL_ACTIVITIES.map(activity => {
+    const members = children.filter(child => {
+      const owner = EVAL_ACTIVITIES.find(a => a.phases.includes(child.name)) || EVAL_ACTIVITIES.at(-1);
+      return owner === activity;
+    });
+    if (!members.length) return null;
+    return {name: activity.name, seconds: members.reduce((sum, child) => sum + child.seconds, 0),
+      status: 'derived', category: activity.category, source: 'Grouped retained timers',
+      note: activity.note, children: members};
+  }).filter(Boolean);
+  return {...tree, name: EVAL_RESOURCES[resource][0], children: grouped.length ? grouped : undefined};
+}
 function renderFlame(c, e, runs, panel) {
-  const scale = S.fscale || panel.scale, resources = [...new Set(e.timing.map(t => t.resource))];
-  if (!resources.includes(S.fres)) S.fres = resources[0];
+  const scale = S.fscale || panel.scale, resources = panel.resource ? [panel.resource] : [...new Set(e.timing.map(t => t.resource))];
+  const evaluation = e.decision_unit === 'evaluation';
+  if (!panel.resource && !resources.includes(S.fres)) S.fres = evaluation && resources.includes('Worker elapsed (sum, overlaps)') ? 'Worker elapsed (sum, overlaps)' : resources[0];
+  const selectedResource = panel.resource || S.fres;
   const bar = node('div', 'fl-bar'), crumbs = node('div', 'crumbs');
   const path = S.fpath ? S.fpath.split('/') : [];
   const rootBtn = node('button', null, 'All'); rootBtn.onclick = () => { S.fpath = ''; render(); }; crumbs.appendChild(rootBtn);
   path.forEach((name, i) => { crumbs.append(' › '); if (i === path.length - 1) crumbs.appendChild(node('b', null, name)); else { const b = node('button', null, name); b.onclick = () => { S.fpath = path.slice(0, i + 1).join('/'); render(); }; crumbs.appendChild(b); } });
   const res = node('div', 'seg'), sc = node('div', 'seg');
-  for (const r of resources) { const b = node('button', null, r); b.setAttribute('aria-pressed', String(S.fres === r)); b.onclick = () => { S.fres = r; S.fpath = ''; render(); }; res.appendChild(b); }
+  for (const r of resources) { const b = node('button', null, evaluation ? EVAL_RESOURCES[r]?.[0] || r : r); b.setAttribute('aria-pressed', String(selectedResource === r)); b.onclick = () => { S.fres = r; S.fpath = ''; render(); }; res.appendChild(b); }
   for (const [v, label] of [['share', 'Share'], ['total', 'Total'], ['per_decision', 'Per 1M decisions']]) { const b = node('button', null, label); b.setAttribute('aria-pressed', String(scale === v)); b.onclick = () => { S.fscale = v; render(); }; sc.appendChild(b); }
   bar.append(crumbs, res, sc); c.appendChild(bar);
+  if (evaluation && EVAL_RESOURCES[selectedResource]) c.appendChild(node('p', 'fl-explanation', EVAL_RESOURCES[selectedResource][1] + ' Width shows time; click an activity to see its measured phases.'));
   const find = (n, names) => { let cur = n; for (const name of names) { cur = (cur.children || []).find(x => x.name === name); if (!cur) return null; } return cur; };
-  const items = runs.map(r => ({r, t: r.get(S.fres)})).filter(x => x.t);
-  const missing = runs.filter(r => !r.get(S.fres));
-  const factor = t => scale === 'per_decision' ? 1e6 / t.decisions : 1;
+  const items = runs.map(r => { const t = r.get(selectedResource); return {r, t: t && evaluation ? {...t, tree: evaluationActivityTree(t.tree, selectedResource)} : t}; }).filter(x => x.t);
+  const missing = runs.filter(r => !r.get(selectedResource));
+  const factor = t => scale === 'per_decision' ? (t.decisions ? 1e6 / t.decisions : 0) : 1;
   const focus = items.map(x => ({...x, f: find(x.t.tree, path)}));
   const maxW = Math.max(...focus.filter(x => x.f).map(x => x.f.seconds * factor(x.t)));
   const notes = new Set();
@@ -241,7 +273,7 @@ function renderFlame(c, e, runs, panel) {
     const head = node('div', 'fl-run'); const hb = node('b', null, r.label); const hs = node('i'); hs.style.cssText = `display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${r.color}`; hb.prepend(hs); head.appendChild(hb);
     if (!f) { head.appendChild(node('span', null, `no “${path[path.length - 1]}” timer in this run`)); c.appendChild(head); continue; }
     const k = factor(t), shown = f.seconds * k;
-    head.appendChild(node('span', null, scale === 'per_decision' ? `${dur(shown)} per 1M learner decisions · ${M.num(t.decisions)} decisions${t.seeds > 1 ? ` (mean of ${t.seeds} seeds)` : ''}` : `${dur(f.seconds)}${path.length ? ` · ${(f.seconds / t.tree.seconds * 100).toFixed(1)}% of run` : ''}`));
+    head.appendChild(node('span', null, scale === 'per_decision' ? `${dur(shown)} per 1M ${e.decision_unit || 'learner'} decisions · ${M.num(t.decisions)} decisions${t.seeds > 1 ? ` (mean of ${t.seeds} seeds)` : ''}` : `${dur(f.seconds)}${path.length ? ` · ${(f.seconds / t.tree.seconds * 100).toFixed(1)}% of run` : ''}`));
     c.appendChild(head);
     const fl = node('div', 'flame'); c.appendChild(fl);
     const width = fl.clientWidth || c.clientWidth - 32, span = scale === 'share' ? width : width * shown / maxW;
@@ -259,15 +291,16 @@ function renderFlame(c, e, runs, panel) {
       el.onpointerleave = Charts.hideTip;
       if (n.status !== 'uninstrumented' && n.children) el.onclick = () => { S.fpath = [...path, ...pathTo(f, n)].join('/'); render(); };
       fl.appendChild(el);
-      if (n.note && n.children) notes.add(`${r.label} · ${n.name}: ${n.note}`);
+      if (n.note) notes.add(`${r.label} · ${n.name}: ${n.note}`);
       if (n.status === 'uninstrumented') notes.add(`Not instrumented inside ${pathTo(t.tree, n).slice(-2, -1)[0] || f.name}: ${n.name}`);
       let cx = x;
-      for (const ch of n.children || []) { const cw = w * ch.seconds / n.seconds; place(ch, cx, cw, d + 1); cx += cw; }
+      // Activity overview stays one level deep; drilling reveals raw phases.
+      for (const ch of (evaluation && !path.length && d >= 1 ? [] : n.children || [])) { const cw = w * ch.seconds / n.seconds; place(ch, cx, cw, d + 1); cx += cw; }
     };
     place(f, 0, span, 0);
     fl.style.height = (depth + 1) * 26 + 'px';
   }
-  for (const r of missing) { const h = node('div', 'fl-run'); h.append(node('b', null, r.label), node('span', null, `no ${S.fres} timers recorded for every seed`)); c.appendChild(h); }
+  for (const r of missing) { const h = node('div', 'fl-run'); h.append(node('b', null, r.label), node('span', null, `no ${selectedResource} timers recorded for every seed`)); c.appendChild(h); }
   const n = node('div', 'fl-notes'); [...notes].forEach(t => n.appendChild(node('span', null, t))); c.appendChild(n);
 }
 function pathTo(root, target) {
@@ -322,11 +355,74 @@ function jobMetric(e, j, key, axis = 'updates') {
   });
 }
 function jobTiming(e, j, resource) {
-  const ts = j.runs.map(i => e.timing.find(t => t.run === i && t.resource === resource));
-  if (ts.some(t => !t)) return null;
-  const mean = nodes => ({...nodes[0], seconds: nodes.reduce((a, n) => a + n.seconds, 0) / nodes.length,
-    children: nodes[0].children ? nodes[0].children.map(ch => mean(nodes.map(n => (n.children || []).find(x => x.name === ch.name) || {...ch, seconds: 0}))) : undefined});
-  return {tree: mean(ts.map(t => t.tree)), decisions: ts.reduce((a, t) => a + t.decisions, 0) / ts.length, seeds: ts.length};
+  const ts = j.runs.map(i => e.timing.find(t => t.run === i && t.resource === resource)).filter(Boolean);
+  if (!ts.length) return null;
+  // Conditional means of partial children do not partition their parent. Keep
+  // common children in the tree and expose partial coverage in the parent note.
+  const mean = nodes => {
+    const names = [...new Set(nodes.flatMap(n => (n.children || []).map(c => c.name)))];
+    const children = [], gaps = [];
+    for (const name of names) {
+      const present = nodes.map(n => (n.children || []).find(c => c.name === name)).filter(Boolean);
+      if (present.length === nodes.length) children.push(mean(present));
+      else gaps.push(`${name}: ${present.length}/${nodes.length} seeds measured (unavailable for others)`);
+    }
+    return {...nodes[0], seconds: avg(nodes.map(n => n.seconds)), children: children.length ? children : undefined,
+      note: [nodes[0].note, ...gaps].filter(Boolean).join('; '), coverage: nodes.length};
+  };
+  const tree = mean(ts.map(t => t.tree));
+  tree.note = [tree.note, `Coverage: ${ts.length}/${j.runs.length} seeds; missing timers are never zero`].filter(Boolean).join('; ');
+  return {tree, decisions: avg(ts.map(t => t.decisions)), seeds: ts.length};
+}
+
+function renderEvalPerformance(host, e, visibleRuns) {
+  if (!e.eval_performance) return;
+  const data = e.eval_performance, visible = new Set(visibleRuns);
+  const summary = node('div', 'card'); summary.style.gridColumn = '1 / -1';
+  summary.appendChild(node('h3', null, 'Useful evaluation and coverage'));
+  for (const r of data.runs.filter(r => visible.has(r.run))) {
+    summary.appendChild(node('p', null, `${e.runs[r.run].job_name} · ${r.valid_blocks} valid blocks · ${r.valid_games} valid games · ${r.games_per_wall_hour.toFixed(1)} games/wall-hour · ${r.blocks_per_wall_hour.toFixed(1)} blocks/wall-hour · ${r.failed_games} failed · ${r.interrupted_games} interrupted · ${r.unattempted_games} unattempted`));
+    summary.appendChild(node('p', null, `Timer coverage by phase: ${JSON.stringify(r.coverage)} / ${r.game_population} games. Dollars and games/dollar unavailable without an allocation cost receipt.`));
+    summary.appendChild(node('p', null, `${r.optimization.status}. ${r.optimization.observation} ${r.optimization.mechanism} Validation: ${r.optimization.validation} Coverage: ${r.optimization.coverage}`));
+    for (const o of r.opportunities || []) summary.appendChild(node('p', null, `${o.phase}: ${dur(o.observed_seconds)}, ${o.coverage_games}/${o.game_population} games measured. ${o.dependency} ${o.mechanism} ${o.status}. ${o.serial_elimination_bound == null ? 'No Amdahl prediction without complete, serial coverage.' : `Eliminating this serial phase entirely permits at most ${o.serial_elimination_bound.toFixed(2)}× cell speedup.`}`));
+    const link = node('a', null, 'Optimization evidence'); link.href = r.evidence; summary.appendChild(link);
+  }
+  host.appendChild(summary);
+  for (const a of data.allocations) {
+    const c = node('div', 'card'); c.style.gridColumn = '1 / -1';
+    c.appendChild(node('h3', null, `Shared allocation ${a.identity} · charged once`));
+    c.appendChild(node('p', null, `Allocation elapsed: ${a.elapsed_seconds == null ? 'unavailable' : dur(a.elapsed_seconds)}. ${a.cost.allocation_method}. Measured USD: ${a.cost.measured_usd ?? 'unavailable'}; estimated USD: ${a.cost.estimated_usd ?? 'unavailable'}.`));
+    c.appendChild(node('p', null, `Included cells: ${a.included_cells ?? 'unavailable'}. Valid games/blocks: ${a.valid_games ?? 'unavailable'} / ${a.valid_blocks ?? 'unavailable'}. Games per allocation hour: ${a.games_per_allocation_hour ?? 'unavailable'}; per measured dollar: ${a.games_per_measured_dollar ?? 'unavailable'}; per estimated dollar: ${a.games_per_estimated_dollar ?? 'unavailable'}. Partial report coverage is not whole-allocation yield.`));
+    const s = a.serving;
+    c.appendChild(node('p', null, `Maximum observed request queue age: ${s.measurements?.batch_queue?.maximum_seconds ?? 'unavailable'} seconds. Diagnostic device event durations: ${JSON.stringify(s.device_events || [])}`));
+    c.appendChild(node('p', null, `Request latency p50/p95: ${s.request_p50_seconds == null ? 'unavailable' : dur(s.request_p50_seconds)} / ${s.request_p95_seconds == null ? 'unavailable' : dur(s.request_p95_seconds)}; ${s.latency_sample_count} samples, ${s.sample_coverage}.`));
+    c.appendChild(node('p', null, 'Serving populations count inference replies, including decisions whose later game execution failed.'));
+    c.appendChild(node('pre', null, JSON.stringify(s.counters, null, 2)));
+    renderFlame(c, {...e, timing: [{resource: 'Serving host elapsed'}]}, [{label: 'Resident serving · cold and warm phases', color: css('--r1'), get: () => ({tree: a.tree, decisions: s.counters.decisions || 0, seeds: 1})}], {scale: 'total', resource: 'Serving host elapsed'});
+    for (const path of s.traces) { const link = node('a', null, 'CPU/GPU diagnostic trace (Chrome trace; diagnostic overhead included)'); link.href = path; c.appendChild(link); }
+    c.appendChild(node('p', null, `Unavailable: ${s.unavailable.join('; ')}`));
+    host.appendChild(c);
+  }
+  const timeline = node('div', 'card'); timeline.style.gridColumn = '1 / -1';
+  timeline.appendChild(node('h3', null, 'Concurrency timeline · host monotonic clock'));
+  timeline.appendChild(node('p', null, 'Bounded first spans. Request/batch IDs join IPC, queue and forward work. GPU gaps require the diagnostic trace; device clock alignment is unavailable here.'));
+  const spans = [...data.runs.filter(r => visible.has(r.run)).flatMap(r => r.spans), ...data.allocations.flatMap(a => a.serving.spans)];
+  const lanes = new Map();
+  for (const s of spans) { const key = `${s.process}:${s.thread}`; if (!lanes.has(key)) lanes.set(key, []); lanes.get(key).push(s); }
+  if (spans.length) {
+    const start = Math.min(...spans.map(s => s.start)), end = Math.max(...spans.map(s => s.end));
+    for (const [lane, events] of lanes) {
+      timeline.appendChild(node('p', null, `Process/thread ${lane}`));
+      const track = node('div'); track.style.cssText = 'height:30px;position:relative;background:var(--surface)';
+      for (const s of events) {
+        const b = node('button'); b.title = `${s.name} · ${dur(s.end-s.start)} · request ${s.request || '—'} · batch ${s.batch || '—'}`;
+        b.setAttribute('aria-label', b.title); b.style.cssText = `position:absolute;top:2px;height:24px;left:${100*(s.start-start)/(end-start||1)}%;width:${Math.max(.2,100*(s.end-s.start)/(end-start||1))}%;background:var(--r1);padding:0`;
+        b.onclick = () => { detail.textContent = b.title; }; track.appendChild(b);
+      }
+      timeline.appendChild(track);
+    }
+  }
+  const detail = node('p', null, 'Select a span to inspect its request and batch.'); timeline.appendChild(detail); host.appendChild(timeline);
 }
 // The anchor is the opponent: name both sides by who plays them.
 const sideName = (e, f) => e.anchors[f.anchor] || 'opponent';
@@ -579,7 +675,8 @@ function render() {
     }
   };
   metricSection('perf', L.perf); metricSection('ml', L.ml);
-  const note = silent.length ? `no per-update telemetry retained for ${silent.map(label).join(', ')}` : 'one point per training update';
+  renderEvalPerformance(document.getElementById('perf-body'), e, vis.flatMap(j => jobs[j].runs));
+  const note = e.eval_performance ? 'evaluation decisions · host measurements and coverage' : silent.length ? `no per-update telemetry retained for ${silent.map(label).join(', ')}` : 'one point per training update';
   document.getElementById('perf-sub').textContent = note;
   document.getElementById('ml-sub').textContent = note;
   for (const d of draws) d();

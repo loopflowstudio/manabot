@@ -741,3 +741,16 @@ def test_arena_lost_worker_retains_acknowledged_command(
     assert replay["original_outcome"] == "execution_outcome_unknown"
     assert replay["matches_error"] is None
     assert unobserved.read_bytes() == original
+
+
+@pytest.mark.parametrize("keep", [False, True])
+def test_arena_completed_game_journal_is_kept_only_on_request(
+    tmp_path: Path, keep: bool
+) -> None:
+    game, players = _arena_fixture()
+    journal = tmp_path / "attempt.jsonl"
+    result = simulation.play_game(
+        game, players, {}, 1000, 20, journal, keep_completed=keep
+    )
+    assert result["failure"] is None and result["terminated"]
+    assert journal.exists() == keep

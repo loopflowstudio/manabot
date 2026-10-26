@@ -1,5 +1,9 @@
 import json
+from multiprocessing.connection import Connection
 from pathlib import Path
+import time
+
+import pytest
 
 from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import EvaluationContract, MatchRow
@@ -213,7 +217,10 @@ def _dead_worker(connection, game, registrations, checkpoint_paths, max_commands
     os._exit(7)
 
 
-def test_native_worker_crash_and_timeout_are_retained(monkeypatch):
+@pytest.mark.parametrize("exit_between_polls", [False, True])
+def test_native_worker_crash_and_timeout_are_retained(
+    monkeypatch: pytest.MonkeyPatch, exit_between_polls: bool
+) -> None:
     from copy import deepcopy
 
     import manabot.sim.match as match
@@ -221,9 +228,24 @@ def test_native_worker_crash_and_timeout_are_retained(monkeypatch):
     _, players = selected_players()
     game = {"seat_players": [p.player_id for p in players], "decisions": []}
     monkeypatch.setattr(match, "_game_worker", _dead_worker)
+    if exit_between_polls:
+        original_poll = Connection.poll
+
+        def poll_before_worker_exit(
+            connection: Connection, timeout: float | None = 0.0
+        ) -> bool:
+            ready = original_poll(connection, timeout)
+            if ready and timeout:
+                # Model a timed poll that missed the final phase just before
+                # the worker exited. The next nonblocking poll sees its bytes.
+                time.sleep(0.1)
+                return False
+            return ready
+
+        monkeypatch.setattr(Connection, "poll", poll_before_worker_exit)
     crashed = match.play_game(deepcopy(game), players, {}, 10000, 20)
-    assert crashed["termination_reason"] == "crash"
-    assert crashed["failed_player_id"] == players[0].player_id
+    assert crashed["termination_reason"] == "crash", crashed
+    assert crashed["failed_player_id"] == players[0].player_id, crashed
     assert crashed["winner"] is None
     timed_out = match.play_game(deepcopy(game), players, {}, 10000, 0.001)
     assert timed_out["termination_reason"] == "timeout"

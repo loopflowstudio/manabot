@@ -2,12 +2,21 @@
 
 Polish and validate only the current branch scope.
 
+**NEVER intentionally induce load for testing.** Follow the resource and
+subprocess rules in [TESTING.md](../../TESTING.md), including for benchmarks,
+debugging and demos.
+
 ## Required checks for training recovery
 
 Run `uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`
 when changing resume admission or game-error recovery.
 
 ## Required checks for tracking and offline reports
+
+When changing checkpoint imports or syncing managed evaluation adapters, run
+`uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`.
+It verifies the local CLI, status and continuation in a fresh process that rejects
+managed evaluation imports; adapter-only tests cannot establish that boundary.
 
 Run `uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`
 when changing tracking or report discovery. The live tiny-comparison test writes

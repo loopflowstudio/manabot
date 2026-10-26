@@ -54,7 +54,7 @@ def test_segment_continues_the_frozen_recipe_on_the_cadence() -> None:
     assert stage.learning == frozen.learning and stage.streams == frozen.streams
     assert spec.milestones[0] == 2600 and spec.milestones[-1] == 3950
     assert all(m % CADENCE == 0 for m in spec.milestones)
-    job = spec.job(repo=REGIME.parent, revision="fixture", max_hours=24)
+    job = spec.job(repo=REGIME.parent, revision="HEAD", max_hours=24)
     assert job.until == "updates=4000" and len(job.inputs) == 4
 
 

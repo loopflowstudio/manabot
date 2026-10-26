@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 import tempfile
 from typing import Literal
-from urllib.parse import unquote, urlsplit
 
 from etude.eval.match import EvalRun, Row, Tables, agent
 from etude.eval.records import (
@@ -44,10 +43,10 @@ from manabot.eval.evaluate import (
 )
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
-from manabot.infra.artifacts import verify_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.source import source_commit, source_dirty
+from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
     EvidenceRef,
@@ -159,18 +158,13 @@ def play_card_match(match: Match) -> Tables:
     paths: dict[str, str] = {}
     for entrant, player in zip(match.agents, players, strict=True):
         if entrant.kind == "checkpoint":
-            seated = entrant.artifact
-            uri = urlsplit(seated.uri if seated else "")
             if (
-                seated is None
-                or uri.scheme != "file"
-                or uri.netloc
-                or seated.sha256 != player.checkpoint_sha256
+                entrant.artifact is None
+                or entrant.artifact.sha256 != player.checkpoint_sha256
+                or entrant.artifact.size_bytes != player.checkpoint_bytes
             ):
                 raise ValueError("checkpoint must be admitted local bytes")
-            path = Path(unquote(uri.path))
-            verify_file(path, seated.sha256, player.checkpoint_bytes)
-            paths[player.player_id] = str(path)
+            paths[player.player_id] = str(local_checkpoint_file(entrant))
     root = Path(os.environ["MANABOT_CARD_OUTPUT"])
     attempts = root / "arena" / match.key
     attempts.mkdir(parents=True, exist_ok=True)

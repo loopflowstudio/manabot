@@ -133,6 +133,11 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+**NEVER intentionally induce load for testing**, including debugging,
+benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
+busy loops, stress tools or artificial resource pressure. Use controlled
+fixtures and injected measurements; see [TESTING.md](TESTING.md).
+
 Read [validation by change area](docs/development/validation.md) for the
 checks required by the affected package and workflow.
 

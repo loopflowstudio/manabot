@@ -1,56 +1,23 @@
-# Experiment report prototype
+# Evaluation performance viewer
 
-A working design prototype of the default experiment report (MTG-180). It is a
-reference for how reports should look and behave while the production version
-is built as `etude report EXPERIMENT`. It is not that version: data is assembled
-by a one-off builder, and the page is plain HTML with no Etude integration.
+This directory retains the reviewed evaluation activity overview. Training
+reports use Etude experiment files; the former training-data builder and
+experiment definitions are removed.
 
 ```sh
-uv run --extra artifacts python -m manabot.data fetch experiments/data/seat-comparison-v1
-uv run python -m experiments.report_prototype.build --out .runs/report-prototype
+uv run python -m experiments.report_prototype.build \
+  --eval-receipt .runs/eval/panel --out .runs/eval/report
 ```
 
-Open `.runs/report-prototype/report.html`, or serve that folder. The experiment
-picker switches between:
+Repeat `--eval-receipt` to compare retained attempts. The builder executes no
+games and copies linked evidence into the output directory. Open `report.html`.
+Inference, Game engine, Evidence and replay, and Other and unmeasured are the
+default activity groups; click for measured phases. Each resource keeps its own
+clock, and incomplete coverage never becomes zero.
 
-| Experiment | Data |
-|---|---|
-| Seat comparison v1 | Real: the from-scratch one-seat vs two-seat study, from the artifact store. Default. |
-| MTG-165 two-seat ladder | Real, but only where its retained snapshot exists locally; otherwise skipped. Not a matched comparison. |
-| Elemental, ten decks | Synthetic, shaped like the MTG-181 design (10×10 grid vs heuristic, 50 games per cell). |
+Etude 0.2.5's report panels read training metrics and evaluation score tables;
+they do not yet accept this resource-specific evaluation performance contract.
+The viewer remains until that integration preserves clocks, coverage, activity
+drill-down, shared allocation accounting, and diagnostic evidence links.
 
-## What the prototype settles
-
-- **Defined in Python with the experiment.** `definitions.py` declares a
-  `Report` per experiment: eval panels (`Curve`, `Matrix`, `Ranking`,
-  `HeadToHead`), an optional default clock and baseline. Perf and ML details
-  default to panels over the trainer's own metric keys (`Series`, `Flame`,
-  `Counters`), so most experiments only declare evals. No manifests or config files.
-- **Jobs, not runs.** Every chart shows every job; there is no primary run.
-  A job is labeled by its launch name plus seed count ("Uniform decks · 2 seeds")
-  and shows the seed average: curves band the seed range, matrices pool games.
-  Job-vs-job numbers use a point every job evaluated.
-- **Labels come from the launch.** The name given when a job is created
-  (Etude `training(..., name=...)` → `RunDeclaration.job_name`, or a manabot
-  `Case(label=...)`), never from the report.
-- **Baseline job, dotted.** The experiment's declared baseline is drawn dotted
-  everywhere; `Report(baseline=...)` overrides it.
-- **Two top-level parts.** Evals, then Perf and ML details. Each section owns
-  its controls (x axis on updates, learner decisions or training hours; opponent;
-  smoothing); only job selection and filters are global.
-- **Name who plays what.** Matrices put the model's deck across and the
-  opponent's deck down; labels read "model Allies vs heuristic Lessons".
-  The matrix defaults to the latest checkpoint.
-- **Where time goes, as a flame graph.** An icicle per job of recorded timers
-  (`collection_timings`, `learning_timings` and stage totals), with derived
-  remainders and untimed work hatched, comparable per million learner decisions.
-- **Honest gaps.** Missing evaluations are gaps, never interpolated; metrics a
-  run did not retain are listed as such; synthetic and illustrative data are labeled.
-- **One meaning per color.** Job colors are only for jobs; stage colors only for
-  time stages; green/red only for winning/losing and passing/failing checks.
-
-## Files
-
-- `definitions.py`: the report vocabulary and the three report definitions.
-- `build.py`: reads the sources above and writes the page folder.
-- `report.html`, `model.js`, `charts.js`: the page, its query layer and charts.
+Check: `./scripts/verify-eval-performance-report`.

@@ -9,7 +9,7 @@ Historical serialized keys remain unchanged; these are not training snapshots.
 import os
 from pathlib import Path
 import tempfile
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 from urllib.parse import unquote, urlsplit
 
 from etude.run.records import ArtifactRef
@@ -37,6 +37,10 @@ from manabot.model.world import (
 )
 import managym
 
+if TYPE_CHECKING:
+    # Local policy loading must not import managed evaluation machinery.
+    from etude.eval.records import Agent
+
 
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
     """Admit the exact policy named by an Etude checkpoint record.
@@ -49,6 +53,19 @@ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSp
         return load_checkpoint(
             str(fetch_etude_checkpoint(record.artifact, Path(directory) / "policy.pt"))
         )
+
+
+def local_checkpoint_file(seated: "Agent") -> Path:
+    """The verified local file a checkpoint agent plays; raises for a code agent or a remote file."""
+    artifact = seated.artifact
+    if artifact is None or artifact.sha256 is None or artifact.size_bytes is None:
+        raise ValueError("expected a checkpoint agent with a digest and byte count")
+    uri = urlsplit(artifact.uri)
+    if uri.scheme != "file" or uri.netloc:
+        raise ValueError("checkpoint must be a verified local file")
+    path = Path(unquote(uri.path))
+    verify_file(path, artifact.sha256, artifact.size_bytes)
+    return path
 
 
 def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
