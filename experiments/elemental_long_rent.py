@@ -86,7 +86,7 @@ TRACKING = f"r2://{BUCKET}/jobs"
 WINDOWS = ROOT / "experiments/protocols/elemental-183-windows.json"
 SEGMENTS = ("e7d47d8b220f", "f3748bcabac8")
 # Each rental's $/hour ceiling, which a batch's cap must cover.
-CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60")}
+CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60"), "a4500": Decimal("0.40")}
 # cpu3c 32 vCPUs: one single-threaded group worker per vCPU, less two (MTG-186).
 WORKERS = 30
 # Each batched group plays all its games at once; a few groups share the machine.
@@ -106,7 +106,8 @@ MODES: dict[Mode, tuple[str, int, EvalCompute | None]] = {
 }
 CAP_USD = Decimal("10")
 # A batch's cap must cover its hours and Etude's 15-minute setup allowance at
-# its rental's ceiling; cpu3c is quoted at $0.96/hour, an L4 at $0.59.
+# its rental's ceiling; cpu3c is quoted at $0.96/hour, an L4 at $0.59 and an
+# RTX A4500 (12 vCPUs) at $0.25.
 SETUP_HOURS = Decimal("0.25")
 # Launched batches, so a relaunch neither repeats nor forgets one.
 LEDGER = ROOT / "experiments/protocols/elemental-183-rent.json"
