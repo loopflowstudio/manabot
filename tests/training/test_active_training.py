@@ -23,10 +23,13 @@ R = TypeVar("R")
 
 class Clock:
     def __init__(self) -> None:
+        # Keep native collection deadlines on the real epoch, but charge only
+        # injected durations so host speed cannot change the expected update count.
+        self.epoch = time.perf_counter()
         self.offset = 0.0
 
     def perf_counter(self) -> float:
-        return time.perf_counter() + self.offset
+        return self.epoch + self.offset
 
     def __getattr__(self, name: str) -> object:
         return getattr(time, name)
@@ -60,6 +63,11 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
 ) -> None:
     clock = Clock()
     monkeypatch.setattr(execution, "time", clock)
+    monkeypatch.setattr(
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
@@ -131,6 +139,11 @@ def test_initial_admission_precedes_collection(
 
     monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
+    monkeypatch.setattr(
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
