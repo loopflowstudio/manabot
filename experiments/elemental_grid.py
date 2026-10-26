@@ -21,9 +21,10 @@ beside the score, never replaced or replayed.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from functools import partial
 from html import escape
 import json
 import math
@@ -33,7 +34,7 @@ import random
 import subprocess
 import sys
 import time
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -170,7 +171,6 @@ def _legs(group: Group) -> tuple[str, str, int]:
 def play_group(request: Request) -> list[GameRow]:
     import torch
 
-    from manabot.eval.match import play_cell
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -239,7 +239,7 @@ def play_group(request: Request) -> list[GameRow]:
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     request.output.mkdir(parents=True, exist_ok=False)
-    rows, trace, replay = play_cell(
+    rows, trace, replay = group_cell(request.compute)(
         key=key,
         player_a=candidate,
         player_b=heuristic,
@@ -252,7 +252,6 @@ def play_group(request: Request) -> list[GameRow]:
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
         card_evidence_dir=request.card_evidence,
-        execution=group_execution(request.compute),
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
@@ -292,6 +291,43 @@ def play_group(request: Request) -> list[GameRow]:
 
 # ---------------------------------------------------------------------------
 # One checkpoint: every group, durable per group, bounded workers
+
+
+# A machine-wide shared allocation's endpoint (`endpoint_environment`): when set,
+# every group plays its cell through it, so all games share one model batch.
+ENDPOINT = "MANABOT_EVAL_ENDPOINT"
+Cell = tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]
+
+
+def endpoint_environment(endpoint: Any) -> str:
+    """An `InferenceEndpoint` as the `ENDPOINT` value group workers read."""
+    found = asdict(endpoint)
+    return json.dumps(
+        {
+            "address": found["address"],
+            "authkey": found["authkey"].hex(),
+            "execution": endpoint.execution.model_dump(mode="json"),
+        }
+    )
+
+
+def group_cell(compute: EvalCompute | None) -> Callable[..., Cell]:
+    """How a group plays its cell: through the machine's allocation when
+    `ENDPOINT` names one, else in this process (batched per group under `compute`)."""
+    from manabot.eval.endpoint import InferenceEndpoint
+    from manabot.eval.match import play_cell
+
+    found = os.environ.get(ENDPOINT)
+    if found:
+        if compute is not None:
+            raise ValueError("a group plays under one compute contract")
+        data = json.loads(found)
+        return InferenceEndpoint(
+            address=data["address"],
+            authkey=bytes.fromhex(data["authkey"]),
+            execution=EvalExecution.model_validate(data["execution"]),
+        ).play_cell
+    return partial(play_cell, execution=group_execution(compute))
 
 
 def group_execution(compute: EvalCompute | None) -> EvalExecution | None:

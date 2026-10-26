@@ -18,12 +18,15 @@ as `<run>.tar` plus `receipt.json` (wall time, games, workers, compute).
 
 Two eval runs keep two compute contracts apart: `mtg183-eval-rent` plays the
 frozen scalar path (one Torch thread, one decision per forward pass), and
-`mtg183-eval-batched` plays each group's games concurrently through one shared
-batched inference service (`EvalCompute`). The report treats them as separate
-sources until their agreement is checked.
+`mtg183-eval-batched` plays each group's games concurrently through one
+batched inference service per group (`EvalCompute`), and `mtg183-eval-gpu`
+plays every group on the machine through one CUDA inference service, so
+concurrent games share one batch (`manabot.eval.endpoint.callback_allocation`).
+The report treats them as separate sources until their agreement is checked.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_rent \\
         launch --batch-games 9000 --mode scalar --mode batched [--unit KEY]
+    ... launch --rent l4 --mode gpu --unit KEY
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_rent \\
         collect <etude run id>
 """
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Iterable, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from decimal import Decimal
 import json
 import os
@@ -42,6 +46,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from typing import Literal
 
 from etude.eval.match import evaluate
 from etude.eval.records import Match
@@ -49,6 +54,7 @@ from etude.launch.records import Input, Job, Run
 from etude.run.storage import run_directory, storage_from_uri
 from pydantic import BaseModel, ConfigDict
 
+from experiments.elemental_grid import ENDPOINT, endpoint_environment
 from experiments.elemental_long_eval import (
     CARDS,
     COMPUTE,
@@ -64,10 +70,11 @@ from experiments.elemental_long_eval import (
     units,
     window_checkpoints,
 )
+from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
-from manabot.sim.execution import EvalCompute
+from manabot.sim.execution import EvalCompute, EvalExecution
 
 SCALAR_RUN = "mtg183-eval-rent"
 BATCHED_RUN = "mtg183-eval-batched"
@@ -78,16 +85,28 @@ EVALUATIONS = f"r2://{BUCKET}/evaluations"
 TRACKING = f"r2://{BUCKET}/jobs"
 WINDOWS = ROOT / "experiments/protocols/elemental-183-windows.json"
 SEGMENTS = ("e7d47d8b220f", "f3748bcabac8")
-RENT = "cpu32"
+# Each rental's $/hour ceiling, which a batch's cap must cover.
+CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60")}
 # cpu3c 32 vCPUs: one single-threaded group worker per vCPU, less two (MTG-186).
 WORKERS = 30
 # Each batched group plays all its games at once; a few groups share the machine.
 BATCHED = EvalCompute(max_active_games=12, max_batch_rows=16)
 BATCHED_WORKERS = 6
+GPU_RUN = "mtg183-eval-gpu"
+# One machine-wide CUDA service: every concurrent game's decisions share a batch.
+GPU = EvalCompute(device="cuda", max_active_games=256, max_batch_rows=256)
+# Concurrent matches; each plays its groups in turn, so this bounds pending games.
+GPU_WORKERS = 40
+Mode = Literal["scalar", "batched", "gpu"]
+# Each mode's eval run, concurrent matches and compute contract.
+MODES: dict[Mode, tuple[str, int, EvalCompute | None]] = {
+    "scalar": (SCALAR_RUN, WORKERS, None),
+    "batched": (BATCHED_RUN, BATCHED_WORKERS, BATCHED),
+    "gpu": (GPU_RUN, GPU_WORKERS, GPU),
+}
 CAP_USD = Decimal("10")
 # A batch's cap must cover its hours and Etude's 15-minute setup allowance at
-# cpu32's $2/hour ceiling; cpu3c is quoted at $0.96/hour.
-CEILING = Decimal("2.0")
+# its rental's ceiling; cpu3c is quoted at $0.96/hour, an L4 at $0.59.
 SETUP_HOURS = Decimal("0.25")
 # Launched batches, so a relaunch neither repeats nor forgets one.
 LEDGER = ROOT / "experiments/protocols/elemental-183-rent.json"
@@ -103,6 +122,9 @@ class Batch(BaseModel):
     units: tuple[str, ...]
     workers: int
     compute: EvalCompute | None
+    # Play every group through one machine-wide allocation under `compute`.
+    shared: bool = False
+    hours: float = 1.0
     # Read by `bind_etude_source` before anything reads source identity.
     source_bundle: SourceBundle
 
@@ -172,20 +194,32 @@ def machine(batch: Batch) -> None:
     root = run_directory(track, EXPERIMENT, batch.run)[1].resolve()
     os.environ[EVIDENCE] = str(work / "arena")
     os.environ[CARDS] = str(root)
-    if batch.compute is not None:
+    if batch.compute is not None and not batch.shared:
         os.environ[COMPUTE] = batch.compute.model_dump_json()
+    allocation: AbstractContextManager[InferenceEndpoint | None] = nullcontext(None)
+    if batch.shared:
+        if batch.compute is None:
+            raise ValueError("a shared allocation needs a compute contract")
+        execution = EvalExecution(
+            **batch.compute.model_dump(),
+            deadline_unix=time.time() + batch.hours * 3600,
+        )
+        allocation = callback_allocation(execution, work / "allocation")
     matches: list[Match] = [match for unit in chosen for match in unit.matches]
     started, error = time.time(), None
     try:
-        evaluate(
-            experiment=EXPERIMENT,
-            environment=eval_environment(),
-            matches=matches,
-            play=play,
-            workers=batch.workers,
-            run=batch.run,
-            directory=track,
-        )
+        with allocation as endpoint:
+            if endpoint is not None:
+                os.environ[ENDPOINT] = endpoint_environment(endpoint)
+            evaluate(
+                experiment=EXPERIMENT,
+                environment=eval_environment(),
+                matches=matches,
+                play=play,
+                workers=batch.workers,
+                run=batch.run,
+                directory=track,
+            )
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         raise
@@ -204,6 +238,11 @@ def machine(batch: Batch) -> None:
         with tarfile.open(out / f"{batch.run}.partial", "w") as archive:
             archive.add(root, arcname=batch.run)
         (out / f"{batch.run}.partial").replace(out / f"{batch.run}.tar")
+        # The shared allocation's serving and Perf receipts: where its time went.
+        if (work / "allocation").is_dir():
+            with tarfile.open(out / "allocation.partial", "w") as archive:
+                archive.add(work / "allocation", arcname="allocation")
+            (out / "allocation.partial").replace(out / "allocation.tar")
         (out / "receipt.json").write_text(receipt.model_dump_json(indent=1) + "\n")
 
 
@@ -339,11 +378,12 @@ def _ledger() -> Ledger:
 
 def launch(
     batch_games: int,
-    modes: Sequence[bool],
+    modes: Sequence[Mode],
     hours: float,
     fixed: Sequence[str] = (),
+    rent: str = "cpu32",
 ) -> None:
-    """Queue one batch per mode (True: batched) as one cohort on one rental.
+    """Queue one batch per mode as one cohort on one `rent` rental.
 
     Batches take pending units newest first; `fixed` units instead go to every
     batch, which plays the same games under each compute contract.
@@ -351,7 +391,9 @@ def launch(
     from etude.launch.client import queue_cohort, quote
 
     ledger = _ledger()
-    usd = (CEILING * (Decimal(str(hours)) + SETUP_HOURS)).quantize(Decimal("0.01"))
+    usd = (CEILINGS[rent] * (Decimal(str(hours)) + SETUP_HOURS)).quantize(
+        Decimal("0.01")
+    )
     committed = sum(ledger.max_usd.values(), Decimal(0))
     if committed + usd * len(modes) > CAP_USD:
         raise SystemExit(f"${committed} committed; {len(modes)} more exceed ${CAP_USD}")
@@ -362,11 +404,11 @@ def launch(
         raise SystemExit("commit first: the job runs an exact revision")
     state = admitted()
     design = units(state)
-    done = stored([MINI_RUN, SCALAR_RUN, BATCHED_RUN])
+    done = stored([MINI_RUN, SCALAR_RUN, BATCHED_RUN, GPU_RUN])
     taken = {key for batch in ledger.launched.values() for key in batch.units}
     bundle = bundle_at(ROOT, revision)
     runs, frozen = [], []
-    for batched in modes:
+    for mode in modes:
         if fixed:
             chosen = [unit for unit in design if unit.key in set(fixed)]
         else:
@@ -374,12 +416,15 @@ def launch(
             taken |= {unit.key for unit in chosen}
         if not chosen:
             break
+        run, workers, compute = MODES[mode]
         batch = Batch(
-            run=BATCHED_RUN if batched else SCALAR_RUN,
+            run=run,
             state=state,
             units=tuple(unit.key for unit in chosen),
-            workers=BATCHED_WORKERS if batched else WORKERS,
-            compute=BATCHED if batched else None,
+            workers=workers,
+            compute=compute,
+            shared=mode == "gpu",
+            hours=hours,
             source_bundle=bundle,
         )
         frozen.append(batch)
@@ -391,8 +436,8 @@ def launch(
     if not runs:
         raise SystemExit("nothing pending")
     cohort = f"mtg183-rent-{int(time.time())}"
-    print(quote(runs, rent=RENT, cohort=cohort, max_usd=usd * len(runs)))
-    ids = queue_cohort(cohort, runs, rent=RENT, max_usd=usd * len(runs))
+    print(quote(runs, rent=rent, cohort=cohort, max_usd=usd * len(runs)))
+    ids = queue_cohort(cohort, runs, rent=rent, max_usd=usd * len(runs))
     for run_id, batch in zip(ids, frozen, strict=True):
         ledger.launched[run_id] = batch
         ledger.max_usd[run_id] = usd
@@ -434,16 +479,18 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     launching = commands.add_parser("launch")
     launching.add_argument("--batch-games", type=int, required=True)
-    # One batch per mode, in order: `scalar` or `batched`.
-    launching.add_argument("--mode", action="append", choices=("scalar", "batched"))
+    # One batch per mode, in order.
+    launching.add_argument("--mode", action="append", choices=tuple(MODES))
+    launching.add_argument("--rent", choices=tuple(CEILINGS), default="cpu32")
     launching.add_argument("--hours", type=float, default=1.5)
     launching.add_argument("--unit", action="append", default=[])
     collecting = commands.add_parser("collect")
     collecting.add_argument("run")
     args = parser.parse_args()
     if args.command == "launch":
-        modes = [mode == "batched" for mode in args.mode or ["scalar"]]
-        launch(args.batch_games, modes, args.hours, args.unit)
+        launch(
+            args.batch_games, args.mode or ["scalar"], args.hours, args.unit, args.rent
+        )
     else:
         collect(args.run)
 

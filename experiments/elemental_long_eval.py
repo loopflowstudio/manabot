@@ -93,7 +93,7 @@ from experiments.elemental_grid import (
     Group,
     Request,
     _legs,
-    group_execution,
+    group_cell,
     groups,
     schedule_sha256,
 )
@@ -614,7 +614,6 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
     """
     import torch
 
-    from manabot.eval.match import play_cell
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import canonical_sha256
     from manabot.infra.provenance import runtime_fingerprints
@@ -677,7 +676,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     request.output.mkdir(parents=True, exist_ok=False)
-    rows, trace, replay = play_cell(
+    rows, trace, replay = group_cell(request.compute)(
         key=key,
         player_a=newer,
         player_b=older,
@@ -693,7 +692,6 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
         card_evidence_dir=request.card_evidence,
-        execution=group_execution(request.compute),
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
