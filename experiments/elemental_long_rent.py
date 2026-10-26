@@ -36,6 +36,7 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tarfile
@@ -84,8 +85,10 @@ WORKERS = 30
 BATCHED = EvalCompute(max_active_games=12, max_batch_rows=16)
 BATCHED_WORKERS = 6
 CAP_USD = Decimal("10")
-# Each batch's cap per hour: cpu3c's quoted $0.96, plus margin.
-PRICE = Decimal("1.10")
+# A batch's cap must cover its hours and Etude's 15-minute setup allowance at
+# cpu32's $2/hour ceiling; cpu3c is quoted at $0.96/hour.
+CEILING = Decimal("2.0")
+SETUP_HOURS = Decimal("0.25")
 # Launched batches, so a relaunch neither repeats nor forgets one.
 LEDGER = ROOT / "experiments/protocols/elemental-183-rent.json"
 EXTRAS = " --extra artifacts --extra evaluation"
@@ -149,6 +152,9 @@ def _chosen(batch: Batch) -> list[Unit]:
 def machine(batch: Batch) -> None:
     """Play the batch into a local eval run; return its folder and a receipt."""
     bind_etude_source()
+    # Etude's stop signal unwinds through `finally`, so a stopped batch still
+    # returns the matches it stored.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     inputs = Path(os.environ["ETUDE_INPUTS_DIR"])
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     work = Path(tempfile.mkdtemp(prefix="mtg183-rent-"))
@@ -316,6 +322,7 @@ def job(batch: Batch, *, revision: str, max_hours: float, max_usd: Decimal) -> J
         max_hours=max_hours,
         max_usd=max_usd,
         max_attempts=1,
+        stop_seconds=120.0,
         inputs=tuple(inputs),
         environment=(
             {"name": "OMP_NUM_THREADS", "value": "1"},
@@ -344,7 +351,7 @@ def launch(
     from etude.launch.client import queue_cohort, quote
 
     ledger = _ledger()
-    usd = (PRICE * Decimal(str(hours))).quantize(Decimal("0.01"))
+    usd = (CEILING * (Decimal(str(hours)) + SETUP_HOURS)).quantize(Decimal("0.01"))
     committed = sum(ledger.max_usd.values(), Decimal(0))
     if committed + usd * len(modes) > CAP_USD:
         raise SystemExit(f"${committed} committed; {len(modes)} more exceed ${CAP_USD}")
