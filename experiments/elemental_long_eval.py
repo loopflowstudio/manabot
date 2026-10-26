@@ -93,6 +93,7 @@ from experiments.elemental_grid import (
     Group,
     Request,
     _legs,
+    group_execution,
     groups,
     schedule_sha256,
 )
@@ -112,6 +113,7 @@ from manabot.eval.card_evaluation import trace_card_tables
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
+from manabot.sim.execution import EvalCompute
 from manabot.sim.heuristic import heuristic_source_paths
 import managym
 
@@ -138,6 +140,8 @@ YIELD_TO = r"manabot\.mtg-181-trial-two-seat/.* -m experiments\."
 EVIDENCE = "MTG183_EVAL_EVIDENCE"
 # The eval run's folder, where workers retain card evidence; `follow` sets it.
 CARDS = "MTG183_EVAL_CARDS"
+# An `EvalCompute` as JSON: when set, groups play through shared batched inference.
+COMPUTE = "MTG183_EVAL_COMPUTE"
 
 
 def player(updates: int) -> str:
@@ -431,6 +435,7 @@ class H2HRequest(BaseModel):
     group: Group
     output: Path
     card_evidence: Path | None = None
+    compute: EvalCompute | None = None
 
 
 def _local(seated: Agent) -> LocalCheckpoint:
@@ -495,6 +500,8 @@ def _play_group(
 ) -> tuple[list[GameRow], dict[str, object] | None]:
     """A group's rows and arena trace from its worker; invalid rows and no trace
     when it fails or times out."""
+    found = os.environ.get(COMPUTE)
+    compute = None if not found else EvalCompute.model_validate_json(found)
     if older is None:
         command = ["experiments.elemental_grid"]
         request: BaseModel = Request(
@@ -504,11 +511,17 @@ def _play_group(
             group=group,
             output=output,
             card_evidence=cards,
+            compute=compute,
         )
     else:
         command = ["experiments.elemental_long_eval", "worker"]
         request = H2HRequest(
-            newer=newer, older=older, group=group, output=output, card_evidence=cards
+            newer=newer,
+            older=older,
+            group=group,
+            output=output,
+            card_evidence=cards,
+            compute=compute,
         )
     try:
         completed = subprocess.run(
@@ -680,6 +693,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
         card_evidence_dir=request.card_evidence,
+        execution=group_execution(request.compute),
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))

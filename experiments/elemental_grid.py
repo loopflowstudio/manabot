@@ -38,6 +38,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.execution import EvalCompute, EvalExecution
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -121,6 +122,8 @@ class Request(BaseModel):
     output: Path
     # The eval run's folder: when given, each game's card evidence is retained there.
     card_evidence: Path | None = None
+    # Shared batched inference for the group's games; None is the frozen scalar path.
+    compute: EvalCompute | None = None
 
 
 class GameRow(BaseModel):
@@ -249,6 +252,7 @@ def play_group(request: Request) -> list[GameRow]:
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
         card_evidence_dir=request.card_evidence,
+        execution=group_execution(request.compute),
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
@@ -288,6 +292,15 @@ def play_group(request: Request) -> list[GameRow]:
 
 # ---------------------------------------------------------------------------
 # One checkpoint: every group, durable per group, bounded workers
+
+
+def group_execution(compute: EvalCompute | None) -> EvalExecution | None:
+    """One group's allocation under `compute`, bounded by the group's wall time."""
+    if compute is None:
+        return None
+    return EvalExecution(
+        **compute.model_dump(), deadline_unix=time.time() + GROUP_SECONDS
+    )
 
 
 def _group_name(group: Group) -> str:
