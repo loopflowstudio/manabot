@@ -1,5 +1,58 @@
 # MTG-177 — continue the substantive rules audit
 
+## Current implementation direction — 2026-10-26
+
+Jack Heart requested `pursue` after the candidate review. Implement the first
+priority: one rules-faithful resolution-legality authority across spells,
+activated abilities and triggered abilities, including suspended resolution.
+This supersedes the earlier audit-only/review-only restriction for that repair.
+Deathtouch history and earthbend destination identity remain named follow-ups;
+MTG-195/196 retain trigger/replacement ordering ownership. The whole-rules audit
+also remains unfinished. Return the concrete implementation and evidence for
+review; ready publication, merge and Task completion remain unselected.
+
+The accepted behavioral contract is CR 608.2b: evaluate target eligibility when
+resolution begins, per targeting clause, and retain that decision while effects
+execute or suspend. Do not reinterpret gained hexproof or changed type as a new
+target-legality decision after each instruction. Keep one shared predicate for
+selection, acceptance and resolution-start evaluation. Separately retain the
+object-incarnation/presence guards needed when an instruction moves an object;
+a blanket removal of all effect checks is not correct. Resolve the precise
+EffectFrame representation from existing state before editing, documenting any
+consequential ambiguity rather than inventing a second authority.
+
+Delete — do not maintain: migrate the repeated effect-handler target-legality
+rechecks to the single resolution contract, and unify divergent entry handling
+including the activated all-invalid gate. Remove superseded checks in the same
+change. Preserve per-clause semantics, source exclusions, legitimate response-time
+rechecks, untargeted effects, zero optional targets and current identity rules.
+
+Proof: enable the retained hexproof-during-resolution regression; independently
+assert both controllers, spell/activated/triggered entry paths, mixed/all-invalid
+and multi-clause targets, suspended choices, and departure/reentry during an
+effect. Assert expected outcomes, not just agreement between consumers. Preserve
+the other two ignored proposals as unresolved and add relevant rule citations.
+Use focused debug Rust checks with two jobs first. Required native rebuild,
+world/admission, maintained model/choice-separability and consumer/replay checks
+remain part of the affected acceptance, with gate owning broader checks once.
+Do not resurrect the deliberately removed learnability verifier.
+
+Coordination: fresh inspection found MTG-195 has uncommitted changes in trigger
+placement, action/observation state, hashing, rollback, targeting tests and w14
+fixtures in its own checkout. Do not adopt or overwrite that active writer's
+files. Resolution.rs and the frame contract are this repair's center; reconcile
+adjacent changes against actual supported handoff before integration. Do not
+reuse w14 for different semantics or silently overwrite its evidence. Select the
+final world identity and fresh affected receipts only against the integrated
+source; surface an integration dependency if the other work is not yet available.
+
+The old pursue completed audit implementation/compression and stopped during
+sync. Its preserved draft is recovered and committed in `6b18ee3d9`; candidate
+review is `f16ec7886`. No live audit Graph was observed. Continue from that work,
+not a fresh audit. Keep the approximately 10k authored-line budget (7,493 already
+charged), frozen evidence and existing resource bounds below. No paid compute,
+training experiments, artificial load or unrelated card/format expansion.
+
 ## Accepted direction — 2026-10-26
 
 Jack Heart accepted resuming the whole-rules audit and creating follow-up Tasks
