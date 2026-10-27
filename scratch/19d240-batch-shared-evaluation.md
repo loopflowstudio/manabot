@@ -270,9 +270,9 @@ Ledger (cap $5; committed = caps until settled):
 |---|---|---|---|---|
 | `091840ecd017` | `cpu32` `batched` (6 × 12) at `950e2066e` | cpu3c 32 vCPU, $0.96/h | $2.50 | ~$0.07, 0 valid |
 | `a8182c3ea633` | A4500 `gpu` (256 active) at `950e2066e` | a4500 ≤ $0.40/h | $0.40 | ~$0.01, 0 valid |
-| `a43579fb6172` | A4500 `gpu` (256 active) at `014868990` | a4500 ≤ $0.40/h | $0.40 | queued |
+| `a43579fb6172` | A4500 `gpu` (256 active) at `014868990` (pre-ABI-fix) | a4500 ≤ $0.40/h | $0.40 | queue state unverified |
 
-Committed about $0.48 of $5 (two settled runs plus one queued cap).
+Committed at most about $0.48 of $5 (two settled runs, ~$0.08, plus `a43579fb6172`'s cap if queued).
 
 Both settled arms recorded 1,000/1,000 games failed with "checkpoint requires an
 explicit compatible w14 world binding": `e742e8bff` (main, inherited by both
@@ -280,10 +280,22 @@ branches) moved the engine to w14, and MTG-183's 5,950/5,600 checkpoints are
 w13. Their receipts reported 1,000 games and no error, so a receipt must
 count valid games (uncommitted edit in the calibration worktree). The
 calibration branch reverts `e742e8bff` (`014868990`) so the after-arms play
-the before-arms' w13 world. The `cpu32` arm is not relaunched. From 2026-10-27
-~14:55, session `manabot-19d240-batch-shared-evaluation-a1` owns the
-calibration (one launching writer). Throughput, census and batch targets are
-still unmeasured.
+the before-arms' w13 world. The `cpu32` arm still needs a valid relaunch.
+
+Second admission failure (found by a local `machine` smoke, 2026-10-27):
+served admission checks a checkpoint registration's observation ABI against
+the checkpoint's saved space, but the runners registered every checkpoint with
+the runtime's default space, so policy-input v1 checkpoints were rejected as
+ABI drift. Fixed on this branch for the Elemental grid and MTG-186 arena
+(`c3bd35895`) and on the calibration branch (`97a9c8f0e`, plus an uncommitted
+edit making MTG-183's `elemental_long_eval.play_h2h_group` register with the
+checkpoint's own space). `a43579fb6172` was built at `014868990`, before both
+fixes, so it cannot produce valid games; `~/.manabot/mtg193-calibration/queued.txt`
+lists only the two settled runs, so whether it was queued is unverified. Valid
+after-arms need a revision that has the revert, the ABI fix and the
+valid-game receipt edit committed. From 2026-10-27 ~14:55, session
+`manabot-19d240-batch-shared-evaluation-a1` owns the calibration (one
+launching writer). Throughput, census and batch targets are still unmeasured.
 
 ### Implementation decisions (2026-10-26)
 
@@ -305,6 +317,7 @@ still unmeasured.
 ## Check result
 
 Compress, 2026-10-27: `InferenceRuntime.close` relies on `ChildProcess.kill`'s liveness guard; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 24 passed, 1 skipped.
+Realign, 2026-10-27: `_InChildPlayers`/`in_child` and the supervision header are in `manabot/sim` (grep); calibration has 0 valid games so far.
 Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
 
 Open for gate: the two
@@ -362,4 +375,4 @@ fixtures landed; both follow the accepted concepts. Served checkpoints,
 in-child code/search players, one policy key per checkpoint, child processes
 and role thread budgets still hold, and the engine boundary is unchanged. No
 design change and no open product choice. Remaining: the rental calibration
-and landing gate in Acceptance (operator step, $0.00 of $5 spent).
+and landing gate in Acceptance (now run by MTG-193 itself; ledger in Calibration).
