@@ -184,7 +184,57 @@ def test_generation_defaults_can_come_from_model_config(
     assert loaded.eos_ids == {1, 7}
 
 
-@pytest.mark.parametrize("concurrency", [4, 16])
+def test_long_reasoning_budget_preserves_deals_and_reaches_server(
+    tmp_path: Path,
+    runtime: vllm_runtime.VLLMRuntime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = campaign.Campaign()
+    games = campaign._schedule(config, tmp_path)
+    original = campaign.original.schedule(config)
+    assert len(games) == len(original) == 100
+    for game, expected in zip(games, original, strict=True):
+        assert game.model_dump(
+            exclude={"config": {"inference"}}
+        ) == expected.model_dump(exclude={"config": {"inference"}})
+        assert game.config.max_seconds == config.seconds == 36000
+    effective = InferenceConfig.model_validate_json(
+        (tmp_path / "inference.json").read_text()
+    )
+    command = vllm_server.server_command(effective, "fixture", config.concurrency)
+    assert command[command.index("--max-model-len") + 1] == "65536"
+    assert command[command.index("--max-num-seqs") + 1] == "8"
+    runtime.config = effective
+
+    def request(req: Request, timeout: float) -> Reply:
+        body = json.loads(req.data or b"{}")
+        assert body["max_tokens"] == 16384
+        assert 1700 < timeout <= 1800
+        return Reply(
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "text": "",
+                        "finish_reason": "stop",
+                        "prompt_token_ids": body["prompt"],
+                        "token_ids": [4, 2, 3, 1],
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(vllm_runtime, "urlopen", request)
+    prompt = runtime.encode((Message(role="user", content="A0"),))
+    assert (
+        runtime.generate(
+            prompt, time.monotonic() + effective.deadline_seconds
+        ).finish_reason
+        == "eos"
+    )
+
+
+@pytest.mark.parametrize("concurrency", [4, 8, 16])
 def test_failed_batch_retains_every_admitted_game_and_stops_queue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -236,7 +286,8 @@ def test_failed_batch_retains_every_admitted_game_and_stops_queue(
     effective = InferenceConfig.model_validate_json(
         (tmp_path / "inference.json").read_text()
     )
-    assert effective.deadline_seconds == 300 and effective.max_new_tokens == 2048
+    assert effective.deadline_seconds == 1800 and effective.max_new_tokens == 16384
+    assert effective.context_tokens == 65536
     assert effective.enable_thinking is True
 
 

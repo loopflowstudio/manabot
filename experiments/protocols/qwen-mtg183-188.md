@@ -180,3 +180,43 @@ All outputs from `12f050b52057` were fetched and its pod was verified absent at
 attempts total **$0.29259950272777778413**. The next job/cohort cap is **$9.20**
 with the same $0.50 ancillary reserve. This execution adjustment follows Jack
 Heart's authorization to retry without a count limit within the original $10.
+
+## Accepted 16k generation allowance — 2026-10-27
+
+Run `b1d7ed75492f` ended with 18 completed, replay-verified games (zero Qwen
+wins), eight game-wall timeouts and 74 unattempted entries. Of 793 Qwen
+selections, 33 succeeded initially, 241 succeeded after repair and 519 used the
+declared seeded random fallback. All 519 fallbacks followed two generation-limit
+cutoffs. There were 1,279 truncated generations among 1,553 generation attempts.
+These outcomes describe the 2,048-token treatment, not unrestricted Qwen strength.
+Raw receipts remain under that run's identity; do not combine its outcomes with
+the new treatment as a homogeneous 100-game result.
+
+Jack Heart selected increasing the reasoning allowance, then specified
+"lets do 16k reasoning tokens allowed". The next treatment permits **16,384
+generated tokens per attempt**, including reasoning, final reference and EOS
+under the existing runtime's shared output budget. It still requires a completed
+thinking boundary and exact legal final reference; no forced answer, prompt
+truncation or hidden choice is introduced. The one protocol repair remains, with
+its own allowance and retained result. Context is **65,536 tokens**, accommodating
+the complete observation plus a long initial response and repair. Model weights,
+tokenizer, BF16 precision, greedy decoding, opponent, decks, deals, seats,
+Command binding and replay stay pinned.
+
+Use **eight concurrent games** to leave cache capacity for longer sequences,
+and **1,800 seconds per selection including repair**. Per-game wall can extend
+to the existing **10-hour campaign bound**, reduced by the remaining campaign
+time and cleanup reserve; there is no separate two-hour cutoff. The outer
+10-hour watchdog, 11-hour rental ceiling, early failure stop and independent
+cleanup guardian remain. These larger limits permit reasoning to finish but do
+not promise 100 completed games within the money ceiling. Reserve the original
+100-game schedule again under a new treatment identity; earlier results and
+failures remain separately available.
+
+The SDK's finalized rental charges for all six prior attempts now total
+**$2.253210135812151860498486614** (the earlier estimates remain historical).
+The last provider pod `nb4r2gk2o7uqd2` was freshly confirmed absent. The next
+job/cohort cap is **$7.24**, with the unchanged **$0.50 ancillary reserve**:
+maximum cumulative commitment **$9.993210135812151860498486614**, below the
+original $10. Ancillary final billing remains unavailable. Only one allocation
+may be active; verify absence and reread charges before another launch.

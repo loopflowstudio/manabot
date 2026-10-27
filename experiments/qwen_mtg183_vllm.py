@@ -25,16 +25,25 @@ from manabot.verify.llm_game import GameSummary, _write
 
 
 class Campaign(original.Campaign):
-    concurrency: int = Field(default=16, ge=1, le=16)
-    decision_seconds: float = Field(default=300, gt=0, le=300)
-    game_seconds: float = Field(default=7200, gt=0, le=7200)
+    concurrency: int = Field(default=8, ge=1, le=16)
+    decision_seconds: float = Field(default=1800, gt=0, le=1800)
+    # Games share the campaign watchdog instead of a shorter per-game cutoff.
+    game_seconds: float = Field(default=10 * 3600, gt=0, le=10 * 3600)
+    # Generation includes reasoning, the final reference and its terminator.
+    max_new_tokens: int = Field(default=16_384, gt=0, le=16_384, strict=True)
+    context_tokens: int = Field(default=65_536, gt=0, le=65_536, strict=True)
 
 
 def _schedule(config: Campaign, out: Path) -> list[original.ScheduledGame]:
-    """Keep deal/seat identity while retaining the effective inference deadline."""
+    """Keep deal/seat identity while retaining the effective inference budgets."""
     inference = InferenceConfig.model_validate_json(original.INFERENCE.read_text())
-    inference = inference.model_copy(
-        update={"deadline_seconds": config.decision_seconds}
+    inference = InferenceConfig.model_validate(
+        {
+            **inference.model_dump(),
+            "deadline_seconds": config.decision_seconds,
+            "max_new_tokens": config.max_new_tokens,
+            "context_tokens": config.context_tokens,
+        }
     )
     path = (out / "inference.json").absolute()
     _write(path, inference.model_dump_json(indent=2))
