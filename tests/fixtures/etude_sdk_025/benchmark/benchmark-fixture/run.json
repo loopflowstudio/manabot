@@ -1,0 +1,1 @@
+{"schema_version":1,"experiment":"two-seat-ladder-heuristic-deck-seats","namespace":"local","declaration":{"schema_version":1,"source_key":{"namespace":"local","kind":"run","source_id":"benchmark-fixture"},"clocks":[],"job":null,"job_name":null,"seed":null,"cohort":null,"kind":"evaluation","config_json":null,"config_sha256":null,"continues":null}}

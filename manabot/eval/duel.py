@@ -9,12 +9,13 @@ import json
 import os
 from pathlib import Path
 
-from etude.eval.match import EvalRun, Tables, agent
+from etude.eval.match import EvalRun, Tables
 from etude.eval.records import (
     Benchmark,
     CheckpointKey,
     CheckpointRef,
     Environment,
+    Inference,
     Match,
     Matchup,
     Model,
@@ -119,8 +120,11 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
 def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
-    seated = match.agents[0].artifact
-    if seated is None or seated.sha256 != candidate.checkpoint_sha256:
+    seated = match.players[0]
+    if (
+        not isinstance(seated, Model)
+        or seated.checkpoint.artifact.sha256 != candidate.checkpoint_sha256
+    ):
         raise ValueError("Etude candidate differs from admitted checkpoint")
     conditions = Conditions.model_validate(match.conditions)
     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
@@ -261,15 +265,17 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
             Matchup(
                 name="two-seat vs one-seat",
                 players=(
-                    Model(
-                        code=code,
+                    Inference(
+                        source=code,
                         config={"registration": candidate.model_dump(mode="json")},
                     ),
-                    agent(
-                        "one-seat",
+                    Model(
+                        name="one-seat",
                         checkpoint=_checkpoint(duel.one_seat),
-                        code=code,
-                        config={"registration": opponent.model_dump(mode="json")},
+                        inference=Inference(
+                            source=code,
+                            config={"registration": opponent.model_dump(mode="json")},
+                        ),
                     ),
                 ),
                 conditions=tuple(

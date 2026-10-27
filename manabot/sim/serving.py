@@ -19,7 +19,7 @@ import queue
 import threading
 import time
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
@@ -110,6 +110,13 @@ class DecisionReply:
 
 
 @dataclass(frozen=True)
+class _PendingRequest:
+    identity: str
+    request: DecisionRequest
+    received: float
+
+
+@dataclass(frozen=True)
 class PolicyAdmission:
     registration: PlayerRegistration
     path: str
@@ -179,13 +186,15 @@ class PolicyStore:
             self.perf.count("resident_hits")
             self.policies.move_to_end(key)
             return self.policies[key]
+        self.perf.count("resident_misses")
         admission = self.admissions[key]
         player, path = admission.registration, Path(admission.path)
-        if (
-            path.stat().st_size != player.checkpoint_bytes
-            or file_sha256(path) != key.checkpoint
-        ):
-            raise ValueError("checkpoint byte identity drift")
+        with self.perf.span("checkpoint_verification"):
+            if (
+                path.stat().st_size != player.checkpoint_bytes
+                or file_sha256(path) != key.checkpoint
+            ):
+                raise ValueError("checkpoint byte identity drift")
         with self.perf.span("model_load"):
             agent, space = load_checkpoint(str(path))
             agent.eval()
@@ -269,16 +278,17 @@ def sample_rows(
 
 
 def _infer(
-    store: PolicyStore, requests: list[DecisionRequest], batch: str
+    store: PolicyStore,
+    requests: list[DecisionRequest],
+    batch: str,
+    *,
+    witness: Callable[[torch.Tensor, torch.Tensor, list[int]], None] | None = None,
 ) -> list[DecisionReply]:
     perf = store.perf
-    policy = store.get(requests[0].policy)
     for request in requests:
         if request.deadline_unix <= time.time():
             raise InferenceFailure("request deadline exhausted")
-        perf.record(
-            "batch_queue", request.submitted, request=request.request_id, batch=batch
-        )
+    policy = store.get(requests[0].policy)
     with perf.span("input_assembly", batch=batch):
         tensors = {
             key: torch.from_numpy(
@@ -331,29 +341,73 @@ def _infer(
         )
         for r, action in zip(requests, actions, strict=True)
     ]
-    for request in requests:
-        perf.latency(time.monotonic() - request.submitted)
+    if witness is not None:
+        with perf.span("output_witness_write", batch=batch):
+            witness(logits, tensors["actions_valid"], actions)
     if not store.execution.resident:
         store.close()
     return replies
+
+
+def _record_dispatch(
+    perf: EvalPerformance, chosen: list[_PendingRequest], batch: str
+) -> None:
+    """End queue wait before admission/load; all stamps are on the same host."""
+    dispatched = time.monotonic()
+    for item in chosen:
+        perf.record(
+            "submission_to_receipt",
+            item.request.submitted,
+            end=item.received,
+            request=item.request.request_id,
+            batch=batch,
+            partitions_elapsed=False,
+        )
+        perf.record(
+            "dispatch_queue",
+            item.received,
+            end=dispatched,
+            request=item.request.request_id,
+            batch=batch,
+            partitions_elapsed=False,
+        )
+
+
+def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
+    """Sample RSS at admission/batch boundaries; CUDA peaks are process allocator peaks."""
+    perf.counters["rss_bytes"] = psutil.Process().memory_info().rss
+    perf.counters["peak_sampled_rss_bytes"] = max(
+        perf.counters["peak_sampled_rss_bytes"], perf.counters["rss_bytes"]
+    )
+    perf.count("rss_samples")
+    if execution.device == "cuda":
+        perf.counters["peak_allocated_cuda_bytes"] = torch.cuda.max_memory_allocated()
+        perf.counters["peak_reserved_cuda_bytes"] = torch.cuda.max_memory_reserved()
 
 
 def _service(
     connection: Connection, execution: EvalExecution, directory: Path, allocation: str
 ) -> None:
     torch.set_num_threads(1)
-    perf = EvalPerformance(allocation, execution.instrumentation)
+    perf = EvalPerformance(
+        allocation,
+        execution.instrumentation,
+        latency_boundary="client submission to service reply send; excludes return transport and caller validation",
+    )
     store = PolicyStore(execution, perf)
-    pending: deque[tuple[str, DecisionRequest]] = deque()
+    pending: deque[_PendingRequest] = deque()
     diagnostics = 0
     published = time.monotonic()
     try:
+        # Ready means the service can receive work, not that any model is loaded.
+        perf.write(directory / "serving.json")
+        connection.send(("ready", None, None))
         while execution.remaining() > 0:
             # Once a group is due, continuous admissions cannot starve its flush.
             due = bool(pending) and (
-                time.monotonic() - pending[0][1].submitted
+                time.monotonic() - pending[0].request.submitted
                 >= execution.max_delay_seconds
-                or sum(r.policy == pending[0][1].policy for _, r in pending)
+                or sum(r.request.policy == pending[0].request.policy for r in pending)
                 >= execution.max_batch_rows
             )
             if not due and connection.poll(
@@ -363,12 +417,16 @@ def _service(
                 if kind == "close":
                     break
                 if kind == "infer":
-                    pending.append((identity, payload))
+                    pending.append(_PendingRequest(identity, payload, time.monotonic()))
+                    perf.count("received_requests")
                 else:
                     try:
                         result = (
                             store.admit(payload) if kind == "admit" else perf.snapshot()
                         )
+                        if kind == "admit":
+                            _sample_memory(perf, execution)
+                            perf.write(directory / "serving.json")
                         connection.send((identity, result, None))
                     except Exception as exc:
                         perf.count("failed_admissions")
@@ -378,8 +436,10 @@ def _service(
                 continue
             if not pending:
                 continue
-            first = pending[0][1]
-            compatible = [item for item in pending if item[1].policy == first.policy]
+            first = pending[0].request
+            compatible = [
+                item for item in pending if item.request.policy == first.policy
+            ]
             if (
                 len(compatible) < execution.max_batch_rows
                 and time.monotonic() - first.submitted < execution.max_delay_seconds
@@ -387,9 +447,10 @@ def _service(
                 connection.poll(min(execution.max_delay_seconds, 0.001))
                 continue
             chosen = compatible[: execution.max_batch_rows]
-            ids = {item[0] for item in chosen}
-            pending = deque(item for item in pending if item[0] not in ids)
+            ids = {item.identity for item in chosen}
+            pending = deque(item for item in pending if item.identity not in ids)
             batch = uuid4().hex
+            _record_dispatch(perf, chosen, batch)
             try:
                 if diagnostics < execution.diagnostic_batches:
                     activities = [torch.profiler.ProfilerActivity.CPU]
@@ -404,7 +465,7 @@ def _service(
                                 torch.cuda.Event(enable_timing=True),
                             )
                             begin.record()
-                        replies = _infer(store, [r for _, r in chosen], batch)
+                        replies = _infer(store, [r.request for r in chosen], batch)
                         if execution.device == "cuda":
                             end.record()
                             end.synchronize()
@@ -424,20 +485,27 @@ def _service(
                     perf.count("diagnostic_batches")
                     diagnostics += 1
                 else:
-                    replies = _infer(store, [r for _, r in chosen], batch)
-                for (identity, _), reply in zip(chosen, replies, strict=True):
-                    connection.send((identity, reply, None))
+                    replies = _infer(store, [r.request for r in chosen], batch)
             except Exception as exc:
-                perf.count("failed_requests", len(chosen))
-                for identity, _ in chosen:
-                    connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
-            perf.counters["rss_bytes"] = psutil.Process().memory_info().rss
-            if execution.device == "cuda":
-                perf.counters["peak_vram_bytes"] = torch.cuda.max_memory_allocated()
+                for item in chosen:
+                    connection.send(
+                        (item.identity, None, f"{type(exc).__name__}: {exc}")
+                    )
+                    perf.latency(
+                        time.monotonic() - item.request.submitted, outcome="failed"
+                    )
+            else:
+                for item, reply in zip(chosen, replies, strict=True):
+                    connection.send((item.identity, reply, None))
+                    perf.latency(time.monotonic() - item.request.submitted)
+            _sample_memory(perf, execution)
             if time.monotonic() - published >= 1:
                 perf.write(directory / "serving.json")
                 published = time.monotonic()
     finally:
+        perf.counters["unanswered_requests"] = (
+            perf.counters["received_requests"] - perf.counters["requests"]
+        )
         store.close()
         perf.write(directory / "serving.json")
         connection.close()
@@ -453,7 +521,11 @@ class InferenceRuntime:
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=False)
         self.identity = uuid4().hex
-        self.performance = EvalPerformance(self.identity, execution.instrumentation)
+        self.performance = EvalPerformance(
+            self.identity,
+            execution.instrumentation,
+            latency_boundary="game worker submission through supervisor reply validation, or observed failure; excludes return to game worker",
+        )
         self.slots = threading.BoundedSemaphore(execution.max_active_games)
         self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
         self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
@@ -468,7 +540,25 @@ class InferenceRuntime:
         self.process = context.Process(
             target=_service, args=(child, execution, directory, self.identity)
         )
-        self.process.start()
+        self.performance.write(self.directory / "allocation.json")
+        self._service_started = time.monotonic()
+        try:
+            self.process.start()
+        except BaseException as exc:
+            if self.process.pid is not None:
+                if self.process.is_alive():
+                    self.process.kill()
+                self.process.join()
+            child.close()
+            self._connection.close()
+            self._games.shutdown(wait=True, cancel_futures=True)
+            self.performance.count("failed_service_starts")
+            self.performance.record(
+                "failed_service_start", self._service_started, partitions_elapsed=False
+            )
+            self.performance.write(self.directory / "allocation.json")
+            self._write_execution(f"{type(exc).__name__}: {exc}")
+            raise
         child.close()
         self._reader = threading.Thread(target=self._receive, daemon=True)
         self._reader.start()
@@ -516,6 +606,14 @@ class InferenceRuntime:
         try:
             while True:
                 identity, result, error = self._connection.recv()
+                if identity == "ready":
+                    self.performance.record(
+                        "service_start_to_ready",
+                        self._service_started,
+                        partitions_elapsed=False,
+                    )
+                    self.performance.write(self.directory / "allocation.json")
+                    continue
                 with self._lock:
                     future = self._futures.pop(identity, None)
                 if future is not None:
@@ -562,12 +660,25 @@ class InferenceRuntime:
             self._capacity.release()
 
     def admit(self, admission: PolicyAdmission) -> ObservationConfig:
-        result = self._call("admit", admission)
-        if not isinstance(result, ObservationConfig):
-            raise InferenceFailure("invalid observation admission reply")
-        return result
+        started = time.monotonic()
+        try:
+            result = self._call("admit", admission)
+            if not isinstance(result, ObservationConfig):
+                raise InferenceFailure("invalid observation admission reply")
+            self.performance.count("completed_admissions")
+            return result
+        except BaseException:
+            self.performance.count("failed_admissions")
+            raise
+        finally:
+            # Includes startup when admission is submitted before service ready.
+            self.performance.record(
+                "admission_round_trip", started, partitions_elapsed=False
+            )
+            self.performance.write(self.directory / "allocation.json")
 
     def infer(self, request: DecisionRequest) -> DecisionReply:
+        outcome: Literal["completed", "failed"] = "failed"
         try:
             result = self._call("infer", request, request.deadline_unix - time.time())
             if not isinstance(result, DecisionReply):
@@ -575,10 +686,15 @@ class InferenceRuntime:
             result.validate(request)
             if time.time() >= request.deadline_unix:
                 raise InferenceFailure("inference reply arrived after its deadline")
+            outcome = "completed"
             return result
         except InferenceFailure as exc:
             self.fail(str(exc))
             raise
+        finally:
+            self.performance.latency(
+                time.monotonic() - request.submitted, outcome=outcome
+            )
 
     def snapshot(self) -> dict[str, Any]:
         result = self._call("snapshot", None)
@@ -601,6 +717,7 @@ class InferenceRuntime:
         if self._closed:
             return
         self._closing = True
+        cleanup_started = time.monotonic()
         if self._futures:
             self.fail("allocation closed with pending requests")
         self._games.shutdown(wait=True, cancel_futures=True)
@@ -620,14 +737,19 @@ class InferenceRuntime:
         self._sender.join(timeout=1)
         self._closed = True
         self._connection.close()
+        self.performance.record("cleanup", cleanup_started, partitions_elapsed=False)
         self.performance.write(self.directory / "allocation.json")
 
+        self._write_execution(self._error)
+
+    def _write_execution(self, error: str | None) -> None:
+        """Retain the same allocation identity and cost boundary on every exit."""
         atomic_json(
             self.directory / "execution.json",
             {
                 "allocation_id": self.identity,
                 "execution": self.execution.model_dump(),
                 "cost": allocation_cost(time.monotonic() - self.performance.started),
-                "error": self._error,
+                "error": error,
             },
         )

@@ -117,10 +117,10 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
 
 
 def _design(matches: list[Match]) -> set[tuple[str, ...]]:
-    """Each match as its seated agents' names and conditions, wherever it came from."""
+    """Each match as its seated players' names and conditions, wherever it came from."""
     return {
         (
-            *(agent.name for agent in match.agents),
+            *(player.name for player in match.players),
             str(match.conditions),
             str(match.games),
         )

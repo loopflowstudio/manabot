@@ -170,9 +170,24 @@ checks required by the affected package and workflow.
 
 ### Etude card evaluation
 
-Etude SDK 0.2 hashes tracked source paths (`git add -N` admits new files for local
-implementation checks). Its built-in sync sends only known run folders and does
-not include arbitrary evidence artifacts. Card evaluations use the card
-publication operation to verify/copy their immutable evidence through Etude
-Storage before delivering scalar tables and match records. Do not publish their
-indexes alone or put card evidence in the checkpoint namespace.
+Etude SDK 0.2.8 hashes tracked source paths (`git add -N` admits new files for
+local implementation checks). Card evidence is retained once under the eval
+run's `artifacts/evidence/` directory with content-addressed names. Ordinary
+Etude delivery carries those bytes with tables and match records. Keep the
+evidence with its run; do not publish indexes alone, overwrite immutable
+artifacts, or put card evidence in the checkpoint namespace. Historical
+evidence paths remain valid and must not be rewritten.
+
+Etude evaluation tables use `seat` for the participant's index in
+`Match.players`, and `game_seat` for its native game seat (0 is on the play).
+Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
+group native play/draw reports by `game_seat`. SDK 0.2.8 owns the historical
+`player`/`seat` column conversion; never rewrite retained tables for this rename.
+
+### Offline inference reports
+
+Historical LLM receipt readers stay independent of executable model, simulation
+and native imports. Load the evaluation projection only for evaluation inputs;
+keep its simulation dependencies off the LLM-only path. Check this boundary in a
+fresh process with those imports blocked, and exercise mixed reports through the
+actual builder CLI in the existing headless Perf proof.

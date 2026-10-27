@@ -15,17 +15,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import islice
 import json
-import multiprocessing as mp
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 from typing import Any, Literal
 
 import numpy as np
-import psutil
 from pydantic import Field, model_validator
 import torch
 
+from manabot._process import bounded_call
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.execution import bind_execution
 from manabot.infra.config import MatchConfig
@@ -313,60 +312,17 @@ def _numerical_worker(
 def _bounded_probe(
     target: Callable[..., None], args: tuple[object, ...], plan: BenchmarkPlan
 ) -> dict[str, Any]:
-    context = mp.get_context("spawn")
-    receiver, sender = context.Pipe()
-    process = context.Process(target=target, args=(sender, *args))
-    process.start()
-    sender.close()
-    peak_rss = 0
-    descendants: list[psutil.Process] = []
-    try:
-        while time.time() < plan.deadline_unix:
-            if receiver.poll(0.1):
-                try:
-                    result = receiver.recv()
-                except EOFError:
-                    break
-                result["peak_process_tree_rss_bytes"] = peak_rss
-                return result
-            if not process.is_alive():
-                break
-            try:
-                parent = psutil.Process(process.pid)
-                descendants = parent.children(recursive=True)
-                rss = sum(
-                    p.memory_info().rss
-                    for p in [parent, *descendants]
-                    if p.is_running()
-                )
-            except psutil.NoSuchProcess:
-                continue
-            peak_rss = max(peak_rss, rss)
-            if rss > plan.process_tree_bytes:
-                return {
-                    "passed": False,
-                    "error": "process tree memory limit",
-                    "peak_process_tree_rss_bytes": peak_rss,
-                }
-        return {
-            "passed": False,
-            "error": "worker exited or deadline exhausted",
-            "peak_process_tree_rss_bytes": peak_rss,
-        }
-    finally:
-        if process.is_alive():
-            try:
-                descendants = psutil.Process(process.pid).children(recursive=True)
-            except psutil.NoSuchProcess:
-                pass
-            for child in reversed(descendants):
-                try:
-                    child.kill()
-                except psutil.NoSuchProcess:
-                    pass
-            process.kill()
-        process.join()
-        receiver.close()
+    outcome = bounded_call(
+        target,
+        args,
+        deadline_unix=plan.deadline_unix,
+        process_tree_bytes=plan.process_tree_bytes,
+    )
+    result = dict(outcome.payload or {})
+    if outcome.error or not outcome.cleanup_complete:
+        result.update(passed=False, error=outcome.error or "child cleanup incomplete")
+    result["peak_process_tree_rss_bytes"] = outcome.peak_process_tree_rss_bytes
+    return result
 
 
 def numerical_check(plan: BenchmarkPlan, panel: Panel, trace: Path) -> dict[str, Any]:

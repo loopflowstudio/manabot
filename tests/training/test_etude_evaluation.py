@@ -188,9 +188,9 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
         assert {
             row["game"]
             for row in projected
-            if row["player"] == 0 and row["matchup"] == matchup
+            if row["seat"] == 0 and row["matchup"] == matchup
         } == legs
-    assert [row["matchup"] for row in projected if row["player"] == 1][:4] == [
+    assert [row["matchup"] for row in projected if row["seat"] == 1][:4] == [
         "AvL",
         "LvA",
         "LvA",
@@ -198,7 +198,7 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
     ]
     # The candidate plays Lessons in legs 0 and 3, so a deck matrix puts those
     # games in its Lessons column against the heuristic's Allies row.
-    candidate = [row for row in projected if row["player"] == 0]
+    candidate = [row for row in projected if row["seat"] == 0]
     assert {row["game"] for row in candidate if row["deck"] == "ur_lessons"} == {
         0,
         3,
