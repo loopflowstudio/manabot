@@ -281,9 +281,18 @@ def arena(
         checkpoint = player.checkpoint
         if file_sha256(player.path) != checkpoint.sha256:
             raise ValueError("checkpoint byte identity differs")
-        model, _ = load_checkpoint(str(player.path))
+        model, space = load_checkpoint(str(player.path))
+        # The checkpoint's own observation space (its saved policy-input
+        # version) names its ABI; served admission rejects any other.
+        own = runtime_fingerprints(
+            match_config=matchup.match(), observation_space=space
+        )
         return PlayerRegistration(
-            **common,
+            **{
+                **common,
+                "observation_abi_sha256": own["observation_abi_sha256"],
+                "action_abi_sha256": own["action_abi_sha256"],
+            },
             player_id=name,
             display_name=f"{checkpoint.trial} {checkpoint.seed} u{checkpoint.updates}",
             role=role,
