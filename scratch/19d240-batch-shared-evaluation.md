@@ -257,7 +257,8 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
   `group_worker_budget` (`max_active_games + 7`, or 8 without a runtime) is recorded only,
   in `play_cell`'s `performance.json` on every path.
 - Child modules are `module:function` targets, so tests swap
-  `match.GAME_WORKER` for fixture workers.
+  `match.GAME_WORKER` for fixture workers; the child imports the target module
+  inside the game budget, so fixture targets live in Torch-free modules.
 - Local measure: model-vs-model served game child 76 MB, 1 thread, no Torch;
   replay child 75 MB; former scalar checkpoint child 285 MB, 1 thread.
 
@@ -265,11 +266,17 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 Realign, 2026-10-27, at `46d52b1e0`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped (the stale `cold_scalar` argument was already removed in `fbbbd517a`). Full suite belongs to gate/CI.
 
-Open for gate (from earlier passes, history in git):
-`test_arena_lost_worker_retains_acknowledged_command` (both cases report
-`timeout` where `crash` is expected) fails with `native_game.py` at HEAD; the
-two `test_two_policies_never_share_a_forward_and_hung_service_is_bounded`
-cases failed only under concurrent load. Three `tests/sim` failures
+Implement, 2026-10-27: `test_arena_lost_worker_retains_acknowledged_command`
+timed out because its fixture child imported the Torch-loading test module
+(~7 s) inside the 5 s game budget. The fixture workers now live in Torch-free
+`tests/training/game_error_fixtures.py` (collector adapters moved to
+`test_game_error_recovery.py`): `pytest tests/training/test_game_errors.py
+tests/training/test_game_error_recovery.py tests/test_package_boundaries.py -q`
+→ 32 passed.
+
+Open for gate: the two
+`test_two_policies_never_share_a_forward_and_hung_service_is_bounded` cases
+failed only under concurrent load. Three `tests/sim` failures
 (conditional-search fixture digest, rollout card admission, seed-197 world
 binding) also fail at `ea8d0e874`. Remaining `spawn` uses (`eval/local.py`,
 `verify/competency`, `llm/*`, `_process.py`) are not game/replay/serving
