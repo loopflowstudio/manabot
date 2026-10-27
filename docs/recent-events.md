@@ -135,16 +135,18 @@ These are correctness fixtures, not scientific training or evaluation evidence.
 ## Current continuation input
 
 Public history and current continuation are separate inputs. Fresh
-`ObservationConfig` uses policy input v2: a native `relations[64,32]` float32
+`ObservationConfig` uses policy input v3: a native `relations[64,32]` float32
 buffer represents ordered stack entries, announced targets and clauses, chosen
-modes/abilities, kicker, reserved sacrifice, and suspended payment obligations.
+modes/abilities, kicker, reserved sacrifice, suspended payment obligations, and
+waiting triggers with their ability and causal context.
 The version is recorded in checkpoint configuration and world input binding.
 Loading a checkpoint whose observation configuration omits the version selects
-v1, with its original tensors, parameter names and meaning. Loading never trains
-or upgrades those weights. New training must use v2 to receive the added facts.
+v1. Explicit v2 configurations retain continuation input and their serialized
+version. Historical worlds still fail current-world admission; a version default
+does not upgrade weights or reinterpret their action head.
 
 V1 checkpoints still lack continuation input. A matched-input LLM comparison
-requires a policy trained on v2 and an explicitly matched public-history
+requires a policy trained with continuation input and an explicitly matched public-history
 treatment; card text versus semantic catalog programs remains a representation
 difference. This delivery selects no comparator, model or playing-strength run.
 
@@ -177,18 +179,22 @@ the mode, mana amounts and Lesson flag columns for each possible output. Columns
 Zero denotes absent selectors/links and padding. The model joins definitions to
 its existing card catalog, gathers object embeddings for links, and combines
 relation context with object and action embeddings. It never treats transport
-IDs as numeric features. Frame and target order remain numeric ordinal features;
-the channel has no writable memory across decisions.
+IDs as numeric features. Public stack and target order retain ordinal features.
+Pending-trigger frame ordinals are joins only: all rows for the selected frame
+are pooled into that action, so same-source occurrences retain causal/target
+context without learning occurrence numbers. The action join is checked and
+excluded from numeric features. The channel has no writable memory across decisions.
 
-Atomic text capture v2 retains these same typed frames alongside the unchanged
-schema-6 Observation. Native types validate portable viewer JSON; Python owns
+Atomic text capture v3 retains these same typed frames alongside the
+schema-7 Observation. Native types validate portable viewer JSON; Python owns
 formatting and the small capture envelope. Public definitions and their content
 digest are cached on the immutable native content pack. Origin-bound submission,
 reset/stale rejection and complete legal Commands retain their existing owners.
-The earlier unreleased capture-v1 prompt evidence remains historical evidence;
-it does not acquire v2 continuation facts.
+Earlier capture-v1/v2 evidence remains historical; it does not acquire v3
+trigger-order facts. Current capture, action ABI and hash identities belong to w14.
 
-Measure encode-only behavior with
+The v2 measurement protocol and receipts below are historical; they do not
+establish w14 performance. Measure encode-only behavior with
 `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`
 (`-- --legacy` isolates the old layout after refactoring). The seeded corpus
 contains priority, target, additional-cost and large-legal positions and reports

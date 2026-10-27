@@ -1,5 +1,5 @@
-//! Atomic, representation-neutral input for one acting decision. Schema 6 stays
-//! frozen; capture v2 shares native continuation, content and public-history
+//! Atomic, representation-neutral input for one acting decision. Capture v3
+//! combines schema-7 observations with native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,7 +18,7 @@ use crate::{
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
 /// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 2;
+pub const DECISION_CAPTURE_VERSION: u16 = 3;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {
@@ -205,7 +205,10 @@ mod tests {
         let before = serde_json::to_value(game.semantic_observation(actor).unwrap()).unwrap();
         let snapshot = game.capture_decision(actor, 0).unwrap();
         assert_eq!(serde_json::to_value(&snapshot.observation).unwrap(), before);
-        assert_eq!(snapshot.observation.identity.schema_version, 6);
+        assert_eq!(
+            snapshot.observation.identity.schema_version,
+            crate::decision::SEMANTIC_DECISION_VERSION
+        );
         assert_eq!(
             snapshot.digest,
             game.capture_decision(actor, 0).unwrap().digest

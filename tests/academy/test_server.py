@@ -518,7 +518,7 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
     assert trace_payload["end_reason"] == server.SESSION_EXPIRED_END_REASON
 
 
-def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
+def test_wire_message_includes_pending_action_log_on_observation(monkeypatch):
     session = server.GameSession()
     session.obs = SimpleNamespace(
         game_over=False,
@@ -534,7 +534,7 @@ def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
         end_reason="disconnect",
         timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_villain_log = ["Villain: Pass priority"]
+    session._pending_action_log = ["Villain: Pass priority"]
 
     session.published_prompt = SimpleNamespace(actions=[])
     monkeypatch.setattr(
@@ -552,10 +552,10 @@ def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
 
     assert payload["type"] == "observation"
     assert payload["log"] == ["Villain: Pass priority"]
-    assert session._pending_villain_log == []
+    assert session._pending_action_log == []
 
 
-def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
+def test_wire_message_includes_pending_action_log_on_game_over(monkeypatch):
     session = server.GameSession()
     session.obs = SimpleNamespace(game_over=True)
     session.trace = trace_store.Trace(
@@ -568,7 +568,7 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
         end_reason="disconnect",
         timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_villain_log = ["Villain: Attack with Gray Ogre"]
+    session._pending_action_log = ["Villain: Attack with Gray Ogre"]
 
     monkeypatch.setattr(
         session,
@@ -586,4 +586,4 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
     assert payload["type"] == "game_over"
     assert payload["winner"] == 1
     assert payload["log"] == ["Villain: Attack with Gray Ogre"]
-    assert session._pending_villain_log == []
+    assert session._pending_action_log == []

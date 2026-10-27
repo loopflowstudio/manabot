@@ -1218,6 +1218,30 @@
    "sha256": "bd3bada800271a8a7ded12b986b7a37048073dcb0f93ac150a3327aeed621a83",
    "bytes": 23509
   },
+  "experiments/data/haiku-mtg183-20261027/analysis.json": {
+   "sha256": "dc59a271f3b8a334260b094deee7522eff8884f3bcdb06eeeea581d242a172a0",
+   "bytes": 118887
+  },
+  "experiments/data/haiku-mtg183-20261027/archive.json": {
+   "sha256": "8598cf9dbeee864912f9cd7d4e849bea6ddd6efd85ba98a6148f4ad26bc40a22",
+   "bytes": 472
+  },
+  "experiments/data/haiku-mtg183-20261027/cost-probe.json": {
+   "sha256": "9895e0157f75eae9ff7773ad521615d2532dcbdab1e441a67fc4719d8466adf9",
+   "bytes": 1485
+  },
+  "experiments/data/haiku-mtg183-20261027/evidence.tar.gz": {
+   "sha256": "daa2f074f5c03723a12a1e032f62287ea3447fea36504c8923577b4f5416c656",
+   "bytes": 1040916791
+  },
+  "experiments/data/haiku-mtg183-20261027/manifest.json": {
+   "sha256": "5de07f28df8fc881a0485ba1deb4c7cd878da067b10ef7ba372cd5eca15727b4",
+   "bytes": 33576
+  },
+  "experiments/data/haiku-mtg183-20261027/source-files.json": {
+   "sha256": "0dee1f0947a520b52f2bb4e9d0617218e04705dd0ec434a4bf2681ac2ee21bcb",
+   "bytes": 27797
+  },
   "experiments/data/inference-policy-gpu/0e85d66534f3/game-attempts.json": {
    "sha256": "a1df0fa36fd7cfdb62a3d00ed3da612793b053441ddb30b9c4b165c0bae19e74",
    "bytes": 51901
