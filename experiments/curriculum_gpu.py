@@ -61,6 +61,11 @@ def benchmark(original: Benchmark) -> Benchmark:
                 update={
                     "players": (inference, anchor),
                     "conditions": conditions,
+                    "tags": tuple(
+                        tag + "-gpu" if tag in {"development", "held-out"} else tag
+                        for tag in matchup.tags
+                    )
+                    + ("gpu",),
                 }
             )
         )
