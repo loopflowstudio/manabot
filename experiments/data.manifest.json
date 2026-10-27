@@ -886,6 +886,14 @@
    "sha256": "8ab1c6db007ef6e8ed2718ba0996caa6a02fea95b278ab61b43947a5779113e5",
    "bytes": 1969
   },
+  "experiments/data/curriculum-175/initial-evaluation/operations.json": {
+   "sha256": "4243717944b87503caba87a495a8bc9309f008b63fca6d1a680678326f3318bb",
+   "bytes": 78208
+  },
+  "experiments/data/curriculum-175/initial-evaluation/outcomes.json": {
+   "sha256": "db72cbcf82afaefd295fa09bd92eb437c7483872fc393fd3c60461bb0ab83d6c",
+   "bytes": 354418
+  },
   "experiments/data/curriculum/analysis.json": {
    "sha256": "6983f9e9eaacd2fd9337df5c156b777f39bc717a780cf175dab1a0fbd69abdb5",
    "bytes": 24010
