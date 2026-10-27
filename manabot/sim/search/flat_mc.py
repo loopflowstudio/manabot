@@ -36,6 +36,7 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.action.compound import CompoundPolicy
+from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
 from manabot.verify.util import _select_agent_action
@@ -136,23 +137,6 @@ class FlatMCPlayer:
         self.stats.decision_seconds.append(elapsed)
         self.last_scores = np.asarray(scores, dtype=np.float32)
         return int(np.argmax(scores))
-
-
-class RandomMatchupPlayer:
-    """Uniform random over valid actions in the encoded observation.
-
-    Matches the RandomPolicy used for every historical vs-random baseline.
-    """
-
-    def __init__(self, seed: int = 0):
-        self._rng = np.random.default_rng(seed)
-
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-        del env
-        valid = np.flatnonzero(obs["actions_valid"] > 0)
-        if len(valid) == 0:
-            return 0
-        return int(self._rng.choice(valid))
 
 
 class AgentMatchupPlayer:

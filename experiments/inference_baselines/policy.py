@@ -93,7 +93,7 @@ def execute(
         max_commands=request.max_commands,
         matchup_mode=request.matchup_mode,
         authored_matchup=request.authored_matchup,
-        execution=execution if cell.execution else None,
+        execution=execution,
         legs=workload.legs,
         keep_game_logs=True,
     )

@@ -267,7 +267,7 @@ def test_policy_exception_retains_player_failure(monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("policy failed")
 
-    monkeypatch.setattr("manabot.sim.guidance.build_registered_player", fail)
+    monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
     messages = []
     execute_game(game, players, {}, 1, messages.append)
     result = messages[-1][1]

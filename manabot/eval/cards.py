@@ -52,7 +52,7 @@ def verification_spec(games: int) -> CardEvaluationSpec:
             observation_abi_sha256=runtime["observation_abi_sha256"],
             action_abi_sha256=runtime["action_abi_sha256"],
             matchup_sha256=runtime["matchup_sha256"],
-            source_sha256=source_digest(["manabot/sim/players.py"]),
+            source_sha256=source_digest(["manabot/sim/anchors.py"]),
             player_seed_derivation_id="arena-pair-deal-player-v1",
         )
         for name in ("verify-one", "verify-two")

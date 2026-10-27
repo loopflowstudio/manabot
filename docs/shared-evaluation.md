@@ -11,9 +11,12 @@ seed identities and frozen evidence retain their original meanings.
 `manabot.sim.execution.EvalExecution` declares a local evaluation allocation:
 CPU or CUDA float32, active-game limit, batch-row limit, batching delay,
 resident-model byte allowance, request timeout and absolute Unix deadline.
-The default registration remains historical CPU scalar execution. An explicit
-execution derives new registrations and a new arena compute envelope; it does
-not resume frozen results under different numerical assumptions.
+Evaluation checkpoint players are always served. When a cell with a flat
+checkpoint player declares no execution, `manabot.eval.execution.resolve_execution`
+gives `play_cell`, `evaluate` and the training monitor a CPU envelope that plays
+one game at a time. Execution derives new registrations and a new arena compute
+envelope, so checkpoint players that formerly played scalar in-child now have a
+new identity: their frozen scalar evidence stays as it was and is not reused.
 
 `EvalCompute` is the stable part of that declaration: device/dtype, batching,
 residency/cache settings and request limits identify the player and benchmark.
@@ -45,10 +48,25 @@ order within the row and delay limits, and each row samples from its own
 decision seed. Each batch moves to the device in one copy per dtype (float32
 observations, int64 catalog references).
 
+The execution engine is the part that turns admitted requests into forwards:
+the serving child's flush loop and `serving._infer` (process layout, batching,
+threads, device transfer). Everything before it is shared by CPU and CUDA:
+registration, `PolicyKey`, admission and setup validation, the
+`DecisionRequest`/`DecisionReply` protocol, game children, per-row seeds and
+sampling, and receipts. Today both devices use the same engine, one serial
+service per allocation with one Torch thread. A CPU host runs several
+allocations side by side (one per group of games) to use more cores. CPU-specific
+engine code, such as several inference workers per allocation or sizing intra-op
+threads to the allocation, waits for a `cpu32` calibration whose `serving.json`
+shows the service saturated (forward, transfer, sampling and assembly near its
+elapsed time).
+
 Game, replay and serving children start through `manabot.sim.child`, never
 `multiprocessing` spawn, so they do not re-import the evaluator's `__main__`.
-Model-vs-model game children and replay children never import Torch; games with
-an in-process scalar player (code anchors, unserved checkpoints, search) do.
+Game children whose players are served checkpoints or code players (random,
+scripted, heuristic, demo search; `manabot.sim.players`) never import Torch, nor
+do replay children. Only a game with a search player (flat-MC, PUCT, local
+update, which keep their policy beside their rollouts) loads Torch in-child.
 Every child starts with single-threaded library pools
 (`manabot.sim.threads.child_environment`) and counts its own threads against a
 declared budget: 4 for game and replay children, 16 for serving. Exceeding it
@@ -61,9 +79,8 @@ or 8 without one; this budget is recorded for calibration, not enforced.
 `effective_cpus()` honors affinity masks and cgroup quotas, unlike
 `os.cpu_count()`, which reports the host inside containers.
 
-Ordinary flat, stateless checkpoints and random/scripted/heuristic anchors are
-supported. Compound, belief and search players retain their existing scalar
-path. Explicit shared execution rejects them before playing any games.
+Ordinary flat, stateless checkpoints are served. Code and search players keep
+their registrations under an execution and play in their game child.
 
 ```python
 from pathlib import Path
@@ -325,9 +342,9 @@ It requires four explicit configurations
 (`cold_scalar`, `resident_only`, `resident_catalog`, `batched`), three interleaved
 repetitions, named panels wrapping the same `EvaluationRequest`, retained-root population, numerical
 and action-agreement tolerances, speedup and instrumentation-overhead thresholds,
-process-tree memory cap and absolute deadline. Cold scalar uses original
-per-game checkpoint construction. Each panel uses the shared evaluator's fresh
-attempt and complete-cohort validation; replayed partial panels cannot pass.
+process-tree memory cap and absolute deadline. Cold scalar is served, one row
+per forward, without residency or catalog cache. Each panel uses the shared
+evaluator's fresh attempt and complete-cohort validation; replayed partial panels cannot pass.
 Every repetition/failure is retained; numerical
 and instrumentation probes run outside throughput timing, on identical retained
 inputs and row seeds in killable processes. Memory limits include descendants.

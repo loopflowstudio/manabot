@@ -19,7 +19,7 @@ from uuid import uuid4
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.eval.execution import bind_execution
+from manabot.eval.execution import bind_execution, is_served, resolve_execution
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval
@@ -265,12 +265,15 @@ def _execute_attempt(
 def _execution(
     execution: EvalExecution | None,
     inference: InferenceRuntime | InferenceEndpoint | None,
+    request: EvaluationRequest,
 ) -> EvalExecution | None:
-    if inference is not None:
-        if execution is not None and execution != inference.execution:
-            raise ValueError("conflicting execution declaration")
-        return inference.execution
-    return execution
+    return resolve_execution(
+        execution,
+        inference,
+        serves=any(is_served(p) for p in (request.candidate, request.opponent)),
+        games=request.expected_games,
+        game_seconds=request.game_seconds,
+    )
 
 
 def evaluate(
@@ -286,7 +289,7 @@ def evaluate(
     Explicit continuation uses continue_evaluation. The first attempt stays at
     this root; subsequent attempts retain their own subdirectories and receipts.
     """
-    execution = _execution(execution, inference)
+    execution = _execution(execution, inference, request)
     if execution is not None:
         request = request.bind(execution)
     out_dir.mkdir(parents=True, exist_ok=False)
@@ -415,7 +418,6 @@ def continue_evaluation(
     relocation changes no checkpoint identity. This is filesystem continuation,
     not an object-store lease or an automatic retry after machine loss.
     """
-    execution = _execution(execution, inference)
     with exclusive_file_lock(directory / ".evaluation.lock"), ExitStack() as claims:
         prior = [directory, *sorted((directory / "attempts").glob("*/"))]
         for attempt in prior:
@@ -424,6 +426,7 @@ def continue_evaluation(
         if result.evaluation_id is None:
             raise ValueError("historical evaluation has no continuation identity")
         original = result.request
+        execution = _execution(execution, inference, original)
         if (execution.compute if execution else None) != (
             result.execution.compute if result.execution else None
         ):

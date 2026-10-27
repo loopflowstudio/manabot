@@ -557,7 +557,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
     assert replay["passed"]
 
 
-def test_expired_allocation_and_unsupported_players_start_no_games(
+def test_expired_allocation_starts_no_games_and_search_stays_unbound(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="deadline"):
@@ -568,12 +568,13 @@ def test_expired_allocation_and_unsupported_players_start_no_games(
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
     )
-    with pytest.raises(ValueError, match="stateless"):
-        bind_execution(
-            contract.key,
-            (contract.anchors[2],),
-            EvalExecution(deadline_unix=time.time() + 30),
-        )
+    # Search players keep their registration and play in their game child.
+    _, (search,) = bind_execution(
+        contract.key,
+        (contract.anchors[2],),
+        EvalExecution(deadline_unix=time.time() + 30),
+    )
+    assert search == contract.anchors[2]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA runner")

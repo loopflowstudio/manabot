@@ -1,8 +1,51 @@
 """Bind comparison identities to an explicit simulation compute envelope."""
 
+from __future__ import annotations
+
+import time
+from typing import TYPE_CHECKING
+
 from manabot.eval.models import EvaluationKey
 from manabot.sim.execution import EvalExecution
 from manabot.sim.registration import PlayerRegistration
+from manabot.sim.serving_protocol import InferenceRuntime
+
+if TYPE_CHECKING:
+    from manabot.eval.endpoint import InferenceEndpoint
+
+
+def is_served(player: PlayerRegistration) -> bool:
+    """Flat checkpoint players play through shared inference in evaluation."""
+    return (
+        player.runner_kind == "checkpoint"
+        and player.player_spec.get("kind") == "checkpoint"
+    )
+
+
+def resolve_execution(
+    execution: EvalExecution | None,
+    inference: InferenceRuntime | InferenceEndpoint | None,
+    *,
+    serves: bool,
+    games: int,
+    game_seconds: float,
+) -> EvalExecution | None:
+    """The declared allocation, or local CPU serving when `serves` declares none.
+
+    A running service fixes the allocation. Local serving plays one game at a
+    time; its deadline covers every game and its replay.
+    """
+    if inference is not None:
+        if execution is not None and execution != inference.execution:
+            raise ValueError("conflicting execution declaration")
+        return inference.execution
+    if execution is None and serves:
+        return EvalExecution(
+            device="cpu",
+            max_active_games=1,
+            deadline_unix=time.time() + 2 * games * game_seconds,
+        )
+    return execution
 
 
 def bind_execution(
@@ -10,14 +53,16 @@ def bind_execution(
     players: tuple[PlayerRegistration, ...],
     execution: EvalExecution,
 ) -> tuple[EvaluationKey, tuple[PlayerRegistration, ...]]:
-    """Derive compute-bound copies without modifying frozen inputs."""
+    """Derive compute-bound copies without modifying frozen inputs.
+
+    Flat checkpoint players are bound to the shared service. Code and search
+    players keep their registrations and play in their game child.
+    """
     compute = execution.compute.model_dump()
     bound = []
     for player in players:
         spec = dict(player.player_spec)
-        if player.runner_kind == "checkpoint":
-            if spec.get("kind") != "checkpoint":
-                raise ValueError("shared inference requires ordinary flat checkpoints")
+        if is_served(player):
             existing = spec.get("execution")
             if existing is not None and existing != compute:
                 raise ValueError("conflicting execution declaration")
@@ -33,8 +78,6 @@ def bind_execution(
                     "compute_class_id": execution.identity,
                 }
             )
-        elif spec.get("kind") not in {"random", "scripted_greedy", "heuristic"}:
-            raise ValueError("shared evaluation supports stateless anchors only")
         bound.append(player)
     if key.evaluation_compute_envelope_id.startswith("shared-eval-") and (
         key.evaluation_compute_envelope_id != execution.identity

@@ -12,12 +12,12 @@ live at `ce43a5cf7:scratch/questions.md`.
 - **Open — oversubscription culprit:** not reproducible on macOS. The rental
   thread census by role and thread name decides which pool caused ~1,000
   threads on `cpu32`; the bound is enforced regardless.
-- **Coordination:** the before/after calibration runs through MTG-183's
-  rental runner and allowance (< $1.50); this Task launches no rentals itself.
-- **Gap — code anchors still load Torch in-child:** heuristic/random/scripted
-  players are built through `flat_mc`/`players`, which import Torch. The accepted
-  scope (MTG-183's model-vs-model cohort) is fully served and Torch-free;
-  splitting `flat_mc` so code-anchor games are light is a candidate follow-up.
+- **Rentals (Jack Heart, 2026-10-27):** MTG-193 may launch its own machines,
+  under $5 total, with a spend ledger. MTG-183's runner is on its branch.
+- **Decided (Jack Heart, 2026-10-27):** code anchors become Torch-free in
+  #389, and evaluation checkpoint players become served-only, gated on a
+  `cpu32` served-CPU calibration arm against `cpu32` scalar. See concept review
+  4 in the design.
 - **Assumption — supervisor census recorded, not enforced:** the group-worker
   parent hosts Etude callbacks and checkpoint preparation whose threads this
   change does not own; failing an allocation at close would discard results.
@@ -40,3 +40,38 @@ support; these paths do not implement MTG-193's shared evaluation changes.
 Keep this branch's assumptions above. The target's MTG-188 notes remain at
 `b8820b0d9e9160086d8acc13075638003c61b3e5:scratch/questions.md` as historical
 context, not new execution direction. No rental is launched by this sync.
+
+## Served-only and Torch-free anchors — implement 2026-10-27
+
+- **Assumption — in-child checkpoint search players keep `torch.manual_seed`:**
+  agent PUCT, policy-prior PUCT and local update still play in-child; only the
+  plain `checkpoint` kind left the child, so only its seeding went with it.
+- **Assumption — local CPU envelope (`resolve_execution`):** callers without an allocation
+  (monitor, study, attack, card evaluation, `evaluate.py`, experiment runners)
+  serve on CPU with `max_active_games=1` (games stay sequential, as before) and
+  default batching; deadline `2 × games × game_seconds` covers play and replay.
+  The CPU engine work (Jack Heart's engine-boundary steer) may change these.
+- **Changed — the training monitor plays one panel:** it always declares an
+  execution (local CPU serving when none is given), so all deals share one
+  CPU service instead of one `evaluate` call per deal. Block retention still
+  comes from `rows.json` after each completed deal.
+- **Changed — `bind_execution` admits code and search players** unchanged into
+  served cells (they play in their child); before, any non-anchor was rejected.
+- **Changed — `serving_benchmark`'s `cold_scalar` arm is served** (one row,
+  not resident, no catalog cache). Frozen experiment runners (MTG-181 grid,
+  MTG-186, MTG-183 head-to-head) now serve too; reruns get new identities.
+
+## Engine boundary — implement 2026-10-27
+
+- **Decision — no CPU-specific engine code yet:** a CPU host already gets
+  several serial CPU services by running several allocations (one per group).
+  exp-07 measured batched CPU inference at about 12× scalar obs/s. If the `cpu32`
+  served arm is slower than scalar and `serving.json` shows the service
+  saturated, the first candidates are several workers per allocation and then
+  intra-op threads. Both are allocation settings; intra-op threads could change
+  numerics, so they would need a compute-contract decision.
+- **Not run — rental calibration:** this is an operator step (cross-branch
+  runner, paid machines, shared storage). The headless implement pass did not
+  launch it. No spend: the ledger is $0.00 of $5.
+- **Search players stay in-child (Jack Heart, 2026-10-27):** serving search
+  players' model calls is out of scope for MTG-193; follow-up MTG-205.

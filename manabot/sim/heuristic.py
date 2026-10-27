@@ -44,8 +44,8 @@ turn. Mana is approximated by untapped lands, ignoring colors and other
 sources. Creature identity uses the visible card definitions; a permanent
 without one counts as a creature when its toughness is positive.
 
-This lives outside `players.py` because arena registrations pin that file's
-bytes as the v1 and demo-search source identity; v1 stays frozen.
+This lives outside `anchors.py` because arena registrations pin that file's
+bytes as the v1 source identity; v1 stays frozen.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, 
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.sim.players import ScriptedGreedyPlayer
+from manabot.sim.anchors import ScriptedGreedyPlayer
 import managym
 
 Polarity = Literal["harmful", "beneficial"]
@@ -224,7 +224,7 @@ def heuristic_source_paths() -> list[Path]:
     sim = Path(__file__).resolve().parent
     return [
         Path(__file__).resolve(),
-        sim / "players.py",
+        sim / "anchors.py",
         *SEMANTIC_SOURCES,
     ]
 

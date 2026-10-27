@@ -11,7 +11,7 @@ import psutil
 
 from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.evaluation import evaluate
-from manabot.eval.execution import bind_execution
+from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
 from manabot.infra.files import atomic_json
@@ -185,10 +185,15 @@ def evaluate_checkpoint(
     inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
-    if inference is not None:
-        if execution is not None and execution != inference.execution:
-            raise ValueError("conflicting execution declaration")
-        execution = inference.execution
+    protocol = protocol or MonitorProtocol()
+    # The monitored checkpoint is always served.
+    execution = resolve_execution(
+        execution,
+        inference,
+        serves=True,
+        games=protocol.legs * len(protocol.deal_seeds),
+        game_seconds=protocol.game_seconds,
+    )
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
     started_unix = time.time()
@@ -199,7 +204,7 @@ def evaluate_checkpoint(
             run,
             artifact,
             coordinates,
-            protocol or MonitorProtocol(),
+            protocol,
             execution=execution,
         )
     except Exception as exc:
@@ -220,27 +225,19 @@ def evaluate_checkpoint(
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     try:
-        panels = (
-            [result.protocol.deal_seeds]
-            if execution
-            else [(seed,) for seed in result.protocol.deal_seeds]
+        # One panel serves every deal; the arena persists command traces and
+        # completed blocks after every attempted game.
+        directory = output_dir / "deal-000"
+        panel = evaluate(
+            _request(result, result.protocol.deal_seeds),
+            out_dir=directory,
+            execution=execution,
+            inference=inference,
         )
-        for block, seeds in enumerate(panels):
-            directory = output_dir / f"deal-{block:03d}"
-            # The arena persists command traces after every attempted game.
-            panel = evaluate(
-                _request(result, tuple(seeds)),
-                out_dir=directory,
-                execution=execution,
-                inference=inference,
-            )
-            for row in panel.rows:
-                row.trace_path = str(Path(directory.name) / row.trace_path)
-                result.rows.append(row)
-            if panel.error:
-                result.error = panel.error
-                break
-            atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
+        for row in panel.rows:
+            row.trace_path = str(Path(directory.name) / row.trace_path)
+            result.rows.append(row)
+        result.error = panel.error
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
     finally:

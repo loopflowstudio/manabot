@@ -1,38 +1,108 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MTG-193 concept review 3</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-193 concept review</title>
 <style>
-:root{--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--prop:#8a5a00;--code:#f0ede6}
-@media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--rule:#3a3833;--prop:#e0b060;--code:#2a2925}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,serif}
-main{max-width:42rem;margin:0 auto;padding:2rem 1.25rem 4rem}
-header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
-h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2.2rem;border-top:1px solid var(--rule);padding-top:1rem}
-code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.88em}
-table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--rule);padding:.4rem .3rem;text-align:left;vertical-align:top}
-.callout{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem}
-</style></head><body><main>
+:root{--bg:#fbfaf7;--fg:#1f1d1a;--muted:#6b665e;--rule:#e2ded6;--code:#f1eee8;--accent:#8a4b12;--prop:#1d5f8a;--prop-bg:#eaf2f8}
+@media (prefers-color-scheme:dark){:root{--bg:#171614;--fg:#ebe7df;--muted:#a09a90;--rule:#34312c;--code:#24221f;--accent:#e0a060;--prop:#7cb8e0;--prop-bg:#1b2933}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
+header p{margin:.2rem 0;color:var(--muted);font-size:.9rem}
+h1{font-size:1.5rem;margin:.6rem 0 .4rem;line-height:1.3}
+h2{font-size:1.1rem;margin:2.6rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
+h3{font-size:1rem;margin:1.6rem 0 .4rem}
+code{background:var(--code);padding:.05em .3em;border-radius:3px;font-size:.88em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.lead{font-size:1.08rem}
+.flow{display:grid;grid-template-columns:7.5rem 1fr;gap:.35rem 1rem;margin:.6rem 0 1rem}
+.flow dt{color:var(--muted);font-size:.9rem;padding-top:.1rem}
+.flow dd{margin:0}
+.proposed{background:var(--prop-bg);border-left:3px solid var(--prop);padding:.8rem 1rem;margin:1rem 0;border-radius:0 4px 4px 0}
+.proposed .tag{color:var(--prop);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+.mismatch{border-left:3px solid var(--accent);padding:.2rem 1rem;margin:1rem 0}
+ol.q>li{margin-bottom:1rem}
+ol.q ol{list-style:lower-alpha;margin-top:.3rem}
+ol.q ol li{margin:.15rem 0}
+.rec{color:var(--muted);font-size:.9rem}
+@media (max-width:520px){.flow{grid-template-columns:1fr}.flow dt{padding-top:.6rem}}
+</style>
+</head>
+<body>
+<main>
 <header>
-<h1>Concept review 3: batched shared evaluation, light bounded children</h1>
-<p>Task MTG-193 · step concept-review (headless) · 2026-10-26 · HEAD <code>2cc89c948</code></p>
-<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/serving_protocol.py</code>, <code>manabot/sim/threads.py</code>, <code>manabot/eval/match.py</code>, <code>manabot/sim/native_game.py</code>, <code>manabot/verify/scenarios.py</code></p>
+<p>MTG-193 · Batch shared evaluation inference across matchups and lighten game processes</p>
+<p>Concept review with Jack Heart · 2026-10-27 · PR #389 at <code>ea8d0e874</code></p>
+<p>Built from <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/native_game.py</code>, <code>manabot/sim/execution.py</code>, <code>manabot/sim/serving_protocol.py</code></p>
 </header>
 
-<p><strong>Decision needed:</strong> none. Nothing changes, and the step advances.</p>
+<h1>Should a checkpoint have one way to play in evaluation?</h1>
+<div class="proposed"><p class="tag">Decided · Jack Heart · 2026-10-27 · “1a 2b 3b”</p>
+<p>Evaluation checkpoint players become served-only, landing only once the <code>cpu32</code> served-CPU arm shows it isn't slower than scalar. Code anchors become Torch-free in #389. Both extend MTG-193. Next implement direction: concept review 4 in <code>scratch/19d240-batch-shared-evaluation.md</code>.</p></div>
+<p class="lead">PR #389 makes <em>served</em> checkpoint play fast and light. But evaluation still has a second, <em>scalar</em> way to play a checkpoint, and that is the path the worst baseline (<code>cpu32</code>, about 1,700 games/hour) uses. The decision I need: do we keep both, or does every checkpoint in evaluation play served, with CPU serving as the CPU path?</p>
 
-<h2>Actions → concepts → APIs (existing, verified)</h2>
-<table>
-<tr><th>Operator action</th><th>Concept</th><th>API</th></tr>
-<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world and numerics. The matchup appears only in admission and evidence.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
-<tr><td>Run many games cheaply</td><td>Child process: a <code>module:function</code> target that does not import the parent's <code>__main__</code> and does not load Torch when served</td><td><code>ChildProcess</code>, <code>native_game</code></td></tr>
-<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census, including <code>group_worker</code></td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>group_worker_budget</code>, <code>effective_cpus</code></td></tr>
-</table>
+<h2>What an evaluator does today</h2>
+<dl class="flow">
+<dt>Action</dt><dd>Rate checkpoint A against checkpoint B over a matchup suite, on a GPU box or a CPU box.</dd>
+<dt>Concepts</dt><dd>Registered player (checkpoint + optional <code>EvalCompute</code>) · matchup · cell (deal block) · <code>PolicyKey</code> · game child.</dd>
+<dt>Choice they must make</dt><dd>Set <code>execution</code> and get <b>served</b> play, or leave it <code>None</code> and get <b>scalar</b> play. The choice becomes part of player identity.</dd>
+<dt>APIs</dt><dd><code>play_cell(…, execution=EvalExecution(device="cuda"|"cpu"))</code> → <code>InferenceRuntime</code> + <code>native_game:game_worker</code>; with <code>execution=None</code>, <code>_ScalarPlayers</code> builds the policy inside each game child.</dd>
+</dl>
 
-<h2>Only finding: the record, not the code</h2>
-<div class="callout">
-<p>Review 2 recorded that no private name crosses a module boundary. One still does: <code>native_game</code> imports <code>supervision._failure</code>. That import came unchanged from <code>main</code>, where <code>sim/match.py</code> had it at <code>f5e7289b1</code>. It is kept out of this Task's diff, and the working design now records the correction.</p>
+<h3>What each path gets from this PR</h3>
+<dl class="flow">
+<dt>Served</dt><dd>One resident policy per checkpoint across matchups, batched forwards, 2 transfers per batch, Torch-free 76 MB children, bounded threads.</dd>
+<dt>Scalar</dt><dd>Bounded threads only. Each child still imports Torch and loads the checkpoint (285 MB measured locally) and runs one forward per decision.</dd>
+</dl>
+
+<div class="mismatch">
+<p><b>The mismatch.</b> The Task says “every game process loads Torch” is a limit, and its <code>cpu32</code> numbers come from scalar play. The PR fixes that limit only for players that opt into serving. Evaluators still have to know about the two paths, and choosing the faster, lighter one changes player identity.</p>
 </div>
 
+<h2>The simpler interaction</h2>
+<div class="proposed">
+<p class="tag">Proposed</p>
+<dl class="flow">
+<dt>Action</dt><dd>Same: rate A against B on a GPU or CPU box.</dd>
+<dt>Concepts</dt><dd>A checkpoint player <b>is</b> served. The only remaining choice is the device: <code>EvalCompute(device="cpu")</code> or <code>"cuda"</code>. Search players (flat-MC, PUCT, local update) keep the policy beside their rollouts in the child. Code anchors (heuristic, random, scripted) run Torch-free.</dd>
+<dt>APIs</dt><dd><code>play_cell</code> requires <code>execution</code> for checkpoint players; <code>_ScalarPlayers</code> builds only search players; <code>flat_mc</code> is split so code anchors import no Torch.</dd>
+<dt>Machinery removed</dt><dd>The scalar checkpoint branch in <code>native_game</code>, and <code>torch.manual_seed</code> for checkpoint players.</dd>
+</dl>
+</div>
+
+<h3>Normal path, failure, recovery</h3>
+<dl class="flow">
+<dt>Normal</dt><dd><code>cpu32</code>: a few group workers share one CPU service each, so forwards batch across 64 games instead of running 30 × N single-row forwards.</dd>
+<dt>Failure</dt><dd>The CPU service dies or hangs. As on GPU today, the allocation fails as infrastructure: games are not forfeited, and completed deal evidence is kept.</dd>
+<dt>Must survive</dt><dd>Frozen scalar evidence and ratings stay exactly as they are; replay verification is unchanged.</dd>
+<dt>Deliberately changes</dt><dd>Formerly scalar checkpoint players get a new identity, so their Commands differ and old scalar deal evidence is not reused.</dd>
+<dt>Counterexample</dt><dd>One serial CPU service could lose to 30 parallel in-child forwards on 32 vCPUs. exp-07 measured batched CPU inference at about 12× the obs/s, but not under game load. One extra rental arm, <code>cpu32</code> served CPU against <code>cpu32</code> scalar, settles it.</dd>
+</dl>
+
 <h2>Questions</h2>
-<ol><li>None open. The remaining work is slice 5: the rental before/after run through MTG-183, which also settles the budgets, the RSS target and the cause of the oversubscription (<code>scratch/questions.md</code>).</li></ol>
-</main></body></html>
+<ol class="q">
+<li>Checkpoint play in evaluation:
+  <ol>
+  <li>Served only; retire scalar checkpoint play once the CPU arm shows it isn't slower.</li>
+  <li>Keep both, and add the served-CPU arm to the rental only to measure. <span class="rec">(my recommendation: measure first, decide on evidence)</span></li>
+  <li>Keep both as they are; no extra arm.</li>
+  </ol>
+</li>
+<li>Torch-free code anchors (the <code>flat_mc</code> split):
+  <ol>
+  <li>A follow-up Task. <span class="rec">(recommended: PR #389 is published, with CI pending)</span></li>
+  <li>Add it to PR #389.</li>
+  <li>Not needed; anchor games are a small share of evaluation.</li>
+  </ol>
+</li>
+<li>If (1a) wins, where does it live?
+  <ol>
+  <li>A new Task after #389 lands, which owns the identity change and its documentation.</li>
+  <li>Extend MTG-193.</li>
+  </ol>
+</li>
+</ol>
+</main>
+</body>
+</html>

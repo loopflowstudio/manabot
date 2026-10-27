@@ -14,8 +14,8 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.sim.guidance import build_registered_player
 from manabot.sim.native_game import execute_game
-from manabot.sim.players import build_player
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
@@ -312,10 +312,10 @@ def test_registered_puct_completes_games_and_replays(
         }
     )
     with pytest.raises(ValueError, match="source drift"):
-        build_player(drift, seed=1, checkpoint_path=str(path))
+        build_registered_player(drift, seed=1, checkpoint_path=str(path))
     wrong_bytes = candidate.model_copy(update={"checkpoint_sha256": identity})
     with pytest.raises(ValueError, match="byte identity drift"):
-        build_player(wrong_bytes, seed=1, checkpoint_path=str(path))
+        build_registered_player(wrong_bytes, seed=1, checkpoint_path=str(path))
     opponent = PlayerRegistration(
         **common,
         player_id="random-fixture",

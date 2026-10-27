@@ -2,11 +2,12 @@
 
 `supervise_game` launches `game_worker` as a `ChildProcess`. The child builds
 viewer-safe frames, sends each pending Command for durable acknowledgement
-before native execution, and reports the settled game. Served players reach
-their policy through the supervisor's inference runtime, so a served game child
-never imports Torch. Scalar players (code, checkpoint and search policies) are
-built in-process by `_ScalarPlayers`, the one place this module imports
-Torch-bearing code.
+before native execution, and reports the settled game. Checkpoint players
+are served: they reach their policy through the supervisor's inference runtime.
+Code players (anchors, heuristic) are built Torch-free, so a game between them
+and served players never imports Torch. Search players (flat-MC, PUCT, local
+update) keep their policy in-child; `_ScalarPlayers` is the one place this
+module imports Torch-bearing code.
 
 Before reporting, the child counts its threads against the declared game
 budget; exceeding it is an infrastructure failure, not a forfeit.
@@ -36,6 +37,7 @@ from manabot.infra.provenance import (
 from manabot.sim.execution import EvalExecution
 from manabot.sim.frames import build_command, build_viewer_frame
 from manabot.sim.performance import EvalPerformance
+from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import replay_environment
 from manabot.sim.serving_protocol import (
@@ -51,9 +53,11 @@ from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
 class _ScalarPlayers:
     """Builds in-process players and answers which game hooks they take.
 
-    Only search players that track the whole game receive `start_game`, and
-    only local-update players observe each step, exactly as registered
-    policies always have. Torch loads on the first scalar build.
+    Code players (anchors, heuristic, demo search) come from the Torch-free
+    `players` module. Search players load Torch on their first build. Only
+    search players that track the whole game receive `start_game`, and only
+    local-update players observe each step, exactly as registered policies
+    always have.
     """
 
     def __init__(self) -> None:
@@ -68,6 +72,10 @@ class _ScalarPlayers:
         seed: int,
         checkpoint_path: str | None,
     ) -> tuple[Any, ObservationSpace | None]:
+        if registration.player_spec["kind"] in CODE_PLAYER_KINDS:
+            return build_code_player(registration, seed=seed), None
+        if registration.player_spec["kind"] == "checkpoint":
+            raise InferenceFailure("evaluation checkpoint players play served")
         if self._torch is None:
             import torch
 
@@ -84,15 +92,15 @@ class _ScalarPlayers:
         )
 
     def starts_game(self, player: Any) -> bool:
-        assert self._local_update is not None and self._puct is not None
-        return isinstance(player, (self._local_update, self._puct))
+        return self._puct is not None and isinstance(
+            player, (self._local_update, self._puct)
+        )
 
     def observes_steps(self, player: Any) -> bool:
-        assert self._local_update is not None
-        return isinstance(player, self._local_update)
+        return self._local_update is not None and isinstance(player, self._local_update)
 
     def seed(self, seed: int) -> None:
-        """Seed Torch's global generator before a scalar checkpoint decision."""
+        """Seed Torch's global generator before a checkpoint-guided search decision."""
         self._torch.manual_seed(seed)
 
 
@@ -115,8 +123,8 @@ def execute_game(
 ) -> None:
     """Play one game, sending phase, pending and decision events, then its result.
 
-    Served players reach a policy only through `infer`; scalar players are built
-    in-process (`_ScalarPlayers`), the only path that imports Torch.
+    Served players reach a policy only through `infer`; code and search players
+    are built in-process (`_ScalarPlayers`); only search players import Torch.
     """
     responsible = None
     perf = EvalPerformance(

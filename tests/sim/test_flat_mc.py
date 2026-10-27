@@ -12,12 +12,12 @@ from manabot.belief import ManabotPlayer
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.sim.anchors import RandomMatchupPlayer
 import manabot.sim.search.flat_mc as flat_mc
 from manabot.sim.search.flat_mc import (
     AgentMatchupPlayer,
     FlatMCPlayer,
     GameRecord,
-    RandomMatchupPlayer,
     aggregate_records,
     make_player,
     play_games,

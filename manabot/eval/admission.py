@@ -17,7 +17,7 @@ from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
-from manabot.sim import players
+from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
 
@@ -99,7 +99,7 @@ def register_anchor(
     source = (
         source_bundle_sha256([Path(path) for path in heuristic_source_paths()])
         if kind == "heuristic"
-        else file_sha256(Path(players.__file__))
+        else file_sha256(Path(anchors.__file__))
     )
     common = candidate.model_dump(
         include={

@@ -327,16 +327,11 @@ def _panel_worker(
     connection: Connection,
     panel: Panel,
     execution: EvalExecution,
-    name: Variant,
     directory: Path,
 ) -> None:
     started = time.monotonic()
     try:
-        result = evaluate(
-            panel.request,
-            out_dir=directory,
-            execution=None if name == "cold_scalar" else execution,
-        )
+        result = evaluate(panel.request, out_dir=directory, execution=execution)
         connection.send(
             {
                 "passed": result.status == "completed",
@@ -406,7 +401,7 @@ def run(plan_path: Path, out: Path) -> dict[str, Any]:
                     execution = plan.configurations[name]
                     attempt.update(
                         _bounded_probe(
-                            _panel_worker, (panel, execution, name, directory), plan
+                            _panel_worker, (panel, execution, directory), plan
                         )
                     )
                     attempt.setdefault("seconds", time.monotonic() - started)

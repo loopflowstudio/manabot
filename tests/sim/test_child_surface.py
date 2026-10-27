@@ -44,13 +44,14 @@ _PARENT_MAIN = textwrap.dedent(
     out = Path(sys.argv[1])
     key, player, anchor, path = fixture_policy(out)
     _, other, _, other_path = fixture_policy(out, 84)
+    search = anchor.model_copy(
+        update={"player_id": "search-1", "player_spec": {"kind": "search", "sims": 1}}
+    )
     served = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
     report = {}
-    # Model-vs-model games are fully served. A code anchor is a scalar player.
-    for mode, opponent, execution in (
-        ("served", other, served),
-        ("scalar", anchor, None),
-    ):
+    # Checkpoints are always served. A code anchor plays Torch-free in-child;
+    # a search player is the one in-child Torch consumer.
+    for mode, opponent in (("served", other), ("anchor", anchor), ("search", search)):
         _, trace, replay = play_cell(
             key=key,
             player_a=player,
@@ -58,7 +59,7 @@ _PARENT_MAIN = textwrap.dedent(
             deal_seeds=(831,),
             out_dir=out / mode,
             checkpoint_paths={player.player_id: str(path), other.player_id: str(other_path)},
-            execution=execution,
+            execution=served,
             max_commands=4,
         )
         games = read_trace(Path(trace["path"]))
@@ -96,11 +97,14 @@ def child_report(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
     return json.loads(completed.stdout.splitlines()[-1])
 
 
-def test_served_game_child_never_imports_torch(child_report: dict) -> None:
-    served = child_report["served"]
-    assert served["replay_passed"] and served["failures"] == []
+@pytest.mark.parametrize("mode", ["served", "anchor"])
+def test_served_and_code_anchor_game_children_never_import_torch(
+    child_report: dict, mode: str
+) -> None:
+    report = child_report[mode]
+    assert report["replay_passed"] and report["failures"] == []
 
-    for counters in served["children"]:
+    for counters in report["children"]:
         assert counters["torch_loaded/game"] == 0
         assert 1 <= counters["threads/game"] <= GAME_BUDGET.threads
         assert counters["threads_budget/game"] == GAME_BUDGET.threads
@@ -114,11 +118,10 @@ def test_replay_child_never_imports_torch(child_report: dict) -> None:
     assert replay["process"]["threads/replay"] <= REPLAY_BUDGET.threads
 
 
-def test_scalar_game_child_stays_within_budget(child_report: dict) -> None:
-    scalar = child_report["scalar"]
-    assert scalar["replay_passed"] and scalar["failures"] == []
-    for counters in scalar["children"]:
-        # Scalar players are the one in-child Torch consumer.
+def test_search_game_child_stays_within_budget(child_report: dict) -> None:
+    search = child_report["search"]
+    assert search["replay_passed"] and search["failures"] == []
+    for counters in search["children"]:
         assert counters["torch_loaded/game"] == 1
         assert counters["threads/game"] <= GAME_BUDGET.threads
 
