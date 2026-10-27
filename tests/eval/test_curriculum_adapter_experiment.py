@@ -27,6 +27,12 @@ def test_four_arms_share_learning_and_initialization_with_inclusive_reserves() -
         assert run.job.max_attempts == 1
         assert run.job.max_usd + study.RESERVE_USD <= 10
         assert spec.milestones == study.CADENCE
+        assert spec.initial_checkpoint is not None
+        assert spec.initial_checkpoint.key == (
+            "jobs/mtg183-elemental-long-w1/runtime/artifacts/sha256/"
+            "1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688"
+        )
+        assert run.job.inputs[0].key == spec.initial_checkpoint.key
         stage = spec.regime.stages[0]
         assert isinstance(stage, TrainSelfPlay)
         assert stage.adaptive is not None and len(stage.adaptive.cells) == 100
@@ -191,6 +197,13 @@ def test_cost_selection_uses_first_seen_cost_and_never_backdates_exports(
         now,
     )
     assert ledger.selections()[run.name].clocks["updates"] == 200
+    prior = CostLedger(arms={run.name: "M"}, prior_dollars={run.name: Decimal("0.80")})
+    prior.add(
+        ExperimentState(experiment=study.EXPERIMENT, runs=(early,)),
+        {run.name: status},
+        now,
+    )
+    assert prior.selections() == {}
     ledger.add(
         ExperimentState(experiment=study.EXPERIMENT, runs=(run,)),
         {

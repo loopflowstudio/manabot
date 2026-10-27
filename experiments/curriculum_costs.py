@@ -31,10 +31,11 @@ class CostObservation(BaseModel):
     checkpoint: Checkpoint
     launcher: Status
     reserve_dollars: Decimal = Field(default=Decimal("0.50"), ge=0)
+    prior_dollars: Decimal = Field(default=Decimal(0), ge=0, le=10)
 
     @property
     def inclusive_dollars(self) -> Decimal:
-        return self.launcher.usd + self.reserve_dollars
+        return self.launcher.usd + self.reserve_dollars + self.prior_dollars
 
 
 class CostLedger(BaseModel):
@@ -44,6 +45,7 @@ class CostLedger(BaseModel):
     )
     # Keys are launcher/training IDs, not display labels that can be renamed.
     arms: dict[str, Literal["M", "E", "ME"]]
+    prior_dollars: dict[str, Decimal] = Field(default_factory=dict)
     observations: list[CostObservation] = Field(default_factory=list)
 
     def add(
@@ -76,7 +78,10 @@ class CostLedger(BaseModel):
                         )
                     continue
                 row = CostObservation(
-                    observed_at=observed_at, checkpoint=cp, launcher=current
+                    observed_at=observed_at,
+                    checkpoint=cp,
+                    launcher=current,
+                    prior_dollars=self.prior_dollars.get(run.name, Decimal(0)),
                 )
                 self.observations.append(row)
                 known[key] = row
@@ -107,7 +112,7 @@ def selected_checkpoints() -> dict[str, Checkpoint]:
     return CostLedger.model_validate_json(Path(path).read_bytes()).selections()
 
 
-def sample(path: Path, arms: dict[str, Literal["M", "E", "ME"]], source: str) -> None:
+def sample(path: Path, config: CostLedger, source: str) -> None:
     """Observe exports before asking for costs, so no earlier estimate is borrowed."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.with_suffix(".lock").open("a") as lock:
@@ -115,12 +120,12 @@ def sample(path: Path, arms: dict[str, Literal["M", "E", "ME"]], source: str) ->
         ledger = (
             CostLedger.model_validate_json(path.read_bytes())
             if path.exists()
-            else CostLedger(arms=arms)
+            else config.model_copy(deep=True)
         )
-        if ledger.arms != arms:
+        if ledger.arms != config.arms or ledger.prior_dollars != config.prior_dollars:
             raise ValueError("cost observer cannot change the retained arm identities")
         state = observe(storage_from_uri(source), EXPERIMENT)
-        statuses = {run: status(run) for run in arms}
+        statuses = {run: status(run) for run in config.arms}
         ledger.add(state, statuses, datetime.now(UTC))
         atomic_json(path, ledger.model_dump(mode="json", by_alias=True))
 
@@ -132,11 +137,11 @@ def main() -> None:
     parser.add_argument("--source", default="r2://manabot/jobs")
     parser.add_argument("--watch", type=float)
     args = parser.parse_args()
-    arms = CostLedger.model_validate_json(args.arms.read_bytes()).arms
+    config = CostLedger.model_validate_json(args.arms.read_bytes())
     if args.watch is not None and args.watch < 30:
         parser.error("cost observations must be at least 30 seconds apart")
     while True:
-        sample(args.ledger, arms, args.source)
+        sample(args.ledger, config, args.source)
         if args.watch is None:
             return
         time.sleep(args.watch)

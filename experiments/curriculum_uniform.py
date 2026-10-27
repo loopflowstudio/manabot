@@ -93,14 +93,16 @@ class UniformControl(BaseModel):
     def initial(self) -> StagedExport:
         """The existing R2 input used to initialize every new adaptive arm."""
         ref = self.checkpoints[0].artifact
-        prefix = "r2://manabot/jobs/"
-        if not ref.uri.startswith(prefix):
+        if not ref.uri.startswith("r2://manabot/jobs/"):
             raise ValueError(
                 "uniform initialization must be retained in the training store"
             )
         assert ref.sha256 is not None and ref.size_bytes is not None
         return StagedExport(
-            key=ref.uri.removeprefix(prefix), sha256=ref.sha256, bytes=ref.size_bytes
+            # Launcher Input.key is bucket-relative, not storage-prefix-relative.
+            key=ref.uri.removeprefix("r2://manabot/"),
+            sha256=ref.sha256,
+            bytes=ref.size_bytes,
         )
 
 

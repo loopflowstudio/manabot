@@ -117,6 +117,14 @@ separately from new charges; do not bill the original Task twice.
 reserved for storage/observation/cleanup uncertainty. Thus new training caps
 sum to $28.50, new inclusive arm limits to $30, and the reused U costs less
 than its own $10 allowance. No retries, replacement seeds or automatic top-up.
+The first three admissions failed before the job command ran: their staged
+initialization input omitted the bucket's `jobs/` prefix and returned 404.
+No learning/export/evaluation occurred. Permit one corrected bootstrap admission
+per arm after verifying the full input key and retained digest, with the same
+seed, recipe and initialization. Retain the failed runs; deduct their confirmed
+charges from each arm's $9.50 training allocation before resubmission. This
+supersedes the no-retry rule solely for this pre-learning path correction;
+there is no replacement after observing training or evaluation outcomes.
 Submit each adaptive arm as its own single-job cohort capped at $9.50. A
 multi-job cohort spreads rental lifetime over its available slots and can
 quote more than one arm's allowance for a single rental. Separate cohorts
