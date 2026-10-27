@@ -13,8 +13,8 @@ from pydantic import JsonValue
 import pytest
 
 from manabot.eval.arena_log import ArenaPrinting, CardMapping, export_arena_log
+from manabot.eval.card_evaluation import verification_spec
 from manabot.eval.card_metrics import reduce_cards
-from manabot.eval.cards import verification_spec
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.card_evidence import GameTrace, capture_verified_game

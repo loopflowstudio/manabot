@@ -17,7 +17,11 @@ import time
 from etude.run.storage import default_root
 
 from manabot.eval.arena_log import CardMapping, export_arena_log
-from manabot.eval.card_evaluation import CardEvaluationSpec, evaluate_cards
+from manabot.eval.card_evaluation import (
+    CardEvaluationSpec,
+    evaluate_cards,
+    verification_spec,
+)
 from manabot.eval.card_page import write_page
 from manabot.eval.card_query import (
     CardData,
@@ -27,61 +31,6 @@ from manabot.eval.card_query import (
     card_db,
     load_game,
 )
-from manabot.eval.evaluate import source_digest
-from manabot.eval.models import EvaluationKey
-from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints
-from manabot.sim.matchup import AuthoredMatchup
-from manabot.sim.registration import PlayerRegistration
-
-VERIFY_EXPERIMENT = "card-verification"
-
-
-def verification_spec(games: int) -> CardEvaluationSpec:
-    if games < 8 or games % 8:
-        raise ValueError("games must be a positive multiple of eight")
-    matrix = AuthoredMatchup(
-        pack_key="elemental-world-v2", role_a="elemental_ug", role_b="elemental_bg"
-    )
-    runtime = runtime_fingerprints(match_config=matrix.match())
-    players = tuple(
-        PlayerRegistration(
-            player_id=name,
-            display_name=name,
-            role="anchor",
-            runner_kind="code",
-            player_spec={"kind": "scripted_greedy"},
-            compute_class_id="scripted-greedy-cpu-v1",
-            information_boundary="acting-viewer",
-            world=runtime["world"],
-            content_suite=matrix.content_suite,
-            observation_abi_sha256=runtime["observation_abi_sha256"],
-            action_abi_sha256=runtime["action_abi_sha256"],
-            matchup_sha256=runtime["matchup_sha256"],
-            source_sha256=source_digest(["manabot/sim/players.py"]),
-            player_seed_derivation_id="arena-pair-deal-player-v1",
-        )
-        for name in ("verify-one", "verify-two")
-    )
-    return CardEvaluationSpec(
-        experiment=VERIFY_EXPERIMENT,
-        run=f"verify-{games}",
-        key=EvaluationKey(
-            world=runtime["world"],
-            content_suite=matrix.content_suite,
-            viewer_boundary="acting-viewer",
-            arena_version="card-evaluation-v1",
-            rating_model_version="unrated-card-evaluation",
-            rating_prior_sha256=canonical_sha256({}),
-            anchor_cohort_sha256=canonical_sha256([p.model_dump() for p in players]),
-            evaluation_compute_envelope_id="scripted-greedy-cpu-v1",
-        ),
-        players=players,
-        deals=tuple(range(230000, 230000 + games // 8)),
-        authored_matchup=matrix,
-        game_seconds=60,
-        max_commands=10000,
-    )
 
 
 def verify(games: int, out: Path) -> dict[str, int | float | str]:

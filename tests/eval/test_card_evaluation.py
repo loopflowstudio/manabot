@@ -19,7 +19,12 @@ import torch
 
 from manabot.env import Match as EnvMatch, ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
-from manabot.eval.card_evaluation import card_tables, evaluate_cards, trace_card_tables
+from manabot.eval.card_evaluation import (
+    card_tables,
+    evaluate_cards,
+    trace_card_tables,
+    verification_spec,
+)
 from manabot.eval.card_metrics import (
     CARD_ROLLUPS,
     CardGame,
@@ -39,7 +44,6 @@ from manabot.eval.card_query import (
     load_game,
 )
 from manabot.eval.card_schedule import CardConditions, admit_card_runtime
-from manabot.eval.cards import verification_spec
 from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256

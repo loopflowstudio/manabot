@@ -28,8 +28,11 @@ from etude.launch.client import default, queue_cohort, quote, status
 from etude.launch.records import Job, Run
 from pydantic import BaseModel
 
-from manabot.eval.card_evaluation import CardEvaluationSpec, evaluate_cards
-from manabot.eval.cards import verification_spec
+from manabot.eval.card_evaluation import (
+    CardEvaluationSpec,
+    evaluate_cards,
+    verification_spec,
+)
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 
