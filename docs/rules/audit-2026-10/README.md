@@ -173,3 +173,13 @@ the substantive whole-rules audit remains unfinished. Unknown rules do not
 inherit these results. Stack CardId loses incarnation, but the new ordinary
 recast/LIFO witness does not expose a supported-play stale-target effect.
 The original report's counts describe its original snapshot.
+
+## MTG-195 follow-up — 2026-10-27
+
+World w14 replaces the fixed trigger-order owner identified by this audit with
+controller-selected placement. The live anchors in `reviews.json` and its generated
+index now point to that authority and its focused witnesses. CR 603.3b remains
+partial: the two-pass scheduler has typed fixture coverage, while matching on
+another ability triggering is still unsupported. The original source identity,
+audited revision, draft and `unification.md` retain the dated audit findings.
+See [the w14 contract](../../../WORLDS.md#w14-controller-selected-trigger-placement).
