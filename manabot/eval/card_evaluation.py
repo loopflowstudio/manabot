@@ -2,9 +2,9 @@
 
 One match is the existing eight-leg authored arena matrix for one deal. Etude
 owns completion, retries and scalar tables; every eval run names the experiment
-whose database it joins. Each game's evidence is written under the eval run's
-folder, which Etude delivery carries with its tables. Games are admitted one at
-a time: a crash, timeout or failed replay is an ineligible `card_plays` row,
+whose database it joins. Each game's evidence is returned to Etude as a blob
+of its match (`etude.eval.match.Result`), named in `card_plays` by its SHA256.
+Games are admitted one at a time: a crash, timeout or failed replay is an ineligible `card_plays` row,
 never a reason to drop the rest of its deal."""
 
 from __future__ import annotations
@@ -16,13 +16,16 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
-from etude.eval.match import EvalRun, Row, Tables, agent
+from etude.eval.match import EvalRun, Result, Row, Tables, Value
 from etude.eval.records import (
-    Agent,
     CheckpointKey,
     CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
+    Model,
+    Player,
     RoundRobin,
 )
 from etude.eval.tournament import hold
@@ -110,7 +113,7 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
+def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     # Bind all Python inference code as well as the separately bound native
     # runtime; a registration's human label never establishes byte identity.
@@ -141,13 +144,13 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
                     size_bytes=player.checkpoint_bytes,
                 ),
             )
+        config = {"registration": player.model_dump(mode="json")}
         entrants.append(
-            agent(
-                player.player_id,
-                checkpoint=checkpoint,
-                code=code,
-                config={"registration": player.model_dump(mode="json")},
-            )
+            Code(name=player.player_id, source=code, config=config)
+            if checkpoint is None
+            else Inference(source=code, config=config)
+            .model(checkpoint)
+            .model_copy(update={"name": player.player_id})
         )
     return tuple(entrants)
 
@@ -156,12 +159,12 @@ def play_card_match(match: Match) -> Tables:
     players = card_match_players(match)
     conditions = CardConditions.model_validate(match.conditions)
     paths: dict[str, str] = {}
-    for entrant, player in zip(match.agents, players, strict=True):
-        if entrant.kind == "checkpoint":
+    for entrant, player in zip(match.players, players, strict=True):
+        if isinstance(entrant, Model):
+            artifact = entrant.checkpoint.artifact
             if (
-                entrant.artifact is None
-                or entrant.artifact.sha256 != player.checkpoint_sha256
-                or entrant.artifact.size_bytes != player.checkpoint_bytes
+                artifact.sha256 != player.checkpoint_sha256
+                or artifact.size_bytes != player.checkpoint_bytes
             ):
                 raise ValueError("checkpoint must be admitted local bytes")
             paths[player.player_id] = str(local_checkpoint_file(entrant))
@@ -202,7 +205,7 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
         for play in game_tables["card_plays"]:
             tables["plays"].append(
                 {
-                    "player": play["player"],
+                    "seat": play["seat"],
                     "game": game.game,
                     "score": 0.5 if game.winner is None else float(play["win"] or 0),
                     "on_play": play["on_play"],
@@ -218,26 +221,30 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
 
 def trace_card_tables(
     root: Path, trace: Mapping[str, object], participants: tuple[str, str]
-) -> Tables:
-    """Card tables for the games one `play_cell(card_evidence_dir=root)` call retained.
+) -> Result:
+    """Card tables and evidence blobs for the games one `play_cell(card_evidence_dir=root)` call retained.
 
     This lets any evaluation deliver card data beside its own outcome tables:
-    merge the result into the `Tables` its `play` returns. `root` is the eval
-    run's folder, so Etude delivery carries the evidence and `cards audit` finds
-    it. `participants` names the two registered players in Etude row order.
-    Games are not bound to a card-evaluation schedule; each must seat exactly
-    these players.
+    merge the result into the `Result` its `play` returns. `root` is a scratch
+    folder the worker wrote evidence to; each game's evidence is read, verified,
+    returned as a blob and deleted there. `participants` names the two
+    registered players in Etude row order. Games are not bound to a
+    card-evaluation schedule; each must seat exactly these players.
     """
     references = trace.get("card_evidence")
     if not isinstance(references, list):
         raise ValueError("play_cell retained no card evidence; pass card_evidence_dir")
     tables: dict[str, list[Row]] = {}
+    blobs: list[bytes] = []
     for raw in references:
         ref = EvidenceRef.model_validate(raw)
-        game = read_evidence((root / ref.path).read_bytes(), ref)
+        body = (root / ref.path).read_bytes()
+        game = read_evidence(body, ref)
+        blobs.append(body)
         for name, rows in _game_card_tables(ref, game, participants).items():
             tables.setdefault(name, []).extend(rows)
-    return tables
+        (root / ref.path).unlink(missing_ok=True)
+    return Result(tables=tables, blobs=blobs)
 
 
 def _game_card_tables(
@@ -246,7 +253,6 @@ def _game_card_tables(
     """One game's normalized card rows, with its evidence and provenance on `card_plays`."""
     rows = normalize(reduce_cards(game, participants))
     evidence = {
-        "evidence": ref.path,
         "evidence_sha256": ref.sha256,
         "evidence_bytes": ref.bytes,
         "trace_sha256": game.trace_sha256,
@@ -255,13 +261,22 @@ def _game_card_tables(
         "source_commit": source_commit(),
         "source_dirty": source_dirty(),
     }
+
+    # Etude names a row's position in the match `seat` (etude-sdk 0.2.7+).
+    def seated(row: Mapping[str, Value]) -> dict[str, Value]:
+        return {("seat" if k == "player" else k): v for k, v in row.items()}
+
     return {
         "card_plays": [
-            {**play, **evidence, "participant": participants[int(play["player"] or 0)]}
+            {
+                **seated(play),
+                **evidence,
+                "participant": participants[int(play["player"] or 0)],
+            }
             for play in rows.plays
         ],
-        "card_counts": list(rows.counts),
-        "cards": list(rows.cards),
+        "card_counts": [seated(row) for row in rows.counts],
+        "cards": [seated(row) for row in rows.cards],
     }
 
 

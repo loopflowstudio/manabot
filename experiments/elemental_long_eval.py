@@ -67,13 +67,16 @@ import sys
 import time
 from typing import Literal
 
-from etude.eval.match import Row, Tables, agent, environment, evaluate
+from etude.eval.match import Result, Row, environment, evaluate
 from etude.eval.records import (
-    Agent,
-    AgentKey,
     CheckpointKey,
+    CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
+    Model,
+    Player,
     Version,
     version_of,
 )
@@ -292,27 +295,25 @@ def _inference_version() -> Version:
     return version_of(INFERENCE_CODE)
 
 
-def checkpoint_agent(checkpoint: Checkpoint) -> Agent:
-    """As `etude.eval.match.agent` makes one, with the code's version computed once.
+def checkpoint_agent(checkpoint: Checkpoint) -> Model:
+    """A checkpoint model, with the inference code's version computed once.
 
     Keyed by its window or segment run and update (`RUN/checkpoints/uNNNNNN`),
     so where its bytes lie is not part of what it is.
     """
-    return Agent(
-        key=AgentKey(
-            checkpoint=CheckpointKey(
-                run=checkpoint.run, name=player(checkpoint.updates)
-            )
-        ),
+    return Model(
         name=player(checkpoint.updates),
-        artifact=checkpoint.artifact,
-        version=_inference_version(),
+        checkpoint=CheckpointRef(
+            key=CheckpointKey(run=checkpoint.run, name=player(checkpoint.updates)),
+            artifact=checkpoint.artifact,
+        ),
+        inference=Inference.model_validate({"version": _inference_version()}),
     )
 
 
 @cache
-def heuristic_agent() -> Agent:
-    return agent(HEURISTIC, code=heuristic_source_paths())
+def heuristic_agent() -> Code:
+    return Code(name=HEURISTIC, source=heuristic_source_paths())
 
 
 type Kind = Literal["full", "subset", "pair"]
@@ -368,12 +369,12 @@ def rows(kind: Kind, found: Sequence[Group]) -> list[Conditions]:
 
 def _matches(
     kind: Kind,
-    agents: tuple[Agent, Agent],
+    agents: tuple[Player, Player],
     found: Sequence[Group],
 ) -> tuple[Match, ...]:
     return tuple(
         Match(
-            agents=agents,
+            players=agents,
             conditions=row.model_dump(mode="json"),
             games=sum(len(group.deals) for group in row.groups),
         )
@@ -432,7 +433,9 @@ def halving_pairs(rated: tuple[int, ...], design: Sequence[Pair]) -> list[Pair]:
     return [
         Pair(newer, newer // 2, "halving")
         for newer in rated
-        if newer > 0 and newer % 2 == 0 and newer // 2 in rated
+        if newer > 0
+        and newer % 2 == 0
+        and newer // 2 in rated
         and (newer, newer // 2) not in held
     ]
 
@@ -461,10 +464,12 @@ class H2HRequest(BaseModel):
     compute: EvalCompute | None = None
 
 
-def _local(seated: Agent) -> LocalCheckpoint:
-    """A checkpoint agent's verified bytes, downloaded once per digest."""
-    reference = seated.artifact
-    if reference is None or reference.sha256 is None:
+def _local(seated: Player) -> LocalCheckpoint:
+    """A checkpoint model's verified bytes, downloaded once per digest."""
+    if not isinstance(seated, Model):
+        raise ValueError(f"{seated.name} is not a checkpoint model")
+    reference = seated.checkpoint.artifact
+    if reference.sha256 is None:
         raise ValueError(f"{seated.name} is not a checkpoint with a digest")
     # A local file is verified in place; a remote object is cached by digest.
     path = cache_directory() / reference.sha256
@@ -488,20 +493,22 @@ def evidence_directory() -> Path:
     return ROOT / ".runs/elemental/arena"
 
 
-def play(match: Match) -> Tables:
+def play(match: Match) -> Result:
     """Play one grid row, a bounded worker process per group; see the module docstring.
 
-    Each played group's card evidence lands in the eval run's folder (`CARDS`),
-    and its card tables are delivered beside `games`. A failed group has none.
+    Each played group's workers write card evidence to a scratch folder
+    (`CARDS`); it is returned as the match's blobs, its card tables beside
+    `games`. A failed group has none.
     """
     conditions = Conditions.model_validate(match.conditions)
-    newer = _local(match.agents[0])
-    older = None if conditions.kind != "pair" else _local(match.agents[1])
+    newer = _local(match.players[0])
+    older = None if conditions.kind != "pair" else _local(match.players[1])
     # The registered player IDs the workers seat, in Etude row order.
     participants = ("model", "heuristic") if older is None else ("newer", "older")
     cards = Path(os.environ[CARDS])
     rows: list[GameRow] = []
     tables: dict[str, list[Row]] = {}
+    blobs: list[bytes] = []
     if any(group.model_deck != conditions.deck for group in conditions.groups):
         raise ValueError("a group plays another deck than its match")
 
@@ -515,9 +522,13 @@ def play(match: Match) -> Tables:
     for played, trace in played_groups:
         rows += played
         if trace is not None:
-            for name, found in trace_card_tables(cards, trace, participants).items():
+            cards_played = trace_card_tables(cards, trace, participants)
+            for name, found in cards_played.tables.items():
                 tables.setdefault(name, []).extend(found)
-    return {"games": game_rows(rows, conditions.kind), **tables}
+            blobs += cards_played.blobs
+    return Result(
+        tables={"games": game_rows(rows, conditions.kind), **tables}, blobs=blobs
+    )
 
 
 def _play_group(
@@ -617,12 +628,12 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
         for player, (deck, opponent_deck, seat, player_score) in enumerate(sides):
             found.append(
                 {
-                    "player": player,
+                    "seat": player,
                     "unit": kind,
                     "deal": row.deal,
                     "deck": deck,
                     "opponent_deck": opponent_deck,
-                    "seat": seat,
+                    "game_seat": seat,
                     "score": player_score,
                     "valid": row.valid,
                     "terminated": row.terminated,
@@ -788,7 +799,7 @@ def follow(
     segments: Sequence[SegmentSource],
     continues: bool = False,
     storages: Sequence[Storage],
-    play_match: Callable[[Match], Tables] = play,
+    play_match: Callable[[Match], Result] = play,
     workers: int = WORKERS,
     poll_seconds: float = 600,
     yielding: Callable[[], bool] = _yielding,

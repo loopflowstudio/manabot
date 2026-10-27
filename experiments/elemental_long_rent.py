@@ -49,7 +49,7 @@ import time
 from typing import Literal
 
 from etude.eval.match import evaluate
-from etude.eval.records import Match
+from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
 from etude.run.storage import run_directory
 from pydantic import BaseModel, ConfigDict
@@ -63,6 +63,7 @@ from experiments.elemental_long_eval import (
     EXPERIMENT,
     GROUP_WORKERS,
     ROOT,
+    Conditions,
     EvalState,
     Unit,
     admit,
@@ -138,6 +139,10 @@ class Batch(BaseModel):
     group_workers: int = 1
     # Play only each unit's first matches (calibration); None plays them all.
     match_limit: int | None = None
+    # Demo (Etude blocks): play only each group's first deals, and start no
+    # unit past this many seconds of play; None plays the design as frozen.
+    deals_per_group: int | None = None
+    play_seconds: float | None = None
     hours: float = 1.0
     # Read by `bind_etude_source` before anything reads source identity.
     source_bundle: SourceBundle
@@ -188,9 +193,10 @@ def _checkpoint_inputs(state: EvalState, chosen: Iterable[Unit]) -> dict[str, in
     found: dict[str, int] = {}
     for unit in chosen:
         for match in unit.matches:
-            for seated in match.agents:
-                if seated.artifact is not None and seated.artifact.sha256:
-                    found[seated.artifact.sha256] = seated.artifact.size_bytes or 0
+            for seated in match.players:
+                if isinstance(seated, Model) and seated.checkpoint.artifact.sha256:
+                    artifact = seated.checkpoint.artifact
+                    found[artifact.sha256] = artifact.size_bytes or 0
     return found
 
 
@@ -221,7 +227,9 @@ def machine(batch: Batch) -> None:
     track = work / "track"
     root = run_directory(track, EXPERIMENT, batch.run)[1].resolve()
     os.environ[EVIDENCE] = str(work / "arena")
-    os.environ[CARDS] = str(root)
+    # Workers write each game's evidence here; `play` returns it as the match's
+    # blobs, so the run folder holds only Etude's sealed blocks.
+    os.environ[CARDS] = str(work / "evidence")
     if batch.compute is not None and not batch.shared:
         os.environ[COMPUTE] = batch.compute.model_dump_json()
     allocation: AbstractContextManager[InferenceEndpoint | None] = nullcontext(None)
@@ -240,6 +248,7 @@ def machine(batch: Batch) -> None:
     # finish it before `STOP_SECONDS` short of the batch's hours.
     started = time.time()
     stop = started + batch.hours * 3600 - STOP_SECONDS
+    playing = stop if batch.play_seconds is None else started + batch.play_seconds
     receipt = Receipt(
         run=batch.run,
         units=(),
@@ -273,10 +282,13 @@ def machine(batch: Batch) -> None:
             if endpoint is not None:
                 os.environ[ENDPOINT] = endpoint_environment(endpoint)
             for unit in chosen:
-                matches = unit.matches[: batch.match_limit]
+                matches = [
+                    _trimmed(match, batch.deals_per_group)
+                    for match in unit.matches[: batch.match_limit]
+                ]
                 games = sum(match.games for match in matches)
                 rate = min((u.games / u.seconds for u in receipt.played), default=None)
-                if rate is not None and time.time() + games / rate > stop:
+                if rate is not None and time.time() + games / rate > playing:
                     break
                 begun = time.time()
                 evaluate(
@@ -304,10 +316,27 @@ def machine(batch: Batch) -> None:
         _deliver(out, root, work, receipt)
 
 
+def _trimmed(match: Match, deals: int | None) -> Match:
+    """The match with each group cut to its first `deals` deals; itself for None."""
+    if deals is None:
+        return match
+    conditions = Conditions.model_validate(match.conditions)
+    cut = tuple(
+        group.model_copy(update={"deals": group.deals[:deals]})
+        for group in conditions.groups
+    )
+    return Match(
+        players=match.players,
+        conditions=conditions.model_copy(update={"groups": cut}).model_dump(
+            mode="json"
+        ),
+        games=sum(len(group.deals) for group in cut),
+    )
+
+
 def _progress(root: Path, started: float) -> str:
-    """Games finished (one card evidence file each), load and memory, as JSON."""
-    evidence = root / "artifacts" / "evidence"
-    games = sum(1 for _ in evidence.iterdir()) if evidence.is_dir() else 0
+    """Sealed blocks so far, load and memory, as JSON."""
+    games = sum(1 for _ in root.glob("blocks/*/block.json"))
     processes = (
         [p for p in Path("/proc").glob("[0-9]*")] if Path("/proc").is_dir() else []
     )
@@ -328,8 +357,7 @@ def _progress(root: Path, started: float) -> str:
     return json.dumps(
         {
             "elapsed": round(elapsed),
-            "games": games,
-            "games_per_hour": round(games / elapsed * 3600),
+            "blocks": games,
             "load": [round(x, 1) for x in os.getloadavg()],
             "processes": len(processes),
             "threads": threads,
@@ -372,8 +400,8 @@ def _match_identity(match: Match) -> tuple[str, str, str, str]:
     conditions = match.conditions
     assert isinstance(conditions, dict)
     return (
-        match.agents[0].name,
-        match.agents[1].name,
+        match.players[0].name,
+        match.players[1].name,
         str(conditions["kind"]),
         str(conditions["deck"]),
     )
@@ -419,9 +447,11 @@ def job(batch: Batch, *, revision: str, max_hours: float, max_usd: Decimal) -> J
     inputs = []
     for unit in chosen:
         for match in unit.matches:
-            for seated in match.agents:
-                reference = seated.artifact
-                if reference is None or reference.sha256 is None:
+            for seated in match.players:
+                if not isinstance(seated, Model):
+                    continue
+                reference = seated.checkpoint.artifact
+                if reference.sha256 is None:
                     continue
                 name = f"{reference.sha256}.pt"
                 if any(found.name == name for found in inputs):
@@ -555,6 +585,49 @@ def launch(
     print("queued", *ids)
 
 
+DEMO_RUN = "eb70f8-demo-gpu"
+
+
+def demo(
+    count: int, deals: int, play_seconds: float, hours: float, rent: str, usd: Decimal
+) -> str:
+    """Launch the Etude-blocks demo: `count` newest heuristic grids, trimmed, on one GPU.
+
+    Its own eval run (`DEMO_RUN`), played into the machine's disk and returned
+    as `<run>.tar`; it writes no shared bucket folder and no ledger entry.
+    """
+    from etude.launch.client import launch as launch_run
+
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    if subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True):
+        raise SystemExit("commit first: the job runs an exact revision")
+    state = admitted()
+    grids = sorted(
+        (unit for unit in units(state) if unit.older is None), key=lambda u: -u.newer
+    )[:count]
+    batch = Batch(
+        run=DEMO_RUN,
+        state=state,
+        units=tuple(unit.key for unit in grids),
+        workers=GPU_WORKERS,
+        group_workers=GROUP_WORKERS_GPU,
+        compute=GPU,
+        shared=True,
+        deals_per_group=deals,
+        play_seconds=play_seconds,
+        hours=hours,
+        source_bundle=bundle_at(ROOT, revision),
+    )
+    print(batch.units)
+    run_id = launch_run(
+        Run(job=job(batch, revision=revision, max_hours=hours, max_usd=usd)), rent=rent
+    )
+    print("launched", run_id)
+    return run_id
+
+
 def collect(run_id: str) -> Receipt:
     """Fold a finished batch's returned run folder into MTG-183's combined database.
 
@@ -601,8 +674,24 @@ def main() -> None:
     settling = commands.add_parser("settle")
     settling.add_argument("run")
     settling.add_argument("usd", type=Decimal)
+    demoing = commands.add_parser("demo")
+    demoing.add_argument("--units", type=int, default=6)
+    demoing.add_argument("--deals", type=int, default=2)
+    demoing.add_argument("--play-seconds", type=float, default=600)
+    demoing.add_argument("--hours", type=float, default=0.75)
+    demoing.add_argument("--rent", default="l4")
+    demoing.add_argument("--max-usd", type=Decimal, default=Decimal("1.00"))
     args = parser.parse_args()
-    if args.command == "launch":
+    if args.command == "demo":
+        demo(
+            args.units,
+            args.deals,
+            args.play_seconds,
+            args.hours,
+            args.rent,
+            args.max_usd,
+        )
+    elif args.command == "launch":
         launch(
             args.batch_games,
             args.mode or ["scalar"],

@@ -2,7 +2,7 @@
 
 `card_data` selects games from every eval run of one experiment (Etude
 `statsdb`) and reports 17Lands-style columns per card. Players come from
-Etude's `seats` and `agents` tables, so subjects and opponents are joins, never
+Etude's `seats` and `players` tables, so subjects and opponents are joins, never
 fields copied into card rows. Queries trust the rows admitted when each match
 was played; `audit` re-reads and re-verifies the retained evidence on request.
 
@@ -101,7 +101,7 @@ class CardData(StrictModel):
 
 def _agents(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
     known = db.execute(
-        "select agent, name, checkpoint, artifact from agents"
+        "select player, name, checkpoint, artifact from players"
     ).fetchall()
     found: list[str] = []
     for value in values:
@@ -129,9 +129,9 @@ def selected_games(
         parameters.extend(values)
 
     if selection.subjects:
-        among("s.agent", _agents(db, selection.subjects))
+        among("s.player", _agents(db, selection.subjects))
     if selection.opponents:
-        among("o.agent", _agents(db, selection.opponents))
+        among("o.player", _agents(db, selection.opponents))
     if selection.runs:
         among("p.run", selection.runs)
     if selection.commits:
@@ -148,10 +148,10 @@ def selected_games(
             where.append(f"{column} = ?")
             parameters.append(value)
     return (
-        "select p.*, s.agent as subject, o.agent as opponent from card_plays p"
-        " join seats s on s.run = p.run and s.match = p.match and s.player = p.player"
+        "select p.*, s.player as subject, o.player as opponent from card_plays p"
+        " join seats s on s.run = p.run and s.match = p.match and s.seat = p.seat"
         " join seats o on o.run = p.run and o.match = p.match"
-        " and o.player = 1 - p.player"
+        " and o.seat = 1 - p.seat"
         f" where {' and '.join(where)}"
     ), parameters
 
@@ -169,14 +169,14 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
     db.execute(f"create or replace temp table selected as {sql}", parameters)
     names = dict(
         db.execute(
-            "select agent, name from agents where agent in"
+            "select player, name from players where player in"
             " (select distinct subject from selected)"
         ).fetchall()
     )
     opponents = dict(
         db.execute(
             "select a.name, count(*) from selected s"
-            " join agents a on a.agent = s.opponent group by a.name"
+            " join players a on a.player = s.opponent group by a.name"
         ).fetchall()
     )
     runs = tuple(
@@ -230,7 +230,7 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
         " count(*) filter (where c.deck_copies > 0 and c.gih_copies = 0),"
         " coalesce(sum(s.win) filter (where c.deck_copies > 0 and c.gih_copies = 0), 0)"
         " from card_counts c join selected s"
-        " on c.run = s.run and c.match = s.match and c.player = s.player"
+        " on c.run = s.run and c.match = s.match and c.seat = s.seat"
         " and c.game = s.game"
         " where s.eligible group by c.card, s.deal"
     ).fetchall()
@@ -332,7 +332,7 @@ def audit(
     participant = "participant" if "participant" in columns else "null"
     plays = db.execute(
         "select run, match, game, evidence, evidence_sha256, evidence_bytes,"
-        f" list({participant} order by player)"
+        f" list({participant} order by seat)"
         " from card_plays group by all order by run, match, game"
     ).fetchall()
     held: dict[str, tuple[dict[str, Match], TournamentRun] | None] = {}

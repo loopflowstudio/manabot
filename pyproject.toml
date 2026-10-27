@@ -16,7 +16,7 @@ dependencies = [
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk==0.2.6",
+    "etude-sdk",
 ]
 
 [project.scripts]
@@ -24,7 +24,7 @@ manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
 reports = [
-    "etude-sdk[s3]==0.2.6 ; python_version >= '3.12'",
+    "etude-sdk[s3] ; python_version >= '3.12'",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -35,7 +35,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
-    "etude-sdk[eval]==0.2.6",
+    "etude-sdk[eval]",
     "matplotlib>=3.9",
 ]
 play = [
@@ -70,7 +70,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
-    "etude-sdk==0.2.6",
+    "etude-sdk",
 ]
 
 [tool.uv]
@@ -98,6 +98,8 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
+# Demo only: Etude PR #63 (sealed eval blocks with blobs and rollups).
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "d3a67a38aeccff6bd883dd781252aa18bd820029" }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
