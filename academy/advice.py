@@ -17,7 +17,6 @@ import json
 import math
 from pathlib import Path
 import statistics
-import time
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -31,6 +30,12 @@ from typing import (
     TypeAlias,
 )
 
+from managym.decision import DecisionFrame
+from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
+from managym.possible_worlds import (
+    PossibleWorldError,
+    PossibleWorldSpace,
+)
 from pydantic import Field, TypeAdapter, model_validator
 
 from academy.advice_identity import (
@@ -52,17 +57,9 @@ from academy.study_branch import (
     StudyForkProvider,
 )
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
-from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
-from managym.possible_worlds import (
-    POSSIBLE_WORLD_SPACE_VERSION,
-    PossibleWorldError,
-    PossibleWorldSpace,
-)
 
 if TYPE_CHECKING:
-    from manabot.belief.range import BeliefState
-    from manabot.sim.conditional_search import (
+    from manabot.sim.search.conditional import (
         ConditionalStrategyResult,
         ConditionResult,
     )
@@ -320,7 +317,9 @@ class AdvisorSemanticOffer(ProtocolModel):
 
 class AdvisorStrategyEvidence(ProtocolModel):
     schema_version: Literal[1] = 1
-    policy_semantic: Literal["puct_visit_distribution/v1", "regularized-local-update/v1"]
+    policy_semantic: Literal[
+        "puct_visit_distribution/v1", "regularized-local-update/v1"
+    ]
     decision_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     viewer_frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     advisor_identity: AdvisorIdentity
@@ -550,7 +549,7 @@ def int13_condition_to_decision_evidence(
     """INT-13 seam: map one ``ConditionResult`` to the ``DecisionEvidence`` shape.
 
     This is the explicit binding point where INT-13's determinized-PUCT search
-    evidence (``manabot.sim.conditional_search.ConditionResult``) becomes the
+    evidence (``manabot.sim.search.conditional.ConditionResult``) becomes the
     per-action ``DecisionEvidence`` the shared live/Study surface renders. The
     prototype serves checked conditional-PUCT evidence from the static fixture
     at runtime. When INT-13's live search publishes, the ``POST /api/advice``
@@ -742,11 +741,6 @@ def request_advice(
     )
 
 
-def landmark_alternative_ids(landmark: StudyLandmark) -> list[str]:
-    """The shared action vocabulary for one landmark, in alternative-id order."""
-    return [alternative.id for alternative in landmark.alternatives]
-
-
 def policy_mass_is_non_uniform(landmark: StudyLandmark) -> bool:
     """True if the landmark's policy mass is not uniform across alternatives."""
     probabilities = [row.probability for row in landmark.evidence.policy_mass]
@@ -827,23 +821,6 @@ class ResolvedAdvisorDecision:
     world_space: PossibleWorldSpace
     source_replay_sha256: str
     content_sha256: str
-
-
-class AdvisorDecisionResolver(Protocol):
-    def resolve(
-        self,
-        address: ReplayDecisionAddress,
-        viewer: ViewerIdentity,
-    ) -> ResolvedAdvisorDecision: ...
-
-
-class BeliefDistributionResolver(Protocol):
-    def resolve(
-        self,
-        scenario: BeliefScenario,
-        decision: ResolvedAdvisorDecision,
-        viewer: ViewerIdentity,
-    ) -> BeliefDistributionPayload: ...
 
 
 class LiveAdvisorRootProvider(Protocol):
@@ -944,30 +921,6 @@ class StudyAdvisorDecisionResolver:
 
 
 @dataclass(frozen=True)
-class StaticBeliefDistributionResolver:
-    """Checked fixture resolver for authored or retained model payloads."""
-
-    payloads: Mapping[str, BeliefDistributionPayload]
-
-    def resolve(
-        self,
-        scenario: BeliefScenario,
-        decision: ResolvedAdvisorDecision,
-        viewer: ViewerIdentity,
-    ) -> BeliefDistributionPayload:
-        del decision, viewer
-        payload = self.payloads.get(scenario.id)
-        if payload is None:
-            reason = (
-                "belief_artifact_unavailable"
-                if scenario.provenance.kind == "model_inferred"
-                else "belief_distribution_unavailable"
-            )
-            raise AdvisorUnavailable(reason)
-        return payload
-
-
-@dataclass(frozen=True)
 class RegisteredAdvisor:
     identity: AdvisorIdentity
     source_paths: tuple[Path, ...]
@@ -980,53 +933,8 @@ class RegisteredAdvisor:
             return
         self._checkpoint_registration(artifact)
 
-    def checkpoint_evaluator(self) -> Any | None:
-        """Build the sole registered checkpoint evaluator, if selected."""
-
-        artifact = self.identity.artifact
-        if isinstance(artifact, CodeSourceArtifact):
-            return None
-        registration = self._checkpoint_registration(artifact)
-        compute = self.identity.compute
-        if (
-            compute.simulations_per_scenario != registration.simulations
-            or compute.sampled_worlds != registration.sampled_worlds
-            or compute.c_puct != registration.c_puct
-            or compute.max_steps != registration.max_steps
-            or compute.branch_driver_id != registration.branch_driver_id
-        ):
-            raise AdvisorUnavailable("compute_mismatch")
-        if self.identity.evaluator_id != "checkpoint_policy_neutral_value":
-            raise AdvisorUnavailable("evaluator_mismatch")
-
-        from manabot.sim.flat_mc import load_checkpoint_agent
-        from manabot.sim.mcts import AgentLeafEvaluator
-        from manabot.sim.search_runtime import (
-            model_action_abi_sha256,
-            model_observation_abi_sha256,
-        )
-
-        agent, observation_space = load_checkpoint_agent(
-            str(registration.checkpoint_path)
-        )
-        parameter_count = sum(parameter.numel() for parameter in agent.parameters())
-        if parameter_count != registration.parameter_count:
-            raise AdvisorUnavailable("advisor_artifact_mismatch")
-        if (
-            model_observation_abi_sha256(observation_space)
-            != artifact.observation_abi.sha256
-        ):
-            raise AdvisorUnavailable("observation_abi_mismatch")
-        if model_action_abi_sha256(observation_space) != artifact.action_abi.sha256:
-            raise AdvisorUnavailable("action_abi_mismatch")
-        return AgentLeafEvaluator(
-            agent,
-            observation_space,
-            value_mode=artifact.value_mode,
-        )
-
     def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
-        from manabot.sim.search_runtime import (
+        from manabot.sim.search.runtime import (
             RetainedCheckpointMismatchError,
             RetainedCheckpointUnavailableError,
             retained_int7_policy_only_checkpoint,
@@ -1073,56 +981,9 @@ ADVISOR_SOURCE_PATHS = (
     REPO_ROOT / "manabot" / "sim" / "mcts.py",
     REPO_ROOT / "manabot" / "sim" / "search_branch.py",
     REPO_ROOT / "manabot" / "sim" / "search_runtime.py",
-    REPO_ROOT / "managym" / "decision.py",
-    REPO_ROOT / "managym" / "possible_worlds.py",
+    REPO_ROOT / "manabot" / "managym" / "decision.py",
+    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
 )
-
-
-def _file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def runtime_advisor_abis() -> tuple[AbiIdentity, AbiIdentity, AbiIdentity]:
-    """Return current checked Observation/action/world ABI identities."""
-
-    return (
-        AbiIdentity(
-            name="experience_frame",
-            version="experience-v1",
-            sha256=_file_sha256(REPO_ROOT / "protocol" / "experience-v1.schema.json"),
-        ),
-        AbiIdentity(
-            name="semantic_decision_frame",
-            version=str(SEMANTIC_DECISION_VERSION),
-            sha256=_file_sha256(REPO_ROOT / "managym" / "decision.py"),
-        ),
-        AbiIdentity(
-            name="possible_world_space",
-            version=str(POSSIBLE_WORLD_SPACE_VERSION),
-            sha256=_file_sha256(REPO_ROOT / "managym" / "possible_worlds.py"),
-        ),
-    )
-
-
-def player_authored_provenance_identity(scenario: BeliefScenario) -> str:
-    provenance = scenario.provenance
-    if provenance.kind != "player_authored":
-        raise AdvisorUnavailable("belief_provenance_mismatch")
-    return (
-        f"player_authored:{scenario.author_viewer_id}:"
-        f"{provenance.created_at_table_revision}"
-    )
-
-
-def _scenario_provenance_identity(scenario: BeliefScenario) -> str:
-    provenance = scenario.provenance
-    if provenance.kind == "player_authored":
-        return player_authored_provenance_identity(scenario)
-    return (
-        f"model_inferred:{provenance.belief_model_id}:"
-        f"{provenance.checkpoint_sha256}:{provenance.artifact_manifest_sha256}:"
-        f"{provenance.viewer_history_sha256}"
-    )
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -1150,12 +1011,6 @@ def serialize_advice_response(response: AdviceResponse) -> bytes:
         raise ValueError("advice response SHA-256 mismatch")
     complete = response.model_copy(update={"response_sha256": digest})
     return _canonical_bytes(complete)
-
-
-def parse_advice_response_bytes(payload: bytes) -> AdviceResponse:
-    response = AdviceResponse.model_validate_json(payload)
-    serialize_advice_response(response)
-    return response
 
 
 def _identity_mismatch_reason(
@@ -1191,358 +1046,6 @@ def _identity_mismatch_reason(
         (actual.seed == expected.seed, "seed_plan_mismatch"),
     )
     return next((reason for matches, reason in checks if not matches), None)
-
-
-def _quantity_delta(
-    left: AdviceQuantity,
-    right: AdviceQuantity,
-) -> AdvisorDeltaQuantity:
-    if isinstance(left, AvailableQuantity) and isinstance(right, AvailableQuantity):
-        return AdvisorDeltaQuantity(
-            status="available", value=float(left.value - right.value)
-        )
-    return AdvisorDeltaQuantity(
-        status="unavailable", reason="comparison_quantity_unavailable"
-    )
-
-
-def _scenario_audience_is_visible(
-    scenario: BeliefScenario,
-    viewer: ViewerIdentity,
-) -> bool:
-    if scenario.audience.kind == "personal":
-        return scenario.author_viewer_id == viewer.viewer_id
-    return scenario.audience.table_id == viewer.table_id
-
-
-class AdviceProvider:
-    """One identity-pinned provider used by both live and Study adapters."""
-
-    def __init__(
-        self,
-        *,
-        registered: RegisteredAdvisor,
-        decision_resolver: AdvisorDecisionResolver,
-        belief_resolver: BeliefDistributionResolver,
-    ) -> None:
-        self.registered = registered
-        self.decision_resolver = decision_resolver
-        self.belief_resolver = belief_resolver
-        self._cache: dict[str, bytes] = {}
-        self.last_timings_ms: dict[str, float] = {}
-
-    def advise(self, request: AdviceRequest, *, recompute: bool = False) -> bytes:
-        if request.is_legacy:
-            raise ValueError("AdviceProvider accepts only advice-v1 requests")
-        started = time.perf_counter_ns()
-        request_sha = advice_request_sha256(request)
-        if not recompute and request_sha in self._cache:
-            artifact_started = time.perf_counter_ns()
-            assert request.advisor_identity is not None
-            mismatch = _identity_mismatch_reason(
-                request.advisor_identity, self.registered.identity
-            )
-            if mismatch is not None:
-                raise ValueError("cached advice identity changed")
-            self.registered.verify_artifact()
-            finished = time.perf_counter_ns()
-            self.last_timings_ms = {
-                "request_validation": (artifact_started - started) / 1_000_000,
-                "artifact_verification": (finished - artifact_started) / 1_000_000,
-                "total": (finished - started) / 1_000_000,
-            }
-            return self._cache[request_sha]
-        assert request.advisor_identity is not None
-        try:
-            response = self._compute(request, request_sha)
-        except AdvisorUnavailable as unavailable:
-            response = AdviceResponse(
-                status="unavailable",
-                reason=unavailable.reason,
-                address=request.address,
-                identity=request.advisor_identity,
-                request_sha256=request_sha,
-            )
-        serialization_started = time.perf_counter_ns()
-        payload = serialize_advice_response(response)
-        finished = time.perf_counter_ns()
-        self.last_timings_ms["serialization"] = (
-            finished - serialization_started
-        ) / 1_000_000
-        self.last_timings_ms["total"] = (finished - started) / 1_000_000
-        if not recompute:
-            self._cache[request_sha] = payload
-        return payload
-
-    def _compute(self, request: AdviceRequest, request_sha: str) -> AdviceResponse:
-        assert request.viewer is not None
-        assert request.scenario is not None
-        assert request.advisor_identity is not None
-        identity = request.advisor_identity
-        mismatch = _identity_mismatch_reason(identity, self.registered.identity)
-        if mismatch is not None:
-            raise AdvisorUnavailable(mismatch)
-        if (
-            request.parsed_address.replay_id != identity.source_replay_id
-            or request.parsed_address.match_id != identity.match_id
-        ):
-            raise AdvisorUnavailable("decision_identity_mismatch")
-        artifact_started = time.perf_counter_ns()
-        self.registered.verify_artifact()
-        artifact_finished = time.perf_counter_ns()
-        decision = self.decision_resolver.resolve(
-            request.parsed_address, request.viewer
-        )
-        decision_finished = time.perf_counter_ns()
-        if decision.source_replay_sha256 != identity.source_replay_sha256:
-            raise AdvisorUnavailable("replay_mismatch")
-        if decision.content_sha256 != identity.content_sha256:
-            raise AdvisorUnavailable("content_mismatch")
-        if decision.world_space.identity == "" or identity.world_id != "w2":
-            raise AdvisorUnavailable("world_mismatch")
-        runtime_abis = runtime_advisor_abis()
-        if identity.observation_abi != runtime_abis[0]:
-            raise AdvisorUnavailable("observation_abi_mismatch")
-        if identity.action_abi != runtime_abis[1]:
-            raise AdvisorUnavailable("action_abi_mismatch")
-        if identity.possible_world_abi != runtime_abis[2]:
-            raise AdvisorUnavailable("possible_world_abi_mismatch")
-
-        scenarios = [request.scenario]
-        if request.comparison_scenario is not None:
-            scenarios.append(request.comparison_scenario)
-        beliefs: dict[str, BeliefState] = {}
-        receipts: dict[str, BeliefNormalizationReceipt] = {}
-        for scenario in scenarios:
-            belief, receipt = self._resolve_belief(
-                scenario, request, decision, request.viewer
-            )
-            beliefs[scenario.id] = belief
-            receipts[scenario.id] = receipt
-        normalization_finished = time.perf_counter_ns()
-
-        from manabot.sim.conditional_search import (
-            conditional_determinized_puct_beliefs,
-            project_viewer_safe_result,
-            validate_result,
-        )
-
-        compute = identity.compute
-        evaluator = self.registered.checkpoint_evaluator()
-        root_observation = (
-            decision.root.observation_for_player(request.viewer.rules_viewer)
-            if evaluator is not None
-            else None
-        )
-        result = conditional_determinized_puct_beliefs(
-            decision.root,
-            beliefs=beliefs,
-            simulations=compute.simulations_per_scenario,
-            worlds=compute.sampled_worlds,
-            seed=identity.seed.root_seed,
-            c_puct=compute.c_puct,
-            max_steps=compute.max_steps,
-            evaluator=evaluator,
-            root_observation=root_observation,
-            branch_driver_id=compute.branch_driver_id,
-            branch_audit=True,
-            branch_match_id=identity.match_id,
-        )
-        validate_result(result, expected_condition_ids=tuple(beliefs))
-        search_finished = time.perf_counter_ns()
-        offer_ids = [int(offer["id"]) for offer in decision.semantic_frame.offers]
-        projected = project_viewer_safe_result(result, offer_ids=offer_ids)
-        evidence = self._strategy_evidence(decision, identity, projected, receipts)
-        projection_finished = time.perf_counter_ns()
-        self.last_timings_ms = {
-            "artifact_verification": (artifact_finished - artifact_started) / 1_000_000,
-            "decision_resolution": (decision_finished - artifact_finished) / 1_000_000,
-            "normalization": (normalization_finished - decision_finished) / 1_000_000,
-            "materialization_search": (search_finished - normalization_finished)
-            / 1_000_000,
-            "projection": (projection_finished - search_finished) / 1_000_000,
-        }
-        public_payload = evidence.model_dump(mode="json")
-        forbidden = {
-            "authority_private",
-            "world_q_values",
-            "world_root_values",
-            "world_visit_counts",
-            "branch_receipt",
-            "sampled_indexes",
-            "opponent_hand",
-            "actual_query_truth",
-            "rng_tapes",
-        }
-        if _contains_forbidden_key(public_payload, forbidden):
-            raise AdvisorUnavailable("private_projection_failure")
-        return AdviceResponse(
-            status="ok",
-            address=request.address,
-            frame=decision.frame,
-            offers=list(decision.frame.offers),
-            identity=identity,
-            request_sha256=request_sha,
-            strategy=evidence,
-        )
-
-    def _resolve_belief(
-        self,
-        scenario: BeliefScenario,
-        request: AdviceRequest,
-        decision: ResolvedAdvisorDecision,
-        viewer: ViewerIdentity,
-    ) -> tuple[BeliefState, BeliefNormalizationReceipt]:
-        assert request.advisor_identity is not None
-        if not _scenario_audience_is_visible(scenario, viewer):
-            raise AdvisorUnavailable("belief_viewer_mismatch")
-        if scenario.source.decision_address != request.address:
-            raise AdvisorUnavailable("belief_decision_mismatch")
-        if isinstance(scenario.source.advice_identity, AdviceRequestIdentity):
-            raise AdvisorUnavailable("legacy_identity_incomplete")
-        if scenario.source.advice_identity != request.advisor_identity:
-            raise AdvisorUnavailable("belief_provenance_mismatch")
-        payload = self.belief_resolver.resolve(scenario, decision, viewer)
-        if payload.space_identity != decision.world_space.identity:
-            raise AdvisorUnavailable("belief_space_mismatch")
-        expected_provenance = _scenario_provenance_identity(scenario)
-        if (
-            payload.provenance_kind != scenario.provenance.kind
-            or payload.provenance_identity != expected_provenance
-        ):
-            raise AdvisorUnavailable("belief_provenance_mismatch")
-        expected_distribution_sha256 = belief_distribution_sha256(
-            payload.space_identity,
-            payload.belief_model_id,
-            payload.weights,
-            payload.provenance_identity,
-        )
-        if payload.distribution_sha256 != expected_distribution_sha256:
-            raise AdvisorUnavailable("belief_distribution_mismatch")
-        from manabot.belief.range import BeliefError, BeliefState
-
-        try:
-            belief = BeliefState.from_probabilities(
-                decision.world_space,
-                payload.belief_model_id,
-                payload.weights,
-            )
-        except BeliefError as error:
-            raise AdvisorUnavailable("belief_invalid") from error
-        return belief, BeliefNormalizationReceipt(
-            scenario_id=scenario.id,
-            space_identity=decision.world_space.identity,
-            belief_model_id=payload.belief_model_id,
-            distribution_sha256=payload.distribution_sha256,
-            normalized_belief_sha256=belief.digest,
-            positive_support=belief.positive_support_size,
-            normalization_error=belief.normalization_error,
-            provenance_kind=payload.provenance_kind,
-            provenance_identity=payload.provenance_identity,
-        )
-
-    @staticmethod
-    def _strategy_evidence(
-        decision: ResolvedAdvisorDecision,
-        identity: AdvisorIdentity,
-        projected: Mapping[str, Any],
-        receipts: Mapping[str, BeliefNormalizationReceipt],
-    ) -> AdvisorStrategyEvidence:
-        semantic_offers = [
-            AdvisorSemanticOffer(
-                offer_id=int(offer["id"]),
-                actor=int(offer["actor"]),
-                verb=str(offer["verb"]),
-                label=str(offer.get("label") or offer.get("description") or ""),
-            )
-            for offer in decision.semantic_frame.offers
-        ]
-        scenario_rows: list[AdvisorScenarioEvidence] = []
-        for raw_condition in projected["conditions"]:
-            scenario_id = str(raw_condition["condition_id"])
-            actions = [
-                AdvisorOfferEvidence(
-                    offer_id=int(action["offer_id"]),
-                    label=str(action["label"]),
-                    probability=float(action["probability"]),
-                    visits=int(action["visits"]),
-                    q=action["q"],
-                    robustness=action["robustness"],
-                    uncertainty=action["uncertainty"],
-                )
-                for action in raw_condition["actions"]
-            ]
-            if [action.offer_id for action in actions] != [
-                offer.offer_id for offer in semantic_offers
-            ]:
-                raise AdvisorUnavailable("action_identity_mismatch")
-            if not math.isclose(
-                sum(action.probability for action in actions), 1.0, abs_tol=1e-9
-            ):
-                raise AdvisorUnavailable("policy_mass_invalid")
-            scenario_rows.append(
-                AdvisorScenarioEvidence(
-                    scenario_id=scenario_id,
-                    belief=receipts[scenario_id],
-                    condition_mass=float(raw_condition["condition_mass"]),
-                    support=int(raw_condition["support"]),
-                    sampled_worlds=int(raw_condition["sampled_worlds"]),
-                    actions=actions,
-                    root_value=raw_condition["root_value"],
-                    root_uncertainty=raw_condition["root_uncertainty"],
-                    simulations=int(raw_condition["simulations"]),
-                    cap_hits=int(raw_condition["cap_hits"]),
-                    tree_nodes=int(raw_condition["tree_nodes"]),
-                )
-            )
-        comparison = (
-            _build_comparison(scenario_rows[0], scenario_rows[1])
-            if len(scenario_rows) == 2
-            else None
-        )
-        return AdvisorStrategyEvidence(
-            policy_semantic=projected["policy_semantic"],
-            decision_sha256=decision.address.decision_sha256,
-            viewer_frame_sha256=decision.frame.frame_hash,
-            advisor_identity=identity,
-            offers=semantic_offers,
-            scenarios=scenario_rows,
-            comparison=comparison,
-            realized_compute=dict(projected["realized_compute"]),
-            prior_sha256=projected["prior_sha256"],
-            plan_sha256=projected["plan_sha256"],
-        )
-
-
-def _build_comparison(
-    left: AdvisorScenarioEvidence,
-    right: AdvisorScenarioEvidence,
-) -> AdvisorComparison:
-    if [action.offer_id for action in left.actions] != [
-        action.offer_id for action in right.actions
-    ]:
-        raise AdvisorUnavailable("action_identity_mismatch")
-    actions = [
-        AdvisorOfferDelta(
-            offer_id=left_action.offer_id,
-            policy_probability=(left_action.probability - right_action.probability),
-            q=_quantity_delta(left_action.q, right_action.q),
-            robustness=_quantity_delta(left_action.robustness, right_action.robustness),
-            uncertainty=_quantity_delta(
-                left_action.uncertainty, right_action.uncertainty
-            ),
-        )
-        for left_action, right_action in zip(left.actions, right.actions, strict=True)
-    ]
-    return AdvisorComparison(
-        left_scenario_id=left.scenario_id,
-        right_scenario_id=right.scenario_id,
-        left_belief_sha256=left.belief.normalized_belief_sha256,
-        right_belief_sha256=right.belief.normalized_belief_sha256,
-        actions=actions,
-        root_value=_quantity_delta(left.root_value, right.root_value),
-        root_uncertainty=_quantity_delta(left.root_uncertainty, right.root_uncertainty),
-    )
 
 
 def _contains_forbidden_key(value: Any, forbidden: set[str]) -> bool:
@@ -1703,7 +1206,6 @@ def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
     )
 
 
-ADVICE_RESPONSE_ADAPTER = TypeAdapter(AdviceResponse)
 ADVICE_FIXTURE_ADAPTER = TypeAdapter(VersionedAdviceFixture)
 
 

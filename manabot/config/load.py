@@ -4,14 +4,11 @@ import ast
 from copy import deepcopy
 from typing import Any, Iterable
 
-from manabot.infra import ExperimentHypers, Hypers, SimulationHypers
+from manabot.infra import RuntimeConfig, SimulationConfig
 
 from .presets import (
     DEFAULT_SIM_PRESET,
-    DEFAULT_TRAIN_PRESET,
     get_sim_preset,
-    get_training_base,
-    get_training_preset,
 )
 
 
@@ -92,36 +89,24 @@ def apply_set_overrides(
     return out
 
 
-def load_train_config(
-    preset: str = DEFAULT_TRAIN_PRESET,
-    set_overrides: Iterable[str] | None = None,
-) -> Hypers:
-    """Load and validate a training config from preset + overrides."""
-
-    config = deep_merge(get_training_base(), get_training_preset(preset))
-    if set_overrides:
-        config = apply_set_overrides(config, set_overrides)
-    return Hypers.model_validate(config)
-
-
 def load_sim_config(
     preset: str = DEFAULT_SIM_PRESET,
     set_overrides: Iterable[str] | None = None,
-) -> tuple[SimulationHypers, ExperimentHypers]:
+) -> tuple[SimulationConfig, RuntimeConfig]:
     """Load and validate a simulation config from preset + overrides."""
 
     config = get_sim_preset(preset)
     if set_overrides:
         config = apply_set_overrides(config, set_overrides)
 
-    extra_top_level = set(config) - {"sim", "experiment"}
+    extra_top_level = set(config) - {"sim", "runtime"}
     if extra_top_level:
         extras = ", ".join(sorted(extra_top_level))
         raise ValueError(f"Unknown simulation config section(s): {extras}")
 
     sim_raw = config.get("sim", {})
-    experiment_raw = config.get("experiment", {})
+    runtime_raw = config.get("runtime", {})
     return (
-        SimulationHypers.model_validate(sim_raw),
-        ExperimentHypers.model_validate(experiment_raw),
+        SimulationConfig.model_validate(sim_raw),
+        RuntimeConfig.model_validate(runtime_raw),
     )

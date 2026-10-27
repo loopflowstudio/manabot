@@ -8,23 +8,23 @@ import torch
 
 from academy.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
-from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def selected_match():
     return Match(
-        MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
 
 
 def checkpoint():
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )
@@ -32,8 +32,8 @@ def checkpoint():
         "model_state_dict": agent.state_dict(),
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
-            "agent_hypers": agent.hypers.model_dump(),
-            "observation_hypers": space.encoder.hypers.model_dump(),
+            "agent_hypers": agent.config.model_dump(),
+            "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(selected_match().to_rust(), space),
     }
@@ -43,7 +43,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
     path = tmp_path / "policy.pt"
     payload = checkpoint()
     torch.save(payload, path)
-    agent, space = load_checkpoint_agent(str(path))
+    agent, space = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
@@ -79,7 +79,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
         elif change == "schema":
             binding["input_schema"]["actions"]["shape"][0] = 32
         elif change == "input_version":
-            binding["policy_input_version"] = 2
+            binding["policy_input_version"] = 1
         elif change == "action_width":
             binding["input_schema"]["actions"]["shape"][1] = 17
         elif change == "pack":
@@ -90,7 +90,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
     path = tmp_path / "bad.pt"
     torch.save(payload, path)
     with pytest.raises(ValueError, match="binding"):
-        load_checkpoint_agent(str(path))
+        load_checkpoint(str(path))
 
 
 def test_same_shapes_do_not_admit_another_matchup():
@@ -106,10 +106,10 @@ def test_same_shapes_do_not_admit_another_matchup():
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
 def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     from manabot.env import Env, Reward
-    from manabot.sim.flat_mc import AgentMatchupPlayer
-    from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
-    from manabot.sim.value import ValueScorer, VGreedyPlayer
+    from manabot.sim.search.flat_mc import AgentMatchupPlayer
+    from manabot.sim.search.puct import AgentLeafEvaluator, DeterminizedPuctPlayer
+    from manabot.sim.search.value import ValueScorer, VGreedyPlayer
 
     path = tmp_path / "policy.pt"
     torch.save(checkpoint(), path)
@@ -117,7 +117,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
         with pytest.raises(ValueError, match="setup differs"):
             CheckpointVillain(str(path), player_configs=Match().to_rust())
         return
-    agent, space = load_checkpoint_agent(str(path))
+    agent, space = load_checkpoint(str(path))
     players = {
         "policy": lambda: AgentMatchupPlayer(agent),
         "puct": lambda: DeterminizedPuctPlayer(
@@ -126,7 +126,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
         "rollout": lambda: PolicyRolloutMCPlayer(1, BatchedSampler(agent)),
         "value": lambda: VGreedyPlayer(ValueScorer(agent)),
     }
-    env = Env(Match(), space, Reward(RewardHypers()))
+    env = Env(Match(), space, Reward(RewardConfig()))
     obs, _ = env.reset(seed=0)
     with pytest.raises(ValueError, match="setup differs"):
         players[consumer]().act(env, obs)
@@ -137,12 +137,12 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     tmp_path: Path, deck: str
 ) -> None:
     space = ObservationSpace()
-    match = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
+    match = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
     payload = checkpoint()
     payload["world_binding"] = checkpoint_world(match.to_rust(), space)
     path = tmp_path / "mirror.pt"
     torch.save(payload, path)
-    agent, _ = load_checkpoint_agent(str(path))
+    agent, _ = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     validate_checkpoint_world(payload, space, match.to_rust())
     with pytest.raises(ValueError, match="world/setup/input"):

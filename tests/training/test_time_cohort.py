@@ -7,17 +7,18 @@ import subprocess
 
 import pytest
 
-from manabot.training.experiment_report import load_evidence, write_time_profile
-from manabot.training.models import StageRecord, TrainingRun
-from manabot.training.time_cohort import native_cohort, write_cohort_report
-from manabot.training.time_sources import load_time_sources
+from manabot.reports.experiment import load_evidence, write_time_profile
+from manabot.reports.records import RetainedRun
+from manabot.reports.time_cohort import native_cohort, write_cohort_report
+from manabot.reports.time_sources import load_time_sources
+from manabot.training.records import StageRecord
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMO = ROOT / "experiments/study/experiment-demo"
-JS = ROOT / "manabot/training/time_cohort.js"
+DEMO = ROOT / "tests/fixtures/experiment-demo"
+JS = ROOT / "manabot/reports/time_cohort.js"
 
 
-def _run(identifier: str = "first") -> TrainingRun:
+def _run(identifier: str = "first") -> RetainedRun:
     prototype = load_evidence(DEMO).runs[0]
     stage_id = prototype.regime.stages[0].id
     return prototype.model_copy(
@@ -37,7 +38,7 @@ def _run(identifier: str = "first") -> TrainingRun:
                     export_seconds=0.25,
                     diagnostic_seconds=0.0,
                     learner_transitions=100,
-                    diagnostics=[{}],
+                    updates=1,
                 )
             ],
         }
@@ -77,7 +78,7 @@ def test_recovery_counts_retained_work_once_and_keeps_attempt_costs() -> None:
                         "collection_seconds": 1.0,
                         "learning_seconds": 1.0,
                         "learner_transitions": 150,
-                        "diagnostics": [{}, {}],
+                        "updates": 2,
                     }
                 )
             ],
@@ -118,7 +119,7 @@ def test_missing_fields_duplicates_and_native_discovery(tmp_path: Path) -> None:
     conflict = load_time_sources([str(tmp_path)])
     assert not conflict.runs
     assert any("Conflicting native" in w for w in conflict.warnings)
-    absent = native_cohort([TrainingRun.model_validate(payload)]).runs[0]
+    absent = native_cohort([RetainedRun.model_validate(payload)]).runs[0]
     assert absent.active_seconds is None
     assert absent.phases["Unattributed"] > 0
 
@@ -126,7 +127,7 @@ def test_missing_fields_duplicates_and_native_discovery(tmp_path: Path) -> None:
 def test_missing_elapsed_total_does_not_turn_observed_active_time_into_zero() -> None:
     payload = _run().model_dump(exclude_unset=True)
     del payload["seconds"]
-    row = native_cohort([TrainingRun.model_validate(payload)]).runs[0]
+    row = native_cohort([RetainedRun.model_validate(payload)]).runs[0]
     assert row.elapsed_seconds is None
     assert row.active_seconds == 7
 
@@ -207,11 +208,11 @@ console.log(JSON.stringify({initial,cleared,restored:chart()}));
 def test_etude_written_logs_are_selectable_without_invented_phases(
     tmp_path: Path,
 ) -> None:
-    from etude.track.records import Step, Time
-    from etude.track.run import init
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     for seed, seconds in [(1, 10.0), (2, 100.0)]:
-        run = init(
+        run = track(
             experiment="real-training",
             run=f"seed-{seed}",
             job="recipe",
@@ -326,30 +327,31 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
     assert 'src="http' not in html
 
 
-def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from etude.track.records import Step, Time
-    from etude.track.run import init
+def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> None:
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
         Step("learner_transitions", "retained rows"),
     ]
-    first = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    first = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     first.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     first.finish()
-    monkeypatch.setenv("ETUDE_UNTIL_CLOCK", "training_seconds")
-    monkeypatch.setenv("ETUDE_FROM_VALUE", "8")
-    second = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    second = track(
+        experiment="resume",
+        run="same",
+        directory=tmp_path,
+        clocks=clocks,
+        resumed_at={"training_seconds": 8},
+    )
     second.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
     second.finish()
     run = load_time_sources([str(tmp_path)]).runs[0]
     assert len(run.members) == 2
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
-    monkeypatch.delenv("ETUDE_FROM_VALUE")
-    third = init(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    third = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
     third.log({"loss": 0.4}, training_seconds=14, learner_transitions=140)
     third.finish()
     assert load_time_sources([str(tmp_path)]).runs[0].active_seconds is None
@@ -392,22 +394,23 @@ def test_cli_creates_report_from_saved_native_records(tmp_path: Path) -> None:
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
     tmp_path: Path,
 ) -> None:
-    from etude.track.read import read_all
-    from etude.track.records import Continuation, Step, Time
-    from etude.track.run import init
+    from etude.run.records import Continuation
+    from etude.train.read import read_all
+    from etude.train.records import Step, Time
+    from etude.train.run import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
         Step("learner_transitions", "absolute retained rows"),
     ]
-    parent = init(
+    parent = track(
         experiment="continuation", run="parent", directory=tmp_path, clocks=clocks
     )
     parent.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     parent.finish()
     declaration = read_all(tmp_path)[0].file
     assert declaration is not None
-    child = init(
+    child = track(
         experiment="continuation",
         run="child",
         directory=tmp_path,
@@ -426,13 +429,13 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
 
 
 def test_mixed_record_schemas_and_phase_coverage(tmp_path: Path) -> None:
-    from etude.track.records import Step
-    from etude.track.run import init
+    from etude.train.records import Step
+    from etude.train.run import track
 
     native_dir = tmp_path / "native"
     native_dir.mkdir()
     (native_dir / "run.json").write_text(_run().model_dump_json(exclude_unset=True))
-    tracked = init(
+    tracked = track(
         experiment="smoke",
         run="logged",
         kind="smoke",

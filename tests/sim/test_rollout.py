@@ -2,17 +2,16 @@
 
 Covers the RolloutPool bindings (slot layout, batched stepping, scoring),
 the batched sampler (valid-action guarantees), the K-stream vector driver
-(seat balancing), and soft distillation targets.
+(seat balancing).
 """
 
 import numpy as np
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
-from manabot.sim.distill import soft_targets_from_scores
-from manabot.sim.flat_mc import aggregate_records
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
@@ -20,20 +19,21 @@ from manabot.sim.rollout import (
     _allocate_buffers,
     run_vector_games,
 )
+from manabot.sim.search.flat_mc import aggregate_records
 from manabot.verify.util import INTERACTIVE_DECK
 
 
 def make_env(seed: int = 3) -> tuple[Env, dict]:
     obs_space = ObservationSpace()
     match = Match(
-        MatchHypers(
+        MatchConfig(
             hero="a",
             villain="b",
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    env = Env(match, obs_space, Reward(RewardHypers()), seed=seed, auto_reset=False)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
     obs, _ = env.reset(seed=seed)
     return env, obs
 
@@ -95,7 +95,7 @@ class TestRolloutPool:
 
 
 class TestBatchedSampler:
-    def _obs_batch(self, batch: int = 8):
+    def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
         obs_space = ObservationSpace()
         buffers = _allocate_buffers(obs_space, batch)
         rng = np.random.default_rng(1)
@@ -104,6 +104,10 @@ class TestBatchedSampler:
                 continue
             if arr.dtype == np.float32:
                 arr[:] = rng.random(arr.shape, dtype=np.float32)
+        # Transport definition IDs are discrete even in a synthetic feature batch.
+        buffers["semantic_cards"].fill(0)
+        for key in ("agent_permanents", "opponent_permanents"):
+            buffers[key][..., PERMANENT_DEFINITION_INDEX] = 0
         valid = np.zeros_like(buffers["actions_valid"])
         valid[:, :5] = (rng.random((batch, 5)) < 0.6).astype(np.float32)
         valid[np.arange(batch), rng.integers(0, 5, batch)] = 1.0
@@ -113,7 +117,7 @@ class TestBatchedSampler:
         return buffers
 
     def test_selects_valid_actions_only(self):
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         buffers = self._obs_batch()
         rows = np.arange(8)
         for kwargs in (
@@ -139,7 +143,7 @@ class TestBatchedSampler:
 class TestVectorDriver:
     def test_seat_balanced_records(self):
         torch.manual_seed(0)
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         sampler = BatchedSampler(agent, seed=1)
         records, stats = run_vector_games(
             sampler,
@@ -159,7 +163,7 @@ class TestPolicyRolloutPlayer:
     def test_plays_and_scores(self):
         torch.manual_seed(0)
         env, obs = make_env(seed=13)
-        agent = Agent(ObservationSpace(), AgentSpec())
+        agent = ActorCritic(ObservationSpace(), ModelConfig())
         sampler = BatchedSampler(agent, epsilon=0.2, seed=5)
         player = PolicyRolloutMCPlayer(4, sampler, seed=17)
         action = player.act(env, obs)
@@ -171,14 +175,3 @@ class TestPolicyRolloutPlayer:
         assert player.last_scores.max() <= 1.0
         # The chosen action must be playable in the real env.
         env.step(action)
-
-
-class TestSoftTargets:
-    def test_padding_masked_and_temperature_sharpens(self):
-        scores = torch.tensor([[0.5, 0.6, -1.0, -1.0]])
-        sharp = soft_targets_from_scores(scores, 0.02)
-        flat = soft_targets_from_scores(scores, 1.0)
-        for probs in (sharp, flat):
-            assert probs[0, 2:].sum().item() < 1e-6
-            assert abs(probs.sum().item() - 1.0) < 1e-5
-        assert sharp[0, 1] > flat[0, 1] > 0.5

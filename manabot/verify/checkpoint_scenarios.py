@@ -14,18 +14,16 @@ from pathlib import Path
 import time
 from typing import Any, Literal
 
+from managym.experience import UNVERSIONED_CONTENT_HASH
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.arena.replay import read_trace, replay_games, write_trace
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.flat_mc import AgentMatchupPlayer, make_player
-from manabot.sim.teacher1_evidence import (
-    RECORDED_ASSET_MANIFEST_HASH,
-    build_command,
-    build_viewer_frame,
-)
+from manabot.sim.replay import read_trace, replay_games, write_trace
+from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
+from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.competency import (
     SCENARIOS,
     ScriptedVillain,
@@ -39,7 +37,6 @@ from manabot.verify.scenario_validation import (
     scenario_identity,
     validate_scenarios,
 )
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class ScenarioScore(BaseModel):
@@ -94,7 +91,7 @@ def score_checkpoint(
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",
             "scenario_root": scenario_identity(scenario_name),
             "world_binding": checkpoint_world(env.match.to_rust(), space),
-            "observation_hypers": space.encoder.hypers.model_dump(),
+            "observation_hypers": space.encoder.config.model_dump(),
             "deal_seed": seed,
             "seat_players": [score.checkpoint_sha256, "scripted-villain"],
             "checkpoint_sha256": score.checkpoint_sha256,

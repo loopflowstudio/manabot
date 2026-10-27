@@ -8,12 +8,19 @@ import math
 from typing import Any
 
 import numpy as np
+from pydantic import Field
 import torch
 
 from manabot.config.load import deep_merge
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
 from manabot.env.observation import ACTION_DECLARED_INDEX, ActionEnum
-from manabot.infra import Hypers
+from manabot.infra.config import (
+    BaseConfig,
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 import managym
 
 TRUNCATION_INFO_KEYS = (
@@ -56,7 +63,7 @@ INTERACTIVE_DECK = {
 }
 
 # Main-deck projections for callers that inspect the selected matchup. Match
-# construction uses MatchHypers.authored to carry sideboards as well.
+# construction uses MatchConfig.authored to carry sideboards as well.
 UR_LESSONS_DECK = dict(
     managym.authored_deck_setup("ur-lessons-vs-gw-allies", "ur_lessons").decklist
 )
@@ -95,31 +102,24 @@ class EvaluationArtifacts:
     actions: list[EvaluationActionRecord]
 
 
-def build_hypers(**overrides) -> Hypers:
-    """Build Hypers with verification defaults and nested overrides."""
+class VerificationConfig(BaseConfig):
+    """Environment and untrained-policy setup for bounded diagnostics."""
 
-    base = Hypers().model_dump()
-    base["experiment"].update(
-        {
-            "exp_name": "verify",
-            "wandb": False,
-            "device": "cpu",
-            "profiler_enabled": False,
-            "log_level": "INFO",
-        }
-    )
-    base["agent"]["attention_on"] = False
-    # Versioned verification recipes (first light, exp-11) predate FiLM.
-    base["agent"]["policy_film"] = False
-    base["train"]["opponent_policy"] = "passive"
+    observation: ObservationConfig = Field(default_factory=ObservationConfig)
+    match: MatchConfig = Field(default_factory=MatchConfig)
+    reward: RewardConfig = Field(default_factory=RewardConfig)
+    agent: ModelConfig = Field(default_factory=lambda: ModelConfig(attention_on=False))
 
+
+def build_verification_config(**overrides: object) -> VerificationConfig:
+    base = VerificationConfig().model_dump()
     match_overrides = overrides.pop("match", None)
     merged = deep_merge(base, overrides)
     if isinstance(match_overrides, dict):
         merged["match"] = {**base["match"], **match_overrides}
     elif match_overrides is not None:
         merged["match"] = match_overrides
-    return Hypers.model_validate(merged)
+    return VerificationConfig.model_validate(merged)
 
 
 def wilson_lower_bound(wins: int, total: int, z: float = 1.96) -> float:

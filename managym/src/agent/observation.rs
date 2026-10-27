@@ -17,16 +17,20 @@ use crate::{
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TurnData {
     pub turn_number: u32,
+    #[serde(deserialize_with = "super::observation_json::phase")]
     pub phase: PhaseKind,
+    #[serde(deserialize_with = "super::observation_json::step")]
     pub step: StepKind,
     pub active_player_id: i32,
     pub agent_player_id: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlayerData {
     pub player_index: i32,
     pub id: i32,
@@ -46,7 +50,8 @@ pub struct PlayerData {
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CardTypeData {
     pub is_castable: bool,
     pub is_permanent: bool,
@@ -62,8 +67,10 @@ pub struct CardTypeData {
     pub is_battle: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CardData {
+    #[serde(deserialize_with = "super::observation_json::zone")]
     pub zone: ZoneType,
     pub owner_id: i32,
     pub id: i32,
@@ -83,12 +90,14 @@ pub struct CardData {
     pub kicker_cost: i32,
     pub card_types: CardTypeData,
     pub keywords: KeywordData,
+    #[serde(deserialize_with = "super::observation_json::mana_cost")]
     pub mana_cost: ManaCost,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
 /// binds action focus; it is not an in-game object reference or a zone.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SideboardCardData {
     pub candidate_id: i32,
     pub owner_id: i32,
@@ -97,7 +106,8 @@ pub struct SideboardCardData {
     pub text_box: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct KeywordData {
     pub flying: bool,
     pub reach: bool,
@@ -153,8 +163,10 @@ pub enum StackTargetKindData {
     Card = 3,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StackTargetData {
+    #[serde(deserialize_with = "super::observation_json::stack_target")]
     pub kind: StackTargetKindData,
     pub player_id: Option<i32>,
     pub permanent_id: Option<i32>,
@@ -162,9 +174,11 @@ pub struct StackTargetData {
     pub card_id: Option<i32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StackObjectData {
     pub stack_object_id: i32,
+    #[serde(deserialize_with = "super::observation_json::stack_kind")]
     pub kind: StackObjectKindData,
     pub controller_id: i32,
     pub source_card_registry_key: i32,
@@ -174,7 +188,8 @@ pub struct StackObjectData {
     pub targets: Vec<StackTargetData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PermanentData {
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
@@ -230,7 +245,8 @@ pub enum EventEntityKind {
     Definition = 5,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EventData {
     pub event_type: i32,
     pub source_kind: i32,
@@ -249,10 +265,13 @@ pub struct EventData {
     pub target_incarnation: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionOption {
     /// Engine-owned meaning for choices whose index alone is insufficient.
     pub description: Option<String>,
+    #[serde(deserialize_with = "super::observation_json::action")]
+    #[serde(rename = "type")]
     pub action_type: ActionType,
     pub focus: Vec<i32>,
     /// Native yes/no declaration, shared by learning and experience consumers.
@@ -261,15 +280,22 @@ pub struct ActionOption {
     pub ability_index: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionSpaceData {
+    #[serde(deserialize_with = "super::observation_json::space")]
+    #[serde(rename = "type")]
     pub action_space_type: ActionSpaceKind,
     pub actions: Vec<ActionOption>,
+    #[serde(skip)]
     pub focus: Vec<i32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Observation {
+    #[serde(skip)]
+    pub continuation: Vec<super::continuation::ContinuationFrame>,
     pub game_over: bool,
     pub won: bool,
     pub turn: TurnData,
@@ -283,6 +309,7 @@ pub struct Observation {
     pub opponent_permanents: Vec<PermanentData>,
     pub stack_objects: Vec<StackObjectData>,
     pub recent_events: Vec<EventData>,
+    #[serde(skip)]
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
@@ -390,6 +417,7 @@ impl Observation {
         let opponent = Self::player_data(game, opponent_player, false);
 
         let mut obs = Self {
+            continuation: game.continuation_frames(agent_player),
             game_over,
             won,
             turn,
@@ -962,7 +990,7 @@ impl Observation {
         }
     }
 
-    fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
+    pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
         match action {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]

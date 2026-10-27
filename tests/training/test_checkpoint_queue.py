@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from manabot.arena.models import canonical_sha256
-from manabot.training import checkpoint_queue as queue
-from manabot.training.execution import atomic_json
-from manabot.training.models import MonitoringCheckpoint, StageRecord, TrainingRun
-from manabot.training.monitor_evaluation import ArenaRow, _summarize
-from manabot.training.presets import ataraxos_mtg_v1
+from manabot.eval.monitor import _summarize
+from manabot.eval.results import EvaluationRow
+from manabot.experiment import evaluation_queue as queue
+from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256
+from manabot.recipes.ataraxos import ataraxos
+from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
 from tests.training.test_monitor_evaluation import _manifest, _rows
 
 
@@ -50,7 +51,7 @@ def fake_process(monkeypatch: pytest.MonkeyPatch) -> list[Process]:
 
 
 def run_fixture(path: Path) -> TrainingRun:
-    regime = ataraxos_mtg_v1().regime()
+    regime = ataraxos().regime()
     run = TrainingRun(
         id="fixture",
         regime=regime,
@@ -64,7 +65,7 @@ def run_fixture(path: Path) -> TrainingRun:
                 id=regime.stages[0].id,
                 status="completed",
                 cumulative_seconds=1,
-                diagnostics=[{}],
+                updates=1,
                 artifacts={"raw": {"path": "first.pt", "sha256": "a" * 64, "bytes": 1}},
             ),
             StageRecord(id=regime.stages[1].id),
@@ -169,7 +170,7 @@ def test_completed_result_projects_and_interruption_suppresses_rate(
     monitor.tick([source])
     attempt = monitor.attempts[0]
     manifest = _manifest()
-    manifest.rows = [ArenaRow.model_validate(r) for r in _rows(manifest)]
+    manifest.rows = [EvaluationRow.model_validate(r) for r in _rows(manifest)]
     _summarize(manifest)
     directory = monitor._directory(attempt) / "evaluation"
     directory.mkdir()
@@ -237,7 +238,7 @@ def test_completed_worker_survives_delayed_parent_poll(
     try:
         monitor.tick([source])
         result = _manifest()
-        result.rows = [ArenaRow.model_validate(r) for r in _rows(result)]
+        result.rows = [EvaluationRow.model_validate(r) for r in _rows(result)]
         _summarize(result)
         directory = monitor._directory(monitor.attempts[0]) / "evaluation"
         directory.mkdir()

@@ -9,7 +9,7 @@ import pytest
 
 # Local imports
 from manabot.env.match import Match, Reward, parse_deck
-from manabot.infra.hypers import RewardHypers
+from manabot.infra.config import RewardConfig
 
 # Common Test Data
 SAMPLE_DECKS = {
@@ -99,7 +99,7 @@ class TestMatch:
 
 @pytest.mark.parametrize("player_index", [0, 1])
 def test_reward_correct_both_players(player_index):
-    reward = Reward(RewardHypers(win_reward=7.0, lose_reward=-3.0))
+    reward = Reward(RewardConfig(win_reward=7.0, lose_reward=-3.0))
     last_obs = SimpleNamespace(agent=SimpleNamespace(player_index=player_index))
     won_obs = SimpleNamespace(game_over=True, won=True)
     lost_obs = SimpleNamespace(game_over=True, won=False)
@@ -110,7 +110,7 @@ def test_reward_correct_both_players(player_index):
 
 def test_reward_progress_shaping():
     reward = Reward(
-        RewardHypers(
+        RewardConfig(
             land_play_reward=1.0,
             creature_play_reward=1.0,
             opponent_life_loss_reward=1.0,
@@ -153,7 +153,7 @@ def test_reward_progress_shaping():
 
 def test_reward_progress_shaping_stacks_with_terminal_reward():
     reward = Reward(
-        RewardHypers(
+        RewardConfig(
             win_reward=2.0,
             land_play_reward=1.0,
         )
@@ -181,18 +181,18 @@ def test_reward_progress_shaping_stacks_with_terminal_reward():
 
 
 def test_authored_setup_swap_and_hypers_roundtrip():
-    from manabot.infra.hypers import MatchHypers
+    from manabot.infra.config import MatchConfig
     import managym
 
-    hypers = MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
-    match = Match(MatchHypers.model_validate_json(hypers.model_dump_json()))
+    config = MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    match = Match(MatchConfig.model_validate_json(config.model_dump_json()))
     swapped = match.swapped()
     assert swapped.hero_sideboard == match.villain_sideboard
     assert swapped.villain_sideboard == match.hero_sideboard
-    assert Match(swapped.hypers).to_rust_hero().sideboard == swapped.hero_sideboard
+    assert Match(swapped.config).to_rust_hero().sideboard == swapped.hero_sideboard
     swapped.villain_sideboard.clear()
     assert len(match.hero_sideboard) == 3
-    assert len(hypers.hero_sideboard) == 3
+    assert len(config.hero_sideboard) == 3
     for first, second in ((match, match.swapped().swapped()),):
         engines = [managym.Env(seed=0) for _ in range(2)]
         engines[0].reset(first.to_rust())
@@ -201,11 +201,11 @@ def test_authored_setup_swap_and_hypers_roundtrip():
 
 
 def test_custom_setup_does_not_infer_sideboard():
-    from manabot.infra.hypers import MatchHypers
+    from manabot.infra.config import MatchConfig
 
-    named = MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    named = MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     custom = Match(
-        MatchHypers(hero_deck=named.hero_deck, villain_deck=named.villain_deck)
+        MatchConfig(hero_deck=named.hero_deck, villain_deck=named.villain_deck)
     )
     assert custom.to_rust_hero().sideboard == {}
     assert custom.to_rust_villain().sideboard == {}
@@ -213,11 +213,11 @@ def test_custom_setup_does_not_infer_sideboard():
 
 def test_reset_replacement_preserves_sideboard_on_auto_reset():
     from manabot.env import Env, ObservationSpace
-    from manabot.infra.hypers import MatchHypers
+    from manabot.infra.config import MatchConfig
 
-    first = Match(MatchHypers(hero_deck={"Island": 8}, villain_deck={"Mountain": 8}))
+    first = Match(MatchConfig(hero_deck={"Island": 8}, villain_deck={"Mountain": 8}))
     replacement = Match(
-        MatchHypers(
+        MatchConfig(
             hero_deck={"Island": 8},
             villain_deck={"Mountain": 8},
             hero_sideboard={"Firebending Lesson": 1},
@@ -225,7 +225,7 @@ def test_reset_replacement_preserves_sideboard_on_auto_reset():
         )
     ).swapped()
     env = Env(
-        first, ObservationSpace(), Reward(RewardHypers()), seed=0, auto_reset=True
+        first, ObservationSpace(), Reward(RewardConfig()), seed=0, auto_reset=True
     )
     env.reset(options={"match": replacement})
     witness = env._engine.search_witness_json()
@@ -241,11 +241,11 @@ def test_reset_replacement_preserves_sideboard_on_auto_reset():
 def test_native_vector_reset_retains_learn_choices(reverse):
     import random
 
-    from manabot.infra.hypers import MatchHypers
+    from manabot.infra.config import MatchConfig
     import managym
 
     match = Match(
-        MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
     if reverse:
         match = match.swapped()
@@ -302,10 +302,10 @@ def test_native_vector_reset_retains_learn_choices(reverse):
     ],
 )
 def test_sideboard_counts_are_not_coerced(sideboard):
-    from manabot.infra.hypers import MatchHypers
+    from manabot.infra.config import MatchConfig
 
     with pytest.raises(ValueError, match="positive integer counts"):
-        MatchHypers(hero_sideboard=sideboard)
+        MatchConfig(hero_sideboard=sideboard)
 
 
 if __name__ == "__main__":

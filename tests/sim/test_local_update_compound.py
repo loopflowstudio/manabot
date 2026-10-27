@@ -5,6 +5,7 @@ from itertools import product
 import json
 from pathlib import Path
 
+from managym.decision import Observation
 import numpy as np
 import pytest
 import torch
@@ -14,25 +15,16 @@ from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import (
-    LOCAL_RECEIPT_KEY,
-    LOCAL_TARGET_KEY,
-    generate_selfplay_shard,
-    load_shards,
-    save_bc_checkpoint,
-)
-from manabot.sim.local_compound import advance_compound, project_compound
-from manabot.sim.local_update import (
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.search.compound import advance_compound, project_compound
+from manabot.sim.search.local_update import (
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
 )
-from manabot.sim.search_supervised import _validate_dataset
-from manabot.training.models import CollectLocalUpdate, TrainCompound, TrainingRegime
 import managym
-from managym.decision import Observation
 from tests.sim import test_local_update as local_fixtures
 from tests.sim.test_local_update import small_match
 from tests.sim.test_local_update_sampling import saved_sampler
@@ -136,10 +128,10 @@ def test_supported_root_rollout_reaching_payment_replays(
     agent = (
         _agent()
         if compound
-        else Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
+        else ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     )
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         space,
         path,
@@ -212,7 +204,6 @@ def test_supported_root_rollout_reaching_payment_replays(
     assert all((v is None) == zero for v, zero in zip(receipt.values, inactive))
     assert np.all(np.asarray(receipt.target)[inactive] == 0)
     assert np.all(np.asarray(receipt.allocation_counts)[inactive] == 0)
-    assert all(np.isfinite(v) for v in receipt.mixing_diagnostics().values())
     with pytest.raises(TimeoutError):
         teacher.search(branch, history, seed=23, compound_cursor=cursor, deadline=1)
     for schema in ("regularized-local-update/v1", "regularized-local-update/v2"):
@@ -228,24 +219,6 @@ def test_supported_root_rollout_reaching_payment_replays(
             replace(receipt, target=tuple(bad_target)).to_json()
         )
 
-    encoded = space.encode(branch.observation_for_player(viewer))
-    dataset = {key: np.expand_dims(value, 0) for key, value in encoded.items()}
-    count = len(receipt.target)
-    dataset.update(
-        {
-            "action": np.array([int(np.argmax(receipt.target))]),
-            "game_index": np.array([0]),
-            "num_valid": np.array([count]),
-            "seat": np.array([viewer]),
-            "winner": np.array([-1]),
-            LOCAL_RECEIPT_KEY: np.array([receipt.to_json()]),
-            LOCAL_TARGET_KEY: np.zeros_like(dataset["actions_valid"]),
-        }
-    )
-    dataset[LOCAL_TARGET_KEY][0, :count] = receipt.target
-    saved = tmp_path / "payment-target.npz"
-    np.savez(saved, **dataset)
-    dataset = load_shards([saved])
     evidence = local_update_scenario(
         receipt,
         BeliefNormalizationReceipt(
@@ -259,29 +232,13 @@ def test_supported_root_rollout_reaching_payment_replays(
             provenance_kind="model_inferred",
             provenance_identity=receipt.policy_sha256,
         ),
-        labels=["payment"] * count,
+        labels=["payment"] * len(receipt.target),
     )
     assert evidence.sampled_worlds == 1
     for action, zero in zip(evidence.actions, inactive):
         assert (action.q.status == "unavailable") == zero
     assert evidence.root_value.status == "available"
     assert np.isfinite(evidence.root_value.value)
-    for kind in ("local_soft", "local_argmax", "local_allocation"):
-        targets = _validate_dataset(
-            dataset, policy_target_kind=kind, value_target_kind="terminal_outcome"
-        )
-        assert targets is not None
-        assert targets.sum() == pytest.approx(1)
-        assert np.all(targets[0, :count][inactive] == 0)
-
-    dataset[LOCAL_TARGET_KEY][0, np.flatnonzero(inactive)[0]] = 1e-12
-    with pytest.raises(ValueError, match="target differs"):
-        _validate_dataset(
-            dataset,
-            policy_target_kind="local_soft",
-            value_target_kind="terminal_outcome",
-        )
-
     # Direct count materialization changes hidden truth, never the viewer policy.
     constraints = branch.hidden_hand_constraints_json(viewer)
     hand = receipt.rollouts[0].sampled_hand
@@ -342,8 +299,8 @@ def test_saved_compound_teacher_replays(
     torch.set_num_threads(1)
     torch.manual_seed(3)
     space = ObservationSpace()
-    agent = Agent(
-        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+    agent = ActorCritic(
+        space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     config = [
         managym.PlayerConfig(
@@ -355,7 +312,7 @@ def test_saved_compound_teacher_replays(
         managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
     ]
     path = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=config)
+    save_checkpoint(agent, space, path, player_configs=config)
     teacher = LocalUpdateTeacher(
         path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
     )
@@ -382,64 +339,6 @@ def test_saved_compound_teacher_replays(
         LocalUpdateReceipt.from_json(receipt.to_json()).replay_identity()
         == receipt.replay_identity()
     )
-
-
-@pytest.mark.parametrize("learned", [False, True])
-def test_compound_complete_game_targets_without_fitting(
-    tmp_path: Path, learned: bool
-) -> None:
-    torch.set_num_threads(1)
-    torch.manual_seed(73)
-    match = Match(small_match())
-    space = ObservationSpace()
-    agent = Agent(
-        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
-    )
-    checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
-    teacher = LocalUpdateTeacher(
-        checkpoint,
-        file_sha256(checkpoint),
-        LocalSearchConfig(depth=1, decision_seconds=20),
-    )
-    artifact = saved_sampler(teacher, tmp_path / "sampler.pt") if learned else None
-    spec = {
-        "kind": "local_update",
-        "checkpoint": str(checkpoint),
-        "checkpoint_sha256": file_sha256(checkpoint),
-        "config": teacher.config.model_copy(
-            update={"sampling": "learned" if learned else "compatible_prior"}
-        ).model_dump(),
-        **(
-            {"sampler": artifact.model_dump(mode="json")}
-            if artifact is not None
-            else {}
-        ),
-    }
-    shard = tmp_path / "compound-targets.npz"
-    generate_selfplay_shard(
-        num_games=1,
-        seed=7,
-        out_path=shard,
-        max_steps_per_game=1000,
-        teacher_spec=spec,
-        match_hypers=small_match(),
-    )
-    dataset = load_shards([shard])
-    labels = _validate_dataset(
-        dataset, policy_target_kind="local_soft", value_target_kind="terminal_outcome"
-    )
-    np.testing.assert_array_equal(labels, dataset[LOCAL_TARGET_KEY])
-    receipts = [
-        LocalUpdateReceipt.from_json(str(row)) for row in dataset[LOCAL_RECEIPT_KEY]
-    ]
-    assert all(receipt.compound_prefix is not None for receipt in receipts)
-    assert any(
-        receipt.compound_prefix.commands
-        for receipt in receipts
-        if receipt.compound_prefix is not None
-    )
-    assert {receipt.viewer for receipt in receipts} == {0, 1}
 
 
 def test_prefix_completion_preserves_complete_tape_contract() -> None:
@@ -474,22 +373,6 @@ def test_interrupted_prefix_fails_closed() -> None:
         project_compound(agent, env, cursor, check)
 
 
-def test_compound_regime_admits_direct_collection() -> None:
-    regime = TrainingRegime(
-        id="saved-compound-collection-contract",
-        world=managym.WORLD_VERSION,
-        match=small_match(),
-        agent=AgentSpec(compound_decisions=True),
-        stages=[
-            TrainCompound(id="policy", operation="train_compound"),
-            CollectLocalUpdate(
-                id="labels", operation="collect_local_update", policy="policy", games=2
-            ),
-        ],
-    )
-    assert isinstance(regime.stages[-1], CollectLocalUpdate)
-
-
 @pytest.mark.parametrize("kind,count", [("attack", 65), ("cast", 33), ("payment", 65)])
 def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -> None:
     env, _ = (
@@ -506,7 +389,7 @@ def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -
 def test_saved_compound_rejects_exact_reference(tmp_path: Path) -> None:
     agent = _agent()
     checkpoint = tmp_path / "compound.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         checkpoint,
@@ -525,12 +408,12 @@ def test_compound_arena_executes_and_replays_saved_policies(
 
     def make(directory: Path) -> tuple[LocalUpdateTeacher, Env]:
         original, env = original_make(directory)
-        agent = Agent(
+        agent = ActorCritic(
             original.space,
-            AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
+            ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
         )
         checkpoint = directory / "compound.pt"
-        save_bc_checkpoint(
+        save_checkpoint(
             agent, original.space, checkpoint, player_configs=env.match.to_rust()
         )
         return LocalUpdateTeacher(

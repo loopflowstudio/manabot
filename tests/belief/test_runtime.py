@@ -2,6 +2,8 @@
 
 import json
 
+from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
 import pytest
 import torch
 
@@ -11,13 +13,11 @@ from manabot.belief import (
     belief_schema_from_engine,
 )
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent, make_player
-from managym.decision import SEMANTIC_DECISION_VERSION
-from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
+from manabot.sim.search.flat_mc import make_player
 from tests.belief.support import fixture_torch_observation
 
 
@@ -107,10 +107,10 @@ class NativeContractEngine:
         )
 
 
-def _belief_agent() -> Agent:
-    return Agent(
+def _belief_agent() -> ActorCritic:
+    return ActorCritic(
         ObservationSpace(),
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=3,
@@ -143,7 +143,7 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
         count_buckets=agent.belief_count_buckets,
     )
     checkpoint_path = tmp_path / "belief.pt"
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         checkpoint_path,
@@ -182,9 +182,9 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
             ),
             "hypers": {
                 "observation_hypers": (
-                    agent.observation_space.encoder.hypers.model_dump()
+                    agent.observation_space.encoder.config.model_dump()
                 ),
-                "agent_hypers": agent.hypers.model_dump(),
+                "agent_hypers": agent.config.model_dump(),
             },
             "model_state_dict": agent.state_dict(),
         },
@@ -192,11 +192,13 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
     )
 
     with pytest.raises(BeliefError, match="missing its schema binding"):
-        load_checkpoint_agent(str(checkpoint_path))
+        load_checkpoint(str(checkpoint_path))
 
 
 def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
-    agent = Agent(ObservationSpace(), AgentSpec(hidden_dim=8, num_attention_heads=2))
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
+    )
     checkpoint_path = tmp_path / "removed-agent-field.pt"
     torch.save(
         {
@@ -205,10 +207,10 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
             ),
             "hypers": {
                 "observation_hypers": (
-                    agent.observation_space.encoder.hypers.model_dump()
+                    agent.observation_space.encoder.config.model_dump()
                 ),
                 "agent_hypers": {
-                    **agent.hypers.model_dump(),
+                    **agent.config.model_dump(),
                     "max_conditions": 5,
                 },
             },
@@ -218,4 +220,4 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
     )
 
     with pytest.raises(ValueError, match="max_conditions"):
-        load_checkpoint_agent(str(checkpoint_path))
+        load_checkpoint(str(checkpoint_path))

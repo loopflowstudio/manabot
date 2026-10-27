@@ -174,6 +174,16 @@ impl Game {
                 {
                     continue;
                 }
+                if ability.mana_choices().is_some() {
+                    if self.can_activate_mana_ability(player, permanent_id, ability_index) {
+                        actions.push(Action::ActivateAbility {
+                            player,
+                            permanent: permanent_id,
+                            ability_index,
+                        });
+                    }
+                    continue;
+                }
                 if let Some(cost) = &ability.sacrifice {
                     let payment = crate::flow::game::Payment::Activation {
                         permanent: permanent_id,
@@ -184,12 +194,18 @@ impl Game {
                         .payment_candidates(player, &payment, cost)
                         .into_iter()
                         .any(|id| {
-                            self.can_pay_with_mana_abilities(player, &ability.mana_cost, Some(id))
+                            self.can_pay_announced_activation(
+                                player,
+                                &ability.mana_cost,
+                                &payment,
+                                Some(id),
+                            )
                         })
                         && !cost.or_mana.as_ref().is_some_and(|extra| {
-                            self.can_pay_with_mana_abilities(
+                            self.can_pay_announced_activation(
                                 player,
                                 &ability.mana_cost.plus(extra),
+                                &payment,
                                 None,
                             )
                         })
@@ -203,10 +219,15 @@ impl Game {
                 let affordable = if ability.waterbend {
                     self.can_pay_with_waterbend(player, &ability.mana_cost)
                 } else {
-                    self.can_pay_with_mana_abilities(
+                    self.can_pay_announced_activation(
                         player,
                         &ability.mana_cost,
-                        (ability.tap_source || ability.sacrifice_source).then_some(permanent_id),
+                        &crate::flow::game::Payment::Activation {
+                            permanent: permanent_id,
+                            ability_index,
+                            targets: Vec::new(),
+                        },
+                        None,
                     )
                 };
                 if affordable {
@@ -468,7 +489,7 @@ impl Game {
                         });
                     }
                 }
-                if self.available_mana(*player).can_pay(&remainder) {
+                if self.can_pay_mana_cost(*player, &remainder) {
                     actions.push(Action::PayCost { player: *player });
                 }
                 let focus = self.state.permanents[*permanent]

@@ -17,17 +17,17 @@ The retrieved supplement SHA-256 is
 
 ```bash
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run manabot train \
-  --regime experiments/regimes/ataraxos-move.json \
+  --regime-name ataraxos_move \
   --seed 601 --out .runs/etu92-move
 ```
 
-Use `ataraxos-move-scalar.json` in a fresh output directory for the representation
+Use `--regime-name ataraxos_move:ataraxos_move_scalar` in a fresh output directory for the representation
 ablation. These are two-stage, one-thread, 180-second bounded recipes, not
 scientific allocations. The normal executor retains the resolved recipe, seed
 streams, source/runtime/setup identities, costs and all failed attempts in
 VerifyStore; JSON is its export. Both raw and evaluation-EMA weights pass the
 ordinary world-bound loader. Categorical checkpoints serve the signed expected
-value through the existing interface; their saved AgentSpec bind the three
+value through the existing interface; their saved ModelConfig bind the three
 logits. An old scalar checkpoint is not converted to a categorical checkpoint.
 
 The selected artifact remains last-complete-raw; EMA selection is explicit in
@@ -38,7 +38,10 @@ human games, strength, or equilibrium.
 
 ## Objective and data ownership
 
-`manabot/training/ataraxos.py` owns the move objective and targets. For each
+`manabot/training/learning/damped_policy.py` owns the damped policy objective and targets. Reusable APIs use
+`DampedPolicyLearning(gradient="damped_policy")`; Ataraxos names identify method
+provenance and experiments. Historical `ataraxos_move` inputs decode at the
+compatibility boundary and retain their serialized tag/digest. For each
 retained observation the policy loss is the negative clipped-ratio advantage
 surrogate plus `collection_kl * KL(current || behavior)` and
 `tau * KL(current || magnet)`. All legal offers enter both KL terms. Actual
@@ -54,8 +57,10 @@ estimates and targets are detached. Shared encoder weights receive both losses.
 The scalar ablation uses squared-error lambda-return supervision instead; equal
 means do not imply equal categorical targets.
 
-Collection freezes learner weights within each batch. Games may span updates,
-so this is close-to-on-policy continuation, not immutable-policy full episodes.
+Collection freezes learner weights within each batch. Default both-seat
+self-play and explicit `games_per_stream` controls finish games before updating.
+The one-seat exact-quota control may span updates, so that path is
+close-to-on-policy continuation, not immutable-policy full episodes.
 One epoch still changes parameters between timestep minibatches: its per-action
 ratios remain necessary. No replay buffer, trajectory product of ratios, or
 importance correction for changing historical state occupancy is implemented
@@ -64,8 +69,10 @@ source. No normalization rescales advantages after filtering.
 
 The collector records only acting-viewer observation tensors, chosen actions,
 behavior probabilities and outcome estimates. Terminal truth supplies reward
-labels, never policy inputs. Each stream pauses at the exact next learner
-observation; end markers stop propagation across resets. Truncation fails
+labels, never policy inputs. One-seat quota streams pause at the exact next learner
+observation. Complete-game batches pack separate same-seat trajectories into
+one column with end markers between seats and games; no padded trajectory rows
+enter selection or either loss. End markers stop propagation across resets. Truncation fails
 rather than becoming a draw. MTG opponent actions are traversed between learner
 decisions, not assigned learner policy gradients.
 
@@ -107,7 +114,7 @@ Before expensive scoring, freeze a new protocol, independent seed cohort,
 training and evaluation budgets, immutable world/setup and code identities,
 held-out paired deals and both seat/deck assignments. Compare current PPO,
 Ataraxos categorical and its scalar ablation using existing TrainingRun exports
-and `manabot.arena` registration/play/replay. Keep the full planned cohort and
+and `manabot.sim` registration/play/replay and `manabot.eval` admission. Keep the full planned cohort and
 all failures, and compare only overlapping observed cost intervals, including
 collection, fitting and exports. Use one inference envelope and declare raw
 versus EMA selection before evaluating. Whole-game partitions apply to any

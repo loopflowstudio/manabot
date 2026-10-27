@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import sqlite3
 from typing import TYPE_CHECKING, Any
 
-from pydantic_core import to_jsonable_python
-
-from .util import EvaluationArtifacts
-
 if TYPE_CHECKING:
-    from manabot.training.experiment_execution import ExperimentRun
-    from manabot.training.models import TrainingRun
+    from manabot.experiment.execution import ExperimentRun
+    from manabot.training.records import TrainingRun
 
 RUN_CONFIG_FIELDS = (
     "experiment",
@@ -94,36 +89,19 @@ def _default_db_path() -> Path:
     return runs_dir / "verify.sqlite"
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
-    """Return one run's stage records in execution order, diagnostics included.
+    """Return one run's stage records in execution order.
 
-    Diagnostics live in their own append-only table. Stores written before that
-    table existed keep them inline in the stage payload, and may lack the table
-    entirely when opened read-only, so both layouts are read here.
+    Self-play update rows are Etude metrics, so a stage payload stays bounded
+    and is rewritten whole on every save.
     """
-    stages = [
+    return [
         json.loads(payload)
         for (payload,) in con.execute(
             "SELECT payload FROM training_stages WHERE run_id=? ORDER BY rowid",
             (run_id,),
         )
     ]
-    if not con.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='training_stage_diagnostics'"
-    ).fetchone():
-        return stages
-    for stage in stages:
-        rows = con.execute(
-            "SELECT payload FROM training_stage_diagnostics WHERE run_id=? AND stage_id=? ORDER BY seq",
-            (run_id, stage["id"]),
-        ).fetchall()
-        if rows or "diagnostics" not in stage:
-            stage["diagnostics"] = [json.loads(payload) for (payload,) in rows]
-    return stages
 
 
 def _clean_json(value: Any) -> Any:
@@ -178,7 +156,7 @@ class VerifyStore:
             )
 
     def experiment_run(self, run_id: str) -> ExperimentRun:
-        from manabot.training.experiment_execution import ExperimentRun
+        from manabot.experiment.execution import ExperimentRun
 
         row = self.con.execute(
             "SELECT payload FROM experiment_runs WHERE id=?", (run_id,)
@@ -197,36 +175,8 @@ class VerifyStore:
             for stage in run.stages:
                 self.con.execute(
                     "INSERT INTO training_stages VALUES (?, ?, ?) ON CONFLICT(run_id, stage_id) DO UPDATE SET payload=excluded.payload",
-                    (run.id, stage.id, stage.model_dump_json(exclude={"diagnostics"})),
+                    (run.id, stage.id, stage.model_dump_json()),
                 )
-                self._save_stage_diagnostics(run.id, stage.id, stage.diagnostics)
-
-    def _save_stage_diagnostics(
-        self, run_id: str, stage_id: str, diagnostics: list[dict]
-    ) -> None:
-        """Write only the diagnostic rows this save can have changed.
-
-        Executors append one row per update and may still be filling in the
-        newest row, so the last stored row is rewritten and later rows are
-        inserted. Earlier rows are immutable once saved; that keeps a save's
-        cost independent of how many updates the stage has already recorded.
-        """
-        key = (run_id, stage_id)
-        stored = self.con.execute(
-            "SELECT COALESCE(MAX(seq) + 1, 0) FROM training_stage_diagnostics WHERE run_id=? AND stage_id=?",
-            key,
-        ).fetchone()[0]
-        if stored > len(diagnostics):
-            self.con.execute(
-                "DELETE FROM training_stage_diagnostics WHERE run_id=? AND stage_id=? AND seq>=?",
-                (*key, len(diagnostics)),
-            )
-            stored = len(diagnostics)
-        for seq in range(max(stored - 1, 0), len(diagnostics)):
-            self.con.execute(
-                "INSERT INTO training_stage_diagnostics VALUES (?, ?, ?, ?) ON CONFLICT(run_id, stage_id, seq) DO UPDATE SET payload=excluded.payload",
-                (*key, seq, json.dumps(to_jsonable_python(diagnostics[seq]))),
-            )
 
     def claim_training_recovery(self, parent_id: str, run: TrainingRun) -> None:
         """Atomically allow one continuation per stopped attempt, never a fork."""
@@ -248,7 +198,7 @@ class VerifyStore:
             )
 
     def training_run(self, run_id: str) -> TrainingRun:
-        from manabot.training.models import TrainingRun
+        from manabot.training.records import TrainingRun
 
         row = self.con.execute(
             "SELECT payload FROM training_runs WHERE id=?", (run_id,)
@@ -275,13 +225,6 @@ class VerifyStore:
                 stage_id TEXT NOT NULL,
                 payload TEXT NOT NULL,
                 PRIMARY KEY (run_id, stage_id)
-            );
-            CREATE TABLE IF NOT EXISTS training_stage_diagnostics (
-                run_id TEXT NOT NULL,
-                stage_id TEXT NOT NULL,
-                seq INTEGER NOT NULL,
-                payload TEXT NOT NULL,
-                PRIMARY KEY (run_id, stage_id, seq)
             );
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY,
@@ -399,263 +342,3 @@ class VerifyStore:
             """
         )
         self.con.commit()
-
-    @staticmethod
-    def _json_blob(value: Any) -> str:
-        return json.dumps(_clean_json(value), sort_keys=True)
-
-    @staticmethod
-    def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
-        if row is None:
-            return None
-        return {key: row[key] for key in row.keys()}
-
-    def create_run(
-        self,
-        *,
-        label: str | None,
-        status: str,
-        mode: str,
-        seed: int,
-        git_commit: str | None,
-        git_branch: str | None,
-        tree_dirty: bool,
-        recipe_name: str,
-        opponent_policy: str,
-        num_envs: int,
-        num_steps: int,
-        total_timesteps: int,
-        eval_interval: int | None,
-        eval_num_games: int,
-        baseline_auto: bool,
-        notes: str | None,
-        configs: dict[str, Any],
-    ) -> int:
-        cursor = self.con.execute(
-            """
-            INSERT INTO runs (
-                created_at, label, status, mode, seed, git_commit, git_branch,
-                tree_dirty, recipe_name, opponent_policy, num_envs, num_steps,
-                total_timesteps, eval_interval, eval_num_games, baseline_auto, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                _utc_now(),
-                label,
-                status,
-                mode,
-                seed,
-                git_commit,
-                git_branch,
-                int(tree_dirty),
-                recipe_name,
-                opponent_policy,
-                num_envs,
-                num_steps,
-                total_timesteps,
-                eval_interval,
-                eval_num_games,
-                int(baseline_auto),
-                notes,
-            ),
-        )
-        run_id = int(cursor.lastrowid)
-        self.con.execute(
-            """
-            INSERT INTO run_configs (
-                run_id, experiment_json, train_json, reward_json,
-                agent_json, match_json, observation_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (run_id, *(self._json_blob(configs[field]) for field in RUN_CONFIG_FIELDS)),
-        )
-        self.con.commit()
-        return run_id
-
-    def update_run_status(
-        self, run_id: int, status: str, notes: str | None = None
-    ) -> None:
-        self.con.execute(
-            "UPDATE runs SET status = ?, notes = COALESCE(?, notes) WHERE id = ?",
-            (status, notes, run_id),
-        )
-        self.con.commit()
-
-    def record_evaluation(
-        self,
-        *,
-        run_id: int,
-        kind: str,
-        step: int,
-        update_index: int | None,
-        opponent_policy: str,
-        num_games: int,
-        deterministic: bool,
-        artifacts: EvaluationArtifacts,
-        explained_variance: float | None = None,
-        retain_actions: bool = False,
-    ) -> int:
-        metrics = artifacts.metrics
-        metric_values = tuple(metrics[field] for field in EVALUATION_METRIC_FIELDS)
-        cursor = self.con.execute(
-            """
-            INSERT INTO evaluations (
-                run_id, created_at, kind, step, update_index, opponent_policy,
-                num_games, deterministic, win_rate, win_ci_lower, mean_steps,
-                attack_rate, attacked_when_able, landed_when_able, cast_when_able,
-                passed_when_able, could_attack, could_land, could_spell, could_pass,
-                land_plays, spell_casts, pass_count, single_valid_decisions,
-                multi_valid_decisions, pass_land_decisions, pass_land_pass_rate,
-                pass_land_land_rate, pass_land_spell_rate, mean_pass_prob,
-                mean_land_prob, mean_spell_prob, mean_attack_prob,
-                mean_pass_prob_when_land_available, mean_land_prob_when_land_available,
-                mean_pass_prob_when_pass_land, mean_land_prob_when_pass_land,
-                action_space_truncations, card_space_truncations,
-                permanent_space_truncations, explained_variance
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run_id,
-                _utc_now(),
-                kind,
-                step,
-                update_index,
-                opponent_policy,
-                num_games,
-                int(deterministic),
-                *metric_values,
-                explained_variance,
-            ),
-        )
-        evaluation_id = int(cursor.lastrowid)
-
-        choice_rows = []
-        for scope, counts in artifacts.choice_sets.items():
-            for choice_set, count in counts.items():
-                choice_rows.append((evaluation_id, scope, choice_set, count))
-        if choice_rows:
-            self.con.executemany(
-                """
-                INSERT INTO evaluation_choice_sets (
-                    evaluation_id, scope, choice_set, count
-                ) VALUES (?, ?, ?, ?)
-                """,
-                choice_rows,
-            )
-
-        if retain_actions and artifacts.actions:
-            self.con.executemany(
-                """
-                INSERT INTO evaluation_actions (
-                    evaluation_id, game_index, step, player, action_type, choice_set,
-                    is_trivial, num_valid_actions, attack_available, land_available,
-                    spell_available, pass_available, pass_prob, land_prob, spell_prob,
-                    attack_prob
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        evaluation_id,
-                        *(
-                            int(getattr(action, field))
-                            if field in BOOLEAN_ACTION_FIELDS
-                            else getattr(action, field)
-                            for field in EVALUATION_ACTION_FIELDS
-                        ),
-                    )
-                    for action in artifacts.actions
-                ],
-            )
-
-        self.con.commit()
-        return evaluation_id
-
-    def record_report(
-        self,
-        *,
-        run_id: int,
-        report_kind: str,
-        markdown_path: str | None,
-        recommendation: str,
-        summary: dict[str, Any],
-    ) -> int:
-        cursor = self.con.execute(
-            """
-            INSERT INTO reports (
-                run_id, created_at, report_kind, markdown_path, recommendation, summary_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run_id,
-                _utc_now(),
-                report_kind,
-                markdown_path,
-                recommendation,
-                self._json_blob(summary),
-            ),
-        )
-        self.con.commit()
-        return int(cursor.lastrowid)
-
-    def get_run(self, run_id: int) -> dict[str, Any]:
-        row = self.con.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
-        result = self._row_to_dict(row)
-        if result is None:
-            raise KeyError(f"Unknown run_id={run_id}")
-        return result
-
-    def get_run_configs(self, run_id: int) -> dict[str, Any]:
-        row = self.con.execute(
-            "SELECT * FROM run_configs WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
-        result = self._row_to_dict(row)
-        if result is None:
-            raise KeyError(f"Unknown run_id={run_id}")
-        return {
-            field: json.loads(result[f"{field}_json"]) for field in RUN_CONFIG_FIELDS
-        }
-
-    def get_evaluations(self, run_id: int) -> list[dict[str, Any]]:
-        rows = self.con.execute(
-            "SELECT * FROM evaluations WHERE run_id = ? ORDER BY step, id",
-            (run_id,),
-        ).fetchall()
-        return [self._row_to_dict(row) for row in rows if row is not None]
-
-    def get_evaluation_choice_sets(
-        self, evaluation_id: int
-    ) -> dict[str, dict[str, float]]:
-        rows = self.con.execute(
-            """
-            SELECT scope, choice_set, count
-            FROM evaluation_choice_sets
-            WHERE evaluation_id = ?
-            ORDER BY scope, choice_set
-            """,
-            (evaluation_id,),
-        ).fetchall()
-        grouped: dict[str, dict[str, float]] = {}
-        for row in rows:
-            scope = row["scope"]
-            grouped.setdefault(scope, {})[row["choice_set"]] = float(row["count"])
-        return grouped
-
-    def get_evaluation_actions(self, evaluation_id: int) -> list[dict[str, Any]]:
-        rows = self.con.execute(
-            """
-            SELECT *
-            FROM evaluation_actions
-            WHERE evaluation_id = ?
-            ORDER BY game_index, step, id
-            """,
-            (evaluation_id,),
-        ).fetchall()
-        return [self._row_to_dict(row) for row in rows if row is not None]
-
-    def get_reports(self, run_id: int) -> list[dict[str, Any]]:
-        rows = self.con.execute(
-            "SELECT * FROM reports WHERE run_id = ? ORDER BY id",
-            (run_id,),
-        ).fetchall()
-        return [self._row_to_dict(row) for row in rows if row is not None]

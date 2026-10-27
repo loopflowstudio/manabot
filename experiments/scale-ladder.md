@@ -18,7 +18,10 @@ because many checkpoints over time give the smoothing that repeat runs would.
 
 ## Recipe
 
-[`regimes/scale-ladder-allies-lessons-v1.json`](regimes/scale-ladder-allies-lessons-v1.json):
+`scale_ladder()` in [`batched_baseline.py`](batched_baseline.py)
+(`uv run manabot train --regime-name batched_baseline:scale_ladder`; the v1 run's
+[exact file](https://github.com/loopflowstudio/manabot/blob/c667feac/experiments/regimes/scale-ladder-allies-lessons-v1.json)
+pinned w6):
 the protocol017 recipe (64×2, 256 streams × 64 transitions, Ataraxos move
 gradient, the 017 learning settings) with the iteration schedule removed. The
 learning rate is 1e-4 until about update 2,300, then decays as 0.5/i^1.1 to its

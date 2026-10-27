@@ -12,19 +12,20 @@ import sqlite3
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from managym.experience import UNVERSIONED_CONTENT_HASH
 import pytest
 
 # Local imports
 from academy import server, trace as trace_store
 from academy.server import app
+import managym
 from managym import experience_projection
-from managym.experience import UNVERSIONED_CONTENT_HASH
 
 MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
     (
         Path(__file__).parents[2]
-        / "frontend/src/lib/fixtures/curated-combat-to-turn-w4.json"
+        / "academy/ui/src/lib/fixtures/curated-combat-to-turn-w4.json"
     ).read_text(encoding="utf-8")
 )
 
@@ -164,18 +165,18 @@ def test_full_game_vs_random_villain(isolated_traces):
 
 
 def _write_tiny_checkpoint(path) -> None:
-    """Write a minimal (untrained) Agent checkpoint in the training format."""
+    """Write a minimal (untrained) ActorCritic checkpoint in the training format."""
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-    from manabot.model.agent import Agent
+    from manabot.infra.config import ModelConfig, ObservationConfig
+    from manabot.model.actor_critic import ActorCritic
 
-    obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")
-    agent = Agent(ObservationSpace(obs_hypers), agent_hypers)
-    from manabot.sim.distill import save_bc_checkpoint
+    obs_config = ObservationConfig()
+    agent_config = ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")
+    agent = ActorCritic(ObservationSpace(obs_config), agent_config)
+    from manabot.model.checkpoint import save_checkpoint
     import managym
 
-    save_bc_checkpoint(
+    save_checkpoint(
         agent,
         agent.observation_space,
         path,
@@ -186,65 +187,13 @@ def _write_tiny_checkpoint(path) -> None:
     )
 
 
-def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path, monkeypatch):
-    checkpoint_path = tmp_path / "tiny_agent.pt"
-    _write_tiny_checkpoint(checkpoint_path)
-    import hashlib
-
-    from academy.opponent import Opponent
-    import managym
-
-    # The server admits an opponent only for the setup it was bound to,
-    # sideboards included.
-    setups = {
-        deck: managym.authored_deck_setup("ur-lessons-vs-gw-allies", deck)
-        for deck in ("ur_lessons", "gw_allies")
-    }
-    env = managym.Env()
-    env.reset(
-        [
-            managym.PlayerConfig(deck, setup.decklist, setup.sideboard)
-            for deck, setup in setups.items()
-        ]
-    )
-    opponent = Opponent(
-        "Synthetic loader test",
-        "test",
-        hashlib.sha256(checkpoint_path.read_bytes()).hexdigest(),
-        checkpoint_path,
-        False,
-        env.content_pack_manifest(),
-        {deck: dict(setup.decklist) for deck, setup in setups.items()},
-    )
-    monkeypatch.setattr(server, "configured_opponent", lambda: opponent)
-
-    with TestClient(app) as client:
-        payload = _play_full_game(
-            client,
-            {
-                "villain_type": "checkpoint",
-                "villain_checkpoint": str(checkpoint_path),
-                "villain_deterministic": False,
-                "seed": 5,
-            },
-            hero_seed=3,
-        )
-    assert payload["type"] == "game_over"
-
-    trace_files = _recorded_traces(isolated_traces)
-    assert len(trace_files) == 1
-    trace_payload = trace_files[0][1]
-    assert trace_payload["config"]["villain_type"] == "checkpoint"
-    assert trace_payload["config"]["villain_checkpoint"] == str(checkpoint_path)
-
-
 def test_new_game_rejects_bad_villain_configs(isolated_traces):
     cases = [
         ({"villain_type": "nonsense"}, "villain_type"),
-        ({"villain_type": "checkpoint"}, "configured"),
+        ({"villain_type": "checkpoint"}, "opponent_sha256"),
         (
             {"villain_type": "checkpoint", "villain_checkpoint": "/no/such/file.pt"},
-            "configured",
+            "opponent_sha256",
         ),
         ({"villain_type": "search", "villain_sims": 0}, "villain_sims"),
         ({"villain_type": "search", "villain_sims": "many"}, "villain_sims"),
@@ -333,13 +282,21 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
 
 
 def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
-    isolated_traces,
-):
+    isolated_traces: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """One exact UR-vs-GW position crosses every semantic event consumer."""
 
     from manabot.env.observation import ActionEnum
 
-    def attacking_villain(_env, obs):
+    # Exact retained event revisions bind the original execution preset.
+    native_env = managym.Env
+
+    def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
+        return native_env(seed=seed, skip_trivial=True)
+
+    monkeypatch.setattr(server.managym, "Env", historical_env)
+
+    def attacking_villain(_env: object, obs: managym.Observation) -> int:
         for index, action in enumerate(obs.action_space.actions):
             if (
                 int(action.action_type) == int(ActionEnum.DECLARE_ATTACKER)
@@ -527,7 +484,9 @@ def test_format_action_uses_magic_terms():
         assert experience_projection.format_action(action, names) == expected
 
 
-def test_hero_view_swaps_terminal_villain_perspective_and_redacts(monkeypatch):
+def test_hero_view_swaps_terminal_villain_perspective_and_redacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """At game over the engine observation may be villain-perspective; the
     wire payload must still present the hero as `agent` with villain hand
     hidden."""
@@ -542,13 +501,20 @@ def test_hero_view_swaps_terminal_villain_perspective_and_redacts(monkeypatch):
         "hand": [{"id": 51, "name": "Lightning Bolt"}],
         "zone_counts": {"HAND": 1},
     }
-    serialized = {
+    serialized: dict[str, object] = {
         "game_over": True,
         "won": True,  # villain-perspective: villain won
         "agent": villain_side,
         "opponent": hero_side,
     }
-    monkeypatch.setattr(server, "serialize_observation", lambda obs: serialized)
+
+    def serialize_fixture(
+        _obs: object, *, include_details: bool = False
+    ) -> dict[str, object]:
+        assert not include_details
+        return serialized
+
+    monkeypatch.setattr(server, "serialize_observation", serialize_fixture)
 
     obs = SimpleNamespace(game_over=True, won=True)
     data = server.hero_view(obs)

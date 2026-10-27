@@ -17,7 +17,9 @@ use crate::{
 };
 
 impl Game {
-    /// A sacrifice is a committed event distinct from destruction (CR 701.17).
+    /// A sacrifice is a committed event distinct from destruction (CR 701.21
+    /// and 701.8 in the September 25, 2026 rules). Indestructible does not
+    /// prevent it; the departing object's controller pays this cost.
     /// Match its triggers against the pre-departure battlefield, including the
     /// sacrificed source, before replacement effects can change its destination.
     pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) {
@@ -123,7 +125,13 @@ impl Game {
             }
 
             if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
+                if let Some(capture) = &mut self.card_capture {
+                    capture.drawing = Some(card);
+                }
                 self.move_card(card, ZoneType::Hand);
+                if let Some(capture) = &mut self.card_capture {
+                    capture.drawing = None;
+                }
                 self.journal_turn();
                 self.state.turn.cards_drawn_this_turn[player.0] += 1;
                 self.emit(GameEvent::CardDrawn {
@@ -416,6 +424,7 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
+        self.capture_card_move(card, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             card,
             from: old_zone,

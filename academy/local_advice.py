@@ -14,7 +14,7 @@ from academy.advice import (
     BeliefNormalizationReceipt,
     UnavailableQuantity,
 )
-from manabot.sim.local_update import LocalUpdateReceipt
+from manabot.sim.search.local_update import LocalUpdateReceipt
 
 
 def local_update_scenario(

@@ -1,1 +1,1 @@
-"""Configuration loading and preset helpers for train/sim CLI commands."""
+"""Simulation presets and dotted configuration overrides."""

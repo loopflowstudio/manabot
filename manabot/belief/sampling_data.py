@@ -19,21 +19,22 @@ import random
 import tempfile
 from typing import Literal, cast
 
-import torch
-
-from manabot.belief.sampling import SamplerInput, SamplerSchema
-from manabot.belief.state import ViewerHistory
-from manabot.env.env import Env
-from manabot.env.match import Match, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
-from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent
-import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     Command,
     DecisionFrame,
     Observation,
 )
+import torch
+
+from manabot.belief.sampling import SamplerInput, SamplerSchema
+from manabot.belief.state import ViewerHistory
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.search.flat_mc import AgentMatchupPlayer
+import managym
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"
@@ -250,7 +251,7 @@ def public_sampler_input(
 def collect_frozen_policy(
     *,
     checkpoint: Path,
-    match_hypers: MatchHypers,
+    match_config: MatchConfig,
     games: int,
     seed: int,
     max_steps: int = 2000,
@@ -265,7 +266,7 @@ def collect_frozen_policy(
     if games < 3 or max_steps < 1:
         raise ValueError("three-way whole-game split requires at least three games")
     policy_identity = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
-    agent, obs_space = load_checkpoint_agent(str(checkpoint))
+    agent, obs_space = load_checkpoint(str(checkpoint))
     if agent.belief_count_buckets:
         raise ValueError(
             "frozen sampler collection requires an observation-only behavior policy"
@@ -273,8 +274,8 @@ def collect_frozen_policy(
     if hashlib.sha256(checkpoint.read_bytes()).hexdigest() != policy_identity:
         raise ValueError("behavior checkpoint changed while loading")
     player = AgentMatchupPlayer(agent)
-    match = Match(match_hypers)
-    env = Env(match, obs_space, Reward(RewardHypers()), seed=seed)
+    match = Match(match_config)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed)
     order = list(range(games))
     random.Random(seed).shuffle(order)
     held_out = max(1, games // 5)

@@ -12,7 +12,7 @@ This test suite verifies:
 """
 
 from types import SimpleNamespace
-from typing import Set, Tuple
+from typing import Tuple
 
 import numpy as np
 import pytest
@@ -21,9 +21,9 @@ import pytest
 from manabot.env.observation import (
     EventEntityKindEnum,
     EventTypeEnum,
+    ObservationConfig,
     ObservationEncoder,
     ObservationSpace,
-    ObservationSpaceHypers,
     PhaseEnum,
     StepEnum,
     ZoneEnum,
@@ -34,9 +34,9 @@ import managym
 
 
 @pytest.fixture(scope="session")
-def hypers():
+def config():
     """Create an encoder with minimal dimensions for testing."""
-    return ObservationSpaceHypers(
+    return ObservationConfig(
         max_cards_per_player=8,
         max_permanents_per_player=2,
         max_actions=8,
@@ -45,15 +45,15 @@ def hypers():
 
 
 @pytest.fixture(scope="session")
-def encoder(hypers):
+def encoder(config):
     """Create an observation encoder for testing."""
-    return ObservationEncoder(hypers)
+    return ObservationEncoder(config)
 
 
 @pytest.fixture(scope="session")
-def observation_space(hypers):
+def observation_space(config):
     """Create an observation space using our test encoder."""
-    return ObservationSpace(hypers)
+    return ObservationSpace(config)
 
 
 @pytest.fixture(scope="session")
@@ -204,7 +204,7 @@ class TestObservationEncoder:
         # 2 players + 60 cards x 2 + 40 permanents x 2 (permanent capacity
         # raised 30 -> 40: token-heavy GW games exceeded 30 battlefield
         # entries and truncated).
-        default_encoder = ObservationEncoder(ObservationSpaceHypers())
+        default_encoder = ObservationEncoder(ObservationConfig())
         total_objects = (
             2
             + default_encoder.cards_per_player * 2
@@ -212,7 +212,7 @@ class TestObservationEncoder:
         )
         assert total_objects == 202
 
-    def get_expected_keys(self) -> Set[str]:
+    def get_expected_keys(self) -> set[str]:
         """Get the complete set of expected keys in an encoded observation."""
         return {
             # Players
@@ -239,9 +239,12 @@ class TestObservationEncoder:
             "events_valid",
             "semantic_cards",
             "known_hand",
+            "relations",
         }
 
-    def test_encode_observation(self, observation_space, observation):
+    def test_encode_observation(
+        self, observation_space: ObservationSpace, observation: managym.Observation
+    ) -> None:
         """Test that encoding produces arrays with correct shapes and no invalid values."""
         encoded = observation_space.encode(observation)
 
@@ -258,7 +261,7 @@ class TestObservationEncoder:
             assert not np.isnan(encoded[key]).any(), f"NaN found in {key}"
             assert not np.isinf(encoded[key]).any(), f"Inf found in {key}"
 
-    def test_validity_masks(self, observation_space, observation, hypers):
+    def test_validity_masks(self, observation_space, observation, config):
         """Test that validity masks correctly reflect the game state."""
         encoded = observation_space.encode(observation)
 
@@ -313,7 +316,7 @@ class TestObservationEncoder:
             assert step_slice[int(observation.turn.step)] == pytest.approx(1.0)
 
     def test_card_and_permanent_features_are_partitioned_and_normalized(
-        self, observation_space, observation, hypers
+        self, observation_space, observation, config
     ):
         encoded = observation_space.encode(observation)
 
@@ -341,7 +344,7 @@ class TestObservationEncoder:
             assert vec[0] == pytest.approx(0.0)
             assert vec[2] == pytest.approx(perm.damage / 10.0)
 
-    def test_object_index_mapping(self, observation_space, observation, hypers):
+    def test_object_index_mapping(self, observation_space, observation, config):
         """Test that object IDs are mapped to consistent indices."""
         observation_space.encode(observation)
         mapping = observation_space.encoder.object_to_index
@@ -354,34 +357,34 @@ class TestObservationEncoder:
             # Index should be after players but before max objects
             total_objects = (
                 2
-                + hypers.max_cards_per_player * 2
-                + hypers.max_permanents_per_player * 2
+                + config.max_cards_per_player * 2
+                + config.max_permanents_per_player * 2
             )
             assert 2 <= idx < total_objects
 
-    def test_focus_indices(self, observation_space, observation, hypers):
+    def test_focus_indices(self, observation_space, observation, config):
         """Test that action focus indices are valid."""
         encoded = observation_space.encode(observation)
         focus = encoded["action_focus"]
 
         # Calculate valid range for focus indices
         total_objects = (
-            2 + hypers.max_cards_per_player * 2 + hypers.max_permanents_per_player * 2
+            2 + config.max_cards_per_player * 2 + config.max_permanents_per_player * 2
         )
 
         # All indices should be either -1 (no focus) or within valid range
         valid = (focus == -1) | ((focus >= 0) & (focus < total_objects))
         assert valid.all(), f"Invalid focus indices found: {focus[~valid]}"
 
-    def test_event_features_round_trip(self, observation_space, observation, hypers):
+    def test_event_features_round_trip(self, observation_space, observation, config):
         encoded = observation_space.encode(observation)
         learning_events = [
             event
             for event in observation.recent_events
             if int(event.event_type) <= int(EventTypeEnum.ABILITY_TRIGGERED)
         ]
-        events = learning_events[-hypers.max_events :]
-        valid_count = min(len(learning_events), hypers.max_events)
+        events = learning_events[-config.max_events :]
+        valid_count = min(len(learning_events), config.max_events)
 
         assert int(encoded["events_valid"].sum()) == valid_count
         for i, event in enumerate(events):
@@ -403,7 +406,7 @@ class TestObservationEncoder:
             )
 
     def test_action_space_overflow_rejects_incomplete_policy_input(self):
-        encoder = ObservationEncoder(ObservationSpaceHypers(max_actions=2))
+        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
         obs = SimpleNamespace(
             action_space=SimpleNamespace(actions=[SimpleNamespace(focus=[])] * 3),
             agent_cards=[],
@@ -415,7 +418,7 @@ class TestObservationEncoder:
             encoder.encode(obs)
 
     def test_action_capacity_rejects_omitted_choices(self):
-        encoder = ObservationEncoder(ObservationSpaceHypers(max_actions=2))
+        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
         obs = SimpleNamespace(
             action_space=SimpleNamespace(
                 actions=[SimpleNamespace(action_type=i, focus=[]) for i in range(3)]
@@ -432,14 +435,14 @@ class TestObservationEncoder:
         ],
     )
     def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
-        encoder = ObservationEncoder(ObservationSpaceHypers(**{capacity: 1}))
+        encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
         objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
         with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
             getattr(encoder, method)(objects, is_mine=1.0)
         assert encoder.object_to_index == {}
 
     def test_focus_capacity_rejects_partial_action(self):
-        encoder = ObservationEncoder(ObservationSpaceHypers(max_focus_objects=1))
+        encoder = ObservationEncoder(ObservationConfig(max_focus_objects=1))
         encoder.object_to_index = {1: 0, 2: 1}
         obs = SimpleNamespace(
             action_space=SimpleNamespace(

@@ -3,7 +3,7 @@
 `managym/src/experience.rs` is the authority for the currently integrated v1
 adapter boundary. It generates `experience-v1.schema.json`, a Draft 2020-12
 schema for one `ProtocolV1ConformanceBundle`: a complete recovery envelope and
-the command selected from that exact frame. `managym/experience.py` is the
+the command selected from that exact frame. `manabot/managym/experience.py` is the
 explicit Pydantic representation shared by Academy and manabot; automated tests
 compare its fields, required/optional keys, tagged variants, and enums to the
 Rust-generated schema.
@@ -125,7 +125,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_canonical_replay -- protocol/canonical-replay-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test canonical_replay_tests
 uv run --extra dev pytest -q tests/gui/test_replay_index.py
-npm --prefix frontend test -- --run src/lib/replay-index.test.ts
+npm --prefix academy/ui test -- --run src/lib/replay-index.test.ts
 ```
 
 ## Study artifact v1
@@ -153,7 +153,7 @@ cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_study_protocol -- protocol/study-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
 uv run pytest -q tests/academy/test_study_protocol.py
-npm --prefix frontend test -- --run src/lib/study-protocol.test.ts
+npm --prefix academy/ui test -- --run src/lib/study-protocol.test.ts
 ```
 
 This certifies portable restoration and evidence labelling only. V1 contains

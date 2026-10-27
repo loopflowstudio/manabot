@@ -11,7 +11,7 @@ import time
 
 import torch
 
-from manabot.training.health import NumericalHealth, OptimizerHealth
+from manabot.training.learning.health import NumericalHealth, OptimizerHealth
 
 
 def measure(device: str, steps: int, guarded: bool) -> float:

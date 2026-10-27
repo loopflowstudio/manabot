@@ -7,24 +7,25 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from managym.experience import LegacyPermanentView
+from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
-from manabot.env import Env, Match, ObservationSpace, Reward, VectorEnv
+from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ObservationEncoder
-from manabot.infra import Experiment, ExperimentHypers, TrainHypers
-from manabot.infra.hypers import (
-    AgentSpec,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
 )
-from manabot.model import Trainer
-from manabot.model.agent import Agent
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import inspect_checkpoint
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_setup,
@@ -32,14 +33,13 @@ from manabot.model.world import (
 )
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.training.execution import execute_regime
+from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
+from manabot.verify.store import VerifyStore
 import managym
-from managym.experience import LegacyPermanentView
-from managym.experience_projection import describe_actions, serialize_observation
 
-PACK = "elemental-world-v1"
-BASE = Path("content/semantic/v1")
+PACK = "elemental-world-v2"
+BASE = Path("content/semantic/w11")
 
 
 def test_exact_accepted_lists_inventory_and_compiled_closure() -> None:
@@ -95,13 +95,13 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
     space = ObservationSpace()
-    pair = Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
+    pair = Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"))
     binding = checkpoint_world(pair.to_rust(), space)
     assert len(binding["setups"]) == 10
     assert validate_checkpoint_world({"world_binding": binding}, space) == binding
     agent = SimpleNamespace(world_binding=binding)
     for key in managym.authored_deck_keys(PACK):
-        configs = Match(MatchHypers.authored(PACK, key, key)).to_rust()
+        configs = Match(MatchConfig.authored(PACK, key, key)).to_rust()
         validate_agent_setup(agent, configs)
         assert (
             validate_checkpoint_world({"world_binding": binding}, space, configs)
@@ -122,7 +122,7 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
         validate_checkpoint_world({"world_binding": drifted}, space)
     stale = deepcopy(binding)
     stale["world"] = "w9"
-    with pytest.raises(ValueError, match="compatible w10"):
+    with pytest.raises(ValueError, match=f"compatible {managym.WORLD_VERSION}"):
         validate_checkpoint_world({"world_binding": stale}, space)
 
 
@@ -132,20 +132,22 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     torch.set_num_threads(1)
     space = ObservationSpace()
     env = Env(
-        Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg")),
+        Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")),
         space,
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=164,
     )
     observation, _ = env.reset(seed=164)
-    agent = Agent(space, AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True))
+    agent = ActorCritic(
+        space, ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True)
+    )
     native = managym.Env(seed=164)
     native.reset(
-        Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
+        Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
     assert len(pack.ir.definitions) == 100
-    assert pack.schema.raw["schema_version"] == 6
+    assert pack.schema.raw["schema_version"] == 7
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
@@ -164,11 +166,11 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert not truncated
     assert not info["action_space_truncated"]
     path = tmp_path / "elemental.pt"
-    save_bc_checkpoint(agent, space, path, player_configs=env.match.to_rust())
+    save_checkpoint(agent, space, path, player_configs=env.match.to_rust())
     summary = inspect_checkpoint(path)
     assert summary.compatible
     assert len(summary.setups) == 10
-    restored, _ = load_checkpoint_agent(str(path))
+    restored, _ = load_checkpoint(str(path))
     restored_policy, restored_value = restored(tensors)
     torch.testing.assert_close(restored_policy, policy)
     torch.testing.assert_close(restored_value, value)
@@ -189,59 +191,40 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
     tmp_path: Path,
 ) -> None:
 
-    torch.set_num_threads(1)
-    space = ObservationSpace()
-    match = Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
-    experiment = Experiment(
-        ExperimentHypers(
-            exp_name="elemental-smoke",
-            seed=164,
-            wandb=False,
-            device="cpu",
-            runs_dir=tmp_path,
-        )
+    recipe = TrainingRegime(
+        id="elemental-ppo-smoke",
+        world=managym.WORLD_VERSION,
+        match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
+        agent=ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True),
+        stages=[
+            TrainSelfPlay(
+                id="self-play",
+                operation="train_self_play",
+                updates=2,
+                streams=2,
+                transitions=8,
+                learning_seats="one",
+                learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
+            )
+        ],
     )
-    env = VectorEnv(
-        num_envs=2,
-        match=match,
-        observation_space=space,
-        reward=Reward(RewardHypers()),
-        device="cpu",
-        opponent_policy="passive",
+    with VerifyStore(tmp_path / "runs.sqlite") as store:
+        run = execute_regime(recipe, 164, tmp_path / "run", store)
+    assert run.status == "completed", run.error
+    stage = run.stages[0]
+    assert stage.learner_transitions == 32
+    initial, _ = load_checkpoint(stage.artifacts["initial_raw"]["path"])
+    restored, _ = load_checkpoint(stage.artifacts["raw"]["path"])
+    assert any(
+        not torch.equal(a, b)
+        for a, b in zip(initial.parameters(), restored.parameters())
     )
-    agent = Agent(space, AgentSpec(hidden_dim=16, semantic_pack=PACK, policy_film=True))
-    before = {name: value.detach().clone() for name, value in agent.named_parameters()}
-    trainer = Trainer(
-        agent,
-        experiment,
-        env,
-        TrainHypers(
-            num_envs=2,
-            num_steps=8,
-            num_minibatches=2,
-            update_epochs=1,
-            total_timesteps=32,
-            opponent_policy="passive",
-        ),
+    assert all(torch.isfinite(value).all() for value in restored.parameters())
+    assert len(restored.world_binding["setups"]) == 10
+    validate_agent_setup(
+        restored,
+        Match(MatchConfig.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
     )
-    try:
-        trainer.train()
-        assert trainer.global_step == 32
-        assert any(
-            not torch.equal(before[name], value)
-            for name, value in agent.named_parameters()
-        )
-        assert all(torch.isfinite(value).all() for value in agent.parameters())
-        # train() saves the final checkpoint before closing the experiment.
-        restored, _ = load_checkpoint_agent(str(experiment.runs_dir / "step_32.pt"))
-        assert len(restored.world_binding["setups"]) == 10
-        validate_agent_setup(
-            restored,
-            Match(MatchHypers.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
-        )
-    finally:
-        env.close()
-        experiment.close()
 
 
 def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
@@ -294,7 +277,7 @@ def test_avatar_grant_reaches_native_python_and_academy_views() -> None:
         obs = engine.step(action["index"])[0]
     else:
         pytest.fail("Avatar grant did not resolve")
-    expected = ObservationEncoder(ObservationSpaceHypers()).encode(view)
+    expected = ObservationEncoder(ObservationConfig()).encode(view)
     actual = engine.encode_observation(view)
     for key in expected:
         np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
@@ -354,9 +337,9 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
     left: str, right: str
 ) -> None:
     env = Env(
-        Match(MatchHypers.authored(PACK, "elemental_" + left, "elemental_" + right)),
+        Match(MatchConfig.authored(PACK, "elemental_" + left, "elemental_" + right)),
         ObservationSpace(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         seed=164,
     )
     observation, _ = env.reset(seed=164)
@@ -373,3 +356,75 @@ def test_elemental_complete_games_use_the_ordinary_training_encoder(
     pytest.fail(
         f"{left}/{right} did not terminate within the 5000-action encoder smoke cap"
     )
+
+
+def test_retained_professor_offer_completes_payment_and_replays_exactly() -> None:
+    # Apply the retained w10 action prefix to the current w11 WB/UG setup.
+    # This preserves the regression; it does not relabel the frozen w10 root.
+    prefix = [
+        2,
+        2,
+        0,
+        0,
+        4,
+        3,
+        3,
+        5,
+        2,
+        0,
+        2,
+        2,
+        2,
+        6,
+        2,
+        3,
+        1,
+        2,
+        1,
+        0,
+        4,
+        0,
+        0,
+        8,
+        0,
+        0,
+        1,
+        4,
+        6,
+        2,
+        2,
+        5,
+        1,
+        1,
+    ]
+    digests: list[str] = []
+    for _ in range(2):
+        env = managym.Env(seed=2165384, skip_trivial=True)
+        obs, _ = env.reset(
+            [
+                managym.authored_deck_setup(PACK, key)
+                for key in ("elemental_wb", "elemental_ug")
+            ]
+        )
+        for action in prefix:
+            obs, _, _, _, _ = env.step(action)
+        assert len(obs.action_space.actions) == 8
+        assert "Gnarled Professor" in describe_actions(obs)[4]["description"]
+        root = env.state_digest()
+        branch = env.clone_env()
+        obs, _, _, _, _ = branch.step(4)
+        # The production wrapper skips forced payment and priority steps,
+        # reaching the resolved Professor's player-visible Learn decision.
+        # Directed native regressions exercise each explicit payment step.
+        assert any(
+            c.name == "Gnarled Professor" and c.zone == 2 for c in obs.agent_cards
+        )
+        decline = next(
+            i
+            for i, action in enumerate(obs.action_space.actions)
+            if action.action_type == 10
+        )
+        branch.step(decline)
+        assert env.state_digest() == root
+        digests.append(branch.state_digest())
+    assert digests[0] == digests[1]

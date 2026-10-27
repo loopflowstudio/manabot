@@ -143,6 +143,8 @@ pub(crate) enum CombatDamagePass {
 
 #[derive(Debug)]
 pub struct Game {
+    /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
+    pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
     pub state: GameState,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
@@ -179,6 +181,7 @@ impl Clone for Game {
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
             undo: None,
+            card_capture: None,
         }
     }
 }
@@ -258,6 +261,7 @@ impl Game {
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
             undo: None,
+            card_capture: None,
         }
     }
 }

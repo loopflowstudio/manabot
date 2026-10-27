@@ -13,13 +13,13 @@ import platform
 import resource
 import sys
 import time
+import tomllib
 import tracemalloc
 from typing import Any, Sequence
 
 import managym._managym as native_managym
 import numpy as np
 import psutil
-import tomllib
 
 from manabot.semantic.compiler import canonical_json
 from manabot.semantic.learning import BoundSemanticPack

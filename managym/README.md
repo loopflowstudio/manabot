@@ -2,7 +2,9 @@
 
 The deterministic Magic: The Gathering rules engine and training environment
 behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-and `academy` (the optional play UI).
+and `academy` (the optional play UI). The Python API is `manabot.managym`,
+bundled with the `manabot` distribution; `import managym` remains a compatibility
+alias. Rust sources stay in this directory.
 
 ## Architecture
 
@@ -71,7 +73,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w10-v1](../conformance/semantic-kernel-w10-v1/).
+[semantic-kernel-w13-v1](../conformance/semantic-kernel-w13-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -79,6 +81,23 @@ After changing Rust, rebuild the Python extension into the uv-managed venv:
 uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
+
+The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
+inventories every numbered entry, with explicit unknowns and scoped evidence.
+Card-shell checks and replay agreement do not independently prove rules
+correctness. Prefer directed tests with independently specified outcomes and
+small bounded combinations before adding longer random-game cohorts.
+
+Check the committed inventory offline from the repository root with
+`uv run python scripts/audit_rules.py`. Supplying `--source <downloaded-txt>`
+also checks the pinned byte digest and exact source inventory. Do not upgrade
+child rules merely because their family has a test or a matching citation.
+The Prism/Treasure audit probe now follows explicit nested payment decisions
+and passes its final mana, sacrifice and empty-stack assertions. Its original
+failure remains historical evidence; this bounded pass does not certify all
+payment rules. See the audit's
+[ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
+before using its historical Task attribution.
 
 ## Style
 
@@ -126,3 +145,45 @@ cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
+
+Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
+Their [ownership and authoring contract](../docs/rules/optional-payments.md)
+covers both ordinary mana and waterbend without a card-specific decision.
+
+Mana offers, waterbend affordability and automatic production use executable
+witnesses from `flow/mana.rs`. A mana source is reserved while its printed
+upfront cost is pending; `Decision::ManaUpfront` retains the parent decision
+and frame. Only after that obligation finishes do its tap/life/sacrifice costs
+commit and its output become a visible color decision. Mana abilities do not
+create stack objects. Fixed production keeps source order; a nested automatic
+prefix considers concrete pool remainders and the parent's completion.
+
+Every registered chosen-output mana mode consumes a tap (sometimes also a
+sacrifice), so each source has one use during a payment. The registry contract
+requires a model extension before introducing separate tap/sacrifice mana uses,
+repeatable free sources, or additional mana-ability cost methods.
+Search retains identities rather than grouping equal outputs. Its total and
+spend-purpose bounds only reject impossible branches; every accepted payment
+still requires a complete witness. This is finite search, without a general
+large-board performance guarantee.
+
+`Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
+v2: the unchanged semantic Observation, shared native continuation frames, bound public card
+characteristics, visible object joins, world/content identity and optional public
+history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
+all fields except the digest itself using recursively key-sorted compact JSON.
+`DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
+`SEMANTIC_DECISION_VERSION` still owns embedded schema 6. No frozen world or
+existing observation consumer changes meaning.
+
+The opaque native capture binds an Env and reset generation. Use
+`execute_captured_command_json(capture, command_json)` for atomic origin and
+current-digest validation plus ordinary semantic execution. Portable capture JSON
+is evidence, not execution authority; clones need their own live capture.
+
+
+Fresh policy input v2 adds native current stack/continuation relation rows. Its
+layout, legacy checkpoint admission and measurement commands are documented in
+[the observation input contract](../docs/recent-events.md#current-continuation-input).
+The presentation context and text capture derive from the same typed frames;
+portable schema-6 viewer JSON is validated by the native observation types.

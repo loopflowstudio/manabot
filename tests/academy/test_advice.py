@@ -26,7 +26,7 @@ from academy.advice import (
 )
 from academy.server import app
 from academy.study_protocol import DecisionEvidence, StudyArtifact
-from manabot.sim.conditional_search import ConditionalStrategyResult, ConditionResult
+from manabot.sim.search.conditional import ConditionalStrategyResult, ConditionResult
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(
@@ -48,7 +48,7 @@ def test_default_play_import_does_not_require_training_dependencies() -> None:
 import builtins
 import sys
 
-blocked = {'numpy', 'torch', 'pandas', 'psutil', 'wandb', 'gymnasium'}
+blocked = {'numpy', 'torch', 'pandas', 'psutil', 'gymnasium'}
 real_import = builtins.__import__
 
 def guarded(name, globals=None, locals=None, fromlist=(), level=0):
@@ -70,7 +70,7 @@ with TemporaryDirectory() as directory:
     game.hero_action(0)
     game.close('test')
     assert game.attempt_store.load(game.trace_id)['events']
-assert 'manabot.sim.conditional_search' not in sys.modules
+assert 'manabot.sim.search.conditional' not in sys.modules
 assert 'numpy' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True)

@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
-
-import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
+
+import managym
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -31,10 +31,10 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w10-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w11-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "c9a026adad8735ebac47a0a3f9406817fad4c46b800869c5b824b55354627c1b"
-TERMINAL_STATE = "f3046d40c9cf6a1bedccfef44a2be44417e703f5b5aa5e90ac019ab17c8f9443"
+AUTHORITY_SHA256 = "78d533368335094f7720c942229dc2cd2a1bcbc9d4e2a70d9b7fa34727fa7f2b"
+TERMINAL_STATE = "3f34856d96bdee401c8b50bb02fe0aa2443adeb80053bbe90b96ea97813ec0b2"
 
 COMMAND_COUNT = 156
 HISTORICAL_AUTHORITY_SHA256 = (
@@ -625,14 +625,14 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w10-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/v1/generated/two_deck.ir.json",
         "content/semantic/v1/two_deck.source.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",
-        "managym/experience.py",
-        "managym/experience_projection.py",
+        "manabot/managym/experience.py",
+        "manabot/managym/experience_projection.py",
         "academy/presentation.py",
         "academy/replay_index.py",
         "academy/semantic_boundary.py",
@@ -641,7 +641,7 @@ def _source_manifest() -> dict[str, Any]:
         "manabot/semantic/decision_contract.py",
         "managym/Cargo.lock",
         "managym/Cargo.toml",
-        "managym/decision.py",
+        "manabot/managym/decision.py",
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
         "tests/academy/test_authored_match_parity.py",

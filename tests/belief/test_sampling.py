@@ -3,6 +3,7 @@
 from dataclasses import replace
 import itertools
 
+from managym.possible_worlds import PossibleWorldSpace
 import pytest
 import torch
 
@@ -13,7 +14,6 @@ from manabot.belief.sampling import (
     physical_deal_log_prob,
     sample_physical_deal,
 )
-from managym.possible_worlds import PossibleWorldSpace
 
 
 def _input() -> SamplerInput:

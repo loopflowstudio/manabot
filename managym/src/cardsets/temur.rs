@@ -4,7 +4,7 @@
 
 use super::alpha::CardRegistry;
 use crate::state::{
-    ability::{Ability, Effect, StaticCondition, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, PaymentCost, StaticCondition, TriggerCondition, TriggerSubject},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords},
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
@@ -173,7 +173,11 @@ impl CardRegistry {
             text_box: "Draw three cards. Then discard a card unless you waterbend {2}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)".into(),
             spell_effects: vec![
                 Effect::DrawCards { count: 3 },
-                Effect::WaterbendOrDiscard { generic: 2 },
+                Effect::OptionalPayment {
+                    cost: PaymentCost::Waterbend { generic: 2 },
+                    if_paid: vec![],
+                    if_declined: vec![Effect::Discard],
+                },
             ],
             ..Default::default()
         });

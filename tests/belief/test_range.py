@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import math
 
+from managym.possible_worlds import PossibleWorld, PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 
 from manabot.belief.range import BeliefError, BeliefState
-from manabot.sim.teacher1_evidence import _fresh_env
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace, WorldQuery
+from manabot.sim.search.teacher1_evidence import _fresh_env
 
 
 def _space(

@@ -36,6 +36,27 @@ impl Game {
         skip_trivial: bool,
         content: Arc<ContentPack>,
     ) -> Self {
+        Self::construct(player_configs, seed, skip_trivial, content, false)
+    }
+
+    pub(crate) fn new_capturing(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+    ) -> Self {
+        let content = content_pack_for_authored_match(&player_configs)
+            .expect("validated authored content")
+            .unwrap_or_else(default_content_pack);
+        Self::construct(player_configs, seed, skip_trivial, content, true)
+    }
+
+    fn construct(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+        content: Arc<ContentPack>,
+        capture: bool,
+    ) -> Self {
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
@@ -100,7 +121,8 @@ impl Game {
                 zones.move_card(card, player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
-            // CR 103.4, 103.5 — Each player shuffles then draws an opening hand of seven cards.
+            // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
+            // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
                 if let Some(card) = zones.top(ZoneType::Library, player) {
                     zones.move_card(card, player, ZoneType::Hand);
@@ -144,11 +166,15 @@ impl Game {
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
             undo: None,
+            card_capture: None,
         };
 
         game.trackers[0].on_game_start();
         game.trackers[1].on_game_start();
 
+        if capture {
+            game.card_capture = Some(crate::flow::card_capture::CardCapture::new(&game));
+        }
         let _ = game.tick();
         game
     }

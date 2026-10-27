@@ -3,13 +3,16 @@
 from dataclasses import asdict
 from pathlib import Path
 
+from managym.experience import ExperienceFrame
 import pytest
 
 from academy import server
 from academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
+from academy.play_demo import load_play_demo
+from academy.server import viewer_view
 from academy.trace import GameConfig, load_trace
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.infra.config import MatchConfig, RewardConfig
 import managym
 
 
@@ -51,7 +54,7 @@ def test_session_reveal_evidence_uses_definition_identity(tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_session_manabot_and_stored_root_agree(tmp_path, reverse):
+def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) -> None:
     decks = ["ur_lessons", "gw_allies"]
     if reverse:
         decks.reverse()
@@ -76,16 +79,16 @@ def test_session_manabot_and_stored_root_agree(tmp_path, reverse):
     assert sum(config.villain_sideboard.values()) == (3 if reverse else 2)
 
     match = Match(
-        MatchHypers.authored(
+        MatchConfig.authored(
             CURATED_PACK.semantic_pack_key, *decks, hero="Hero", villain="Villain"
         )
     )
-    env = Env(match, ObservationSpace(), Reward(RewardHypers()), seed=0)
+    env = Env(match, ObservationSpace(), Reward(RewardConfig()), seed=0)
     env.reset(seed=0)
     witness = session.env.search_witness_json()
-    assert env._engine.search_witness_json() == witness
+    training_witness = env._engine.search_witness_json()
     env.reset(seed=0)
-    assert env._engine.search_witness_json() == witness
+    assert env._engine.search_witness_json() == training_witness
 
     recovery = session.current_recovery("reconnect")
     assert recovery["frame"]["match_id"] == session.match_id
@@ -94,9 +97,14 @@ def test_session_manabot_and_stored_root_agree(tmp_path, reverse):
     payload = load_trace(session.match_id, tmp_path)
     restored = GameConfig(**payload["config"])
     assert asdict(restored) == asdict(config)
-    rebuilt = managym.Env(seed=restored.seed)
+    # Compare each consumer at its own native decision boundary. Academy
+    # surfaces sole choices; training collapses them using the same setup.
+    rebuilt = managym.Env(seed=restored.seed, skip_trivial=False)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == witness
+    training_root = managym.Env(seed=restored.seed, skip_trivial=True)
+    training_root.reset(restored.to_rust())
+    assert training_root.search_witness_json() == training_witness
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -151,17 +159,15 @@ def test_recorded_named_root_rejects_missing_sideboards_and_old_asset_identity()
 @pytest.mark.parametrize(
     "kind", ["LEARN_TAKE_LESSON", "LEARN_DISCARD", "DECLINE_CHOICE"]
 )
-def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(tmp_path, kind):
-    from academy.learn_demo import load_learn_demo
-    from academy.server import viewer_view
-    from managym.experience import ExperienceFrame
-
+def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(
+    tmp_path: Path, kind: str
+) -> None:
     session = server.GameSession(trace_dir=tmp_path)
     frame = session.new_game({"demo": "learn"})["frame"]
     assert frame["action_space"] == "LEARN"
-    assert frame["revision"] == load_learn_demo()["learn_revision"]
+    assert frame["revision"] == load_play_demo("learn").decision_revision
     ExperienceFrame.model_validate(frame)
-    assert len(session.canonical_decisions) >= len(load_learn_demo()["prefix"])
+    assert len(session.canonical_decisions) >= len(load_play_demo("learn").prefix)
     assert len(frame["projection"]["agent"]["sideboard"]) == 3
     assert frame["projection"]["opponent"].get("sideboard", []) == []
     root = session.env.clone_env()
@@ -196,11 +202,14 @@ def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(tmp_path, 
     )
 
 
-def test_checked_demo_rejects_wrong_runtime_identity(tmp_path, monkeypatch):
-    from academy import learn_demo
+def test_checked_demo_rejects_wrong_runtime_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from academy import play_demo
 
-    demo = learn_demo.load_learn_demo()
-    demo["learn_digest"] = "wrong"
-    monkeypatch.setattr(learn_demo, "load_learn_demo", lambda: demo)
+    demo = play_demo.load_play_demo("learn").model_copy(
+        update={"decision_digest": "wrong"}
+    )
+    monkeypatch.setattr(play_demo, "load_play_demo", lambda name: demo)
     with pytest.raises(ValueError, match="checked decision"):
         server.GameSession(trace_dir=tmp_path).new_game({"demo": "learn"})

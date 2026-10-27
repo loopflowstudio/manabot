@@ -8,7 +8,7 @@ model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
-Admission is still ``manabot.sim.flat_mc.load_checkpoint_agent``; the catalog
+Admission is still ``manabot.sim.search.flat_mc.load_checkpoint``; the catalog
 reuses its world binding rules (``manabot.model.world``) so a listed
 "compatible" checkpoint and a loadable one cannot disagree about the world.
 """
@@ -27,7 +27,7 @@ from typing import Any, Literal
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
 
 CheckpointSource = Literal["path", "runs", "tournament"]
@@ -125,7 +125,7 @@ def _inspect_cached(
         or not isinstance(checkpoint.get("hypers"), Mapping)
     ):
         return NotAPolicyCheckpoint(f"{path} holds no policy")
-    hypers = checkpoint["hypers"]
+    config = checkpoint["hypers"]
     binding = checkpoint.get("world_binding")
     world = binding.get("world") if isinstance(binding, Mapping) else None
     step = checkpoint.get("global_step")
@@ -137,7 +137,7 @@ def _inspect_cached(
         source="path",
         producer=_producer(checkpoint),
         world=world if isinstance(world, str) else None,
-        model=_model_shape(hypers.get("agent_hypers")),
+        model=_model_shape(config.get("agent_hypers")),
         parameters=sum(
             int(tensor.numel())
             for tensor in checkpoint["model_state_dict"].values()
@@ -163,8 +163,8 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
     if trained != WORLD:
         return f"trained in {trained}, engine is {WORLD}"
     try:
-        observation = ObservationSpaceHypers(
-            **checkpoint["hypers"]["observation_hypers"]
+        observation = ObservationConfig.from_checkpoint(
+            checkpoint["hypers"]["observation_hypers"]
         )
         configs = checkpoint_configs(binding)
         expected = checkpoint_world(configs, ObservationSpace(observation))
@@ -237,16 +237,14 @@ def _producer(checkpoint: Mapping[str, Any]) -> str:
         stage = f" {extra['stage_id']}" if extra.get("stage_id") else ""
         weights = f" ({extra['weights']})" if extra.get("weights") else ""
         return f"regime run {extra['run_id']}{stage}{weights}"
-    if isinstance(extra, Mapping):
-        return "supervised distillation"
     if checkpoint["hypers"].get("train_hypers"):
         return "manabot train"
     return "unknown"
 
 
-def _model_shape(agent_hypers: Any) -> str:
+def _model_shape(agent_config: Any) -> str:
     try:
-        spec = AgentSpec(**agent_hypers)
+        spec = ModelConfig(**agent_config)
     except Exception:  # unknown fields from another code version
         return "unknown shape"
     if not spec.attention_on:
@@ -340,9 +338,8 @@ def _tournament(
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 
-    The schema owner is ``experiments.runners.head_to_head.Tournament``; only
-    the entrant fields that identify exact bytes are read here, and code
-    anchors without a ``file`` are skipped.
+    Only the entrant fields that identify exact bytes (``file``, ``sha256``)
+    are read here; code anchors without a ``file`` are skipped.
     """
 
     try:

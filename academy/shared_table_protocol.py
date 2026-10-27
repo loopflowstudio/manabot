@@ -12,9 +12,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import ConfigDict, Field, TypeAdapter
-
 from managym.experience import Command, ProtocolModel, UInt64
+from pydantic import ConfigDict, Field, TypeAdapter
 
 from .advice_identity import AdviceIdentity
 
@@ -371,8 +370,3 @@ class SharedTableV1ConformanceBundle(ProtocolModel):
 def shared_table_schema() -> dict[str, object]:
     """Return the checked Draft 2020-12 control schema."""
     return SharedTableV1ConformanceBundle.model_json_schema()
-
-
-def request_types() -> tuple[str, ...]:
-    """Closed operation vocabulary used by both validation and dispatch."""
-    return REQUEST_TYPES

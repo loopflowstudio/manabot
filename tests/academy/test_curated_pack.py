@@ -67,7 +67,7 @@ def test_pack_hash_and_backend_deck_views_derive_from_manifest():
     assert len(expected_hash) == 64
     assert server.ASSET_MANIFEST_HASH == expected_hash
     # manabot records the served pack's digest in its frames without loading it.
-    from manabot.sim.teacher1_evidence import (
+    from manabot.infra.provenance import (
         RECORDED_ASSET_MANIFEST,
         RECORDED_ASSET_MANIFEST_HASH,
     )

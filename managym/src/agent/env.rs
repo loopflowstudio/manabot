@@ -87,15 +87,25 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
+/// Private scalar replay input retained only for diagnostics at vector failures.
+#[derive(Clone, Debug, serde::Serialize)]
+struct NativeActionTrace {
+    player_configs: Vec<PlayerConfig>,
+    actions: Vec<usize>,
+}
+
 #[derive(Debug)]
 pub struct Env {
     game: Option<Game>,
+    action_trace: Option<NativeActionTrace>,
+    capture_cards: bool,
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
     possible_world_space_constructions: AtomicU64,
+    pub(crate) capture_generation: u64,
 }
 
 /// One canonical space prepared for bounded materialization against the same
@@ -172,12 +182,15 @@ impl Env {
     ) -> Self {
         Self {
             game: None,
+            action_trace: None,
+            capture_cards: false,
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         }
     }
 
@@ -190,12 +203,15 @@ impl Env {
     fn branch_from_game(&self, game: Game) -> Env {
         Env {
             game: Some(game),
+            action_trace: None,
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         }
     }
 
@@ -213,11 +229,48 @@ impl Env {
         crate::semantic::content_pack_for_authored_match(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
-        let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
+        self.action_trace = Some(NativeActionTrace {
+            player_configs: player_configs.clone(),
+            actions: Vec::new(),
+        });
+        let mut game = if self.capture_cards {
+            Game::new_capturing(player_configs, self.seed, self.skip_trivial)
+        } else {
+            Game::new(player_configs, self.seed, self.skip_trivial)
+        };
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
+        self.capture_generation += 1;
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
+    }
+
+    /// Must be enabled before reset so setup facts cannot be missed.
+    pub fn enable_card_capture(&mut self) -> Result<(), AgentError> {
+        if self.game.is_some() {
+            return Err(AgentError(
+                "card capture must be enabled before reset".into(),
+            ));
+        }
+        self.capture_cards = true;
+        Ok(())
+    }
+
+    pub fn card_capture_json(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("capture before reset".into()))?;
+        let capture = game
+            .card_capture
+            .as_ref()
+            .ok_or_else(|| AgentError("card capture unavailable".into()))?;
+        serde_json::to_string(&serde_json::json!({
+            "capture": capture,
+            "final_cards": crate::flow::card_capture::snapshots(game),
+            "turn": game.state.turn.turn_number,
+        }))
+        .map_err(|e| AgentError(e.to_string()))
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -233,6 +286,24 @@ impl Env {
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {
         self.game.as_ref().map_or(0, |game| game.skip_trivial_count)
+    }
+
+    /// Training-only error context. Public scalar/API errors do not expose
+    /// hidden cards. The snapshot may be partially mutated by the failed step;
+    /// the reset input and successful prefix reconstruct its pre-action root.
+    pub(crate) fn vector_failure_context(&self, action: i64) -> String {
+        serde_json::json!({
+            "schema": "managym-native-failure-v1",
+            "world": crate::WORLD_VERSION,
+            "match_state_hash_version": crate::MATCH_STATE_HASH_VERSION,
+            "seed": self.seed,
+            "skip_trivial": self.skip_trivial,
+            "trace": self.action_trace,
+            "failed_action_index": action,
+            "post_error_state": self.game.as_ref().map(|game| game.state.deterministic_hash_value()),
+            "post_error_pending_choice": self.game.as_ref().map(|game| &game.pending_choice),
+            "post_error_offers": self.game.as_ref().and_then(|game| game.action_space()),
+        }).to_string()
     }
 
     pub fn step(
@@ -267,6 +338,9 @@ impl Env {
         };
 
         let done = game.step(action)?;
+        if let Some(trace) = &mut self.action_trace {
+            trace.actions.push(action);
+        }
         let mut result = finish_game_step(game, agent, done);
         if done {
             self.add_profiler_info(&mut result.4);
@@ -381,6 +455,57 @@ impl Env {
                 AgentError("env.semantic_decision_frame called before reset".to_string())
             })?
             .semantic_decision_frame()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Public event identities used to explain a committed transition.
+    pub fn presentation_subjects(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, crate::experience::SubjectRef>, AgentError> {
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .presentation_subjects())
+    }
+
+    pub fn decision_offer_subjects(
+        &self,
+        viewer: usize,
+    ) -> Result<Vec<Vec<crate::experience::OfferSubjectView>>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision_offer_subjects(PlayerId(viewer)))
+    }
+
+    pub fn decision_context(
+        &self,
+        viewer: usize,
+    ) -> Result<Option<crate::experience::DecisionContextView>, AgentError> {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .decision_context(PlayerId(viewer)))
+    }
+
+    pub fn capture_decision(
+        &self,
+        viewer: usize,
+        history_capacity: usize,
+    ) -> Result<crate::decision_capture::DecisionCapture, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .capture_decision(PlayerId(viewer), history_capacity)
             .map_err(|error| AgentError(error.to_string()))
     }
 
@@ -740,12 +865,15 @@ impl Env {
             .clone();
         Ok(Env {
             game: Some(game),
+            action_trace: self.action_trace.clone(),
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         })
     }
 
@@ -758,12 +886,15 @@ impl Env {
         let game = FullCloneDriver.fork_exact(source);
         Ok(Env {
             game: Some(game),
+            action_trace: self.action_trace.clone(),
+            capture_cards: false,
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            capture_generation: 0,
         })
     }
 

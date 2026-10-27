@@ -17,8 +17,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sanity:
-    uses: ./.github/workflows/learnability.yml
   train:
     strategy:
       fail-fast: false
@@ -66,7 +64,7 @@ jobs:
           if-no-files-found: error
   evidence:
     if: always() && needs.train.result != 'skipped'
-    needs: [train, sanity]
+    needs: train
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

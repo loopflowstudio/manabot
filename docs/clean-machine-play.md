@@ -32,13 +32,13 @@ Chromium version observed on each run. The hosted runner image may evolve; the
 recorded facts are evidence and are not silently replaced by the label above.
 
 Before timing begins, the checkout must not contain `.venv`, `.cache`,
-`frontend/node_modules`, generated Svelte/Vite/build/test output,
+`academy/ui/node_modules`, generated Svelte/Vite/build/test output,
 `managym/target`, a `managym/_managym*.so` extension, GUI trace JSON, or a
 prior proof browser profile. The proof job restores no uv, npm, Cargo, target,
 or project-install cache. Installing the host tools, browser, and checkout is
 provisioning and is outside the measured command.
 
-## Ninety-second boundary
+## Time to playable
 
 The wall clock starts immediately before `./scripts/play` is spawned. It ends
 only when a fresh Chromium context shows all of the following:
@@ -51,12 +51,22 @@ only when a fresh Chromium context shows all of the following:
 
 The measured time includes uv's locked play-runtime sync, the release native build,
 `npm ci`, both service startups, browser navigation, and default match
-creation. It must be strictly less than 90,000 ms. The budget was 60,000 ms
-until 2026-09-30; the release native build alone had reached about 52 s on
-GitHub's runner before the w4 cards added rules, and the first w4 run timed
-out, so Jack Heart accepted 90 s. The launcher-internal time
-is diagnostic; the externally measured receipt is authoritative because it
-also includes uv startup and dependency work.
+creation. The budget is 90,000 ms. It was 60,000 ms until 2026-09-30; the
+release native build alone had reached about 52 s on GitHub's runner before
+the w4 cards added rules, and the first w4 run timed out, so Jack Heart
+accepted 90 s. The launcher-internal time is diagnostic; the externally
+measured receipt is authoritative because it also includes uv startup and
+dependency work.
+
+The receipt records `elapsed_to_playable_ms`, `budget_ms` and `within_budget`,
+and CI prints the time in the job summary and warns when it is over budget.
+CI does not fail on the budget. On 2026-10-21 one main commit
+(run 39684701736) timed out on its first attempt with the native build still
+compiling dependencies after 66 s, then reached playable in 55,193 ms on
+rerun, with a 43.3 s native build. The same `npm ci` took 12.7 s on the
+first runner and 4.3 s on the second, so the verdict depended on the runner
+and not on the commit. The proof still fails if a clean launch does not
+become ready within 600 s, or if any playable or offline-reload check fails.
 
 Run the complete proof only from a checkout that satisfies the empty-artifact
 predicate:
@@ -77,8 +87,7 @@ so frontend startup and initial compilation overlap backend preparation.
 Both services must pass readiness before the launcher emits its ready record.
 Any installation or service-start failure tears down the started services. The
 browser waits for `ACADEMY_PLAY_READY` before navigating. This overlaps proof
-setup with installation without moving the external start time or relaxing
-the ninety-second playable-state assertion.
+setup with installation without moving the external start time.
 
 ### Startup phase evidence
 
@@ -87,16 +96,15 @@ runtime is ready and around frontend installation/sync and the native build.
 Installation and compiler output streams directly to the launcher log, including
 while a subprocess is still running. A missing completion record therefore leaves
 its start timestamp and live output available after a timeout. Completed phases
-report their duration and exit code. These are diagnostics; the external playable
-clock and its 90,000 ms assertion remain unchanged.
+report their duration and exit code. These are diagnostics beside the external
+playable clock.
 
 On 2026-10-08, [main run 37798764116](https://github.com/loopflowstudio/fantasia/actions/runs/37798764116)
 at `69594494` timed out after Vite was ready and native compilation had started.
 Its launcher buffered compiler output until process exit, so the retained log
 cannot distinguish slow compilation from an intervening download or tool failure.
 The same launcher/native source passed PR268's clean proof in 36,846 ms. That
-difference establishes timing variation, not a confirmed cause or permission to
-raise the accepted limit. Phase records close the diagnostic gap without changing
+difference establishes timing variation, not a confirmed cause. Phase records close the diagnostic gap without changing
 the installation, release profile, readiness checks, or offline-play assertions.
 The [local clean proof](../experiments/data/etu126/clean-startup-20261008.json)
 with phase logging reached playable state in 26,151 ms on an M4 Max, including
@@ -120,7 +128,7 @@ the local authority can run without networking or a local process,
 respectively.
 
 The pack authority remains
-`frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json`. Both the
+`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json`. Both the
 launcher and browser receipt derive `{id, version, manifest_sha256}` from its
 installed bytes. There is no duplicated deck list or expected hash in the
 proof.

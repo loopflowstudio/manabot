@@ -2,8 +2,8 @@
 // Continuous-effect queries: effective power/toughness, effective keywords,
 // animation-aware type checks, and static-condition evaluation.
 //
-// Layer order (simplified CR 613.3/613.4):
-//   1. base P/T — printed, or characteristic-defining (CR 613.3a layer 7a:
+// Supported subset of CR 613.4 (September 25, 2026):
+//   1. base P/T — printed, or characteristic-defining (CR 613.4a layer 7a:
 //      Suki "power = creatures you control", Dragonfly Swarm "power =
 //      noncreature nonland cards in your graveyard"); earthbend animation
 //      sets base 0/0 by construction (lands print no P/T).
@@ -12,7 +12,9 @@
 //   3. until-end-of-turn P/T modifications (also layer 7c; all Milestone-1
 //      effects are additive, so ordering within the layer is immaterial and
 //      no timestamp system is kept).
-//   4. +1/+1 counters (layer 7d).
+//   4. +1/+1 counters (also layer 7c, CR 613.4c).
+// These additive layer-7c terms commute. Layer 7d switches P/T, and is not
+// represented here; neither are general timestamp/dependency interactions.
 // Anthem scopes match printed characteristics plus animation (never
 // power), so the computation cannot recurse.
 

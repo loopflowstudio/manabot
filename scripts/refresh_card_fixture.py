@@ -18,10 +18,10 @@ from __future__ import annotations
 import gzip
 import io
 import json
+from pathlib import Path
 import re
 import sys
 import urllib.request
-from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CARDSETS = REPO / "managym" / "src" / "cardsets"
@@ -32,7 +32,16 @@ BULK_INDEX = "https://api.scryfall.com/bulk-data"
 
 # Fields we snapshot per card. They are compared against registrations by the
 # cargo conformance test (managym/tests/conformance_tests.rs).
-FIELDS = ["name", "mana_cost", "type_line", "power", "toughness", "keywords", "oracle_text", "colors"]
+FIELDS = [
+    "name",
+    "mana_cost",
+    "type_line",
+    "power",
+    "toughness",
+    "keywords",
+    "oracle_text",
+    "colors",
+]
 
 
 def registered_names() -> list[str]:
@@ -101,7 +110,9 @@ def oracle_cards() -> dict[str, dict]:
     index = json.loads(http_get(BULK_INDEX))
     entry = next(item for item in index["data"] if item["type"] == "oracle_cards")
     size_mb = entry.get("size", entry.get("compressed_size", 0)) / 1e6
-    print(f"downloading oracle_cards bulk data ({size_mb:.0f} MB, updated {entry.get('updated_at')})...")
+    print(
+        f"downloading oracle_cards bulk data ({size_mb:.0f} MB, updated {entry.get('updated_at')})..."
+    )
     if "download_uri" in entry:
         cards = json.loads(http_get(entry["download_uri"]))
     else:
@@ -113,7 +124,12 @@ def oracle_cards() -> dict[str, dict]:
     print(f"bulk data: {len(cards)} oracle cards")
     by_name: dict[str, dict] = {}
     for card in cards:
-        if card.get("layout") in ("token", "double_faced_token", "emblem", "art_series"):
+        if card.get("layout") in (
+            "token",
+            "double_faced_token",
+            "emblem",
+            "art_series",
+        ):
             continue
         by_name.setdefault(card["name"], card)
     return by_name
@@ -135,7 +151,9 @@ def main() -> int:
         cards[name] = {field: card.get(field) for field in FIELDS}
 
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(json.dumps(dict(sorted(cards.items())), indent=2, ensure_ascii=False) + "\n")
+    FIXTURE.write_text(
+        json.dumps(dict(sorted(cards.items())), indent=2, ensure_ascii=False) + "\n"
+    )
     print(f"wrote {FIXTURE} ({len(cards)} cards)")
     if missing:
         print("\nNOT on Scryfall (mark `// not a real card` or register as token):")

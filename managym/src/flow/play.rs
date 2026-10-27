@@ -48,7 +48,7 @@ impl Game {
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.available_mana(player).can_pay(cost)
+        self.can_pay_automatic_mana(player, cost)
     }
 
     /// Iroh's continuous grant is restricted to its controller's turn.
@@ -856,30 +856,6 @@ impl Game {
         }
     }
 
-    pub(crate) fn reserved_payment_source(&self, payment: &Payment) -> Option<PermanentId> {
-        match payment {
-            Payment::Activation {
-                permanent,
-                ability_index,
-                ..
-            } => {
-                let source = self.state.permanents[*permanent].as_ref().unwrap();
-                let ability = &self.state.cards[source.card].activated_abilities[*ability_index];
-                (ability.tap_source || ability.sacrifice_source).then_some(*permanent)
-            }
-            Payment::Spell { .. } => None,
-        }
-    }
-
-    pub(crate) fn pending_mana_source(&self) -> Option<PermanentId> {
-        match &self.pending_choice {
-            Some(PendingChoice::ManaPayment { payment, .. }) => {
-                self.reserved_payment_source(payment)
-            }
-            _ => None,
-        }
-    }
-
     fn begin_mana_payment(
         &mut self,
         player: PlayerId,
@@ -923,8 +899,7 @@ impl Game {
         alternative: Option<ManaCost>,
     ) -> Result<(), AgentError> {
         let cost = self.payment_mana_cost(player, &payment, alternative.as_ref());
-        let reserved = self.reserved_payment_source(&payment);
-        self.produce_mana_without(player, &cost, reserved)?;
+        self.produce_mana(player, &cost)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
         self.spend_mana(player, &cost)?;
@@ -984,19 +959,7 @@ impl Game {
     /// Can `player` cover `cost` with untapped waterbend candidates
     /// ({1} each, generic only) plus available mana?
     pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        if self.can_pay_with_mana_abilities(player, cost, None) {
-            return true;
-        }
-        if cost.generic() == 0 {
-            return false;
-        }
-        self.waterbend_candidates(player)
-            .into_iter()
-            .any(|candidate| {
-                let mut probe = self.clone();
-                probe.tap_permanent(candidate, false);
-                probe.can_pay_with_waterbend(player, &cost.reduced_generic(1))
-            })
+        self.waterbend_payment_possible(player, cost)
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.

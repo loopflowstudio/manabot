@@ -10,7 +10,7 @@ It has two halves:
   per-player observations that keep hidden information hidden. Python bindings
   come through PyO3.
 - **manabot** (Python): the agents. It includes self-play training, search,
-  belief models over hidden cards, and an arena for evaluating checkpoints
+  belief models over hidden cards, and evaluation tools for checkpoints
   against fixed opponents.
 
 We are currently focusing on a very small but fairly complicated set of decks:
@@ -45,7 +45,7 @@ fixtures ([conformance/](conformance/)).
 
 **Versioned worlds.** The observation and action encoding is versioned as a
 *world* ([WORLDS.md](WORLDS.md)). Checkpoints only load in the world they were
-trained in, and a nightly learnability check catches encodings that make two
+trained in, and the nightly baseline check refuses encodings that make two
 different choices look identical.
 
 **One network, one action head.** One network encodes every visible object,
@@ -68,16 +68,15 @@ Reward is win or loss only: our shaped rewards lost to it
 **Hidden information and search.** Belief samplers learn a distribution over
 the opponent's hidden cards from a frozen policy's own games
 ([belief sampler](docs/belief-sampler.md)). Search samples hands from that
-belief, uses the frozen policy for continuations, and distills its choices
-back into the policy ([local policy search](docs/local-policy-search.md)).
-This runs end to end but has not yet shown a strength gain over the policy
-alone.
+belief and uses the frozen policy for continuations at play time
+([local policy search](docs/local-policy-search.md)). It has not yet shown a
+strength gain over the policy alone.
 
 **Evaluation by head-to-head play.** Trained agents play each other. A
 *Tournament* file names a roster of checkpoints and fixed opponents, and the
 runner plays every pairing on the same held-out deals, with both decks and
-both seats ([head-to-head](experiments/head-to-head.md)). The arena fits
-ratings across the whole population (`manabot/arena/`), and a rule-based
+both seats ([head-to-head](experiments/head-to-head.md)). The evaluation library fits
+ratings across the whole population (`manabot/eval/`), and a rule-based
 `heuristic` bot gives a stable reference point across runs. Every game is
 replay-verified.
 
@@ -93,6 +92,13 @@ mirror matches versus balanced cross-deck play). Evaluation is kept narrow,
 just enough to compare curricula, rather than testing current agents across a
 wide range of environments.
 
+## Versioned installs
+
+Versioned PyPI release preparation, platform support, CPU/CUDA installation and
+maintainer publishing are described in [the release guide](docs/releases.md).
+[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
+the source workflow below remains available.
+
 ## Quickstart
 
 You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
@@ -104,13 +110,15 @@ uv sync --python 3.12 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train          # small CPU training run, under a minute, no W&B
+uv run manabot train          # small CPU training run, under a minute, local Etude tracking
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints to
-`.runs/local/`. Training recipes are JSON *regimes* under
-[experiments/regimes/](experiments/regimes/). The current GPU baseline is
-`uv run manabot train --regime experiments/regimes/batched-baseline.json`.
+`.runs/local/`. Training recipes are typed *regimes* composed in Python, one module per
+current experiment in [experiments/](experiments/), from reusable parts in
+[manabot/training/builders.py](manabot/training/builders.py). The current GPU
+baseline is
+`uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
 [manabot/README.md](manabot/README.md) covers presets, remote GPU runs,
 simulation, and evaluation.
 
@@ -181,14 +189,14 @@ not comparable with today's checkpoints:
 | Path | What it is |
 |---|---|
 | `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
-| `manabot/` | Agents: models, training, search, beliefs, arena, verification ([README](manabot/README.md)) |
+| `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Card and deck definitions compiled to a typed IR |
-| `conformance/` | Rules conformance fixtures |
+| `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/repository-archive.md) |
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |
-| `academy/`, `frontend/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
+| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
 | `wave/`, `.lf/` | Loopflow Waves, Flows, and skills that organize agent work |
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
@@ -197,6 +205,9 @@ decisions, and the play UI only displays what managym allows the viewer to
 see.
 
 ## Development
+
+Read [TESTING.md](TESTING.md) before running checks. Never intentionally induce
+load for testing.
 
 ```bash
 # Rust (CI runs cargo test in debug, so validate in debug before landing)
@@ -213,7 +224,7 @@ guides are in each package README.
 
 - **manabot**: the bot and the Python library. You train *a* manabot.
 - **managym**: the rules environment the bot lives in.
-- **Academy**: the local bot-testing UI (`academy/`, `frontend/`).
+- **Academy**: the local bot-testing UI (`academy/`, `academy/ui/`).
 - **Etude**: the separate system that launches and records experiments
   ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
   documents also use *Etude* and *Fantasia* for this project.

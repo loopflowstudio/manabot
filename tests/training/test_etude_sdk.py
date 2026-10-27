@@ -1,4 +1,4 @@
-"""Public SDK admission: local recording, artifact retention, and offline reports.
+"""Public SDK admission: local recording and artifact retention.
 
 This is infrastructure proof only. The fixture does not train a policy, launch a
 job, or claim that an SDK artifact has passed manabot checkpoint admission.
@@ -8,22 +8,21 @@ import hashlib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from etude.track.read import read_all
-from etude.track.records import Step
-from etude.track.report import page_data, write
-from etude.track.run import init
+from etude.train.read import read_all
+from etude.train.records import Step
+from etude.train.run import track
 import pytest
 
-from manabot.infra.experiment import Experiment
-from manabot.infra.hypers import ExperimentHypers
+from manabot.infra.config import RuntimeConfig
+from manabot.infra.runtime import RunContext
 
 
-def test_public_sdk_records_checkpoint_and_renders_offline(tmp_path: Path) -> None:
+def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:
     artifact = tmp_path / "fixture.bin"
     payload = b"mtg122-sdk-admission-no-training"
     artifact.write_bytes(payload)
     directory = tmp_path / "records"
-    run = init(
+    run = track(
         experiment="mtg122-sdk-admission",
         clocks=[Step("updates", "completed collect/update iterations")],
         directory=directory,
@@ -42,19 +41,19 @@ def test_public_sdk_records_checkpoint_and_renders_offline(tmp_path: Path) -> No
     data = read_all(directory)
     assert len(data) == 1
     assert len(data[0].checkpoints) == 1
-    report = write(page_data("mtg122-sdk-admission", data), tmp_path / "report")
-    assert "mtg122-sdk-admission" in report.read_text()
 
 
-def test_experiment_uses_sdk_even_with_historical_wandb_disabled(
+def test_run_context_records_update_clocks(
     tmp_path: Path,
 ) -> None:
-    with Experiment(
-        ExperimentHypers(exp_name="sdk-fixture", runs_dir=tmp_path, wandb=False)
+    with RunContext(
+        RuntimeConfig(name="sdk-fixture", runs_dir=tmp_path),
+        experiment="seat_comparison",
     ) as experiment:
         experiment.log_update({"loss": 0.25}, updates=2, transitions=512)
     data = read_all(tmp_path / "sdk-fixture" / "etude")
     assert len(data) == 1
+    assert data[0].experiment == "seat_comparison"
     assert data[0].rows == 1
     assert "loss" in data[0].metrics()
     assert data[0].incomplete == 0
@@ -64,23 +63,27 @@ def test_experiment_uses_sdk_even_with_historical_wandb_disabled(
     assert data[0].state.state == "finished"
 
 
-def test_experiment_retains_failure_state(tmp_path: Path) -> None:
+def test_run_context_retains_failure_state(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="fixture failure"):
-        with Experiment(ExperimentHypers(exp_name="failed-fixture", runs_dir=tmp_path)):
+        with RunContext(
+            RuntimeConfig(name="failed-fixture", runs_dir=tmp_path),
+            experiment="failed-fixture",
+        ):
             raise RuntimeError("fixture failure")
     data = read_all(tmp_path / "failed-fixture" / "etude")
     assert data[0].state is not None
     assert data[0].state.state == "failed"
 
 
-def test_experiment_obeys_launcher_identity_and_directory(
+def test_run_context_obeys_launcher_identity_and_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     launched = tmp_path / "launched"
     monkeypatch.setenv("ETUDE_RUN", "fixture-launched-run")
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(launched))
-    with Experiment(
-        ExperimentHypers(exp_name="launched-fixture", runs_dir=tmp_path / "local"),
+    with RunContext(
+        RuntimeConfig(name="launched-fixture", runs_dir=tmp_path / "local"),
+        experiment="launched-fixture",
         resolved_config={"fixture": "resolved-recipe"},
     ) as experiment:
         experiment.log_update({"loss": 0.5}, updates=1, transitions=16)

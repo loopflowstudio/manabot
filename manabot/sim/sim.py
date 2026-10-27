@@ -1,35 +1,34 @@
-"""
-evaluate.py
-Simplified and consolidated evaluation package for manabot.
+"""Scalar game simulation and evaluation statistics recorded through Etude.
 
-This module provides:
-1. Loading models from wandb
-2. Player abstractions for model inference
-3. Basic game simulation and statistics tracking
-4. Action distribution and decision analysis
+load_player admits local policies or exact Etude checkpoint records. run_simulation
+owns the evaluation tracking lifetime; game statistics never fit a model.
 """
 
 import argparse
 from collections import Counter, defaultdict
 from enum import Enum
+import logging
+import os
+from pathlib import Path
 import threading
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from etude.train.records import Step
+from etude.train.run import track
 import numpy as np
-import wandb
 
 # Local imports
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.experiment import Experiment
-from manabot.infra.hypers import ExperimentHypers, SimulationHypers
-from manabot.infra.log import getLogger
+from manabot.infra.config import RuntimeConfig, SimulationConfig
+from manabot.infra.log import getLogger, setGlobalLogLevel
+from manabot.infra.runtime import seed_random
+from manabot.model.checkpoint import load_checkpoint, load_etude_checkpoint
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
     Player,
     RandomPlayer,
-    load_model_from_wandb,
 )
 
 # -----------------------------------------------------------------------------
@@ -361,62 +360,6 @@ class GameStats:
                     else:
                         logger.info(f"  {key}: {value}")
 
-    def log_to_wandb(self, run) -> None:
-        """Log summary statistics and visualizations to wandb."""
-        summary = self.get_summary()
-
-        # Basic metrics
-        metrics = {
-            "eval/hero_win_rate": summary["hero_win_rate"],
-            "eval/villain_win_rate": summary["villain_win_rate"],
-            "eval/timeout_rate": summary["timeouts"] / summary["total_games"],
-            "eval/avg_steps": summary["avg_steps"],
-            "eval/avg_duration": summary["avg_duration"],
-        }
-
-        if self.steps_to_win:
-            metrics["eval/avg_steps_to_win"] = summary["avg_steps_to_win"]
-
-        run.log(metrics)
-
-        # Game records table
-        games_table = wandb.Table(
-            columns=["outcome", "steps", "duration"],
-            data=[[g["outcome"].value, g["steps"], g["duration"]] for g in self.games],
-        )
-        run.log({"eval/games": games_table})
-
-        # Turn distribution histogram
-        if self.games:
-            turn_counts = [g["steps"] for g in self.games]
-            turn_histogram = np.histogram(turn_counts, bins=20)
-            run.log(
-                {"eval/turn_distribution": wandb.Histogram(np_histogram=turn_histogram)}
-            )
-
-            # Win rates by turn
-            detailed = self.get_detailed_analysis()
-            run.log(
-                {
-                    "eval/early_game_win_rate": detailed["early_game_win_rate"],
-                    "eval/mid_game_win_rate": detailed["mid_game_win_rate"],
-                    "eval/late_game_win_rate": detailed["late_game_win_rate"],
-                }
-            )
-
-            # Log behavior metrics
-            behavior_summary = self.get_behavior_summary()
-
-            # Hero behavior metrics
-            for key, value in behavior_summary["hero"].items():
-                if isinstance(value, (int, float)):
-                    run.log({f"eval/hero_{key}": value})
-
-            # Villain behavior metrics
-            for key, value in behavior_summary["villain"].items():
-                if isinstance(value, (int, float)):
-                    run.log({f"eval/villain_{key}": value})
-
 
 # -----------------------------------------------------------------------------
 # Outcome Determination
@@ -466,7 +409,7 @@ def determine_outcome(
 def simulate_models(
     hero_player: Player,
     villain_player: Player,
-    sim_hypers: Optional[SimulationHypers] = None,
+    sim_config: Optional[SimulationConfig] = None,
 ) -> GameStats:
     """
     Evaluate models in parallel by running multiple games simultaneously.
@@ -482,13 +425,13 @@ def simulate_models(
     logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
 
     # Set up hyperparameters
-    sim_hypers = sim_hypers or SimulationHypers()
+    sim_config = sim_config or SimulationConfig()
 
     # Determine number of threads (capped by games and CPU cores)
-    num_threads = min(sim_hypers.num_threads, sim_hypers.num_games)
+    num_threads = min(sim_config.num_threads, sim_config.num_games)
     logger.info(f"Starting simulation: {hero_player.name} vs {villain_player.name}")
     logger.info(
-        f"Running {sim_hypers.num_games} games with max {sim_hypers.max_steps} steps each"
+        f"Running {sim_config.num_games} games with max {sim_config.max_steps} steps each"
     )
     logger.info(f"Using {num_threads} parallel threads")
 
@@ -503,9 +446,9 @@ def simulate_models(
     # Worker function that runs games until target count is reached
     def worker_thread(thread_id):
         # Create environment for this thread
-        match = Match(sim_hypers.match)
+        match = Match(sim_config.match)
         observation_space = ObservationSpace()
-        reward = Reward(sim_hypers.reward)
+        reward = Reward(sim_config.reward)
         env = Env(
             match,
             observation_space,
@@ -521,13 +464,13 @@ def simulate_models(
         while True:
             # Check if we've completed enough games
             with completed_lock:
-                if completed_games >= sim_hypers.num_games:
+                if completed_games >= sim_config.num_games:
                     break
                 completed_games += 1
 
             # Simulate a single game
             outcome, steps, duration, profiler_data, behavior_data = _simulate_game(
-                env, hero_player, villain_player, sim_hypers.max_steps
+                env, hero_player, villain_player, sim_config.max_steps
             )
 
             # Record game with minimal metadata
@@ -570,10 +513,10 @@ def simulate_models(
             current = completed_games
 
         # Progress update every 5 seconds
-        if current < sim_hypers.num_games:
+        if current < sim_config.num_games:
             elapsed = time.time() - start_time
             rate = current / elapsed if elapsed > 0 else 0
-            remaining = sim_hypers.num_games - current
+            remaining = sim_config.num_games - current
             eta = remaining / rate if rate > 0 else "unknown"
 
             if isinstance(eta, float):
@@ -582,8 +525,8 @@ def simulate_models(
                 eta_str = str(eta)
 
             logger.info(
-                f"Progress: {current}/{sim_hypers.num_games} games completed "
-                f"({current / sim_hypers.num_games:.1%}) | "
+                f"Progress: {current}/{sim_config.num_games} games completed "
+                f"({current / sim_config.num_games:.1%}) | "
                 f"Rate: {rate:.2f} games/sec | ETA: {eta_str}"
             )
 
@@ -707,10 +650,12 @@ def load_player(model_str: str) -> Player:
     if model_name == "default":
         return DefaultPlayer("DefaultPlayer")
 
-    model, version = model_str.split(":") if ":" in model_str else (model_str, "latest")
-    return ModelPlayer(
-        f"Model_{model_str}", load_model_from_wandb(model, version, device="cpu")
-    )
+    path = Path(model_str).expanduser()
+    if path.suffix == ".json":
+        agent, _ = load_etude_checkpoint(path)
+    else:
+        agent, _ = load_checkpoint(str(path))
+    return ModelPlayer(f"Model_{path.stem}", agent)
 
 
 # -----------------------------------------------------------------------------
@@ -718,25 +663,46 @@ def load_player(model_str: str) -> Player:
 # -----------------------------------------------------------------------------
 
 
-def run_simulation(
-    sim_hypers: SimulationHypers, experiment_hypers: ExperimentHypers
-) -> None:
+def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) -> None:
     """Run a simulation sweep for hero/villain model specs."""
-    _ = Experiment(experiment_hypers)
-    logger = getLogger("manabot.sim.sim")
-    logger.info(
-        "Simulation config: "
-        f"hero={sim_hypers.hero}, villain={sim_hypers.villain}, "
-        f"num_games={sim_hypers.num_games}, num_threads={sim_hypers.num_threads}, "
-        f"max_steps={sim_hypers.max_steps}"
+    setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
+    seed_random(
+        runtime_config.seed, torch_deterministic=runtime_config.torch_deterministic
     )
+    with track(
+        experiment=runtime_config.name,
+        clocks=[Step("games", "completed evaluation games")],
+        seed=runtime_config.seed,
+        config=sim_config.model_dump(mode="json"),
+        directory=None
+        if os.environ.get("ETUDE_TRACK_DIR")
+        else runtime_config.runs_dir / runtime_config.name / "etude",
+        strict=True,
+    ) as tracked:
+        logger = getLogger("manabot.sim.sim")
+        logger.info(
+            "Simulation config: "
+            f"hero={sim_config.hero}, villain={sim_config.villain}, "
+            f"num_games={sim_config.num_games}, num_threads={sim_config.num_threads}, "
+            f"max_steps={sim_config.max_steps}"
+        )
 
-    logger.info(f"Loading hero model: {sim_hypers.hero}")
-    logger.info(f"Loading villain model: {sim_hypers.villain}")
-    hero_player = load_player(sim_hypers.hero)
-    villain_player = load_player(sim_hypers.villain)
+        logger.info(f"Loading hero model: {sim_config.hero}")
+        logger.info(f"Loading villain model: {sim_config.villain}")
+        hero_player = load_player(sim_config.hero)
+        villain_player = load_player(sim_config.villain)
 
-    simulate_models(hero_player, villain_player, sim_hypers)
+        stats = simulate_models(hero_player, villain_player, sim_config)
+        for index, game in enumerate(stats.games, start=1):
+            tracked.log(
+                {
+                    "game/outcome": game["outcome"].value,
+                    "game/steps": game["steps"],
+                    "game/duration": game["duration"],
+                },
+                games=index,
+            )
+        tracked.log({"evaluation": stats.get_summary()}, games=len(stats.games))
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -754,10 +720,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    sim_hypers, experiment_hypers = load_sim_config(
+    sim_config, runtime_config = load_sim_config(
         preset=args.preset, set_overrides=args.set_values
     )
-    run_simulation(sim_hypers, experiment_hypers)
+    run_simulation(sim_config, runtime_config)
 
 
 if __name__ == "__main__":
