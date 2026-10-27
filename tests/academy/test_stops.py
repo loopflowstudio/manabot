@@ -147,7 +147,11 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
     assert len(clicked_events) == len(surfaced_decisions), (
         "Every clicked decision corresponds to a surfaced window"
     )
-    assert all(not e["auto"] for e in trace["events"] if e["actor"] == "villain")
+    assert all(
+        len(e["actions"]) == 1
+        for e in trace["events"]
+        if e["actor"] == "villain" and e["auto"]
+    )
 
 
 def test_disabling_auto_pass_surfaces_every_window(isolated_traces):

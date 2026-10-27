@@ -15,7 +15,8 @@
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
-  import { gameStore } from '$lib/game.svelte';
+  import { checkpointChoice, gameStore } from '$lib/game.svelte';
+  import { sanitizeDeckSelection } from '$lib/decks';
   import { presentationPlayer } from '$lib/presentation.svelte';
   import {
     connect,
@@ -36,6 +37,7 @@
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
+  let showSetup = $state(false);
 
   let trainedOpponents = $state<TrainedOpponent[]>([]);
   let catalogError = $state<string | null>(null);
@@ -54,7 +56,17 @@
   let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
-    demoName = new URLSearchParams(window.location.search).get('demo');
+    const params = new URLSearchParams(window.location.search);
+    demoName = params.get('demo');
+    if (!demoName) {
+      const decks = sanitizeDeckSelection({ hero: params.get('hero'), villain: params.get('villain') });
+      if (decks) {
+        gameStore.setHeroDeck(decks.hero);
+        gameStore.setVillainDeck(decks.villain);
+      }
+      const opponent = params.get('opponent');
+      if (opponent && /^[a-f0-9]{64}$/.test(opponent)) gameStore.setOpponentChoice(checkpointChoice(opponent));
+    }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
     connect();
@@ -145,6 +157,7 @@
       return;
     }
     sendNewGame(gameStore.newGameConfig());
+    showSetup = false;
   }
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
@@ -296,16 +309,10 @@
       {/if}
     </div>
 
-    <div class="flex flex-wrap items-end gap-x-5 gap-y-3">
+    <div class="flex min-w-0 max-w-full flex-wrap items-end gap-x-5 gap-y-3">
       {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. Automated checked setup; New Game repeats it.</p>
       {:else if demoName}<p class="type-caption" data-testid="demo-origin">Precision demo · custom stress decks · automated checked setup. Choose actions from the legal choices below. New Game repeats setup.</p>{/if}
-      {#if !demoName && (!gameStore.observation || gameStore.gameOver) && gameStore.hasCapability('configure_match')}
-        <DeckSelector
-          hero={gameStore.decks.hero}
-          villain={gameStore.decks.villain}
-          onHeroChange={(value) => gameStore.setHeroDeck(value)}
-          onVillainChange={(value) => gameStore.setVillainDeck(value)}
-        />
+      {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
         <OpponentSelector
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
@@ -314,6 +321,11 @@
         />
       {/if}
       <div class="flex items-center gap-4">
+        {#if !demoName && gameStore.observation && !gameStore.gameOver && gameStore.hasCapability('configure_match')}
+          <button class="btn" aria-expanded={showSetup} onclick={() => showSetup = !showSetup}>
+            {showSetup ? 'Return to game' : 'Choose decks'}
+          </button>
+        {/if}
         <div data-testid="connection-summary" class="flex items-center gap-1.5">
           <i
             aria-hidden="true"
@@ -337,19 +349,31 @@
             {gameStore.connection}
           </span>
         </div>
-        {#if gameStore.observation}<button
+        <button
           class="btn btn-primary"
           onclick={startNewGame}
           disabled={gameStore.newGamePending || !gameStore.hasCapability('configure_match')}
         >
           {gameStore.newGamePending ? 'Preparing game…' : gameStore.hasCapability('configure_match') ? 'New Game' : 'Pilot only'}
-        </button>{/if}
+        </button>
       </div>
     </div>
   </div>
 
   {#if !gameStore.observation}
     <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
+  {/if}
+  {#if !demoName && (!gameStore.observation || gameStore.gameOver || showSetup) && gameStore.hasCapability('configure_match')}
+    {#if gameStore.observation && !gameStore.gameOver}
+      <p class="type-caption mt-4 text-ink-2">Choose your next matchup. New Game ends this attempt and starts the selected decks; Return to game keeps playing.</p>
+    {/if}
+    <DeckSelector
+      hero={gameStore.decks.hero}
+      villain={gameStore.decks.villain}
+      disabled={gameStore.newGamePending}
+      onHeroChange={(value) => gameStore.setHeroDeck(value)}
+      onVillainChange={(value) => gameStore.setVillainDeck(value)}
+    />
   {/if}
   {#if gameStore.observation && boardObservation}
     <div class="grid grid-cols-1 items-start">
@@ -443,13 +467,6 @@
     <div class="mx-auto max-w-xl py-12 text-center">
       <p class="type-annotation mb-1 text-ink-2">The table is set.</p>
       <p role="status" class="type-caption mb-5 text-ink-2">{gameStore.newGamePending ? 'Preparing the checked demo position. This may take a moment…' : 'Start a game to begin.'}</p>
-      <button
-        class="btn btn-primary"
-        onclick={startNewGame}
-        disabled={gameStore.newGamePending || !gameStore.hasCapability('configure_match')}
-      >
-        {gameStore.newGamePending ? 'Preparing game…' : gameStore.hasCapability('configure_match') ? 'New Game' : 'Pilot only'}
-      </button>
       <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
         <fieldset disabled={!gameStore.hasCapability('configure_match')}>
           <legend class="sr-only">Pilot stop controls</legend>

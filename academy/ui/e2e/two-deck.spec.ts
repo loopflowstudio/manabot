@@ -1,3 +1,4 @@
+import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
 // Milestone-1 two-deck slice e2e: select UR Lessons vs GW Allies in the UI,
@@ -54,8 +55,8 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
 
   // Select the Milestone-1 matchup through the UI (also the defaults, but
   // the point is that the pickers drive the config).
-  await page.getByTestId('deck-select-hero').selectOption('ur_lessons');
-  await page.getByTestId('deck-select-villain').selectOption('gw_allies');
+  await selectDeck(page, 'hero', 'ur_lessons');
+  await selectDeck(page, 'villain', 'gw_allies');
   await page.getByTestId('opponent-select').selectOption('random');
   // Default stops stay on: my main1/main2 + opponent end step + stack.
 

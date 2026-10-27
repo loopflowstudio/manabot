@@ -21,6 +21,7 @@ academy/ui/.svelte-kit/
 academy/ui/build/
 academy/ui/.vite/
 academy/ui/src/lib/card-art/*.jpg
+academy/ui/src/lib/card-art/full/*.jpg
 academy/ui/src/lib/card-art/credits.json
 .runs/
 
