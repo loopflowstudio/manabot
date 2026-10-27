@@ -13,13 +13,129 @@ from dataclasses import dataclass
 import math
 from typing import Literal
 
+from etude.eval.query import statsdb
+from etude.eval.records import Agent, Environment
+from etude.run.storage import Storage
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import Game, GameRow
 
 Arm = Literal["U", "M", "E", "ME"]
 ARMS: tuple[Arm, ...] = ("U", "M", "E", "ME")
 type GameKey = tuple[str, str, int, int]
+
+
+class Outcome(BaseModel):
+    """The scoring fields Etude publishes; unavailable decision diagnostics are not invented."""
+
+    model_config = ConfigDict(extra="forbid")
+    model_deck: str
+    heuristic_deck: str
+    model_seat: Literal[0, 1]
+    deal: int
+    score: float | None
+    valid: bool
+    failure: str | None
+
+
+class _StoredOutcome(Outcome):
+    artifact: str | None
+    model_commit: str | None
+    model_source: str | None
+    anchor_key: str
+    anchor_commit: str | None
+    anchor_source: str | None
+    environment: str
+
+
+def load_games(
+    source: Storage,
+    selections: Mapping[Arm, Agent],
+    *,
+    anchor: Agent,
+    environment: Environment,
+    tournament: str,
+) -> dict[Arm, list[Outcome]]:
+    """Read selected checkpoint games from Etude, refusing changed identities.
+
+    Agents and environment must come from the frozen launch records, not be
+    recomputed from a newer checkout. Absent delivered game tables mean no
+    games yet. Storage/SQL failures propagate, rather than becoming empty data.
+    Duplicated/off-schedule game rows remain visible for `compare` to reject.
+    """
+    if anchor.version.source is None:
+        raise ValueError("the frozen anchor source is required")
+    if any(
+        agent.version.source is None
+        or agent.key.checkpoint is None
+        or agent.artifact is None
+        or agent.artifact.sha256 is None
+        for agent in selections.values()
+    ):
+        raise ValueError(
+            "selected policies require checkpoint keys and artifact digests"
+        )
+    found: dict[Arm, list[Outcome]] = {arm: [] for arm in ARMS}
+    db = statsdb("curriculum_adapters", source)
+    try:
+        tables = {row[0] for row in db.sql("show tables").fetchall()}
+        if "games" not in tables:
+            return found
+        # Etude omits columns whose delivered values are all null. Preserve
+        # unknown scores/reasons as null, including an entirely invalid cohort.
+        game_columns = {row[0] for row in db.sql("describe games").fetchall()}
+        score = "g.score" if "score" in game_columns else "cast(null as double)"
+        failure = "g.failure" if "failure" in game_columns else "cast(null as varchar)"
+        for arm, agent in selections.items():
+            cursor = db.execute(
+                f"""select g.deck as model_deck, g.opponent_deck as heuristic_deck,
+                    g.seat as model_seat, g.deal, {score} as score, g.valid, {failure} as failure,
+                    a.artifact, s.commit as model_commit, s.source as model_source,
+                    o.agent as anchor_key, o.commit as anchor_commit, o.source as anchor_source,
+                    r.environment
+                from games g
+                join seats s on s.run=g.run and s.match=g.match and s.player=0
+                join agents a on a.agent=s.agent
+                join seats o on o.run=g.run and o.match=g.match and o.player=1
+                join runs r on r.run=g.run
+                where g.player=0 and s.agent=? and r.tournament=?""",
+                [agent.key.encoded, tournament],
+            )
+            columns = [column[0] for column in cursor.description]
+            for values in cursor.fetchall():
+                row = _StoredOutcome.model_validate(
+                    dict(zip(columns, values, strict=True))
+                )
+                assert agent.artifact is not None
+                if (
+                    row.artifact != agent.artifact.sha256
+                    or (row.model_commit, row.model_source)
+                    != (agent.version.commit, agent.version.source)
+                    or row.anchor_key != anchor.key.encoded
+                    or (row.anchor_commit, row.anchor_source)
+                    != (anchor.version.commit, anchor.version.source)
+                    or row.environment != environment.identity
+                ):
+                    raise ValueError(f"frozen evaluation identity mismatch for {arm}")
+                found[arm].append(
+                    Outcome.model_validate(
+                        row.model_dump(
+                            exclude={
+                                "artifact",
+                                "model_commit",
+                                "model_source",
+                                "anchor_key",
+                                "anchor_commit",
+                                "anchor_source",
+                                "environment",
+                            }
+                        )
+                    )
+                )
+    finally:
+        db.close()
+    return found
 
 
 @dataclass(frozen=True)
@@ -54,13 +170,13 @@ class Comparison:
     contrast_bounds: dict[str, Bounds]
 
 
-def _key(row: Game | GameRow) -> GameKey:
+def _key(row: Game | GameRow | Outcome) -> GameKey:
     return row.model_deck, row.heuristic_deck, row.deal, row.model_seat
 
 
 def compare(
     schedule: Sequence[Game],
-    results: Mapping[Arm, Sequence[GameRow]],
+    results: Mapping[Arm, Sequence[GameRow | Outcome]],
     *,
     seed: int,
     replicates: int = 2000,

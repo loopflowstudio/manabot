@@ -1,9 +1,28 @@
 """Small grids verify equal cells, paired seats and visible missing outcomes."""
 
+import hashlib
+from pathlib import Path
+
+from etude.eval.match import Tables
+from etude.eval.records import (
+    Agent,
+    AgentKey,
+    Benchmark,
+    CheckpointKey,
+    Environment,
+    Match,
+    Matchup,
+    Version,
+    digest,
+)
+from etude.eval.tournament import hold
+from etude.run.records import ArtifactRef
+from etude.run.storage import DirectoryStorage
 import pytest
 
-from experiments.curriculum_report import ARMS, Arm, Bounds, compare
+from experiments.curriculum_report import ARMS, Arm, Bounds, compare, load_games
 from experiments.elemental_grid import Game, GameRow
+from experiments.elemental_long_eval import game_rows
 
 
 def _schedule() -> list[Game]:
@@ -102,3 +121,167 @@ def test_shared_deal_noise_cancels_from_paired_contrasts() -> None:
     assert result.scores == dict.fromkeys(ARMS, 0.25)
     for estimate in result.contrasts.values():
         assert (estimate.value, estimate.low, estimate.high) == (0.0, 0.0, 0.0)
+
+
+def _fixture_play(match: Match) -> Tables:
+    # Controlled outcomes, never inference or training on the fixture bytes.
+    rows = _results(_schedule())
+    arm = next(arm for arm in ARMS if arm == match.agents[0].name)
+    selected = rows[arm]
+    if match.conditions.get("invalid"):
+        selected = [
+            row.model_copy(
+                update={"valid": False, "score": None, "failure": "fixture invalid"}
+            )
+            for row in selected
+        ]
+    return {"games": game_rows(selected, "subset")}
+
+
+def test_load_real_etude_tables_and_reject_changed_frozen_identity(
+    tmp_path: Path,
+) -> None:
+    source = DirectoryStorage(tmp_path / "tracking")
+    world = Environment(name="fixture-world", files=digest("world"))
+    anchor = Agent(
+        key=AgentKey(code="heuristic"),
+        name="heuristic",
+        version=Version(source=digest("anchor")),
+    )
+    policies: dict[Arm, Agent] = {}
+    for arm in ARMS:
+        path = tmp_path / f"{arm}.pt"
+        body = f"identity fixture {arm}; not a policy".encode()
+        path.write_bytes(body)
+        policies[arm] = Agent(
+            key=AgentKey(checkpoint=CheckpointKey(run=f"train-{arm}", name="u0.pt")),
+            name=arm,
+            version=Version(source=digest("inference")),
+            artifact=ArtifactRef(
+                uri=path.as_uri(),
+                sha256=hashlib.sha256(body).hexdigest(),
+                size_bytes=len(body),
+            ),
+        )
+    tournament = Benchmark(
+        name="held-out",
+        environment=world,
+        matchups=tuple(
+            Matchup(
+                name=arm, players=(policies[arm], anchor), conditions=({},), games=6
+            )
+            for arm in ARMS
+        ),
+    )
+    hold(
+        tournament,
+        experiment="curriculum_adapters",
+        play=_fixture_play,
+        directory=tmp_path / "writer",
+        storages=[source],
+    )
+    rows = load_games(
+        source, policies, anchor=anchor, environment=world, tournament="held-out"
+    )
+    assert compare(_schedule(), rows, seed=1, replicates=8).scores == {
+        "U": 0.25,
+        "M": 0.5,
+        "E": 0.75,
+        "ME": 1.0,
+    }
+    assert all(
+        not games
+        for games in load_games(
+            source, policies, anchor=anchor, environment=world, tournament="development"
+        ).values()
+    )
+    changed = dict(policies)
+    changed["M"] = policies["M"].model_copy(
+        update={"version": Version(source=digest("changed"))}
+    )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        load_games(
+            source, changed, anchor=anchor, environment=world, tournament="held-out"
+        )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        load_games(
+            source,
+            policies,
+            anchor=anchor,
+            environment=world.model_copy(update={"files": digest("changed world")}),
+            tournament="held-out",
+        )
+
+    changed_artifact = dict(policies)
+    assert policies["U"].artifact is not None
+    changed_artifact["U"] = policies["U"].model_copy(
+        update={
+            "artifact": policies["U"].artifact.model_copy(
+                update={"sha256": digest("other bytes")}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        load_games(
+            source,
+            changed_artifact,
+            anchor=anchor,
+            environment=world,
+            tournament="held-out",
+        )
+    with pytest.raises(ValueError, match="identity mismatch"):
+        load_games(
+            source,
+            policies,
+            anchor=anchor.model_copy(
+                update={"version": Version(source=digest("other heuristic"))}
+            ),
+            environment=world,
+            tournament="held-out",
+        )
+    invalid_source = DirectoryStorage(tmp_path / "invalid-tracking")
+    assert all(
+        not games
+        for games in load_games(
+            invalid_source,
+            policies,
+            anchor=anchor,
+            environment=world,
+            tournament="invalid-only",
+        ).values()
+    )
+    invalid = Benchmark(
+        name="invalid-only",
+        environment=world,
+        matchups=(
+            Matchup(
+                name="invalid",
+                players=(policies["U"], anchor),
+                conditions=({"invalid": True},),
+                games=6,
+            ),
+        ),
+    )
+    hold(
+        invalid,
+        experiment="curriculum_adapters",
+        play=_fixture_play,
+        directory=tmp_path / "invalid-writer",
+        storages=[invalid_source],
+    )
+    invalid_rows = load_games(
+        invalid_source,
+        policies,
+        anchor=anchor,
+        environment=world,
+        tournament="invalid-only",
+    )
+    assert len(invalid_rows["U"]) == 6
+    assert all(
+        row.score is None and not row.valid and row.failure == "fixture invalid"
+        for row in invalid_rows["U"]
+    )
+    assert (
+        compare(_schedule(), invalid_rows, seed=1, replicates=8).coverage["U"].invalid
+        == 6
+    )

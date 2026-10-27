@@ -244,3 +244,11 @@ lie anywhere in [0,1]; these are identification bounds, not confidence
 intervals or imputed games. Do not substitute a complete-case population.
 This estimator is prepared before observing any completed study evaluation;
 its controlled test fixtures are not study results.
+
+`load_games` reads the retained Etude tables for explicitly selected checkpoint
+agents and tournament, using identities from frozen launch records. It checks
+checkpoint digest, policy source/commit, heuristic key/source/commit and world
+identity before admitting rows. Missing score/failure columns in all-null Etude
+tables remain null. It preserves invalid outcomes and passes duplicate rows to
+the estimator for rejection. Controlled integration tests write real Etude
+tournament records with fixture outcomes; they are not study evaluations.
