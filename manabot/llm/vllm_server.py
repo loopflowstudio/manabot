@@ -31,7 +31,8 @@ def server_command(config: InferenceConfig, model: str, concurrency: int) -> lis
         "--no-project",
         "--no-sync",
         "--python",
-        str(Path(".venv-vllm/bin/python").resolve()),
+        # Resolving this symlink selects system Python and loses the venv.
+        str(Path(".venv-vllm/bin/python").absolute()),
         "python",
         "-m",
         "vllm.entrypoints.openai.api_server",
@@ -93,9 +94,12 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 ],
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
                 timeout=30,
             )
+            self.log.write(probe.stdout.encode() + probe.stderr.encode())
+            self.log.flush()
+            probe.check_returncode()
             facts = json.loads(probe.stdout)
             identity = RuntimeIdentity(
                 runtime="vllm",
@@ -120,6 +124,9 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
+            print(
+                "vLLM server starting; startup details retained in vllm.log", flush=True
+            )
             deadline = started + 900
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
@@ -130,6 +137,10 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                     with urlopen("http://127.0.0.1:8123/health", timeout=2) as response:
                         if response.status == 200:
                             self.seconds = time.monotonic() - started
+                            print(
+                                f"vLLM server healthy after {self.seconds:.3f}s",
+                                flush=True,
+                            )
                             return self
                 except (URLError, TimeoutError):
                     pass

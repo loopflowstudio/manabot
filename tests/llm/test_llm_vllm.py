@@ -4,6 +4,8 @@ from concurrent.futures import Future
 from functools import partial
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tarfile
 import time
 from types import TracebackType
@@ -23,6 +25,32 @@ from experiments import qwen_mtg183_vllm as campaign
 from manabot.llm import vllm_runtime, vllm_server
 from manabot.llm.schema import InferenceConfig, Message, RuntimeIdentity
 from manabot.verify.llm_game import GameSummary
+
+
+def test_server_uses_its_own_virtual_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An actual uv-created venv must survive interpreter symlinks and a parent venv."""
+    subprocess.run(
+        ["uv", "venv", "--python", sys.executable, str(tmp_path / ".venv-vllm")],
+        check=True,
+        capture_output=True,
+        timeout=20,
+    )
+    config = InferenceConfig.model_validate_json(
+        campaign.original.INFERENCE.read_text()
+    )
+    monkeypatch.setenv("VIRTUAL_ENV", sys.prefix)
+    monkeypatch.chdir(tmp_path)
+    command = vllm_server.server_command(config, "fixture", 4)
+    probe = subprocess.run(
+        command[:7] + ["-c", "import sys; print(sys.prefix)"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
+    assert Path(probe.stdout.strip()) == tmp_path / ".venv-vllm"
 
 
 @pytest.fixture

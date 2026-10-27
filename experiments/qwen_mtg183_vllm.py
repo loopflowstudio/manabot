@@ -153,6 +153,7 @@ def worker(config: Campaign, out: Path) -> None:
                 else:
                     del pending[future]
                     pending[submitted] = game
+                    print(f"GAME {game.index}: admitted", flush=True)
 
         for _ in range(config.concurrency):
             admit()

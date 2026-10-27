@@ -129,3 +129,14 @@ charge was $0.02901644665277777951. Together with `b6a4716bb321`, retained renta
 estimates total $0.09140036411944444410. The next job/cohort cap of $9.40 plus
 that sunk amount and the $0.50 reserve totals $9.99140036411944444410. Later
 attempts must lower their cap as needed; final inclusive billing remains unknown.
+
+The cache-fix attempt `25ce352f9533` passed acquisition but failed its server
+environment probe: resolving `.venv-vllm/bin/python` followed its symlink to
+system Python. The repair preserves the absolute virtual-environment path and
+retains probe stderr. A local uv-created environment test verifies the actual
+command selects the server environment even with an active client environment.
+No games were admitted. Provider absence was verified at 2026-10-27 05:55:25 UTC;
+its estimated charge is $0.02914788226388888835. The three prior estimates total
+$0.12054824638333333245. The next job/cohort cap is **$9.37**, preserving the
+same $0.50 reserve under the original $10. Hardware and scientific treatment
+remain unchanged; each failed attempt remains separate evidence.
