@@ -1,13 +1,15 @@
 """A bounded full-game proof with native text, a warm model and command replay.
 
-One seat uses the ordinary LLM protocol; the other samples the complete legal
-action set uniformly. Every capture, selection and native transition is retained
+One seat uses the ordinary LLM protocol; the other uses an admitted checkpoint
+or samples the complete legal action set uniformly. Every capture and transition is retained
 before the next decision. This is a functional test, not a strength evaluation.
 """
 
 import argparse
 from collections import Counter
-from dataclasses import asdict
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
 import json
 import os
 from pathlib import Path
@@ -16,12 +18,19 @@ import statistics
 import subprocess
 import time
 
-from managym.decision import apply_semantic_command
+from managym.decision import DecisionFrame, apply_semantic_command
 from pydantic import BaseModel, Field
+import torch
 
+from manabot.env.match import Match
+from manabot.infra.artifacts import verify_file
+from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
+from manabot.model.checkpoint import load_checkpoint
+from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import (
+    TextDecision,
     capture_text_decision,
     resolve_action,
     submit_response,
@@ -38,6 +47,8 @@ class GameConfig(BaseModel):
     max_decisions: int = Field(default=2000, gt=0)
     max_seconds: float = Field(default=3600, gt=0)
     deck: dict[str, int] = {"Mountain": 24, "Gray Ogre": 24, "Lightning Bolt": 12}
+    match: MatchConfig | None = None
+    skip_trivial: bool = False
 
 
 class GameSummary(BaseModel):
@@ -56,6 +67,83 @@ class GameSummary(BaseModel):
     replay_matches: bool = True
     final_digest: str | None = None
     mode: str
+    # Monotonic host intervals; native execution includes capture validation.
+    observations: dict[str, float] = Field(default_factory=dict)
+    model_latencies: list[float] = Field(default_factory=list)
+    opponent_latencies: list[float] = Field(default_factory=list)
+    reasoning_tokens: int = 0
+    answer_tokens: int = 0
+    output_tokens: int = 0
+    token_split_attempts: int = 0
+    generation_attempts: int = 0
+    llm_phases: dict[str, float] = Field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PolicyChoice:
+    reference: str
+    encoding_seconds: float
+    inference_seconds: float
+
+
+class CheckpointOpponent:
+    """One resident CPU policy; tensor offers bind back to native Commands.
+
+    Loading happens once outside the game window; setup admission repeats for
+    each game and remains in its unattributed host overhead. The complete native
+    offer space must fit the checkpoint encoder; truncation fails closed.
+    """
+
+    def __init__(self, path: Path, sha256: str, size: int) -> None:
+        started = time.monotonic()
+        verify_file(path, sha256, size)
+        self.agent, self.space = load_checkpoint(str(path))
+        if self.agent.config.compound_decisions or self.agent.belief_count_buckets:
+            raise ValueError("this comparison requires the flat stateless checkpoint")
+        self.agent.eval()
+        self.load_seconds = time.monotonic() - started
+        self.sha256 = sha256
+
+    def admit(self, players: list[managym.PlayerConfig], seed: int) -> None:
+        validate_agent_setup(self.agent, players, allow_deck_repetition=True)
+        torch.manual_seed(seed)
+
+    def choose(self, env: managym.Env, decision: TextDecision) -> PolicyChoice:
+        started = time.monotonic()
+        actor = env.current_agent_index()
+        raw = env.observation_for_player(actor)
+        encoder = self.space.encoder
+        if (
+            len(raw.action_space.actions) > encoder.max_actions
+            or max(len(raw.agent_cards), len(raw.opponent_cards))
+            > encoder.cards_per_player
+            or max(len(raw.agent_permanents), len(raw.opponent_permanents))
+            > encoder.perms_per_player
+        ):
+            raise ValueError(
+                "checkpoint encoding would truncate native observations or offers"
+            )
+        encoded = self.space.encode(raw)
+        encoding_seconds = time.monotonic() - started
+        started = time.monotonic()
+        tensors = {
+            name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
+            for name, value in encoded.items()
+        }
+        with torch.inference_mode():
+            action, _, _, _ = self.agent.get_action_and_value(tensors)
+        index = int(action.item())
+        inference_seconds = time.monotonic() - started
+        if index < 0 or index >= len(encoded["actions_valid"]):
+            raise ValueError("policy returned an invalid action index")
+        if not encoded["actions_valid"][index]:
+            raise ValueError("policy selected a masked action")
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        offer_id = int(frame.offers[index]["id"])
+        choices = [a for a in decision.actions if a.command.offer_id == offer_id]
+        if len(choices) != 1:
+            raise ValueError("tensor action has no unique captured semantic reference")
+        return PolicyChoice(choices[0].reference, encoding_seconds, inference_seconds)
 
 
 def _write(path: Path, payload: str) -> None:
@@ -70,23 +158,55 @@ def play(
     session: InferenceSession | None,
     *,
     progress_path: Path | None = None,
+    opponent: CheckpointOpponent | None = None,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
     A missing session selects the explicit random-v-random plumbing control.
-    Native trivial-decision skipping is disabled for both seats.
+    Native trivial-decision skipping is declared and identical for both seats.
     """
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "config.json", config.model_dump_json(indent=2))
     started = time.monotonic()
-    env = managym.Env(seed=config.seed, skip_trivial=False)
-    env.reset([managym.PlayerConfig(f"seat-{seat}", config.deck) for seat in (0, 1)])
-    replay = env.clone_env()
+    observations: dict[str, float] = {}
+
+    @contextmanager
+    def observe(name: str) -> Iterator[None]:
+        phase_start = time.monotonic()
+        try:
+            yield
+        finally:
+            observations[name] = (
+                observations.get(name, 0) + time.monotonic() - phase_start
+            )
+
+    def retain(path: Path, payload: str) -> None:
+        with observe("evidence_write"):
+            _write(path, payload)
+
+    players = (
+        Match(config.match).to_rust()
+        if config.match is not None
+        else [managym.PlayerConfig(f"seat-{seat}", config.deck) for seat in (0, 1)]
+    )
+    if opponent is not None:
+        opponent.admit(players, config.opponent_seed)
+    with observe("native_reset"):
+        env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
+        env.reset(players)
+    with observe("clone_replay"):
+        replay = env.clone_env()
     rng = random.Random(config.opponent_seed)
-    summary = GameSummary(mode="qwen-v-random" if session else "random-control")
+    summary = GameSummary(
+        mode="qwen-v-checkpoint"
+        if opponent
+        else "qwen-v-random"
+        if session
+        else "random-control"
+    )
     if session:
         summary.model_load_seconds = session.load_seconds
-        _write(out / "runtime.json", session.identity.model_dump_json(indent=2))
+        retain(out / "runtime.json", session.identity.model_dump_json(indent=2))
     origins: Counter[str] = Counter()
     latencies: list[float] = []
     try:
@@ -97,11 +217,12 @@ def play(
                 raise TimeoutError("game wall limit reached")
             step = out / f"decision-{summary.decisions:05d}"
             step.mkdir()
-            decision = capture_text_decision(
-                env, history_capacity=config.history_capacity
-            )
-            _write(step / "capture.json", decision.capture_json)
-            _write(step / "prompt.txt", decision.text)
+            with observe("render_capture"):
+                decision = capture_text_decision(
+                    env, history_capacity=config.history_capacity
+                )
+            retain(step / "capture.json", decision.capture_json)
+            retain(step / "prompt.txt", decision.text)
             actor = env.current_agent_index()
             if session and actor == config.model_seat:
                 supplied = DecisionInput(
@@ -112,11 +233,43 @@ def play(
                 )
 
                 def progress(result: SelectionResult) -> None:
-                    _write(step / "selection.json", result.model_dump_json(indent=2))
+                    retain(step / "selection.json", result.model_dump_json(indent=2))
 
-                result = session.decide(supplied, progress=progress)
+                write_before = observations.get("evidence_write", 0)
+                selection_start = time.monotonic()
+                try:
+                    result = session.decide(supplied, progress=progress)
+                finally:
+                    selection_wall = time.monotonic() - selection_start
+                    # Progress writes are nested synchronous host work.
+                    observations["llm_wait_and_dispatch"] = (
+                        observations.get("llm_wait_and_dispatch", 0)
+                        + selection_wall
+                        - (observations.get("evidence_write", 0) - write_before)
+                    )
                 progress(result)
                 summary.model_decisions += 1
+                summary.model_latencies.append(result.seconds)
+                for attempt in result.attempts:
+                    summary.generation_attempts += 1
+                    summary.output_tokens += attempt.output_tokens or 0
+                    for name in (
+                        "encode_seconds",
+                        "generation_seconds",
+                        "validation_seconds",
+                    ):
+                        seconds = getattr(attempt, name)
+                        if seconds is not None:
+                            summary.llm_phases[name] = (
+                                summary.llm_phases.get(name, 0) + seconds
+                            )
+                    if attempt.response is not None:
+                        if attempt.response.reasoning_tokens is not None:
+                            summary.token_split_attempts += 1
+                        summary.reasoning_tokens += (
+                            attempt.response.reasoning_tokens or 0
+                        )
+                        summary.answer_tokens += attempt.response.answer_tokens or 0
                 if result.failure is not None:
                     raise RuntimeError(result.failure.model_dump_json())
                 if result.selected_reference is None or result.origin is None:
@@ -128,14 +281,24 @@ def play(
                     *(a.prompt_tokens or 0 for a in result.attempts),
                 )
                 summary.peak_gpu_bytes = result.peak_gpu_bytes
+            elif opponent is not None:
+                choice = opponent.choose(env, decision)
+                reference, producer = choice.reference, "checkpoint-stochastic-cpu"
+                summary.opponent_latencies.append(choice.inference_seconds)
+                for name, seconds in (
+                    ("policy_encoding", choice.encoding_seconds),
+                    ("policy_inference", choice.inference_seconds),
+                ):
+                    observations[name] = observations.get(name, 0) + seconds
+                retain(step / "policy.json", json.dumps(asdict(choice)))
             else:
                 reference = rng.choice(decision.actions).reference
                 producer = "seeded-uniform-opponent" if session else "random-control"
             origins[producer] += 1
             command = resolve_action(decision, reference)
             # Retain intent before the potentially mutating native call.
-            _write(step / "command.json", command.to_json())
-            _write(
+            retain(step / "command.json", command.to_json())
+            retain(
                 step / "choice.json",
                 json.dumps(
                     {
@@ -145,20 +308,23 @@ def play(
                     }
                 ),
             )
-            transition = submit_response(env, decision, reference)
-            _write(step / "transition.json", json.dumps(asdict(transition)))
-            replayed = apply_semantic_command(replay, command)
-            summary.replay_matches = (
-                replayed == transition and replay.state_digest() == env.state_digest()
-            )
+            with observe("native_command"):
+                transition = submit_response(env, decision, reference)
+            retain(step / "transition.json", json.dumps(asdict(transition)))
+            with observe("clone_replay"):
+                replayed = apply_semantic_command(replay, command)
+                summary.replay_matches = (
+                    replayed == transition
+                    and replay.state_digest() == env.state_digest()
+                )
             if not summary.replay_matches:
                 raise RuntimeError("native command replay diverged")
             summary.decisions += 1
             summary.origins = dict(origins)
             summary.game_seconds = time.monotonic() - started
-            _write(out / "progress.json", summary.model_dump_json(indent=2))
+            retain(out / "progress.json", summary.model_dump_json(indent=2))
             if progress_path is not None:
-                _write(progress_path, summary.model_dump_json(indent=2))
+                retain(progress_path, summary.model_dump_json(indent=2))
             if summary.decisions % 10 == 0:
                 print(
                     f"decisions={summary.decisions} model={summary.model_decisions} seconds={summary.game_seconds:.1f}",
@@ -175,7 +341,11 @@ def play(
         if latencies:
             summary.decision_seconds_median = statistics.median(latencies)
             summary.decision_seconds_max = max(latencies)
-        _write(out / "summary.json", summary.model_dump_json(indent=2))
+        summary.observations = dict(observations)
+        summary.observations["unattributed"] = max(
+            0, summary.game_seconds - sum(observations.values())
+        )
+        retain(out / "summary.json", summary.model_dump_json(indent=2))
     return summary
 
 

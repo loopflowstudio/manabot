@@ -60,7 +60,9 @@ def _game_slot(
         except BaseException:
             inference.slots.release()
             raise
-        inference.performance.record("game_admission", queued, request=identity)
+        inference.performance.record(
+            "game_admission", queued, request=identity, partitions_elapsed=False
+        )
     try:
         yield
     finally:

@@ -13,6 +13,7 @@ composition.
 from __future__ import annotations
 
 from collections import OrderedDict, deque
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -42,6 +43,13 @@ from manabot.sim.serving_protocol import (
     PolicyKey,
 )
 from manabot.sim.threads import SERVING_BUDGET
+
+
+@dataclass(frozen=True)
+class _PendingRequest:
+    identity: str
+    request: DecisionRequest
+    received: float
 
 
 @dataclass
@@ -113,13 +121,15 @@ class PolicyStore:
             self.perf.count("resident_hits")
             self.policies.move_to_end(key)
             return self.policies[key]
+        self.perf.count("resident_misses")
         admission = self.admissions[key]
         player, path = admission.registration, Path(admission.path)
-        if (
-            path.stat().st_size != player.checkpoint_bytes
-            or file_sha256(path) != key.checkpoint
-        ):
-            raise ValueError("checkpoint byte identity drift")
+        with self.perf.span("checkpoint_verification"):
+            if (
+                path.stat().st_size != player.checkpoint_bytes
+                or file_sha256(path) != key.checkpoint
+            ):
+                raise ValueError("checkpoint byte identity drift")
         with self.perf.span("model_load"):
             agent, space = load_checkpoint(str(path))
             agent.eval()
@@ -203,16 +213,17 @@ def sample_rows(
 
 
 def _infer(
-    store: PolicyStore, requests: list[DecisionRequest], batch: str
+    store: PolicyStore,
+    requests: list[DecisionRequest],
+    batch: str,
+    *,
+    witness: Callable[[torch.Tensor, torch.Tensor, list[int]], None] | None = None,
 ) -> list[DecisionReply]:
     perf = store.perf
-    policy = store.get(requests[0].policy)
     for request in requests:
         if request.deadline_unix <= time.time():
             raise InferenceFailure("request deadline exhausted")
-        perf.record(
-            "batch_queue", request.submitted, request=request.request_id, batch=batch
-        )
+    policy = store.get(requests[0].policy)
     with perf.span("input_assembly", batch=batch):
         tensors = {
             key: torch.from_numpy(
@@ -267,11 +278,48 @@ def _infer(
         )
         for r, action in zip(requests, actions, strict=True)
     ]
-    for request in requests:
-        perf.latency(time.monotonic() - request.submitted)
+    if witness is not None:
+        with perf.span("output_witness_write", batch=batch):
+            witness(logits, tensors["actions_valid"], actions)
     if not store.execution.resident:
         store.close()
     return replies
+
+
+def _record_dispatch(
+    perf: EvalPerformance, chosen: list[_PendingRequest], batch: str
+) -> None:
+    """End queue wait before admission/load; all stamps are on the same host."""
+    dispatched = time.monotonic()
+    for item in chosen:
+        perf.record(
+            "submission_to_receipt",
+            item.request.submitted,
+            end=item.received,
+            request=item.request.request_id,
+            batch=batch,
+            partitions_elapsed=False,
+        )
+        perf.record(
+            "dispatch_queue",
+            item.received,
+            end=dispatched,
+            request=item.request.request_id,
+            batch=batch,
+            partitions_elapsed=False,
+        )
+
+
+def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
+    """Sample RSS at admission/batch boundaries; CUDA peaks are process allocator peaks."""
+    perf.counters["rss_bytes"] = psutil.Process().memory_info().rss
+    perf.counters["peak_sampled_rss_bytes"] = max(
+        perf.counters["peak_sampled_rss_bytes"], perf.counters["rss_bytes"]
+    )
+    perf.count("rss_samples")
+    if execution.device == "cuda":
+        perf.counters["peak_allocated_cuda_bytes"] = torch.cuda.max_memory_allocated()
+        perf.counters["peak_reserved_cuda_bytes"] = torch.cuda.max_memory_reserved()
 
 
 def serve(
@@ -280,18 +328,25 @@ def serve(
     """Serving child entry; exceeding its thread budget fails the allocation."""
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    perf = EvalPerformance(allocation, execution.instrumentation)
+    perf = EvalPerformance(
+        allocation,
+        execution.instrumentation,
+        latency_boundary="client submission to service reply send; excludes return transport and caller validation",
+    )
     store = PolicyStore(execution, perf)
-    pending: deque[tuple[str, DecisionRequest]] = deque()
+    pending: deque[_PendingRequest] = deque()
     diagnostics = 0
     published = time.monotonic()
     try:
+        # Ready means the service can receive work, not that any model is loaded.
+        perf.write(directory / "serving.json")
+        connection.send(("ready", None, None))
         while execution.remaining() > 0:
             # Once a group is due, continuous admissions cannot starve its flush.
             due = bool(pending) and (
-                time.monotonic() - pending[0][1].submitted
+                time.monotonic() - pending[0].request.submitted
                 >= execution.max_delay_seconds
-                or sum(r.policy == pending[0][1].policy for _, r in pending)
+                or sum(r.request.policy == pending[0].request.policy for r in pending)
                 >= execution.max_batch_rows
             )
             if not due and connection.poll(
@@ -301,12 +356,16 @@ def serve(
                 if kind == "close":
                     break
                 if kind == "infer":
-                    pending.append((identity, payload))
+                    pending.append(_PendingRequest(identity, payload, time.monotonic()))
+                    perf.count("received_requests")
                 else:
                     try:
                         result = (
                             store.admit(payload) if kind == "admit" else perf.snapshot()
                         )
+                        if kind == "admit":
+                            _sample_memory(perf, execution)
+                            perf.write(directory / "serving.json")
                         connection.send((identity, result, None))
                     except Exception as exc:
                         perf.count("failed_admissions")
@@ -316,8 +375,10 @@ def serve(
                 continue
             if not pending:
                 continue
-            first = pending[0][1]
-            compatible = [item for item in pending if item[1].policy == first.policy]
+            first = pending[0].request
+            compatible = [
+                item for item in pending if item.request.policy == first.policy
+            ]
             if (
                 len(compatible) < execution.max_batch_rows
                 and time.monotonic() - first.submitted < execution.max_delay_seconds
@@ -325,9 +386,10 @@ def serve(
                 connection.poll(min(execution.max_delay_seconds, 0.001))
                 continue
             chosen = compatible[: execution.max_batch_rows]
-            ids = {item[0] for item in chosen}
-            pending = deque(item for item in pending if item[0] not in ids)
+            ids = {item.identity for item in chosen}
+            pending = deque(item for item in pending if item.identity not in ids)
             batch = uuid4().hex
+            _record_dispatch(perf, chosen, batch)
             try:
                 if diagnostics < execution.diagnostic_batches:
                     activities = [torch.profiler.ProfilerActivity.CPU]
@@ -342,7 +404,7 @@ def serve(
                                 torch.cuda.Event(enable_timing=True),
                             )
                             begin.record()
-                        replies = _infer(store, [r for _, r in chosen], batch)
+                        replies = _infer(store, [r.request for r in chosen], batch)
                         if execution.device == "cuda":
                             end.record()
                             end.synchronize()
@@ -362,23 +424,30 @@ def serve(
                     perf.count("diagnostic_batches")
                     diagnostics += 1
                 else:
-                    replies = _infer(store, [r for _, r in chosen], batch)
+                    replies = _infer(store, [r.request for r in chosen], batch)
                 # Pools start lazily (CUDA, profiler); count after each batch
                 # and fail its requests, never attribute them to a player.
                 SERVING_BUDGET.account(perf.counters)
-                for (identity, _), reply in zip(chosen, replies, strict=True):
-                    connection.send((identity, reply, None))
             except Exception as exc:
-                perf.count("failed_requests", len(chosen))
-                for identity, _ in chosen:
-                    connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
-            perf.counters["rss_bytes"] = psutil.Process().memory_info().rss
-            if execution.device == "cuda":
-                perf.counters["peak_vram_bytes"] = torch.cuda.max_memory_allocated()
+                for item in chosen:
+                    connection.send(
+                        (item.identity, None, f"{type(exc).__name__}: {exc}")
+                    )
+                    perf.latency(
+                        time.monotonic() - item.request.submitted, outcome="failed"
+                    )
+            else:
+                for item, reply in zip(chosen, replies, strict=True):
+                    connection.send((item.identity, reply, None))
+                    perf.latency(time.monotonic() - item.request.submitted)
+            _sample_memory(perf, execution)
             if time.monotonic() - published >= 1:
                 perf.write(directory / "serving.json")
                 published = time.monotonic()
     finally:
+        perf.counters["unanswered_requests"] = (
+            perf.counters["received_requests"] - perf.counters["requests"]
+        )
         store.close()
         perf.write(directory / "serving.json")
         connection.close()

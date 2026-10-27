@@ -182,3 +182,11 @@ not include arbitrary evidence artifacts. Card evaluations use the card
 publication operation to verify/copy their immutable evidence through Etude
 Storage before delivering scalar tables and match records. Do not publish their
 indexes alone or put card evidence in the checkpoint namespace.
+
+### Offline inference reports
+
+Historical LLM receipt readers stay independent of executable model, simulation
+and native imports. Load the evaluation projection only for evaluation inputs;
+keep its simulation dependencies off the LLM-only path. Check this boundary in a
+fresh process with those imports blocked, and exercise mixed reports through the
+actual builder CLI in the existing headless Perf proof.

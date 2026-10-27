@@ -13,12 +13,19 @@ from typing import Callable
 
 from manabot.llm.schema import (
     DecisionInput,
+    EncodedPrompt,
     Failure,
     InferenceConfig,
     RuntimeIdentity,
     SelectionResult,
 )
 from manabot.llm.selection import Runtime, select
+
+
+@dataclass(frozen=True)
+class _DecisionRequest:
+    decision: DecisionInput
+    expected_prompt: EncodedPrompt | None
 
 
 @dataclass(frozen=True)
@@ -56,9 +63,15 @@ def _serve(
                 return
             if decision is None:
                 return
-            if not isinstance(decision, DecisionInput):
-                raise TypeError("expected DecisionInput")
-            result = select(decision, config, runtime, progress=connection.send)
+            if not isinstance(decision, _DecisionRequest):
+                raise TypeError("expected decision request")
+            result = select(
+                decision.decision,
+                config,
+                runtime,
+                progress=connection.send,
+                expected_prompt=decision.expected_prompt,
+            )
             if result.failure is not None:
                 return
 
@@ -101,6 +114,7 @@ class InferenceSession:
         decision: DecisionInput,
         *,
         progress: Callable[[SelectionResult], None] | None = None,
+        expected_prompt: EncodedPrompt | None = None,
     ) -> SelectionResult:
         if self.closed:
             raise RuntimeError("inference session is closed")
@@ -110,7 +124,7 @@ class InferenceSession:
             decision=decision, config=self.config, runtime=self.identity
         )
         try:
-            self.connection.send(decision)
+            self.connection.send(_DecisionRequest(decision, expected_prompt))
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or not self.connection.poll(remaining):

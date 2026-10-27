@@ -375,27 +375,182 @@ function jobTiming(e, j, resource) {
   return {tree, decisions: avg(ts.map(t => t.decisions)), seeds: ts.length};
 }
 
+function renderMatchupSummary(host, r) {
+  const m = r.matchup;
+  if (!m) return;
+  const c = card(host, 'Qwen reasoning × MTG-183 final checkpoint', 'Same games · Qwen on GPU · trained policy on one CPU thread', 'full');
+  c.dataset.matchupSummary = r.identity;
+  const planned = r.coverage.planned_games ?? m.games;
+  c.appendChild(node('p', null, `${m.valid} / ${planned} planned games completed and replay verified · Qwen ${m.wins} wins, ${m.losses} losses, ${m.draws} draws. ${r.coverage.fallback} fallback choices; ${r.coverage.repaired} repaired choices.`));
+  c.appendChild(node('p', null, `${m.games - m.valid} failed or incomplete observed games · ${Math.max(0, planned - m.games)} games without a final summary. One game per deck pairing is descriptive, not a strength ranking.`));
+  const phases = [
+    ['Qwen wait and dispatch', ['llm_wait_and_dispatch']],
+    ['Policy inference', ['policy_inference']],
+    ['Policy observation encoding', ['policy_encoding']],
+    ['Simulation: reset and native commands', ['native_reset', 'native_command']],
+    ['Observation rendering', ['render_capture']],
+    ['Replay verification', ['clone_replay']],
+    ['Evidence writes', ['evidence_write']],
+    ['Unattributed overhead', ['unattributed']],
+  ];
+  c.appendChild(node('h4', null, `Where ${dur(m.game_seconds)} of summarized game time went`));
+  const table = node('table'); table.style.width = '100%';
+  for (const [label, keys] of phases) {
+    const known = keys.every(k => m.exclusive[k] != null);
+    const seconds = known ? keys.reduce((n, k) => n + m.exclusive[k], 0) : null;
+    const row = node('tr'); row.appendChild(node('td', null, label));
+    row.appendChild(node('td', null, seconds == null ? 'unavailable' : `${seconds.toFixed(3)} s`));
+    const share = node('td');
+    if (seconds != null && m.game_seconds > 0) {
+      const fraction = seconds / m.game_seconds;
+      const bar = node('progress'); bar.max = 1; bar.value = fraction;
+      bar.setAttribute('aria-label', `${label}: ${(fraction * 100).toFixed(2)} percent of game time`);
+      bar.style.width = 'min(15vw, 140px)'; share.append(bar, ` ${(fraction * 100).toFixed(2)}%`);
+    } else share.textContent = 'unavailable';
+    row.appendChild(share); table.appendChild(row);
+  }
+  c.appendChild(table);
+  c.appendChild(node('p', 'muted', 'Exclusive game-host intervals. Native commands include binding validation and forced-action advancement. Startup, archival and delivery are outside game time. Games without a final timing receipt are excluded here; the remainder is not assigned to simulation.'));
+  c.appendChild(node('h4', null, 'Inference latency per call'));
+  const latency = node('table'); latency.style.width = '100%';
+  const headings = node('tr'); for (const label of ['Boundary', 'p50', 'p95', 'Calls']) headings.appendChild(node('th', null, label)); latency.appendChild(headings);
+  for (const [label, d] of [['Qwen generation host', r.generation_host_latency], ['Qwen completed selection', r.selection_latency], ['Qwen failed selection', r.failed_selection_latency], ['Policy tensor / forward / sampling', m.policy_latency]]) {
+    if (!d) continue;
+    const row = node('tr');
+    for (const value of [label, d.p50 == null ? 'unavailable' : `${(d.p50 * 1000).toFixed(2)} ms`, d.p95 == null ? 'unavailable' : `${(d.p95 * 1000).toFixed(2)} ms`, `${d.n} / ${d.population}`]) row.appendChild(node('td', null, value));
+    latency.appendChild(row);
+  }
+  c.appendChild(latency);
+  c.appendChild(node('p', null, 'These are different model workloads and hardware, not a backend speedup. Qwen generation includes input/output transfer and text decoding; selection adds tokenization, validation and repairs. Policy observation encoding is separate above. Device prefill/decode timing is unavailable.'));
+  c.appendChild(node('p', null, `${m.reasoning_tokens.toLocaleString()} reasoning tokens · ${m.answer_tokens.toLocaleString()} final-answer tokens · ${m.output_tokens.toLocaleString()} total generated tokens (includes delimiters/EOS). Split available for ${m.token_split_attempts}/${m.generation_attempts} attempts. First calls remain included; no separately excluded warmup.`));
+  const phasesText = Object.entries(m.llm_phases).map(([k,v]) => `${k.replaceAll('_seconds','').replaceAll('_',' ')} ${v.toFixed(3)} s`).join(' · ');
+  if (phasesText) c.appendChild(node('p', null, `Inside Qwen (overlapping its game-host wait): ${phasesText}.`));
+  const value = key => r.metrics[key]?.value;
+  c.appendChild(node('p', null, `Outside games: cache preparation ${value('cache_preparation') == null ? 'unavailable' : dur(value('cache_preparation'))} · Qwen readiness ${value('worker_readiness') == null ? 'unavailable' : dur(value('worker_readiness'))} · policy load ${value('policy_readiness') == null ? 'unavailable' : dur(value('policy_readiness'))}. Inclusive billing ${value('inclusive_cost') == null ? 'not available' : '$' + value('inclusive_cost').toFixed(2)}.`));
+}
+
+function renderInferencePerformance(host, e, visibleRuns) {
+  const data = e.inference_performance;
+  if (!data) return;
+  const visible = new Set(visibleRuns);
+  for (const r of data.runs.filter(r => visible.has(r.run))) renderMatchupSummary(host, r);
+  if (data.attempts.length) {
+    const c = card(host, 'Declared baseline attempts', 'All planned cells remain visible; unavailable evidence is not a successful run.', 'full');
+    const declaration = node('details'); declaration.appendChild(node('summary', null, `${data.attempts.length} declared attempts and their evidence status`)); c.appendChild(declaration);
+    for (const a of data.attempts) {
+      const p = node('p', null, `${a.id} · ${a.cohort} · repeat ${a.repeat} · ${a.mode} · declared ${a.declared_status} · evidence ${a.evidence_status} · observed ${a.observed_status}. ${a.reason} `);
+      p.id = `attempt-${a.id}`;
+      if (a.run != null) {
+        if (visible.has(a.run)) { const link = node('a', null, 'Linked measurements'); link.href = `#perf-run-${a.run}`; p.appendChild(link); }
+        else p.appendChild(node('span', null, 'Measurements hidden by run filter.'));
+      }
+      if (a.execution) {
+        const e = a.execution;
+        p.appendChild(node('span', null, ` Whole attempt ${e.whole_attempt_seconds.toFixed(3)} s · collection ${e.collection_seconds.toFixed(3)} s · child cleanup ${e.supervision.cleanup_complete ? 'complete' : 'incomplete'}. `));
+        const games = e.supervision.payload?.completed_games;
+        if (games != null && e.whole_attempt_seconds > 0) p.appendChild(node('span', null, `${games} replay-verified games / whole-attempt wall = ${(games / e.whole_attempt_seconds).toFixed(3)} games/s. `));
+        if (a.execution_evidence) { const link = node('a', null, 'Attempt evidence'); link.href = a.execution_evidence; p.appendChild(link); }
+      }
+      declaration.appendChild(p);
+    }
+    if (data.protocol_status) c.appendChild(node('p', null, `Frozen execution protocol: ${data.protocol_status}`));
+    if (data.protocol) { const link = node('a', null, 'Frozen protocol and input pins'); link.href = data.protocol; c.appendChild(link); }
+    if (data.baseline_manifest) { const link = node('a', null, 'Pinned baseline manifest'); link.href = data.baseline_manifest; c.appendChild(link); }
+  }
+  for (const r of data.runs.filter(r => visible.has(r.run))) {
+    const c = card(host, `LLM receipt · ${r.label}`, `observed ${r.observed_status} · ${r.matchup ? "retained same-game evidence" : "historical evidence, separate workload cohort"}`, 'full');
+    c.id = `perf-run-${r.run}`;
+    if (r.attempt_id != null) { const link = node('a', null, `Declared attempt ${r.attempt_id}`); link.href = `#${encodeURIComponent(`attempt-${r.attempt_id}`)}`; c.appendChild(link); }
+    c.dataset.inferenceReceipt = r.identity;
+    const n = r.coverage;
+    c.appendChild(node('p', null, `${n.selection_files}/${n.selection_population ?? 'unknown'} selections · ${n.committed_commands}/${n.command_population ?? 'unknown'} committed Commands · ${n.replay_verified_games ?? 'unavailable'} replay-verified games. ${n.initial} initial · ${n.repaired} repaired · ${n.fallback} fallback · ${n.failed_selections} failed selections · ${n.unknown_selections} unknown · ${n.generation_attempts} generation attempts.`));
+    if (r.failure) c.appendChild(node('p', null, `Failure: ${r.failure}`));
+    if (!r.matchup) c.appendChild(node('p', null, `Game wall ${r.metrics.game_wall?.value == null ? 'unavailable' : dur(r.metrics.game_wall.value)} · selection p50 ${r.selection_latency?.p50 == null ? 'unavailable' : dur(r.selection_latency.p50)} · p95 ${r.selection_latency?.p95 == null ? 'unavailable' : dur(r.selection_latency.p95)}. Separate model cohorts cannot establish a speedup.`));
+    const detail = node('details'); detail.appendChild(node('summary', null, 'Timing definitions, full measurements and evidence')); c.appendChild(detail);
+    for (const [label, d] of [['Successful selection latency (population: all model selections)', r.selection_latency], ['Failed selection latency', r.failed_selection_latency], ['Generation-attempt latency (includes repairs)', r.generation_latency], ['Completed generation host latency', r.generation_host_latency], ['Failed generation host latency', r.failed_generation_host_latency]]) {
+      if (!d) continue;
+      const seconds = v => v == null ? 'unavailable' : `${v.toFixed(6)} s`;
+      detail.appendChild(node('p', null, `${label}: p50 ${seconds(d.p50)} · p95 ${seconds(d.p95)} · max ${seconds(d.maximum)} · n=${d.n}, population=${d.population}. ${d.method}`));
+    }
+    const table = node('table'); table.style.width = '100%';
+    const head = node('tr'); for (const name of ['Measurement', 'Value / status', 'Boundary and coverage']) head.appendChild(node('th', null, name)); table.appendChild(head);
+    for (const [key, m] of Object.entries(r.metrics)) {
+      const row = node('tr');
+      row.appendChild(node('td', null, key.replaceAll('_', ' ')));
+      row.appendChild(node('td', null, `${m.value == null ? 'unavailable' : `${Number.isInteger(m.value) ? m.value : m.value.toFixed(6)} ${m.unit}`} · ${m.status}`));
+      row.appendChild(node('td', null, `${m.resource}: ${m.boundary}. ${m.coverage}. ${m.reason}.`));
+      table.appendChild(row);
+    }
+    detail.appendChild(table);
+    if (r.games) {
+      const games = node('details'); games.appendChild(node('summary', null, 'Per-game observations'));
+      for (const game of r.games) {
+        const p = game.projection;
+        games.appendChild(node('p', null, `${game.label}: ${p.observed_status} · ${p.coverage.committed_commands} Commands · ${p.coverage.replay_verified_games ?? 'unknown'} replay-verified games · game wall ${p.metrics.game_wall.value ?? 'unavailable'} s · selection p95 ${p.selection_latency.p95 ?? 'unavailable'} s · n=${p.selection_latency.n}`));
+        games.appendChild(node('pre', null, JSON.stringify(p.metrics, null, 2)));
+      }
+      detail.appendChild(games);
+    }
+    for (const note of r.notes) detail.appendChild(node('p', null, note));
+    detail.appendChild(node('p', null, `Device samples: ${r.device_memory.samples}; window ${r.device_memory.window_start ?? 'unavailable'} to ${r.device_memory.window_end ?? 'unavailable'}. ${r.device_memory.note}`));
+    const identity = node('details'); identity.appendChild(node('summary', null, 'Recorded model, workload and runtime identity'));
+    identity.appendChild(node('pre', null, JSON.stringify({game: r.config, inference: r.inference_config, runtime: r.runtime && {runtime: r.runtime.runtime, version: r.runtime.runtime_version, torch: r.runtime.torch_version, device: r.runtime.device_name}}, null, 2))); detail.appendChild(identity);
+    const link = node('a', null, 'Evidence and ordered corpus manifest'); link.href = r.evidence_manifest; detail.appendChild(link);
+    const sources = node('details'); sources.appendChild(node('summary', null, `${r.evidence.length} immutable evidence files`));
+    for (const f of r.evidence) { const p = node('p'), a = node('a', null, f.path); a.href = f.href; p.append(a, ` · ${f.bytes} bytes · SHA-256 ${f.sha256}`); sources.appendChild(p); }
+    detail.appendChild(sources);
+  }
+}
+
 function renderEvalPerformance(host, e, visibleRuns) {
-  if (!e.eval_performance) return;
+  if (!e.eval_performance || !e.eval_performance.runs.length) return;
   const data = e.eval_performance, visible = new Set(visibleRuns);
   const summary = node('div', 'card'); summary.style.gridColumn = '1 / -1';
   summary.appendChild(node('h3', null, 'Useful evaluation and coverage'));
   for (const r of data.runs.filter(r => visible.has(r.run))) {
-    summary.appendChild(node('p', null, `${e.runs[r.run].job_name} · ${r.valid_blocks} valid blocks · ${r.valid_games} valid games · ${r.games_per_wall_hour.toFixed(1)} games/wall-hour · ${r.blocks_per_wall_hour.toFixed(1)} blocks/wall-hour · ${r.failed_games} failed · ${r.interrupted_games} interrupted · ${r.unattempted_games} unattempted`));
+    const row = node('p', null, `${e.runs[r.run].job_name} · observed ${r.observed_status ?? 'unknown'} · ${r.valid_blocks} valid blocks · ${r.valid_games} valid games · ${r.games_per_wall_hour.toFixed(1)} games/wall-hour · ${r.blocks_per_wall_hour.toFixed(1)} blocks/wall-hour · ${r.failed_games} failed · ${r.interrupted_games} interrupted · ${r.unattempted_games} unattempted`);
+    row.id = `perf-run-${r.run}`;
+    if (r.attempt_id != null) { const link = node('a', null, `Declared attempt ${r.attempt_id}`); link.href = `#${encodeURIComponent(`attempt-${r.attempt_id}`)}`; row.append(' · ', link); }
+    summary.appendChild(row);
     summary.appendChild(node('p', null, `Timer coverage by phase: ${JSON.stringify(r.coverage)} / ${r.game_population} games. Dollars and games/dollar unavailable without an allocation cost receipt.`));
+    if (r.worker_request_latency?.length) {
+      const details = node('details'), title = node('summary', null, 'Game-worker request latency · individual games, no pooled quantiles');
+      details.appendChild(title);
+      details.appendChild(node('pre', null, JSON.stringify(r.worker_request_latency, null, 2)));
+      summary.appendChild(details);
+    }
     summary.appendChild(node('p', null, `${r.optimization.status}. ${r.optimization.observation} ${r.optimization.mechanism} Validation: ${r.optimization.validation} Coverage: ${r.optimization.coverage}`));
     for (const o of r.opportunities || []) summary.appendChild(node('p', null, `${o.phase}: ${dur(o.observed_seconds)}, ${o.coverage_games}/${o.game_population} games measured. ${o.dependency} ${o.mechanism} ${o.status}. ${o.serial_elimination_bound == null ? 'No Amdahl prediction without complete, serial coverage.' : `Eliminating this serial phase entirely permits at most ${o.serial_elimination_bound.toFixed(2)}× cell speedup.`}`));
     const link = node('a', null, 'Optimization evidence'); link.href = r.evidence; summary.appendChild(link);
+    if (r.evidence_manifest) { const p = node('p'), a = node('a', null, 'Evaluation evidence inventory'); a.href = r.evidence_manifest; p.appendChild(a); summary.appendChild(p); }
+    for (const id of r.allocation_ids) { const p = node('p'), a = node('a', null, `Shared allocation ${id}`); a.href = `#${encodeURIComponent(`allocation-${id}`)}`; p.appendChild(a); summary.appendChild(p); }
+    for (const f of r.dependencies || []) if (f.reason) summary.appendChild(node('p', null, `${f.path}: unavailable — ${f.reason}`));
   }
   host.appendChild(summary);
   for (const a of data.allocations) {
     const c = node('div', 'card'); c.style.gridColumn = '1 / -1';
+    c.id = `allocation-${a.identity}`;
     c.appendChild(node('h3', null, `Shared allocation ${a.identity} · charged once`));
     c.appendChild(node('p', null, `Allocation elapsed: ${a.elapsed_seconds == null ? 'unavailable' : dur(a.elapsed_seconds)}. ${a.cost.allocation_method}. Measured USD: ${a.cost.measured_usd ?? 'unavailable'}; estimated USD: ${a.cost.estimated_usd ?? 'unavailable'}.`));
     c.appendChild(node('p', null, `Included cells: ${a.included_cells ?? 'unavailable'}. Valid games/blocks: ${a.valid_games ?? 'unavailable'} / ${a.valid_blocks ?? 'unavailable'}. Games per allocation hour: ${a.games_per_allocation_hour ?? 'unavailable'}; per measured dollar: ${a.games_per_measured_dollar ?? 'unavailable'}; per estimated dollar: ${a.games_per_estimated_dollar ?? 'unavailable'}. Partial report coverage is not whole-allocation yield.`));
+    for (const f of a.dependencies || []) {
+      const p = node('p');
+      if (f.href) { const link = node('a', null, f.path); link.href = f.href; p.appendChild(link); }
+      else p.append(`${f.path}: unavailable — ${f.reason}`);
+      if (f.sha256) p.append(` · ${f.bytes} bytes · SHA-256 ${f.sha256}`);
+      c.appendChild(p);
+    }
     const s = a.serving;
-    c.appendChild(node('p', null, `Maximum observed request queue age: ${s.measurements?.batch_queue?.maximum_seconds ?? 'unavailable'} seconds. Diagnostic device event durations: ${JSON.stringify(s.device_events || [])}`));
-    c.appendChild(node('p', null, `Request latency p50/p95: ${s.request_p50_seconds == null ? 'unavailable' : dur(s.request_p50_seconds)} / ${s.request_p95_seconds == null ? 'unavailable' : dur(s.request_p95_seconds)}; ${s.latency_sample_count} samples, ${s.sample_coverage}.`));
+    if (!s) { c.appendChild(node('p', null, 'Serving measurements unavailable.')); host.appendChild(c); continue; }
+    c.appendChild(node('p', null, `Maximum dispatch queue wait (service receipt to dispatch, before model load): ${s.measurements?.dispatch_queue?.maximum_seconds ?? 'unavailable'} seconds. Submission-to-service transport maximum: ${s.measurements?.submission_to_receipt?.maximum_seconds ?? 'unavailable'} seconds.`));
+    if (s.measurements?.batch_queue) c.appendChild(node('p', null, `Historical queue interval (submission through model readiness, includes cold loading): maximum ${s.measurements.batch_queue.maximum_seconds} seconds.`));
+    const lifecycle = a.lifecycle || {};
+    c.appendChild(node('p', null, `Service process start-to-ready: ${lifecycle.measurements?.service_start_to_ready?.seconds ?? 'unavailable'} seconds; includes imports and IPC, excludes model admission. Admission round trips (may overlap readiness): ${lifecycle.measurements?.admission_round_trip?.seconds ?? 'unavailable'} seconds. Cleanup: ${lifecycle.measurements?.cleanup?.seconds ?? 'unavailable'} seconds.`));
+    for (const [label, receipt] of [['Service reply', s], ['Supervisor validated reply', lifecycle]]) {
+      c.appendChild(node('p', null, `${label} completed latency p50/p95: ${receipt.request_p50_seconds == null ? 'unavailable' : dur(receipt.request_p50_seconds)} / ${receipt.request_p95_seconds == null ? 'unavailable' : dur(receipt.request_p95_seconds)}; ${receipt.latency_sample_count ?? 'unavailable'} samples. Failed p50/p95: ${receipt.failed_request_p50_seconds == null ? 'unavailable' : dur(receipt.failed_request_p50_seconds)} / ${receipt.failed_request_p95_seconds == null ? 'unavailable' : dur(receipt.failed_request_p95_seconds)}; ${receipt.failed_latency_sample_count ?? 'unavailable'} samples. ${receipt.latency_boundary || 'Historical boundary: submission through completed inference, before reply send'}. ${receipt.sample_coverage || ''}`));
+      if (receipt.first_request_seconds != null) c.appendChild(node('p', null, `${label} first observed request: ${dur(receipt.first_request_seconds)} (${receipt.first_request_outcome}); retained in its population. ${receipt.latency_method}`));
+    }
+    c.appendChild(node('p', null, `Memory: sampled process RSS peak ${s.counters?.peak_sampled_rss_bytes ?? 'unavailable'} bytes (${s.counters?.rss_samples ?? 'unavailable'} samples after admission and batches); process CUDA allocated/reserved peaks ${s.counters?.peak_allocated_cuda_bytes ?? s.counters?.peak_vram_bytes ?? 'unavailable'} / ${s.counters?.peak_reserved_cuda_bytes ?? 'unavailable'} bytes. Whole-device occupancy unavailable. Diagnostic device intervals: ${JSON.stringify(s.device_events || [])}`));
     c.appendChild(node('p', null, 'Serving populations count inference replies, including decisions whose later game execution failed.'));
     c.appendChild(node('pre', null, JSON.stringify(s.counters, null, 2)));
     renderFlame(c, {...e, timing: [{resource: 'Serving host elapsed'}]}, [{label: 'Resident serving · cold and warm phases', color: css('--r1'), get: () => ({tree: a.tree, decisions: s.counters.decisions || 0, seeds: 1})}], {scale: 'total', resource: 'Serving host elapsed'});
@@ -406,7 +561,7 @@ function renderEvalPerformance(host, e, visibleRuns) {
   const timeline = node('div', 'card'); timeline.style.gridColumn = '1 / -1';
   timeline.appendChild(node('h3', null, 'Concurrency timeline · host monotonic clock'));
   timeline.appendChild(node('p', null, 'Bounded first spans. Request/batch IDs join IPC, queue and forward work. GPU gaps require the diagnostic trace; device clock alignment is unavailable here.'));
-  const spans = [...data.runs.filter(r => visible.has(r.run)).flatMap(r => r.spans), ...data.allocations.flatMap(a => a.serving.spans)];
+  const spans = [...data.runs.filter(r => visible.has(r.run)).flatMap(r => r.spans), ...data.allocations.flatMap(a => [...(a.serving?.spans || []), ...(a.lifecycle?.spans || [])])];
   const lanes = new Map();
   for (const s of spans) { const key = `${s.process}:${s.thread}`; if (!lanes.has(key)) lanes.set(key, []); lanes.get(key).push(s); }
   if (spans.length) {
@@ -456,9 +611,9 @@ function render() {
   if (C.caveat) { const cv = node('div', 'caveat', C.caveat); ctx.appendChild(cv); }
   const kv = (k, v) => { const s = node('span', null, k + ' '); s.appendChild(node('b', null, v)); ctx.appendChild(s); };
   kv('World', C.world); kv('Device', C.device); kv('Jobs', `${jobs.length} · ${e.runs.length} runs`);
-  kv('Heartbeat', ago(C.heartbeat_at)); kv('Captured', when(C.captured_at));
+  kv('Heartbeat', C.heartbeat_at == null ? 'unavailable' : ago(C.heartbeat_at)); kv('Captured', C.captured_at == null ? 'unavailable' : when(C.captured_at));
   const lastAlign = Math.max(...e.runs.flatMap(r => r.evals.map(v => v.align ?? -1)));
-  kv('Last eval', lastAlign >= 0 ? `${M.num(lastAlign)} learner decisions` : `update ${M.num(Math.max(...e.runs.flatMap(r => r.evals.map(v => v.updates))))}`);
+  if (e.runs.some(r => r.evals.length)) kv('Last eval', lastAlign >= 0 ? `${M.num(lastAlign)} learner decisions` : `update ${M.num(Math.max(...e.runs.flatMap(r => r.evals.map(v => v.updates))))}`);
   if (C.budget) { const b = node('span', 'budget', 'Budget '); const t = node('span', 'track'); const fill = node('span'); fill.style.width = Math.min(100, C.budget.spent / C.budget.ceiling * 100) + '%'; t.appendChild(fill); b.append(t, node('b', null, `Spent $${C.budget.spent.toFixed(2)}`), ` · $${(C.budget.ceiling - C.budget.spent).toFixed(2)} left of $${C.budget.ceiling.toFixed(0)} ceiling`); ctx.appendChild(b); }
   else kv('Budget', 'no cost receipts');
 
@@ -473,9 +628,10 @@ function render() {
   // Controls live with the charts they change.
   const evalControls = document.getElementById('evals-controls'); evalControls.replaceChildren();
   if (e.anchors.length > 1) control(evalControls, 'Opponent', e.anchors.map((a, i) => [String(i), a]), 'anchor');
-  control(evalControls, 'X axis', CLOCKS, 'axis');
+  if (L.evals.length) control(evalControls, 'X axis', CLOCKS, 'axis');
   for (const id of ['perf-controls', 'ml-controls']) {
     const host = document.getElementById(id); host.replaceChildren();
+    if (!L[id === 'perf-controls' ? 'perf' : 'ml'].length) continue;
     control(host, 'X axis', CLOCKS, 'taxis');
     control(host, 'Lines', [['on', 'Smoothed'], ['off', 'Raw']], 'smooth');
   }
@@ -488,11 +644,11 @@ function render() {
   // ---- shared eval state. Cross-run numbers use the latest update every visible run evaluated.
   const curves = Object.fromEntries(vis.map(j => [j, jobCurve(e, jobs[j], f)]));
   const cap = Math.min(...vis.map(j => Math.max(...curves[j].filter(p => !p.missing).map(p => p.key))));
-  const sharedKeys = curves[vis[0]].filter(p => !p.missing && vis.every(i => curves[i].some(q => !q.missing && q.key === p.key))).map(p => p.key);
+  const sharedKeys = (curves[vis[0]] || []).filter(p => !p.missing && vis.every(i => curves[i].some(q => !q.missing && q.key === p.key))).map(p => p.key);
   const common = sharedKeys.length ? Math.max(...sharedKeys) : null;
   const at = (i, u) => curves[i].find(p => p.key === u);
   // How a shared point is named: a learner-decision milestone or an update.
-  const aligned = e.runs[0].evals.some(v => v.align != null);
+  const aligned = e.runs[0]?.evals.some(v => v.align != null);
   const keyName = k => aligned ? `${M.num(k)} learner decisions` : `update ${M.num(k)}`;
   const latestOf = i => [...curves[i]].reverse().find(p => !p.missing);
   // The update a job's breakdowns use: the shared one when it exists, else its latest.
@@ -676,7 +832,13 @@ function render() {
   };
   metricSection('perf', L.perf); metricSection('ml', L.ml);
   renderEvalPerformance(document.getElementById('perf-body'), e, vis.flatMap(j => jobs[j].runs));
-  const note = e.eval_performance ? 'evaluation decisions · host measurements and coverage' : silent.length ? `no per-update telemetry retained for ${silent.map(label).join(', ')}` : 'one point per training update';
+  renderInferencePerformance(document.getElementById('perf-body'), e, vis.flatMap(j => jobs[j].runs));
+  for (const section of ['evals', 'ml']) {
+    const shown = L[section].length > 0;
+    document.getElementById(section).hidden = !shown;
+    document.querySelector(`[data-s=${section}]`).hidden = !shown;
+  }
+  const note = e.inference_performance?.runs.length ? 'separate workload cohorts · retained measurements and unknowns' : e.eval_performance ? 'evaluation decisions · host measurements and coverage' : silent.length ? `no per-update telemetry retained for ${silent.map(label).join(', ')}` : 'one point per training update';
   document.getElementById('perf-sub').textContent = note;
   document.getElementById('ml-sub').textContent = note;
   for (const d of draws) d();

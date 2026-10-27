@@ -22,7 +22,7 @@ import queue
 import threading
 import time
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
@@ -120,7 +120,11 @@ class InferenceRuntime:
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=False)
         self.identity = uuid4().hex
-        self.performance = EvalPerformance(self.identity, execution.instrumentation)
+        self.performance = EvalPerformance(
+            self.identity,
+            execution.instrumentation,
+            latency_boundary="game worker submission through supervisor reply validation, or observed failure; excludes return to game worker",
+        )
         self.slots = threading.BoundedSemaphore(execution.max_active_games)
         self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
         self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
@@ -130,9 +134,21 @@ class InferenceRuntime:
         self._error: str | None = None
         self._closed = False
         self._closing = False
-        self.process = ChildProcess(
-            "manabot.sim.serving:serve", (execution, directory, self.identity)
-        )
+        self.performance.write(self.directory / "allocation.json")
+        self._service_started = time.monotonic()
+        try:
+            self.process = ChildProcess(
+                "manabot.sim.serving:serve", (execution, directory, self.identity)
+            )
+        except BaseException as exc:
+            self._games.shutdown(wait=True, cancel_futures=True)
+            self.performance.count("failed_service_starts")
+            self.performance.record(
+                "failed_service_start", self._service_started, partitions_elapsed=False
+            )
+            self.performance.write(self.directory / "allocation.json")
+            self._write_execution(f"{type(exc).__name__}: {exc}")
+            raise
         self._connection = self.process.connection
         self._reader = threading.Thread(target=self._receive, daemon=True)
         self._reader.start()
@@ -180,6 +196,14 @@ class InferenceRuntime:
         try:
             while True:
                 identity, result, error = self._connection.recv()
+                if identity == "ready":
+                    self.performance.record(
+                        "service_start_to_ready",
+                        self._service_started,
+                        partitions_elapsed=False,
+                    )
+                    self.performance.write(self.directory / "allocation.json")
+                    continue
                 with self._lock:
                     future = self._futures.pop(identity, None)
                 if future is not None:
@@ -226,12 +250,25 @@ class InferenceRuntime:
             self._capacity.release()
 
     def admit(self, admission: PolicyAdmission) -> ObservationConfig:
-        result = self._call("admit", admission)
-        if not isinstance(result, ObservationConfig):
-            raise InferenceFailure("invalid observation admission reply")
-        return result
+        started = time.monotonic()
+        try:
+            result = self._call("admit", admission)
+            if not isinstance(result, ObservationConfig):
+                raise InferenceFailure("invalid observation admission reply")
+            self.performance.count("completed_admissions")
+            return result
+        except BaseException:
+            self.performance.count("failed_admissions")
+            raise
+        finally:
+            # Includes startup when admission is submitted before service ready.
+            self.performance.record(
+                "admission_round_trip", started, partitions_elapsed=False
+            )
+            self.performance.write(self.directory / "allocation.json")
 
     def infer(self, request: DecisionRequest) -> DecisionReply:
+        outcome: Literal["completed", "failed"] = "failed"
         try:
             result = self._call("infer", request, request.deadline_unix - time.time())
             if not isinstance(result, DecisionReply):
@@ -239,10 +276,15 @@ class InferenceRuntime:
             result.validate(request)
             if time.time() >= request.deadline_unix:
                 raise InferenceFailure("inference reply arrived after its deadline")
+            outcome = "completed"
             return result
         except InferenceFailure as exc:
             self.fail(str(exc))
             raise
+        finally:
+            self.performance.latency(
+                time.monotonic() - request.submitted, outcome=outcome
+            )
 
     def snapshot(self) -> dict[str, Any]:
         result = self._call("snapshot", None)
@@ -265,6 +307,7 @@ class InferenceRuntime:
         if self._closed:
             return
         self._closing = True
+        cleanup_started = time.monotonic()
         if self._futures:
             self.fail("allocation closed with pending requests")
         self._games.shutdown(wait=True, cancel_futures=True)
@@ -284,14 +327,19 @@ class InferenceRuntime:
         self._sender.join(timeout=1)
         self._closed = True
         self._connection.close()
+        self.performance.record("cleanup", cleanup_started, partitions_elapsed=False)
         self.performance.write(self.directory / "allocation.json")
 
+        self._write_execution(self._error)
+
+    def _write_execution(self, error: str | None) -> None:
+        """Retain the same allocation identity and cost boundary on every exit."""
         atomic_json(
             self.directory / "execution.json",
             {
                 "allocation_id": self.identity,
                 "execution": self.execution.model_dump(),
                 "cost": allocation_cost(time.monotonic() - self.performance.started),
-                "error": self._error,
+                "error": error,
             },
         )
