@@ -254,7 +254,7 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 - Census is `ProcessCensus` (threads, Linux thread names, RSS, Torch loaded),
   recorded by role. Named budgets `GAME_BUDGET`/`REPLAY_BUDGET` (4) and
   `SERVING_BUDGET` (16) are enforced with `ThreadBudget.account(counters)`;
-  `group_worker_budget` (`max_active_games + 7`, or 8 scalar) is recorded only,
+  `group_worker_budget` (`max_active_games + 7`, or 8 without a runtime) is recorded only,
   in `play_cell`'s `performance.json` on every path.
 - Child modules are `module:function` targets, so tests swap
   `match.GAME_WORKER` for fixture workers.
@@ -263,6 +263,7 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 ## Check result
 
+Compress (2026-10-27; group-worker budget names the no-runtime case, not "scalar"): `uv run --extra dev pytest tests/sim/test_child_surface.py tests/eval/test_local_evaluation.py -q` → 26 passed. No other cuts found; delete list complete.
 Implement, 2026-10-27, at `fbbbd517a`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped. PR #389 CI was pending at `fc5c96237`; the full suite belongs to gate/CI.
 
 Open for gate (from earlier passes, history in git):
@@ -281,7 +282,7 @@ The three concepts hold: **policy key** (checkpoint + ABIs + world + numerics;
 matchup only in admission/evidence), **child process** (`module:function`
 target, no parent `__main__`, pinned pools) and **thread budget by role**.
 Applied: `play_cell` records `ProcessCensus` under `group_worker` on every path
-(budget `max_active_games + 7`, or 8 scalar; recorded, not enforced);
+(budget `max_active_games + 7`, or 8 without a runtime; recorded, not enforced);
 `verify/scenarios` helpers are public. Kept: `InferenceRuntime` in
 `serving_protocol.py`; `supervision._failure` imported by `native_game`
 (inherited from `main` at `f5e7289b1`). Full text at `ea8d0e874`.

@@ -64,19 +64,22 @@ GAME_BUDGET = ThreadBudget("game", 4)
 REPLAY_BUDGET = ThreadBudget("replay", 4)
 SERVING_BUDGET = ThreadBudget("serving", 16)
 
-# The group worker runs `play_cell`. Its scalar path keeps the main thread
-# plus a small helper allowance. Hosting an inference runtime adds one game
+# The group worker runs `play_cell`. Without a shared runtime (code and search
+# players only) it keeps the main thread plus a small helper allowance. Hosting an inference runtime adds one game
 # thread per active game; its main thread, request reader and sender, plus four
 # runtime helpers make the fixed allowance. Recorded for calibration, not
 # enforced: the worker coordinates games rather than playing them.
-_GROUP_WORKER_SCALAR_THREADS = 8
+_GROUP_WORKER_UNSERVED_THREADS = 8
 _GROUP_WORKER_ALLOWANCE = 7
 
 
 def group_worker_budget(max_active_games: int | None) -> ThreadBudget:
-    """Declared threads for the process running `play_cell`; None without a shared runtime."""
+    """Declared threads for the process running `play_cell`.
+
+    `max_active_games` is the shared runtime's bound, or None without one.
+    """
     if max_active_games is None:
-        return ThreadBudget("group_worker", _GROUP_WORKER_SCALAR_THREADS)
+        return ThreadBudget("group_worker", _GROUP_WORKER_UNSERVED_THREADS)
     return ThreadBudget("group_worker", max_active_games + _GROUP_WORKER_ALLOWANCE)
 
 
