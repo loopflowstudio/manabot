@@ -1,3 +1,4 @@
+import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
 
 test('shared history identifies both players and preserves private prefixes and notes', async ({ browser }) => {
@@ -8,6 +9,16 @@ test('shared history identifies both players and preserves private prefixes and 
   for (const page of [alice, bob, visitor]) {
     page.on('pageerror', (error) => failures.push(error.message));
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    // Keep this history/privacy proof on one ordinary, reproducible deal.
+    await page.routeWebSocket('**/ws/play', socket => {
+      const server = socket.connectToServer();
+      socket.onMessage(message => {
+        if (typeof message !== 'string') { server.send(message); return; }
+        const payload = JSON.parse(message);
+        if (payload.type === 'new_game') payload.config.seed = 1255757736;
+        server.send(JSON.stringify(payload));
+      });
+    });
   }
   const suffix = Date.now();
   const aliceName = `History Alice ${suffix}`;
@@ -21,8 +32,8 @@ test('shared history identifies both players and preserves private prefixes and 
     await expect(page.getByRole('status').filter({ hasText: 'Saved for your next game.' })).toBeVisible();
     await page.getByRole('link', { name: 'Play a game', exact: true }).click();
     await page.getByTestId('opponent-select').selectOption('passive');
-    await page.getByTestId('deck-select-hero').selectOption('gw_allies');
-    await page.getByTestId('deck-select-villain').selectOption('ur_lessons');
+    await selectDeck(page, 'hero', 'gw_allies');
+    await selectDeck(page, 'villain', 'ur_lessons');
     await page.getByRole('button', { name: 'New Game', exact: true }).click();
     await expect(page.getByTestId('game-board')).toBeVisible();
   }
@@ -48,6 +59,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await expect(alice.getByRole('status').filter({ hasText: 'Feedback saved.' })).toBeVisible();
     await start(bob, bobName);
     await visitor.goto('/games');
+    await expect(visitor.getByLabel('Display name')).not.toHaveValue('');
     await visitor.getByLabel('Search games').fill(String(suffix));
     await visitor.getByRole('button', { name: 'Find games' }).focus();
     await visitor.keyboard.press('Enter');
@@ -62,6 +74,7 @@ test('shared history identifies both players and preserves private prefixes and 
     const filtered = visitor.url();
     await aliceRow.getByRole('link', { name: /^Replay game/ }).click();
     await expect(visitor.getByTestId('game-board')).toBeVisible();
+    await expect(visitor.getByText('Automatic action · configured automation', { exact: true })).toBeVisible();
     await expect(visitor.getByRole('textbox', { name: /How did this game feel/ })).toHaveCount(0);
     await visitor.getByTestId('study-decision').first().click();
     await expect(visitor.getByText("Shared replay from Player 1's perspective.", { exact: false })).toBeVisible();
