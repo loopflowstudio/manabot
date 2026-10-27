@@ -209,7 +209,6 @@ def test_calibration_rejects_partial_replayed_cohort(
             sender,
             Panel(name="partial", request=request),
             EvalExecution(deadline_unix=time.time() + 30),
-            "cold_scalar",
             out,
         )
         receipt = receiver.recv()

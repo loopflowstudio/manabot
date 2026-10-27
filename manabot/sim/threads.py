@@ -58,7 +58,8 @@ class ThreadBudget:
 
 # Single-threaded pools leave the interpreter's main thread plus a small
 # allowance for runtime helpers (Torch's lazily created interop worker when a
-# scalar checkpoint plays in-child, CUDA driver and profiler threads in serving).
+# search player loads its checkpoint in-child, CUDA driver and profiler threads
+# in serving).
 GAME_BUDGET = ThreadBudget("game", 4)
 REPLAY_BUDGET = ThreadBudget("replay", 4)
 SERVING_BUDGET = ThreadBudget("serving", 16)
@@ -73,7 +74,7 @@ _GROUP_WORKER_ALLOWANCE = 7
 
 
 def group_worker_budget(max_active_games: int | None) -> ThreadBudget:
-    """Declared threads for the process running `play_cell`; None when scalar."""
+    """Declared threads for the process running `play_cell`; None without a shared runtime."""
     if max_active_games is None:
         return ThreadBudget("group_worker", _GROUP_WORKER_SCALAR_THREADS)
     return ThreadBudget("group_worker", max_active_games + _GROUP_WORKER_ALLOWANCE)

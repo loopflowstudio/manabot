@@ -2,8 +2,10 @@
 
 Status: **accepted** — Jack Heart approved this design as written ("keep going", 2026-10-26), including `shared-eval-v1` unchanged. Kickoff plan 2026-10-26. Direction accepted by Jack Heart,
 2026-10-26: fix all three serving limits from MTG-183's rented calibration
-(Etude `d0955f2a44b6`, `307c3a8630af`, `00119d1c9211`). No design choice below
-needs product approval; the remote calibration is coordinated through MTG-183.
+(Etude `d0955f2a44b6`, `307c3a8630af`, `00119d1c9211`). Extended by Jack Heart,
+2026-10-27 (concept review 4, "1a 2b 3b"): evaluation checkpoint players play
+served only, and code anchors are Torch-free. MTG-193 runs its own rental
+calibration under $5 with a spend ledger.
 
 ## Problem (from the Task)
 
@@ -18,6 +20,8 @@ On the A4500 rental, the MTG-183 runner's `gpu` mode plays the same 1,000-game
 pair cohort (update 5,950 vs 5,600): `serving.json` shows `model_loads: 2`
 (one per checkpoint), median batch rows ≫ 1, `host_to_device_calls/decisions`
 ≤ 0.1, games/hour well above 2,600, and 256 active games complete without OOM.
+On `cpu32` the same pair is played served on CPU at least as fast as the
+scalar baseline (about 1,700 games/hour), within the declared thread budgets.
 Locally: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q`
 plays a served game whose child reports `torch` absent from `sys.modules` and a
 thread count within its declared bound.
@@ -92,11 +96,10 @@ thread count within its declared bound.
   serving processes all use it; no parent `__main__` is imported.
 - New `manabot/sim/native_game.py` (Torch-free child entry): `_execute_game`
   and `_game_worker` move here from `sim/match.py`. Scalar players are built
-  through `guidance.build_registered_player` imported only when a registration
-  lacks `execution` (the one justified local import: scalar policies are
-  Torch's only consumer in the child). Scalar hooks keep `isinstance`
-  dispatch with the search classes imported lazily (see implementation
-  decisions). `torch.manual_seed` runs only for scalar checkpoint players.
+  Torch-free by `players.build_code_player` (random, scripted, heuristic);
+  only search players (flat-MC, PUCT, local update) import Torch, lazily in
+  `_ScalarPlayers`, and only they call `torch.manual_seed`. Plain checkpoint
+  players never build in-child (slice 6).
 - Split `serving.py`: Torch-free `sim/serving_protocol.py` (`PolicyKey`,
   `DecisionRequest`, `DecisionReply`, `PolicyAdmission`, `InferenceFailure`)
   and `InferenceRuntime` (parent supervisor); Torch-bearing `sim/serving.py`
@@ -144,13 +147,16 @@ thread count within its declared bound.
 - Same seeds → same Commands for a CPU served panel before/after (fixture
   panel in `test_batched_eval.py`); replay verification and evidence formats
   unchanged (`tests/eval/test_mirror_admission.py`, card evidence tests).
-- Remote calibration (MTG-183 rental runner `experiments/elemental_long_rent.py`,
-  one before/after each on A4500 `gpu` and `cpu32` `scalar`, total < $1.50 of
-  MTG-183's $10): record games/hour, load, threads by role, RSS per active game,
-  `model_loads`, batch-row histogram, `host_to_device_calls/decisions`.
-  Targets: A4500 > 2,600 games/h with median batch > 8 and 256 active games
-  without OOM; served child RSS ≤ 90 MiB (local import measure 216 → ~50 MiB);
-  `cpu32` threads ≤ declared total and load ≤ vCPUs.
+- Remote calibration (slice 7, under the $5 ledger): A4500 `gpu` after and
+  `cpu32` served CPU after on the same 1,000-game pair; before = the Task's
+  retained baselines (A4500 2,600, `cpu32` scalar 1,700 games/h). Record
+  games/hour, load, threads by role, RSS per active game, `model_loads`,
+  batch-row histogram, `host_to_device_calls/decisions`. Targets: A4500
+  > 2,600 games/h with median batch > 8 and 256 active games without OOM;
+  served child RSS ≤ 90 MiB (local 76 MB); `cpu32` served ≥ 1,700 games/h,
+  threads ≤ declared total and load ≤ vCPUs. **Landing gate:** #389 lands
+  after `cpu32` served CPU at least matches scalar, or Jack Heart decides
+  otherwise on that evidence.
 
 ## Alternatives rejected
 
@@ -166,8 +172,8 @@ thread count within its declared bound.
 Multi-process or multi-device serving; vectorized sampling that would change
 Commands; removing the parent's request hop; making group-worker parents
 Torch-free (they load checkpoints for registration); CPU/CUDA parity (stays a
-stated limit); switching the `cpu32` scalar path to shared CPU inference (may
-be measured as an extra calibration arm if budget allows).
+stated limit); serving search players' model calls (follow-up MTG-205); a
+second CPU engine before rental counters show a saturated CPU service.
 
 ## Delete — do not maintain
 
@@ -198,10 +204,7 @@ fallback to spawn; a v2 key beside v1.
 (competency positions split from runners), `serving_protocol.py`, `child.py`,
 `native_game.py`, `threads.py`, matchup-free `PolicyKey` with per-registration
 setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
-5. Rental before/after through MTG-183 — not run here (needs MTG-183's runner,
-   which is not on this branch, and its allowance). It also settles the
-   served-child RSS target, the thread budgets and the oversubscription
-   culprit (`scratch/questions.md`).
+5. Folded into slice 7's rental calibration.
 
 6. Torch-free code anchors and served-only checkpoint players (implemented
    2026-10-27, local; see concept review 4). `sim/anchors.py` holds the v1
@@ -221,11 +224,16 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
    as layout. An in-process engine saves only the IPC hop and loses
    killability. Multi-worker allocations, intra-op threads and a CPU delay
    are not written until rental counters show a saturated CPU service (YAGNI;
-   no second engine without evidence). **Remaining:** rental calibration under the
-   $5 ledger: A4500 `gpu` after, `cpu32` served CPU after (before = Task
-   baselines 2,600 / 1,700 games/h). It needs MTG-183's runner merged onto a
-   calibration branch with its own eval run names (not `mtg183-eval-*`) and
-   no `collect` into MTG-183's database. Not launched by implement.
+   no second engine without evidence). **Remaining:** the rental calibration
+   in Acceptance. MTG-183's runner (`experiments/elemental_long_rent.py`) lives
+   on its branch and imports that branch's `elemental_long_eval` family, so the
+   calibration runs from a calibration branch merging both, with its own eval
+   run names (not `mtg183-eval-*`) and no `collect` into MTG-183's database.
+   It also settles the RSS target, the thread budgets and the oversubscription
+   culprit. If `cpu32` served is slower, iterate the CPU engine (several
+   workers per allocation, then intra-op threads, which need a compute-contract
+   decision) before Jack Heart decides on retaining scalar play. Ledger:
+   $0.00 of $5; no rental launched.
 
 ### Implementation decisions (2026-10-26)
 
@@ -241,11 +249,11 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 - Child modules are `module:function` targets, so tests swap
   `match.GAME_WORKER` for fixture workers.
 - Local measure: model-vs-model served game child 76 MB, 1 thread, no Torch;
-  replay child 75 MB; scalar child 285 MB, 1 thread.
+  replay child 75 MB; former scalar checkpoint child 285 MB, 1 thread.
 
 ## Check result
 
-Latest (compress after slice 6, 2026-10-27; deletion targets re-checked absent): `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/eval/test_batched_eval.py tests/eval/test_evaluation_match.py tests/sim/test_child_surface.py tests/sim/test_heuristic.py tests/eval/test_evaluation_models.py tests/test_package_boundaries.py tests/training/test_monitor_evaluation.py -q` → 96 passed, 1 skipped. Cut: comment-only (stale deal-block and scalar-checkpoint wording; `anchors.py` header reflowed before its bytes become a pinned identity). Broader suites with gate.
+Latest (compress after realign, 2026-10-27; `_ScalarPlayers` hook types as tuples, no `None` guards): `uv run --extra dev pytest tests/sim/test_child_surface.py tests/eval/test_batched_eval.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py -q` → 54 passed, 1 skipped, 4 failed. The two `test_two_policies_never_share_a_forward_and_hung_service_is_bounded` cases pass alone (timing under concurrent load); `test_arena_lost_worker_retains_acknowledged_command` (both cases: `timeout` where `crash` expected) also fails with `native_game.py` at HEAD — owner: gate. Previous: realign, `test_child_surface.py` → 7 passed.
 Earlier passes (history in git): `resolve_execution` owns the conflict check and local-CPU default for `play_cell`, `evaluate` and `evaluate_checkpoint`; `PolicyStore` keeps one admission per key. Three `tests/sim` failures (conditional-search fixture digest, rollout card admission, seed-197 world binding) also fail at `ea8d0e874`. Remaining `spawn` uses (`eval/local.py`, `verify/competency`, `llm/*`, `_process.py`) are not game/replay/serving children. Only the rental calibration (slice 7 **Remaining**) is left; ledger $0.00 of $5. Implement 8 (2026-10-27) found no code work left and did not launch the rental: MTG-183's runner imports its branch's `elemental_long_eval`/`elemental_long_db`/`elemental_grid` family (88 files diverge from this branch) and admits checkpoints from training's bucket, so it is an operator step on a calibration branch.
 
 ## Concept reviews 1–3 (headless, 2026-10-26)
@@ -261,85 +269,15 @@ Applied: `play_cell` records `ProcessCensus` under `group_worker` on every path
 
 ## Concept review 4 (with Jack Heart, 2026-10-27, at `ea8d0e874`, PR #389)
 
-**Proposed, not accepted.** The headless reviews checked the code against the
-accepted design. This one reconsiders the design: one consequential mismatch
-remains between the Task's outcome and what an evaluator experiences.
-
-- **Two ways a checkpoint plays.** An evaluation player is either *served*
-  (`EvalCompute` set: one resident policy per key, batched, Torch-free child)
-  or *scalar* (`execution is None`: `_ScalarPlayers` loads Torch and the
-  checkpoint inside every game child). Player identity distinguishes the two,
-  and this PR improves only the served one. The worst baseline, `cpu32` scalar
-  (about 1,700 games/hour, about 1,000 threads), still gets heavy children
-  (285 MB measured locally) and one forward per decision; this PR only bounds
-  its threads.
-- **Proposal:** in evaluation, checkpoint players always play served;
-  `EvalCompute(device="cpu")` is the CPU path. In-child Torch stays only for
-  search players (flat-MC/PUCT/local-update), which need the policy beside
-  their rollouts. Code anchors become Torch-free through a `flat_mc` split
-  (the known limit).
-- **Consequences:** formerly scalar checkpoint players get a new identity, so
-  their deal evidence is not reused and their Commands differ. Frozen scalar
-  evidence stays as it is. The `cpu32` group-worker shape changes from 30
-  workers each running its own policies to a few workers sharing one CPU
-  service.
-- **Counterexample to test:** one serial CPU service could be slower than 30
-  in-child scalar forwards on 32 vCPUs. exp-07 found batched CPU inference
-  about 12× higher in obs/s, but that was not under game load. The rental can
-  settle this with one extra arm: `cpu32` served CPU against `cpu32` scalar.
-- **Decided by Jack Heart, 2026-10-27 ("1a 2b 3b"):**
-  - **1a:** in evaluation, checkpoint players play served only. Scalar
-    checkpoint play is retired once the rental's `cpu32` served-CPU arm shows
-    it isn't slower than `cpu32` scalar.
-  - **2b:** code anchors become Torch-free in PR #389. Split `flat_mc`/`players`
-    so heuristic, random and scripted players build and play without importing
-    Torch.
-  - **3b:** both changes extend MTG-193 rather than going to a new Task.
-
-### Next implement direction (accepted 2026-10-27)
-
-- **Torch-free code anchors.** Move the heuristic, random and scripted player
-  definitions (and whatever they need from `flat_mc`/`players`) into Torch-free
-  modules. `native_game` builds them without `_ScalarPlayers` importing Torch.
-  Extend `tests/sim/test_child_surface.py`: a code-anchor game child against a
-  served checkpoint reports `torch` absent from `sys.modules`. Commands for
-  existing anchor seeds are unchanged.
-- **Served-only checkpoint players.** In evaluation (`play_cell` and its
-  callers in `manabot/eval`, `manabot/experiment`, `experiments/`), a
-  checkpoint player requires `execution`. CPU hosts use
-  `EvalCompute(device="cpu")`. `_ScalarPlayers` builds only search players
-  (flat-MC, PUCT, local update), which keep the policy in-child. Remove the
-  scalar checkpoint branch and its `torch.manual_seed`. Formerly scalar
-  checkpoint players get a new identity (their `EvalCompute`); frozen scalar
-  evidence is untouched and not reused. Document this in
-  `docs/shared-evaluation.md`.
-- **Execution engines (Jack Heart, 2026-10-27).** CPU and GPU inference are
-  different systems and may have different execution engines, each optimized
-  for its own case. Everything before the engine is shared: registration,
-  `PolicyKey`, admission and setup validation, the decision request/reply
-  protocol, game children, per-row seeds and sampling, receipts and evidence.
-  The engine owns how requests become forwards: process layout, batching
-  policy, threads, device transfer. Where exactly the boundary falls is a
-  design question for implement; keep the shared side as large as possible.
-  Candidate CPU engine choices to evaluate: no separate service process
-  (batch in the group worker, saving the IPC hop), several CPU inference
-  workers per host, intra-op threads sized to the allocation rather than a
-  single serial forward, and a batching delay tuned for CPU forward cost.
-- **CPU performance is iterated, not just gated.** If served CPU is slower
-  than scalar on `cpu32`, improve the CPU engine before giving up on the
-  shared path; retaining scalar checkpoint play is the last resort, decided
-  with Jack Heart on evidence. Local work may use counters (forwards per
-  decision, batch rows, IPC hops, threads) and controlled fixtures; throughput
-  is measured only on rentals (never induced load locally).
-- **Rental budget (Jack Heart, 2026-10-27).** MTG-193 may launch its own
-  machines for calibration and CPU-engine iteration, under $5 total, keeping
-  a spend ledger. This replaces the earlier plan to spend < $1.50 of MTG-183's
-  allowance. MTG-183's runner `experiments/elemental_long_rent.py` lives on its
-  branch (`manabot.mtg-183-train-one-long`), not on `main`; reuse it there or
-  bring the minimum needed onto this branch.
-- **Landing gate.** #389 lands after the rental shows `cpu32` served CPU at
-  least matching `cpu32` scalar on the same 1,000-game pair, or after Jack
-  Heart decides otherwise on that evidence. The Torch-free anchors land
-  regardless.
-- **Calibration arms** (under the $5 ledger): A4500 `gpu` before/after,
-  `cpu32` scalar before, `cpu32` served CPU after.
+Finding: evaluation had two ways a checkpoint plays, served (`EvalCompute`
+set) and scalar (Torch and the checkpoint in every game child), and the PR
+improved only the served one, leaving the worst baseline (`cpu32` scalar)
+heavy. **Decided by Jack Heart, 2026-10-27 ("1a 2b 3b"):** 1a evaluation
+checkpoint players play served only, with scalar play retired once `cpu32`
+served CPU is not slower; 2b code anchors become Torch-free in #389; 3b both
+extend MTG-193. **Engine boundary (Jack Heart, 2026-10-27):** share everything
+up to the engine (registration, `PolicyKey`, admission, request/reply,
+children, per-row seeds, receipts); each device's engine owns process layout,
+batching, threads and transfer, and CPU performance is iterated on rental
+evidence rather than only gated. Implemented as slices 6–7. Proposal text at
+`303e65204`.

@@ -62,8 +62,8 @@ class _ScalarPlayers:
 
     def __init__(self) -> None:
         self._torch: Any = None
-        self._local_update: type | None = None
-        self._puct: type | None = None
+        self._game_trackers: tuple[type, ...] = ()
+        self._step_observers: tuple[type, ...] = ()
 
     def build(
         self,
@@ -84,7 +84,8 @@ class _ScalarPlayers:
 
             torch.set_num_threads(1)
             self._torch = torch
-            self._local_update, self._puct = LocalUpdatePlayer, DeterminizedPuctPlayer
+            self._game_trackers = (LocalUpdatePlayer, DeterminizedPuctPlayer)
+            self._step_observers = (LocalUpdatePlayer,)
         from manabot.sim.guidance import build_registered_player
 
         return build_registered_player(
@@ -92,12 +93,10 @@ class _ScalarPlayers:
         )
 
     def starts_game(self, player: Any) -> bool:
-        return self._puct is not None and isinstance(
-            player, (self._local_update, self._puct)
-        )
+        return isinstance(player, self._game_trackers)
 
     def observes_steps(self, player: Any) -> bool:
-        return self._local_update is not None and isinstance(player, self._local_update)
+        return isinstance(player, self._step_observers)
 
     def seed(self, seed: int) -> None:
         """Seed Torch's global generator before a checkpoint-guided search decision."""
@@ -188,12 +187,10 @@ def execute_game(
         send(("initial", game["initial_state_digest"]))
         for seat, player_id in enumerate(game["seat_players"]):
             player = built[player_id][0]
-            if player is not None and scalar.starts_game(player):
+            if scalar.starts_game(player):
                 player.start_game(env, seat)
         local_players = [
-            player
-            for player, _ in built.values()
-            if player is not None and scalar.observes_steps(player)
+            player for player, _ in built.values() if scalar.observes_steps(player)
         ]
         decision_counts = dict.fromkeys(built, 0)
         for revision in range(max_commands):
@@ -314,11 +311,7 @@ def execute_game(
             perf.count("native_step_calls")
             decision["post_state_digest"] = env._engine.state_digest()
             player = built[player_id][0]
-            if (
-                player is not None
-                and scalar.observes_steps(player)
-                and player.last_receipt is not None
-            ):
+            if scalar.observes_steps(player) and player.last_receipt is not None:
                 # Arena traces are private. Advice uses the explicit public projection.
                 decision["local_update_receipt"] = player.last_receipt.to_json()
                 decision["latency_seconds"] += player.last_receipt.belief_seconds

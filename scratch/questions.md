@@ -85,3 +85,10 @@ registrations therefore get new `source_sha256` values and do not reuse
 earlier deal evidence; frozen evidence is untouched. Assumed acceptable
 under decision 2b (Torch-free anchors); revisit if a frozen v1 anchor must
 keep matching for resumption.
+
+## Calibration baselines (realign, 2026-10-27)
+
+- **Assumption — "before" arms are the retained MTG-183 runs** (`d0955f2a44b6`
+  A4500 about 2,600 games/h; `00119d1c9211` `cpu32` scalar about 1,700) on the
+  same 1,000-game pair, so the $5 ledger buys only the two "after" arms. A
+  fresh `main` before-arm is optional if the ledger allows and the hosts differ.
