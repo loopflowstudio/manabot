@@ -1,5 +1,7 @@
 # One text decision through an untouched LLM
 
+For hosted models, see the [OpenRouter adapter, cost estimates and cache layout](openrouter.md).
+
 `manabot.llm` consumes observation text and its complete legal-reference list,
 then returns one inspectable selection record. It does not render observations,
 resolve Commands, advance a game or train a model. The caller remains responsible
