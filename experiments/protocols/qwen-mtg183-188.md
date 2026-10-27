@@ -108,3 +108,24 @@ the [official Qwen recipe](https://recipes.vllm.ai/Qwen/Qwen3.5-9B) and the
 [v0.17.1 completion protocol](https://github.com/vllm-project/vllm/blob/v0.17.1/vllm/entrypoints/openai/completion/protocol.py).
 Local controlled tests establish binding and accounting; actual GPU startup,
 fit, latency and complete-game outcomes remain to be observed.
+
+## Retry authorization — 2026-10-26
+
+After the first batched attempt failed before model startup, Jack Heart said
+“yes retry”, then clarified “no cap on retries” and “just cap on money”. This
+supersedes every retry-count or single-allocation restriction above. The original
+**$10 cumulative ceiling** remains; it is not replenished by failures or repairs.
+Keep the $0.50 ancillary reserve and deduct every previous rental before quoting
+the next one. Only one allocation runs at a time. Each repaired source/treatment
+gets a new run identity, its own declared job/cohort cap and retained failure
+evidence. The SDK remains at one automatic attempt per job so retries can inspect
+the failure and record what changed. No further retry-count approval is needed.
+
+Run `594e466c66c1` failed because its offline snapshot lookup requested three
+documentation files excluded by cache preparation. Source `fea08def9` repairs
+that mismatch with shared file patterns and a real offline-resolver regression
+test. All 100 games were unattempted. Its pod was verified absent; its estimated
+charge was $0.02901644665277777951. Together with `b6a4716bb321`, retained rental
+estimates total $0.09140036411944444410. The next job/cohort cap of $9.40 plus
+that sunk amount and the $0.50 reserve totals $9.99140036411944444410. Later
+attempts must lower their cap as needed; final inclusive billing remains unknown.

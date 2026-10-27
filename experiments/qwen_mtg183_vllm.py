@@ -258,7 +258,11 @@ def run(config: Campaign) -> None:
         )
 
 
-def runs(native_artifact: str, native_source: str) -> Job:
+def runs(native_artifact: str, native_source: str, attempt_usd: str = "9.40") -> Job:
+    """The operator deducts every earlier allocation before setting this cap."""
+    ceiling = Decimal(attempt_usd)
+    if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
+        raise ValueError("attempt_usd must be positive and at most 9.40")
     job = original.runs(native_artifact, native_source)
     return job.model_copy(
         update={
@@ -266,7 +270,7 @@ def runs(native_artifact: str, native_source: str) -> Job:
             "command": "uv run python -m etude.call --function experiments.qwen_mtg183_vllm:run",
             "config": Campaign().model_dump_json(),
             "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",
-            "max_usd": Decimal("9.40"),
+            "max_usd": ceiling,
         }
     )
 
