@@ -284,3 +284,25 @@ start for the point. U/E acquired both A4000 slots after M's first request was
 refused without acquisition; M's unchanged request waits for a released slot.
 All pre-start refusals and zero-attempt cancellations remain in the report's
 operational history. The timed-out U-initial point remains withheld from replay.
+
+## Additional batched GPU evaluation allowance (2026-10-27)
+
+Jack authorized an additional **$10 total evaluation budget**, separate from
+the existing arm allocations, for rented GPU evaluations using the shared
+batched evaluator. Reserve $0.50 for ancillary costs; admit at most $9.50 of
+rental ceilings across these jobs, including setup and delivery. Failed actual
+attempts consume this allowance; no automatic replay of failed games.
+
+The first allocation evaluates U, M and E at update800 on the unchanged
+400-game development schedule. Later allocations prioritize clean endpoints,
+the predeclared cost-selected checkpoints and ME when exported. All retain
+the historical w13 world, v1 policy inputs, real checkpoint bytes, heuristic v2,
+decks, deals and seats. Do not substitute current-world weights or rules.
+
+GPU evaluations use the existing shared resident FP32 CUDA service with four
+active games, batches up to four rows and a 5ms collection window. Conditions
+and tournament names retain this compute treatment separately from scalar CPU
+evidence. Treat GPU scores as a distinct evaluation series; numerical parity
+on a previous workload does not establish identical trajectories universally.
+Training definitions, training spending ceilings and checkpoint selection
+remain unchanged.

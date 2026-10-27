@@ -12,10 +12,34 @@ from etude.train.read import read
 import pytest
 
 from experiments import curriculum_adapters as study, curriculum_uniform as uniform
+from experiments.curriculum_gpu import COMPUTE, GPUConditions, benchmark
 from experiments.elemental_long import recipe as baseline_recipe
 from experiments.elemental_long_eval import Conditions
 from manabot.experiment.job import TrainingJob
 from manabot.training.regime import TrainSelfPlay
+
+
+@pytest.mark.parametrize("held_out", (False, True))
+def test_gpu_benchmark_preserves_deals_seats_and_anchor_with_distinct_identity(
+    held_out: bool,
+) -> None:
+    original = study._benchmark(held_out)
+    before = original.model_dump_json()
+    gpu = benchmark(original)
+    assert original.model_dump_json() == before
+    assert gpu.environment == original.environment
+    assert gpu.name == original.name + "-gpu"
+    for scalar, batched in zip(original.matchups, gpu.matchups, strict=True):
+        assert scalar.players[1] == batched.players[1]
+        assert scalar.games == batched.games
+        assert scalar.definition != batched.definition
+        for first, second in zip(scalar.conditions, batched.conditions, strict=True):
+            condition = GPUConditions.model_validate(second)
+            assert condition.compute == COMPUTE
+            assert (
+                condition.model_dump(exclude={"compute"})
+                == Conditions.model_validate(first).model_dump()
+            )
 
 
 def test_four_arms_share_learning_and_initialization_with_inclusive_reserves() -> None:

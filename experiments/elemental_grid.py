@@ -33,11 +33,14 @@ import random
 import subprocess
 import sys
 import time
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
+
+if TYPE_CHECKING:
+    from manabot.sim.serving import InferenceRuntime
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -162,7 +165,10 @@ def _legs(group: Group) -> tuple[str, str, int]:
     return x, partner, (4, 5)[group.model_seat]
 
 
-def play_group(request: Request) -> list[GameRow]:
+def play_group(
+    request: Request, *, inference: InferenceRuntime | None = None
+) -> list[GameRow]:
+    """Run the frozen deck/seat group, optionally on a caller-owned allocation."""
     import torch
 
     from manabot.eval.match import play_cell
@@ -246,6 +252,7 @@ def play_group(request: Request) -> list[GameRow]:
         authored_matchup=matchup,
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
+        inference=inference,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
