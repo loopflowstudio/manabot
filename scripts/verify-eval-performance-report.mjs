@@ -173,6 +173,26 @@ fixtures['_shared_fixture'](root, llm_failure=True)
   assert.equal(await page.locator('[data-inference-receipt]').count(), 0);
   assert.match(await page.locator('#perf-body').innerText(), /1 valid games/);
   assert.deepEqual(errors, []);
+
+  execFileSync('uv', ['run', '--extra', 'dev', 'python', '-c', `
+import runpy, sys
+from pathlib import Path
+fixtures = runpy.run_path('tests/eval/test_inference_receipts.py')
+fixtures['_matchup_fixture'](Path(sys.argv[1]))
+`, join(directory, 'matchup-input')], {timeout: 30000, stdio: 'pipe'});
+  execFileSync('uv', ['run', '--extra', 'dev', 'python', '-m', 'experiments.report_prototype.build', '--llm-receipt', join(directory, 'matchup-input'), '--out', join(directory, 'matchup')], {timeout: 30000, stdio: 'pipe'});
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({width, height: 900});
+    await page.goto(`file://${join(directory, 'matchup', 'report.html')}#perf`);
+    const summary = page.locator('[data-matchup-summary]');
+    await summary.waitFor();
+    assert.match(await summary.innerText(), /2 \/ 3 planned games.*Qwen 1 wins, 1 losses/);
+    assert.match(await summary.innerText(), /Simulation: reset and native commands/);
+    assert.match(await summary.innerText(), /Policy tensor \/ forward \/ sampling/);
+    assert.equal(await summary.locator('progress').count(), 3); // missing native_reset cannot become zero
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  assert.deepEqual(errors, []);
   console.log('Evaluation Perf report: activity controls and CLI-generated mixed inference receipts passed.');
 } finally {
   await browser?.close();

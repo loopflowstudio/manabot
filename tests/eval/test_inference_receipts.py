@@ -1104,10 +1104,8 @@ def test_device_samples_retain_uuid_and_declared_interval(tmp_path: Path) -> Non
     assert memory["peak_used_bytes"] == 20 * 1024**2
 
 
-def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
-    tmp_path: Path,
-) -> None:
-    root = tmp_path / "sequence"
+def _matchup_fixture(root: Path) -> Path:
+    """Two controlled matchup games and one missing planned game."""
     for i in range(2):
         game = _fixture(root / f"game-{i:03d}") / "game"
         path = game / "summary.json"
@@ -1142,6 +1140,13 @@ def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
         },
     )
     _write(root / "readiness.json", {"seconds": 4.0, "policy_cpu_seconds": 0.2})
+    return root
+
+
+def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
+    tmp_path: Path,
+) -> None:
+    root = _matchup_fixture(tmp_path / "sequence")
     projection = project_llm(root)
     matchup = projection["matchup"]
     assert projection["observed_status"] == "partial"
