@@ -1,295 +1,220 @@
-# MTG-177 — continue the substantive rules audit
+# MTG-177 — resolution legality and the continuing rules audit
 
-## Current implementation direction — 2026-10-26
+Draft implementation; projection corrected 2026-10-27. The resolution contract is accepted;
+final integrated-world identity and acceptance remain pending.
 
-Jack Heart requested `pursue` after the candidate review. Implement the first
-priority: one rules-faithful resolution-legality authority across spells,
-activated abilities and triggered abilities, including suspended resolution.
-This supersedes the earlier audit-only/review-only restriction for that repair.
-Deathtouch history and earthbend destination identity remain named follow-ups;
-MTG-195/196 retain trigger/replacement ordering ownership. The whole-rules audit
-also remains unfinished. Return the concrete implementation and evidence for
-review; ready publication, merge and Task completion remain unselected.
+## Requested stack — 2026-10-27
 
-The accepted behavioral contract is CR 608.2b: evaluate target eligibility when
-resolution begins, per targeting clause, and retain that decision while effects
-execute or suspend. Do not reinterpret gained hexproof or changed type as a new
-target-legality decision after each instruction. Keep one shared predicate for
-selection, acceptance and resolution-start evaluation. Separately retain the
-object-incarnation/presence guards needed when an instruction moves an object;
-a blanket removal of all effect checks is not correct. Resolve the precise
-EffectFrame representation from existing state before editing, documenting any
-consequential ambiguity rather than inventing a second authority.
+Jack Heart directed "stack on 195": MTG-177 is to build on MTG-195's
+trigger-ordering implementation, retaining the resolution repair and reconciling
+the shared continuation/model contracts and final world identity. This supersedes
+waiting for an unrelated main-branch delivery. Existing review and no-merge
+boundaries remain; MTG-195's unresolved label choice belongs to its conversation.
 
-Delete — do not maintain: migrate the repeated effect-handler target-legality
-rechecks to the single resolution contract, and unify divergent entry handling
-including the activated all-invalid gate. Remove superseded checks in the same
-change. Preserve per-clause semantics, source exclusions, legitimate response-time
-rechecks, untargeted effects, zero optional targets and current identity rules.
+Attempted `lf checkout MTG-177 --stack-on MTG-195 --json`; it returned
+`stack parent PR is missing`. Fresh inspection shows MTG-195's implementation is
+still uncommitted with no parent PR available to that operation. Its checkout was
+left intact. Current lf 0.14.17 also fails Task status/checkout reads with
+`missing field interactive`; Session and process inventories remain readable.
+No live audit Graph was observed, and no replacement Graph was launched.
+The stack has not been established. The next supported action is to establish
+MTG-195's parent PR handoff, recover working Task reads, then repeat the requested
+stack operation and reconcile the combined source. Do not apply the old stash
+from the failed runner message: the current implementation edits are already
+present and the cited stash belongs to the earlier recovered audit.
 
-Proof: enable the retained hexproof-during-resolution regression; independently
-assert both controllers, spell/activated/triggered entry paths, mixed/all-invalid
-and multi-clause targets, suspended choices, and departure/reentry during an
-effect. Assert expected outcomes, not just agreement between consumers. Preserve
-the other two ignored proposals as unresolved and add relevant rule citations.
-Use focused debug Rust checks with two jobs first. Required native rebuild,
-world/admission, maintained model/choice-separability and consumer/replay checks
-remain part of the affected acceptance, with gate owning broader checks once.
-Do not resurrect the deliberately removed learnability verifier.
+## Accepted direction and boundary
 
-Coordination: fresh inspection found MTG-195 has uncommitted changes in trigger
-placement, action/observation state, hashing, rollback, targeting tests and w14
-fixtures in its own checkout. Do not adopt or overwrite that active writer's
-files. Resolution.rs and the frame contract are this repair's center; reconcile
-adjacent changes against actual supported handoff before integration. Do not
-reuse w14 for different semantics or silently overwrite its evidence. Select the
-final world identity and fresh affected receipts only against the integrated
-source; surface an integration dependency if the other work is not yet available.
+Jack Heart requested `pursue` on 2026-10-26 after reviewing the three audit
+candidates. Implement the first priority: one CR 608.2b resolution-legality
+authority across spells, activated abilities, triggers and suspended resolution.
+This supersedes the earlier audit-only restriction for this repair. Return the
+implementation and evidence for review; ready publication, merge and whole-Task
+completion remain unselected. The earlier “ship it” delivered PR354 only.
 
-The old pursue completed audit implementation/compression and stopped during
-sync. Its preserved draft is recovered and committed in `6b18ee3d9`; candidate
-review is `f16ec7886`. No live audit Graph was observed. Continue from that work,
-not a fresh audit. Keep the approximately 10k authored-line budget (7,493 already
-charged), frozen evidence and existing resource bounds below. No paid compute,
-training experiments, artificial load or unrelated card/format expansion.
+Deathtouch history and earthbend destination identity remain proposed follow-ups.
+MTG-195 owns controller-selected trigger ordering; MTG-196 owns affected-player
+replacement/prevention ordering. Those mechanisms are outside this repair.
+The whole-rules audit remains unfinished.
 
-## Accepted direction — 2026-10-26
+## Resolution contract and implementation
 
-Jack Heart accepted resuming the whole-rules audit and creating follow-up Tasks
-with "sounds goo" after reviewing the proposed sequence. This pass produces a
-readable audit draft for review. It does not authorize ready publication, merge,
-or Task completion; the earlier "ship it" instruction delivered PR354.
+CR 608.2b evaluates each chosen target against its targeting clause when
+resolution begins. Preserve that result while instructions execute or suspend:
+gained hexproof, changed control or changed type cannot retrospectively retarget.
+Selection, acceptance and resolution entry share `target_is_legal`; legitimate
+response-time checks remain. Live object-presence checks are separate (CR 400.7).
 
-Keep this Task as the audit owner. MTG-195 owns controller-selected trigger
-ordering; its own conversation records design acceptance and implementation
-authorization on October 26. MTG-196 owns affected-player replacement and
-prevention ordering and remains queued. Do not implement either mechanism here.
+`EffectFrame` retains ordered `ResolutionTarget { target, requirement, legal }`
+slots. Keep illegal positions because the final-target damage instruction is
+positional. All three entry paths reject nonempty all-invalid sets before any
+effect; zero optional targets still resolve. Trigger context is untargeted and
+cannot replace an illegal chosen slot. PermanentId and graveyard ObjectRef retain
+the existing incarnation guards; no stack-target ABI migration is selected.
+Clone, undo and canonical serialization carry the slots. Continuation projection
+now retains `legal_at_resolution_start` with each reference, clause and ordinal.
 
-## What has shipped
+The retained hexproof regression is enabled. Independent bounded fixtures cover
+both controllers, all entry paths, mixed/all-invalid and multi-clause targets,
+suspended choices, characteristic changes, clone/undo and departure/reentry.
+The two unrelated ignored proposals retain their CR-required outcomes. Synthetic
+fixtures establish obligations, not admitted-deck reachability.
 
-PR354 merged as `4a2744705e0f493ce05c0643e5eafe59a5749c08`: shared targeting
-legality, permanent-wide hexproof enforcement, bounded independent tests,
-rules citations, source-pinned inventory, coverage map and measured CI evidence.
-Combined targeting/payment behavior was bound to w13 with fresh receipts;
-earlier corpora, demos, checkpoints and experiments retain their identities.
-The Prism/Treasure regression passes through explicit nested payment choices.
-Do not repeat these repairs or treat historical payment failures as current.
+### Delete — do not maintain
 
-The substantive audit remains unfinished: 2,965 of 3,322 indexed entries were
-unknown after shipping. Unknown means unreviewed, not necessarily missing code.
-The inventory contains 3,166 numbered rules/subrules and 156 headings.
+Completed: per-handler `target_is_legal` rechecks, separate spell/trigger
+all-invalid predicates, frame `target_req_indices`, and the hexproof probe's
+ignore attribute. Positional damage, ForEachTarget and continuation consumers
+use the surviving frame contract. No remaining production deletion target.
 
-## This pass
+Completed projection correction: removed the boolean native encoder `relations`
+selector and its single-width assumption. The existing policy-input version
+contract selects the layout; the same continuation encoder consumes v3. Frozen
+v1/v2 rows and checkpoint omissions survive. No parallel legality computation
+or new lifecycle was introduced.
 
-Audit individual obligations and subrules in CR 115, 400.7, 603, 608 and 704
-against the updated checkout. Prioritize target/zone restrictions, resolution,
-trigger collection/placement and SBA stabilization. Preserve the pinned official
-September 25, 2026 source metadata in docs/rules/audit-2026-10/source.json; distinguish
-any newer source rather than silently changing the pin. Recover the exact TXT
-from that source if needed and verify its digest.
+Removed `resolution.rs::permanent_on_battlefield` and `spell_controller`:
+callers now use the exact-object authority and the existing stack controller
+accessor after one lookup. Positional targets now use `split_last`;
+owned inline effects travel together with their counter key instead of cloning
+and branching twice. Presence checks remain between damage events;
+all target slots are preserved. These reductions introduce no new serialized state.
 
-For each reviewed entry, inspect exact native authority and callers, relevant
-comments/citations, independent behavioral evidence and exceptions. Decide which
-implementation matches the rule when paths disagree. Distinguish legitimate
-selection/resolution rechecks from competing semantics. Do not bulk-upgrade
-subrules from family-level evidence or agreement between two shared callers.
+Retired one-shot audit authors (`scratch/update_review.py`, `finalize_audit.py`,
+`run_audit.py`) remain archived at
+`.cache/rules-audit/retired-authoring-20261026.tar`; their charges are not refunded.
+`reviews.json` is the authored source; `scripts/audit_rules.py` generates the
+index. Exact retirement rationale/hash and prior validation are
+in `a9dd41142:scratch/plan.md` and `line-accounting.json`.
 
-Add only cheap directed tests and useful rule/invariant citations justified by
-findings. Keep production behavior changes as explicit follow-up proposals for
-review. In particular, do not implement trigger/replacement choice mechanisms,
-start a stack-target ABI migration, expand cards/formats, rewrite payments, or
-rerun CI-cost research without a new finding. Target/identity uncertainties need
-a supported-play witness or precise missing obligation before a new Task.
+## Concept review and projection correction
 
-Deliver an updated per-rule index and concise coverage map, prioritized findings,
-bounded draft evidence, exact test receipts and line accounting. Keep working
-direction here rather than growing an exhaustive narrative report. Leave other
-families honestly unreviewed. This pass does not complete the whole-rules Task.
+The 2026-10-26 concept review changed the design: native authority retained
+`ResolutionTarget.legal`, but `ClauseTarget` dropped it, making different entry
+eligibilities indistinguishable after characteristics converged. Jack Heart's
+accepted 2026-10-21 shared-observation direction and 2026-10-26 resolution
+contract settle the correction; no new product decision or UI redesign is implied.
+The original review remains in `scratch/concept-review.html`.
 
-## Current source and constraints
+Implemented 2026-10-27: `ClauseTarget.legal_at_resolution_start: Option<bool>`
+projects directly from suspended slots. Stack/announcement targets have no
+entry result. Acting-viewer gating, original slot order and exact-object joins
+are unchanged. True eligibility cannot restore an expired object reference.
+Python bindings and native portable validation retain the fact. Missing historical
+fields mean unknown; malformed facts and eligibility on nonresolution frames
+fail validation. Capture v2 cannot acquire known eligibility retroactively.
 
-The checkout was synced to main in `324db65f2` (upstream `558e0186b`), resolving
-six conflicts and passing 39 focused CI-selection/world-admission checks.
-Main moved arena models into shared evaluation and retired the old learnability
-diagnostic. Use current supported test entry points; preserve historical receipts
-without reviving removed production systems or relabeling old evidence.
+Draft policy-input v3 appends column 32 to `relations[64,33]`: unknown=0,
+legal=1, illegal=2. Columns 0–31 preserve v2 semantics, including row validity
+at 31. Scalar/vector buffer widths bind the version; reference encoding and the
+model use the configured width. V1/v2 checkpoint layouts, initialization order
+and serialized omissions remain intact. Draft capture v3 and text representation
+`manabot-text-3` expose “Legal when resolution began”; embedded Observation and
+Command schema 6 are unchanged. Final version reservation remains integration work.
 
-Retain the original roughly 10k authored-line ceiling: the recorded charge after
-shipping is 6,891. Reports/index/conformance evidence are excluded; runtime demos
-and helper code count. Update conservative accounting for this increment.
-Use debug Rust with two Cargo jobs, uv-managed Python, and bounded fixtures.
-Limits remain 900s cold Rust, 180s warm Rust and 120s per Python check. No paid
-compute, random-game searches, stress loops, assertion weakening or frozen
-evidence edits. Do not run the full expensive matrix for this audit-only pass.
+The native paired witness covers both controllers: hexproof gained during
+resolution versus present at entry, with a second legal clause allowing both
+effects to suspend. Current observations and v2 tensors are identical; retained
+eligibility, v3 tensors, portable text and model values differ. Independent
+expected slot values precede encoder parity assertions. Checked generated
+captures live in `tests/fixtures/resolution-eligibility-captures.json`; these are
+synthetic observation evidence, not executable Academy setups or proof of deck
+reachability. Existing witnesses now assert capture/clone/rollback preservation,
+nonacting privacy and absent replacement links for departed permanent/graveyard
+objects. No target reselection, cancellation, undo action or browser authority
+was added. Command/reconnect acceptance remains gate-owned after integration.
 
-## Evidence and handoff
+## Integration and remaining acceptance
 
-Read docs/rules/audit-2026-10/{README.md,coverage-map.md,unification.md,reviews.json,
-index.jsonl,shipping-integration.json,line-accounting.json}; distinguish current
-claims from pre-sync w12 history. Preserve all existing work. Keep agreed new
-direction and a short per-command result here. Return the draft to the existing
-MTG-177 primary conversation, with concrete choices and remaining findings.
+The 2026-10-26 reconciliation confirmed MTG-195 still has uncommitted trigger-order,
+action/observation, hashing, rollback and w14 fixture changes in its own checkout.
+Its accepted design and local implementation notes now report completed local
+validation and availability for review, but no supported commit/PR handoff.
+The Task API's planning snapshot is marked stale and still describes design-only
+authorization; the dated local notes record Jack Heart's later “implement for sure”
+decision. Neither the API snapshot nor reported tests establish integrated acceptance.
+Local main remains `2f5b7cbcd`, already merged here; no newer upstream source was
+inspected. The adjacent implementation and its historical receipts remain separate.
 
-## Delete — do not maintain
+This isolated draft uses `w15-resolution-draft` and canonical hash 10 because
+EffectFrame serialization changed; MTG-195 locally reserved w14/hash 9. This is
+not final world assignment or admission. Remaining work is a supported handoff,
+integration, final identity selection and fresh conformance/Academy prefixes.
 
-- Retired `scratch/update_review.py`, `scratch/finalize_audit.py` and
-  `scratch/run_audit.py`, preserving their exact bytes in
-  `.cache/rules-audit/retired-authoring-20261026.tar`. The one-shot author has
-  drifted from the finished reviews and appends duplicate evidence on reruns;
-  finalization depends on scratch receipts no longer present. Keep reviews.json
-  as the authored source and scripts/audit_rules.py as the index generator.
-  Historical helper lines remain charged; their removal does not refund effort.
-- Replaced README.md's repeated PR354 walkthrough with the delivery result,
-  receipt links and precise historical reference
-  `dccf75632e18e88abc2fd92904ea4d81535cadfc:docs/rules/audit-2026-10/README.md`.
-  Keep unification.md and all frozen receipts intact.
-- Stale w12/current-payment wording and inherited MTG-184 questions are already
-  removed. The latter remain at `324db65f2:scratch/questions.md`.
-- The earlier audit-only increment replaced no production path. The selected
-  resolution repair's deletion list and remaining integration work are below.
+Gate owns broader affected acceptance once: full debug Rust/clippy,
+world/admission/monitoring, maintained model/choice-separability, Command/recovery
+and consumer/replay checks in `docs/development/validation.md`. This includes
+`tests/academy/test_choice_navigation.py`, `test_learn_setup.py`, the model suite
+and focused browser interactions against refreshed world-bound positions.
+MTG-195's accepted maintained-learnability interpretation agrees with this plan;
+the retired verifier remains excluded. Historical worlds, checkpoints,
+experiments, source pin and failure evidence remain frozen. Integration is a dependency,
+not a claim that acceptance passed.
 
-## Implementation — 2026-10-26
+## Audit findings and historical evidence
 
-Completed individual inspection of all 150 obligations in the five selected
-areas: 74 partial, 56 missing, 8 outside admission, 2 implemented and 10 still
-unknown. Overall unknown count is now 2,840. The coverage map prioritizes the
-findings; reviews/index retain exact authority and limits. No production changes.
+The October 26 audit inspected all 150 individual entries in CR 115, 400.7,
+603, 608 and 704: 74 partial, 56 missing, 8 outside admission, 2 implemented,
+10 unknown. Overall 2,840 of 3,322 entries remain unknown. Unknown means
+unreviewed/unproved, not necessarily missing code. The index contains 3,166
+numbered rules/subrules and 156 headings. Family coverage and agreement between
+shared callers do not establish individual child obligations.
 
-Three deliberately ignored probes fail at their CR-required outcomes:
-earthbend follows a second zone change; deathtouch survives an earlier SBA
-check; per-instruction legality rechecks skip damage after the same resolving
-ability grants hexproof. These are controlled obligation witnesses, not claims
-of reachable authored-deck responses. Repair decisions remain with review.
+Remaining candidate order after resolution:
 
-Check: debug `cargo test ... cr_608_resolution` → 2 ordinary passes; explicit
-ignored probes → 3 expected-outcome failures retained; inventory pytest → 6
-passes; pinned-source generation/validation and final Rust format pass. Exact
-commands, input hashes and output: `obligation-validation.json`; measured
-command duration 33.542s. Broader affected checks belong to gate, without
-repeating unchanged passing checks or the full expensive matrix.
+1. Consume deathtouch damage history at the shared SBA boundary (CR 704.5h),
+   preserving simultaneous checks, new damage, lethal damage, indestructibility
+   and undo. Coordinate stabilization with MTG-195. Keep positive first-check and
+   negative later-check witnesses.
+2. Retain earthbend's first destination incarnation through trigger resolution
+   (CR 400.7e, 603.6/603.7c). Keep normal graveyard/exile returns; reject a second
+   move or same-zone round trip. Coordinate trigger context with MTG-195. Current
+   direct-zone probe does not establish real-card reachability or justify a
+   general stack-target ABI migration.
 
-Conservative total: 7,493 authored churn lines of roughly 10k, including local
-helpers and inherited-question cleanup. Reports/index/evidence remain excluded.
-Official input is retained at `.cache/rules-audit/MagicCompRules-20260925.txt`;
-source.json is unchanged. Wave GOAL.md was read; its MEMORY.md is absent.
+True modal-trigger placement, ability stack lifetime and full characteristic LKI
+remain inspected limits; resolution-time color/token/may choices must not move
+to placement just because they are named `Modal`. Ten unresolved obligations
+and the other rule families still need evidence. See the coverage map and
+per-rule reviews for exact remaining obligations and authority references.
 
-Remaining: review the three proposed repairs and ten unresolved obligations;
-MTG-195/196 retain shared-choice ownership. This implementation pass is complete;
-publication, merge and whole-Task completion remain outside its boundary.
+PR354 merged as `4a2744705e0f493ce05c0643e5eafe59a5749c08`, delivering shared
+targeting/hexproof and the combined w13 payment integration. Prism/Treasure now
+passes explicit nested payments; its earlier failures remain historical.
+The subsequent audit Graph stopped during sync after merging main as `a52bfc5d3`.
+Its complete draft was recovered from retained stash
+`2690e564e06d34988f8bb7e62a19c49ed8b7e270` and committed in `6b18ee3d9`;
+candidate review is `f16ec7886`, authorization `e35982be4`, repair `a9dd41142`.
+Full prior narrative: `a9dd41142:scratch/plan.md`;
+inherited MTG-184 questions: `324db65f2:scratch/questions.md`.
 
-Compression checks: `git diff --check` passes; `uv run python` verified all
-three final artifact hashes in obligation-validation.json and README/coverage
-links. Tests and authored reviews are byte-identical to their recorded receipts,
-so those results are reused; broader checks remain gate-owned. `lf context`
-reports scratch within both limits. No deletion targets remain in this increment.
+## Resource limits and validation
 
-## Operator recovery — 2026-10-26
+The approximately 10k authored-churn-line ceiling remains; 9,096 are charged, including
+94 lines for the inherited reduction and 574 for this correction. Reports/index/receipts/design notes are excluded; runtime demos
+and helpers count. Deleted code retains its prior charges. Current
+accounting is `docs/rules/audit-2026-10/line-accounting.json`.
 
-The pursue Graph finished implement/compress, then stopped during sync without
-an exit receipt. Fresh process inspection found no live Graph or sync worker.
-Sync had merged main as `a52bfc5d3` and preserved the complete draft in stash
-`2690e564e06d34988f8bb7e62a19c49ed8b7e270`. Applied that exact stash cleanly,
-retaining the stash as a backup. No audit work was lost or rerun.
+Validation uses debug Rust with two Cargo jobs, uv-managed Python and controlled fixtures.
+Limits: 900s cold Rust, 180s warm Rust, 120s per Python check. No paid compute,
+training experiments, artificial load, random-game searches, assertion weakening,
+unrelated card/format expansion or unrequested CI-cost research.
 
-Verified all three final artifact hashes against obligation-validation.json,
-verified the full pinned-source index, and passed `git diff --check`.
-No managym or inventory-tool changes occurred between the tested base and the
-sync merge, so the recorded focused tests remain applicable. The draft is
-available for review; no new production repair, publication or merge is selected.
+Pinned September 25, 2026 TXT:
+`.cache/rules-audit/MagicCompRules-20260925.txt`; metadata/digest in `source.json`.
+Rules' objective remains one faithful shared world for human play and training;
+agreement between consumers alone cannot prove rule correctness. Its GOAL.md was
+read; MEMORY.md is absent, and directory inspection found no child scopes or
+child memories in this checkout. No Wave files changed.
 
-## Candidate review — 2026-10-26
+Earlier repair and reduction receipts remain historical source snapshots:
+`docs/rules/audit-2026-10/resolution-validation.json` and
+`scratch/compress-*.json`. The current correction's bounded command outputs and
+source digests are in `scratch/eligibility-{native-tests,encoding-tests,python-tests,native-build,native-install}.json`.
+The generated capture receipt is consumed by the maintained Python proof.
 
-Jack Heart accepted reviewing the three candidates with "sounds good". This
-selects a review and priority recommendation, not implementation or shipping.
-Fresh Task/Session/process reads confirm no live audit Graph; the interrupted
-sync record remains historical. Rules backlog and open PRs were inspected.
-No existing Rules Task owns these three repairs. MTG-195 still owns trigger
-ordering and touches adjacent trigger/stabilization machinery; coordinate any
-future repair against its actual diff. Open PR383 is adaptive game selection,
-not an overlapping rules repair.
-
-Recommended order, measured against the original authority-unification goal:
-
-1. **Resolution legality first.** `target_is_legal` is already shared, but
-   resolution entry and individual effect handlers call it at different times.
-   CR 608.2b requires the initial resolution check; subsequent characteristic
-   changes must not retroactively invalidate that decision. Establish one owner
-   for clause-specific resolution eligibility across spells, activated abilities,
-   triggered abilities and suspended frames. Preserve offer/acceptance checks,
-   response-time rechecks, mixed/all-invalid behavior, and object-incarnation
-   guards when an instruction itself moves an object. Merely deleting every
-   effect-level check is not a sufficient design. Acceptance includes the retained
-   hexproof probe, both controllers, multi-clause targets, interrupted resolution,
-   and target departure/reentry. The probe is synthetic, not an admitted-deck
-   exploit. Review the precise frame contract before implementation.
-2. **Deathtouch history second.** CR 704.5h says since the previous SBA check;
-   the current flag persists until cleanup. Consume the relevant damage history
-   at the shared SBA boundary while preserving simultaneous checks, new damage,
-   ordinary lethal damage, indestructibility and journal/undo behavior. Retain
-   the positive first-check case and the negative later-check probe. This is a
-   lifetime correction in one authority, not two competing engines. Coordinate
-   changes to stabilization with MTG-195 rather than starting parallel edits.
-3. **Earthbend destination identity third.** The watcher retains ObjectRef,
-   but the return effect reduces identity to CardId plus graveyard/exile presence.
-   CR 400.7e allows finding the first destination object, not following another
-   zone change. Preserve that destination incarnation through trigger placement
-   and resolution using existing identity machinery. Keep normal graveyard and
-   exile returns working; reject a second move and leave/reenter, including a
-   round trip to the same zone. No general stack-target ABI migration is needed
-   merely because this narrower gap exists. Coordinate trigger context with
-   MTG-195. Current probe directly moves zones, so real-card reachability remains
-   an explicit evidence gap.
-
-All three claims were checked against the pinned official text and native
-authority. Existing test receipts still apply; this review changed no code and
-ran no new behavior tests. Keep this as the reviewable repair plan. Shared-choice
-work remains MTG-195/196; no duplicate Task or worker was launched by this review.
-
-## Resolution repair implementation — 2026-10-26
-
-Frame decision: replace the frame's separate target/clause vectors with
-`ResolutionTarget { target, requirement, legal }` slots, preserving chosen order
-and illegal slots (the last-target damage instruction is positional). One
-resolution-entry helper evaluates these with the existing `target_is_legal`.
-All three stack paths reject a nonempty all-illegal set before effects. Suspended
-frames, cloning and canonical serialization retain the result. Trigger context
-remains untargeted and cannot substitute for an illegal chosen slot. Effects
-check live object presence separately; PermanentId and graveyard ObjectRef retain
-the existing incarnation guards. No stack-target ABI migration is included.
-
-Delete — do not maintain: per-handler `target_is_legal` calls, separate spell /
-trigger all-invalid predicates, frame `target_req_indices`, and the hexproof
-probe's ignore attribute. Preserve the two unrelated ignored proposals and
-legitimate selection/acceptance predicates. Migrate positional damage and
-ForEachTarget along with ordinary handlers and continuation projection.
-
-Integration: fresh read of MTG-195's checkout still shows its uncommitted w14
-implementation and fixtures. No supported handoff is available. Final world
-identity, new conformance/demo receipts and integrated consumer acceptance are
-pending that integration; do not claim this local repair as admitted w13 or w14.
-
-Canonical hash integration: EffectFrame serialization owns suspended eligibility;
-its shape changes the hash contract. MTG-195 locally reserves hash version 9
-alongside w14. This isolated draft uses hash 10 and `w15-resolution-draft` so
-native consumers cannot misidentify it as either 8/w13 or 9/w14. This is not the
-final integrated world or an admission claim. Select the final world and fresh
-receipts only after supported integration; no historical fixtures are relabeled.
-
-Resolution repair status: production deletion/migration is complete. All handler
-TargetSpec rechecks and frame clause-vector duplication are removed; positional
-power damage and ForEachTarget consume retained eligibility. The two unrelated
-ignored probes are unchanged. No final-world receipts were generated.
-
-Remaining accepted work: supported MTG-195 integration, final world assignment
-and new conformance/Academy prefixes; then gate owns full debug Rust/clippy and
-`docs/development/validation.md` world/admission, maintained model/separability,
-Command/recovery and consumer/replay checks. Earlier worlds, source pin and
-historical receipts stay frozen. Publication/merge/whole-Task completion remain
-unselected. This dependency is not an assertion that integrated acceptance passed.
-
-Check: focused debug Rust → 33 passes, 3 intentionally ignored proposals;
-inventory pytest → 6 passes; native release build + atomic install/import,
-rustfmt, pinned inventory verification and diff whitespace → pass. Exact
-commands/source hashes/failure correction: `docs/rules/audit-2026-10/resolution-validation.json`.
-Broader acceptance remains gate-owned after integration above. Conservative
-charge: 935 new lines, 8428 total of roughly 10k.
+Check: focused debug resolution/continuation/encoder/capture tests → 18 pass;
+focused Python continuation/text tests → 26 pass; release wheel built and cp312
+extension installed atomically; Ruff, format, diff and context checks pass.
+Full debug/clippy, world/admission/model/training/replay/Academy acceptance and
+final version identity remain deferred to integration and gate as above.

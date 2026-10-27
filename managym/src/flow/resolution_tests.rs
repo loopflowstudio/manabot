@@ -183,7 +183,23 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 .position(|a| matches!(a, Action::ChooseMode { mode: 0, .. }))
                 .unwrap();
             game.publish_action_space(space);
+            let captured = game.capture_decision(controller, 0).unwrap();
+            let targets = &captured
+                .frames
+                .iter()
+                .find(|f| f.kind == 5)
+                .unwrap()
+                .targets;
+            assert_eq!(targets[0].legal_at_resolution_start, Some(true));
+            assert!(game
+                .continuation_frames(PlayerId(1 - controller.0))
+                .iter()
+                .all(|f| f.kind <= 3));
             let mut fork = game.clone();
+            assert_eq!(
+                fork.capture_decision(controller, 0).unwrap().digest,
+                captured.digest
+            );
             let before = game.state.deterministic_hash();
             game.enable_undo(Arc::new(JournalStats::default()), 608);
             let mark = game.undo_mark();
@@ -198,6 +214,10 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
             fork.step(choice).unwrap();
             assert_eq!(fork.state.deterministic_hash(), after);
             game.undo_rollback(mark);
+            assert_eq!(
+                game.capture_decision(controller, 0).unwrap().digest,
+                captured.digest
+            );
             assert_eq!(game.state.deterministic_hash(), before);
             game.step(choice).unwrap();
             assert_eq!(game.state.deterministic_hash(), after);
@@ -386,6 +406,12 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
             game.move_card(card, ZoneType::Battlefield);
             let replacement = game.state.card_to_permanent[card].unwrap();
             assert_ne!(victim, replacement);
+            let space = game.suspended_decision_action_space().unwrap();
+            game.publish_action_space(space);
+            let frames = game.continuation_frames(controller);
+            let slot = &frames.iter().find(|f| f.kind == 5).unwrap().targets[0];
+            assert_eq!(slot.legal_at_resolution_start, Some(true));
+            assert_eq!(slot.reference.object, None);
             game.execute_decision_action(&Action::ChooseMode {
                 player: controller,
                 mode: 0,
@@ -430,6 +456,12 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
             assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Hand));
             game.move_card(card, ZoneType::Graveyard);
             assert_ne!(game.current_object_ref(card), Some(original));
+            let space = game.suspended_decision_action_space().unwrap();
+            game.publish_action_space(space);
+            let frames = game.continuation_frames(controller);
+            let slot = &frames.iter().find(|f| f.kind == 5).unwrap().targets[0];
+            assert_eq!(slot.legal_at_resolution_start, Some(true));
+            assert_eq!(slot.reference.object, None);
             game.execute_decision_action(&Action::ChooseMode {
                 player: controller,
                 mode: 0,
@@ -479,5 +511,97 @@ fn resolution_positional_power_damage_never_substitutes_an_illegal_victim() {
             assert_eq!(game.state.permanents[attacker].as_ref().unwrap().damage, 0);
             assert_eq!(game.state.players[controller.0].life, 27);
         }
+    }
+}
+
+/// Identical present characteristics cannot reconstruct an earlier eligibility check.
+/// Exported captures are portable evidence for the Python text/reference encoder proof.
+#[test]
+fn resolution_eligibility_distinguishes_identical_present_observations() {
+    use crate::agent::{
+        observation::Observation,
+        observation_encoder::{encode, ObservationEncoderConfig},
+    };
+    let mut evidence = Vec::new();
+    for controller in [PlayerId(0), PlayerId(1)] {
+        let mut observations = Vec::new();
+        let mut encodings = Vec::new();
+        for legal in [true, false] {
+            let (mut game, first, second) = fixture(controller);
+            hexproof(&mut game, first, !legal);
+            stack(
+                &mut game,
+                Entry::Spell,
+                controller,
+                vec![
+                    clause(
+                        TargetSpec::Creature,
+                        vec![Effect::GrantKeywordsToTarget {
+                            keywords: Keywords {
+                                hexproof: true,
+                                ..Default::default()
+                            },
+                            target: TargetSpec::Creature,
+                        }],
+                    ),
+                    clause(TargetSpec::Creature, vec![pause(), damage()]),
+                ],
+                vec![Target::Permanent(first), Target::Permanent(second)],
+                vec![0, 1],
+            );
+            // Public stack targets have not been evaluated yet.
+            assert!(game
+                .continuation_frames(controller)
+                .iter()
+                .flat_map(|f| &f.targets)
+                .all(|t| t.legal_at_resolution_start.is_none()));
+            game.resolve_top_of_stack();
+            let space = game.suspended_decision_action_space().unwrap();
+            game.publish_action_space(space);
+            let obs = Observation::for_player(&game, controller);
+            let frame = obs.continuation.iter().find(|f| f.kind == 5).unwrap();
+            assert_eq!(
+                frame
+                    .targets
+                    .iter()
+                    .map(|t| (t.clause, t.legal_at_resolution_start))
+                    .collect::<Vec<_>>(),
+                vec![(0, Some(legal)), (1, Some(true))]
+            );
+            let capture = game.capture_decision(controller, 0).unwrap();
+            let other = game.continuation_frames(PlayerId(1 - controller.0));
+            assert!(other.iter().all(|f| f.kind <= 3));
+            let native = encode(&obs, &ObservationEncoderConfig::default())
+                .unwrap()
+                .relations;
+            let legacy = encode(
+                &obs,
+                &ObservationEncoderConfig {
+                    policy_input_version: 2,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .relations;
+            for (row, old) in native.chunks_exact(33).zip(legacy.chunks_exact(32)) {
+                assert_eq!(&row[..32], old);
+            }
+            let target_rows = native
+                .chunks_exact(33)
+                .filter(|r| r[0] == 2.0 && r[3] == 5.0)
+                .collect::<Vec<_>>();
+            assert_eq!(target_rows.len(), 2);
+            assert_eq!(target_rows[0][32], if legal { 1.0 } else { 2.0 });
+            assert_eq!(target_rows[1][32], 1.0);
+            evidence
+                .push(serde_json::json!({"legal": legal, "capture": capture, "relations": native}));
+            observations.push(obs.to_json());
+            encodings.push(legacy);
+        }
+        assert_eq!(observations[0], observations[1]);
+        assert_eq!(encodings[0], encodings[1]);
+    }
+    if let Ok(path) = std::env::var("RESOLUTION_ELIGIBILITY_EVIDENCE") {
+        std::fs::write(path, serde_json::to_string_pretty(&evidence).unwrap()).unwrap();
     }
 }

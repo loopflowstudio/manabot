@@ -172,7 +172,7 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v2: the unchanged semantic Observation, shared native continuation frames, bound public card
+v3: the unchanged semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
@@ -186,7 +186,8 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v2 adds native current stack/continuation relation rows. Its
+Fresh draft policy input v3 adds resolution-start eligibility to the native
+current stack/continuation relation rows; v1/v2 retain their meanings. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/recent-events.md#current-continuation-input).
 The presentation context and text capture derive from the same typed frames;

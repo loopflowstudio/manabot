@@ -214,8 +214,8 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.bias)
 
         self.continuation = (
-            ContinuationEncoder(embed_dim)
-            if enc.config.policy_input_version == 2
+            ContinuationEncoder(embed_dim, enc.relation_dim)
+            if enc.config.policy_input_version >= 2
             else None
         )
 

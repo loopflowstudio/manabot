@@ -107,6 +107,9 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Native scalar/vector observation buffers bind continuation input semantics by
+  relation width: v2 has 32 columns, v3 has 33; validity remains column 31.
+  Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

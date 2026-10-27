@@ -1,6 +1,6 @@
-"""Stateless policy-input-v2 context from current stack/continuation relations.
+"""Stateless policy-input-v2/v3 context from current stack/continuation relations.
 
-Rows [B,64,32] retain frame order, parent links and target clauses. Definition
+Rows [B,64,32/33] retain frame order, parent links and target clauses. Definition
 IDs join the existing catalog; object indexes gather the current object table.
 Neither identifier is used as a numeric feature. Gradients reach the shared
 object/catalog encoders and this projection; no memory survives a decision.
@@ -13,10 +13,11 @@ from manabot.env.observation import RELATION_DIM, RELATION_ROWS
 
 
 class ContinuationEncoder(nn.Module):
-    def __init__(self, width: int) -> None:
+    def __init__(self, width: int, relation_dim: int = RELATION_DIM) -> None:
         super().__init__()
+        self.relation_dim = relation_dim
         self.projection = nn.Sequential(
-            nn.Linear(RELATION_DIM - 5 + 4 * width, width),
+            nn.Linear(relation_dim - 5 + 4 * width, width),
             nn.Tanh(),
             nn.Linear(width, width),
         )
@@ -28,15 +29,17 @@ class ContinuationEncoder(nn.Module):
         definitions: torch.Tensor,
     ) -> torch.Tensor:
         """Return [B,D], exactly zero for empty relations (including padding)."""
-        if rows.shape[1:] != (RELATION_ROWS, RELATION_DIM):
-            raise ValueError("policy input v2 requires [batch, 64, 32] relations")
-        valid = rows[..., -1]
+        if rows.shape[1:] != (RELATION_ROWS, self.relation_dim):
+            raise ValueError(f"expected [batch, 64, {self.relation_dim}] relations")
+        valid = rows[..., 31]
         if not ((valid == 0) | (valid == 1)).all():
             raise ValueError("relation validity must be binary")
         rows = torch.where(valid.bool().unsqueeze(-1), rows, 0)
         if not torch.isfinite(rows).all():
             raise ValueError("relations must be finite")
         features = [torch.cat((rows[..., :5], rows[..., 7:23], rows[..., 25:31]), -1)]
+        if self.relation_dim == RELATION_DIM:
+            features.append(rows[..., 32:33])
         for column in (6, 24):
             indexes = rows[..., column]
             if not (

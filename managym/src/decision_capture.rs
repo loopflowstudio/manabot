@@ -1,5 +1,5 @@
 //! Atomic, representation-neutral input for one acting decision. Schema 6 stays
-//! frozen; capture v2 shares native continuation, content and public-history
+//! frozen; capture v3 shares native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,7 +18,7 @@ use crate::{
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
 /// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 2;
+pub const DECISION_CAPTURE_VERSION: u16 = 3;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {

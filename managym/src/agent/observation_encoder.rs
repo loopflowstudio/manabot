@@ -25,7 +25,7 @@ pub const STEP_DIM: usize = 12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
-    pub relations: bool,
+    pub policy_input_version: u8,
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
@@ -43,15 +43,23 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-            relations: true,
+            policy_input_version: 3,
         }
     }
 }
 
 impl ObservationEncoderConfig {
+    pub fn relation_dim(&self) -> usize {
+        if self.policy_input_version >= 3 {
+            super::continuation::RELATION_DIM
+        } else {
+            super::continuation::LEGACY_RELATION_DIM
+        }
+    }
+
     pub fn relations_len(&self) -> usize {
-        if self.relations {
-            super::continuation::RELATION_ROWS * super::continuation::RELATION_DIM
+        if self.policy_input_version >= 2 {
+            super::continuation::RELATION_ROWS * self.relation_dim()
         } else {
             0
         }
@@ -475,7 +483,7 @@ pub fn encode_into(
         &mut current_object_index,
     );
 
-    if config.relations {
+    if config.policy_input_version >= 2 {
         super::continuation::encode_into(
             &obs.continuation,
             obs.agent.player_index as usize,
@@ -1064,7 +1072,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 2,
             policy_history: false,
-            relations: true,
+            policy_input_version: 3,
         };
 
         let encoded = encode(&obs, &config).unwrap();
@@ -1178,7 +1186,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 1,
             policy_history: false,
-            relations: true,
+            policy_input_version: 3,
         };
 
         let mut agent_player = vec![0.0; 1];

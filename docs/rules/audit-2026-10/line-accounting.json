@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 8428,
+  "combined_draft_churn_lines": 9096,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -621,6 +621,132 @@
         "deleted": 0
       }
     ],
-    "churn_lines": 935
+    "churn_lines": 935,
+    "simplification": {
+      "basis": "Reduction from a9dd41142: additions plus deletions for resolution.rs; plan and evidence excluded. Preserve the original repair charge.",
+      "files": [
+        {
+          "path": "managym/src/flow/resolution.rs",
+          "added": 27,
+          "deleted": 67
+        }
+      ],
+      "churn_lines": 94
+    }
+  },
+  "resolution_projection_increment": {
+    "basis": "2026-10-27 correction against supplied working tree. Authored code/tests/docs churn plus eight new assumption lines; inherited resolution reduction and plan edits are excluded. Historical 8522-line charge retained. Generated native captures are immutable observation/encoder evidence, not authored runtime demos.",
+    "files": [
+      {
+        "path": "AGENTS.md",
+        "added": 3,
+        "deleted": 0
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 21,
+        "deleted": 5
+      },
+      {
+        "path": "manabot/README.md",
+        "added": 3,
+        "deleted": 0
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "added": 20,
+        "deleted": 10
+      },
+      {
+        "path": "manabot/infra/config.py",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/managym/__init__.pyi",
+        "added": 2,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/managym/decision_capture.py",
+        "added": 19,
+        "deleted": 4
+      },
+      {
+        "path": "manabot/model/actor_critic.py",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/model/continuation.py",
+        "added": 10,
+        "deleted": 7
+      },
+      {
+        "path": "manabot/semantic/text_observation.py",
+        "added": 6,
+        "deleted": 3
+      },
+      {
+        "path": "managym/README.md",
+        "added": 3,
+        "deleted": 2
+      },
+      {
+        "path": "managym/examples/bench_observation.rs",
+        "added": 5,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/agent/continuation.rs",
+        "added": 47,
+        "deleted": 26
+      },
+      {
+        "path": "managym/src/agent/observation_encoder.rs",
+        "added": 15,
+        "deleted": 7
+      },
+      {
+        "path": "managym/src/decision_capture.rs",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "managym/src/flow/resolution_tests.rs",
+        "added": 124,
+        "deleted": 0
+      },
+      {
+        "path": "managym/src/python/bindings.rs",
+        "added": 26,
+        "deleted": 7
+      },
+      {
+        "path": "managym/src/python/vector_env_bindings.rs",
+        "added": 19,
+        "deleted": 3
+      },
+      {
+        "path": "tests/semantic/test_text_observation.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 148,
+        "deleted": 5
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 8,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 574,
+    "excluded_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures.json",
+      "scratch/eligibility-*.json"
+    ]
   }
 }

@@ -135,16 +135,18 @@ These are correctness fixtures, not scientific training or evaluation evidence.
 ## Current continuation input
 
 Public history and current continuation are separate inputs. Fresh
-`ObservationConfig` uses policy input v2: a native `relations[64,32]` float32
+`ObservationConfig` uses draft policy input v3: a native `relations[64,33]` float32
 buffer represents ordered stack entries, announced targets and clauses, chosen
 modes/abilities, kicker, reserved sacrifice, and suspended payment obligations.
 The version is recorded in checkpoint configuration and world input binding.
 Loading a checkpoint whose observation configuration omits the version selects
 v1, with its original tensors, parameter names and meaning. Loading never trains
-or upgrades those weights. New training must use v2 to receive the added facts.
+or upgrades those weights. V2 retains its original 32 columns and architecture;
+v3 appends one column without reinterpreting them. Native scalar and vector
+buffers bind the version by their relation width (32 or 33).
 
 V1 checkpoints still lack continuation input. A matched-input LLM comparison
-requires a policy trained on v2 and an explicitly matched public-history
+requires a policy trained on the same input version and an explicitly matched public-history
 treatment; card text versus semantic catalog programs remains a representation
 difference. This delivery selects no comparator, model or playing-strength run.
 
@@ -173,6 +175,7 @@ the mode, mana amounts and Lesson flag columns for each possible output. Columns
 | 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
 | 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
 | 30–31 | Ability resolutions this turn; row validity |
+| 32 (v3 only) | Target legality at resolution start: 0 unknown/not evaluated, 1 legal, 2 illegal |
 
 Zero denotes absent selectors/links and padding. The model joins definitions to
 its existing card catalog, gathers object embeddings for links, and combines
@@ -180,13 +183,26 @@ relation context with object and action embeddings. It never treats transport
 IDs as numeric features. Frame and target order remain numeric ordinal features;
 the channel has no writable memory across decisions.
 
-Atomic text capture v2 retains these same typed frames alongside the unchanged
+Atomic text capture v3 retains these same typed frames alongside the unchanged
 schema-6 Observation. Native types validate portable viewer JSON; Python owns
 formatting and the small capture envelope. Public definitions and their content
 digest are cached on the immutable native content pack. Origin-bound submission,
 reset/stale rejection and complete legal Commands retain their existing owners.
 The earlier unreleased capture-v1 prompt evidence remains historical evidence;
-it does not acquire v2 continuation facts.
+it does not acquire continuation facts. Capture-v2 evidence remains readable;
+its absent `legal_at_resolution_start` is unknown, never false. Text representation
+v3 labels the fact “Legal when resolution began.”
+
+Suspended target slots project `legal_at_resolution_start: bool | null` directly
+from their retained frame. Announcement and public stack slots have null; no
+resolution-entry check has happened there. Every slot retains its clause and
+ordinal, including ineligible slots. This fact cannot be reconstructed from
+current hexproof, control or type. It does not certify current presence: expired
+object references never join a replacement incarnation. Only the acting viewer
+receives the suspended facts. Clone/rollback preserve them with the frame.
+The draft input/capture versions and `w15-resolution-draft` await the final
+MTG-195 integration and world admission; historical benchmark evidence below
+still describes its recorded v2 sources.
 
 Measure encode-only behavior with
 `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`
