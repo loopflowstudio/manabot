@@ -48,6 +48,7 @@ import threading
 import time
 from typing import Any, Literal
 
+import duckdb
 from etude.eval.match import evaluate
 from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
@@ -148,6 +149,8 @@ class Played(BaseModel):
     unit: str
     games: int
     seconds: float
+    # Games the run's tables record as valid; fewer than `games` is a failed unit.
+    valid: int = 0
 
 
 class Receipt(BaseModel):
@@ -293,9 +296,15 @@ def machine(batch: Batch) -> None:
                     run=batch.run,
                     directory=track,
                 )
-                receipt.played.append(
-                    Played(unit=unit.key, games=games, seconds=time.time() - begun)
+                played = Played(
+                    unit=unit.key,
+                    games=games,
+                    seconds=time.time() - begun,
+                    valid=_valid_games(root),
                 )
+                receipt.played.append(played)
+                if played.valid < games:
+                    receipt.error = f"{unit.key}: {played.valid}/{games} games valid"
                 receipt.units += (unit.key,)
                 receipt.games += games
                 receipt.seconds = time.time() - started
@@ -307,6 +316,18 @@ def machine(batch: Batch) -> None:
         receipt.seconds = time.time() - started
         print(receipt.model_dump_json(), flush=True)
         _deliver(out, root, work, receipt)
+
+
+def _valid_games(root: Path) -> int:
+    """Games the run's tables record as valid, counting each game once (seat 0)."""
+    tables = sorted((root / "tables").glob("games.*.parquet"))
+    if not tables:
+        return 0
+    found = duckdb.sql(
+        "select count(*) from read_parquet($tables) where valid and seat = 0",
+        params={"tables": [str(path) for path in tables]},
+    ).fetchone()
+    return int(found[0]) if found else 0
 
 
 def _progress(root: Path, started: float) -> str:
