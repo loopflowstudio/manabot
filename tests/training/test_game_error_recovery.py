@@ -10,6 +10,7 @@ import inspect
 import json
 from pathlib import Path
 import time
+from typing import Any
 
 import pytest
 import torch
@@ -37,7 +38,6 @@ from manabot.training.state.game_errors import (
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.game_error_fixtures import (
-    PaymentMismatchCollector,
     PaymentMismatchEnv,
     _bounded_fixture_replay,
     _payment_match,
@@ -45,6 +45,78 @@ from tests.training.game_error_fixtures import (
 )
 from tests.training.test_checkpoint_queue import Process
 from tests.training.test_recovery import tracked_updates
+
+
+class PaymentMismatchVector:
+    def __init__(self, collector: SeatRoutedCollector) -> None:
+        self.native = collector._env
+        self.configs = [match.to_rust() for match in collector.stream_matches]
+        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
+        self.infos: list[dict[str, Any]] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.native, name)
+
+    def _new_shadow(self, row: int) -> PaymentMismatchEnv:
+        shadow = PaymentMismatchEnv(
+            seed=self.native.current_game_seeds()[row], skip_trivial=True
+        )
+        shadow.reset(self.configs[row])
+        return shadow
+
+    def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
+        self.native.reset_seeds_into_buffers(seeds)
+        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
+
+    def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
+        self.native.step_into_buffers(actions, active)
+        for row, enabled in enumerate(active):
+            if enabled:
+                self.shadows[row].step(actions[row])
+
+    def step_isolated_into_buffers(
+        self, actions: list[int], active: list[bool]
+    ) -> None:
+        enabled = list(active)
+        failures: dict[int, dict[str, Any]] = {}
+        done_rows: list[int] = []
+        for row, shadow in enumerate(self.shadows):
+            if not active[row]:
+                continue
+            frame = shadow.semantic_decision_frame_json()
+            try:
+                _, _, done, truncated, _ = shadow.step(actions[row])
+                if done or truncated:
+                    done_rows.append(row)
+            except managym.AgentError as error:
+                enabled[row] = False
+                failures[row] = {
+                    "game_error": str(error),
+                    "game_error_class": type(error).__name__,
+                    "game_error_frame": frame,
+                    "game_error_trace": "deterministic offered-cast payment fixture",
+                }
+        self.native.step_isolated_into_buffers(actions, enabled)
+        self.infos = self.native.get_last_info()
+        for row, failure in failures.items():
+            self.infos[row] = failure
+        for row in done_rows:
+            self.shadows[row] = self._new_shadow(row)
+
+    def get_last_info(self) -> list[dict[str, Any]]:
+        return self.infos
+
+    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
+        self.native.replace_failed_into_buffers(failed)
+        for row, replace in enumerate(failed):
+            if replace:
+                self.shadows[row] = self._new_shadow(row)
+
+
+class PaymentMismatchCollector(SeatRoutedCollector):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._env = PaymentMismatchVector(self)
 
 
 def test_repaired_restart_preserves_post_snapshot_failures_and_costs(

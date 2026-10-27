@@ -3,16 +3,24 @@
 These adapters use native Mountain/Gray Ogre games. Their faulty/repaired payment
 validator is fixture code, not a reproduction or repair of MTG-175. Keep this
 module independent of remote test owners so bounded replay needs only game inputs.
+
+The `*_worker` functions are `ChildProcess` game-worker targets. Their children
+import this module under the game's wall-clock budget, so keep it Torch-free;
+collector adapters belong with their training tests.
 """
 
 import json
+import multiprocessing.connection
+import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from typing import Any
 
 from manabot.infra.config import MatchConfig
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.sim import native_game
+from manabot.sim.registration import PlayerRegistration
 import managym
 
 _NATIVE_ENV = managym.Env
@@ -78,76 +86,37 @@ class PaymentMismatchEnv:
         return self.native.step(action)
 
 
-class PaymentMismatchVector:
-    def __init__(self, collector: SeatRoutedCollector) -> None:
-        self.native = collector._env
-        self.configs = [match.to_rust() for match in collector.stream_matches]
-        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
-        self.infos: list[dict[str, Any]] = []
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.native, name)
-
-    def _new_shadow(self, row: int) -> PaymentMismatchEnv:
-        shadow = PaymentMismatchEnv(
-            seed=self.native.current_game_seeds()[row], skip_trivial=True
-        )
-        shadow.reset(self.configs[row])
-        return shadow
-
-    def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
-        self.native.reset_seeds_into_buffers(seeds)
-        self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
-
-    def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
-        self.native.step_into_buffers(actions, active)
-        for row, enabled in enumerate(active):
-            if enabled:
-                self.shadows[row].step(actions[row])
-
-    def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
-    ) -> None:
-        enabled = list(active)
-        failures: dict[int, dict[str, Any]] = {}
-        done_rows: list[int] = []
-        for row, shadow in enumerate(self.shadows):
-            if not active[row]:
-                continue
-            frame = shadow.semantic_decision_frame_json()
-            try:
-                _, _, done, truncated, _ = shadow.step(actions[row])
-                if done or truncated:
-                    done_rows.append(row)
-            except managym.AgentError as error:
-                enabled[row] = False
-                failures[row] = {
-                    "game_error": str(error),
-                    "game_error_class": type(error).__name__,
-                    "game_error_frame": frame,
-                    "game_error_trace": "deterministic offered-cast payment fixture",
-                }
-        self.native.step_isolated_into_buffers(actions, enabled)
-        self.infos = self.native.get_last_info()
-        for row, failure in failures.items():
-            self.infos[row] = failure
-        for row in done_rows:
-            self.shadows[row] = self._new_shadow(row)
-
-    def get_last_info(self) -> list[dict[str, Any]]:
-        return self.infos
-
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None:
-        self.native.replace_failed_into_buffers(failed)
-        for row, replace in enumerate(failed):
-            if replace:
-                self.shadows[row] = self._new_shadow(row)
+def _payment_game_worker(
+    connection: multiprocessing.connection.Connection,
+    game: dict[str, Any],
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+) -> None:
+    managym.Env = PaymentMismatchEnv
+    native_game.game_worker(
+        connection, game, registrations, checkpoint_paths, max_commands
+    )
 
 
-class PaymentMismatchCollector(SeatRoutedCollector):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._env = PaymentMismatchVector(self)
+def _lost_payment_worker(
+    connection: multiprocessing.connection.Connection,
+    game: dict[str, Any],
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+) -> None:
+    """Die or hang only after the parent acknowledges retained native inputs."""
+
+    def send(event: tuple[str, Any]) -> None:
+        connection.send(event)
+        if event[0] == "pending":
+            assert connection.recv() == "retained"
+            if game.get("test_hang"):
+                time.sleep(60)
+            os._exit(7)
+
+    native_game.execute_game(game, registrations, checkpoint_paths, max_commands, send)
 
 
 def _bounded_fixture_replay(

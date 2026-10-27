@@ -2,12 +2,9 @@
 
 from copy import deepcopy
 import json
-import multiprocessing.connection
-import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 from typing import Any, Literal
 
 import numpy as np
@@ -24,7 +21,7 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim import match as simulation, native_game
+from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
@@ -42,7 +39,6 @@ from manabot.training.state.game_errors import (
 )
 import managym
 from tests.training.game_error_fixtures import (
-    PaymentMismatchEnv,
     _bounded_fixture_replay,
     _payment_match,
 )
@@ -540,39 +536,6 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
     assert batch.actions.size == 10 and int(batch.dones.sum()) == 4
 
 
-def _payment_game_worker(
-    connection: multiprocessing.connection.Connection,
-    game: dict[str, Any],
-    registrations: list[PlayerRegistration],
-    checkpoint_paths: dict[str, str],
-    max_commands: int,
-) -> None:
-    managym.Env = PaymentMismatchEnv
-    native_game.game_worker(
-        connection, game, registrations, checkpoint_paths, max_commands
-    )
-
-
-def _lost_payment_worker(
-    connection: multiprocessing.connection.Connection,
-    game: dict[str, Any],
-    registrations: list[PlayerRegistration],
-    checkpoint_paths: dict[str, str],
-    max_commands: int,
-) -> None:
-    """Die or hang only after the parent acknowledges retained native inputs."""
-
-    def send(event: tuple[str, Any]) -> None:
-        connection.send(event)
-        if event[0] == "pending":
-            assert connection.recv() == "retained"
-            if game.get("test_hang"):
-                time.sleep(60)
-            os._exit(7)
-
-    native_game.execute_game(game, registrations, checkpoint_paths, max_commands, send)
-
-
 def _arena_fixture() -> tuple[dict[str, Any], list[PlayerRegistration]]:
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_text()
@@ -606,7 +569,7 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
     monkeypatch.setattr(
         simulation,
         "GAME_WORKER",
-        "tests.training.test_game_errors:_payment_game_worker",
+        "tests.training.game_error_fixtures:_payment_game_worker",
     )
     failed = simulation.play_game(game, players, {}, 1000, 20, journal)
     assert "fixture payment mismatch" in failed["failure"]
@@ -727,7 +690,7 @@ def test_arena_lost_worker_retains_acknowledged_command(
     monkeypatch.setattr(
         simulation,
         "GAME_WORKER",
-        "tests.training.test_game_errors:_lost_payment_worker",
+        "tests.training.game_error_fixtures:_lost_payment_worker",
     )
     journal = tmp_path / "attempt.jsonl"
     result = simulation.play_game(game, players, {}, 1000, 5, journal)
