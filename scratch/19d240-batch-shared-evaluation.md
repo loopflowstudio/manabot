@@ -229,7 +229,17 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
    on its branch and imports that branch's `elemental_long_eval` family, so the
    calibration runs from a calibration branch merging both, with its own eval
    run names (not `mtg183-eval-*`) and no `collect` into MTG-183's database.
-   It also settles the RSS target, the thread budgets and the oversubscription
+   As of MTG-183 `a75df8b5e` (2026-10-27) the merge brings 31 files and
+   etude-sdk 0.2.9; both branches change `experiments/elemental_grid.py`,
+   `experiments/elemental_long_eval.py`, `manabot/training/execution.py` and
+   `manabot/training/state/learning_state.py`. On this code the runner's modes
+   mean: `gpu` is the A4500 arm, but its `GPU` contract caps
+   `max_active_games=64` for Torch children, so the calibration branch raises
+   it to 256 for the OOM check; `batched` (6 groups × 12 active games, one CPU
+   service each) is the `cpu32` served arm; `scalar` (no `EvalCompute`) now
+   serves one game at a time per group and no longer measures scalar play, so
+   the scalar baseline is the retained run `00119d1c9211`.
+   The calibration also settles the RSS target, the thread budgets and the oversubscription
    culprit. If `cpu32` served is slower, iterate the CPU engine (several
    workers per allocation, then intra-op threads, which need a compute-contract
    decision) before Jack Heart decides on retaining scalar play. Ledger:
@@ -253,9 +263,17 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 ## Check result
 
-Latest (implement, 2026-10-27; removed the stale mode argument from `test_calibration_rejects_partial_replayed_cohort`): Acceptance `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped.
-Previous (compress after realign, 2026-10-27; `_ScalarPlayers` hook types as tuples, no `None` guards): `uv run --extra dev pytest tests/sim/test_child_surface.py tests/eval/test_batched_eval.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py -q` → 54 passed, 1 skipped, 4 failed. The two `test_two_policies_never_share_a_forward_and_hung_service_is_bounded` cases pass alone (timing under concurrent load); `test_arena_lost_worker_retains_acknowledged_command` (both cases: `timeout` where `crash` expected) also fails with `native_game.py` at HEAD — owner: gate. Previous: realign, `test_child_surface.py` → 7 passed.
-Earlier passes (history in git): `resolve_execution` owns the conflict check and local-CPU default for `play_cell`, `evaluate` and `evaluate_checkpoint`; `PolicyStore` keeps one admission per key. Three `tests/sim` failures (conditional-search fixture digest, rollout card admission, seed-197 world binding) also fail at `ea8d0e874`. Remaining `spawn` uses (`eval/local.py`, `verify/competency`, `llm/*`, `_process.py`) are not game/replay/serving children. Only the rental calibration (slice 7 **Remaining**) is left; ledger $0.00 of $5. Implement 8 (2026-10-27) found no code work left and did not launch the rental: MTG-183's runner imports its branch's `elemental_long_eval`/`elemental_long_db`/`elemental_grid` family (88 files diverge from this branch) and admits checkpoints from training's bucket, so it is an operator step on a calibration branch.
+Implement, 2026-10-27, at `fbbbd517a`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped. PR #389 CI was pending at `fc5c96237`; the full suite belongs to gate/CI.
+
+Open for gate (from earlier passes, history in git):
+`test_arena_lost_worker_retains_acknowledged_command` (both cases report
+`timeout` where `crash` is expected) fails with `native_game.py` at HEAD; the
+two `test_two_policies_never_share_a_forward_and_hung_service_is_bounded`
+cases failed only under concurrent load. Three `tests/sim` failures
+(conditional-search fixture digest, rollout card admission, seed-197 world
+binding) also fail at `ea8d0e874`. Remaining `spawn` uses (`eval/local.py`,
+`verify/competency`, `llm/*`, `_process.py`) are not game/replay/serving
+children.
 
 ## Concept reviews 1–3 (headless, 2026-10-26)
 
