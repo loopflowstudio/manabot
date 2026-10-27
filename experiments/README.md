@@ -3,6 +3,9 @@
 One experiment = one report (`<name>.md`). Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
+The [Haiku versus MTG-183 evaluation](haiku-mtg183.md) reports a completed
+100-game hosted-model comparison, with full evidence in the experiment cache.
+
 Each experiment people run today is one module beside its report: its recipes,
 built from [`manabot.recipes.builders`](../manabot/training/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable

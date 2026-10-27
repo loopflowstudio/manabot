@@ -12,7 +12,7 @@ elemental_gw)` with MTG-186 as arena player A: legs 0 and 3 put MTG-186 on UR
 in seats 0 and 1, legs 1 and 2 put it on GW. Mirror legs 4–7 never play.
 
 One Etude eval run (`EXPERIMENT`/`RUN`) holds the games. Each match is
-`MATCH_DEALS` deals between agents `mtg186` (player 0) and `mtg181` (player 1),
+`MATCH_DEALS` deals between players `mtg186` (player 0) and `mtg181` (player 1),
 played by one bounded worker process (`python -m experiments.mtg186_cards
 worker`) through replay-checked `play_cell(card_evidence_dir=…)`. A match
 returns table `games` (one row per game, player 0's: MTG-186's deck, seat and
@@ -53,12 +53,12 @@ from typing import TYPE_CHECKING
 from etude.eval.match import Row, Tables, environment as eval_environment, evaluate
 from etude.eval.query import statsdb
 from etude.eval.records import (
-    Agent,
-    AgentKey,
     CheckpointKey,
+    CheckpointRef,
     Environment,
+    Inference,
     Match,
-    version_of,
+    Model,
 )
 from etude.launch.client import default, queue_cohort, quote, status
 from etude.launch.records import Job, Run
@@ -149,22 +149,24 @@ def endpoint() -> Pairing:
 
 
 # ---------------------------------------------------------------------------
-# Agents and matches
+# Players and matches
 
 
-def checkpoint_agent(name: str, checkpoint: Checkpoint) -> Agent:
-    """A checkpoint agent keyed by its R2 object; `name` is what `--subject` takes."""
+def checkpoint_model(name: str, checkpoint: Checkpoint) -> Model:
+    """A model keyed by its R2 object; `name` is what `--subject` takes."""
     uri = f"r2://{BUCKET}/{checkpoint.key}"
-    return Agent(
-        key=AgentKey(
-            checkpoint=CheckpointKey(address=uri),
-            config={"updates": checkpoint.updates, "seed": checkpoint.seed},
+    return Model(
+        checkpoint=CheckpointRef(
+            key=CheckpointKey(address=uri),
+            artifact=ArtifactRef(
+                uri=uri, sha256=checkpoint.sha256, size_bytes=checkpoint.size_bytes
+            ),
         ),
         name=name,
-        artifact=ArtifactRef(
-            uri=uri, sha256=checkpoint.sha256, size_bytes=checkpoint.size_bytes
+        inference=Inference(
+            source=INFERENCE_CODE,
+            config={"updates": checkpoint.updates, "seed": checkpoint.seed},
         ),
-        version=version_of(INFERENCE_CODE),
     )
 
 
@@ -174,14 +176,14 @@ class Conditions(BaseModel):
 
 
 def matches(pairing: Pairing) -> list[Match]:
-    agents = (
-        checkpoint_agent("mtg186", pairing.mtg186),
-        checkpoint_agent("mtg181", pairing.mtg181),
+    players = (
+        checkpoint_model("mtg186", pairing.mtg186),
+        checkpoint_model("mtg181", pairing.mtg181),
     )
     found = deals()
     return [
         Match(
-            agents=agents,
+            players=players,
             conditions=Conditions(deals=found[i : i + MATCH_DEALS]).model_dump(
                 mode="json"
             ),
@@ -301,11 +303,11 @@ def game_rows(rows: list[GameRow]) -> list[Row]:
     """One row per game, player 0's (MTG-186's); `score` is null for an invalid game."""
     return [
         {
-            "player": 0,
+            "seat": 0,
             "deal": row.deal,
             "deck": row.model_deck,
             "opponent_deck": row.heuristic_deck,
-            "seat": row.model_seat,
+            "game_seat": row.model_seat,
             "score": row.score if row.valid else None,
             "valid": row.valid,
             "terminated": row.terminated,
@@ -528,7 +530,7 @@ def _rows(db: "duckdb.DuckDBPyConnection") -> list[GameRow]:
             deal=row["deal"],
             model_deck=row["deck"],
             heuristic_deck=row["opponent_deck"],
-            model_seat=row["seat"],
+            model_seat=row["game_seat"],
             score=row["score"],
             valid=row["valid"],
             terminated=row["terminated"],

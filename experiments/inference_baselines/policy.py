@@ -57,10 +57,10 @@ def execute(
     if (
         compute.max_active_games > 4
         or compute.max_batch_rows > 4
-        or compute.max_delay_seconds != 0
+        or compute.max_delay_seconds > 0.005
     ):
         raise ValueError(
-            "baseline allows at most four workers/rows and no added batch delay"
+            "baseline allows at most four workers/rows and 5 ms batch delay"
         )
     execution = EvalExecution(
         **compute.model_dump(),

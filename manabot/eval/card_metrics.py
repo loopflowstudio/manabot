@@ -2,7 +2,7 @@
 
 `reduce_cards` owns the counting rules. `normalize` splits its rows into the
 three author tables an evaluation delivers: `card_plays` (one row per game and
-player, with the game's facts), `card_counts` (per card in that game) and
+seat, with the game's facts), `card_counts` (per card in that game) and
 `cards` (names for card keys)."""
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ METRIC_VERSION = "gih-copies-v1"
 
 
 class CardGame(StrictModel):
-    player: Seat
+    seat: Seat
+    game_seat: Seat
     game: str
     deal: int
     card: str
@@ -49,47 +50,50 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
     cards = {c.copy_id: c for c in capture.initial}
     cards.update({m.card.copy_id: m.card for m in capture.moves})
     rows: list[CardGame] = []
-    for seat in (0, 1):
+    eligible = game.outcome == "win_loss" and game.replay.get("passed") is True
+    for game_seat in (0, 1):
+        seat = participants.index(game.seat_players[game_seat])
         deck = Counter(
             c.definition
             for c in capture.initial
-            if c.owner == seat and c.origin == "deck"
+            if c.owner == game_seat and c.origin == "deck"
         )
-        opening = Counter(cards[c].definition for c in capture.opening[seat])
+        opening = Counter(cards[c].definition for c in capture.opening[game_seat])
         drawn = Counter(
             m.card.definition
             for m in capture.moves
-            if m.card.owner == seat and m.cause == "draw"
+            if m.card.owner == game_seat and m.cause == "draw"
         )
-        definitions = {c.definition: c for c in cards.values() if c.owner == seat}
-        eligible = game.outcome == "win_loss" and game.replay.get("passed") is True
+        definitions = {c.definition: c for c in cards.values() if c.owner == game_seat}
         for definition in sorted(deck.keys() | opening.keys() | drawn.keys()):
             rows.append(
                 CardGame(
-                    player=participants.index(game.seat_players[seat]),
+                    seat=seat,
+                    game_seat=game_seat,
                     game=game.game,
                     deal=game.deal,
                     card=f"{capture.content_digest}:{definition}",
                     name=definitions[definition].name,
                     definition=definition,
                     content=capture.content_digest,
-                    deck=game.seat_decks[seat],
-                    opponent_deck=game.seat_decks[1 - seat],
-                    on_play=seat == 0,
+                    deck=game.seat_decks[game_seat],
+                    opponent_deck=game.seat_decks[1 - game_seat],
+                    on_play=game_seat == 0,
                     deck_copies=deck[definition],
                     opening_copies=opening[definition],
                     drawn_copies=drawn[definition],
                     gih_copies=opening[definition] + drawn[definition],
                     eligible=eligible,
                     outcome=game.outcome,
-                    win=int(game.winner == seat) if eligible else None,
+                    win=int(game.winner == game_seat) if eligible else None,
                 )
             )
     return rows
 
 
 PLAY_FIELDS = (
-    "player",
+    "seat",
+    "game_seat",
     "game",
     "deal",
     "deck",
@@ -102,7 +106,7 @@ PLAY_FIELDS = (
     "metric_version",
 )
 COUNT_FIELDS = (
-    "player",
+    "seat",
     "game",
     "card",
     "deck_copies",
@@ -110,8 +114,8 @@ COUNT_FIELDS = (
     "drawn_copies",
     "gih_copies",
 )
-# Etude rows name a player, so a card's name row is keyed by whose deck held it.
-CARD_FIELDS = ("player", "card", "content", "definition", "name")
+# Etude rows name a seat, so a card's name row is keyed by whose deck held it.
+CARD_FIELDS = ("seat", "card", "content", "definition", "name")
 
 
 class CardRows(StrictModel):
@@ -121,14 +125,14 @@ class CardRows(StrictModel):
 
 
 def normalize(rows: list[CardGame]) -> CardRows:
-    """One `card_plays` row per (game, player); counts and names keyed by card."""
+    """One `card_plays` row per (game, seat); counts and names keyed by card."""
     plays: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
     cards: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
     counts = []
     for row in rows:
         data = row.model_dump()
-        plays.setdefault((row.game, row.player), {f: data[f] for f in PLAY_FIELDS})
-        cards.setdefault((row.card, row.player), {f: data[f] for f in CARD_FIELDS})
+        plays.setdefault((row.game, row.seat), {f: data[f] for f in PLAY_FIELDS})
+        cards.setdefault((row.card, row.seat), {f: data[f] for f in CARD_FIELDS})
         counts.append({f: data[f] for f in COUNT_FIELDS})
     return CardRows(
         plays=list(plays.values()), counts=counts, cards=list(cards.values())

@@ -85,7 +85,7 @@ def test_export_matches_pinned_parser_fields_without_network(
     assert Counter(parsed["drawn_cards"]) == {printing: 6 if viewer == 0 else 2}
     # A bounce and tutor appear in parser hand sightings; native GIH excludes them.
     rows = reduce_cards(game, game.seat_players)
-    assert next(r for r in rows if r.player == viewer).gih_copies == (
+    assert next(r for r in rows if r.seat == viewer).gih_copies == (
         4 if viewer == 0 else 2
     )
     assert parsed["opponent_card_ids"] == ([] if viewer == 0 else [70504])

@@ -1,8 +1,8 @@
 """A bounded full-game proof with native text, a warm model and command replay.
 
-One seat uses the ordinary LLM protocol; the other uses an admitted checkpoint
-or samples the complete legal action set uniformly. Every capture and transition is retained
-before the next decision. This is a functional test, not a strength evaluation.
+One seat uses the ordinary LLM protocol; the other uses a frozen checkpoint or
+samples legal actions uniformly. Every capture, selection and native transition
+is retained before the next decision. One game cannot establish playing strength.
 """
 
 import argparse
@@ -17,6 +17,7 @@ import random
 import statistics
 import subprocess
 import time
+from typing import TYPE_CHECKING
 
 from managym.decision import DecisionFrame, apply_semantic_command
 from pydantic import BaseModel, Field
@@ -35,7 +36,13 @@ from manabot.semantic.text_observation import (
     resolve_action,
     submit_response,
 )
+from manabot.verify.llm_opponent import (
+    CheckpointOpponent as ConfiguredCheckpointOpponent,
+)
 import managym
+
+if TYPE_CHECKING:
+    from manabot.llm.openrouter import OpenRouterResult, OpenRouterSession
 
 
 class GameConfig(BaseModel):
@@ -49,6 +56,10 @@ class GameConfig(BaseModel):
     deck: dict[str, int] = {"Mountain": 24, "Gray Ogre": 24, "Lightning Bolt": 12}
     match: MatchConfig | None = None
     skip_trivial: bool = False
+    opponent_checkpoint: Path | None = None
+    # Stop before another decision after this reported spend. An in-flight
+    # decision (including its repair) can exceed the threshold; this is no hard cap.
+    max_reported_cost_usd: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
 
 class GameSummary(BaseModel):
@@ -77,6 +88,14 @@ class GameSummary(BaseModel):
     token_split_attempts: int = 0
     generation_attempts: int = 0
     llm_phases: dict[str, float] = Field(default_factory=dict)
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
+    reported_cost_usd: float = 0
+    # Totals above include only reported values, including repairs and failures.
+    unpriced_attempts: int = 0
 
 
 @dataclass(frozen=True)
@@ -152,17 +171,52 @@ def _write(path: Path, payload: str) -> None:
     temporary.replace(path)
 
 
+def _game_mode(
+    session: "InferenceSession | OpenRouterSession | None", checkpoint: bool
+) -> str:
+    if session is None:
+        return "random-v-checkpoint-control" if checkpoint else "random-control"
+    model = "openrouter" if session.identity.runtime == "openrouter-chat-v1" else "qwen"
+    return f"{model}-v-{'checkpoint' if checkpoint else 'random'}"
+
+
+def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> None:
+    """Account for every attempt, including repairs and failed requests.
+
+    Missing billing information is counted separately; zero reported spend
+    never implies that a request without usage was free.
+    """
+    for attempt in result.attempts:
+        usage = attempt.completion.usage if attempt.completion else None
+        if usage is None or usage.cost is None:
+            summary.unpriced_attempts += 1
+        if usage is None:
+            continue
+        summary.prompt_tokens += usage.prompt_tokens
+        summary.completion_tokens += usage.completion_tokens
+        summary.reported_cost_usd += usage.cost or 0
+        if usage.prompt_tokens_details:
+            summary.cached_tokens += usage.prompt_tokens_details.cached_tokens or 0
+            summary.cache_write_tokens += (
+                usage.prompt_tokens_details.cache_write_tokens or 0
+            )
+        if usage.completion_tokens_details:
+            summary.reasoning_tokens += (
+                usage.completion_tokens_details.reasoning_tokens or 0
+            )
+
+
 def play(
     config: GameConfig,
     out: Path,
-    session: InferenceSession | None,
+    session: "InferenceSession | OpenRouterSession | None",
     *,
     progress_path: Path | None = None,
     opponent: CheckpointOpponent | None = None,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
-    A missing session selects the explicit random-v-random plumbing control.
+    A missing session selects random actions for the model seat.
     Native trivial-decision skipping is declared and identical for both seats.
     """
     out.mkdir(parents=True, exist_ok=False)
@@ -184,25 +238,13 @@ def play(
         with observe("evidence_write"):
             _write(path, payload)
 
-    players = (
-        Match(config.match).to_rust()
-        if config.match is not None
-        else [managym.PlayerConfig(f"seat-{seat}", config.deck) for seat in (0, 1)]
-    )
-    if opponent is not None:
-        opponent.admit(players, config.opponent_seed)
-    with observe("native_reset"):
-        env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
-        env.reset(players)
-    with observe("clone_replay"):
-        replay = env.clone_env()
+    env: managym.Env | None = None
+    replay: managym.Env | None = None
     rng = random.Random(config.opponent_seed)
     summary = GameSummary(
-        mode="qwen-v-checkpoint"
-        if opponent
-        else "qwen-v-random"
-        if session
-        else "random-control"
+        mode=_game_mode(
+            session, opponent is not None or config.opponent_checkpoint is not None
+        )
     )
     if session:
         summary.model_load_seconds = session.load_seconds
@@ -210,6 +252,29 @@ def play(
     origins: Counter[str] = Counter()
     latencies: list[float] = []
     try:
+        players = (
+            Match(config.match).to_rust()
+            if config.match is not None
+            else [managym.PlayerConfig(f"seat-{seat}", config.deck) for seat in (0, 1)]
+        )
+        if opponent is not None and config.opponent_checkpoint is not None:
+            raise ValueError("choose one checkpoint opponent source")
+        configured_opponent = None
+        if config.opponent_checkpoint is not None:
+            configured_opponent = ConfiguredCheckpointOpponent(
+                config.opponent_checkpoint, players, config.opponent_seed
+            )
+            retain(
+                out / "opponent.json",
+                configured_opponent.identity.model_dump_json(indent=2),
+            )
+        if opponent is not None:
+            opponent.admit(players, config.opponent_seed)
+        with observe("native_reset"):
+            env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
+            env.reset(players)
+        with observe("clone_replay"):
+            replay = env.clone_env()
         while not env.is_game_over():
             if summary.decisions >= config.max_decisions:
                 raise TimeoutError("game decision limit reached")
@@ -225,6 +290,13 @@ def play(
             retain(step / "prompt.txt", decision.text)
             actor = env.current_agent_index()
             if session and actor == config.model_seat:
+                if config.max_reported_cost_usd is not None:
+                    if summary.unpriced_attempts:
+                        raise RuntimeError(
+                            "cannot enforce spend threshold with missing costs"
+                        )
+                    if summary.reported_cost_usd >= config.max_reported_cost_usd:
+                        raise RuntimeError("reported spend threshold reached")
                 supplied = DecisionInput(
                     text=decision.text,
                     legal_references=tuple(a.reference for a in decision.actions),
@@ -232,7 +304,7 @@ def play(
                     source_identity={"capture_digest": decision.capture_digest},
                 )
 
-                def progress(result: SelectionResult) -> None:
+                def progress(result: "SelectionResult | OpenRouterResult") -> None:
                     retain(step / "selection.json", result.model_dump_json(indent=2))
 
                 write_before = observations.get("evidence_write", 0)
@@ -250,26 +322,29 @@ def play(
                 progress(result)
                 summary.model_decisions += 1
                 summary.model_latencies.append(result.seconds)
-                for attempt in result.attempts:
-                    summary.generation_attempts += 1
-                    summary.output_tokens += attempt.output_tokens or 0
-                    for name in (
-                        "encode_seconds",
-                        "generation_seconds",
-                        "validation_seconds",
-                    ):
-                        seconds = getattr(attempt, name)
-                        if seconds is not None:
-                            summary.llm_phases[name] = (
-                                summary.llm_phases.get(name, 0) + seconds
+                if isinstance(result, SelectionResult):
+                    for attempt in result.attempts:
+                        summary.generation_attempts += 1
+                        summary.output_tokens += attempt.output_tokens or 0
+                        for name in (
+                            "encode_seconds",
+                            "generation_seconds",
+                            "validation_seconds",
+                        ):
+                            seconds = getattr(attempt, name)
+                            if seconds is not None:
+                                summary.llm_phases[name] = (
+                                    summary.llm_phases.get(name, 0) + seconds
+                                )
+                        if attempt.response is not None:
+                            if attempt.response.reasoning_tokens is not None:
+                                summary.token_split_attempts += 1
+                            summary.reasoning_tokens += (
+                                attempt.response.reasoning_tokens or 0
                             )
-                    if attempt.response is not None:
-                        if attempt.response.reasoning_tokens is not None:
-                            summary.token_split_attempts += 1
-                        summary.reasoning_tokens += (
-                            attempt.response.reasoning_tokens or 0
-                        )
-                        summary.answer_tokens += attempt.response.answer_tokens or 0
+                            summary.answer_tokens += attempt.response.answer_tokens or 0
+                else:
+                    _record_hosted_usage(summary, result)
                 if result.failure is not None:
                     raise RuntimeError(result.failure.model_dump_json())
                 if result.selected_reference is None or result.origin is None:
@@ -281,7 +356,7 @@ def play(
                     *(a.prompt_tokens or 0 for a in result.attempts),
                 )
                 summary.peak_gpu_bytes = result.peak_gpu_bytes
-            elif opponent is not None:
+            elif opponent is not None and actor != config.model_seat:
                 choice = opponent.choose(env, decision)
                 reference, producer = choice.reference, "checkpoint-stochastic-cpu"
                 summary.opponent_latencies.append(choice.inference_seconds)
@@ -291,6 +366,9 @@ def play(
                 ):
                     observations[name] = observations.get(name, 0) + seconds
                 retain(step / "policy.json", json.dumps(asdict(choice)))
+            elif configured_opponent is not None and actor != config.model_seat:
+                reference = configured_opponent.select(env, decision)
+                producer = "checkpoint-opponent"
             else:
                 reference = rng.choice(decision.actions).reference
                 producer = "seeded-uniform-opponent" if session else "random-control"
@@ -336,7 +414,8 @@ def play(
         summary.failure = f"{type(error).__name__}: {error}"
     finally:
         summary.game_seconds = time.monotonic() - started
-        summary.final_digest = env.state_digest()
+        if env is not None and replay is not None:
+            summary.final_digest = env.state_digest()
         summary.origins = dict(origins)
         if latencies:
             summary.decision_seconds_median = statistics.median(latencies)
@@ -400,14 +479,30 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--random-control", action="store_true")
+    parser.add_argument(
+        "--openrouter",
+        type=Path,
+        help="OpenRouter inference config; runs locally against the hosted API",
+    )
     args = parser.parse_args()
+    if args.random_control and args.openrouter:
+        parser.error("--random-control and --openrouter are mutually exclusive")
     config = (
         GameConfig.model_validate_json(args.config.read_text())
         if args.config
         else GameConfig()
     )
-    if args.random_control:
-        summary = play(config, args.out, None)
+    if args.random_control or args.openrouter:
+        if args.openrouter:
+            from manabot.llm.openrouter import OpenRouterConfig, OpenRouterSession
+
+            inference = OpenRouterConfig.model_validate_json(
+                args.openrouter.read_text()
+            )
+            with OpenRouterSession(inference) as session:
+                summary = play(config, args.out, session)
+        else:
+            summary = play(config, args.out, None)
         print(summary.model_dump_json(indent=2))
         if not summary.completed:
             raise SystemExit(1)

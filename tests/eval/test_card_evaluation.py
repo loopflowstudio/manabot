@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 import json
 from pathlib import Path
 import time
@@ -11,7 +11,7 @@ from typing import Any
 import duckdb
 from etude.eval.match import Tables, evaluate
 from etude.eval.query import statsdb
-from etude.eval.records import Agent, Environment, Match
+from etude.eval.records import Code, Environment, Match
 from etude.run.declaration import declare
 from etude.run.delivery import sync
 from etude.run.storage import DirectoryStorage
@@ -23,7 +23,14 @@ from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
 from manabot.eval.card_evaluation import card_tables, evaluate_cards, trace_card_tables
-from manabot.eval.card_metrics import CardGame, normalize, reduce_cards
+from manabot.eval.card_metrics import (
+    CARD_FIELDS,
+    COUNT_FIELDS,
+    PLAY_FIELDS,
+    CardGame,
+    normalize,
+    reduce_cards,
+)
 from manabot.eval.card_page import page_data, write_page
 from manabot.eval.card_query import (
     AuditResult,
@@ -167,7 +174,7 @@ def _scheduled_fixture(
     """Synthetic metric facts with explicit schedule provenance; no replay claim."""
     conditions = CardConditions.model_validate(match.conditions)
     game = card_fixture(deal=conditions.deal, leg=leg)
-    names = tuple(agent.name for agent in match.agents)
+    names = tuple(player.name for player in match.players)
     seats = names if leg % 2 == 0 else names[::-1]
     matrix = conditions.authored_matchup
     decks = matrix.decks(leg) if matrix else selected_decks(leg)
@@ -211,7 +218,7 @@ def _rebind_fixture(raw: dict[str, Any]) -> GameEvidence:
 def _fixture_play(
     runtime: dict[str, JsonValue],
     change: dict[int, dict[str, Any]] | None = None,
-) -> Any:
+) -> Callable[[Match], Tables]:
     """A `play` that retains synthetic games for every leg, edited per leg."""
 
     def play(match: Match) -> Tables:
@@ -229,31 +236,62 @@ def _fixture_play(
     return play
 
 
+@pytest.mark.parametrize("native_column", ["absent", "mixed", "corrupt"])
+def test_audit_preserves_card_position_before_game_seat_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_column: str
+) -> None:
+    spec = verification_spec(8)
+    assert spec.authored_matchup is not None
+    fixture = _fixture_play(
+        runtime_fingerprints(match_config=spec.authored_matchup.match())
+    )
+
+    def play(match: Match) -> Tables:
+        tables = fixture(match)
+        for row in tables["card_plays"]:
+            if native_column == "absent":
+                row.pop("game_seat")
+            elif native_column == "mixed":
+                # Represent old rows unioned with newly written native seats.
+                if row["on_play"]:
+                    row["game_seat"] = None
+            else:
+                row["game_seat"] = 1 if row["on_play"] else 0
+        return tables
+
+    monkeypatch.setattr(evaluation, "play_card_match", play)
+    evaluate_cards(spec, tmp_path)
+    with statsdb(spec.experiment, tmp_path) as db:
+        result = audit(db, tmp_path)
+    assert result.games == 8
+    assert len(result.problems) == (8 if native_column == "corrupt" else 0)
+
+
 def _db(
     matches: Sequence[tuple[str, tuple[str, str], list[CardGame]]],
 ) -> duckdb.DuckDBPyConnection:
     """The statsdb tables card queries read, built straight from reducer rows."""
     db = duckdb.connect()
     db.execute(
-        "create table card_plays (run varchar, match varchar, player bigint, game varchar,"
+        "create table card_plays (run varchar, match varchar, seat bigint, game_seat bigint, game varchar,"
         " deal bigint, deck varchar, opponent_deck varchar, on_play boolean,"
         " eligible boolean, outcome varchar, win bigint, content varchar,"
         " metric_version varchar, source_commit varchar)"
     )
     db.execute(
-        "create table card_counts (run varchar, match varchar, player bigint, game varchar,"
+        "create table card_counts (run varchar, match varchar, seat bigint, game varchar,"
         " card varchar, deck_copies bigint, opening_copies bigint, drawn_copies bigint,"
         " gih_copies bigint)"
     )
     db.execute(
-        "create table cards (run varchar, match varchar, player bigint, card varchar,"
+        "create table cards (run varchar, match varchar, seat bigint, card varchar,"
         " content varchar, definition bigint, name varchar)"
     )
     db.execute(
-        "create table seats (run varchar, match varchar, player bigint, agent varchar)"
+        "create table seats (run varchar, match varchar, seat bigint, player varchar)"
     )
     db.execute(
-        "create table agents (agent varchar, name varchar, kind varchar,"
+        "create table players (player varchar, name varchar, kind varchar,"
         " checkpoint varchar, artifact varchar,"
         " uri varchar, config json)"
     )
@@ -261,49 +299,31 @@ def _db(
     names = {name for _, pair, _ in matches for name in pair}
     for name in names:
         db.execute(
-            "insert into agents values (?, ?, 'code', null, ?, null, null)",
+            "insert into players values (?, ?, 'code', null, ?, null, null)",
             [f"id-{name}", name, "a" * 64],
         )
     for match, pair, rows in matches:
         db.execute("insert into matches values ('run', ?, 'done')", [match])
-        for player, name in enumerate(pair):
+        for seat, name in enumerate(pair):
             db.execute(
                 "insert into seats values ('run', ?, ?, ?)",
-                [match, player, f"id-{name}"],
+                [match, seat, f"id-{name}"],
             )
         normal = normalize(rows)
         for play in normal.plays:
             db.execute(
-                "insert into card_plays values ('run', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'abc')",
-                [
-                    match,
-                    *(
-                        play[f]
-                        for f in (
-                            "player",
-                            "game",
-                            "deal",
-                            "deck",
-                            "opponent_deck",
-                            "on_play",
-                            "eligible",
-                            "outcome",
-                            "win",
-                            "content",
-                            "metric_version",
-                        )
-                    ),
-                ],
+                "insert into card_plays values ('run', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'abc')",
+                [match, *(play[field] for field in PLAY_FIELDS)],
             )
         for count in normal.counts:
             db.execute(
                 "insert into card_counts values ('run', ?, ?, ?, ?, ?, ?, ?, ?)",
-                [match, *count.values()],
+                [match, *(count[field] for field in COUNT_FIELDS)],
             )
         for card in normal.cards:
             db.execute(
                 "insert into cards values ('run', ?, ?, ?, ?, ?, ?)",
-                [match, *card.values()],
+                [match, *(card[field] for field in CARD_FIELDS)],
             )
     return db
 
@@ -313,7 +333,7 @@ def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
     rows = reduce_cards(game, ("player-two", "player-one"))
     red = next(r for r in rows if r.name == "Mountain")
     assert (
-        red.player,
+        red.seat,
         red.deck_copies,
         red.opening_copies,
         red.drawn_copies,
@@ -376,21 +396,22 @@ def test_execution_rejects_invalid_participant_schedule(
     corruption: str, error: str
 ) -> None:
     spec = verification_spec(8)
-    agents = tuple(
-        Agent(
+    entrants = tuple(
+        Code(
             name=player.player_id,
-            kind="code",
-            artifact="a" * 64,
             config={"registration": player.model_dump(mode="json")},
         )
         for player in spec.players
     )
     if corruption == "participants":
-        agents = agents[:1]
+        entrants = entrants[:1]
     elif corruption == "name":
-        agents = (agents[0].model_copy(update={"name": "other-player"}), agents[1])
+        entrants = (
+            entrants[0].model_copy(update={"name": "other-player"}),
+            entrants[1],
+        )
     match = Match(
-        agents=agents,
+        players=entrants,
         games=4 if corruption == "games" else 8,
         conditions=CardConditions(
             deal=spec.deals[0],
@@ -509,7 +530,7 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     with statsdb(spec.experiment, tmp_path) as db:
         data = card_data(db, selection)
     assert data.games == 12 and data.failed_matches == 0
-    with pytest.raises(ValueError, match="no agent in this experiment"):
+    with pytest.raises(ValueError, match="no player in this experiment"):
         with statsdb(spec.experiment, tmp_path) as db:
             card_data(db, selection.model_copy(update={"subjects": ("absent",)}))
 
@@ -557,10 +578,10 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
                 experiment=spec.experiment, subjects=(subject,), on_play=False
             ),
         )
-        # Etude orders players by agent identity. Player 0 is on the play in
+        # Etude orders players by player identity. Player 0 is on the play in
         # even legs, which hold the crashed leg 2.
         (player,) = db.execute(
-            "select distinct s.player from seats s join agents a using (agent)"
+            "select distinct s.seat from seats s join players a using (player)"
             " where a.name = ?",
             [subject],
         ).fetchone()
@@ -591,11 +612,9 @@ def test_each_game_is_admitted_against_its_schedule(
     assert spec.authored_matchup is not None
     runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
     match = Match(
-        agents=tuple(
-            Agent(
+        players=tuple(
+            Code(
                 name=p.player_id,
-                kind="code",
-                artifact="a" * 64,
                 config={"registration": p.model_dump(mode="json")},
             )
             for p in spec.players
@@ -641,11 +660,9 @@ def test_audit_binds_games_to_their_declared_runtime(field: str) -> None:
         config={**identity, "capture_version": 1, "metric_version": "gih-copies-v1"},
     )
     match = Match(
-        agents=tuple(
-            Agent(
+        players=tuple(
+            Code(
                 name=p.player_id,
-                kind="code",
-                artifact="a" * 64,
                 config={"registration": p.model_dump(mode="json")},
             )
             for p in spec.players
@@ -777,12 +794,12 @@ def test_invalid_outcomes_never_receive_win_rate_credit(outcome: str) -> None:
 
 def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
     def outcome_only(match: Match) -> Tables:
-        return {"plays": [{"player": 0, "score": 1.0}]}
+        return {"plays": [{"seat": 0, "score": 1.0}]}
 
     evaluate(
         experiment="old",
         environment=Environment(name="old", files="a" * 64),
-        matches=[Match(agents=(Agent(name="one", kind="code", artifact="b" * 64),))],
+        matches=[Match(players=(Code(name="one"),))],
         play=outcome_only,
         run="old",
         directory=tmp_path,
@@ -884,9 +901,7 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
             else None,
             card_evidence_dir=root,
         )
-        own = {
-            "games": [{"player": 0, "score": float(r["score_a"] or 0)} for r in rows]
-        }
+        own = {"games": [{"seat": 0, "score": float(r["score_a"] or 0)} for r in rows]}
         return {
             **own,
             **trace_card_tables(root, trace, (first.player_id, second.player_id)),
@@ -897,9 +912,9 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
         environment=Environment(name="grid", files="a" * 64),
         matches=[
             Match(
-                agents=(
-                    Agent(name=first.player_id, kind="code", artifact="b" * 64),
-                    Agent(name=second.player_id, kind="code", artifact="c" * 64),
+                players=(
+                    Code(name=first.player_id),
+                    Code(name=second.player_id),
                 ),
                 conditions={"deal": spec.deals[0]},
             )

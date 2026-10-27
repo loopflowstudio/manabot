@@ -30,3 +30,13 @@ live at `ce43a5cf7:scratch/questions.md`.
   timing was ported into the split modules (`serving.py`, `serving_protocol.py`,
   `native_game.py`); its service-start failure test now injects a `ChildProcess`
   launch failure instead of a `multiprocessing` start failure.
+
+## Sync resolution — 2026-10-27
+
+The incoming conflict revision `b8820b0d9e9160086d8acc13075638003c61b3e5` extends the
+inherited MTG-188 Qwen runtime and game runner. Retain its runtime fixes,
+effective campaign budgets, hosted-model accounting and checkpoint-opponent
+support; these paths do not implement MTG-193's shared evaluation changes.
+Keep this branch's assumptions above. The target's MTG-188 notes remain at
+`b8820b0d9e9160086d8acc13075638003c61b3e5:scratch/questions.md` as historical
+context, not new execution direction. No rental is launched by this sync.

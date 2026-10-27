@@ -11,6 +11,7 @@
     <h3 class="font-medium">What is happening</h3>
     {#if context}
       <p class="type-caption capitalize">{stageLabel(context.stage)}</p>
+      <p class="type-caption">{context.instruction}</p>
       {#if context.source}<p>Source: {subjectLabel(observation, context.source)}</p>{/if}
       {#if context.chosen_mode !== null}<p>Chosen mode: {context.chosen_mode + 1}</p>{/if}
       {#each context.targets as target}<p>Selected target {target.clause + 1}: {subjectLabel(observation, target.object)}</p>{/each}

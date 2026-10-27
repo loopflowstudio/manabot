@@ -208,6 +208,7 @@ def freeze(recipe: Recipe) -> Protocol:
         Path(p)
         for p in (
             "experiments/inference_baseline.py",
+            "experiments/policy_inference_gpu.py",
             "uv.lock",
             "pyproject.toml",
             "managym/Cargo.lock",

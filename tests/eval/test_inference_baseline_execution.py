@@ -757,3 +757,58 @@ def test_collection_exhaustion_retains_pins_and_reaps_children(
     (directory / "a.json").write_text("{}")
     with pytest.raises(ValueError, match="mismatch"):
         write_report([], [], tmp_path / "changed", out / "manifest.json")
+
+
+def test_gpu_replay_resolves_portable_cell_trace(tmp_path: Path) -> None:
+    from experiments.policy_inference_gpu import replay_recipe
+
+    single = PolicyWorkload(
+        id="single", kind="policy", request=tmp_path / "single.json", legs=(0,)
+    )
+    many = single.model_copy(update={"id": "many"})
+    recipe = Recipe(
+        workloads=(single, many),
+        cells=(
+            Cell(id="single", workload="single"),
+            Cell(id="batch1", workload="many"),
+            Cell(id="batch4", workload="many"),
+        ),
+    )
+    cell = tmp_path / "completed-cell"
+    cell.mkdir()
+    (cell / "trace.json").write_text(json.dumps({"artifact_path": "traces/game.gz"}))
+    replay = replay_recipe(recipe, cell)
+    assert replay.workloads[0].trace == cell / "traces/game.gz"
+    assert [c.id for c in replay.cells] == ["batch1", "batch4"]
+    (cell / "trace.json").write_text("{}")
+    with pytest.raises(ValueError, match="no trace artifact"):
+        replay_recipe(recipe, cell)
+
+
+@pytest.mark.parametrize("delay", [0.005, 0.006])
+def test_policy_baseline_bounds_batch_collection_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delay: float
+) -> None:
+    from experiments.inference_baselines import policy
+
+    protocol = _protocol(tmp_path)
+    cell = protocol.recipe.cells[0]
+    assert cell.execution is not None
+    cell.execution.write_text(
+        EvalCompute(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
+    )
+    out = tmp_path / "output"
+    out.mkdir()
+
+    def admitted(**kwargs: object) -> None:
+        raise RuntimeError("execution admitted without playing a fixture game")
+
+    monkeypatch.setattr(policy, "play_cell", admitted)
+    workload = protocol.recipe.workloads[0]
+    assert isinstance(workload, PolicyWorkload)
+    if delay > 0.005:
+        with pytest.raises(ValueError, match="5 ms batch delay"):
+            policy.execute(protocol, workload, cell, out, False, time.time() + 30)
+    else:
+        with pytest.raises(RuntimeError, match="execution admitted"):
+            policy.execute(protocol, workload, cell, out, False, time.time() + 30)

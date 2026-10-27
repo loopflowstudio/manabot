@@ -65,7 +65,8 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         targets: vec![],
         target_req_indices: vec![],
         requirement_index: 0,
-        enqueue_order: order,
+        id: crate::flow::trigger::TriggerId(order),
+        ordering_class: crate::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
         inline_effects: Some(effects),
     }
@@ -285,7 +286,6 @@ fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
 }
 
 #[test]
-#[ignore = "CR 603.3b missing same-controller trigger-order decision; proposal only"]
 fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();
     game.state.pending_triggers = vec![
@@ -313,12 +313,14 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
         game.state.players[0].life = 2;
         let gain = vec![Effect::GainLife { amount: 2 }];
         let damage = vec![Effect::DealDamageToController { amount: 2 }];
-        let (first, last) = if gain_last {
-            (damage, gain)
-        } else {
-            (gain, damage)
-        };
-        game.state.pending_triggers = vec![trigger(source, first, 0), trigger(source, last, 1)];
+        game.state.pending_triggers = vec![trigger(source, gain, 0), trigger(source, damage, 1)];
+        let choice = game.flush_triggers().unwrap();
+        assert_eq!(choice.actions.len(), 2);
+        game.choose_trigger(
+            PlayerId(0),
+            crate::flow::trigger::TriggerId(if gain_last { 1 } else { 0 }),
+        )
+        .unwrap();
         assert!(game.flush_triggers().is_none());
         game.resolve_top_of_stack();
         game.perform_state_based_actions();
@@ -542,4 +544,326 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Battlefield));
         assert_eq!(game.state.players[controller.0].life, 20);
     }
+}
+
+#[test]
+fn trigger_order_all_three_occurrence_permutations_are_legal() {
+    use crate::flow::trigger::TriggerId;
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let (mut game, source, ..) = fixture();
+        game.state.pending_triggers = (0..3)
+            .map(|id| {
+                trigger(
+                    source,
+                    vec![Effect::GainLife {
+                        amount: id as i32 + 1,
+                    }],
+                    id,
+                )
+            })
+            .collect();
+        for (position, id) in order[..2].iter().enumerate() {
+            let space = game.flush_triggers().unwrap();
+            assert_eq!(
+                space.kind,
+                crate::agent::action::ActionSpaceKind::OrderTriggers
+            );
+            assert_eq!(space.actions.len(), 3 - position);
+            game.choose_trigger(PlayerId(0), TriggerId(*id)).unwrap();
+        }
+        assert!(game.flush_triggers().is_none());
+        for id in order.iter().rev() {
+            let before = game.state.players[0].life;
+            game.resolve_top_of_stack();
+            assert_eq!(game.state.players[0].life, before + *id as i32 + 1);
+        }
+    }
+}
+
+#[test]
+fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
+    use crate::flow::trigger::{TriggerId, TriggerOrderingClass};
+    for active in [PlayerId(0), PlayerId(1)] {
+        let (mut game, source, ..) = fixture();
+        let ordinary = trigger(source, vec![Effect::GainLife { amount: 1 }], 0);
+        let mut batch = Vec::new();
+        for group in 0..4 {
+            for id in 0..2 {
+                let mut t = ordinary.clone();
+                t.id = TriggerId(group * 2 + id);
+                t.controller = if group % 2 == 0 {
+                    active
+                } else {
+                    PlayerId(1 - active.0)
+                };
+                t.ordering_class = if group < 2 {
+                    TriggerOrderingClass::Ordinary
+                } else {
+                    TriggerOrderingClass::AbilityTriggered
+                };
+                batch.push(t);
+            }
+        }
+        game.state.trigger_placement = Some(crate::flow::trigger::TriggerPlacement {
+            remaining: batch,
+            active,
+            group: 0,
+            placing: None,
+        });
+        game.state
+            .pending_triggers
+            .push(trigger(source, vec![Effect::GainLife { amount: 9 }], 99));
+        for group in 0..4 {
+            let space = game.flush_triggers().unwrap();
+            let player = if group % 2 == 0 {
+                active
+            } else {
+                PlayerId(1 - active.0)
+            };
+            assert_eq!(space.player, Some(player));
+            assert_eq!(space.actions.len(), 2);
+            let hash = game.state.deterministic_hash();
+            assert!(game
+                .choose_trigger(PlayerId(1 - player.0), TriggerId(group * 2))
+                .is_err());
+            assert!(game.choose_trigger(player, TriggerId(99)).is_err());
+            assert_eq!(game.state.deterministic_hash(), hash);
+            game.choose_trigger(player, TriggerId(group * 2 + 1))
+                .unwrap();
+        }
+        assert!(game.flush_triggers().is_none());
+        assert_eq!(game.state.stack_objects.len(), 10);
+        assert_eq!(game.state.pending_triggers.len(), 1);
+    }
+}
+
+#[test]
+fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
+    let (mut game, source, ..) = fixture();
+    assert!(game.flush_triggers().is_none());
+    game.state
+        .pending_triggers
+        .push(trigger(source, vec![Effect::GainLife { amount: 1 }], 0));
+    assert!(game.flush_triggers().is_none());
+    game.state.pending_triggers = (1..66)
+        .map(|id| trigger(source, vec![Effect::GainLife { amount: 1 }], id))
+        .collect();
+    let space = game.flush_triggers().unwrap();
+    assert_eq!(space.actions.len(), 65);
+    game.current_action_space = Some(space);
+    let observation = crate::agent::observation::Observation::new(&game, std::iter::empty());
+    assert_eq!(observation.action_space.actions.len(), 65);
+    assert!(crate::agent::observation_encoder::encode(&observation, &Default::default()).is_err());
+    let larger = crate::agent::observation_encoder::ObservationEncoderConfig {
+        max_actions: 65,
+        ..Default::default()
+    };
+    assert!(matches!(
+        crate::agent::observation_encoder::encode(&observation, &larger),
+        Err(
+            crate::agent::observation_encoder::ObservationEncodeError::Capacity {
+                field: "continuation relations",
+                ..
+            }
+        )
+    ));
+    assert!(
+        crate::agent::observation::Observation::for_player(&game, PlayerId(1))
+            .action_space
+            .actions
+            .is_empty()
+    );
+}
+
+#[test]
+fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
+    use crate::agent::{observation::Observation, observation_encoder};
+    let (mut game, source, other, ..) = fixture();
+    let mut first = trigger(source, vec![Effect::GainLife { amount: 1 }], 900);
+    first.source_ref = game.current_object_ref(source);
+    first.context = Some(Target::StackSpell(source));
+    let mut second = first.clone();
+    second.id = crate::flow::trigger::TriggerId(901);
+    second.ability_index = 1;
+    let mut third = first.clone();
+    third.id = crate::flow::trigger::TriggerId(902);
+    third.context = Some(Target::StackSpell(other));
+    game.state.pending_triggers = vec![first, second, third];
+    game.current_action_space = game.flush_triggers();
+    let observation = Observation::for_player(&game, PlayerId(0));
+    let frames: Vec<_> = observation
+        .action_space
+        .actions
+        .iter()
+        .map(|action| &observation.continuation[action.continuation_index.unwrap()])
+        .collect();
+    assert_eq!(frames[0].source, frames[1].source);
+    assert_eq!(frames[0].source, frames[2].source);
+    assert_ne!(frames[0].ability, frames[1].ability);
+    assert_eq!(frames[0].ability, frames[2].ability);
+    assert_ne!(frames[0].context, frames[2].context);
+    let encoded = observation_encoder::encode(&observation, &Default::default()).unwrap();
+    // Occurrence counters bind Commands but are not policy features.
+    for trigger in &mut game.state.trigger_placement.as_mut().unwrap().remaining {
+        trigger.id.0 += 10_000;
+    }
+    game.current_action_space = game.flush_triggers();
+    let renumbered = Observation::for_player(&game, PlayerId(0));
+    assert_eq!(
+        encoded,
+        observation_encoder::encode(&renumbered, &Default::default()).unwrap()
+    );
+    let other_view = Observation::for_player(&game, PlayerId(1));
+    assert!(other_view.continuation.iter().all(|frame| frame.kind <= 3));
+}
+
+#[test]
+fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
+    use crate::agent::action::{Action, ActionSpaceKind};
+    use crate::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    let (mut game, source, ..) = fixture();
+    game.state.pending_triggers = vec![
+        trigger(
+            source,
+            vec![Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::Player),
+                effects: vec![Effect::GainLife { amount: 1 }],
+            }],
+            0,
+        ),
+        trigger(source, vec![Effect::GainLife { amount: 2 }], 1),
+        trigger(source, vec![Effect::GainLife { amount: 3 }], 2),
+    ];
+    game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
+    game.current_action_space = game.flush_triggers();
+    let root = witness(&game);
+    let driver = ClonePlusUndoDriver::default();
+    let mut branch = driver.fork_exact(&game);
+    let outer = driver.mark(&mut branch);
+    driver
+        .apply(
+            &mut branch,
+            BenchCommand {
+                action_index: 0,
+                expected_action_hash: None,
+                expected_state_hash: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        branch.action_space().unwrap().kind,
+        ActionSpaceKind::ChooseTarget
+    );
+    assert_eq!(branch.state.stack_objects.len(), 2);
+    let context = branch.decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "trigger_targets");
+    assert_eq!(context.source.0.unwrap().label, "Lightning Bolt");
+    assert!(context
+        .instruction
+        .contains("Lightning Bolt — delayed ability:"));
+    assert!(context.instruction.contains("You gain 1 life"));
+    assert!(!branch
+        .decision_context(PlayerId(1))
+        .unwrap()
+        .instruction
+        .contains("Lightning Bolt"));
+    let targeting = driver.witness(&branch);
+    let inner = driver.mark(&mut branch);
+    driver
+        .apply(
+            &mut branch,
+            BenchCommand {
+                action_index: 0,
+                expected_action_hash: None,
+                expected_state_hash: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        branch.action_space().unwrap().kind,
+        ActionSpaceKind::OrderTriggers
+    );
+    assert_eq!(branch.state.stack_objects.len(), 3);
+    assert!(branch
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .all(|a| matches!(a, Action::ChooseTrigger { .. })));
+    driver.rollback(&mut branch, inner);
+    assert_eq!(driver.witness(&branch), targeting);
+    driver.rollback(&mut branch, outer);
+    assert_eq!(driver.witness(&branch), root);
+    assert_eq!(witness(&game), root);
+}
+
+#[test]
+fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
+    use crate::agent::observation::Observation;
+    use crate::state::ability::{Ability, TriggerCondition, TriggerSubject};
+    let (mut game, source, ..) = fixture();
+    game.state.cards[source].abilities = vec![
+        Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::DrawCards { count: 2 }],
+        },
+        Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::GainLife { amount: 3 }],
+        },
+    ];
+    let mut dies = trigger(source, vec![], 0);
+    dies.inline_effects = None;
+    let mut enters = dies.clone();
+    enters.id = crate::flow::trigger::TriggerId(1);
+    enters.ability_index = 1;
+    let mut delayed = trigger(source, vec![Effect::ReturnSourceToBattlefieldTapped], 2);
+    delayed.ability_index = usize::MAX; // Inline effects do not reference a card slot.
+    game.state.pending_triggers = vec![dies, enters, delayed];
+    game.current_action_space = game.flush_triggers();
+    let observation = Observation::for_player(&game, PlayerId(0));
+    let labels: Vec<_> = observation
+        .action_space
+        .actions
+        .iter()
+        .map(|a| a.description.as_deref().unwrap())
+        .collect();
+    assert_eq!(labels, vec![
+        "Put on stack next — Lightning Bolt — When this dies: Draw 2 cards",
+        "Put on stack next — Lightning Bolt — When this enters the battlefield: You gain 3 life",
+        "Put on stack next — Lightning Bolt — delayed ability: Return this card to the battlefield tapped",
+    ]);
+    assert!(labels
+        .iter()
+        .all(|label| !label.contains(&game.state.cards[source].text_box)));
+    for id in 0..2 {
+        game.choose_trigger(PlayerId(0), crate::flow::trigger::TriggerId(id))
+            .unwrap();
+        game.current_action_space = game.flush_triggers();
+    }
+    let stack = Observation::for_player(&game, PlayerId(1));
+    let descriptions: Vec<_> = stack
+        .stack_objects
+        .iter()
+        .filter_map(|s| s.description.as_deref())
+        .collect();
+    assert_eq!(
+        descriptions,
+        labels
+            .iter()
+            .rev()
+            .map(|l| l.strip_prefix("Put on stack next — ").unwrap())
+            .collect::<Vec<_>>()
+    );
 }

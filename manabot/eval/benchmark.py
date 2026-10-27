@@ -13,15 +13,16 @@ from functools import partial
 import os
 from pathlib import Path
 
-from etude.eval.match import Row, Tables, agent
+from etude.eval.match import Row, Tables
 from etude.eval.records import (
     Benchmark,
     CheckpointKey,
     CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
     Matchup,
-    Model,
 )
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
@@ -83,9 +84,9 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
         )
         for path in sorted(Path(folder).rglob("*.py"))
     ] + [Path(__file__)]
-    opponent = agent(
-        "heuristic",
-        code=code,
+    opponent = Code(
+        name="heuristic",
+        source=code,
         config={"registration": manifest.opponent.model_dump(mode="json")},
     )
     return Benchmark(
@@ -99,8 +100,8 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
             Matchup(
                 name="checkpoint vs heuristic",
                 players=(
-                    Model(
-                        code=code,
+                    Inference(
+                        source=code,
                         config={"registration": registration.model_dump(mode="json")},
                     ),
                     opponent,
@@ -122,9 +123,9 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
 
 def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
-    if len(match.agents) != 2 or match.games != 8:
+    if len(match.players) != 2 or match.games != 8:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
-    checkpoint, anchor = match.agents
+    checkpoint, anchor = match.players
     path = local_checkpoint_file(checkpoint)
     sha256 = file_sha256(path)
     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
@@ -190,21 +191,22 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
         score = row.score_a
         if score is None:
             raise ValueError("valid arena row requires a score")
-        # Etude's player is a tournament participant, not the native on-play
+        # Etude's seat is a tournament participant, not the native on-play
         # seat. Deck labels and on-play flags describe that row's participant:
         # `deck` is the deck it actually played, `opponent_deck` the other's.
-        for player in (0, 1):
-            native_seat = (row.leg + player) % 2
-            deck, opponent_deck = decks[native_seat], decks[1 - native_seat]
+        for seat in (0, 1):
+            game_seat = (row.leg + seat) % 2
+            deck, opponent_deck = decks[game_seat], decks[1 - game_seat]
             plays.append(
                 {
-                    "player": player,
+                    "seat": seat,
                     "game": row.leg,
-                    "score": score if player == 0 else 1.0 - score,
+                    "score": score if seat == 0 else 1.0 - score,
                     "deck": deck,
                     "opponent_deck": opponent_deck,
                     "matchup": labels[(deck, opponent_deck)],
-                    "on_play": native_seat == 0,
+                    "game_seat": game_seat,
+                    "on_play": game_seat == 0,
                     "valid": True,
                 }
             )

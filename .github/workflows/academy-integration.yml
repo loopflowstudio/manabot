@@ -51,6 +51,12 @@ jobs:
       - name: Elemental roster admission
         run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
 
+      - name: Elemental local play contracts
+        run: |
+          uv run --python 3.12 --extra dev --extra artifacts pytest -q \
+            tests/academy/test_elemental_play_launcher.py \
+            tests/academy/test_forced_step_automation.py
+
       - name: Frozen-policy search fixtures
         run: |
           uv run --python 3.12 --extra dev pytest -q \

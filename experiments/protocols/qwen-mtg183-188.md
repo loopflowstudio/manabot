@@ -129,3 +129,94 @@ charge was $0.02901644665277777951. Together with `b6a4716bb321`, retained renta
 estimates total $0.09140036411944444410. The next job/cohort cap of $9.40 plus
 that sunk amount and the $0.50 reserve totals $9.99140036411944444410. Later
 attempts must lower their cap as needed; final inclusive billing remains unknown.
+
+The cache-fix attempt `25ce352f9533` passed acquisition but failed its server
+environment probe: resolving `.venv-vllm/bin/python` followed its symlink to
+system Python. The repair preserves the absolute virtual-environment path and
+retains probe stderr. A local uv-created environment test verifies the actual
+command selects the server environment even with an active client environment.
+No games were admitted. Provider absence was verified at 2026-10-27 05:55:25 UTC;
+its estimated charge is $0.02914788226388888835. The three prior estimates total
+$0.12054824638333333245. The next job/cohort cap is **$9.37**, preserving the
+same $0.50 reserve under the original $10. Hardware and scientific treatment
+remain unchanged; each failed attempt remains separate evidence.
+
+Run `dcd5044dd2e0` loaded the vLLM model and reached health in 79.136809 seconds.
+Its four admitted games failed before play because the client assumed a separate
+`generation_config.json`; this Qwen revision uses model-config EOS defaults.
+The repair follows Transformers' config-derived fallback and retains the
+tokenizer's message terminator. The exact cached Qwen metadata admits locally
+without weights or inference. No games completed; 96 were unattempted. SDK
+command success means failure evidence was retained, not evaluation success.
+Provider absence was verified at 2026-10-27 06:03:11 UTC; estimated charge
+$0.03861355726111111192. Four prior estimates total $0.15916180364444444437.
+The next job/cohort cap is **$9.34** plus the unchanged $0.50 reserve.
+
+## Measured deadline and concurrency revision
+
+Run `12f050b52057` admitted four games. Three initial requests hit 120 seconds;
+the fourth game made 23 native decisions and six successful Qwen selections
+before its seventh selection timed out. No games completed; 96 remained
+unattempted. The retained server logs show approximately 129 aggregate generated
+tokens/s with four requests, versus 34 tokens/s with one. Warm 2,048-token
+responses take approximately 60.7 seconds, leaving too little of 120 seconds
+for a full protocol repair; cold first requests also include additional work.
+These are observed request windows, not completed-game throughput or a
+like-for-like backend speedup.
+
+The next declared treatment uses **16 concurrent scheduled games**, a **300-second
+selection deadline** including repair, and a **7,200-second between-decision game
+limit**. The campaign still has its 10-hour watchdog, 11-hour job ceiling, one
+active allocation and all original money safeguards. The original 100 decks,
+seeds, seat assignments, BF16 weights, greedy decoding, enabled reasoning,
+2,048-token per-generation limit, complete legal choices and native execution
+contracts are unchanged. Effective inference settings are written to
+`inference.json` before admission and carried by the scheduled game records.
+Server cache sizing suggests capacity for a larger batch; actual 16-game fit
+and throughput remain measurements to obtain, not established results.
+
+All outputs from `12f050b52057` were fetched and its pod was verified absent at
+2026-10-27 06:23:40 UTC. Its estimate is $0.13343769908333333976; five earlier
+attempts total **$0.29259950272777778413**. The next job/cohort cap is **$9.20**
+with the same $0.50 ancillary reserve. This execution adjustment follows Jack
+Heart's authorization to retry without a count limit within the original $10.
+
+## Accepted 16k generation allowance — 2026-10-27
+
+Run `b1d7ed75492f` ended with 18 completed, replay-verified games (zero Qwen
+wins), eight game-wall timeouts and 74 unattempted entries. Of 793 Qwen
+selections, 33 succeeded initially, 241 succeeded after repair and 519 used the
+declared seeded random fallback. All 519 fallbacks followed two generation-limit
+cutoffs. There were 1,279 truncated generations among 1,553 generation attempts.
+These outcomes describe the 2,048-token treatment, not unrestricted Qwen strength.
+Raw receipts remain under that run's identity; do not combine its outcomes with
+the new treatment as a homogeneous 100-game result.
+
+Jack Heart selected increasing the reasoning allowance, then specified
+"lets do 16k reasoning tokens allowed". The next treatment permits **16,384
+generated tokens per attempt**, including reasoning, final reference and EOS
+under the existing runtime's shared output budget. It still requires a completed
+thinking boundary and exact legal final reference; no forced answer, prompt
+truncation or hidden choice is introduced. The one protocol repair remains, with
+its own allowance and retained result. Context is **65,536 tokens**, accommodating
+the complete observation plus a long initial response and repair. Model weights,
+tokenizer, BF16 precision, greedy decoding, opponent, decks, deals, seats,
+Command binding and replay stay pinned.
+
+Use **eight concurrent games** to leave cache capacity for longer sequences,
+and **1,800 seconds per selection including repair**. Per-game wall can extend
+to the existing **10-hour campaign bound**, reduced by the remaining campaign
+time and cleanup reserve; there is no separate two-hour cutoff. The outer
+10-hour watchdog, 11-hour rental ceiling, early failure stop and independent
+cleanup guardian remain. These larger limits permit reasoning to finish but do
+not promise 100 completed games within the money ceiling. Reserve the original
+100-game schedule again under a new treatment identity; earlier results and
+failures remain separately available.
+
+The SDK's finalized rental charges for all six prior attempts now total
+**$2.253210135812151860498486614** (the earlier estimates remain historical).
+The last provider pod `nb4r2gk2o7uqd2` was freshly confirmed absent. The next
+job/cohort cap is **$7.24**, with the unchanged **$0.50 ancillary reserve**:
+maximum cumulative commitment **$9.993210135812151860498486614**, below the
+original $10. Ancillary final billing remains unavailable. Only one allocation
+may be active; verify absence and reread charges before another launch.

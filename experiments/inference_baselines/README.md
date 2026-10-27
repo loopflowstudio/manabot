@@ -31,8 +31,10 @@ CPU play. For example:
 }
 ```
 
-The compute file declares `max_delay_seconds: 0`, at most four active games and
-four batch rows. The runner fixes one Torch thread and disables TF32. Ordinary
+The compute file declares a batch collection window between zero and 5 ms,
+at most four active games and four batch rows. A zero window dispatches immediately
+and may never form multi-row batches despite concurrent games; inspect the actual
+`batch_rows/*` counters. The runner fixes one Torch thread and disables TF32. Ordinary
 and diagnostic cells remain separate, as do instrumentation-on/off cells.
 Repeat order rotates the declared cell order; the entire ledger is reserved
 before any child starts. Deadline/RSS failure retains progress and stops owned
@@ -89,7 +91,14 @@ includes transfers and decode, and does not establish prefill or decode time.
 No local timer establishes provider billing. UUID-tagged 1 Hz device sampling is
 optional; unavailable utilities remain explicitly unavailable.
 
-The MTG-188 empirical baseline is still pending pinned trained bytes, CPU/GPU and
-LLM single/many-game observations, and artifact publication. New paid execution
-has not been authorized. `mtg185-l4.json` remains the unchanged historical corpus
+MTG-188 now focuses on non-LLM evaluation timing (Jack Heart, 2026-10-27).
+Jack subsequently requested GPU policy-versus-policy batched measurements within
+the original cumulative $10 ceiling. `experiments/policy_inference_gpu.py` uses
+MTG-183 final raw u5950 in both seats with independent policy RNG and retains
+complete-game and fixed-input comparisons. Further Qwen inference belongs to
+MTG-191. `mtg185-l4.json` remains the unchanged historical corpus
 inventory; neither the runner nor this example converts it into new measurements.
+
+The [2026-10-27 GPU policy results](policy-gpu-20261027.md) retain both the
+zero-delay concurrency observation and the 5 ms batching treatment, with their
+raw archives and portable Perf reports in the experiment artifact store.

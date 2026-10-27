@@ -88,7 +88,7 @@ def test_one_match_delivers_games_and_both_card_tables(
     )
     with statsdb(cards.EXPERIMENT, directory) as db:
         games = db.execute(
-            "select deck, opponent_deck, seat, valid from games order by deck, seat"
+            "select deck, opponent_deck, game_seat, valid from games order by deck, game_seat"
         ).fetchall()
         assert [(deck, seat) for deck, _, seat, _ in games] == [
             (GW, 0),
