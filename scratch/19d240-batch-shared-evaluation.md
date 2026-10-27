@@ -95,7 +95,7 @@ thread count within its declared bound.
   kill/exit-code semantics matching today's supervision. Game, replay and
   serving processes all use it; no parent `__main__` is imported.
 - New `manabot/sim/native_game.py` (Torch-free child entry): `_execute_game`
-  and `_game_worker` move here from `sim/match.py`. Scalar players are built
+  and `_game_worker` move here from `sim/match.py`. Code players are built
   Torch-free by `players.build_code_player` (random, scripted, heuristic);
   only search players (flat-MC, PUCT, local update) import Torch, lazily in
   `_InChildPlayers`, and only they call `torch.manual_seed`. Plain checkpoint
@@ -313,3 +313,12 @@ in-child players. The `scalar_policy` performance span and `cold_scalar`
 benchmark variant keep their names as retained receipt keys; MTG-183's runner
 `scalar` mode is MTG-183's name. Remaining: the rental calibration and landing
 gate as written in Acceptance.
+
+## Concept review 6 (headless, 2026-10-27, at `c6c8f4c87`)
+
+Since review 5 only the `_InChildPlayers` rename and Torch-free lost-worker
+fixtures landed; both follow the accepted concepts. Served checkpoints,
+in-child code/search players, one policy key per checkpoint, child processes
+and role thread budgets still hold, and the engine boundary is unchanged. No
+design change and no open product choice. Remaining: the rental calibration
+and landing gate in Acceptance (operator step, $0.00 of $5 spent).
