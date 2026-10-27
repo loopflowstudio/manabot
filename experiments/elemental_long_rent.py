@@ -55,7 +55,7 @@ from etude.run.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment
-from experiments.elemental_long_db import LocalFolder, connect, ingest
+from experiments.elemental_long_db import BucketFolder, LocalFolder, connect, ingest
 from experiments.elemental_long_eval import (
     CARDS,
     COMPUTE,
@@ -379,35 +379,20 @@ def _match_identity(match: Match) -> tuple[str, str, str, str]:
     )
 
 
-def stored(runs: Sequence[str]) -> set[tuple[str, str, str, str]]:
-    """Matches stored by any of these eval runs, by seated names and conditions.
+def stored() -> set[tuple[str, str, str, str]]:
+    """Matches the combined database holds from any eval run, by seated names and conditions.
 
-    Runs at different source revisions key the same match differently, so
-    matches are compared by what they play, not by key.
+    The mini's run is folded in first, so its newest matches count. Runs at
+    different source revisions key the same match differently, so matches are
+    compared by what they play, not by key.
     """
-    import boto3
-
-    client = boto3.client(
-        "s3",
-        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
-    )
-    found: set[tuple[str, str, str, str]] = set()
-    for run in runs:
-        pages = client.get_paginator("list_objects_v2").paginate(
-            Bucket=BUCKET, Prefix=f"evaluations/{run}/matches/"
-        )
-        for page in pages:
-            for entry in page.get("Contents", []):
-                if entry["Key"].endswith(".failed.json"):
-                    continue
-                body = client.get_object(Bucket=BUCKET, Key=entry["Key"])["Body"]
-                found.add(
-                    _match_identity(Match.model_validate(json.load(body)["match"]))
-                )
-    return found
+    with connect() as db:
+        ingest(db, BucketFolder(MINI_RUN))
+        records = db.execute("SELECT record FROM matches").fetchall()
+    return {
+        _match_identity(Match.model_validate(json.loads(record)["match"]))
+        for (record,) in records
+    }
 
 
 def plan(
@@ -517,7 +502,7 @@ def launch(
         raise SystemExit("commit first: the job runs an exact revision")
     state = admitted()
     design = units(state)
-    done = stored([MINI_RUN, SCALAR_RUN, BATCHED_RUN, GPU_RUN])
+    done = stored()
     # Units of batches still live; a settled batch's played matches are `done`,
     # and the rest of its units are pending again.
     taken = {
