@@ -196,9 +196,18 @@ def play_group(
     )
     if file_sha256(request.checkpoint) != request.sha256:
         raise ValueError("checkpoint byte identity differs")
-    model, _ = load_checkpoint(request.checkpoint)
+    model, space = load_checkpoint(request.checkpoint)
+    # Historical policies retain their saved input version. Shared inference
+    # checks this ABI against the loaded tensor shapes before playing a game.
+    # Keep the heuristic's original registration (and therefore policy seeds).
+    policy_fingerprints = runtime_fingerprints(
+        match_config=matchup.match(), observation_space=space
+    )
     candidate = PlayerRegistration(
-        **common,
+        **{
+            **common,
+            "observation_abi_sha256": policy_fingerprints["observation_abi_sha256"],
+        },
         player_id="model",
         display_name="Checkpoint",
         role="challenger",
