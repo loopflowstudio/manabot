@@ -183,3 +183,11 @@ Etude evaluation tables use `seat` for the participant's index in
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
 group native play/draw reports by `game_seat`. SDK 0.2.8 owns the historical
 `player`/`seat` column conversion; never rewrite retained tables for this rename.
+
+### Offline inference reports
+
+Historical LLM receipt readers stay independent of executable model, simulation
+and native imports. Load the evaluation projection only for evaluation inputs;
+keep its simulation dependencies off the LLM-only path. Check this boundary in a
+fresh process with those imports blocked, and exercise mixed reports through the
+actual builder CLI in the existing headless Perf proof.

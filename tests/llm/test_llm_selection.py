@@ -252,7 +252,6 @@ def test_invalid_reference_lists_fail_before_inference(
         {"max_new_tokens": 100},
         {"deadline_seconds": 0},
         {"deadline_seconds": float("inf")},
-        {"enable_thinking": True},
     ],
 )
 def test_unpinned_or_unbounded_configuration_is_rejected(
@@ -260,3 +259,77 @@ def test_unpinned_or_unbounded_configuration_is_rejected(
 ) -> None:
     with pytest.raises(ValidationError):
         config(**settings)
+
+
+@pytest.mark.parametrize("prefix", ["", "<think>"])
+def test_thinking_selects_only_the_final_reference(prefix: str) -> None:
+    raw = prefix + "Consider A0 but choose A1.</think>\nA1"
+    result = select(
+        decision(), config(enable_thinking=True), ScriptedRuntime([response(raw)])
+    )
+    assert result.selected_reference == "A1" and result.origin == "initial"
+    assert result.attempts[0].response.text == raw
+    assert "end your thinking" in result.attempts[0].messages[0].content
+
+
+@pytest.mark.parametrize(
+    "raw", ["A0", "A0</think>A1</think>A0", "A0</think>I choose A1"]
+)
+def test_incomplete_or_ambiguous_thinking_requires_repair(raw: str) -> None:
+    result = select(
+        decision(),
+        config(enable_thinking=True),
+        ScriptedRuntime([response(raw), response("Reason.</think>A1")]),
+    )
+    assert result.origin == "retry" and result.selected_reference == "A1"
+    assert result.attempts[0].validation_error is not None
+
+
+def test_phase_timings_preserve_failed_generation_and_pending_encode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = 0.0
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+
+    class TimedRuntime(ScriptedRuntime):
+        def encode(self, messages: tuple[Message, ...]) -> EncodedPrompt:
+            nonlocal now
+            now += 2
+            return super().encode(messages)
+
+        def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
+            nonlocal now
+            now += 3
+            return super().generate(prompt, deadline)
+
+    snapshots: list[SelectionResult] = []
+    result = select(
+        decision(),
+        config(),
+        TimedRuntime([RuntimeError("injected")]),
+        progress=snapshots.append,
+    )
+    attempt = result.attempts[0]
+    assert attempt.encode_seconds == 2
+    assert attempt.generation_seconds == 3
+    assert attempt.validation_seconds is None
+    assert attempt.seconds == 5
+    assert result.failure is not None
+    assert any(
+        s.attempts
+        and s.attempts[0].encode_seconds == 2
+        and s.attempts[0].generation_seconds is None
+        for s in snapshots
+    )
+
+
+def test_retained_prompt_mismatch_prevents_generation() -> None:
+    result = select(
+        decision(),
+        config(),
+        ScriptedRuntime([]),
+        expected_prompt=EncodedPrompt(text="different", token_ids=(1,)),
+    )
+    assert result.failure is not None
+    assert "retained prompt" in result.failure.message
+    assert result.attempts[0].generation_seconds is None

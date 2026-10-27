@@ -17,6 +17,7 @@ from transformers import (
     GenerationConfig,
 )
 
+from manabot.llm.cache import MODEL_PATTERNS, TOKENIZER_PATTERNS
 from manabot.llm.schema import (
     EncodedPrompt,
     GeneratedResponse,
@@ -24,6 +25,7 @@ from manabot.llm.schema import (
     Message,
     RuntimeIdentity,
 )
+from manabot.llm.tokenization import decode_response, encode_prompt
 
 
 class TransformersRuntime:
@@ -37,12 +39,12 @@ class TransformersRuntime:
         model_path = snapshot_download(
             config.model_id,
             revision=config.model_revision,
-            allow_patterns=["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=MODEL_PATTERNS,
         )
         tokenizer_path = snapshot_download(
             config.tokenizer_id,
             revision=config.tokenizer_revision,
-            allow_patterns=["*.json", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=TOKENIZER_PATTERNS,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_path,
@@ -119,22 +121,7 @@ class TransformersRuntime:
         )
 
     def encode(self, messages: tuple[Message, ...]) -> EncodedPrompt:
-        text = self.tokenizer.apply_chat_template(
-            [message.model_dump() for message in messages],
-            chat_template=self.template,
-            tokenize=False,
-            add_generation_prompt=True,
-            **(
-                {"enable_thinking": self.config.enable_thinking}
-                if self.config.enable_thinking is not None
-                else {}
-            ),
-        )
-        # The chat template already supplies its special tokens. Never truncate.
-        tokens = self.tokenizer(text, add_special_tokens=False, truncation=False)[
-            "input_ids"
-        ]
-        return EncodedPrompt(text=text, token_ids=tuple(tokens))
+        return encode_prompt(self.tokenizer, self.config, messages)
 
     def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
         remaining = deadline - time.monotonic()
@@ -151,16 +138,8 @@ class TransformersRuntime:
                 max_time=remaining,
             )
         tokens = tuple(int(token) for token in output[0, inputs.shape[1] :].tolist())
-        ended = bool(tokens) and tokens[-1] in self.eos_ids
-        text = self.tokenizer.decode(
-            tokens[:-1] if ended else tokens,
-            skip_special_tokens=False,
-            clean_up_tokenization_spaces=False,
-        )
-        return GeneratedResponse(
-            text=text,
-            token_ids=tokens,
-            finish_reason="eos" if ended else "length",
+        return decode_response(
+            self.tokenizer, tokens, self.eos_ids, self.config.enable_thinking
         )
 
     def peak_gpu_bytes(self) -> int | None:

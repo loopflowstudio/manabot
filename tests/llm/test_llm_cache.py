@@ -1,6 +1,7 @@
 """Cache admission verifies published shard hashes before offline inference."""
 
 from hashlib import sha256
+from itertools import count
 import json
 from pathlib import Path
 
@@ -38,8 +39,14 @@ def test_cache_rejects_corruption_without_trusting_cache_filenames(
             )
         ],
     )
-    receipt = cache.prepare(config, manifest, offline=True)
+    clock = count()
+    with monkeypatch.context() as timing:
+        timing.setattr(cache.time, "monotonic", lambda: float(next(clock)))
+        receipt = cache.prepare(config, manifest, offline=True)
     assert receipt.files == manifest.files
+    assert receipt.offline is True
+    assert receipt.acquisition_seconds == receipt.verification_seconds == 1
+    assert receipt.seconds == 2
     blob.write_bytes(b"bad bytes")
     with pytest.raises(ValueError, match="checksum mismatch"):
         cache.prepare(config, manifest, offline=True)

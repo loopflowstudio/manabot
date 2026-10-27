@@ -52,7 +52,9 @@ def _execute_game(
     torch.set_num_threads(1)
     responsible = None
     perf = EvalPerformance(
-        str(game.get("match_id", "game")), game.get("instrumentation", True)
+        str(game.get("match_id", "game")),
+        game.get("instrumentation", True),
+        latency_boundary="game worker submission through reply identity validation; excludes Command validation and native execution",
     )
     try:
         built = {}
@@ -158,9 +160,17 @@ def _execute_game(
                     time.monotonic(),
                 )
                 with perf.span("inference_round_trip", request=request.request_id):
-                    reply = infer(request)
-                    reply.validate(request)
-                    action = reply.action
+                    try:
+                        reply = infer(request)
+                        reply.validate(request)
+                        action = reply.action
+                    except BaseException:
+                        perf.latency(
+                            time.monotonic() - request.submitted, outcome="failed"
+                        )
+                        raise
+                    else:
+                        perf.latency(time.monotonic() - request.submitted)
                 perf.count(
                     "ipc_input_bytes",
                     sum(v.nbytes for v in request.observation.values()),

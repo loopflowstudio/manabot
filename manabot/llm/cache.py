@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from manabot.llm.schema import InferenceConfig
 
+MODEL_PATTERNS = ["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"]
+TOKENIZER_PATTERNS = ["*.json", "*.jinja", "*.txt", "*.model"]
+
 
 class CachedFile(BaseModel):
     name: str
@@ -25,6 +28,9 @@ class CacheReceipt(BaseModel):
     tokenizer_path: str
     files: list[CachedFile]
     seconds: float
+    acquisition_seconds: float | None = None
+    verification_seconds: float | None = None
+    offline: bool | None = None
 
 
 class CacheManifest(BaseModel):
@@ -46,16 +52,17 @@ def prepare(
         snapshot_download(
             config.model_id,
             revision=config.model_revision,
-            allow_patterns=["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=MODEL_PATTERNS,
             local_files_only=offline,
         )
     )
     tokenizer_path = snapshot_download(
         config.tokenizer_id,
         revision=config.tokenizer_revision,
-        allow_patterns=["*.json", "*.jinja", "*.txt", "*.model"],
+        allow_patterns=TOKENIZER_PATTERNS,
         local_files_only=offline,
     )
+    acquired = time.monotonic()
     index = model_path / "model.safetensors.index.json"
     if index.exists():
         payload = json.loads(index.read_text())
@@ -80,13 +87,17 @@ def prepare(
         ):
             raise ValueError(f"cached shard checksum mismatch: {name}")
         files.append(CachedFile(name=name, bytes=path.stat().st_size, sha256=actual))
+    finished = time.monotonic()
     return CacheReceipt(
         model_id=config.model_id,
         revision=config.model_revision,
         model_path=str(model_path),
         tokenizer_path=tokenizer_path,
         files=files,
-        seconds=time.monotonic() - started,
+        seconds=finished - started,
+        acquisition_seconds=acquired - started,
+        verification_seconds=finished - acquired,
+        offline=offline,
     )
 
 
