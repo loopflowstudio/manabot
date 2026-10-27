@@ -269,6 +269,7 @@ def test_thinking_selects_only_the_final_reference(prefix: str) -> None:
     )
     assert result.selected_reference == "A1" and result.origin == "initial"
     assert result.attempts[0].response.text == raw
+    assert "end your thinking" in result.attempts[0].messages[0].content
 
 
 @pytest.mark.parametrize(

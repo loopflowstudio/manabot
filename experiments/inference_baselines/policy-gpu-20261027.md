@@ -132,3 +132,13 @@ Software checks: 18 existing bounded-runner cases passed; the new trace fixture
 passed after its missing required legs field was corrected. Three focused
 trace/batch-window cases then passed. Ruff and diff checks passed. The artifact
 untracked check passed. These checks are separate from the actual GPU results.
+
+## Landing integration
+
+The landing sync incorporates main's newer engine/observation changes and hosted
+LLM provider support. The measurements above remain bound to their recorded
+pre-sync source/native identities; they do not certify current-world checkpoint
+admission or performance. No checkpoint or historical receipt is upgraded.
+Current-world software validation is separate from these empirical results.
+Further CPU/GPU comparisons, larger concurrency sweeps and Qwen efficiency
+remain later work; the two displayed reports are the reviewed GPU baseline.

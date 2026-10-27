@@ -10,12 +10,13 @@ import torch
 
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.identity import file_sha256
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterResult, OpenRouterSession
 from manabot.llm.schema import DecisionInput
 from manabot.llm.selection import REPAIR, decision_messages
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.verify.llm_game import GameConfig, play
+from manabot.verify.llm_game import CheckpointOpponent, GameConfig, play
 import managym
 
 
@@ -305,6 +306,38 @@ def test_hosted_game_replays_and_accounts_for_every_attempt(tmp_path: Path) -> N
     assert summary.prompt_tokens == 100 * summary.model_decisions
     assert summary.reasoning_tokens == 27 * summary.model_decisions
     assert summary.unpriced_attempts == 0
+    assert len(summary.model_latencies) == summary.model_decisions
+    assert summary.observations["llm_wait_and_dispatch"] >= 0
+    assert summary.llm_phases == {}
+
+
+def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
+    tmp_path: Path,
+) -> None:
+    config = GameConfig(max_decisions=8)
+    path = tmp_path / "policy.pt"
+    space = ObservationSpace(ObservationConfig(policy_input_version=1))
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(91)
+        agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_layers=1))
+    save_checkpoint(
+        agent,
+        space,
+        path,
+        player_configs=[
+            managym.PlayerConfig(str(seat), config.deck) for seat in (0, 1)
+        ],
+    )
+    opponent = CheckpointOpponent(path, file_sha256(path), path.stat().st_size)
+    summary = play(config, tmp_path / "game", None, opponent=opponent)
+    assert summary.replay_matches and summary.decisions == 8
+    assert summary.mode == "random-v-checkpoint-control"
+    assert summary.origins["checkpoint-stochastic-cpu"] > 0
+    assert summary.origins["random-control"] > 0
+    assert (
+        len(summary.opponent_latencies) == summary.origins["checkpoint-stochastic-cpu"]
+    )
+    assert summary.observations["policy_inference"] >= 0
 
 
 def test_checkpoint_opponent_preserves_legacy_inputs_and_replays(
