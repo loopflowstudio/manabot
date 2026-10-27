@@ -210,9 +210,9 @@ def build() -> Path:
     os.environ["ETUDE_HOME"] = str(HOME / "etude")
     db = statsdb(EXPERIMENT, MIRROR, rebuild=True)
     try:
-        db.execute(f"ATTACH '{EVIDENCE}' AS kept (READ_ONLY)")
-        db.execute("CREATE OR REPLACE TABLE evidence AS SELECT * FROM kept.evidence")
-        db.execute("DETACH kept")
+        db.execute(f"ATTACH '{EVIDENCE}' AS evidence_store (READ_ONLY)")
+        db.execute("CREATE OR REPLACE TABLE evidence AS SELECT * FROM evidence_store.main.evidence")
+        db.execute("DETACH evidence_store")
         db.execute("CHECKPOINT")
         kept = Path(db.execute("PRAGMA database_list").fetchall()[0][2])
     finally:
