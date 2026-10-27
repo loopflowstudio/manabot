@@ -1,7 +1,7 @@
 # Curriculum adapters: interim results
 
-Observed 2026-10-27T10:43:42.846617+00:00. **The final four-arm effects comparison is not
-yet available.** This interim report records the first complete U/E development
+Observed 2026-10-27T11:38:53.947448+00:00. **The final four-arm effects comparison is not
+yet available.** This interim report records the first complete U/M/E development
 results and the retained initial-evaluation failure while the experiment continues.
 
 The treatments are uniform U, moderate-matchup preference M (peaks near 33/67
@@ -12,15 +12,16 @@ selection, fixed evaluation deals, cost-based checkpoint selection and analysis.
 
 ## Update-200 development results
 
-On the predeclared 400-game development grid, **U scored 55.50% and E scored
-49.75%**. E was **5.75 percentage points below U** on these fixed deals.
-Both cohorts contain all 400 planned games, all valid, with zero missing or
-invalid games. Scores weight ordered deck cells and native seats equally.
+On the predeclared 400-game development grid, **U scored 55.50%, M scored
+53.00%, and E scored 49.75%**. M was **2.50 percentage points below U** and E
+was **5.75 percentage points below U** on these fixed deals. Each cohort contains
+all 400 planned games, all valid, with zero missing or invalid games. Scores
+weight ordered deck cells and native seats equally.
 
 | Arm | Valid / planned games | Observed full-grid score |
 |---|---|---|
 | U | 400 / 400 | 55.50% |
-| M | 0 / 400 | Pending |
+| M | 400 / 400 | 53.00% |
 | E | 400 / 400 | 49.75% |
 | ME | 0 / 400 | Pending |
 
@@ -28,14 +29,14 @@ This is an exploratory development point at equal update counts, not the primary
 cost-selected or held-out endpoint comparison. It describes the observed grid;
 it does not establish a general curriculum effect or final ranking. The
 preregistered four-arm paired confidence intervals and interaction remain
-pending M and ME. The single historical-control seed and maintenance/coverage
+pending ME. The single historical-control seed and maintenance/coverage
 confounds still apply. Missing arms are not assigned zero scores.
 
 The frozen identities, admitted rows, coverage and complete-grid bounds are
-published at `experiments/data/curriculum-175/development-200/early-outcomes.json`.
-The original U/E eval jobs were still running or delivering their receipts at
-the observation; delivered valid games are retained independently of that
-operational status.
+published at `experiments/data/curriculum-175/development-200/three-arm-outcomes.json`.
+The earlier U/E snapshot remains in `early-outcomes.json`. U/E jobs have now
+succeeded; M was still delivering its completion receipt at the observation.
+Delivered valid games are retained independently of that operational status.
 
 ## Initial-policy evidence
 
@@ -55,14 +56,14 @@ The initial weights are shared by the adaptive arms and the reused MTG-183
 control. This initial evaluation therefore establishes starting-policy context;
 it cannot establish that a curriculum helped or hurt.
 
-Training status below is the earlier 10:36 UTC snapshot; the live dashboard
-updates independently. The U/E scores above use the later frozen-data read.
+Training status below is the 11:36 UTC snapshot; the live dashboard updates
+independently. The scores above use the later frozen-data read.
 
-| Arm | Training at 10:36 UTC | Update-200 evaluation |
+| Arm | Training at 11:36 UTC | Update-200 evaluation |
 |---|---|---|
-| U | Reused MTG-183's genuine window through update 1,325 | Running |
-| M | Running, update 334 | Queued for first-available capacity |
-| E | Running, update 354 | Running |
+| U | Reused MTG-183's genuine window through update 1,325 | Succeeded; 400 valid games |
+| M | Running, update 399 | 400 valid games delivered; final receipt pending |
+| E | Running, update 419 | Succeeded; 400 valid games |
 | ME | Queued for an L4 | Awaits its genuine export and budget check |
 
 M's first remote update-200 request was refused before machine acquisition or
@@ -110,7 +111,13 @@ evaluation is submitted. No unused allowance moves between arms.
 
 Live provider billing revised U's elapsed-rate estimate downward when a
 closed-hour record arrived. These amounts remain provisional, not invoices;
-the lower estimate is not treated as extra spending permission.
+the lower estimate is not treated as extra spending permission. SDK run-share
+cost ends at command completion and can omit the paid evidence-delivery tail.
+Final inclusive costs must include each dedicated rental through confirmed
+machine deletion, plus setup failures and earlier evaluation charges. For
+example, U's completed update-200 rental spanned about 44 minutes, including
+final delivery, for a $0.184 elapsed-rate estimate at $0.25/hour; its retained
+$0.3125 rental ceiling remains the spending bound, not that provisional estimate.
 
 The final report still requires genuine trained-policy results across all four
 arms, paired whole-deal contrasts and uncertainty, deck/seat outcomes, exposure,
