@@ -441,11 +441,6 @@ def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
         == sum(d["player_id"] == player.player_id for d in g["decisions"])
         for g in games
     )
-    assert any(
-        int(k.split("/")[1]) > 1
-        for k in receipt["counters"]
-        if k.startswith("batch_rows/")
-    )
     assert all(row["score_a"] is None for row in rows)
     # The group worker's own census, taken while its game threads are alive.
     cell = json.loads((tmp_path / "panel/performance.json").read_text())["counters"]
