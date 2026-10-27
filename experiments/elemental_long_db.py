@@ -19,8 +19,8 @@ Tables, one row per stored fact, each with the eval run (`source`) it came from:
 Sources are an eval run's folder in the evaluations bucket (the Mac mini's
 `mtg183-eval-cards`, and earlier rented calibrations) or a rented batch's
 returned run folder (`experiments.elemental_long_rent.collect`). A table part
-Etude marked removed (`tables/<id>.removed`) is skipped. Nothing is deleted
-from any source.
+its writer merged away (listed in a `tables/<id>.removed` note) is skipped.
+Nothing is deleted from any source.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_db \\
         ingest-bucket mtg183-eval-cards
@@ -154,13 +154,18 @@ def ingest(
     source = folder.name
     keys = list(folder.keys())
     known = _known(db, source)
-    removed = {
-        Path(k).name.removesuffix(".removed") for k in keys if k.endswith(".removed")
+    # A writer's `tables/<id>.removed` note lists the parts it merged into a newer one.
+    retired = {
+        line
+        for key in keys
+        if key.endswith(".removed")
+        for line in (_read(folder, key) or b"").decode().splitlines()
+        if line
     }
     counts = {"matches": 0, "parts": 0, "evidence": 0, "skipped": 0}
 
-    def fetch(key: str) -> tuple[str, bytes]:
-        return key, folder.read(key)
+    def fetch(key: str) -> tuple[str, bytes | None]:
+        return key, _read(folder, key)
 
     pending = [k for k in keys if k not in known and not k.endswith(".removed")]
     matches = [
@@ -172,6 +177,8 @@ def ingest(
     evidence = [k for k in pending if k.startswith("artifacts/evidence/")]
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for key, data in pool.map(fetch, matches):
+            if data is None:
+                continue
             record = json.loads(data)
             db.execute(
                 "INSERT OR IGNORE INTO matches VALUES (?, ?, ?)",
@@ -182,7 +189,8 @@ def ingest(
         for key, data in pool.map(fetch, parts):
             found = _PART.match(key)
             assert found is not None
-            if found["id"] in removed:
+            if data is None or key in retired:
+                # Merged away by its writer, possibly while this listing ran.
                 counts["skipped"] += 1
             else:
                 frame = _parquet(data)
@@ -192,6 +200,8 @@ def ingest(
             db.execute("INSERT OR IGNORE INTO parts VALUES (?, ?)", [source, key])
         batch: list[list[Any]] = []
         for key, data in pool.map(fetch, evidence):
+            if data is None:
+                continue
             batch.append(
                 [source, key, hashlib.sha256(data).hexdigest(), len(data), data]
             )
@@ -203,6 +213,18 @@ def ingest(
             _evidence(db, batch)
             counts["evidence"] += len(batch)
     return counts
+
+
+def _read(folder: Folder, key: str) -> bytes | None:
+    """A key's bytes, or None when it vanished after listing (a live writer merged it)."""
+    try:
+        return folder.read(key)
+    except FileNotFoundError:
+        return None
+    except Exception as error:
+        if type(error).__name__ == "NoSuchKey":
+            return None
+        raise
 
 
 def _parquet(data: bytes) -> pd.DataFrame:
