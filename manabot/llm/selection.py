@@ -43,6 +43,21 @@ class ContextOverflow(ValueError):
     """The complete prompt plus its generation allowance exceeds the budget."""
 
 
+def _answer(text: str, thinking: bool | None) -> str:
+    """Qwen opens thinking in its prompt; require exactly one closing boundary.
+
+    Never search reasoning for a legal reference or accept an unfinished thought.
+    Raw text and tokens remain unchanged in the response receipt.
+    """
+    if thinking is not True:
+        return text.strip()
+    if text.startswith("<think>"):
+        text = text[len("<think>") :]
+    if text.count("</think>") != 1 or "<think>" in text:
+        return ""
+    return text.split("</think>", 1)[1].strip()
+
+
 def select(
     decision: DecisionInput,
     config: InferenceConfig,
@@ -68,7 +83,12 @@ def select(
                 decision.text
                 + "\n\nLegal action references:\n"
                 + "\n".join(decision.legal_references)
-                + "\n\nReturn exactly one listed action reference, with no other text."
+                + (
+                    "\n\nReason about the decision, then end your thinking and return "
+                    "exactly one listed action reference as the final answer, with no other text."
+                    if config.enable_thinking is True
+                    else "\n\nReturn exactly one listed action reference, with no other text."
+                )
             ),
         ),
     )
@@ -130,7 +150,7 @@ def select(
                 )
                 attempts[-1] = attempt
             validation_start = time.monotonic()
-            reference = response.text.strip()
+            reference = _answer(response.text, config.enable_thinking)
             error = None
             if response.finish_reason != "eos":
                 error = "incomplete response: generation limit reached"

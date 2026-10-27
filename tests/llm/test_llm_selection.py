@@ -252,7 +252,6 @@ def test_invalid_reference_lists_fail_before_inference(
         {"max_new_tokens": 100},
         {"deadline_seconds": 0},
         {"deadline_seconds": float("inf")},
-        {"enable_thinking": True},
     ],
 )
 def test_unpinned_or_unbounded_configuration_is_rejected(
@@ -260,6 +259,29 @@ def test_unpinned_or_unbounded_configuration_is_rejected(
 ) -> None:
     with pytest.raises(ValidationError):
         config(**settings)
+
+
+@pytest.mark.parametrize("prefix", ["", "<think>"])
+def test_thinking_selects_only_the_final_reference(prefix: str) -> None:
+    raw = prefix + "Consider A0 but choose A1.</think>\nA1"
+    result = select(
+        decision(), config(enable_thinking=True), ScriptedRuntime([response(raw)])
+    )
+    assert result.selected_reference == "A1" and result.origin == "initial"
+    assert result.attempts[0].response.text == raw
+
+
+@pytest.mark.parametrize(
+    "raw", ["A0", "A0</think>A1</think>A0", "A0</think>I choose A1"]
+)
+def test_incomplete_or_ambiguous_thinking_requires_repair(raw: str) -> None:
+    result = select(
+        decision(),
+        config(enable_thinking=True),
+        ScriptedRuntime([response(raw), response("Reason.</think>A1")]),
+    )
+    assert result.origin == "retry" and result.selected_reference == "A1"
+    assert result.attempts[0].validation_error is not None
 
 
 def test_phase_timings_preserve_failed_generation_and_pending_encode(

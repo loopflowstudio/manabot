@@ -43,8 +43,9 @@ class InferenceConfig(Record):
     deadline_seconds: float = Field(gt=0, allow_inf_nan=False)
     fallback_seed: int = Field(strict=True)
     decoding: Literal["greedy"] = "greedy"
-    # None preserves the tokenizer's default; reasoning output is not supported.
-    enable_thinking: Literal[False] | None = None
+    # Explicit thinking uses Qwen's closing </think> delimiter; the final answer
+    # alone must be one legal reference. None preserves the historical protocol.
+    enable_thinking: bool | None = None
 
     @model_validator(mode="after")
     def validate_budget(self) -> "InferenceConfig":
@@ -68,6 +69,8 @@ class GeneratedResponse(Record):
     text: str
     token_ids: tuple[int, ...]
     finish_reason: Literal["eos", "length"]
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    answer_tokens: int | None = Field(default=None, ge=0)
 
 
 class RuntimeIdentity(Record):

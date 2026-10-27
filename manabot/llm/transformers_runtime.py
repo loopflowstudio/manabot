@@ -157,10 +157,26 @@ class TransformersRuntime:
             skip_special_tokens=False,
             clean_up_tokenization_spaces=False,
         )
+        reasoning_tokens = answer_tokens = None
+        if self.config.enable_thinking is True:
+            boundary = self.tokenizer.encode("</think>", add_special_tokens=False)
+            if len(boundary) != 1:
+                raise ValueError(
+                    "thinking requires a single-token Qwen closing delimiter"
+                )
+            content = tokens[:-1] if ended else tokens
+            if content.count(boundary[0]) == 1:
+                split = content.index(boundary[0])
+                reasoning_tokens = split
+                answer_tokens = len(content) - split - 1
+            elif boundary[0] not in content:
+                reasoning_tokens, answer_tokens = len(content), 0
         return GeneratedResponse(
             text=text,
             token_ids=tokens,
             finish_reason="eos" if ended else "length",
+            reasoning_tokens=reasoning_tokens,
+            answer_tokens=answer_tokens,
         )
 
     def peak_gpu_bytes(self) -> int | None:

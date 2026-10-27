@@ -128,3 +128,40 @@ def test_sequence_uses_one_session_and_retains_individual_game_summaries(
     assert json.loads((out / "game-001/session-state.json").read_text())["games"] == 2
     assert json.loads((out / "session-cleanup.json").read_text())["closed"]
     assert json.loads((out / "readiness.json").read_text())["seconds"] == 7
+
+
+def test_reasoning_campaign_schedule_is_complete_and_balanced() -> None:
+    from experiments.elemental_grid import DECKS
+    from experiments.qwen_mtg183 import Campaign, schedule
+
+    games = schedule(Campaign())
+    assert len(games) == 100
+    assert {(g.qwen_deck, g.policy_deck) for g in games} == {
+        (a, b) for a in DECKS for b in DECKS
+    }
+    assert sum(g.config.model_seat for g in games) == 50
+    assert len({g.config.seed for g in games}) == 100
+    assert all(g.config.skip_trivial for g in games)
+    assert [g.model_dump() for g in games] == [
+        g.model_dump() for g in schedule(Campaign())
+    ]
+
+
+def test_campaign_archive_retains_completed_and_partial_games(tmp_path: Path) -> None:
+    import tarfile
+
+    from experiments.qwen_mtg183 import collect
+
+    out = tmp_path / "outputs"
+    out.mkdir()
+    record = tmp_path / "game-records/game-000"
+    record.mkdir(parents=True)
+    (record / "progress.json").write_text('{"decisions": 1}')
+    collect(out)
+    (record / "summary.json").write_text('{"completed": true}')
+    collect(out)
+    with tarfile.open(out / "game-000.tar.gz") as archive:
+        assert "game-000/summary.json" in archive.getnames()
+    before = (out / "game-000.tar.gz").read_bytes()
+    collect(out)
+    assert (out / "game-000.tar.gz").read_bytes() == before
