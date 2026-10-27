@@ -316,6 +316,7 @@ launching writer). Throughput, census and batch targets are still unmeasured.
 
 ## Check result
 
+Compress, 2026-10-27, after `c3bd35895`: checkpoint registrations in `elemental_grid.play_group` and `mtg186_eval.arena` pass their own ABI as keyword arguments (no default-space fingerprints computed only to be overridden); `uv run --extra dev pytest tests/eval/test_elemental_grid.py tests/eval/test_mtg186_cards.py tests/eval/test_etude_player_migration.py -q` → 13 passed (no test reaches these two functions; the calibration's `machine` smoke does).
 Compress, 2026-10-27: `InferenceRuntime.close` relies on `ChildProcess.kill`'s liveness guard; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 24 passed, 1 skipped.
 Realign, 2026-10-27: `_InChildPlayers`/`in_child` and the supervision header are in `manabot/sim` (grep); calibration has 0 valid games so far.
 Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
