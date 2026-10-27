@@ -50,7 +50,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
 export function replayLogEntries(trace: Trace): GameLogEntry[] {
   return trace.events.map((event, index) => ({
     id: `replay-${index}`,
-    actor: event.actor,
-    text: `${event.actor === 'hero' ? 'Hero' : 'Villain'}: ${event.action_description}`,
+    actor: event.auto ? 'system' : event.actor,
+    text: `${event.auto ? 'Auto: ' : ''}${event.actor === 'hero' ? 'Hero' : 'Villain'}: ${event.action_description}`,
   }));
 }

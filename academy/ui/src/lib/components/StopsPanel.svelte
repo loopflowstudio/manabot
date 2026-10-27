@@ -38,7 +38,7 @@
         checked={stops.auto_pass}
         onchange={(event) => onAutoPassChange?.(event.currentTarget.checked)}
       />
-      Auto-pass priority (MTGO stops)
+      Advance forced steps and use priority stops
     </label>
 
     <div class={stops.auto_pass ? '' : 'pointer-events-none opacity-50'}>
@@ -71,7 +71,7 @@
           disabled={!stops.auto_pass}
           onchange={(event) => onStopOnStackChange?.(event.currentTarget.checked)}
         />
-        Always stop when the stack is not empty
+        Stop when the stack offers a response choice
       </label>
     </div>
 

@@ -846,7 +846,7 @@ class GameSession:
         self.content_hash = UNVERSIONED_CONTENT_HASH
         self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
-        self._pending_villain_log: list[str] = []
+        self._pending_action_log: list[str] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -923,9 +923,8 @@ class GameSession:
             raise ValueError("Failed to load the selected opponent.") from exc
 
         try:
-            # A sole legal color or payment is still an explicit decision.
-            # Configured priority stops automate passes at the Academy layer,
-            # where their Commands and provenance are retained.
+            # Forced actions and priority passes are automated at the Academy
+            # layer so every native step retains its Command and provenance.
             env = managym.Env(seed=seed, skip_trivial=False)
             obs, _ = env.reset(config.to_rust())
         except BaseException as exc:
@@ -998,7 +997,7 @@ class GameSession:
         )
         self._trace_saved = False
         self.trace_id = None
-        self._pending_villain_log = []
+        self._pending_action_log = []
         self.stops = {
             side: list(steps) for side, steps in (config.stops or DEFAULT_STOPS).items()
         }
@@ -1459,8 +1458,15 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
-        if actor == "villain":
-            self._pending_villain_log.append(f"Villain: {action_description}")
+        if auto and len(actions) == 1:
+            label = (
+                f"Opponent: {action_description}"
+                if actor == "villain"
+                else action_description
+            )
+            self._pending_action_log.append(f"Auto: {label}")
+        elif actor == "villain":
+            self._pending_action_log.append(f"Villain: {action_description}")
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
@@ -1532,6 +1538,15 @@ class GameSession:
             steps += 1
 
             context = self._build_decision_context(self.obs, viewer=1)
+            if self.auto_pass and len(context.actions) == 1:
+                self._step_and_record(
+                    actor="villain",
+                    action_index=context.actions[0]["index"],
+                    actions=context.actions,
+                    context=context,
+                    auto=True,
+                )
+                continue
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -1574,9 +1589,9 @@ class GameSession:
     def _advance(self) -> None:
         """Run the game forward to the next point the hero must see.
 
-        Alternates villain auto-play with hero auto-passes until the game is
-        over or a hero decision surfaces per the stop rules. Bounded so a
-        stuck engine cannot spin the server forever.
+        Alternates villain play with forced hero actions and priority passes.
+        Each automatic action uses the same recorded authority path as a click.
+        Bounded so a stuck engine cannot spin the server forever.
         """
         if (
             self.watch_mode
@@ -1586,7 +1601,7 @@ class GameSession:
         ):
             return
 
-        hero_passes = 0
+        hero_steps = 0
         while True:
             self._auto_play_villain()
             if self.obs.game_over:
@@ -1595,26 +1610,28 @@ class GameSession:
 
             # Hero is to act from here on.
             self._maybe_clear_f6()
-            if self._should_surface():
+            actions = describe_actions(self.obs)
+            forced = self.auto_pass and len(actions) == 1
+            if not forced and self._should_surface():
                 return
 
-            if hero_passes >= MAX_AUTOPLAY_STEPS:
-                raise RuntimeError("Hero auto-pass exceeded safety step limit.")
-            hero_passes += 1
+            if hero_steps >= MAX_AUTOPLAY_STEPS:
+                raise RuntimeError("Hero automatic play exceeded safety step limit.")
+            hero_steps += 1
 
-            actions = describe_actions(self.obs)
-            pass_index = _pass_priority_index(actions)
-            if pass_index is None:
-                # Defensive: _should_surface only lets pure priority windows
-                # through, which always contain a pass action.
+            action_index = (
+                actions[0]["index"] if forced else _pass_priority_index(actions)
+            )
+            if action_index is None:
                 return
             self._step_and_record(
                 actor="hero",
-                action_index=pass_index,
+                action_index=action_index,
                 actions=actions,
                 auto=True,
             )
-            self._auto_passed_since_surface += 1
+            if not forced:
+                self._auto_passed_since_surface += 1
 
     def _maybe_clear_f6(self) -> None:
         if self._f6_turn is None or self.obs is None:
@@ -1660,15 +1677,15 @@ class GameSession:
             "auto_pass": self.auto_pass,
         }
 
-    def _drain_pending_villain_log(self) -> list[str]:
-        pending = list(self._pending_villain_log)
-        self._pending_villain_log = []
+    def _drain_pending_action_log(self) -> list[str]:
+        pending = list(self._pending_action_log)
+        self._pending_action_log = []
         return pending
 
     def _drain_surface_metadata(self) -> dict[str, Any]:
         """Drain compatibility narration outside the canonical frame."""
         payload: dict[str, Any] = {}
-        log = self._drain_pending_villain_log()
+        log = self._drain_pending_action_log()
         auto_passed = self._auto_passed_since_surface
         self._auto_passed_since_surface = 0
         if log:

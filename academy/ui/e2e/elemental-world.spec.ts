@@ -1,3 +1,4 @@
+import { selectDeck } from './deck-selection';
 import { expect, test } from '@playwright/test';
 import manifest from '../src/lib/packs/elemental-world/v1/manifest.json' with { type: 'json' };
 import type { ExperienceFrame } from '../src/lib/types';
@@ -16,15 +17,12 @@ for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg'
     });
     await page.goto('/');
     await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-    for (const seat of ['hero', 'villain']) {
-      const choices = page.getByTestId(`deck-select-${seat}`).locator('option');
-      for (const deck of manifest.roster) {
-        await expect(choices.filter({ hasText: deck.display_name })).toHaveAttribute('value', deck.deck_id);
-      }
+    for (const deck of manifest.roster) {
+      await expect(page.getByTestId(`browse-${deck.deck_id}`)).toBeVisible();
     }
     await page.getByTestId('opponent-select').selectOption('passive');
-    await page.getByTestId('deck-select-hero').selectOption(hero);
-    await page.getByTestId('deck-select-villain').selectOption(villain);
+    await selectDeck(page, 'hero', hero);
+    await selectDeck(page, 'villain', villain);
     const previousMatch = frame?.match_id;
     await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
     await expect.poll(() => frame?.match_id).not.toBe(previousMatch);

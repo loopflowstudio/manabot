@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+# Checkpoint admission imports the engine before the ordinary launcher starts.
+uv run --python 3.12 --locked --only-group play-runtime python -c \
+  'from scripts.play import ensure_native; ensure_native()'
+exec uv run --python 3.12 --locked --no-default-groups --group play-runtime --extra artifacts scripts/play_elemental.py "$@"
