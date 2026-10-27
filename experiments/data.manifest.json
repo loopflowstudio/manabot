@@ -886,6 +886,10 @@
    "sha256": "8ab1c6db007ef6e8ed2718ba0996caa6a02fea95b278ab61b43947a5779113e5",
    "bytes": 1969
   },
+  "experiments/data/curriculum-175/development-200/early-outcomes.json": {
+   "sha256": "5050757d79a00304625534ee9cbf7d54e329f9abdef710cdcc660215aa6f21c2",
+   "bytes": 179269
+  },
   "experiments/data/curriculum-175/initial-evaluation/operations.json": {
    "sha256": "4243717944b87503caba87a495a8bc9309f008b63fca6d1a680678326f3318bb",
    "bytes": 78208

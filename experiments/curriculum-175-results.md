@@ -1,8 +1,8 @@
 # Curriculum adapters: interim results
 
-Observed 2026-10-27, 10:36 UTC. **The effects of M, E and ME are not yet
-measured.** This report records genuine results and operational failures while
-the four-arm experiment continues; it is not the final comparison.
+Observed 2026-10-27T10:43:42.846617+00:00. **The final four-arm effects comparison is not
+yet available.** This interim report records the first complete U/E development
+results and the retained initial-evaluation failure while the experiment continues.
 
 The treatments are uniform U, moderate-matchup preference M (peaks near 33/67
 and 67/33), value-target error E, and their normalized-rank mixture ME. Jack's
@@ -10,7 +10,34 @@ latest allocation is **$10 inclusive per arm, $40 total**, superseding the
 original $5-per-arm goal. The [protocol](protocols/curriculum-175.md) defines
 selection, fixed evaluation deals, cost-based checkpoint selection and analysis.
 
-## Evidence available
+## Update-200 development results
+
+On the predeclared 400-game development grid, **U scored 55.50% and E scored
+49.75%**. E was **5.75 percentage points below U** on these fixed deals.
+Both cohorts contain all 400 planned games, all valid, with zero missing or
+invalid games. Scores weight ordered deck cells and native seats equally.
+
+| Arm | Valid / planned games | Observed full-grid score |
+|---|---|---|
+| U | 400 / 400 | 55.50% |
+| M | 0 / 400 | Pending |
+| E | 400 / 400 | 49.75% |
+| ME | 0 / 400 | Pending |
+
+This is an exploratory development point at equal update counts, not the primary
+cost-selected or held-out endpoint comparison. It describes the observed grid;
+it does not establish a general curriculum effect or final ranking. The
+preregistered four-arm paired confidence intervals and interaction remain
+pending M and ME. The single historical-control seed and maintenance/coverage
+confounds still apply. Missing arms are not assigned zero scores.
+
+The frozen identities, admitted rows, coverage and complete-grid bounds are
+published at `experiments/data/curriculum-175/development-200/early-outcomes.json`.
+The original U/E eval jobs were still running or delivering their receipts at
+the observation; delivered valid games are retained independently of that
+operational status.
+
+## Initial-policy evidence
 
 The common initial policy's held-out evaluation delivered **1,600 valid games
 of 2,000 planned**, with **0 delivered invalid games and 400 missing games**.
@@ -28,7 +55,10 @@ The initial weights are shared by the adaptive arms and the reused MTG-183
 control. This initial evaluation therefore establishes starting-policy context;
 it cannot establish that a curriculum helped or hurt.
 
-| Arm | Training at this observation | Update-200 evaluation |
+Training status below is the earlier 10:36 UTC snapshot; the live dashboard
+updates independently. The U/E scores above use the later frozen-data read.
+
+| Arm | Training at 10:36 UTC | Update-200 evaluation |
 |---|---|---|
 | U | Reused MTG-183's genuine window through update 1,325 | Running |
 | M | Running, update 334 | Queued for first-available capacity |
@@ -61,7 +91,7 @@ Their immutable content hashes are in [the artifact manifest](data.manifest.json
 Fetch them with:
 
 ```sh
-uv run --extra artifacts python -m manabot.data fetch experiments/data/curriculum-175/initial-evaluation
+uv run --extra artifacts python -m manabot.data fetch experiments/data/curriculum-175
 ```
 
 The original match records and tables also remain in Etude's
