@@ -37,6 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 from typing import Any, Protocol
 
@@ -54,6 +55,8 @@ DATABASE = HOME / "mtg183-eval.duckdb"
 # The published database: one object, replaced on each publish.
 PUBLISHED = f"{PREFIX}/mtg183/mtg183-eval.duckdb"
 _EVIDENCE = "artifacts/evidence/"
+# A rated checkpoint's player name, `uNNNNNN` (its update).
+_UPDATES = re.compile(r"u\d{6}")
 
 
 class Folder(Protocol):
@@ -203,15 +206,62 @@ def _insert(db: duckdb.DuckDBPyConnection, rows: list[list[Any]]) -> None:
     db.commit()
 
 
+def place(record: bytes) -> bytes | None:
+    """A match record whose checkpoints declare where they stood, or None if it already does.
+
+    Matches played before MTG-183's seats declared `at` and `line` (etude-sdk
+    0.2.6) leave Etude's report no position for a checkpoint no training run of
+    this experiment recorded. Both are part of no key, so declaring them keeps
+    the match's key and file; the record is upgraded to the current format.
+    """
+    from etude.eval.records import MatchRecord, Model
+
+    from experiments.elemental_long_eval import LINE
+
+    found = MatchRecord.model_validate_json(record)
+    players = []
+    for seated in found.match.players:
+        name = seated.name
+        if isinstance(seated, Model) and _UPDATES.fullmatch(name):
+            ref = seated.checkpoint.model_copy(
+                update={"at": {"updates": int(name[1:])}, "line": LINE}
+            )
+            seated = seated.model_copy(update={"checkpoint": ref})
+        players.append(seated)
+    placed = found.model_copy(
+        update={"match": found.match.model_copy(update={"players": tuple(players)})}
+    )
+    if placed.match.key != found.match.key:
+        raise ValueError(f"declaring positions changed match {found.match.key}")
+    if placed == found:
+        return None
+    return placed.model_dump_json().encode()
+
+
+def _place_mirror() -> int:
+    """Declare positions in every mirrored match record; returns how many changed."""
+    changed = 0
+    for path in MIRROR.glob("*/*/matches/*.json"):
+        placed = place(path.read_bytes())
+        if placed is not None:
+            path.with_name(path.name + ".partial").write_bytes(placed)
+            path.with_name(path.name + ".partial").replace(path)
+            changed += 1
+    return changed
+
+
 def build() -> Path:
     """Etude's statsdb over the mirror, with the evidence table, as `DATABASE`."""
     from etude.eval.query import statsdb
 
+    _place_mirror()
     os.environ["ETUDE_HOME"] = str(HOME / "etude")
     db = statsdb(EXPERIMENT, MIRROR, rebuild=True)
     try:
         db.execute(f"ATTACH '{EVIDENCE}' AS evidence_store (READ_ONLY)")
-        db.execute("CREATE OR REPLACE TABLE evidence AS SELECT * FROM evidence_store.main.evidence")
+        db.execute(
+            "CREATE OR REPLACE TABLE evidence AS SELECT * FROM evidence_store.main.evidence"
+        )
         db.execute("DETACH evidence_store")
         db.execute("CHECKPOINT")
         kept = Path(db.execute("PRAGMA database_list").fetchall()[0][2])
