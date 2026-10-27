@@ -263,8 +263,7 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 ## Check result
 
-Compress (2026-10-27; group-worker budget names the no-runtime case, not "scalar"): `uv run --extra dev pytest tests/sim/test_child_surface.py tests/eval/test_local_evaluation.py -q` → 26 passed. No other cuts found; delete list complete.
-Implement, 2026-10-27, at `fbbbd517a`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped. PR #389 CI was pending at `fc5c96237`; the full suite belongs to gate/CI.
+Realign, 2026-10-27, at `46d52b1e0`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped (the stale `cold_scalar` argument was already removed in `fbbbd517a`). Full suite belongs to gate/CI.
 
 Open for gate (from earlier passes, history in git):
 `test_arena_lost_worker_retains_acknowledged_command` (both cases report
