@@ -76,7 +76,6 @@ pub enum PromptKind {
     Waterbend,
     Discard,
     LegendRule,
-    OrderTriggers,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -85,7 +84,6 @@ pub enum OfferVerb {
     ActivateAbility,
     Cast,
     ChooseMode,
-    ChooseTrigger,
     ChooseTarget,
     DeclareAttacker,
     DeclareAttackers,
@@ -1943,7 +1941,6 @@ fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOff
         ActionSpaceKind::Waterbend => Ok(PromptKind::Waterbend),
         ActionSpaceKind::Discard => Ok(PromptKind::Discard),
         ActionSpaceKind::LegendRule => Ok(PromptKind::LegendRule),
-        ActionSpaceKind::OrderTriggers => Ok(PromptKind::OrderTriggers),
         ActionSpaceKind::GameOver => Err(StructuredOfferError::GameOver),
     }
 }
@@ -1969,7 +1966,6 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
         Action::Decline { .. } => OfferVerb::Decline,
         Action::PayCost { .. } => OfferVerb::PayCost,
         Action::ChooseMode { .. } => OfferVerb::ChooseMode,
-        Action::ChooseTrigger { .. } => OfferVerb::ChooseTrigger,
         Action::WaterbendTap { .. } => OfferVerb::WaterbendTap,
     }
 }

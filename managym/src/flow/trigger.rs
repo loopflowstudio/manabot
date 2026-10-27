@@ -1,49 +1,7 @@
-//! Waiting trigger occurrences and the resumable, two-pass placement round.
-//! Collection owns arrivals; placement owns a detached batch until every
-//! controller has placed its abilities (CR 603.3b, 2026-09-25 rules snapshot).
-
 use crate::state::{
     ability::Effect,
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
 };
-
-/// Stable occurrence identity; never a strategic ordering preference.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct TriggerId(pub u64);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum TriggerOrderingClass {
-    Ordinary,
-    AbilityTriggered,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct TriggerPlacement {
-    pub remaining: Vec<PendingTrigger>,
-    pub active: PlayerId,
-    /// Ordinary AP/NAP, then ability-triggered AP/NAP. Four means complete.
-    pub group: u8,
-    pub placing: Option<PendingTrigger>,
-}
-
-impl TriggerPlacement {
-    pub fn controller(&self) -> PlayerId {
-        if self.group.is_multiple_of(2) {
-            self.active
-        } else {
-            PlayerId(1 - self.active.0)
-        }
-    }
-
-    pub fn in_current_group(&self, trigger: &PendingTrigger) -> bool {
-        let class = if self.group < 2 {
-            TriggerOrderingClass::Ordinary
-        } else {
-            TriggerOrderingClass::AbilityTriggered
-        };
-        self.group < 4 && trigger.controller == self.controller() && trigger.ordering_class == class
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PendingTrigger {
@@ -58,8 +16,7 @@ pub struct PendingTrigger {
     pub source_lki: Option<ObjectLki>,
     pub ability_index: usize,
     pub controller: PlayerId,
-    pub id: TriggerId,
-    pub ordering_class: TriggerOrderingClass,
+    pub enqueue_order: u64,
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
     pub context: Option<Target>,

@@ -9,14 +9,13 @@ pub const PLAYER_DIM: usize = 40;
 pub const CARD_DIM: usize = 41;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
 pub const PERMANENT_DIM: usize = 28;
-pub const ACTION_TYPE_DIM: usize = 17;
+pub const ACTION_TYPE_DIM: usize = 16;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
 pub const ACTION_DECLARED_INDEX: usize = ACTION_TYPE_DIM;
 pub const ACTION_MODE_INDEX: usize = ACTION_DECLARED_INDEX + 1;
 pub const ACTION_ABILITY_INDEX: usize = ACTION_MODE_INDEX + 1;
-pub const ACTION_CONTINUATION_INDEX: usize = ACTION_ABILITY_INDEX + 1;
-pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 5;
+pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 4;
 /// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
 pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
 pub const EVENT_DIM: usize = 7;
@@ -333,19 +332,6 @@ pub fn encode_into(
         }
     }
     for action in &obs.action_space.actions {
-        if let Some(index) = action.continuation_index {
-            if !config.relations || index >= obs.continuation.len() {
-                return Err(ObservationEncodeError::Capacity {
-                    field: "action continuation reference",
-                    capacity: if config.relations {
-                        obs.continuation.len()
-                    } else {
-                        0
-                    },
-                    actual: index + 1,
-                });
-            }
-        }
         for index in [action.mode_index, action.ability_index]
             .into_iter()
             .flatten()
@@ -729,9 +715,6 @@ fn encode_actions(
         row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
         row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
-        row[ACTION_CONTINUATION_INDEX] = action
-            .continuation_index
-            .map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
@@ -871,7 +854,6 @@ mod tests {
                         description: None,
                         mode_index: None,
                         ability_index: None,
-                        continuation_index: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -880,7 +862,6 @@ mod tests {
                         description: None,
                         mode_index: None,
                         ability_index: None,
-                        continuation_index: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -889,7 +870,6 @@ mod tests {
                         description: None,
                         mode_index: None,
                         ability_index: None,
-                        continuation_index: None,
                     },
                 ],
                 focus: Vec::new(),
@@ -991,7 +971,6 @@ mod tests {
                 description: None,
                 mode_index: None,
                 ability_index: None,
-                continuation_index: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -1154,7 +1133,6 @@ mod tests {
                 description: None,
                 mode_index: None,
                 ability_index: None,
-                continuation_index: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

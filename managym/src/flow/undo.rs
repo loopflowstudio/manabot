@@ -17,7 +17,7 @@ use crate::{
         event_log::EventLog,
         game::{Game, PendingChoice},
         priority::PriorityState,
-        trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
+        trigger::{DelayedTrigger, ExileLink, PendingTrigger},
         turn::TurnState,
     },
     state::{
@@ -167,7 +167,7 @@ enum UndoEntry {
     EventQueue(EventQueue, EventLog),
     EventLength(EventQueue, usize),
     PendingTriggers(Vec<PendingTrigger>),
-    TriggerPlacement(Box<Option<TriggerPlacement>>),
+    PendingTriggerChoice(Box<Option<PendingTrigger>>),
     DelayedTriggers(Vec<DelayedTrigger>),
     ExileLinks(Vec<ExileLink>),
     SuspendedDecision(Box<Option<SuspendedResolution>>),
@@ -227,9 +227,9 @@ impl UndoEntry {
                 Some(_) => size_of::<PendingChoice>(),
                 None => 0,
             },
-            Self::TriggerPlacement(trigger) => (**trigger).as_ref().map_or(0, |p| {
-                size_of::<TriggerPlacement>() + vec_bytes(&p.remaining)
-            }),
+            Self::PendingTriggerChoice(trigger) => (**trigger)
+                .as_ref()
+                .map_or(0, |_| size_of::<PendingTrigger>()),
             Self::SuspendedDecision(decision) => (**decision)
                 .as_ref()
                 .map_or(0, |_| size_of::<SuspendedResolution>()),
@@ -299,7 +299,7 @@ impl UndoEntry {
                 game.state.observation_events.truncate(old);
             }
             Self::PendingTriggers(old) => game.state.pending_triggers = old,
-            Self::TriggerPlacement(old) => game.state.trigger_placement = *old,
+            Self::PendingTriggerChoice(old) => game.state.pending_trigger_choice = *old,
             Self::DelayedTriggers(old) => game.state.delayed_triggers = old,
             Self::ExileLinks(old) => game.state.exile_links = old,
             Self::SuspendedDecision(old) => game.state.suspended_decision = *old,
@@ -634,7 +634,7 @@ impl Game {
         self.journal_suspended_decision();
         self.journal_pending_events();
         self.journal_pending_triggers();
-        self.journal_trigger_placement();
+        self.journal_pending_trigger_choice();
         self.journal_delayed_triggers();
         self.journal_exile_links();
         self.journal_trigger_enqueue_counter();
@@ -674,9 +674,9 @@ impl Game {
         ));
     }
 
-    pub(crate) fn journal_trigger_placement(&mut self) {
-        self.record_undo(UndoEntry::TriggerPlacement(Box::new(
-            self.state.trigger_placement.clone(),
+    pub(crate) fn journal_pending_trigger_choice(&mut self) {
+        self.record_undo(UndoEntry::PendingTriggerChoice(Box::new(
+            self.state.pending_trigger_choice.clone(),
         )));
     }
 

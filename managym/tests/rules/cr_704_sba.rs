@@ -262,8 +262,6 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
 
     s.pass_priority();
 
-    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
-    s.step_action(0);
     let mut stacked_sources: Vec<_> = s
         .game()
         .state

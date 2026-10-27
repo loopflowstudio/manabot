@@ -251,8 +251,7 @@ impl Game {
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
             .iter()
-            .find(|frame| frame.kind == 8)
-            .or_else(|| frames.iter().find(|frame| frame.kind == 4))
+            .find(|frame| frame.kind == 4)
             .or_else(|| frames.iter().find(|frame| frame.kind == 5))
         {
             let object = |reference: crate::agent::continuation::VisibleReference| {
@@ -335,24 +334,6 @@ impl Game {
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
-        }
-        if let Some(placement) = &self.state.trigger_placement {
-            view.stage = if placement.placing.is_some() {
-                "trigger_targets"
-            } else {
-                "order_triggers"
-            }
-            .into();
-            view.instruction = if let Some(trigger) = &placement.placing {
-                let description = crate::agent::ability_description::trigger_description(
-                    &self.state.cards[trigger.source_card],
-                    trigger.ability_index,
-                    trigger.inline_effects.as_deref(),
-                );
-                format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
-            } else {
-                "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
-            };
         }
         Some(view)
     }

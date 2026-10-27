@@ -59,7 +59,6 @@ _SPACES = (
     "waterbend",
     "discard",
     "legend rule",
-    "order triggers",
 )
 _VERBS = (
     "play_land",
@@ -78,7 +77,6 @@ _VERBS = (
     "waterbend_tap",
     "learn_take_lesson",
     "learn_discard",
-    "choose_trigger",
 )
 _STAGES = frozenset(
     (
@@ -101,8 +99,6 @@ _STAGES = frozenset(
         "discard",
         "select_milled",
         "legend_rule",
-        "order_triggers",
-        "trigger_targets",
     )
 )
 
@@ -349,7 +345,6 @@ class _Renderer:
                 "decline": "Decline / finish the offered choice",
                 "pay_cost": "Pay the offered cost",
                 "choose_mode": "Choose mode",
-                "choose_trigger": "Put the triggered ability on the stack next",
                 "waterbend_tap": "Tap for cost",
                 "learn_take_lesson": "Take Lesson",
                 "learn_discard": "Discard for Learn",
@@ -363,8 +358,6 @@ class _Renderer:
             "declare_blocker",
         ):
             details.insert(0, f"declaration {_yes(action.declared)}")
-        if action.continuation_index is not None:
-            details.append(f"trigger context R{action.continuation_index + 1}")
         if details:
             label += "; " + "; ".join(details)
         if action.description:
@@ -374,7 +367,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -403,7 +396,6 @@ class _Renderer:
                         "Learn",
                         "discard",
                         "legend rule",
-                        "order triggers",
                     ),
                     relation.decision,
                 )
@@ -642,7 +634,8 @@ class _Renderer:
             stack_frame = capture.frames[index]
             if stack_frame.kind != int(item.kind) + 1:
                 raise TextEncodingError("stack/continuation order mismatch")
-            # Shared native frames own exact target incarnations and clauses.
+            # Frozen schema 6 lacks target incarnation/clause information. The
+            # shared native frames are authoritative for current relationships.
             targets = [
                 f"clause {target.clause + 1}: {self.fact_reference(target.reference)}"
                 for target in stack_frame.targets
@@ -652,8 +645,6 @@ class _Renderer:
                 f"controller {self.name(item.controller_id)}",
                 f"source {source}",
             ]
-            if item.description:
-                details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
             if targets:
                 details.append("targets " + ", ".join(targets))

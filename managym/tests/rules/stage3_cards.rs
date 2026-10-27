@@ -130,7 +130,7 @@ fn resolve_everything(s: &mut Scenario) {
     s.advance_until(
         |sc| {
             sc.game().state.pending_triggers.is_empty()
-                && sc.game().state.trigger_placement.is_none()
+                && sc.game().state.pending_trigger_choice.is_none()
                 && sc.game().state.stack_objects.is_empty()
                 && sc.game().state.suspended_decision.is_none()
         },
@@ -227,7 +227,7 @@ fn earthbend_trigger_removed_without_lands() {
     s.pass_priority();
     // No land to target: the trigger is removed (CR 603.3d); play goes on.
     assert!(s.game().state.pending_triggers.is_empty());
-    assert!(s.game().state.trigger_placement.is_none());
+    assert!(s.game().state.pending_trigger_choice.is_none());
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }
 

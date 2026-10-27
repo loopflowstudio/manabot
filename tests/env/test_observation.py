@@ -441,7 +441,7 @@ class TestObservationEncoder:
             getattr(encoder, method)(objects, is_mine=1.0)
         assert encoder.object_to_index == {}
 
-    def test_focus_capacity_rejects_partial_action(self) -> None:
+    def test_focus_capacity_rejects_partial_action(self):
         encoder = ObservationEncoder(ObservationConfig(max_focus_objects=1))
         encoder.object_to_index = {1: 0, 2: 1}
         obs = SimpleNamespace(
@@ -453,7 +453,6 @@ class TestObservationEncoder:
                         declared=None,
                         mode_index=None,
                         ability_index=None,
-                        continuation_index=None,
                     )
                 ]
             )

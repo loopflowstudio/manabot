@@ -12,7 +12,7 @@ from manabot.sim.execution import EvalCompute
 from manabot.sim.search.branch import branch_backend
 
 type WorldVersion = Literal[
-    "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13", "w14"
+    "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13"
 ]
 
 

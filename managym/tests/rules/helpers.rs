@@ -293,7 +293,7 @@ impl Scenario {
                 .unwrap_or(space.actions.len().saturating_sub(1)),
             // Picks first legal target arbitrarily — tests that care about targeting
             // should use choose_target_named or explicit action selection instead.
-            ActionSpaceKind::ChooseTarget | ActionSpaceKind::OrderTriggers => 0,
+            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
             // Mid-resolution / cost decisions default to declining (the
             // last action is Decline for optional choices); tests that care

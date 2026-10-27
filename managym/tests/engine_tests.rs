@@ -170,8 +170,7 @@ fn combat_damage_reduces_life() {
             | ActionSpaceKind::Learn
             | ActionSpaceKind::Discard
             | ActionSpaceKind::LegendRule
-            | ActionSpaceKind::Waterbend
-            | ActionSpaceKind::OrderTriggers => 0,
+            | ActionSpaceKind::Waterbend => 0,
         };
 
         game.step(action_index).expect("step should succeed");

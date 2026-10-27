@@ -61,7 +61,6 @@ jobs:
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
-            tests/academy/test_trigger_order.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
             tests/training/test_matchups.py \

@@ -31,15 +31,10 @@ pub enum ActionType {
     TapForCost = 13,
     LearnTakeLesson = 14,
     LearnDiscard = 15,
-    ChooseTrigger = 16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Action {
-    ChooseTrigger {
-        player: PlayerId,
-        trigger_id: crate::flow::trigger::TriggerId,
-    },
     PlayLand {
         player: PlayerId,
         card: CardId,
@@ -112,7 +107,6 @@ pub enum Action {
 impl Action {
     pub fn action_type(&self) -> ActionType {
         match self {
-            Action::ChooseTrigger { .. } => ActionType::ChooseTrigger,
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
             Action::ActivateAbility { .. } => ActionType::PriorityActivateAbility,
@@ -161,7 +155,6 @@ pub enum ActionSpaceKind {
     Waterbend = 10,
     Discard = 11,
     LegendRule = 12,
-    OrderTriggers = 13,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
