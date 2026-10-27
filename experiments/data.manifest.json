@@ -886,6 +886,10 @@
    "sha256": "8ab1c6db007ef6e8ed2718ba0996caa6a02fea95b278ab61b43947a5779113e5",
    "bytes": 1969
   },
+  "experiments/data/curriculum-175/development-200/deck-seat-strata.json": {
+   "sha256": "29c69f3a0c85fe0a78c7c227a8f516f5adab506badf54b64d4701ac20b29e334",
+   "bytes": 106074
+  },
   "experiments/data/curriculum-175/development-200/early-outcomes.json": {
    "sha256": "5050757d79a00304625534ee9cbf7d54e329f9abdef710cdcc660215aa6f21c2",
    "bytes": 179269

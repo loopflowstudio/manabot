@@ -20,7 +20,14 @@ from etude.run.records import ArtifactRef
 from etude.run.storage import DirectoryStorage
 import pytest
 
-from experiments.curriculum_report import ARMS, Arm, Bounds, compare, load_games
+from experiments.curriculum_report import (
+    ARMS,
+    Arm,
+    Bounds,
+    compare,
+    load_games,
+    stratify,
+)
 from experiments.elemental_grid import Game, GameRow
 from experiments.elemental_long_eval import game_rows
 
@@ -285,3 +292,29 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
         compare(_schedule(), invalid_rows, seed=1, replicates=8).coverage["U"].invalid
         == 6
     )
+
+
+def test_deck_and_seat_strata_keep_equal_cell_weights_and_missing_games() -> None:
+    schedule = _schedule()
+    rows = _results(schedule)
+    rows["U"][0] = rows["U"][0].model_copy(update={"valid": False, "score": None})
+    rows["ME"].pop()
+    strata = {(row.by, row.value): row.summary for row in stratify(schedule, rows)}
+    deck_a = strata[("model_deck", "a")]
+    assert deck_a.score_bounds["M"] == Bounds(1, 1)
+    assert deck_a.score_bounds["U"] == Bounds(0.25, 0.5)
+    assert deck_a.coverage["U"].invalid == 1
+    assert deck_a.coverage["U"].missing == 0
+    deck_b = strata[("model_deck", "b")]
+    assert deck_b.score_bounds["ME"] == Bounds(0.5, 1)
+    assert deck_b.coverage["ME"].valid == deck_b.coverage["ME"].missing == 1
+    seat_zero = strata[("model_seat", 0)]
+    # Cell a has twice as many deals as b, but each keeps half the weight.
+    assert seat_zero.score_bounds["M"] == Bounds(0.5, 0.5)
+    assert seat_zero.score_bounds["U"] == Bounds(0.25, 0.5)
+    assert seat_zero.score_bounds["E"] == Bounds(1, 1)
+    assert strata[("model_seat", 1)].score_bounds["E"] == Bounds(0.5, 0.5)
+    assert strata[("heuristic_deck", "opponent")].score_bounds["E"] == Bounds(
+        0.75, 0.75
+    )
+    assert len(strata) == 5

@@ -1,8 +1,10 @@
 # Curriculum adapters: interim results
 
-Observed 2026-10-27T11:38:53.947448+00:00. **The final four-arm effects comparison is not
-yet available.** This interim report records the first complete U/M/E development
-results and the retained initial-evaluation failure while the experiment continues.
+Development outcomes observed 2026-10-27T11:38:53.947448+00:00; operational
+status checked at 12:29 UTC. **The final four-arm effects comparison is not yet
+available.** This interim report records complete U/M/E development results,
+their deck/seat breakdowns and the retained initial-evaluation failure while
+the experiment continues.
 
 The treatments are uniform U, moderate-matchup preference M (peaks near 33/67
 and 67/33), value-target error E, and their normalized-rank mixture ME. Jack's
@@ -34,9 +36,61 @@ confounds still apply. Missing arms are not assigned zero scores.
 
 The frozen identities, admitted rows, coverage and complete-grid bounds are
 published at `experiments/data/curriculum-175/development-200/three-arm-outcomes.json`.
-The earlier U/E snapshot remains in `early-outcomes.json`. U/E jobs have now
-succeeded; M was still delivering its completion receipt at the observation.
+The earlier U/E snapshot remains in `early-outcomes.json`. All three update-200
+evaluation jobs have now succeeded, with their rentals confirmed ended.
 Delivered valid games are retained independently of that operational status.
+
+## Development results by deck and native seat
+
+Each deck row contains **40 valid games per observed arm**: ten opposing decks,
+two deals per pairing and both native seats. Cells receive equal weight. Each
+seat row contains **200 valid games per arm**, with all 100 ordered cells.
+There are no missing or invalid U/M/E games in these strata; ME remains pending
+throughout. Differences are percentage points against U on the same deals.
+
+| Model deck | U | M | E | M−U | E−U |
+|---|---:|---:|---:|---:|---:|
+| Black-green | 65.00% | 57.50% | 65.00% | −7.50 | 0.00 |
+| Red-green | 65.00% | 60.00% | 57.50% | −5.00 | −7.50 |
+| Green-white | 35.00% | 32.50% | 37.50% | −2.50 | +2.50 |
+| Black-red | 62.50% | 65.00% | 52.50% | +2.50 | −10.00 |
+| Blue-black | 60.00% | 55.00% | 50.00% | −5.00 | −10.00 |
+| Blue-green | 50.00% | 37.50% | 35.00% | −12.50 | −15.00 |
+| Blue-red | 62.50% | 67.50% | 65.00% | +5.00 | +2.50 |
+| White-blue | 27.50% | 42.50% | 30.00% | +15.00 | +2.50 |
+| White-black | 65.00% | 57.50% | 50.00% | −7.50 | −15.00 |
+| Red-white | 62.50% | 55.00% | 55.00% | −7.50 | −7.50 |
+
+| Heuristic opponent deck | U | M | E | M−U | E−U |
+|---|---:|---:|---:|---:|---:|
+| Black-green | 65.00% | 65.00% | 57.50% | 0.00 | −7.50 |
+| Red-green | 45.00% | 37.50% | 37.50% | −7.50 | −7.50 |
+| Green-white | 52.50% | 57.50% | 57.50% | +5.00 | +5.00 |
+| Black-red | 80.00% | 65.00% | 65.00% | −15.00 | −15.00 |
+| Blue-black | 60.00% | 60.00% | 55.00% | 0.00 | −5.00 |
+| Blue-green | 62.50% | 57.50% | 60.00% | −5.00 | −2.50 |
+| Blue-red | 40.00% | 35.00% | 30.00% | −5.00 | −10.00 |
+| White-blue | 65.00% | 62.50% | 52.50% | −2.50 | −12.50 |
+| White-black | 40.00% | 47.50% | 45.00% | +7.50 | +5.00 |
+| Red-white | 45.00% | 42.50% | 37.50% | −2.50 | −7.50 |
+
+| Model native seat | U | M | E | M−U | E−U |
+|---|---:|---:|---:|---:|---:|
+| 0 | 53.00% | 52.00% | 49.00% | −1.00 | −4.00 |
+| 1 | 58.00% | 54.00% | 50.50% | −4.00 | −7.50 |
+
+E's aggregate deficit appears in both native seats and six of ten model decks;
+it is not confined to one deck. M's largest observed gain is white-blue (+15pp),
+while blue-green is lower for both adaptive arms. These are small, descriptive
+development strata, not significant subgroup effects, final forgetting measures
+or evidence that later curriculum concentration caused the differences.
+The update-393–400 exposure window below occurs **after** these evaluations.
+
+The derived strata, exact estimator and analysis source, planned schedule and
+input artifact digest are retained in
+`experiments/data/curriculum-175/development-200/deck-seat-strata.json`.
+The shared estimator preserves missing/invalid games as full-target bounds;
+it never substitutes the delivered subset for the planned population.
 
 ## How the curricula changed actual game selection
 
@@ -113,14 +167,15 @@ The initial weights are shared by the adaptive arms and the reused MTG-183
 control. This initial evaluation therefore establishes starting-policy context;
 it cannot establish that a curriculum helped or hurt.
 
-Training status below is the 11:36 UTC snapshot; the live dashboard updates
-independently. The scores above use the later frozen-data read.
+Training status below is the 12:27 UTC snapshot, with evaluation completion
+checked at 12:29 UTC; the live dashboard updates independently. The scores above
+retain their original frozen-data read.
 
-| Arm | Training at 11:36 UTC | Update-200 evaluation |
+| Arm | Training at 12:27 UTC | Update-200 evaluation |
 |---|---|---|
 | U | Reused MTG-183's genuine window through update 1,325 | Succeeded; 400 valid games |
-| M | Running, update 399 | 400 valid games delivered; final receipt pending |
-| E | Running, update 419 | Succeeded; 400 valid games |
+| M | Running, update 444 | Succeeded; 400 valid games |
+| E | Running, update 472 | Succeeded; 400 valid games |
 | ME | Queued for an L4 | Awaits its genuine export and budget check |
 
 M's first remote update-200 request was refused before machine acquisition or

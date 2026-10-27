@@ -6,6 +6,8 @@ cells and seats have equal weight. It reports no primary contrast until every
 planned game of all four arms is valid. Missing/invalid games remain counted,
 with worst-case bounds over the complete target population. These intervals describe
 evaluation-deal uncertainty for this one seed, not training-seed uncertainty.
+`stratify` gives descriptive deck/seat coverage and full-target bounds through
+the same validation and weighting path, without inventing subgroup intervals.
 """
 
 from collections.abc import Mapping, Sequence
@@ -174,24 +176,32 @@ def _key(row: Game | GameRow | Outcome) -> GameKey:
     return row.model_deck, row.heuristic_deck, row.deal, row.model_seat
 
 
-def compare(
+@dataclass(frozen=True)
+class Summary:
+    coverage: dict[Arm, Coverage]
+    score_bounds: dict[Arm, Bounds]
+
+
+@dataclass(frozen=True)
+class Stratum:
+    by: Literal["model_deck", "heuristic_deck", "model_seat"]
+    value: str | int
+    summary: Summary
+
+
+@dataclass(frozen=True)
+class _Outcomes:
+    planned: set[GameKey]
+    received: dict[Arm, set[GameKey]]
+    valid: dict[Arm, dict[GameKey, float]]
+
+
+def _outcomes(
     schedule: Sequence[Game],
     results: Mapping[Arm, Sequence[GameRow | Outcome]],
-    *,
-    seed: int,
-    replicates: int = 2000,
-) -> Comparison:
-    """Complete-grid scores and M−U, E−U, ME−U, ME−M−E+U intervals.
-
-    Reject duplicates and off-schedule rows instead of choosing a preferred
-    attempt. An incomplete grid returns coverage and worst-case bounds, with no point
-    scores or bootstrap contrasts. Bounds assign each missing/invalid score
-    any value in [0, 1]; they are not confidence intervals.
-    Percentile intervals resample deals independently within each cell, using
-    the same sampled deals for every arm and both native seats.
-    """
-    if not schedule or replicates < 2:
-        raise ValueError("a nonempty schedule and at least two replicates are required")
+) -> _Outcomes:
+    if not schedule:
+        raise ValueError("a nonempty schedule is required")
     planned = {_key(row) for row in schedule}
     if len(planned) != len(schedule):
         raise ValueError("duplicate scheduled game")
@@ -208,7 +218,7 @@ def compare(
         raise ValueError("each scheduled deal must include both seats")
     if set(results) != set(ARMS):
         raise ValueError("all four arms must be present, even if their rows are empty")
-    coverage: dict[Arm, Coverage] = {}
+    received: dict[Arm, set[GameKey]] = {}
     indexed: dict[Arm, dict[GameKey, float]] = {}
     for arm in ARMS:
         seen: set[GameKey] = set()
@@ -227,31 +237,101 @@ def compare(
                     raise ValueError("a valid game requires a finite score in [0, 1]")
                 valid[key] = row.score
         indexed[arm] = valid
+        received[arm] = seen
+    return _Outcomes(planned, received, indexed)
+
+
+def _summarize(planned: set[GameKey], outcomes: _Outcomes) -> Summary:
+    cells = sorted({key[:2] for key in planned})
+    coverage: dict[Arm, Coverage] = {}
+    bounds: dict[Arm, Bounds] = {}
+    for arm in ARMS:
+        received = planned.intersection(outcomes.received[arm])
+        valid = planned.intersection(outcomes.valid[arm])
         coverage[arm] = Coverage(
             len(planned),
-            len(seen),
+            len(received),
             len(valid),
-            len(seen) - len(valid),
-            len(planned) - len(seen),
+            len(received) - len(valid),
+            len(planned) - len(received),
         )
+        low = high = 0.0
+        for cell in cells:
+            keys = sorted(key for key in planned if key[:2] == cell)
+            low += (
+                sum(outcomes.valid[arm].get(key, 0.0) for key in keys)
+                / len(keys)
+                / len(cells)
+            )
+            high += (
+                sum(outcomes.valid[arm].get(key, 1.0) for key in keys)
+                / len(keys)
+                / len(cells)
+            )
+        bounds[arm] = Bounds(low, high)
+    return Summary(coverage, bounds)
+
+
+def stratify(
+    schedule: Sequence[Game],
+    results: Mapping[Arm, Sequence[GameRow | Outcome]],
+) -> tuple[Stratum, ...]:
+    """Describe each model deck, opponent deck and native seat, keeping all cells.
+
+    Cells receive equal mass within each stratum, even with unequal deal counts.
+    A complete stratum has a degenerate bound; missing/invalid games keep their
+    full-target bounds and counts. These are not confidence intervals, subgroup
+    hypothesis tests or a replacement for the paired four-arm comparison.
+    """
+    outcomes = _outcomes(schedule, results)
+    axes: tuple[
+        tuple[Literal["model_deck", "heuristic_deck", "model_seat"], int], ...
+    ] = (
+        ("model_deck", 0),
+        ("heuristic_deck", 1),
+        ("model_seat", 3),
+    )
+    strata: list[Stratum] = []
+    for by, index in axes:
+        for value in sorted({key[index] for key in outcomes.planned}):
+            planned = {key for key in outcomes.planned if key[index] == value}
+            strata.append(Stratum(by, value, _summarize(planned, outcomes)))
+    return tuple(strata)
+
+
+def compare(
+    schedule: Sequence[Game],
+    results: Mapping[Arm, Sequence[GameRow | Outcome]],
+    *,
+    seed: int,
+    replicates: int = 2000,
+) -> Comparison:
+    """Complete-grid scores and M−U, E−U, ME−U, ME−M−E+U intervals.
+
+    Reject duplicates and off-schedule rows instead of choosing a preferred
+    attempt. An incomplete grid returns coverage and worst-case bounds, with no point
+    scores or bootstrap contrasts. Bounds assign each missing/invalid score
+    any value in [0, 1]; they are not confidence intervals.
+    Percentile intervals resample deals independently within each cell, using
+    the same sampled deals for every arm and both native seats.
+    """
+    if replicates < 2:
+        raise ValueError("at least two replicates are required")
+    outcomes = _outcomes(schedule, results)
+    summary = _summarize(outcomes.planned, outcomes)
+    coverage, score_bounds = summary.coverage, summary.score_bounds
+    indexed = outcomes.valid
+    cells = sorted({key[:2] for key in outcomes.planned})
+    deals = {
+        cell: sorted({key[2] for key in outcomes.planned if key[:2] == cell})
+        for cell in cells
+    }
     weights = {
         "M-U": (-1, 1, 0, 0),
         "E-U": (-1, 0, 1, 0),
         "ME-U": (-1, 0, 0, 1),
         "ME-M-E+U": (1, -1, -1, 1),
     }
-    score_bounds: dict[Arm, Bounds] = {}
-    for arm in ARMS:
-        lower = upper = 0.0
-        for cell in cells:
-            keys = [(*cell, deal, seat) for deal in deals[cell] for seat in (0, 1)]
-            lower += (
-                sum(indexed[arm].get(key, 0.0) for key in keys) / len(keys) / len(cells)
-            )
-            upper += (
-                sum(indexed[arm].get(key, 1.0) for key in keys) / len(keys) / len(cells)
-            )
-        score_bounds[arm] = Bounds(lower, upper)
     contrast_bounds = {
         name: Bounds(
             sum(
