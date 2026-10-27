@@ -103,6 +103,7 @@ from experiments.elemental_long import (
     SEED,
     STAGE,
     H2HGame,
+    Pair,
     h2h_schedule,
     h2h_schedule_sha256,
     heuristic_games,
@@ -400,7 +401,8 @@ def units(state: EvalState) -> list[Unit]:
             )
         )
     pairs = h2h_groups(h2h_schedule())
-    for pair in pair_design(rated, state.endpoint):
+    design = pair_design(rated, state.endpoint)
+    for pair in [*design, *halving_pairs(rated, design)]:
         found.append(
             Unit(
                 key=f"pair-{pair.newer:06d}-v-{pair.older:06d}",
@@ -416,6 +418,23 @@ def units(state: EvalState) -> list[Unit]:
         found,
         key=lambda u: (u.newer, u.older is not None, -(u.older or 0)),
     )
+
+
+def halving_pairs(rated: tuple[int, ...], design: Sequence[Pair]) -> list[Pair]:
+    """Each rated checkpoint against the one at exactly half its updates.
+
+    Jack Heart's direction (2026-10-27): the score of `u` against `u/2` traces
+    what the second half of training gains at every scale. These pairs extend
+    MTG-183's played design only; pairs it already holds keep their role, and
+    the shared `pair_design` (MTG-181's too) is unchanged.
+    """
+    held = {(p.newer, p.older) for p in design}
+    return [
+        Pair(newer, newer // 2, "halving")
+        for newer in rated
+        if newer > 0 and newer % 2 == 0 and newer // 2 in rated
+        and (newer, newer // 2) not in held
+    ]
 
 
 # ---------------------------------------------------------------------------

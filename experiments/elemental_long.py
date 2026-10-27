@@ -289,7 +289,7 @@ def h2h_schedule_sha256() -> str:
 
 H2H_SCHEDULE_SHA256 = "27f22397b3462d2856784726d953b2a4c05a44be6b595085d04cf664cc0a7f60"
 
-Role = Literal["consecutive", "reference", "endpoint", "held-out"]
+Role = Literal["consecutive", "reference", "endpoint", "held-out", "halving"]
 
 
 @dataclass(frozen=True)
