@@ -783,3 +783,32 @@ def test_gpu_replay_resolves_portable_cell_trace(tmp_path: Path) -> None:
     (cell / "trace.json").write_text("{}")
     with pytest.raises(ValueError, match="no trace artifact"):
         replay_recipe(recipe, cell)
+
+
+@pytest.mark.parametrize("delay", [0.005, 0.006])
+def test_policy_baseline_bounds_batch_collection_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delay: float
+) -> None:
+    from experiments.inference_baselines import policy
+
+    protocol = _protocol(tmp_path)
+    cell = protocol.recipe.cells[0]
+    assert cell.execution is not None
+    cell.execution.write_text(
+        EvalCompute(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
+    )
+    out = tmp_path / "output"
+    out.mkdir()
+
+    def admitted(**kwargs: object) -> None:
+        raise RuntimeError("execution admitted without playing a fixture game")
+
+    monkeypatch.setattr(policy, "play_cell", admitted)
+    workload = protocol.recipe.workloads[0]
+    assert isinstance(workload, PolicyWorkload)
+    if delay > 0.005:
+        with pytest.raises(ValueError, match="5 ms batch delay"):
+            policy.execute(protocol, workload, cell, out, False, time.time() + 30)
+    else:
+        with pytest.raises(RuntimeError, match="execution admitted"):
+            policy.execute(protocol, workload, cell, out, False, time.time() + 30)

@@ -27,6 +27,7 @@ from manabot.sim.matchup import AuthoredMatchup
 class Campaign(BaseModel):
     repetitions: int = Field(default=3, ge=1, le=3)
     phase_seconds: float = Field(default=900, gt=0, le=900)
+    batch_delay_seconds: float = Field(default=0.005, ge=0, le=0.005)
 
 
 def prepare(root: Path, checkpoint: Path, config: Campaign) -> baseline.Recipe:
@@ -67,7 +68,7 @@ def prepare(root: Path, checkpoint: Path, config: Campaign) -> baseline.Recipe:
                 device="cuda",
                 max_active_games=size,
                 max_batch_rows=size,
-                max_delay_seconds=0,
+                max_delay_seconds=config.batch_delay_seconds if size > 1 else 0,
             ),
         )
     baseline._write(

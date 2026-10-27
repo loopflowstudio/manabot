@@ -55,3 +55,21 @@ $1.00 cohort ceiling. Run `4f8f34d188a7` launched from `bb47aafe0d3c` on
 `mtg188-a6000-bbb813fb57a2`; first read confirms `setting_up`, one attempt.
 The unused L4 supply has no rental. Observe only this run and the dedicated
 `mtg188-a6000` supply; never tick unrelated Etude work.
+
+Run 4f8f34d188a7 succeeded: 51/51 complete replay-verified games, six complete
+fixed-input cells. Provider pod absence verified 2026-10-27T14:32:12Z. Rental
+estimate $0.0626565781 (final billing pending). Eight-game median whole-attempt
+wall was 47.855 s at one active game and 19.372 s at four active games, but all
+live dispatches contained one row. Fixed-input batch-4 median measured pass
+was 0.076067 s versus 0.267682 s for 64 inputs at batch-1, with full action
+agreement and maximum legal-logit error 7.63e-6. These witness walls include
+output writes. Do not attribute the live concurrency gain to actual batching.
+
+To fulfill Jack's GPU batched-inference request, the next treatment admits the
+existing serving default of a 5 ms collection window for four-row cells. The
+runner's prior zero-delay-only constraint prevented this comparison; its new
+upper bound is 5 ms, still four workers/rows, with all other time/RSS ceilings
+unchanged. No serving implementation is replaced. Repeat the same fixed
+checkpoint/game protocol, retaining both treatments separately and charging
+both to the original $10 budget. Next job ceiling remains $1.00; no allocation
+may overlap the ended first run.
