@@ -47,3 +47,29 @@ the final tree changes only the paper and this Task note. Updated TeX, PDF and
 README are available for local review. PDF artifact-marker helper is absent in this repository;
 use the existing TeX build and system Poppler for validation. Prior PR #336 was
 closed unmerged; this request does not reopen or land it.
+
+## October 26 shipping gate
+
+Gate reviewed `bd032ffd8` against `origin/main` at `558e0186b`; `git ls-remote
+origin refs/heads/main` confirmed that base is still current. The six-file diff
+contains five paper files and this note only. No paper corrections were needed.
+The three retained reports, heuristic study and LLM proof support the quoted
+results; the draft preserves the seed/deal, cost, opponent and renderer limits.
+Current baseline and damped-learning constants agree with the pinned code.
+
+- `git diff --check origin/main` — passed.
+- `make -C paper` and `make -q -C paper` — passed; committed output is current.
+- `uv run --no-sync python` (inline gate audit) — passed: six citation keys,
+  15 concrete pinned source/report targets (excluding the macro definition),
+  README relative paths, both exact subtitles, and all three report SHA-256/size
+  entries agree with the manifest.
+- `make -C <temporary paper copy>` — clean build passed without warnings;
+  `pdftotext -layout` output matches the committed PDF exactly, with eight pages
+  and methods starting on page 4. The paper sources and PDF remain unchanged;
+  the prior inspection of all eight rendered pages remains the visual evidence.
+- `git diff --name-only -z origin/main | bash .github/ci/select-tests.sh` — all
+  runtime suites correctly unselected for this documentation-only change.
+
+No checks deferred, no unresolved gate blockers, and no training or scientific
+evaluation launched. Return to the primary conversation for `lf land --wait-and-fix`;
+publication, landing and Task completion have not been performed by this gate.
