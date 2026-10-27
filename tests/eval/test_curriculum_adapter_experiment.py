@@ -1,5 +1,6 @@
 """The four-arm declaration binds one recipe, disjoint evaluations and hard caps."""
 
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from typing import Literal
@@ -113,6 +114,42 @@ def test_development_and_final_deals_are_disjoint_and_failure_is_not_an_endpoint
         deals.append(set(selected))
     assert deals[0].isdisjoint(deals[1])
     assert study.eval(ExperimentState(experiment=study.EXPERIMENT)) == []
+
+
+@pytest.mark.parametrize("state", ["running", "finished", "failed"])
+def test_off_cadence_endpoint_requires_clean_training_finish(
+    tmp_path: Path, state: Literal["running", "finished", "failed"]
+) -> None:
+    run = _run(tmp_path, "time-limited", state)
+    endpoint = run.checkpoints[-1].model_copy(update={"clocks": {"updates": 675.0}})
+    run = replace(run, checkpoints=Checkpoints([run.checkpoints[0], endpoint]))
+    specs = [
+        evaluation_spec(job)
+        for job in study.eval(ExperimentState(experiment=study.EXPERIMENT, runs=(run,)))
+    ]
+    for name in (study.MONITOR, study.FINAL):
+        actual = [
+            cp.clocks["updates"]
+            for spec in specs
+            if spec.tournament.name == name
+            for cp in spec.checkpoints
+        ]
+        assert actual == ([0.0, 675.0] if state == "finished" else [0.0])
+
+
+def test_initialization_only_finish_does_not_duplicate_initial_evaluations(
+    tmp_path: Path,
+) -> None:
+    run = _run(tmp_path, "initial-only", "finished")
+    run = replace(run, checkpoints=Checkpoints([run.checkpoints[0]]))
+    specs = [
+        evaluation_spec(job)
+        for job in study.eval(ExperimentState(experiment=study.EXPERIMENT, runs=(run,)))
+    ]
+    assert sorted(spec.tournament.name for spec in specs) == sorted(
+        [study.MONITOR, study.FINAL]
+    )
+    assert all(len(spec.checkpoints) == 1 for spec in specs)
 
 
 def test_reused_uniform_is_a_labelled_projection_of_real_export_references(

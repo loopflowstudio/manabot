@@ -160,10 +160,13 @@ def eval(state: ExperimentState) -> list[Job]:
                 and int(checkpoint.clocks["updates"]) == CONTROL.endpoint_updates
             )
         ]
-        if run.final is not None and int(run.final.clocks["updates"]) == (
-            CONTROL.endpoint_updates if run.name == UNIFORM_RUN else UPDATES
-        ):
-            endpoints.append(run.final)
+        # A clean time-limited finish is an actual endpoint even when it falls
+        # between monitoring milestones. TrainingRun.final excludes failures
+        # and live runs; an initialization-only run has no trained endpoint.
+        if (final := run.final) is not None and final.clocks["updates"] > 0:
+            endpoints.append(final)
+            if final not in monitoring:
+                monitoring.append(final)
         if selected := cost_selected.get(run.name):
             # Stop changing the primary selection once this run has ended.
             # During training the observer may still see a later eligible export.
