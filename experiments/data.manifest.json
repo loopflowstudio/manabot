@@ -906,6 +906,10 @@
    "sha256": "10402b139909e8479ea3dd4705f9512290663cb978e4ace69a9bd00746f54a09",
    "bytes": 2614178
   },
+  "experiments/data/curriculum-175/evaluation-costs/completed-rentals.json": {
+   "sha256": "60c1c827ea23346d949b75e208d03ebc5a7b50a436a77e87b9ee71db445543df",
+   "bytes": 1899570
+  },
   "experiments/data/curriculum-175/initial-evaluation/operations.json": {
    "sha256": "4243717944b87503caba87a495a8bc9309f008b63fca6d1a680678326f3318bb",
    "bytes": 78208

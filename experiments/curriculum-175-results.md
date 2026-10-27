@@ -215,9 +215,9 @@ integration evidence, not evidence of curriculum gains.
 ## Cost and interpretation
 
 U retains its historical $7.225 cleanup estimate; it was not trained again.
-Its incomplete initial eval had a retained rental ceiling of $0.3125. The
+Its incomplete initial eval had a nominal rental limit of $0.3125. The
 update-200 capacity allowance is at most $0.34 per arm. The retained M/E training
-rental ceilings are $8.9975 each; prior startup charges and the full $0.50 reserve
+rental limits are $8.9975 each; prior startup charges and the full $0.50 reserve
 remain included in each arm's $10 limit. ME requires a fresh bound before its
 evaluation is submitted. No unused allowance moves between arms.
 
@@ -226,10 +226,39 @@ closed-hour record arrived. These amounts remain provisional, not invoices;
 the lower estimate is not treated as extra spending permission. SDK run-share
 cost ends at command completion and can omit the paid evidence-delivery tail.
 Final inclusive costs must include each dedicated rental through confirmed
-machine deletion, plus setup failures and earlier evaluation charges. For
-example, U's completed update-200 rental spanned about 44 minutes, including
-final delivery, for a $0.184 elapsed-rate estimate at $0.25/hour; its retained
-$0.3125 rental ceiling remains the spending bound, not that provisional estimate.
+machine deletion, plus setup failures and earlier evaluation charges.
+
+A read-only provider billing check at **2026-10-27T12:47:31Z** found revised
+charges for completed rentals that the controller had already stopped refreshing.
+The table retains the distinct measurements. Provider hour records are a dated
+snapshot, **not settled invoices**; an SDK `estimated=false` flag alone does not
+prove that subsequent provider revisions are absent.
+
+| Evaluation rental | Dedicated minutes | Nominal limit | Elapsed-rate estimate | Provider hour records |
+|---|---:|---:|---:|---:|
+| U initial, lost | 75.05 | $0.3125 | $0.31271 | $0.31457 |
+| U update 200, succeeded | 44.11 | $0.3125 | $0.18379 | $0.18494 |
+| M update 200, succeeded | 43.30 | $0.3125 | $0.18043 | $0.18169 |
+| E update 200, succeeded | 39.06 | $0.3125 | $0.16277 | $0.16384 |
+
+U's initial deletion receipt arrived about three seconds after its deadline;
+its later provider record also exceeds the nominal limit. Thus these nominal
+limits are retained control settings, not evidence that the final charge is
+mathematically bounded by the same amount. The study's $10-per-arm allocation
+remains the constraint; no apparent billing reduction authorizes extra work.
+
+For M update 200, the controller retained only $0.00453 of rental billing while
+the fresh provider read returned $0.18169. Its run-share field was lower still,
+about $0.00113. U/M/E update-200 rentals remained alive for approximately
+30.94/32.52/28.93 minutes after their successful commands finished, respectively.
+Those intervals include evidence delivery and deletion. The old worker archives
+remain unchanged; the bounded-delivery SDK repair applies to future launches.
+
+The lifecycle records, both billing observations and exact read-only audit
+sources are retained in
+`experiments/data/curriculum-175/evaluation-costs/completed-rentals.json`.
+These later observations never rewrite the prospective checkpoint-selection
+ledger or select policies based on their evaluation scores.
 
 The final report still requires genuine trained-policy results across all four
 arms, paired whole-deal contrasts and uncertainty, deck/seat outcomes, exposure,
