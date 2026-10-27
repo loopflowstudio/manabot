@@ -9,7 +9,7 @@ from typing import Any, cast
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import pytest
 
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
 from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol

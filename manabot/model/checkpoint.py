@@ -22,7 +22,7 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     belief_checkpoint_fields,
 )
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact, verify_file
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic

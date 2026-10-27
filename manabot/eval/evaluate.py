@@ -18,7 +18,7 @@ import sys
 import time
 from typing import Any
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey, MatchRow
 from manabot.eval.rating import bootstrap_population, fit_population

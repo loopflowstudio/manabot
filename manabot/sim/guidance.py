@@ -8,7 +8,7 @@ from typing import Any, Mapping
 import numpy as np
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint

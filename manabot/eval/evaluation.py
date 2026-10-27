@@ -30,7 +30,7 @@ from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 
 if TYPE_CHECKING:
     from manabot.eval.endpoint import InferenceEndpoint

@@ -20,7 +20,7 @@ from manabot.infra.provenance import source_bundle_sha256
 from manabot.sim import players
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
 

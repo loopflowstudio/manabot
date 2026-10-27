@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from manabot.infra.config import MatchConfig
-from manabot.verify.competency import (
+from manabot.verify.scenarios import (
     SCENARIOS,
     SPACE_ATTACKER,
     SPACE_BLOCKER,

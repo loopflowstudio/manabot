@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 
 from manabot.belief import ManabotPlayer
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 import manabot.sim.search.flat_mc as flat_mc
 from manabot.sim.search.flat_mc import (
     AgentMatchupPlayer,
@@ -23,7 +23,8 @@ from manabot.sim.search.flat_mc import (
     play_games,
     wilson_interval,
 )
-from manabot.verify.util import INTERACTIVE_DECK, wilson_lower_bound
+from manabot.verify.games import INTERACTIVE_DECK
+from manabot.verify.util import wilson_lower_bound
 import managym
 
 SEARCH_4 = {"kind": "search", "sims": 4}

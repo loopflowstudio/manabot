@@ -10,9 +10,11 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.verify.competency import _find_cast_action, _pass_index
+from manabot.verify.scenarios import _find_cast_action, _pass_index
 import managym
 
 

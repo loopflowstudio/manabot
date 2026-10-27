@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-193 concept review</title>
+<style>
+:root{--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--prop:#8a5a00;--code:#f0ede6}
+@media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--rule:#3a3833;--prop:#e0b060;--code:#2a2925}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,serif}
+main{max-width:42rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2.2rem;border-top:1px solid var(--rule);padding-top:1rem}
+code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.88em}
+table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--rule);padding:.4rem .3rem;text-align:left;vertical-align:top}
+.prop{color:var(--prop)}
+.callout{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem}
+</style></head><body><main>
+<header>
+<h1>Concept review: batched shared evaluation, light bounded children</h1>
+<p>Task MTG-193 · step concept-review (headless) · 2026-10-26</p>
+<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/{serving_protocol,child,threads,native_game,supervision,serving}.py</code>, <code>manabot/eval/match.py</code>, <code>docs/shared-evaluation.md</code></p>
+</header>
+
+<p><strong>Decision needed:</strong> none. Accepted product decisions settle the one change below, so the step iterates to implement.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+<tr><th>Operator action</th><th>Concept</th><th>API</th></tr>
+<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world, numerics. Matchup is in admission and evidence only.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
+<tr><td>Run many games cheaply</td><td>Child process: a <code>module:function</code> target that never imports the parent's <code>__main__</code></td><td><code>ChildProcess</code>, <code>native_game.execute_game</code></td></tr>
+<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census</td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>effective_cpus</code></td></tr>
+</table>
+
+<h2>The one mismatch</h2>
+<div class="callout">
+<p>The Task asks that <em>every</em> evaluation process, group workers included, run with a declared thread count proven by counting. Today only the shared path records the parent's census (as <code>supervisor</code>, from <code>InferenceRuntime.close</code>). On the scalar path, which is the <code>cpu32</code> arm where 30 group workers reached about 1,000 threads, the group worker records nothing. The rental calibration therefore could not show whether that process is bounded.</p>
+</div>
+<table>
+<tr><th></th><th>Before (this branch)</th><th class="prop">Proposed</th></tr>
+<tr><td>Shared path</td><td><code>threads/supervisor</code> in <code>allocation.json</code></td><td class="prop"><code>threads/group_worker</code> in the cell's <code>performance.json</code>, budget <code>max_active_games + 7</code></td></tr>
+<tr><td>Scalar path</td><td>no parent census</td><td class="prop">same role, constant allowance 8, recorded and not enforced</td></tr>
+</table>
+<p>The counters are new on this branch, so the rename touches no frozen evidence.</p>
+
+<h2>Kept as is</h2>
+<p><code>InferenceRuntime</code> stays in <code>serving_protocol.py</code>, as the accepted split placed it. Code-anchor games still load Torch; that is a known limit with a candidate follow-up.</p>
+
+<h2>Questions</h2>
+<ol><li>None open. The calibration's open items (the culprit for the oversubscription, budget values, the target for served-child RSS) are in <code>scratch/questions.md</code> and need the rental run through MTG-183.</li></ol>
+</main></body></html>

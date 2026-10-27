@@ -30,7 +30,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.match import play_game
 from manabot.sim.replay import read_trace, write_trace
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 from tests.eval.test_batched_eval import fixture_policy
 
 

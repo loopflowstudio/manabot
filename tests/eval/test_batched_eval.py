@@ -10,30 +10,30 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationContract, EvaluationKey
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
+from manabot.model.inference import transfer
 from manabot.sim.execution import EvalExecution
-from manabot.sim.matchup import SELECTED_SUITE, selected_match
+from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_environment, replay_prefix
-from manabot.sim.serving import (
+from manabot.sim.serving import PolicyStore, _infer, sample_rows
+from manabot.sim.serving_protocol import (
     DecisionRequest,
     InferenceFailure,
     InferenceRuntime,
     PolicyAdmission,
     PolicyKey,
-    PolicyStore,
-    _infer,
-    sample_rows,
 )
 from managym import WORLD_VERSION
 
@@ -98,13 +98,16 @@ def fixture_policy(
 
 
 def request_for(
-    player: PlayerRegistration, execution: EvalExecution, seed: int = 5
+    player: PlayerRegistration,
+    execution: EvalExecution,
+    seed: int = 5,
+    setup: MatchConfig | None = None,
 ) -> DecisionRequest:
     _, obs = replay_environment(
         {
             "deal_seed": 83,
             "seat_players": ["a", "b"],
-            "match_hypers": selected_match().model_dump(),
+            "match_hypers": (setup or selected_match()).model_dump(),
         },
         observation_space=ObservationSpace(),
     )
@@ -219,6 +222,67 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     store.close()
 
 
+def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
+    tmp_path: Path,
+) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    mirror = MatchConfig.authored(
+        "ur-lessons-vs-gw-allies",
+        "ur_lessons",
+        "ur_lessons",
+        hero="arena-seat-0",
+        villain="arena-seat-1",
+    )
+    other = player.model_copy(
+        update={
+            "player_spec": {**player.player_spec, "allow_deck_repetition": True},
+            "matchup_sha256": canonical_sha256(mirror.model_dump()),
+            "content_suite": AuthoredMatchup(
+                pack_key="ur-lessons-vs-gw-allies",
+                role_a="ur_lessons",
+                role_b="gw_allies",
+            ).content_suite,
+        }
+    )
+    execution = EvalExecution(deadline_unix=time.time() + 120)
+    _, (player, other) = bind_execution(key, (player, other), execution)
+    assert PolicyKey.from_registration(player, execution) == (
+        PolicyKey.from_registration(other, execution)
+    )
+    perf = EvalPerformance("test")
+    store = PolicyStore(execution, perf)
+    store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
+    store.admit(PolicyAdmission(other, str(path), (mirror,)))
+    assert perf.counters["model_loads"] == 1
+    assert len(store.admissions) == 1
+    (admission,) = store.admissions.values()
+    assert admission.setups == (selected_match(), mirror)
+    requests = [
+        request_for(player, execution, 5),
+        request_for(other, execution, 7, mirror),
+    ]
+    mixed = _infer(store, requests, "mixed")
+    assert perf.counters["batch_rows/2"] == 1
+    single = [_infer(store, [request], "single")[0] for request in requests]
+    assert [r.action for r in mixed] == [r.action for r in single]
+    assert perf.counters["model_loads"] == 1
+    store.close()
+
+
+def test_packed_transfer_makes_one_copy_per_dtype() -> None:
+    tensors = {
+        "a": torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        "b": torch.ones(2, 4, 5),
+        "rows": torch.arange(4).reshape(2, 2),
+    }
+    moved, copies = transfer(tensors, torch.device("meta"))
+    assert copies == 2
+    assert {k: (v.shape, v.dtype, v.device.type) for k, v in moved.items()} == {
+        k: (v.shape, v.dtype, "meta") for k, v in tensors.items()
+    }
+    assert transfer(tensors, torch.device("cpu")) == (tensors, 0)
+
+
 def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
     key, player, _, path = fixture_policy(tmp_path)
     execution = EvalExecution(deadline_unix=time.time() + 60, max_delay_seconds=0.01)
@@ -275,6 +339,10 @@ def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
         if k.startswith("batch_rows/")
     )
     assert all(row["score_a"] is None for row in rows)
+    # The group worker's own census, taken while its game threads are alive.
+    cell = json.loads((tmp_path / "panel/performance.json").read_text())["counters"]
+    assert cell["threads/group_worker"] >= 1
+    assert cell["threads_budget/group_worker"] == execution.max_active_games + 7
 
     from experiments.report_prototype.build import write_evaluations
     from manabot.eval.serving_benchmark import BenchmarkPlan, Panel, numerical_check

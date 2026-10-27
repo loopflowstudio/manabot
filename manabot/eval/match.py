@@ -30,13 +30,14 @@ from manabot.sim.matchup import (
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt, write_trace
-from manabot.sim.serving import (
+from manabot.sim.serving_protocol import (
     InferenceFailure,
     InferenceRuntime,
     PolicyAdmission,
 )
 from manabot.sim.supervision import replay_retained
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.sim.threads import ProcessCensus, group_worker_budget
+from manabot.verify.games import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
 MatchupMode = Literal["cross", "mirrors", "all"]
@@ -475,6 +476,14 @@ def play_cell(
         ]
         perf.counters["unattempted_games"] = len(unattempted)
         atomic_json(out_dir / "unattempted.json", unattempted)
+        # Every receipt carries this worker's own census, while the runtime's
+        # game threads are still alive, so calibration can attribute them.
+        ProcessCensus.take().record(
+            perf.counters,
+            group_worker_budget(
+                runtime.execution.max_active_games if runtime is not None else None
+            ),
+        )
         if not games:
             perf.write(out_dir / "performance.json")
             raise InferenceFailure("allocation stopped before any game started")

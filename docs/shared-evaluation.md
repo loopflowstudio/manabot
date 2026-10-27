@@ -30,6 +30,37 @@ force a replay. Use the calibration runner's fresh direct arena attempts when
 measuring instrumentation or throughput. Diagnostic timings stay separate from
 ordinary throughput even though the underlying policy identity is the same.
 
+## Batching and processes
+
+One allocation runs one serving child (`manabot.sim.serving`), the only process
+that loads served weights. `PolicyKey` groups requests by checkpoint,
+observation/action ABI, world, device, dtype, determinism and implementation.
+Matchup and content suite are not model inputs: the card catalog is bound by the
+checkpoint's world, so concurrent games that seat one checkpoint share its
+resident policy and its batches whatever their matchup. Each registration's
+setups are still validated against that policy at admission, and matchup
+identity remains in registrations and evidence. This stays `shared-eval-v1`:
+the contract never fixed batch composition, which already depended on arrival
+order within the row and delay limits, and each row samples from its own
+decision seed. Each batch moves to the device in one copy per dtype (float32
+observations, int64 catalog references).
+
+Game, replay and serving children start through `manabot.sim.child`, never
+`multiprocessing` spawn, so they do not re-import the evaluator's `__main__`.
+Model-vs-model game children and replay children never import Torch; games with
+an in-process scalar player (code anchors, unserved checkpoints, search) do.
+Every child starts with single-threaded library pools
+(`manabot.sim.threads.child_environment`) and counts its own threads against a
+declared budget: 4 for game and replay children, 16 for serving. Exceeding it
+is an infrastructure failure, never a forfeit. Game children record
+`threads/game`, `rss_bytes/game` and `torch_loaded/game` in their
+`worker_performance`; `serving.json` carries the serving role. Each cell's
+`performance.json` records the group worker that ran `play_cell` under
+`threads/group_worker` against `max_active_games + 7` with a shared runtime,
+or 8 without one; this budget is recorded for calibration, not enforced.
+`effective_cpus()` honors affinity masks and cgroup quotas, unlike
+`os.cpu_count()`, which reports the host inside containers.
+
 Ordinary flat, stateless checkpoints and random/scripted/heuristic anchors are
 supported. Compound, belief and search players retain their existing scalar
 path. Explicit shared execution rejects them before playing any games.
@@ -40,7 +71,7 @@ import time
 
 from manabot.sim.execution import EvalExecution
 from manabot.eval.evaluation import EvaluationRequest, evaluate
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 
 execution = EvalExecution(
     device="cpu",

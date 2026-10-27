@@ -26,7 +26,9 @@ from typing import Any, Protocol
 from managym.decision import Command, DecisionFrame
 import numpy as np
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
@@ -35,11 +37,8 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.action.compound import CompoundPolicy
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
-from manabot.verify.util import (
-    INTERACTIVE_DECK,
-    _select_agent_action,
-    winner_from_info_or_obs,
-)
+from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
+from manabot.verify.util import _select_agent_action
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 

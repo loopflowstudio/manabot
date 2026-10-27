@@ -21,9 +21,9 @@ import torch
 import torch.nn as nn
 
 # Local imports
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -69,13 +69,12 @@ def real_observation(
     as produced by the real environment.
     """
     # Local imports
-    from manabot.env import Reward
-    from manabot.env.match import Match
+    from manabot.env.match import Match, Reward
     from manabot.infra.config import RewardConfig
 
     reward = Reward(RewardConfig(trivial=True))
     match = Match()
-    from manabot.env import VectorEnv
+    from manabot.env.vector_env import VectorEnv
 
     vec_env = VectorEnv(
         num_envs=2,

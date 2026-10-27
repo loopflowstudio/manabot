@@ -11,9 +11,8 @@ import torch
 import torch.nn as nn
 
 # Local imports
-from manabot.env import ObservationSpace
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX
-from manabot.infra import ModelConfig
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.continuation import ContinuationEncoder

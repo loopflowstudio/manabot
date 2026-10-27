@@ -86,6 +86,12 @@ checkpoints or experiment evidence.
 - Put imports at the top; use explicit imports and underscore-prefixed private
   helpers. Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
+- Import names from their defining modules (`manabot.env.observation`, not
+  `manabot.env`); package `__init__` files re-export nothing, so evaluation
+  game and replay children stay Torch-free
+  (`tests/test_package_boundaries.py` enforces the child modules). Launch
+  evaluation children with `manabot.sim.child.ChildProcess`, not
+  `multiprocessing` spawn, which re-imports the parent's `__main__`.
 
 ### Python typing
 

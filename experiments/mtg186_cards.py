@@ -93,6 +93,7 @@ from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.threads import child_environment
 
 if TYPE_CHECKING:
     import duckdb
@@ -347,7 +348,7 @@ def play(match: Match) -> Tables:
             text=True,
             capture_output=True,
             timeout=MATCH_SECONDS,
-            env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+            env=child_environment(),
         )
         failure = None if completed.returncode == 0 else completed.stderr[-4000:]
     except subprocess.TimeoutExpired:

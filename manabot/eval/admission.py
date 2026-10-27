@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from manabot.env import Match
+from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256

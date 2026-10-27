@@ -11,6 +11,11 @@ import pytest
 from manabot.verify.competency import (
     MICRO_AGGRO,
     MICRO_CONTROL,
+    parse_agent_specs,
+    play_probed_games,
+    run_scenario_once,
+)
+from manabot.verify.scenarios import (
     SCENARIOS,
     SPACE_ATTACKER,
     SPACE_BLOCKER,
@@ -20,9 +25,6 @@ from manabot.verify.competency import (
     _pass_index,
     _stack_names,
     build_scenario_env,
-    parse_agent_specs,
-    play_probed_games,
-    run_scenario_once,
 )
 
 
@@ -114,9 +116,7 @@ def test_scenario_positions_construct(name):
 
 def test_counter_bomb_scored_correct_when_bomb_countered():
     scenario = SCENARIOS["s1_counter_the_bomb"]
-    result = run_scenario_once(
-        scenario, CounterBombHero("Shivan Dragon"), None, seed=3
-    )
+    result = run_scenario_once(scenario, CounterBombHero("Shivan Dragon"), None, seed=3)
     assert result["correct"] is True
     assert result["counter_cast_on"] == "Shivan Dragon"
     assert not result["bomb_resolved"]
@@ -190,7 +190,7 @@ class BlockLineHero(PassHero):
         self._blocks_this_turn: dict[int, int] = {}
 
     def act(self, env, obs):
-        from manabot.verify.competency import _battlefield_pairs, _hero_view
+        from manabot.verify.scenarios import _battlefield_pairs, _hero_view
 
         raw = env.last_raw_obs
         kind = int(raw.action_space.action_space_type)

@@ -8,7 +8,8 @@ from typing import Any, Literal
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval import monitor as monitor
 from manabot.eval.models import EvaluationKey
 from manabot.experiment import checkpoint_evaluation

@@ -1,119 +1,47 @@
-"""One resident inference process per evaluation allocation.
+"""The serving child: one resident inference process per evaluation allocation.
 
-Game processes exchange owned arrays through their existing supervisor pipe.
-Only this process loads served weights. The parent multiplexes bounded requests
-and grants game slots across callbacks. FIFO policy groups flush independently;
-each row samples on CPU from its own retained decision seed.
+`InferenceRuntime` (`manabot.sim.serving_protocol`) launches `serve` as a
+`ChildProcess`; only this process imports Torch and loads served weights. Game
+children send owned arrays through their supervisor, which multiplexes them
+here. Requests group by `PolicyKey` (checkpoint and numerics, not matchup);
+FIFO groups flush independently at `max_batch_rows` or `max_delay_seconds`.
+Each batch moves to the device in one copy per dtype, and each row samples on
+CPU from its own retained decision seed, so actions do not depend on batch
+composition.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict, deque
-from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
-from dataclasses import dataclass
-import multiprocessing as mp
+from dataclasses import dataclass, replace
 from multiprocessing.connection import Connection
 from pathlib import Path
-import queue
-import threading
 import time
-from types import TracebackType
-from typing import Any
 from uuid import uuid4
 
 import numpy as np
 import psutil
 import torch
 
-from manabot.env import Match, ObservationSpace
-from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.infra.files import atomic_json
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.inference import PolicyInference
+from manabot.model.inference import PolicyInference, transfer
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
-from manabot.sim.performance import EvalPerformance, allocation_cost
-from manabot.sim.registration import PlayerRegistration
-
-
-class InferenceFailure(RuntimeError):
-    """Infrastructure failure, never an attributed player forfeit."""
-
-
-@dataclass(frozen=True)
-class PolicyKey:
-    checkpoint: str
-    input_binding: str
-    device: str
-    dtype: str
-    deterministic: bool
-    implementation: str = "policy-inference-cpu-row-sampling-v1"
-
-    @classmethod
-    def from_registration(
-        cls, player: PlayerRegistration, execution: EvalExecution
-    ) -> PolicyKey:
-        return cls(
-            str(player.checkpoint_sha256),
-            canonical_sha256(
-                {
-                    "observation": player.observation_abi_sha256,
-                    "action": player.action_abi_sha256,
-                    "world": player.world,
-                    "content": player.content_suite,
-                    "matchup": player.matchup_sha256,
-                }
-            ),
-            execution.device,
-            execution.dtype,
-            bool(player.player_spec["deterministic"]),
-        )
-
-
-@dataclass(frozen=True)
-class DecisionRequest:
-    request_id: str
-    game_id: str
-    actor: int
-    revision: int
-    policy: PolicyKey
-    ordinal: int
-    seed: int
-    observation: dict[str, np.ndarray]
-    deadline_unix: float
-    submitted: float
-
-
-@dataclass(frozen=True)
-class DecisionReply:
-    request_id: str
-    game_id: str
-    actor: int
-    revision: int
-    ordinal: int
-    action: int
-    batch_id: str
-
-    def validate(self, request: DecisionRequest) -> None:
-        if (self.request_id, self.game_id, self.actor, self.revision, self.ordinal) != (
-            request.request_id,
-            request.game_id,
-            request.actor,
-            request.revision,
-            request.ordinal,
-        ):
-            raise InferenceFailure("stale or mismatched inference reply")
-
-
-@dataclass(frozen=True)
-class PolicyAdmission:
-    registration: PlayerRegistration
-    path: str
-    setups: tuple[MatchConfig, ...]
+from manabot.sim.performance import EvalPerformance
+from manabot.sim.serving_protocol import (
+    DecisionReply,
+    DecisionRequest,
+    InferenceFailure,
+    PolicyAdmission,
+    PolicyKey,
+)
+from manabot.sim.threads import SERVING_BUDGET
 
 
 @dataclass
@@ -146,16 +74,18 @@ class PolicyStore:
             raise ValueError("checkpoint byte identity drift")
         if player.player_spec.get("execution") != self.execution.compute.model_dump():
             raise ValueError("registration differs from serving execution")
+        if not admission.setups:
+            raise ValueError("policy admission requires an execution setup")
         key = PolicyKey.from_registration(player, self.execution)
-        self.admissions[key] = admission
+        # Registrations of one checkpoint for other matchups share its resident
+        # policy. Each registration's own setups are validated against it.
+        admitted = self.admissions.setdefault(key, admission)
         resident = self.get(key)
         if (
             sum(p.numel() for p in resident.agent.parameters())
             != player.parameter_count
         ):
             raise ValueError("checkpoint parameter count drift")
-        if not admission.setups:
-            raise ValueError("policy admission requires an execution setup")
         runtime = runtime_fingerprints(
             match_config=admission.setups[0], observation_space=resident.space
         )
@@ -171,6 +101,10 @@ class PolicyStore:
                 allow_deck_repetition=player.player_spec.get(
                     "allow_deck_repetition", False
                 ),
+            )
+        if admitted is not admission:
+            self.admissions[key] = replace(
+                admitted, setups=admitted.setups + admission.setups
             )
         return resident.space.encoder.config
 
@@ -297,14 +231,16 @@ def _infer(
         perf.count("input_bytes", size)
     with torch.no_grad():
         with perf.span("input_admission_and_transfer_host", batch=batch):
-            prepared = (
-                policy.scope.prepare(tensors)
-                if store.execution.cache_catalog
-                else {k: t.to(store.execution.device) for k, t in tensors.items()}
-            )
+            if store.execution.cache_catalog:
+                prepared = policy.scope.prepare(tensors)
+                transfers = prepared.transfers
+            else:
+                prepared, transfers = transfer(
+                    tensors, torch.device(store.execution.device)
+                )
         if store.execution.device == "cuda":
             perf.count("host_to_device_bytes", size)
-            perf.count("host_to_device_calls", len(tensors))
+            perf.count("host_to_device_calls", transfers)
         with perf.span("forward_host", batch=batch):
             logits, _ = policy.agent(prepared)
         with perf.span("output_transfer_host", batch=batch):
@@ -338,10 +274,12 @@ def _infer(
     return replies
 
 
-def _service(
+def serve(
     connection: Connection, execution: EvalExecution, directory: Path, allocation: str
 ) -> None:
+    """Serving child entry; exceeding its thread budget fails the allocation."""
     torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
     perf = EvalPerformance(allocation, execution.instrumentation)
     store = PolicyStore(execution, perf)
     pending: deque[tuple[str, DecisionRequest]] = deque()
@@ -425,6 +363,9 @@ def _service(
                     diagnostics += 1
                 else:
                     replies = _infer(store, [r for _, r in chosen], batch)
+                # Pools start lazily (CUDA, profiler); count after each batch
+                # and fail its requests, never attribute them to a player.
+                SERVING_BUDGET.account(perf.counters)
                 for (identity, _), reply in zip(chosen, replies, strict=True):
                     connection.send((identity, reply, None))
             except Exception as exc:
@@ -441,193 +382,3 @@ def _service(
         store.close()
         perf.write(directory / "serving.json")
         connection.close()
-
-
-class InferenceRuntime:
-    """Allocation supervisor, shared by concurrent local Etude callbacks."""
-
-    def __init__(self, execution: EvalExecution, directory: Path) -> None:
-        if execution.remaining() <= 0:
-            raise ValueError("allocation deadline has expired")
-        self.execution = execution
-        self.directory = directory
-        directory.mkdir(parents=True, exist_ok=False)
-        self.identity = uuid4().hex
-        self.performance = EvalPerformance(self.identity, execution.instrumentation)
-        self.slots = threading.BoundedSemaphore(execution.max_active_games)
-        self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
-        self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
-        self._capacity = threading.BoundedSemaphore(execution.max_active_games + 1)
-        self._lock = threading.RLock()
-        self._futures: dict[str, Future[Any]] = {}
-        self._error: str | None = None
-        self._closed = False
-        self._closing = False
-        context = mp.get_context("spawn")
-        self._connection, child = context.Pipe()
-        self.process = context.Process(
-            target=_service, args=(child, execution, directory, self.identity)
-        )
-        self.process.start()
-        child.close()
-        self._reader = threading.Thread(target=self._receive, daemon=True)
-        self._reader.start()
-        self._outgoing: queue.Queue[tuple[str, str, object] | None] = queue.Queue(
-            execution.max_active_games + 2
-        )
-        # Pipe.send can block while a service is stopped. Keep it off the
-        # futures lock and caller thread so request deadlines and fail() work.
-        self._sender = threading.Thread(target=self._send, daemon=True)
-        self._sender.start()
-
-    def check(self) -> None:
-        if (
-            self._error
-            or self._closed
-            or self._closing
-            or self.execution.remaining() <= 0
-            or not self.process.is_alive()
-        ):
-            raise InferenceFailure(self._error or "inference allocation stopped")
-
-    def submit_game(self, run: Callable[[], dict[str, Any]]) -> Future[dict[str, Any]]:
-        """Bound both threads and queued games across all callbacks."""
-        while not self._game_capacity.acquire(
-            timeout=min(0.1, self.execution.remaining())
-        ):
-            self.check()
-        try:
-            self.check()
-            future = self._games.submit(run)
-        except BaseException:
-            self._game_capacity.release()
-            raise
-        future.add_done_callback(lambda _: self._game_capacity.release())
-        return future
-
-    def _send(self) -> None:
-        try:
-            while (message := self._outgoing.get()) is not None:
-                self._connection.send(message)
-        except (OSError, EOFError) as exc:
-            self.fail(f"inference send failed: {exc}")
-
-    def _receive(self) -> None:
-        try:
-            while True:
-                identity, result, error = self._connection.recv()
-                with self._lock:
-                    future = self._futures.pop(identity, None)
-                if future is not None:
-                    if error:
-                        future.set_exception(InferenceFailure(error))
-                    else:
-                        future.set_result(result)
-        except (EOFError, OSError) as exc:
-            if not self._closing:
-                self.fail(f"inference service exited: {exc}")
-
-    def fail(self, message: str) -> None:
-        with self._lock:
-            self._error = message
-            for future in self._futures.values():
-                if not future.done():
-                    future.set_exception(InferenceFailure(message))
-            self._futures.clear()
-
-    def _call(self, kind: str, payload: object, timeout: float | None = None) -> Any:
-        timeout = min(
-            self.execution.request_seconds,
-            self.execution.request_seconds if timeout is None else timeout,
-            self.execution.remaining(),
-        )
-        if timeout <= 0:
-            raise InferenceFailure("inference request deadline exhausted")
-        deadline = time.monotonic() + timeout
-        if not self._capacity.acquire(timeout=timeout):
-            raise InferenceFailure("inference backpressure deadline exhausted")
-        try:
-            self.check()
-            identity = uuid4().hex
-            future: Future[Any] = Future()
-            with self._lock:
-                self._futures[identity] = future
-                self._outgoing.put_nowait((identity, kind, payload))
-            try:
-                return future.result(timeout=max(0, deadline - time.monotonic()))
-            except TimeoutError as exc:
-                self.fail("inference service request timed out")
-                raise InferenceFailure("inference service request timed out") from exc
-        finally:
-            self._capacity.release()
-
-    def admit(self, admission: PolicyAdmission) -> ObservationConfig:
-        result = self._call("admit", admission)
-        if not isinstance(result, ObservationConfig):
-            raise InferenceFailure("invalid observation admission reply")
-        return result
-
-    def infer(self, request: DecisionRequest) -> DecisionReply:
-        try:
-            result = self._call("infer", request, request.deadline_unix - time.time())
-            if not isinstance(result, DecisionReply):
-                raise InferenceFailure("invalid inference reply")
-            result.validate(request)
-            if time.time() >= request.deadline_unix:
-                raise InferenceFailure("inference reply arrived after its deadline")
-            return result
-        except InferenceFailure as exc:
-            self.fail(str(exc))
-            raise
-
-    def snapshot(self) -> dict[str, Any]:
-        result = self._call("snapshot", None)
-        if not isinstance(result, dict):
-            raise InferenceFailure("invalid serving receipt")
-        return result
-
-    def __enter__(self) -> InferenceRuntime:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._closing = True
-        if self._futures:
-            self.fail("allocation closed with pending requests")
-        self._games.shutdown(wait=True, cancel_futures=True)
-        try:
-            self._outgoing.put_nowait(("close", "close", None))
-        except queue.Full:
-            self.fail("inference shutdown queue saturated")
-        self.process.join(timeout=min(5, self.execution.remaining()))
-        if self.process.is_alive():
-            self.process.kill()
-            self.process.join()
-        self._reader.join(timeout=1)
-        try:
-            self._outgoing.put_nowait(None)
-        except queue.Full:
-            pass
-        self._sender.join(timeout=1)
-        self._closed = True
-        self._connection.close()
-        self.performance.write(self.directory / "allocation.json")
-
-        atomic_json(
-            self.directory / "execution.json",
-            {
-                "allocation_id": self.identity,
-                "execution": self.execution.model_dump(),
-                "cost": allocation_cost(time.monotonic() - self.performance.started),
-                "error": self._error,
-            },
-        )

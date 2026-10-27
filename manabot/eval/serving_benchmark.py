@@ -34,14 +34,8 @@ from manabot.infra.identity import StrictModel, file_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import (
-    DecisionRequest,
-    PolicyAdmission,
-    PolicyKey,
-    PolicyStore,
-    _infer,
-    sample_rows,
-)
+from manabot.sim.serving import PolicyStore, _infer, sample_rows
+from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 Variant = Literal["cold_scalar", "resident_only", "resident_catalog", "batched"]
 VARIANTS: tuple[Variant, ...] = (

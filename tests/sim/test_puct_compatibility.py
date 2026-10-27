@@ -8,12 +8,13 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.sim.match import _execute_game
+from manabot.sim.native_game import execute_game
 from manabot.sim.players import build_player
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
@@ -339,7 +340,7 @@ def test_registered_puct_completes_games_and_replays(
             ),
         )
         messages: list[tuple[str, object]] = []
-        _execute_game(
+        execute_game(
             game, registrations, {candidate.player_id: str(path)}, 1000, messages.append
         )
         assert game.get("terminated"), game.get("failure")

@@ -7,7 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env import Env, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import file_sha256
 from manabot.sim.search.flat import FlatSearchPolicy
 from manabot.sim.search.flat_mc import MatchupPlayer, make_player

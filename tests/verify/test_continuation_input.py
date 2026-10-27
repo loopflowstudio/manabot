@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.verify.text_observation import collision_branches, native_fixtures

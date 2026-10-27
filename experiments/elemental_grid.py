@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from html import escape
 import json
 import math
-import os
 from pathlib import Path
 import random
 import subprocess
@@ -38,6 +37,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.threads import child_environment
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -340,7 +340,7 @@ def evaluate(
                 text=True,
                 capture_output=True,
                 timeout=GROUP_SECONDS,
-                env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+                env=child_environment(),
             )
             error = None if completed.returncode == 0 else completed.stderr[-4000:]
             output = completed.stdout

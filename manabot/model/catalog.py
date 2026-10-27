@@ -26,7 +26,7 @@ from typing import Any, Literal
 
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
 

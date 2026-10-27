@@ -14,7 +14,7 @@ from managym.decision import Command, DecisionFrame
 import torch
 from torch import Tensor
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.compound import CompoundOutput
 from manabot.sim.action.structured import RaggedOfferBatch, flatten_projection

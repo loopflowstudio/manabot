@@ -14,7 +14,7 @@ import time
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.experiment import evaluation_queue as checkpoint_queue
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256

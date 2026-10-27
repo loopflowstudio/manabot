@@ -76,6 +76,7 @@ from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.sim.threads import child_environment
 import managym
 
 RESULTS = ROOT / "experiments/data/mtg186/pairings"
@@ -447,7 +448,7 @@ def pair(spec: PairJob) -> None:
                 text=True,
                 capture_output=True,
                 timeout=GROUP_SECONDS,
-                env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+                env=child_environment(),
             )
         except subprocess.TimeoutExpired:
             return _invalid(group, "group wall-time bound reached")

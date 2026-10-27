@@ -14,7 +14,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.eval.models import EvaluationContract
 from manabot.infra.config import (
     MatchConfig,
@@ -23,7 +24,7 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
-from manabot.sim import match as simulation
+from manabot.sim import match as simulation, native_game
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
@@ -547,7 +548,7 @@ def _payment_game_worker(
     max_commands: int,
 ) -> None:
     managym.Env = PaymentMismatchEnv
-    simulation._game_worker(
+    native_game.game_worker(
         connection, game, registrations, checkpoint_paths, max_commands
     )
 
@@ -569,7 +570,7 @@ def _lost_payment_worker(
                 time.sleep(60)
             os._exit(7)
 
-    simulation._execute_game(game, registrations, checkpoint_paths, max_commands, send)
+    native_game.execute_game(game, registrations, checkpoint_paths, max_commands, send)
 
 
 def _arena_fixture() -> tuple[dict[str, Any], list[PlayerRegistration]]:
@@ -602,7 +603,11 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
 ) -> None:
     game, players = _arena_fixture()
     journal = tmp_path / "attempt.jsonl"
-    monkeypatch.setattr(simulation, "_game_worker", _payment_game_worker)
+    monkeypatch.setattr(
+        simulation,
+        "GAME_WORKER",
+        "tests.training.test_game_errors:_payment_game_worker",
+    )
     failed = simulation.play_game(game, players, {}, 1000, 20, journal)
     assert "fixture payment mismatch" in failed["failure"]
     assert failed["winner"] is None and failed["failed_player_id"] is None
@@ -719,7 +724,11 @@ def test_arena_lost_worker_retains_acknowledged_command(
 ) -> None:
     game, players = _arena_fixture()
     game["test_hang"] = hang
-    monkeypatch.setattr(simulation, "_game_worker", _lost_payment_worker)
+    monkeypatch.setattr(
+        simulation,
+        "GAME_WORKER",
+        "tests.training.test_game_errors:_lost_payment_worker",
+    )
     journal = tmp_path / "attempt.jsonl"
     result = simulation.play_game(game, players, {}, 1000, 5, journal)
     assert result["termination_reason"] == ("timeout" if hang else "crash")

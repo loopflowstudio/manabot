@@ -59,7 +59,7 @@ from typing import Any, Literal
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import numpy as np
 
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.sim.players import ScriptedGreedyPlayer
 import managym
 
