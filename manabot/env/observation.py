@@ -41,6 +41,7 @@ ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
+ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
@@ -61,7 +62,7 @@ class ObservationEncoder:
     def __init__(self, config: ObservationConfig):
         self.config = config
         self.relation_dim = (
-            RELATION_DIM if config.policy_input_version >= 3 else LEGACY_RELATION_DIM
+            RELATION_DIM if config.policy_input_version >= 4 else LEGACY_RELATION_DIM
         )
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
@@ -93,7 +94,9 @@ class ObservationEncoder:
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
-        self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
+        self.action_dim = (
+            self.num_actions + 5
+        )  # declaration, mode, ability, continuation join, validity
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -167,6 +170,12 @@ class ObservationEncoder:
             for action in obs.action_space.actions
         ):
             raise ValueError("Observation capacity exceeded: action focus")
+        for action in obs.action_space.actions:
+            if action.continuation_index is not None and (
+                self.config.policy_input_version < 2
+                or not 0 <= action.continuation_index < len(obs.continuation)
+            ):
+                raise ValueError("invalid action continuation reference")
         out = {
             "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
             "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
@@ -314,7 +323,7 @@ class ObservationEncoder:
                 target_row = row.copy()
                 target_row[0], target_row[22] = kind, clause + 1
                 target_row[29] = ordinal + 1 if kind == 2 else 1
-                if kind == 2 and self.config.policy_input_version >= 3:
+                if kind == 2 and self.config.policy_input_version >= 4:
                     legal = frame.targets[ordinal].legal_at_resolution_start
                     target_row[32] = 0 if legal is None else (1 if legal else 2)
                 _reference(target_row, target)
@@ -535,6 +544,7 @@ class ObservationEncoder:
             for column, selector in (
                 (ACTION_MODE_INDEX, action.mode_index),
                 (ACTION_ABILITY_INDEX, action.ability_index),
+                (ACTION_CONTINUATION_INDEX, action.continuation_index),
             ):
                 if selector is not None:
                     if not 0 <= selector <= MAX_ACTION_SELECTOR:

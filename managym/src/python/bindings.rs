@@ -527,6 +527,7 @@ pub enum ActionEnum {
     TapForCost = 13,
     LearnTakeLesson = 14,
     LearnDiscard = 15,
+    ChooseTrigger = 16,
 }
 
 #[cfg(feature = "python")]
@@ -556,6 +557,8 @@ impl ActionEnum {
     const LEARN_TAKE_LESSON: Self = Self::LearnTakeLesson;
     #[classattr]
     const LEARN_DISCARD: Self = Self::LearnDiscard;
+    #[classattr]
+    const CHOOSE_TRIGGER: Self = Self::ChooseTrigger;
     #[classattr]
     const DECLINE_CHOICE: Self = Self::DeclineChoice;
     #[classattr]
@@ -589,6 +592,7 @@ impl From<ActionType> for ActionEnum {
             ActionType::ScryBottom => Self::ScryBottom,
             ActionType::LearnTakeLesson => Self::LearnTakeLesson,
             ActionType::LearnDiscard => Self::LearnDiscard,
+            ActionType::ChooseTrigger => Self::ChooseTrigger,
             ActionType::SelectCard => Self::SelectCard,
             ActionType::DeclineChoice => Self::DeclineChoice,
             ActionType::PayCost => Self::PayCost,
@@ -613,6 +617,7 @@ impl From<ActionEnum> for ActionType {
             ActionEnum::ScryBottom => Self::ScryBottom,
             ActionEnum::LearnTakeLesson => Self::LearnTakeLesson,
             ActionEnum::LearnDiscard => Self::LearnDiscard,
+            ActionEnum::ChooseTrigger => Self::ChooseTrigger,
             ActionEnum::SelectCard => Self::SelectCard,
             ActionEnum::DeclineChoice => Self::DeclineChoice,
             ActionEnum::PayCost => Self::PayCost,
@@ -640,6 +645,7 @@ pub enum ActionSpaceEnum {
     Waterbend = 10,
     Discard = 11,
     LegendRule = 12,
+    OrderTriggers = 13,
 }
 
 #[cfg(feature = "python")]
@@ -768,6 +774,8 @@ impl ActionSpaceEnum {
     const DISCARD: Self = Self::Discard;
     #[classattr]
     const LEGEND_RULE: Self = Self::LegendRule;
+    #[classattr]
+    const ORDER_TRIGGERS: Self = Self::OrderTriggers;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -795,6 +803,7 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::Waterbend => Self::Waterbend,
             ActionSpaceKind::Discard => Self::Discard,
             ActionSpaceKind::LegendRule => Self::LegendRule,
+            ActionSpaceKind::OrderTriggers => Self::OrderTriggers,
         }
     }
 }
@@ -816,6 +825,7 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
             ActionSpaceEnum::Waterbend => Self::Waterbend,
             ActionSpaceEnum::Discard => Self::Discard,
             ActionSpaceEnum::LegendRule => Self::LegendRule,
+            ActionSpaceEnum::OrderTriggers => Self::OrderTriggers,
         }
     }
 }
@@ -1491,6 +1501,8 @@ pub struct PyAction {
     pub mode_index: Option<usize>,
     #[pyo3(get, set)]
     pub ability_index: Option<usize>,
+    #[pyo3(get)]
+    pub continuation_index: Option<usize>,
 }
 
 #[cfg(feature = "python")]
@@ -1599,6 +1611,7 @@ impl From<ActionOption> for PyAction {
             description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
+            continuation_index: value.continuation_index,
         }
     }
 }
@@ -1613,6 +1626,7 @@ impl From<PyAction> for ActionOption {
             description: value.description,
             mode_index: value.mode_index,
             ability_index: value.ability_index,
+            continuation_index: value.continuation_index,
         }
     }
 }
@@ -1698,6 +1712,8 @@ impl From<PyStackTarget> for StackTargetData {
 #[derive(Clone)]
 pub struct PyStackObject {
     #[pyo3(get, set)]
+    pub description: Option<String>,
+    #[pyo3(get, set)]
     pub stack_object_id: i32,
     #[pyo3(get, set)]
     pub kind: StackObjectKindEnum,
@@ -1720,6 +1736,7 @@ impl From<StackObjectData> for PyStackObject {
     fn from(value: StackObjectData) -> Self {
         Self {
             stack_object_id: value.stack_object_id,
+            description: value.description,
             kind: value.kind.into(),
             controller_id: value.controller_id,
             source_card_registry_key: value.source_card_registry_key,
@@ -1736,6 +1753,7 @@ impl From<PyStackObject> for StackObjectData {
     fn from(value: PyStackObject) -> Self {
         Self {
             stack_object_id: value.stack_object_id,
+            description: value.description,
             kind: value.kind.into(),
             controller_id: value.controller_id,
             source_card_registry_key: value.source_card_registry_key,
@@ -3516,7 +3534,7 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=3))]
+    #[pyo3(signature = (obs, policy_input_version=4))]
     fn encode_observation(
         &self,
         py: Python<'_>,
@@ -3524,7 +3542,7 @@ impl PyEnv {
         policy_input_version: u8,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=3) {
+        if !matches!(policy_input_version, 1..=4) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         let config = ObservationEncoderConfig {
@@ -3588,7 +3606,7 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=6).contains(&frame.kind)
+        !(1..=9).contains(&frame.kind)
             || (frame.kind != 5
                 && frame
                     .targets

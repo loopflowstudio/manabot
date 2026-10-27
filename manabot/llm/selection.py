@@ -13,6 +13,7 @@ from typing import Protocol
 from manabot.llm.schema import (
     Attempt,
     DecisionInput,
+    DecisionObjective,
     EncodedPrompt,
     Failure,
     FallbackEvidence,
@@ -43,6 +44,64 @@ class ContextOverflow(ValueError):
     """The complete prompt plus its generation allowance exceeds the budget."""
 
 
+def _answer(text: str, thinking: bool | None) -> str:
+    """Qwen opens thinking in its prompt; require exactly one closing boundary.
+
+    Never search reasoning for a legal reference or accept an unfinished thought.
+    Raw text and tokens remain unchanged in the response receipt.
+    """
+    if thinking is not True:
+        return text.strip()
+    if text.startswith("<think>"):
+        text = text[len("<think>") :]
+    if text.count("</think>") != 1 or "<think>" in text:
+        return ""
+    return text.split("</think>", 1)[1].strip()
+
+
+def decision_messages(
+    decision: DecisionInput,
+    *,
+    objective: DecisionObjective = "legal-action",
+    thinking: bool | None = None,
+) -> tuple[Message, ...]:
+    """The shared protocol prompt, independent of runtime or chat template."""
+    instruction = (
+        "You are playing Magic: The Gathering as the player labeled You. "
+        "Choose the legal action that maximizes your probability of winning "
+        "this game.\n\n"
+        if objective == "win-game"
+        else ""
+    )
+    return (
+        Message(
+            role="user",
+            content=(
+                instruction
+                + decision.text
+                + "\n\nLegal action references:\n"
+                + "\n".join(decision.legal_references)
+                + (
+                    "\n\nReason about the decision, then end your thinking and return "
+                    "exactly one listed action reference as the final answer, with no other text."
+                    if thinking is True
+                    else "\n\nReturn exactly one listed action reference, with no other text."
+                )
+            ),
+        ),
+    )
+
+
+def uniform_fallback(decision: DecisionInput, seed: int) -> FallbackEvidence:
+    rng = random.Random(seed)
+    state = repr(rng.getstate())
+    return FallbackEvidence(
+        seed=seed,
+        state_before=state,
+        selected_index=rng.randrange(len(decision.legal_references)),
+    )
+
+
 def select(
     decision: DecisionInput,
     config: InferenceConfig,
@@ -50,6 +109,7 @@ def select(
     *,
     started: float | None = None,
     progress: Callable[[SelectionResult], None] | None = None,
+    expected_prompt: EncodedPrompt | None = None,
 ) -> SelectionResult:
     """Return evidence for success or failure; only invalid answers get recovery.
 
@@ -60,17 +120,7 @@ def select(
     deadline = start + config.deadline_seconds
     result = SelectionResult(decision=decision, config=config, runtime=runtime.identity)
     attempts: list[Attempt] = []
-    messages = (
-        Message(
-            role="user",
-            content=(
-                decision.text
-                + "\n\nLegal action references:\n"
-                + "\n".join(decision.legal_references)
-                + "\n\nReturn exactly one listed action reference, with no other text."
-            ),
-        ),
-    )
+    messages = decision_messages(decision, thinking=config.enable_thinking)
 
     def publish() -> None:
         nonlocal result
@@ -94,30 +144,55 @@ def select(
             attempt = Attempt(messages=messages)
             attempts.append(attempt)
             publish()
-            prompt = runtime.encode(messages)
+            phase_start = time.monotonic()
+            try:
+                prompt = runtime.encode(messages)
+            finally:
+                attempt = attempt.model_copy(
+                    update={"encode_seconds": time.monotonic() - phase_start}
+                )
+                attempts[-1] = attempt
             attempt = attempt.model_copy(
                 update={"prompt": prompt, "prompt_tokens": len(prompt.token_ids)}
             )
             attempts[-1] = attempt
             publish()
             check_deadline()
+            if (
+                origin == "initial"
+                and expected_prompt is not None
+                and prompt != expected_prompt
+            ):
+                raise ValueError(
+                    "retained prompt text/token IDs differ from current encoding"
+                )
             if len(prompt.token_ids) + config.max_new_tokens > config.context_tokens:
                 raise ContextOverflow(
                     "complete prompt plus generation exceeds context_tokens"
                 )
-            response = runtime.generate(prompt, deadline)
-            reference = response.text.strip()
+            phase_start = time.monotonic()
+            try:
+                response = runtime.generate(prompt, deadline)
+            finally:
+                attempt = attempt.model_copy(
+                    update={"generation_seconds": time.monotonic() - phase_start}
+                )
+                attempts[-1] = attempt
+            validation_start = time.monotonic()
+            reference = _answer(response.text, config.enable_thinking)
             error = None
             if response.finish_reason != "eos":
                 error = "incomplete response: generation limit reached"
             elif reference not in decision.legal_references:
                 error = "expected exactly one listed action reference"
+            validation_seconds = time.monotonic() - validation_start
             peak = runtime.peak_gpu_bytes()
             attempt = attempt.model_copy(
                 update={
                     "response": response,
                     "output_tokens": len(response.token_ids),
                     "validation_error": error,
+                    "validation_seconds": validation_seconds,
                     "seconds": time.monotonic() - attempt_start,
                     "peak_gpu_bytes": peak,
                 }
@@ -141,18 +216,14 @@ def select(
                 Message(role="user", content=REPAIR),
             )
         check_deadline()
-        rng = random.Random(config.fallback_seed)
-        state = repr(rng.getstate())
-        selected_index = rng.randrange(len(decision.legal_references))
+        fallback = uniform_fallback(decision, config.fallback_seed)
         result = result.model_copy(
             update={
-                "selected_reference": decision.legal_references[selected_index],
+                "selected_reference": decision.legal_references[
+                    fallback.selected_index
+                ],
                 "origin": "fallback",
-                "fallback": FallbackEvidence(
-                    seed=config.fallback_seed,
-                    state_before=state,
-                    selected_index=selected_index,
-                ),
+                "fallback": fallback,
             }
         )
     except Exception as error:

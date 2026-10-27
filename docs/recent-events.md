@@ -135,14 +135,15 @@ These are correctness fixtures, not scientific training or evaluation evidence.
 ## Current continuation input
 
 Public history and current continuation are separate inputs. Fresh
-`ObservationConfig` uses draft policy input v3: a native `relations[64,33]` float32
+`ObservationConfig` uses policy input v4: a native `relations[64,33]` float32
 buffer represents ordered stack entries, announced targets and clauses, chosen
-modes/abilities, kicker, reserved sacrifice, and suspended payment obligations.
+modes/abilities, kicker, reserved sacrifice, suspended payment obligations, and
+waiting triggers with their ability and causal context.
 The version is recorded in checkpoint configuration and world input binding.
 Loading a checkpoint whose observation configuration omits the version selects
 v1, with its original tensors, parameter names and meaning. Loading never trains
-or upgrades those weights. V2 retains its original 32 columns and architecture;
-v3 appends one column without reinterpreting them. Native scalar and vector
+or upgrades those weights. V2/v3 retain their original 32 columns and architecture;
+v4 appends one column without reinterpreting them. Native scalar and vector
 buffers bind the version by their relation width (32 or 33).
 
 V1 checkpoints still lack continuation input. A matched-input LLM comparison
@@ -175,23 +176,26 @@ the mode, mana amounts and Lesson flag columns for each possible output. Columns
 | 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
 | 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
 | 30–31 | Ability resolutions this turn; row validity |
-| 32 (v3 only) | Target legality at resolution start: 0 unknown/not evaluated, 1 legal, 2 illegal |
+| 32 (v4 only) | Target legality at resolution start: 0 unknown/not evaluated, 1 legal, 2 illegal |
 
 Zero denotes absent selectors/links and padding. The model joins definitions to
 its existing card catalog, gathers object embeddings for links, and combines
 relation context with object and action embeddings. It never treats transport
-IDs as numeric features. Frame and target order remain numeric ordinal features;
-the channel has no writable memory across decisions.
+IDs as numeric features. Public stack and target order retain ordinal features.
+Pending-trigger frame ordinals are joins only: all rows for the selected frame
+are pooled into that action, so same-source occurrences retain causal/target
+context without learning occurrence numbers. The action join is checked and
+excluded from numeric features. The channel has no writable memory across decisions.
 
-Atomic text capture v3 retains these same typed frames alongside the unchanged
-schema-6 Observation. Native types validate portable viewer JSON; Python owns
+Atomic text capture v4 retains these same typed frames alongside the unchanged
+schema-7 Observation. Native types validate portable viewer JSON; Python owns
 formatting and the small capture envelope. Public definitions and their content
 digest are cached on the immutable native content pack. Origin-bound submission,
 reset/stale rejection and complete legal Commands retain their existing owners.
 The earlier unreleased capture-v1 prompt evidence remains historical evidence;
-it does not acquire continuation facts. Capture-v2 evidence remains readable;
+it does not acquire continuation facts. Capture-v3 evidence remains readable;
 its absent `legal_at_resolution_start` is unknown, never false. Text representation
-v3 labels the fact “Legal when resolution began.”
+v4 labels the fact “Legal when resolution began.”
 
 Suspended target slots project `legal_at_resolution_start: bool | null` directly
 from their retained frame. Announcement and public stack slots have null; no
@@ -200,11 +204,11 @@ ordinal, including ineligible slots. This fact cannot be reconstructed from
 current hexproof, control or type. It does not certify current presence: expired
 object references never join a replacement incarnation. Only the acting viewer
 receives the suspended facts. Clone/rollback preserve them with the frame.
-The draft input/capture versions and `w15-resolution-draft` await the final
-MTG-195 integration and world admission; historical benchmark evidence below
+The draft input/capture versions and `w15-resolution-draft` include merged MTG-195 and await final world admission; historical benchmark evidence below
 still describes its recorded v2 sources.
 
-Measure encode-only behavior with
+The v2 measurement protocol and receipts below are historical; they do not
+establish w14 performance. Measure encode-only behavior with
 `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`
 (`-- --legacy` isolates the old layout after refactoring). The seeded corpus
 contains priority, target, additional-cost and large-legal positions and reports

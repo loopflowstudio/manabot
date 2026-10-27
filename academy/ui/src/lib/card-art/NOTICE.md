@@ -1,7 +1,7 @@
 # Card art cache
 
-Files in this directory are Magic: The Gathering card art crops and the
-classic card back,
+Files in this directory are Magic: The Gathering card art crops, printed card
+images under `full/`, and the classic card back,
 © Wizards of the Coast LLC, fetched once per machine from Scryfall's image
 CDN by `academy/ui/scripts/fetch-card-art.mjs` (never at runtime, never
 re-fetched once present). They are used as unofficial Fan Content permitted

@@ -306,7 +306,7 @@ impl PyVectorEnv {
     }
 }
 
-/// Buffer width binds frozen v2 versus v3 semantics in scalar/vector collectors.
+/// Buffer width binds 32-column v2/v3 versus 33-column v4 semantics in scalar/vector collectors.
 #[cfg(feature = "python")]
 pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> {
     let Some(relations) = buffers.get_item("relations")? else {
@@ -314,8 +314,8 @@ pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> 
     };
     let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
     match shape.last() {
-        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(2),
-        Some(&crate::agent::continuation::RELATION_DIM) => Ok(3),
+        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(3),
+        Some(&crate::agent::continuation::RELATION_DIM) => Ok(4),
         _ => Err(PyValueError::new_err(
             "unsupported continuation relation width",
         )),

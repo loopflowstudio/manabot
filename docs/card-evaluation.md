@@ -11,7 +11,7 @@ observations, rule hashes, RNG and search clones.
 `CardEvaluationSpec` in `manabot/eval/card_evaluation.py` names the experiment
 and run, and takes admitted registrations, explicit checkpoint paths, unique
 deal seeds, limits and an optional `AuthoredMatchup`. Omit that matchup for the
-existing Lessons/Allies matrix. Resuming a run requires identical agents and
+existing Lessons/Allies matrix. Resuming a run requires identical players and
 conditions.
 
 ```sh
@@ -24,9 +24,9 @@ uv run --extra evaluation python -m manabot.eval.cards data --experiment EXPERIM
 Card Data, with opponent, position, deck and opponent-deck filters that switch
 between selections computed in Python. Narrow any of them from the command line:
 
-- `--subject` and `--opponent` (repeatable) take an agent's name, its Etude
+- `--subject` and `--opponent` (repeatable) take a player's name, its Etude
   identity, or at least eight characters of its checkpoint digest. Without a
-  subject, every agent's games pool, once for each side.
+  subject, every player's games pool, once for each side.
 - `--position play|draw`, `--deck`, `--opponent-deck`.
 - `--run` and `--commit` (a prefix) narrow to some runs or source commits.
 
@@ -51,7 +51,7 @@ return {
 ```
 
 The participants are the two registered players in Etude row order (the order
-of the match's agents). The run then appears in `cards data --experiment` for
+of the match's players). The run then appears in `cards data --experiment` for
 its experiment, and `cards audit` rebuilds its games from those participants;
 only card evaluations are additionally bound to an eight-leg schedule.
 Capture happens during `play_cell`'s existing verification replay and writes
@@ -83,8 +83,9 @@ unavailable with fewer than two deals.
 
 ## Tables and admission
 
-Each match delivers four author tables; Etude adds `run` and `match`, and
-`player` is an Etude participant, not an engine seat:
+Each match delivers four author tables; Etude adds `run` and `match`.
+`seat` indexes `Match.players`; `game_seat` is the native engine seat (0 is on
+the play):
 
 - `card_plays`: one row per game and player, with deal, decks, position,
   outcome, eligibility, win, the evidence path and digests, and the source
@@ -93,8 +94,8 @@ Each match delivers four author tables; Etude adds `run` and `match`, and
 - `cards`: names for card keys (native content digest plus definition ID).
 - `plays`: the shared outcome table every Etude evaluation report reads.
 
-Subjects and opponents are joins against Etude's `seats` and `agents`, never
-fields copied into card rows; `agents.artifact` is a checkpoint's digest.
+Subjects and opponents are joins against Etude's `seats` and `players`, never
+fields copied into card rows; `players.artifact` is a checkpoint's digest.
 Within an experiment, games pool across engine and manabot commits; the source
 commit is provenance and a filter, not part of the pooling key.
 
@@ -112,7 +113,7 @@ uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXPERI
 and the runtime/content identity its eval run declared, and rebuilds its rows.
 `--replay` also replays each trace. Evidence lives in the eval run's folder at
 `artifacts/evidence/SHA256.json.gz` and travels with ordinary Etude delivery
-(`etude sync`). Etude sends files under `artifacts/` once and never re-reads
+(`uv run etude sync`). Etude sends files under `artifacts/` once and never re-reads
 them, so delivery stays cheap with thousands of games. Earlier runs keep their
 evidence at `evidence/`; their rows name that path. Evidence contains
 copy/incarnation identity, owner/controller, movement source/destination/cause,

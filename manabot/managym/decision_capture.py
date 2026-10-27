@@ -2,7 +2,7 @@
 
 The native handle owns origin and submission. These strict read-only models admit
 serialized evidence for pure rendering; they cannot reconstruct an origin handle.
-Schema-6 Observation and Command retain their existing owners in decision.py.
+Schema-7 Observation and Command retain their existing owners in decision.py.
 Native deserialization validates viewer fields and continuation frames; Python
 keeps only the portable presentation/content envelope.
 """
@@ -146,7 +146,7 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[2, 3]
+    capture_version: Literal[3, 4]
     world_version: str
     content_digest: str
     observation: SkipValidation[Observation]
@@ -170,10 +170,10 @@ class DecisionInput(CaptureModel):
         cls, value: object, info: ValidationInfo
     ) -> list[managym.ContinuationFrame]:
         frames = managym.parse_continuation_frames_json(json.dumps(value))
-        if info.data.get("capture_version") == 2 and any(
+        if info.data.get("capture_version") == 3 and any(
             target.legal_at_resolution_start is not None
             for frame in frames
             for target in frame.targets
         ):
-            raise ValueError("capture v2 has no retained eligibility contract")
+            raise ValueError("capture v3 has no retained eligibility contract")
         return frames

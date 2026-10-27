@@ -15,25 +15,10 @@
   existing EffectFrame; preserve invalid positions rather than compacting targets.
   Untargeted trigger context is used only when no targets were chosen. Existing
   stack CardId identity remains unchanged; no broader stack ABI is inferred.
-- Rechecked 2026-10-26: MTG-195 still has uncommitted trigger-order/w14 work;
-  its local notes report implementation and validation available for review,
-  while the Task planning snapshot remains stale. Final world identity and
-  fresh integrated receipts require its supported handoff; local implementation
-  checks do not certify either frozen world.
-- The serialized frame changes canonical hashing. Use hash 10 (MTG-195 holds
-  9) and the provisional `w15-resolution-draft` identity to prevent frozen-world
-  admission while integration is unavailable. Final world assignment is pending.
-- Headless concept review (2026-10-26): the accepted shared observation direction
-  requires exposing retained entry eligibility through the existing continuation
-  channel, without introducing a new player interaction. Record this as next
-  implementation direction in `plan.md`; do not implement or select navigation
-  here. Exact unreserved schema/input versions remain integration work, not a
-  new product choice. The HTML review is a static artifact, not a rendered proof.
-
-- Implementation correction (2026-10-27): use draft policy-input/capture/text v3
-  in this isolated w15 draft. Append relation column 32 (unknown=0, legal=1,
-  illegal=2), keeping all v2 columns and model dimensions frozen. Buffer width
-  binds scalar/vector input semantics; final version reservation and world
-  admission remain integration work. Embedded semantic schema 6 is unchanged.
-  Historical missing eligibility parses as unknown. Generated paired captures
-  are test evidence, not authored runtime setups or an admitted-deck claim.
+- Integration (2026-10-27): Jack Heart requested stacking on MTG-195 and retried
+  after its delivery. PR386 has merged, so sync main incorporates it directly.
+  Preserve trigger-ordering context/action joins and resolution eligibility together.
+- Combined draft contracts: world `w15-resolution-draft`, hash 10, policy-input
+  and capture/text v4, embedded decision schema 7. V2/v3 keep 32 relation columns;
+  v4 adds eligibility at column 32. Validity remains column 31. Parent world w14
+  and v3 evidence remain frozen. Final world admission and new receipts are pending.

@@ -1,0 +1,9 @@
+{
+  "model_id": "anthropic/claude-haiku-5.5",
+  "objective": "win-game",
+  "max_output_tokens": 8192,
+  "reasoning_effort": "high",
+  "deadline_seconds": 120,
+  "fallback_seed": 37,
+  "cache_prompt": false
+}

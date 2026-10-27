@@ -58,6 +58,8 @@ fn settle_targeting_opponent(s: &mut Scenario) {
     for _ in 0..20 {
         if s.action_space().kind == ActionSpaceKind::ChooseTarget {
             target_opponent(s);
+        } else if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            s.step_action(0);
         } else if s.action_space().kind == ActionSpaceKind::Priority
             && s.game().state.stack_objects.is_empty()
         {
@@ -238,6 +240,8 @@ fn landfall_creates_resources_and_counters() {
     for _ in 0..20 {
         if s.action_space().kind == ActionSpaceKind::Modal {
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+        } else if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            s.step_action(0);
         } else if s.game().state.stack_objects.is_empty()
             && s.action_space().kind == ActionSpaceKind::Priority
         {

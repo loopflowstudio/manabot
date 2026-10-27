@@ -139,7 +139,7 @@ class Env:
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
     def encode_observation(
-        self, obs: Observation, policy_input_version: int = 3
+        self, obs: Observation, policy_input_version: int = 4
     ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]
@@ -264,6 +264,7 @@ class ActionEnum(IntEnum):
     TAP_FOR_COST = 13
     LEARN_TAKE_LESSON = 14
     LEARN_DISCARD = 15
+    CHOOSE_TRIGGER = 16
 
 class ActionSpaceEnum(IntEnum):
     GAME_OVER = 0
@@ -277,6 +278,9 @@ class ActionSpaceEnum(IntEnum):
     MODAL = 8
     LEARN = 9
     WATERBEND = 10
+    DISCARD = 11
+    LEGEND_RULE = 12
+    ORDER_TRIGGERS = 13
 
 class StackObjectKindEnum(IntEnum):
     SPELL = 0
@@ -416,6 +420,7 @@ class Action:
     description: str | None
     mode_index: int | None
     ability_index: int | None
+    continuation_index: int | None
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
@@ -430,6 +435,7 @@ class StackTarget:
     card_id: int | None
 
 class StackObject:
+    description: str | None
     stack_object_id: int
     kind: StackObjectKindEnum
     controller_id: int

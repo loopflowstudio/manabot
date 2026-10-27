@@ -431,7 +431,7 @@ export class GameStore {
 
     this.actionLog = [
       ...this.actionLog,
-      ...lines.map((line) => this.createEntry(actor, line)),
+      ...lines.map((line) => this.createEntry(line.startsWith('Auto: ') ? 'system' : actor, line)),
     ];
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildReplayFrames } from './replay';
+import { buildReplayFrames, replayLogEntries } from './replay';
 import { createReplayStore } from './replay.svelte';
 import type { Observation, Trace } from './types';
 
@@ -83,6 +83,21 @@ function makeTrace(): Trace {
 }
 
 describe('buildReplayFrames', () => {
+  it('labels forced actions for either seat as automation in the replay log', () => {
+    const trace = makeTrace();
+    trace.events[0].auto = true;
+    trace.events[0].action_description = 'Choose red';
+    trace.events[1].auto = true;
+    expect(replayLogEntries(trace)).toEqual([
+      { id: 'replay-0', actor: 'system', text: 'Auto: Hero: Choose red' },
+      { id: 'replay-1', actor: 'system', text: 'Auto: Villain: Pass priority' },
+    ]);
+    trace.events[0].auto = false;
+    expect(replayLogEntries(trace)[0]).toEqual({
+      id: 'replay-0', actor: 'hero', text: 'Hero: Choose red',
+    });
+  });
+
   it('pairs annotations with the post-action board state', () => {
     const frames = buildReplayFrames(makeTrace());
 

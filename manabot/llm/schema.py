@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+DecisionObjective = Literal["legal-action", "win-game"]
+
 
 class Record(BaseModel):
     # Importing infra's shared base also loads its training runtime and Torch.
@@ -43,8 +45,9 @@ class InferenceConfig(Record):
     deadline_seconds: float = Field(gt=0, allow_inf_nan=False)
     fallback_seed: int = Field(strict=True)
     decoding: Literal["greedy"] = "greedy"
-    # None preserves the tokenizer's default; reasoning output is not supported.
-    enable_thinking: Literal[False] | None = None
+    # Explicit thinking uses Qwen's closing </think> delimiter; the final answer
+    # alone must be one legal reference. None preserves the historical protocol.
+    enable_thinking: bool | None = None
 
     @model_validator(mode="after")
     def validate_budget(self) -> "InferenceConfig":
@@ -68,6 +71,8 @@ class GeneratedResponse(Record):
     text: str
     token_ids: tuple[int, ...]
     finish_reason: Literal["eos", "length"]
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    answer_tokens: int | None = Field(default=None, ge=0)
 
 
 class RuntimeIdentity(Record):
@@ -91,6 +96,11 @@ class Attempt(Record):
     # Null in a pending snapshot; never report unfinished inference as zero latency.
     seconds: float | None = None
     peak_gpu_bytes: int | None = None
+    # Worker monotonic host intervals, nested within seconds. Generation includes
+    # input/output transfer and decoding; it is not device-only prefill/decode.
+    encode_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    generation_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    validation_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class Failure(Record):

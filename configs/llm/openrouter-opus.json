@@ -1,0 +1,8 @@
+{
+  "model_id": "anthropic/claude-opus-5.5",
+  "max_output_tokens": 4096,
+  "reasoning_effort": "low",
+  "deadline_seconds": 120,
+  "fallback_seed": 37,
+  "cache_prompt": false
+}

@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-/// Policy inputs v2/v3: up to 64 relation rows, 32/33 floats per row. Overflow is an
+/// Policy inputs v2/v3/v4: up to 64 relation rows, 32/33 floats per row. Overflow is an
 /// admission error, never truncation. Zero is padding/absence for selectors.
 pub const RELATION_ROWS: usize = 64;
 pub const LEGACY_RELATION_DIM: usize = 32;
@@ -60,7 +60,8 @@ pub struct ManaOutput {
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
     /// 1 spell, 2 activated stack ability, 3 triggered stack ability,
-    /// 4 announcement, 5 resolution, 6 suspended decision/obligation.
+    /// 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger,
+    /// 8 trigger being placed, 9 two-pass placement cursor.
     pub kind: u8,
     pub decision: u8,
     pub parent: Option<usize>,
@@ -95,7 +96,11 @@ impl ContinuationFrame {
 }
 
 impl Game {
-    fn visible_reference(&self, object: ObjectRef, viewer: PlayerId) -> VisibleReference {
+    pub(crate) fn visible_reference(
+        &self,
+        object: ObjectRef,
+        viewer: PlayerId,
+    ) -> VisibleReference {
         let card_id = CardId::from(object.entity);
         if self.current_object_ref(card_id) != Some(object) {
             return VisibleReference {
@@ -136,7 +141,7 @@ impl Game {
             .unwrap_or_default()
     }
 
-    fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
+    pub(crate) fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
         match target {
             Target::Player(player) => VisibleReference {
                 player: Some(player.0),
@@ -193,7 +198,80 @@ impl Game {
         if let Some(suspended) = &self.state.suspended_decision {
             self.append_suspended_frames(suspended, viewer, &mut frames);
         }
+        if let Some(placement) = &self.state.trigger_placement {
+            let parent = frames.len();
+            frames.push(ContinuationFrame {
+                kind: 9,
+                decision: placement.group + 1,
+                controller: placement.controller().0,
+                ..ContinuationFrame::default()
+            });
+            for trigger in placement
+                .remaining
+                .iter()
+                .chain(placement.placing.iter())
+                .filter(|t| t.controller == viewer)
+            {
+                let mut source = trigger
+                    .source_ref
+                    .map(|r| self.visible_reference(r, viewer))
+                    .unwrap_or_default();
+                source.definition = Some(trigger.source_lki.map_or(
+                    self.state.cards[trigger.source_card].definition_id.0,
+                    |lki| lki.definition_id.0,
+                ));
+                frames.push(ContinuationFrame {
+                    kind: if placement
+                        .placing
+                        .as_ref()
+                        .is_some_and(|t| t.id == trigger.id)
+                    {
+                        8
+                    } else {
+                        7
+                    },
+                    parent: Some(parent),
+                    controller: viewer.0,
+                    source,
+                    decision: match trigger.ordering_class {
+                        crate::flow::trigger::TriggerOrderingClass::Ordinary => 1,
+                        crate::flow::trigger::TriggerOrderingClass::AbilityTriggered => 2,
+                    },
+                    ability: Some(trigger.ability_index),
+                    active_clause: Some(trigger.requirement_index),
+                    targets: self.clause_targets(
+                        &trigger.targets,
+                        &trigger.target_req_indices,
+                        viewer,
+                    ),
+                    context: trigger.context.map(|t| self.target_reference(t, viewer)),
+                    ..ContinuationFrame::default()
+                });
+            }
+        }
         frames
+    }
+
+    pub(crate) fn trigger_action_frame(
+        &self,
+        action: &super::action::Action,
+        viewer: PlayerId,
+    ) -> Option<usize> {
+        let super::action::Action::ChooseTrigger { trigger_id, player } = action else {
+            return None;
+        };
+        if *player != viewer {
+            return None;
+        }
+        let placement = self.state.trigger_placement.as_ref()?;
+        let index = placement
+            .remaining
+            .iter()
+            .filter(|t| t.controller == viewer)
+            .position(|t| t.id == *trigger_id)?;
+        Some(
+            self.state.stack_objects.len() + usize::from(self.pending_choice.is_some()) + 1 + index,
+        )
     }
 
     fn stack_frame(&self, object: &StackObject, viewer: PlayerId) -> ContinuationFrame {

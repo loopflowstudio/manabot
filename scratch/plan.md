@@ -1,7 +1,7 @@
 # MTG-177 — resolution legality and the continuing rules audit
 
-Draft implementation; projection corrected 2026-10-27. The resolution contract is accepted;
-final integrated-world identity and acceptance remain pending.
+Draft implementation integrated with merged MTG-195 on 2026-10-27.
+Final world admission and broader acceptance remain pending.
 
 ## Requested stack — 2026-10-27
 
@@ -11,17 +11,22 @@ the shared continuation/model contracts and final world identity. This supersede
 waiting for an unrelated main-branch delivery. Existing review and no-merge
 boundaries remain; MTG-195's unresolved label choice belongs to its conversation.
 
-Attempted `lf checkout MTG-177 --stack-on MTG-195 --json`; it returned
-`stack parent PR is missing`. Fresh inspection shows MTG-195's implementation is
-still uncommitted with no parent PR available to that operation. Its checkout was
-left intact. Current lf 0.14.17 also fails Task status/checkout reads with
-`missing field interactive`; Session and process inventories remain readable.
-No live audit Graph was observed, and no replacement Graph was launched.
-The stack has not been established. The next supported action is to establish
-MTG-195's parent PR handoff, recover working Task reads, then repeat the requested
-stack operation and reconcile the combined source. Do not apply the old stash
-from the failed runner message: the current implementation edits are already
-present and the cited stash belongs to the earlier recovered audit.
+The retry now reads both Tasks successfully with lf 0.14.18. MTG-195 is
+completed: PR386 merged as `e742e8bffe622ddb43009d1586ceec25d44cf342`.
+The stack selector found the old PR354 merge intent and rejected reparenting;
+no historical delivery was canceled. Since the parent is merged, the supported
+integration is `lf sync --manual` onto main (`37e5ccd8d`), which includes PR386.
+The child remains based on main and inherits MTG-195 through ancestry.
+
+Merge resolution preserves native trigger-placement frames/action joins together
+with resolution-start eligibility. The shipped v3 input/capture contract belongs
+to MTG-195; this repair now uses v4, retaining 32-column v2/v3 layouts and adding
+eligibility at column 32 only for v4. Row validity remains column 31 for pooling,
+frame joins and padding. Embedded decision schema 7 and trigger ordering survive.
+Historical capture v3 lacks eligibility; v4 carries the fact. No fixed-order
+fallback or second legality authority is introduced. Parent w14 evidence stays
+unchanged; the combined draft remains `w15-resolution-draft`/hash 10 until final
+world admission and fresh evidence are prepared.
 
 ## Accepted direction and boundary
 
@@ -69,8 +74,8 @@ use the surviving frame contract. No remaining production deletion target.
 
 Completed projection correction: removed the boolean native encoder `relations`
 selector and its single-width assumption. The existing policy-input version
-contract selects the layout; the same continuation encoder consumes v3. Frozen
-v1/v2 rows and checkpoint omissions survive. No parallel legality computation
+contract selects the layout; the same continuation encoder consumes v4. Frozen
+v1/v2/v3 rows and checkpoint omissions survive. No parallel legality computation
 or new lifecycle was introduced.
 
 Removed `resolution.rs::permanent_on_battlefield` and `spell_controller`:
@@ -102,20 +107,20 @@ entry result. Acting-viewer gating, original slot order and exact-object joins
 are unchanged. True eligibility cannot restore an expired object reference.
 Python bindings and native portable validation retain the fact. Missing historical
 fields mean unknown; malformed facts and eligibility on nonresolution frames
-fail validation. Capture v2 cannot acquire known eligibility retroactively.
+fail validation. Capture v3 cannot acquire known eligibility retroactively.
 
-Draft policy-input v3 appends column 32 to `relations[64,33]`: unknown=0,
+Draft policy-input v4 appends column 32 to `relations[64,33]`: unknown=0,
 legal=1, illegal=2. Columns 0–31 preserve v2 semantics, including row validity
 at 31. Scalar/vector buffer widths bind the version; reference encoding and the
-model use the configured width. V1/v2 checkpoint layouts, initialization order
-and serialized omissions remain intact. Draft capture v3 and text representation
-`manabot-text-3` expose “Legal when resolution began”; embedded Observation and
-Command schema 6 are unchanged. Final version reservation remains integration work.
+model use the configured width. V1/v2/v3 checkpoint layouts, initialization order
+and serialized omissions remain intact. Draft capture v4 and text representation
+`manabot-text-4` expose “Legal when resolution began”; embedded Observation and
+Command schema 7 are unchanged. Final version reservation remains integration work.
 
 The native paired witness covers both controllers: hexproof gained during
 resolution versus present at entry, with a second legal clause allowing both
 effects to suspend. Current observations and v2 tensors are identical; retained
-eligibility, v3 tensors, portable text and model values differ. Independent
+eligibility, v4 tensors, portable text and model values differ. Independent
 expected slot values precede encoder parity assertions. Checked generated
 captures live in `tests/fixtures/resolution-eligibility-captures.json`; these are
 synthetic observation evidence, not executable Academy setups or proof of deck
@@ -126,20 +131,15 @@ was added. Command/reconnect acceptance remains gate-owned after integration.
 
 ## Integration and remaining acceptance
 
-The 2026-10-26 reconciliation confirmed MTG-195 still has uncommitted trigger-order,
-action/observation, hashing, rollback and w14 fixture changes in its own checkout.
-Its accepted design and local implementation notes now report completed local
-validation and availability for review, but no supported commit/PR handoff.
-The Task API's planning snapshot is marked stale and still describes design-only
-authorization; the dated local notes record Jack Heart's later “implement for sure”
-decision. Neither the API snapshot nor reported tests establish integrated acceptance.
-Local main remains `2f5b7cbcd`, already merged here; no newer upstream source was
-inspected. The adjacent implementation and its historical receipts remain separate.
+MTG-195's supported handoff is now its merged PR386. The current sync includes
+that source and newer main changes. Prior isolated receipts remain historical;
+combined acceptance needs fresh focused proofs and final conformance/Academy
+prefixes. No source copying or change to the parent checkout was necessary.
 
-This isolated draft uses `w15-resolution-draft` and canonical hash 10 because
-EffectFrame serialization changed; MTG-195 locally reserved w14/hash 9. This is
-not final world assignment or admission. Remaining work is a supported handoff,
-integration, final identity selection and fresh conformance/Academy prefixes.
+The combined draft retains `w15-resolution-draft` and canonical hash 10 because
+EffectFrame serialization changed beyond w14/hash 9. Policy input and capture v4
+extend the parent's shipped v3 contracts. Final world assignment, fixture roots
+and admission remain explicit next work before delivery.
 
 Gate owns broader affected acceptance once: full debug Rust/clippy,
 world/admission/monitoring, maintained model/choice-separability, Command/recovery

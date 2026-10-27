@@ -86,6 +86,11 @@ pub(super) fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
         if s.action_space().kind == kind {
             return;
         }
+        if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            // This fixture driver deliberately chooses the first offered trigger.
+            s.step_action(0);
+            continue;
+        }
         s.pass_priority();
     }
     assert_eq!(s.action_space().kind, kind);

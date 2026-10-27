@@ -1,5 +1,67 @@
 # Play, evaluate and retain a local challenger
 
+## Ten-deck Elemental play against MTG-183
+
+From this checkout, download and verify the latest published checkpoint from
+MTG-183's current segment, then run the CPU-only local table:
+
+```sh
+doppler run --project manabot --config prd -- ./scripts/play-elemental
+```
+
+The launcher prints an **Elemental deck browser** link with the exact opponent
+digest and initial UR/GW selections. Open that link, browse the ten archetypes,
+inspect each 40-card list and Lesson pool, and select **Use for me** and **Use
+for opponent** in that same browser. The selected decks appear above the list;
+there are no separate deck dropdowns. Click a card to open its printed image.
+Both sides may use the same deck. Click **New Game** to play.
+Forced steps with one legal option advance automatically for either seat and
+appear as **Auto** in the live and replay logs. Real choices remain explicit. The Stops panel's automation
+checkbox disables both forced advancement and automatic priority passes.
+During a game, **Choose decks** prepares the next matchup; **Return to game**
+keeps the current game, while **New Game** ends that attempt and starts the
+selected matchup. Games history retains unfinished attempts too.
+
+The default training segment is `f3748bcabac8`; `--run` selects a later MTG-183
+segment when one exists. The launcher prepares the native runtime before
+checkpoint admission, then orders published checkpoints by their
+recorded update, verifies SHA-256 and byte count, checks world admission and
+CPU placement, and pins those bytes for the server's lifetime. It does not
+train, start cloud compute, or change an opponent during a match. On 2026-10-26
+the latest export was update 5,950, digest
+`4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4`.
+
+Once downloaded, restart without storage credentials or a network fetch:
+
+```sh
+./scripts/play-elemental --offline
+```
+
+Local checkpoint records live in `.runs/elemental-play/checkpoints/` and human
+attempts in `.runs/elemental-play/human-play/play.sqlite`, marked
+`human_exploratory`. The default ports are 18479 (API) and 18480 (browser);
+override with `--port` and `--frontend-port`. Ctrl-C stops both services.
+`--prepare-only` downloads and verifies without starting the table. Use a
+separate server and store with `automated_validation` for automated play.
+The normal launch also populates the local card-art cache once, including full
+card previews. Offline launches reuse that cache. To populate artwork separately,
+run `npm --prefix academy/ui run fetch:card-art`.
+
+Local validation on 2026-10-26 covered 24 release browser cases with cached art
+and the pinned CPU model, plus built-SPA history/privacy/replay, F6, terminal
+UR/GW play, and complete-game stop automation. On seed 0's Interactive matchup,
+the same scripted hero needed 289 deliberate inputs without automation and 73
+with it; forced skipping changes the random opponent's sampling sequence, so
+these are input counts, not matched-trajectory timings. Backend authority,
+recovery, Study, launcher and verifier checks passed. The pointer-driven stop
+comparison exceeded its five-minute overall budget while progressing; the
+keyboard version retains both complete games and that budget and passes.
+Cold-machine startup remains for Ubuntu CI: a warm local proof does not certify
+its empty-artifact startup budget. Automated records do not establish completed
+human play or human return feedback.
+
+## Other local checkpoints
+
 Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
 ```sh

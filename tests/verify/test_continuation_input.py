@@ -17,6 +17,7 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import collision_branches, native_fixtures
+from manabot.verify.trigger_order import ordering_root
 import managym
 
 
@@ -27,7 +28,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
         env.observation_for_player(env.current_agent_index()) for env in branches
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
-    for version in (1, 2, 3):
+    for version in (1, 2, 3, 4):
         space = ObservationSpace(ObservationConfig(policy_input_version=version))
         encoded = [space.encode(obs) for obs in observations]
         for env, obs, expected in zip(branches, observations, encoded, strict=True):
@@ -100,7 +101,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
     )
 
 
-@pytest.mark.parametrize("version", (1, 2, 3))
+@pytest.mark.parametrize("version", (1, 2, 3, 4))
 def test_checkpoint_retains_its_policy_input_version(
     tmp_path: Path, version: int
 ) -> None:
@@ -172,7 +173,7 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
         observation = managym.Observation.from_json(
             json.dumps(capture.observation.viewer_state)
         )
-        # Schema 6 intentionally excludes continuation. Join the validated capture
+        # Schema 7 intentionally excludes continuation. Join the validated capture
         # frames only for the stateless reference encoder, never an execution Env.
         tensors = space.encode(observation)
         rows = space.encoder._encode_relations(
@@ -218,7 +219,7 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
 ):
     record = _eligibility_evidence()[1]
     payload = record.capture
-    payload["capture_version"] = 2
+    payload["capture_version"] = 3
     frames = payload["frames"]
     assert isinstance(frames, list)
     for frame in frames:
@@ -246,8 +247,8 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         with pytest.raises(ValueError):
             DecisionInput.model_validate_json(json.dumps(fresh))
     fresh = _eligibility_evidence()[0].capture
-    fresh["capture_version"] = 2
-    with pytest.raises(ValueError, match="capture v2"):
+    fresh["capture_version"] = 3
+    with pytest.raises(ValueError, match="capture v3"):
         DecisionInput.model_validate_json(json.dumps(fresh))
     fresh = _eligibility_evidence()[0].capture
     fresh["frames"][0]["targets"][0]["legal_at_resolution_start"] = True
@@ -255,7 +256,7 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
-@pytest.mark.parametrize("version", (1, 2, 3))
+@pytest.mark.parametrize("version", (1, 2, 3, 4))
 def test_scalar_and_vector_buffers_bind_policy_version_by_width(version: int) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
@@ -282,3 +283,48 @@ def test_scalar_and_vector_buffers_bind_policy_version_by_width(version: int) ->
     vector.reset_all_into_buffers(players)
     for key in expected:
         np.testing.assert_array_equal(buffers[key][0], expected[key], err_msg=key)
+
+
+@pytest.mark.parametrize("difference", ["ability", "context"])
+def test_same_source_trigger_choices_follow_facts_not_frame_positions(
+    difference: str,
+) -> None:
+    torch.manual_seed(195)
+    _, raw = ordering_root()
+    space = ObservationSpace()
+    encoded = space.encode(raw)
+    batch = {
+        key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
+    }
+    # A bounded policy fixture isolates two occurrences of the same source.
+    # Native projection of these facts is covered by trigger_order_same_source_joins.
+    rows = batch["relations"]
+    header = rows[0, (rows[0, :, 0] == 1) & (rows[0, :, 3] == 7)][0].clone()
+    rows.zero_()
+    for index in range(2):
+        rows[0, index] = header
+        rows[0, index, 1] = index + 1
+        rows[0, index, 2] = 0
+        rows[0, index, 8] = index + 1 if difference == "ability" else 1
+        if difference == "context":
+            rows[0, index + 2] = rows[0, index]
+            rows[0, index + 2, 0] = 3
+            rows[0, index + 2, 24:26] = index + 1
+    batch["actions"][0, 1, :-2] = batch["actions"][0, 0, :-2]
+    batch["actions"][0, :2, -2] = torch.tensor([1, 2])
+    batch["action_focus"].fill_(-1)
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16))
+    logits, _ = agent(batch)
+    assert not torch.isclose(logits[0, 0], logits[0, 1])
+    reordered = {key: value.clone() for key, value in batch.items()}
+    reordered["relations"] = rows.flip(1)
+    torch.testing.assert_close(agent(reordered)[0], logits)
+    swapped = {key: value.clone() for key, value in batch.items()}
+    swapped["actions"][0, :2, -2] = torch.tensor([2, 1])
+    torch.testing.assert_close(agent(swapped)[0][0, :2], logits[0, :2].flip(0))
+    batch["actions"][0, :2, -2] = 0
+    ablated, _ = agent(batch)
+    torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
+    batch["actions"][0, 0, -2] = 64
+    with pytest.raises(ValueError, match="reference has no frame"):
+        agent(batch)

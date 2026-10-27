@@ -16,13 +16,16 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
-from etude.eval.match import EvalRun, Row, Tables, agent
+from etude.eval.match import EvalRun, Row, Tables
 from etude.eval.records import (
-    Agent,
     CheckpointKey,
     CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
+    Model,
+    Player,
     RoundRobin,
 )
 from etude.eval.tournament import hold
@@ -110,7 +113,7 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
+def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     # Bind all Python inference code as well as the separately bound native
     # runtime; a registration's human label never establishes byte identity.
@@ -127,10 +130,10 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
     runtime = runtime_fingerprints(
         match_config=setup, observation_space=spaces[0] if spaces else None
     )
-    entrants = []
+    entrants: list[Player] = []
     for player in spec.players:
         validate_player_compatibility(player, spec.key, runtime)
-        checkpoint = None
+        config = {"registration": player.model_dump(mode="json")}
         if player.runner_kind == "checkpoint":
             path = spec.checkpoints[player.player_id].resolve()
             checkpoint = CheckpointRef(
@@ -141,14 +144,15 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
                     size_bytes=player.checkpoint_bytes,
                 ),
             )
-        entrants.append(
-            agent(
-                player.player_id,
-                checkpoint=checkpoint,
-                code=code,
-                config={"registration": player.model_dump(mode="json")},
+            entrants.append(
+                Model(
+                    name=player.player_id,
+                    checkpoint=checkpoint,
+                    inference=Inference(source=code, config=config),
+                )
             )
-        )
+        else:
+            entrants.append(Code(name=player.player_id, source=code, config=config))
     return tuple(entrants)
 
 
@@ -156,12 +160,12 @@ def play_card_match(match: Match) -> Tables:
     players = card_match_players(match)
     conditions = CardConditions.model_validate(match.conditions)
     paths: dict[str, str] = {}
-    for entrant, player in zip(match.agents, players, strict=True):
-        if entrant.kind == "checkpoint":
+    for entrant, player in zip(match.players, players, strict=True):
+        if isinstance(entrant, Model):
+            artifact = entrant.checkpoint.artifact
             if (
-                entrant.artifact is None
-                or entrant.artifact.sha256 != player.checkpoint_sha256
-                or entrant.artifact.size_bytes != player.checkpoint_bytes
+                artifact.sha256 != player.checkpoint_sha256
+                or artifact.size_bytes != player.checkpoint_bytes
             ):
                 raise ValueError("checkpoint must be admitted local bytes")
             paths[player.player_id] = str(local_checkpoint_file(entrant))
@@ -202,7 +206,8 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
         for play in game_tables["card_plays"]:
             tables["plays"].append(
                 {
-                    "player": play["player"],
+                    "seat": play["seat"],
+                    "game_seat": play["game_seat"],
                     "game": game.game,
                     "score": 0.5 if game.winner is None else float(play["win"] or 0),
                     "on_play": play["on_play"],
@@ -257,7 +262,7 @@ def _game_card_tables(
     }
     return {
         "card_plays": [
-            {**play, **evidence, "participant": participants[int(play["player"] or 0)]}
+            {**play, **evidence, "participant": participants[int(play["seat"] or 0)]}
             for play in rows.plays
         ],
         "card_counts": list(rows.counts),
