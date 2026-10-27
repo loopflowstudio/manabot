@@ -118,9 +118,9 @@ def test_unsupported_or_inconsistent_capture_fails_closed(mutation: str) -> None
     decision = capture_text_decision(env)
     payload = json.loads(decision.capture_json)
     if mutation == "version":
-        payload["capture_version"] = 3
+        payload["capture_version"] += 1
     elif mutation == "frame_version":
-        payload["observation"]["decision"]["schema_version"] = 7
+        payload["observation"]["decision"]["schema_version"] += 1
     elif mutation == "extra":
         payload["observation"]["viewer_state"]["agent"]["secret_future_field"] = 1
     elif mutation == "unbound":
