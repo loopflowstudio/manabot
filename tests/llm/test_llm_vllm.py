@@ -171,6 +171,19 @@ def test_exact_tokens_and_untrusted_server_reply(
         assert response.finish_reason == "eos"
 
 
+def test_generation_defaults_can_come_from_model_config(
+    runtime: vllm_runtime.VLLMRuntime, tmp_path: Path
+) -> None:
+    (tmp_path / "generation_config.json").unlink()
+    (tmp_path / "config.json").write_text(
+        json.dumps({"model_type": "gpt2", "eos_token_id": 7})
+    )
+    loaded = vllm_runtime.VLLMRuntime(
+        runtime.config, identity_path=tmp_path / "identity.json"
+    )
+    assert loaded.eos_ids == {1, 7}
+
+
 def test_failed_batch_retains_every_admitted_game_and_stops_queue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

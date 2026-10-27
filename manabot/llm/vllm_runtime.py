@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from huggingface_hub import snapshot_download
 from pydantic import BaseModel, ConfigDict, Field
-from transformers import AutoTokenizer
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 
 from manabot.llm.cache import TOKENIZER_PATTERNS
 from manabot.llm.schema import (
@@ -57,11 +57,33 @@ class VLLMRuntime:
         self.tokenizer = AutoTokenizer.from_pretrained(
             snapshot, local_files_only=True, trust_remote_code=False
         )
-        generation = json.loads((Path(snapshot) / "generation_config.json").read_text())
-        eos = generation["eos_token_id"]
-        self.eos_ids = set(eos if isinstance(eos, list) else [eos])
+        model_snapshot = snapshot_download(
+            config.model_id,
+            revision=config.model_revision,
+            allow_patterns=["*.json"],
+            local_files_only=True,
+        )
+        # Generation config is optional on the Hub. Match the causal model's
+        # config-derived defaults when the publisher supplies no separate file.
+        if (Path(model_snapshot) / "generation_config.json").exists():
+            generation = GenerationConfig.from_pretrained(
+                model_snapshot, local_files_only=True
+            )
+        else:
+            model_config = AutoConfig.from_pretrained(
+                model_snapshot, local_files_only=True, trust_remote_code=False
+            )
+            generation = GenerationConfig.from_model_config(
+                model_config.get_text_config()
+            )
+        eos = generation.eos_token_id
+        self.eos_ids = (
+            set() if eos is None else {eos} if isinstance(eos, int) else set(eos)
+        )
         if self.tokenizer.eos_token_id is not None:
             self.eos_ids.add(self.tokenizer.eos_token_id)
+        if not self.eos_ids:
+            raise ValueError("model/tokenizer must define an EOS token")
         if self.identity.chat_template != self.tokenizer.get_chat_template():
             raise ValueError(
                 "server receipt and pinned tokenizer chat template disagree"

@@ -140,3 +140,14 @@ its estimated charge is $0.02914788226388888835. The three prior estimates total
 $0.12054824638333333245. The next job/cohort cap is **$9.37**, preserving the
 same $0.50 reserve under the original $10. Hardware and scientific treatment
 remain unchanged; each failed attempt remains separate evidence.
+
+Run `dcd5044dd2e0` loaded the vLLM model and reached health in 79.136809 seconds.
+Its four admitted games failed before play because the client assumed a separate
+`generation_config.json`; this Qwen revision uses model-config EOS defaults.
+The repair follows Transformers' config-derived fallback and retains the
+tokenizer's message terminator. The exact cached Qwen metadata admits locally
+without weights or inference. No games completed; 96 were unattempted. SDK
+command success means failure evidence was retained, not evaluation success.
+Provider absence was verified at 2026-10-27 06:03:11 UTC; estimated charge
+$0.03861355726111111192. Four prior estimates total $0.15916180364444444437.
+The next job/cohort cap is **$9.34** plus the unchanged $0.50 reserve.
