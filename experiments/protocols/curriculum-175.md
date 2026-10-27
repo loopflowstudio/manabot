@@ -62,7 +62,8 @@ they cannot replace the primary matched uniform-versus-adaptive comparison.
 Regular checkpoint evaluations must be real Etude jobs and visible in its
 report, with pending, failed, completed and missing points explicit. Use the
 owned evaluation pool when available; do not run a new laptop evaluator or
-displace MTG-183's evaluator. No additional paid evaluation allocation exists.
+displace MTG-183's evaluator. Evaluation spend must fit the arm's inclusive cap;
+the bounded U-initial fallback below uses U's remaining allowance.
 Export cadence, finalization, cost limits and report identities must survive
 restart without duplicate training or evaluation jobs.
 
@@ -201,13 +202,21 @@ The original reference records and source manifest stay retained; no policy
 weights are changed. All 28 run-relative policy inputs were read back from R2
 and verified before evaluation submission.
 Real adaptive exports must drive actual Etude evaluation requests on the owned
-CPU pool. One checkpoint per bounded evaluation job keeps queue units finite;
-no paid CPU rental or displacement of another Task's evaluator is selected.
+CPU pool. One checkpoint per bounded evaluation job keeps queue units finite.
+U's initial held-out request may use the first available mini or A4000 host,
+with a $0.50 maximum rental charge, one attempt and a one-hour maximum. It
+uses the same policy, match keys, deals and CPU inference path (eight workers).
+The original unstarted request was cancelled with zero attempts and retained
+in the retirement receipt before the replacement was queued. This is evaluation,
+not additional U training: historical U training $7.2252361304746735 plus the
+$0.50 evaluation limit and $0.50 reserve totals $8.2252361304746735. No
+other paid evaluation fallback is selected, and MTG-183 is not displaced.
 Use the queued-evaluation support in
 [Etude PR #56](https://github.com/loopflowstudio/etude/pull/56) while the mini is
 occupied. The operator uses a frozen Manabot runtime at
 `0fc90e4130aca0e28a5e1b56cd9f2004b86a6845` and Etude client source
-`596244996d713202d89385febe1af87ea0ede9d9` (the controller-compatible
-0.2.6 backport of PR #56); later Task edits do not change
+the controller-compatible 0.2.6 queue/report backport (recorded in the runtime
+receipt). Report reads select named metric curves while retaining all raw
+diagnostics; evaluation observation reads only this experiment. Later Task edits do not change
 the live inference/evaluation implementation. Queue state is scoped to this
 Task; existing MTG-183 work is left running.
