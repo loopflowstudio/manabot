@@ -44,6 +44,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 from typing import Literal
 
@@ -134,6 +135,8 @@ class Batch(BaseModel):
     shared: bool = False
     # Groups of one match playing at once.
     group_workers: int = 1
+    # Play only each unit's first matches (calibration); None plays them all.
+    match_limit: int | None = None
     hours: float = 1.0
     # Read by `bind_etude_source` before anything reads source identity.
     source_bundle: SourceBundle
@@ -247,12 +250,30 @@ def machine(batch: Batch) -> None:
         cpus=os.cpu_count(),
         error=None,
     )
+
+    def watch() -> None:
+        """Report progress each minute; at `stop`, return what is stored and end.
+
+        Etude kills a run at its deadline and then returns none of its outputs,
+        so the batch ends itself first, mid-unit if need be.
+        """
+        while True:
+            time.sleep(60)
+            print(_progress(root, started), file=sys.stderr, flush=True)
+            if time.time() > stop:
+                receipt.seconds = time.time() - started
+                receipt.error = "stopped at the batch's own deadline"
+                _deliver(out, root, work, receipt)
+                os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
     try:
         with allocation as endpoint:
             if endpoint is not None:
                 os.environ[ENDPOINT] = endpoint_environment(endpoint)
             for unit in chosen:
-                games = sum(match.games for match in unit.matches)
+                matches = unit.matches[: batch.match_limit]
+                games = sum(match.games for match in matches)
                 rate = min((u.games / u.seconds for u in receipt.played), default=None)
                 if rate is not None and time.time() + games / rate > stop:
                     break
@@ -260,7 +281,7 @@ def machine(batch: Batch) -> None:
                 evaluate(
                     experiment=EXPERIMENT,
                     environment=eval_environment(),
-                    matches=unit.matches,
+                    matches=matches,
                     play=play,
                     workers=batch.workers,
                     run=batch.run,
@@ -280,6 +301,40 @@ def machine(batch: Batch) -> None:
         receipt.seconds = time.time() - started
         print(receipt.model_dump_json(), flush=True)
         _deliver(out, root, work, receipt)
+
+
+def _progress(root: Path, started: float) -> str:
+    """Games finished (one card evidence file each), load and memory, as JSON."""
+    evidence = root / "artifacts" / "evidence"
+    games = sum(1 for _ in evidence.iterdir()) if evidence.is_dir() else 0
+    processes = (
+        [p for p in Path("/proc").glob("[0-9]*")] if Path("/proc").is_dir() else []
+    )
+    threads = 0
+    for process in processes:
+        try:
+            status = (process / "status").read_text()
+        except OSError:
+            continue
+        threads += int(status.split("Threads:")[1].split()[0])
+    memory = {}
+    if Path("/proc/meminfo").is_file():
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            name, value = line.split(":")
+            if name in ("MemTotal", "MemAvailable"):
+                memory[name] = int(value.split()[0]) // 1024
+    elapsed = time.time() - started
+    return json.dumps(
+        {
+            "elapsed": round(elapsed),
+            "games": games,
+            "games_per_hour": round(games / elapsed * 3600),
+            "load": [round(x, 1) for x in os.getloadavg()],
+            "processes": len(processes),
+            "threads": threads,
+            "memory_mib": memory,
+        }
+    )
 
 
 def _deliver(out: Path, root: Path, work: Path, receipt: Receipt) -> None:
@@ -431,6 +486,7 @@ def launch(
     hours: float,
     fixed: Sequence[str] = (),
     rent: str = "cpu32",
+    match_limit: int | None = None,
 ) -> None:
     """Queue one batch per mode as one cohort on one `rent` rental.
 
@@ -481,6 +537,7 @@ def launch(
             group_workers=group_workers,
             compute=compute,
             shared=mode == "gpu",
+            match_limit=match_limit,
             hours=hours,
             source_bundle=bundle,
         )
@@ -545,6 +602,7 @@ def main() -> None:
     launching.add_argument("--rent", choices=tuple(CEILINGS), default="cpu32")
     launching.add_argument("--hours", type=float, default=1.5)
     launching.add_argument("--unit", action="append", default=[])
+    launching.add_argument("--match-limit", type=int)
     collecting = commands.add_parser("collect")
     collecting.add_argument("run")
     # A finished run's settled cost, as `etude runs` reports it.
@@ -554,7 +612,12 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "launch":
         launch(
-            args.batch_games, args.mode or ["scalar"], args.hours, args.unit, args.rent
+            args.batch_games,
+            args.mode or ["scalar"],
+            args.hours,
+            args.unit,
+            args.rent,
+            args.match_limit,
         )
     elif args.command == "settle":
         ledger = _ledger()
