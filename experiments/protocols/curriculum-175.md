@@ -223,3 +223,24 @@ The live imported-control view omits wall-time performance panels, because
 publication times are not U's historical training times. Later Task edits do not change
 the live inference/evaluation implementation. Queue state is scoped to this
 Task; existing MTG-183 work is left running.
+
+
+## Report calculation
+
+`experiments.curriculum_report.compare` consumes MTG-183's `GameRow` contract
+and this study's exact planned grid. It averages both native seats within a
+deal, then deals within each ordered deck cell, then cells equally. Its
+2,000-replicate percentile bootstrap resamples deals within cells, sharing
+the sampled deals across every arm and both seats. Report M−U, E−U, ME−U
+and ME−M−E+U. These intervals describe evaluation-deal uncertainty conditional
+on the fixed cells and this one training seed. They do not measure training
+seed variance or remove the historical-control confounds.
+
+Duplicate/off-schedule rows are rejected. Every arm reports planned, received,
+valid, invalid and missing game counts. A complete four-arm grid produces the
+primary point contrasts and paired intervals. Until then, report worst-case
+full-grid score/contrast bounds by allowing each invalid or missing score to
+lie anywhere in [0,1]; these are identification bounds, not confidence
+intervals or imputed games. Do not substitute a complete-case population.
+This estimator is prepared before observing any completed study evaluation;
+its controlled test fixtures are not study results.

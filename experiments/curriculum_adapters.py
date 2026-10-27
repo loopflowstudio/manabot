@@ -9,7 +9,8 @@ $0.50 reserved for storage/observation uncertainty. The protocol is
 
 `runs` freezes three single-attempt adaptive jobs by default, `eval` asks Etude for development
 checkpoint grids and a disjoint final grid, and `report` draws their scores.
-Evaluate on the owned CPU pool; no paid evaluation rental is authorized.
+Default evaluations use the owned CPU pool. The protocol records a separately
+bounded U-initial evaluation fallback; this planner selects no paid rental.
 
     uv run etude launch experiments/curriculum_adapters.py --revision COMMIT \\
         --arm M --cohort mtg175-v1-m --rent l4 --parallel 1 --max-usd 9.50 --quote
