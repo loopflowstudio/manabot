@@ -266,10 +266,22 @@ Ledger (cap $5; committed = caps until settled):
 
 | Etude run | arm | rental | cap | settled |
 |---|---|---|---|---|
-| `091840ecd017` | `cpu32` `batched` (6 × 12) | cpu3c 32 vCPU, $0.96/h | $2.50 | — |
-| `a8182c3ea633` | A4500 `gpu` (256 active) | a4500 ≤ $0.40/h | $0.40 | — |
+| `091840ecd017` | `cpu32` `batched` (6 × 12) at `950e2066e` | cpu3c 32 vCPU, $0.96/h | $2.50 | ~$0.07, 0 valid |
+| `a8182c3ea633` | A4500 `gpu` (256 active) at `950e2066e` | a4500 ≤ $0.40/h | $0.40 | ~$0.01, 0 valid |
+| `a43579fb6172` | A4500 `gpu` (256 active) at `014868990` | a4500 ≤ $0.40/h | $0.40 | queued |
 
-Committed $2.90 of $5.
+Committed about $0.48 of $5 (two settled runs plus one queued cap).
+
+Both settled arms recorded 1,000/1,000 games failed with "checkpoint requires an
+explicit compatible w14 world binding": `e742e8bff` (main, inherited by both
+branches) moved the engine to w14, and MTG-183's 5,950/5,600 checkpoints are
+w13. Their receipts reported 1,000 games and no error, so a receipt must
+count valid games (uncommitted edit in the calibration worktree). The
+calibration branch reverts `e742e8bff` (`014868990`) so the after-arms play
+the before-arms' w13 world. The `cpu32` arm is not relaunched. From 2026-10-27
+~14:55, session `manabot-19d240-batch-shared-evaluation-a1` owns the
+calibration (one launching writer). Throughput, census and batch targets are
+still unmeasured.
 
 ### Implementation decisions (2026-10-26)
 
