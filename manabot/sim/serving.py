@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, deque
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
@@ -86,8 +86,9 @@ class PolicyStore:
             raise ValueError("policy admission requires an execution setup")
         key = PolicyKey.from_registration(player, self.execution)
         # Registrations of one checkpoint for other matchups share its resident
-        # policy. Each registration's own setups are validated against it.
-        admitted = self.admissions.setdefault(key, admission)
+        # policy. Each registration's own setups are validated against it here;
+        # loading needs only the first admission's checkpoint path.
+        self.admissions.setdefault(key, admission)
         resident = self.get(key)
         if (
             sum(p.numel() for p in resident.agent.parameters())
@@ -109,10 +110,6 @@ class PolicyStore:
                 allow_deck_repetition=player.player_spec.get(
                     "allow_deck_repetition", False
                 ),
-            )
-        if admitted is not admission:
-            self.admissions[key] = replace(
-                admitted, setups=admitted.setups + admission.setups
             )
         return resident.space.encoder.config
 

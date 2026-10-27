@@ -262,8 +262,6 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
     store.admit(PolicyAdmission(other, str(path), (mirror,)))
     assert perf.counters["model_loads"] == 1
     assert len(store.admissions) == 1
-    (admission,) = store.admissions.values()
-    assert admission.setups == (selected_match(), mirror)
     requests = [
         request_for(player, execution, 5),
         request_for(other, execution, 7, mirror),

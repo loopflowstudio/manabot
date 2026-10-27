@@ -25,8 +25,8 @@ live at `ce43a5cf7:scratch/questions.md`.
   threads). Local counts are 1; the rental census confirms or revises them.
 - **Stacked on MTG-188 (Jack Heart, 2026-10-26):** this branch merges
   `jack/mtg-188-measure-inference-startup-decision-latency-and-game` (PR #381).
-  Its scratch files (`mtg188-context.md`, `inference-perf-demo.md`, …) are the
-  parent Task's context, not direction for MTG-193. MTG-188's serving/worker
+  Its design notes are the parent Task's context, not direction for MTG-193;
+  they live at `f5e7289b1:scratch/mtg188-context.md` (removed here 2026-10-26). MTG-188's serving/worker
   timing was ported into the split modules (`serving.py`, `serving_protocol.py`,
   `native_game.py`); its service-start failure test now injects a `ChildProcess`
   launch failure instead of a `multiprocessing` start failure.

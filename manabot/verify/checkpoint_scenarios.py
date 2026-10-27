@@ -32,10 +32,10 @@ from manabot.verify.scenario_validation import (
 from manabot.verify.scenarios import (
     SCENARIOS,
     ScriptedVillain,
-    _action_casts,
-    _battlefield_pairs,
-    _hero_view,
+    action_casts,
+    battlefield_pairs,
     build_scenario_env,
+    hero_view,
 )
 
 
@@ -146,13 +146,13 @@ def score_checkpoint(
                 raise ValueError("player selected illegal offer")
             if actor == 0:
                 tracker.observe_hero(raw, action)
-                spell = _action_casts(raw, action)
+                spell = action_casts(raw, action)
                 if spell is not None:
                     cast = spell
-                    _, side = _hero_view(raw)
+                    _, side = hero_view(raw)
                     creatures_at_cast = sum(
                         bool(card.card_types.is_creature)
-                        for card, _ in _battlefield_pairs(raw, side)
+                        for card, _ in battlefield_pairs(raw, side)
                     )
             command = build_command(frame, action)
             observation, _, terminated, truncated, _ = env.step(action)

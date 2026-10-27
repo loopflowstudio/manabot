@@ -69,9 +69,10 @@ thread count within its declared bound.
 - `PolicyKey.from_registration` binds checkpoint, observation ABI, action ABI,
   world, device, dtype, deterministic, implementation. Matchup and content suite
   leave the key and remain in registrations, admission and evidence.
-- `PolicyStore.admit` keeps one admission per key; a later registration for the
-  same key must have the same checkpoint path/bytes and only adds setups, each
-  validated by `validate_agent_setup` against the resident policy.
+- `PolicyStore.admit` keeps the first admission per key (its path loads the
+  policy). Every registration is checked on arrival against its own checkpoint
+  bytes/SHA, parameter count, world/action ABI, and each of its setups by
+  `validate_agent_setup`; setups are not accumulated.
 - **Identity:** `EvalCompute` stays `shared-eval-v1`. v1 already promises no
   batch composition (it depends on arrival order within the row/delay caps), so
   grouping across matchups is within the contract; `docs/shared-evaluation.md`
@@ -221,11 +222,8 @@ Known limit (draft follow-up, not accepted scope): code-anchor games
 
 ## Check result
 
-Focused suite (batched/local/mirror/match eval, child surface, boundaries,
-game errors, puct/local-update, teacher1, verify, inference, academy deck
-parity): see final line below. Remote calibration (slice 5) pending MTG-183.
-
 Compress 2026-10-26: `uv run --extra dev pytest tests/sim/test_child_surface.py tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/eval/test_evaluation_match.py tests/test_package_boundaries.py tests/training/test_game_errors.py -q` → 80 passed, 1 skipped; broader suites remain with gate.
+Compress 2 (post-merge): `PolicyStore` keeps one admission per key (setups validated on arrival, not accumulated); shared scenario helpers in `verify/scenarios.py` are public (`action_casts`, `battlefield_pairs`, `find_cast_action`, `pass_index`). `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/verify tests/env -q` → 196 passed, 1 skipped.
 
 ## Concept review (headless, 2026-10-26)
 
@@ -235,7 +233,9 @@ matchup only in admission/evidence), **child process** (`module:function`
 target, no parent `__main__`, pinned pools) and **thread budget by role**
 (census recorded, child roles enforced). No open product choice.
 
-Next implement direction (settled by the accepted outcome "every evaluation
+Implemented (verified 2026-10-26): `play_cell` records `ProcessCensus` under
+`group_worker` in every `performance.json`; `supervisor` is gone. Original
+direction (settled by the accepted outcome "every evaluation
 process (group workers, …) runs with a declared, bounded thread count … prove
 it by counting threads"):
 
@@ -255,3 +255,19 @@ it by counting threads"):
 Considered and kept: `InferenceRuntime` living in `serving_protocol.py`
 (accepted split; the module is "the Torch-free side of serving"); code-anchor
 games still loading Torch (known limit, follow-up).
+
+Realign 2026-10-26: plan and code agree; upstream `main` gained only a paper
+commit and MTG-183 is running its own GPU batches, so slice 5 (rental
+before/after through MTG-183) remains the only open work.
+Check: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/verify/test_competency.py -q` → 32 passed, 1 skipped.
+
+## Concept review 2 (headless, 2026-10-26, after compress 2)
+
+The concepts still hold, and the first review's group-worker census is
+implemented. Compress 2's single admission per key is correct:
+`PolicyStore.get` loads only the first admission's checkpoint path, and every
+registration's setups are still validated on arrival. No open product choice.
+
+Done 2026-10-26: `hero_view`, `stack_names` and `zone_names` in
+`verify/scenarios.py` are public; no underscore name crosses a module boundary.
+`uv run --extra dev pytest tests/verify tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 88 passed, 1 skipped.

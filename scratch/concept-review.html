@@ -14,35 +14,35 @@ table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1
 .callout{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem}
 </style></head><body><main>
 <header>
-<h1>Concept review: batched shared evaluation, light bounded children</h1>
-<p>Task MTG-193 · step concept-review (headless) · 2026-10-26</p>
-<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/{serving_protocol,child,threads,native_game,supervision,serving}.py</code>, <code>manabot/eval/match.py</code>, <code>docs/shared-evaluation.md</code></p>
+<h1>Concept review 2: batched shared evaluation, light bounded children</h1>
+<p>Task MTG-193 · step concept-review (headless, after compress 2) · 2026-10-26</p>
+<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/serving.py</code>, <code>manabot/verify/{scenarios,checkpoint_scenarios,scenario_validation,competency}.py</code>, the working-tree diff</p>
 </header>
 
-<p><strong>Decision needed:</strong> none. Accepted product decisions settle the one change below, so the step iterates to implement.</p>
+<p><strong>Decision needed:</strong> none. One small naming change follows from repository style, so the step iterates to implement.</p>
 
-<h2>Actions → concepts → APIs</h2>
+<h2>Actions → concepts → APIs (unchanged, verified)</h2>
 <table>
 <tr><th>Operator action</th><th>Concept</th><th>API</th></tr>
-<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world, numerics. Matchup is in admission and evidence only.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
+<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world, numerics. Matchup is in admission and evidence only. One admission per key, and each registration's setups are validated on arrival.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
 <tr><td>Run many games cheaply</td><td>Child process: a <code>module:function</code> target that never imports the parent's <code>__main__</code></td><td><code>ChildProcess</code>, <code>native_game.execute_game</code></td></tr>
-<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census</td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>effective_cpus</code></td></tr>
+<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census, now including <code>group_worker</code> on both paths</td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>effective_cpus</code></td></tr>
 </table>
 
 <h2>The one mismatch</h2>
 <div class="callout">
-<p>The Task asks that <em>every</em> evaluation process, group workers included, run with a declared thread count proven by counting. Today only the shared path records the parent's census (as <code>supervisor</code>, from <code>InferenceRuntime.close</code>). On the scalar path, which is the <code>cpu32</code> arm where 30 group workers reached about 1,000 threads, the group worker records nothing. The rental calibration therefore could not show whether that process is bounded.</p>
+<p>Compress 2 made the shared helpers in the new <code>verify/scenarios.py</code> module public. Three of them are still private but are imported by other modules, so a private name crosses a module boundary.</p>
 </div>
 <table>
-<tr><th></th><th>Before (this branch)</th><th class="prop">Proposed</th></tr>
-<tr><td>Shared path</td><td><code>threads/supervisor</code> in <code>allocation.json</code></td><td class="prop"><code>threads/group_worker</code> in the cell's <code>performance.json</code>, budget <code>max_active_games + 7</code></td></tr>
-<tr><td>Scalar path</td><td>no parent census</td><td class="prop">same role, constant allowance 8, recorded and not enforced</td></tr>
+<tr><th></th><th>Before (working tree)</th><th class="prop">Proposed</th></tr>
+<tr><td>Public</td><td><code>action_casts</code>, <code>battlefield_pairs</code>, <code>find_cast_action</code>, <code>pass_index</code></td><td class="prop">the same, plus <code>hero_view</code>, <code>stack_names</code>, <code>zone_names</code></td></tr>
+<tr><td>Imported while private</td><td><code>_hero_view</code> (checkpoint_scenarios, scenario_validation); <code>_stack_names</code> and <code>_zone_names</code> (scenario_validation)</td><td class="prop">none</td></tr>
 </table>
-<p>The counters are new on this branch, so the rename touches no frozen evidence.</p>
+<p>The module is new on this branch, so the change touches no external surface and no frozen evidence.</p>
 
 <h2>Kept as is</h2>
-<p><code>InferenceRuntime</code> stays in <code>serving_protocol.py</code>, as the accepted split placed it. Code-anchor games still load Torch; that is a known limit with a candidate follow-up.</p>
+<p>Keeping a single admission per key is correct, because <code>PolicyStore.get</code> loads only the first admission's checkpoint path. Code-anchor games still load Torch, which is a known limit with a candidate follow-up.</p>
 
 <h2>Questions</h2>
-<ol><li>None open. The calibration's open items (the culprit for the oversubscription, budget values, the target for served-child RSS) are in <code>scratch/questions.md</code> and need the rental run through MTG-183.</li></ol>
+<ol><li>None open. The calibration items (the culprit for the oversubscription, budget values, the target for served-child RSS) are in <code>scratch/questions.md</code> and need the rental run through MTG-183.</li></ol>
 </main></body></html>

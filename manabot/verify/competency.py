@@ -60,10 +60,10 @@ from manabot.verify.scenarios import (
     ZONE_STACK,
     Scenario,
     ScriptedVillain,
-    _action_casts,
-    _battlefield_pairs,
-    _find_cast_action,
+    action_casts,
+    battlefield_pairs,
     build_scenario_env,
+    find_cast_action,
 )
 
 # -----------------------------------------------------------------------------
@@ -291,12 +291,12 @@ class BehaviorProbe:
         if kind != SPACE_PRIORITY:
             return
 
-        counter_index = _find_cast_action(raw, "Counterspell")
+        counter_index = find_cast_action(raw, "Counterspell")
         if counter_index is not None:
             self.counter_windows += 1
             first_window = not self._seen_counter_window
             self._seen_counter_window = True
-            if _action_casts(raw, action) == "Counterspell":
+            if action_casts(raw, action) == "Counterspell":
                 self.counter_casts += 1
                 if first_window:
                     self.counter_casts_first_window += 1
@@ -306,7 +306,7 @@ class BehaviorProbe:
                 else:
                     self._pending_counter = True
 
-        if _action_casts(raw, action) == "Lightning Bolt":
+        if action_casts(raw, action) == "Lightning Bolt":
             self.bolt_casts += 1
             self._pending_bolt = True
 
@@ -324,21 +324,21 @@ class BehaviorProbe:
         ):
             untapped_lands = sum(
                 1
-                for card, perm in _battlefield_pairs(raw, "agent")
+                for card, perm in battlefield_pairs(raw, "agent")
                 if bool(card.card_types.is_land) and not bool(perm.tapped)
             )
             creature_costs = [
                 int(c.mana_cost.mana_value)
                 for index in range(len(raw.action_space.actions))
                 for c in raw.agent_cards
-                if (name := _action_casts(raw, index)) is not None
+                if (name := action_casts(raw, index)) is not None
                 and c.name == name
                 and int(c.zone) == ZONE_HAND
                 and bool(c.card_types.is_creature)
             ]
             if creature_costs and untapped_lands - min(creature_costs) < 2:
                 self.hold_windows += 1
-                cast = _action_casts(raw, action)
+                cast = action_casts(raw, action)
                 if cast is not None:
                     for c in raw.agent_cards:
                         if c.name == cast and bool(c.card_types.is_creature):
@@ -370,7 +370,7 @@ class BehaviorProbe:
         focus = int(chosen.focus[0]) if chosen.focus else -1
         villain_creatures = [
             (card, perm)
-            for card, perm in _battlefield_pairs(raw, "opponent")
+            for card, perm in battlefield_pairs(raw, "opponent")
             if bool(card.card_types.is_creature)
         ]
         # Target-quality is only meaningful when there was a real choice
@@ -389,7 +389,7 @@ class BehaviorProbe:
                 if multi and int(perm.power) >= max_power:
                     self.bolt_biggest += 1
                 return
-        for card, perm in _battlefield_pairs(raw, "agent"):
+        for card, perm in battlefield_pairs(raw, "agent"):
             if int(perm.id) == focus:
                 self.bolt_own += 1
                 return

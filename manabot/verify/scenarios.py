@@ -58,7 +58,7 @@ def _card_name(raw: Any, object_id: int) -> str | None:
     return None
 
 
-def _battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
+def battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
     """(CardData, PermanentData) pairs for one side's battlefield.
 
     The engine pushes each permanent and its battlefield card in lockstep
@@ -72,12 +72,12 @@ def _battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
     return list(zip(battlefield_cards, perms))
 
 
-def _zone_names(raw: Any, side: str, zone: int) -> list[str]:
+def zone_names(raw: Any, side: str, zone: int) -> list[str]:
     cards = raw.agent_cards if side == "agent" else raw.opponent_cards
     return [str(c.name) for c in cards if int(c.zone) == zone]
 
 
-def _stack_names(raw: Any) -> list[str]:
+def stack_names(raw: Any) -> list[str]:
     """Names of spells on the stack, top first (both players' spells)."""
 
     names = [
@@ -91,8 +91,8 @@ def _stack_names(raw: Any) -> list[str]:
     return [name for _, name in names]
 
 
-def _hero_view(raw: Any) -> tuple[str, str]:
-    """(hero_side, villain_side) keys for _battlefield_pairs/_zone_names.
+def hero_view(raw: Any) -> tuple[str, str]:
+    """(hero_side, villain_side) keys for battlefield_pairs/zone_names.
 
     The observation is from the decision-holder's perspective; the hero is
     always seat 0 in scenarios.
@@ -103,7 +103,7 @@ def _hero_view(raw: Any) -> tuple[str, str]:
     return "opponent", "agent"
 
 
-def _action_casts(raw: Any, index: int) -> str | None:
+def action_casts(raw: Any, index: int) -> str | None:
     """If action `index` casts a spell, the spell's name (else None)."""
 
     action = raw.action_space.actions[index]
@@ -112,14 +112,14 @@ def _action_casts(raw: Any, index: int) -> str | None:
     return _card_name(raw, int(action.focus[0]))
 
 
-def _find_cast_action(raw: Any, name: str) -> int | None:
+def find_cast_action(raw: Any, name: str) -> int | None:
     for index in range(len(raw.action_space.actions)):
-        if _action_casts(raw, index) == name:
+        if action_casts(raw, index) == name:
             return index
     return None
 
 
-def _pass_index(raw: Any) -> int:
+def pass_index(raw: Any) -> int:
     actions = raw.action_space.actions
     for index, action in enumerate(actions):
         if int(action.action_type) == PASS:
@@ -152,14 +152,14 @@ class ScriptedVillain:
 
         if kind == SPACE_PRIORITY:
             if self.queue:
-                index = _find_cast_action(raw, self.queue[0])
+                index = find_cast_action(raw, self.queue[0])
                 if index is not None:
                     self.queue.pop(0)
                     return index
             for index, action in enumerate(actions):
                 if int(action.action_type) == PLAY_LAND:
                     return index
-            return _pass_index(raw)
+            return pass_index(raw)
         if kind == SPACE_ATTACKER:
             return 0  # [attack, decline] — always attack
         if kind == SPACE_BLOCKER:
@@ -220,21 +220,18 @@ class CounterBombTracker:
         self.bomb_resolved = False
 
     def observe_hero(self, raw: Any, action: int) -> None:
-        if (
-            _action_casts(raw, action) == "Counterspell"
-            and self.counter_cast_on is None
-        ):
-            stack = _stack_names(raw)
+        if action_casts(raw, action) == "Counterspell" and self.counter_cast_on is None:
+            stack = stack_names(raw)
             self.counter_cast_on = stack[0] if stack else None
 
     def observe_state(self, raw: Any) -> None:
-        hero_side, villain_side = _hero_view(raw)
-        battlefield = [c for c, _ in _battlefield_pairs(raw, villain_side)]
+        hero_side, villain_side = hero_view(raw)
+        battlefield = [c for c, _ in battlefield_pairs(raw, villain_side)]
         if any(c.name == self.BOMB for c in battlefield):
             self.bomb_resolved = True
             self.finished = True
             return
-        if self.counter_cast_on == self.BOMB and self.BOMB in _zone_names(
+        if self.counter_cast_on == self.BOMB and self.BOMB in zone_names(
             raw, villain_side, ZONE_GRAVEYARD
         ):
             self.bomb_countered = True
@@ -260,10 +257,10 @@ class HoldWipeTracker:
         self.hero_life_at_cast: int | None = None
 
     def observe_hero(self, raw: Any, action: int) -> None:
-        if _action_casts(raw, action) == "Pyroclasm":
-            hero_side, villain_side = _hero_view(raw)
+        if action_casts(raw, action) == "Pyroclasm":
+            hero_side, villain_side = hero_view(raw)
             self.cast_turn = int(raw.turn.turn_number)
-            self.wiped = _count_creatures(_battlefield_pairs(raw, villain_side))
+            self.wiped = _count_creatures(battlefield_pairs(raw, villain_side))
             hero = raw.agent if hero_side == "agent" else raw.opponent
             self.hero_life_at_cast = int(hero.life)
             self.finished = True
@@ -296,7 +293,7 @@ class BoltThreatTracker:
         self.key_died = False
 
     def observe_hero(self, raw: Any, action: int) -> None:
-        if _action_casts(raw, action) == "Lightning Bolt":
+        if action_casts(raw, action) == "Lightning Bolt":
             self.bolt_cast = True
             self._pending_target = True
             return
@@ -309,17 +306,17 @@ class BoltThreatTracker:
             self._verify_kill = self.target == self.KEY
 
     def _classify(self, raw: Any, focus: int) -> str:
-        hero_side, villain_side = _hero_view(raw)
+        hero_side, villain_side = hero_view(raw)
         hero = raw.agent if hero_side == "agent" else raw.opponent
         villain = raw.opponent if hero_side == "agent" else raw.agent
         if focus == int(hero.id):
             return "own_face"
         if focus == int(villain.id):
             return "villain_face"
-        for card, perm in _battlefield_pairs(raw, villain_side):
+        for card, perm in battlefield_pairs(raw, villain_side):
             if int(perm.id) == focus:
                 return str(card.name)
-        for card, perm in _battlefield_pairs(raw, hero_side):
+        for card, perm in battlefield_pairs(raw, hero_side):
             if int(perm.id) == focus:
                 return f"own:{card.name}"
         return "unknown"
@@ -327,9 +324,9 @@ class BoltThreatTracker:
     def observe_state(self, raw: Any) -> None:
         if not self._verify_kill:
             return
-        _, villain_side = _hero_view(raw)
+        _, villain_side = hero_view(raw)
         on_battlefield = any(
-            card.name == self.KEY for card, _ in _battlefield_pairs(raw, villain_side)
+            card.name == self.KEY for card, _ in battlefield_pairs(raw, villain_side)
         )
         if not on_battlefield:
             self.key_died = True
@@ -362,9 +359,9 @@ class RaceBlockTracker:
         if kind == SPACE_ATTACKER and turn == 1 and not self._first_batch_done:
             chosen = raw.action_space.actions[action]
             focus = int(chosen.focus[0]) if chosen.focus else -1
-            hero_side, _ = _hero_view(raw)
+            hero_side, _ = hero_view(raw)
             name = "unknown"
-            for card, perm in _battlefield_pairs(raw, hero_side):
+            for card, perm in battlefield_pairs(raw, hero_side):
                 if int(perm.id) == focus:
                     name = str(card.name)
                     break
@@ -413,21 +410,21 @@ class HoldQuenchTracker:
         if (
             self.main_choice is None
             and kind == SPACE_PRIORITY
-            and _find_cast_action(raw, "Otter-Penguin") is not None
+            and find_cast_action(raw, "Otter-Penguin") is not None
         ):
-            cast = _action_casts(raw, action)
+            cast = action_casts(raw, action)
             self.main_choice = cast if cast is not None else "pass"
-        if _action_casts(raw, action) == "It'll Quench Ya!":
+        if action_casts(raw, action) == "It'll Quench Ya!":
             self.quench_cast = True
 
     def observe_state(self, raw: Any) -> None:
-        _, villain_side = _hero_view(raw)
-        battlefield = [c.name for c, _ in _battlefield_pairs(raw, villain_side)]
+        _, villain_side = hero_view(raw)
+        battlefield = [c.name for c, _ in battlefield_pairs(raw, villain_side)]
         if self.THREAT in battlefield:
             self.threat_resolved = True
             self.finished = True
             return
-        if self.quench_cast and self.THREAT in _zone_names(
+        if self.quench_cast and self.THREAT in zone_names(
             raw, villain_side, ZONE_GRAVEYARD
         ):
             self.quenched = True
@@ -548,8 +545,6 @@ SCENARIOS: dict[str, Scenario] = {
         correct_line="pass the main phase holding 1U; counter the tapped-out Craw Wurm",
     ),
 }
-
-
 
 
 def build_scenario_env(
