@@ -77,7 +77,7 @@ class BatchedSampler:
 
         obs = {
             key: torch.from_numpy(buffers[key][rows]).to(self.device)
-            for key in OBS_KEYS
+            for key in self.agent.observation_space.shapes
         }
         with torch.inference_mode():
             logits, _ = self.agent.forward(obs)

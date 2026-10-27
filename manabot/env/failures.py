@@ -386,6 +386,22 @@ class CapturedVector(_Capture):
             self.native.reset_each_into_buffers(players)
         self._synchronize()
 
+    def reassign_roots_into_buffers(
+        self, players: list[list[managym.PlayerConfig] | None]
+    ) -> None:
+        """Retain new setups only after native atomic fresh-root validation."""
+        proposed = [game.model_copy(deep=True) for game in self.games]
+        for game, setup, seed in zip(
+            proposed, players, self.native.current_game_seeds(), strict=True
+        ):
+            if setup is not None:
+                game.players = [PlayerSetup.retain(p) for p in setup]
+                game.restart(seed)
+        with self._guard(lambda: self._evidence_for(proposed, "reset")):
+            self.native.reassign_roots_into_buffers(players)
+        self.games = proposed
+        self._synchronize()
+
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
         self.next_seeds = list(seeds)
         for game, seed in zip(self.games, seeds, strict=True):

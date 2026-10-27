@@ -144,6 +144,10 @@ class AdaptiveDiagnostics(TypedDict):
     matchup_scores: list[float | None]
     error_scores: list[float]
     priority_probabilities: list[float]
+    completed_games: int
+    completed_roles: int
+    residual_count: int
+    residual_total: float
 
 
 def _ranks(scores: list[float]) -> list[float]:
@@ -270,21 +274,28 @@ class AdaptiveSampler:
             + [ScoreGeneration(s.generation + 1, tuple(results), tuple(errors))]
         )[-8:]
         completed: set[tuple[int, int]] = set()
+        outcomes: set[tuple[int, int, tuple[int, int]]] = set()
+        cell_completed: list[set[tuple[int, int]]] = [set() for _ in range(n)]
         chunks = [chunk for generation in window for chunk in generation.errors]
         seat_outcomes: list[list[list[float]]] = [[[], []] for _ in range(n)]
         cell_chunks: list[list[ErrorChunk]] = [[] for _ in range(n)]
         for generation in window:
             for result in generation.results:
-                if result.game in completed:
-                    raise ValueError("duplicate completed adaptive game")
+                key = (result.cell, result.seat, result.game)
+                if key in outcomes:
+                    raise ValueError("duplicate completed adaptive role")
+                outcomes.add(key)
                 completed.add(result.game)
+                cell_completed[result.cell].add(result.game)
                 seat_outcomes[result.cell][result.seat].append(result.outcome)
         for chunk in chunks:
             cell_chunks[chunk.cell].append(chunk)
         pooled = median([c.total / c.count for c in chunks]) if chunks else 0.0
         matchup: list[float | None] = []
         error: list[float] = []
-        for seats, selected in zip(seat_outcomes, cell_chunks, strict=True):
+        for cell, (seats, selected) in enumerate(
+            zip(seat_outcomes, cell_chunks, strict=True)
+        ):
             if min(map(len, seats)) >= 20:
                 p = sum((1 + sum(values)) / (2 + len(values)) for values in seats) / 2
                 score = max(0.0, 1 - 6 * abs(p - 1 / 3), 1 - 6 * abs(p - 2 / 3))
@@ -293,7 +304,9 @@ class AdaptiveSampler:
                 matchup.append(0.0 if score <= 8 * math.ulp(1.0) else score)
             else:
                 matchup.append(None)
-            supported = {game for c in selected for game in c.games} & completed
+            supported = {game for c in selected for game in c.games} & cell_completed[
+                cell
+            ]
             weight = len(supported) / (len(supported) + 20)
             raw = median([c.total / c.count for c in selected]) if selected else pooled
             error.append(weight * raw + (1 - weight) * pooled)

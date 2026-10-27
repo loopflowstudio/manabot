@@ -87,6 +87,8 @@ def update_iteration(
             _, returns = transition_gae(
                 rewards, values, ends, next_value, learning.gamma, learning.value_lambda
             )
+        if batch.assignments is not None:
+            batch.target_residuals = (returns - values).detach().cpu().numpy()
         obs = {k: v.flatten(0, 1) for k, v in obs.items()}
         advantages, returns = advantages.flatten(), returns.flatten()
         actions = torch.as_tensor(batch.actions, device=dev).flatten()

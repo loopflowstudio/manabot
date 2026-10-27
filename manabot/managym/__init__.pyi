@@ -186,6 +186,9 @@ class VectorEnv:
     def reset_each_into_buffers(
         self, player_configs: list[list[PlayerConfig]]
     ) -> None: ...
+    def reassign_roots_into_buffers(
+        self, player_configs: list[list[PlayerConfig] | None]
+    ) -> None: ...
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
     ) -> None: ...
