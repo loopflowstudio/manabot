@@ -85,22 +85,16 @@ pub enum Orientation {
     TemurRightVsLeft,
     SacrificeLeftVsRight,
     SacrificeRightVsLeft,
-<<<<<<< HEAD
-=======
     ElementalWorldGrVsUg,
     ElementalWorldUgVsGr,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 
 impl Orientation {
     fn source_bytes(self) -> &'static [u8] {
         match self {
-<<<<<<< HEAD
-=======
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => {
                 include_bytes!("../../content/semantic/w11/elemental_world.source.json")
             }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => {
                 include_bytes!("../../content/semantic/v1/temur.source.json")
             }
@@ -118,14 +112,11 @@ impl Orientation {
     }
     fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
         match self {
-<<<<<<< HEAD
-=======
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
                 crate::semantic::SemanticPack::optional_payments()
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::new(
                 crate::semantic::SemanticPack::temur()
                     .and_then(|pack| pack.compile_content_pack())
@@ -146,11 +137,8 @@ impl Orientation {
     }
     fn seat_keys(self) -> (&'static str, &'static str) {
         match self {
-<<<<<<< HEAD
-=======
             Self::ElementalWorldGrVsUg => ("elemental_gr", "elemental_ug"),
             Self::ElementalWorldUgVsGr => ("elemental_ug", "elemental_gr"),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Self::TemurLeftVsRight => ("temur_left", "temur_right"),
             Self::TemurRightVsLeft => ("temur_right", "temur_left"),
             Self::UrLessonsVsGwAllies => ("ur_lessons", "gw_allies"),

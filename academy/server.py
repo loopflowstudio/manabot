@@ -28,12 +28,6 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, Response
-<<<<<<< HEAD
-from pydantic import ValidationError
-
-import managym
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -50,29 +44,20 @@ from managym.experience import (
     UNVERSIONED_CONTENT_HASH,
     Command,
     ExperienceFrame,
-<<<<<<< HEAD
-)
-from managym.experience_projection import (
-    HERO_PLAYER_INDEX,
-=======
     InteractionOffer,
 )
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
     decision_surface_view,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     describe_actions,
     enum_name,
     offer_verb,
     redact_observation,
     serialize_observation,
 )
-<<<<<<< HEAD
-=======
 from pydantic import ValidationError
 
 import managym
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -85,11 +70,8 @@ from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
 from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
-<<<<<<< HEAD
-=======
     CURATED_PACK_CATALOG,
     ELEMENTAL_WORLD_PACK,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
@@ -97,10 +79,6 @@ from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
 from .opponent import (
     Opponent,
     catalog_opponent,
-<<<<<<< HEAD
-    configured_opponent,
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     opponent_catalog,
 )
 from .presentation import PresentationProjector
@@ -191,13 +169,10 @@ NAMED_DECKS: dict[str, dict[str, int]] = {
     CURATED_PACK.hero_deck_id: UR_LESSONS_DECK,
     CURATED_PACK.villain_deck_id: GW_ALLIES_DECK,
     JEONG_INCREMENT_PACK.hero_deck_id: GW_ALLIES_JEONG_DECK,
-<<<<<<< HEAD
-=======
     **{
         key: dict(ELEMENTAL_WORLD_PACK.player_config(key, key).decklist)
         for key in ELEMENTAL_WORLD_PACK.deck_ids
     },
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 DECK_DISPLAY_NAMES = {
     "interactive": "Interactive",
@@ -205,13 +180,10 @@ DECK_DISPLAY_NAMES = {
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
-<<<<<<< HEAD
-=======
     **{
         row["deck_id"]: row["display_name"]
         for row in ELEMENTAL_WORLD_PACK.manifest["roster"]
     },
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 # Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
 DEFAULT_HERO_DECK_NAME = CURATED_PACK.hero_deck_id
@@ -259,10 +231,6 @@ app = FastAPI(title="Academy")
 # can be mistaken for the code that actually served a retained game.
 PLAY_SOURCE_SHA256 = hashlib.sha256(
     b"".join(
-<<<<<<< HEAD
-        path.name.encode() + b"\0" + path.read_bytes()
-        for path in sorted(Path(__file__).parent.glob("*.py"))
-=======
         f"{path.parent.name}/{path.name}".encode() + b"\0" + path.read_bytes()
         for path in sorted(
             [
@@ -271,7 +239,6 @@ PLAY_SOURCE_SHA256 = hashlib.sha256(
                 Path(managym.__file__).with_name("experience_projection.py"),
             ]
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
 ).hexdigest()
 RULES_BINARY_SHA256 = hashlib.sha256(
@@ -536,13 +503,9 @@ def _encountered_definition_ids(
     return sorted(definitions)
 
 
-<<<<<<< HEAD
-def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
-=======
 def viewer_view(
     obs: managym.Observation, viewer: int, *, include_details: bool = False
 ) -> dict[str, Any]:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     """Serialize an observation for one acting viewer.
 
     Two guarantees, regardless of whose perspective the engine observation is
@@ -550,11 +513,7 @@ def viewer_view(
       1. ``agent`` is always ``viewer`` and ``opponent`` the other player.
       2. The opponent's hand is redacted (libraries are never serialized).
     """
-<<<<<<< HEAD
-    data = serialize_observation(obs)
-=======
     data = serialize_observation(obs, include_details=include_details)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     if int(data["agent"]["player_index"]) != viewer:
         data["agent"], data["opponent"] = data["opponent"], data["agent"]
         data["won"] = bool(obs.game_over) and not bool(obs.won)
@@ -684,31 +643,6 @@ def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str
 
 
 def _select_opponent(sha256: Any) -> Opponent:
-<<<<<<< HEAD
-    """Resolve the requested trained opponent by exact digest, verified.
-
-    Without a digest the configured candidate plays (its historical default).
-    A digest names the configured candidate or a catalog checkpoint; catalog
-    refusals carry the mismatch that makes the checkpoint unplayable here.
-    """
-
-    try:
-        configured = configured_opponent()
-    except ValueError:
-        # A broken candidate bundle must not hide catalog checkpoints.
-        if sha256 is None:
-            raise
-        configured = None
-    if sha256 is None:
-        if configured is None:
-            raise ValueError("No trained opponent is configured on this server.")
-        sha256 = configured.sha256
-    if not isinstance(sha256, str):
-        raise ValueError("opponent_sha256 must be a checkpoint digest.")
-    if configured is not None and sha256 == configured.sha256:
-        configured.verify()
-        return configured
-=======
     """Resolve the requested catalog checkpoint by exact digest, verified.
 
     Refusals carry the mismatch that makes the checkpoint unplayable here.
@@ -716,7 +650,6 @@ def _select_opponent(sha256: Any) -> Opponent:
 
     if not isinstance(sha256, str):
         raise ValueError("opponent_sha256 must name a trained checkpoint digest.")
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     opponent = catalog_opponent(sha256)
     if opponent is None:
         raise ValueError("The selected opponent is no longer available.")
@@ -734,12 +667,7 @@ def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
     """Refuse a matchup outside the decks a catalog checkpoint was bound to.
 
     Seats may swap: the binding is the sorted pair of deck/sideboard setups,
-<<<<<<< HEAD
-    so the bot plays either of its decks from either seat. Candidate bundles
-    check their decks after reset against the engine manifest instead.
-=======
     so the bot plays either of its decks from either seat.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     """
 
     if not opponent.setups:
@@ -748,9 +676,6 @@ def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
     def key(setup: dict) -> str:
         return json.dumps(setup, sort_keys=True)
 
-<<<<<<< HEAD
-    if sorted(map(key, setups)) != sorted(map(key, opponent.setups)):
-=======
     admitted = set(map(key, opponent.setups))
     roster_match = (
         len(opponent.setups) > 2
@@ -760,7 +685,6 @@ def _check_opponent_decks(opponent: Opponent, setups: list[dict]) -> None:
     if not roster_match and sorted(map(key, setups)) != sorted(
         map(key, opponent.setups)
     ):
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         trained = " vs ".join(_deck_label(setup) for setup in opponent.setups)
         raise ValueError(
             f"{opponent.name} was trained on {trained}; choose those decks to play it."
@@ -809,14 +733,11 @@ def _parse_game_config(config: Any) -> GameConfig:
     )
 
     selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
-<<<<<<< HEAD
-=======
     if selected_pack is None and any(
         name in ELEMENTAL_WORLD_PACK.deck_ids
         for name in (hero_deck_name, villain_deck_name)
     ):
         raise ValueError("Elemental decks require two setups from the Elemental roster")
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     sideboards = {}
     for seat, deck_name in (("hero", hero_deck_name), ("villain", villain_deck_name)):
@@ -825,13 +746,8 @@ def _parse_game_config(config: Any) -> GameConfig:
             pack = next(
                 (
                     candidate
-<<<<<<< HEAD
-                    for candidate in (CURATED_PACK, JEONG_INCREMENT_PACK)
-                    if deck_name in (candidate.hero_deck_id, candidate.villain_deck_id)
-=======
                     for candidate in CURATED_PACK_CATALOG
                     if deck_name in candidate.deck_ids
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 ),
                 None,
             )
@@ -908,10 +824,7 @@ class GameSession:
         self._clock = clock or trace_store.utc_now_iso
         self.attempt_owner = participant_id(secrets.token_urlsafe(32))
         self._new_game_requests: set[str] = set()
-<<<<<<< HEAD
-=======
         self._preparing_demo = False
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.attempt_store = AttemptStore(self.trace_dir / "play.sqlite")
         self.record_players = None
         self._record_player_owner = None
@@ -926,10 +839,7 @@ class GameSession:
         self.villain_policy: VillainPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
-<<<<<<< HEAD
-=======
         self._demo_name: str | None = None
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
@@ -994,24 +904,13 @@ class GameSession:
         if request_id in self._new_game_requests:
             return self._wire_message()
 
-<<<<<<< HEAD
-        from .learn_demo import load_learn_demo, replay_learn_demo
-=======
         from .play_demo import load_play_demo, replay_checked_prefix
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         demo_name = (raw_config if isinstance(raw_config, dict) else {}).get("demo")
         demo = None
         if demo_name is not None:
-<<<<<<< HEAD
-            if demo_name != "learn":
-                raise ValueError(f"Unknown play demo: {demo_name}")
-            demo = load_learn_demo()
-            raw_config = {**raw_config, **demo["config"]}
-=======
             demo = load_play_demo(demo_name)
             raw_config = {**raw_config, **demo.config}
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
@@ -1024,14 +923,10 @@ class GameSession:
             raise ValueError("Failed to load the selected opponent.") from exc
 
         try:
-<<<<<<< HEAD
-            env = managym.Env(seed=seed)
-=======
             # A sole legal color or payment is still an explicit decision.
             # Configured priority stops automate passes at the Academy layer,
             # where their Commands and provenance are retained.
             env = managym.Env(seed=seed, skip_trivial=False)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             obs, _ = env.reset(config.to_rust())
         except BaseException as exc:
             # PyO3's PanicException derives directly from BaseException and has
@@ -1043,24 +938,6 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-<<<<<<< HEAD
-        # Candidate bundles pin the engine manifest and decks outside the
-        # checkpoint; catalog checkpoints were checked by their world binding.
-        if (
-            config.opponent_checkpoint is not None
-            and config.opponent_checkpoint["source"] == "candidate"
-        ):
-            opponent = configured_opponent()
-            assert opponent is not None
-            if manifest != opponent.content_manifest:
-                raise ValueError(
-                    "Trained opponent is incompatible with the current world."
-                )
-            decks = (opponent.decks or {}).values()
-            if config.hero_deck not in decks or config.villain_deck not in decks:
-                raise ValueError("Trained opponent does not support these decks.")
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
@@ -1094,10 +971,7 @@ class GameSession:
         self.record_players = players
         self._record_player_owner = self.attempt_owner
         self.env, self.obs, self.villain_policy = env, obs, policy
-<<<<<<< HEAD
-=======
         self._demo_name = demo_name
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if selected_pack is not None:
             self.asset_manifest_hash = selected_pack.manifest_sha256
             self.content_hash = (
@@ -1173,13 +1047,6 @@ class GameSession:
         )
         self.trace_id = self.match_id
         self._persist_attempt()
-<<<<<<< HEAD
-        self._advance()
-        self._last_presentation_cursor = self.presentation.next_seq
-        update = self._wire_message(reason="initial_connect")
-        if demo is not None:
-            replay_learn_demo(self, update, demo)
-=======
         # A checked demo prefix is setup, not a sequence of surfaced human
         # decisions. Retain every Command and Study root in memory, then persist
         # its complete final snapshot once instead of rewriting the growing
@@ -1194,7 +1061,6 @@ class GameSession:
         finally:
             self._preparing_demo = False
         if demo is not None:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             update = self._wire_message(reason="initial_connect")
         if request_id is not None:
             self._new_game_requests.add(request_id)
@@ -1446,11 +1312,7 @@ class GameSession:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
 
-<<<<<<< HEAD
-        observation = serialize_observation(self.obs)
-=======
         observation = decision_surface_view(self.env, int(self.obs.agent.player_index))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         analysis_observation = None
         if self.watch_mode:
             analysis_observation = deepcopy(observation)
@@ -1460,10 +1322,7 @@ class GameSession:
             analysis_observation["opponent"]["hand"] = other["agent"]["hand"]
             analysis_observation["opponent"]["hand_hidden_count"] = 0
         before_observation = self.obs
-<<<<<<< HEAD
-=======
         event_subjects = json.loads(self.env.presentation_subjects_json())
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
         )
@@ -1523,16 +1382,11 @@ class GameSession:
                     raise RuntimeError(
                         "Hero command has no pending canonical decision."
                     )
-<<<<<<< HEAD
-                replay = self.canonical_replay()
-                committed_address = DecisionAddressV2.from_decision(replay, row)
-=======
                 committed_address = DecisionAddressV2.from_row(
                     replay_id=f"replay.{self.match_id}",
                     match_id=self.match_id,
                     row=row,
                 )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 if committed_address != pending.address:
                     raise RuntimeError(
                         "Committed decision identity drifted from live prompt."
@@ -1547,16 +1401,7 @@ class GameSession:
             self._study_roots[int(row.ordinal)] = retained_root
             self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
-<<<<<<< HEAD
-        if self.presentation.note_action(
-            self.obs,
-            actions[action_index],
-            actor_index=actor_index,
-        ):
-            self.authority_fallback_counters["card_name_dispatch"] += 1
-=======
         self.presentation.note_action(InteractionOffer.model_validate(selected_offer))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         from_revision = self.revision
         track_beliefs = (
             self._live_beliefs is not None
@@ -1612,12 +1457,8 @@ class GameSession:
                 actions[action_index],
                 semantic_events,
             )
-<<<<<<< HEAD
-        self.presentation.observe(next_obs)
-=======
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if actor == "villain":
             self._pending_villain_log.append(f"Villain: {action_description}")
         self.trace.events.append(
@@ -1936,14 +1777,6 @@ class GameSession:
         action_by_offer = {
             offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
         }
-<<<<<<< HEAD
-        offers = [
-            {
-                "id": offer_id,
-                "actor": viewer,
-                "verb": offer_verb(str(action.get("type", ""))),
-                "source": None,
-=======
         subjects = json.loads(self.env.decision_offer_subjects_json(viewer))
         offers = [
             {
@@ -1959,16 +1792,11 @@ class GameSession:
                     ),
                     None,
                 ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 "label": action["description"],
                 "help": None,
                 "choices": [],
                 "confirm_label": action["description"],
-<<<<<<< HEAD
-                # Temporary direct-manipulation bridge for the existing table.
-=======
                 # Retained readers use raw fields; the table navigates typed subjects.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 "action_type": action.get("type", ""),
                 "focus": list(action.get("focus", [])),
             }
@@ -2012,13 +1840,6 @@ class GameSession:
         offers: list[dict[str, Any]],
         action_space: str,
     ) -> dict[str, Any]:
-<<<<<<< HEAD
-        projection = viewer_view(obs, viewer)
-        projection["definition_names"] = {
-            str(row["card_def_id"]): row["registry_name"]
-            for row in self.env.content_pack_manifest()["definitions"]
-        }
-=======
         projection = decision_surface_view(self.env, viewer)
         context = projection.get("decision_context")
         if context is not None and prompt is not None:
@@ -2027,7 +1848,6 @@ class GameSession:
                 "instruction": context["instruction"],
                 "title": context["stage"].replace("_", " ").capitalize(),
             }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         frame_without_hash: dict[str, Any] = {
             "protocol": PROTOCOL_VERSION,
             "match_id": self.match_id,
@@ -2183,11 +2003,8 @@ class GameSession:
         return payload
 
     def _persist_attempt(self, *, end_reason: str | None = None) -> None:
-<<<<<<< HEAD
-=======
         if self._preparing_demo and end_reason is None:
             return
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if self.trace is None or self.obs is None or self.env is None:
             return
         finished = end_reason is not None
@@ -2196,21 +2013,13 @@ class GameSession:
         if end_reason == "game_over" and not self.obs.game_over:
             raise ValueError("Only an authoritative terminal game can be completed.")
 
-<<<<<<< HEAD
-        canonical = self.canonical_replay()
-=======
         canonical = self._canonical_replay_snapshot()
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         study_provider = (
             StudyForkProvider(canonical, self._study_roots) if finished else None
         )
         retained = replace(
             self.trace,
-<<<<<<< HEAD
-            final_observation=serialize_observation(self.obs),
-=======
             final_observation=decision_surface_view(self.env, HERO_PLAYER_INDEX),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             winner=_winner_for_hero(self.obs),
             end_reason=end_reason if finished else self.trace.end_reason,
             canonical_replay=canonical.model_dump(mode="json"),
@@ -2226,12 +2035,6 @@ class GameSession:
                 "rules_binary_sha256": RULES_BINARY_SHA256,
                 "experience_source_sha256": PLAY_SOURCE_SHA256,
             },
-<<<<<<< HEAD
-            asdict(retained),
-            finished=finished,
-            players=self.record_players,
-            origin="bot_evaluation" if self.watch_mode else None,
-=======
             retained.to_record(),
             finished=finished,
             players=self.record_players,
@@ -2242,7 +2045,6 @@ class GameSession:
                 if self._demo_name
                 else None
             ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         )
         if finished:
             self._study_provider = study_provider
@@ -2254,8 +2056,6 @@ class GameSession:
         The same replay and row identities are persisted when the game ends;
         no unplayed prompt is assigned an address.
         """
-<<<<<<< HEAD
-=======
         return self._canonical_replay_snapshot().model_copy(deep=True)
 
     def _canonical_replay_snapshot(self) -> CanonicalReplayV1:
@@ -2264,27 +2064,18 @@ class GameSession:
         Persistence serializes this directly. Public consumers receive a deep
         copy so they cannot change retained frames, offers or Command bindings.
         """
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         return CanonicalReplayV1(
             version=CANONICAL_REPLAY_VERSION,
             replay_id=f"replay.{self.match_id}",
             match_id=self.match_id,
             content_hash=self.content_hash,
             asset_manifest_hash=self.asset_manifest_hash,
-<<<<<<< HEAD
-            decisions=[row.model_copy(deep=True) for row in self.canonical_decisions],
-=======
             decisions=list(self.canonical_decisions),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             presentation_tracks=[
                 ViewerPresentationTrack(
                     viewer=viewer,
                     head=len(events),
-<<<<<<< HEAD
-                    events=deepcopy(events),
-=======
                     events=list(events),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 )
                 for viewer, events in sorted(self.canonical_presentation.items())
             ],
@@ -2567,75 +2358,6 @@ class GameSession:
         if canonical_offer is None:
             raise StudyCommandUnavailableError("study_command_offer_missing")
 
-<<<<<<< HEAD
-        if self.watch_mode:
-            before = branch.current_observation()
-            projector = PresentationProjector()
-            projector.note_action(
-                before,
-                {
-                    "type": canonical_offer.action_type,
-                    "focus": list(canonical_offer.focus),
-                },
-                actor_index=restored.viewer,
-            )
-            observation = branch.submit_semantic(command)
-            projector.observe(observation)
-            presentation = projector.drain(
-                from_revision=restored.revision,
-                to_revision=restored.revision + 1,
-                caused_by=command.command_id,
-            )
-            return viewer_view(observation, restored.viewer), presentation
-
-        try:
-            structured = branch.structured_offers()
-        except (managym.AgentError, StudyBranchUnavailableError) as exc:
-            raise StudyCommandUnavailableError("study_command_not_structured") from exc
-        matches = [
-            offer
-            for offer in structured.get("offers", [])
-            if offer.get("actor") == canonical_offer.actor
-            and offer.get("verb") == canonical_offer.verb.value
-            and offer.get("source")
-            == (
-                None
-                if canonical_offer.source is None
-                else canonical_offer.source.model_dump(mode="json")
-            )
-            and offer.get("choices")
-            == [choice.model_dump(mode="json") for choice in canonical_offer.choices]
-        ]
-        if len(matches) != 1:
-            raise StudyCommandUnavailableError("study_command_not_structured")
-
-        before = branch.current_observation()
-        projector = PresentationProjector()
-        projector.note_action(
-            before,
-            {
-                "type": canonical_offer.action_type,
-                "focus": list(canonical_offer.focus),
-            },
-            actor_index=restored.viewer,
-        )
-        try:
-            observation, _, _, _, _, legacy_actions = branch.submit(
-                {
-                    "offer_id": matches[0]["id"],
-                    "answers": command.model_dump(mode="json")["answers"],
-                }
-            )
-        except (managym.AgentError, StudyBranchUnavailableError) as exc:
-            raise StudyCommandUnavailableError("study_command_rejected") from exc
-        projector.observe(observation)
-        presentation = projector.drain(
-            from_revision=restored.revision,
-            to_revision=restored.revision + max(1, legacy_actions),
-            caused_by=command.command_id,
-        )
-        return viewer_view(observation, restored.viewer), presentation
-=======
         event_subjects = branch.presentation_subjects()
         projector = PresentationProjector()
         projector.note_action(canonical_offer)
@@ -2651,7 +2373,6 @@ class GameSession:
             caused_by=command.command_id,
         )
         return branch.current_projection(), presentation
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     @staticmethod
     def _recorded_continuation_projection(

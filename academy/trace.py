@@ -6,11 +6,7 @@ Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 from __future__ import annotations
 
 from copy import deepcopy
-<<<<<<< HEAD
-from dataclasses import dataclass, field
-=======
 from dataclasses import asdict, dataclass, field, fields
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from datetime import datetime, timezone
 import json
 import os
@@ -18,16 +14,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-<<<<<<< HEAD
-import managym
-from managym.experience_projection import redact_observation
-
-=======
 from managym.experience_projection import redact_observation
 
 import managym
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from .bot_decision import BotDecision
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -82,16 +72,6 @@ class GameConfig:
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
-<<<<<<< HEAD
-        if pack is not None:
-            if self.asset_pack != pack.reference:
-                raise ValueError("Recorded asset pack differs from the installed setup")
-            for name, deck, sideboard in (
-                (self.hero_deck_name, self.hero_deck, self.hero_sideboard),
-                (self.villain_deck_name, self.villain_deck, self.villain_sideboard),
-            ):
-                expected = pack.player_config(name, name)
-=======
         configs: list[managym.PlayerConfig] = []
         if pack is not None:
             if self.asset_pack != pack.reference:
@@ -106,16 +86,12 @@ class GameConfig:
                 ),
             ):
                 expected = pack.player_config(name, seat)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 if deck != expected.decklist or sideboard != expected.sideboard:
                     raise ValueError(
                         f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
                     )
-<<<<<<< HEAD
-=======
                 configs.append(expected)
             return configs
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         return [
             managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
             managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),
@@ -134,14 +110,9 @@ class TraceEvent:
     # replay, and the decision-inspector seam consume these same persisted
     # objects; no consumer reconstructs them from observation differences.
     # True when the server auto-passed this priority window (stops system /
-<<<<<<< HEAD
-    # F6), False for decisions the human actually clicked. Competency metrics
-    # must not credit auto-passes as deliberate passes.
-=======
     # F6), False for explicit Commands, including declared validation prefixes.
     # Competency metrics must also use record origin; False alone is not human
     # provenance and auto-passes are never deliberate passes.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     auto: bool = False
     # Ordered semantic facts committed by the same authority transition. Old
     # traces omit this field and remain valid because replay treats it as an
@@ -165,8 +136,6 @@ class Trace:
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
 
-<<<<<<< HEAD
-=======
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
 
@@ -188,7 +157,6 @@ class Trace:
         ]
         return record
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -310,10 +278,3 @@ def prepare_trace_payload(
             redact_observation(observation)
 
     return prepared
-<<<<<<< HEAD
-
-
-def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return prepare_trace_payload(payload, reveal_hidden=False)
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

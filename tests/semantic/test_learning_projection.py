@@ -370,20 +370,12 @@ def test_artifact_headers_round_trip_in_dataset_and_checkpoint(tmp_path):
         SemanticArtifactHeader.from_json("not-json")
 
 
-<<<<<<< HEAD
-def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path):
-=======
 def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path: Path) -> None:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     schema = _json(DEFAULT_SCHEMA_PATH)
     schema["schema_version"] = 999
     bad_schema = tmp_path / "schema.json"
     bad_schema.write_text(json.dumps(schema), encoding="utf-8")
-<<<<<<< HEAD
-    with pytest.raises(UnknownSchemaError, match="expected 2, 3, 4 or 5, got 999"):
-=======
     with pytest.raises(UnknownSchemaError, match="got 999"):
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         LearningSchema.load(bad_schema)
 
     ir = _json(DEFAULT_IR_PATH)
@@ -449,19 +441,11 @@ def test_sideboard_program_projection_is_independent_of_definition_ids():
     assert not second.opaque_identity_valid.any()
 
 
-<<<<<<< HEAD
-def test_learning_schema_rejects_the_pre_sideboard_contract(tmp_path):
-=======
 def test_learning_schema_rejects_the_pre_sideboard_contract(tmp_path: Path) -> None:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     schema = _json(DEFAULT_SCHEMA_PATH)
     schema["schema_version"] = 1
     schema["object_roles"].pop("agent_sideboard")
     path = tmp_path / "old-schema.json"
     path.write_text(json.dumps(schema), encoding="utf-8")
-<<<<<<< HEAD
-    with pytest.raises(UnknownSchemaError, match="expected 2, 3, 4 or 5, got 1"):
-=======
     with pytest.raises(UnknownSchemaError, match="got 1"):
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         LearningSchema.load(path)

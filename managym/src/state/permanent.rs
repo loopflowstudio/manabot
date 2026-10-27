@@ -26,12 +26,9 @@ pub struct Permanent {
     pub animated: bool,
     /// Keywords granted until end of turn — cleared during cleanup.
     pub temp_keywords: Keywords,
-<<<<<<< HEAD
-=======
     /// Additive subtype grants tied to this incarnation, removed at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Object-local replacement, removed at cleanup or when this incarnation leaves.
     pub exile_if_dies_this_turn: bool,
     pub attacking: bool,
@@ -55,10 +52,7 @@ impl Permanent {
             cant_be_blocked_this_turn: false,
             animated: false,
             temp_keywords: Keywords::default(),
-<<<<<<< HEAD
-=======
             temp_subtypes: Vec::new(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             exile_if_dies_this_turn: false,
             attacking: false,
             was_cast: false,
@@ -142,9 +136,6 @@ impl Permanent {
         self.temp_toughness = 0;
         self.cant_be_blocked_this_turn = false;
         self.temp_keywords = Keywords::default();
-<<<<<<< HEAD
-=======
         self.temp_subtypes.clear();
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 }

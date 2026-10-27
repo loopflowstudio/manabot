@@ -4,16 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "manabot"
-<<<<<<< HEAD
-version = "0.1.0"
-description = "The trainable Magic: The Gathering agent for Manabot"
-requires-python = ">=3.10"
-=======
 version = "0.2.0"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 dependencies = [
     "numpy>=1.24.0",
     "pandas>=2.0.0",
@@ -21,25 +15,14 @@ dependencies = [
     "gymnasium>=1.0.0",
     "pydantic>=2.12.0",
     "typer>=0.12.5",
-<<<<<<< HEAD
-    "wandb>=0.18.7",
-    "psutil>=5.9.0",
-    "fastapi>=0.116.0",
-    "uvicorn[standard]>=0.34.0"
-=======
     "psutil>=5.9.0",
     "etude-sdk==0.2.5",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ]
 
 [project.scripts]
 manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
-<<<<<<< HEAD
-reports = [
-    "etude-sdk[s3]==0.1.1 ; python_version >= '3.12'",
-=======
 llm = [
     "huggingface-hub>=1.3,<2",
     "transformers[chat-template]==5.3.0",
@@ -47,14 +30,11 @@ llm = [
 ]
 reports = [
     "etude-sdk[s3]==0.2.5 ; python_version >= '3.12'",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     "matplotlib>=3.9",
 ]
 artifacts = [
     "boto3>=1.35.0",
 ]
-<<<<<<< HEAD
-=======
 academy = [
     "fastapi>=0.116.0",
     "uvicorn[standard]>=0.34.0",
@@ -63,7 +43,6 @@ evaluation = [
     "etude-sdk[eval]==0.2.5",
     "matplotlib>=3.9",
 ]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 play = [
     "maturin>=1.5,<2.0",
 ]
@@ -79,62 +58,6 @@ notebook = [
     "jupyterlab>=4.0",
     "nbclient>=0.10",
     "matplotlib>=3.9",
-<<<<<<< HEAD
-    "wandb-workspaces>=0.4.13",
-]
-
-[dependency-groups]
-training-runtime = [
-    "torch==2.10.0+cu128 ; sys_platform == 'linux'",
-    "torch==2.10.0 ; sys_platform != 'linux'",
-]
-play-runtime = [
-    "fastapi>=0.116.0",
-    # A trained opponent loads through manabot's model and env packages,
-    # which import these at module load.
-    "gymnasium>=1.0.0",
-    "maturin>=1.5,<2.0",
-    "numpy>=1.24.0",
-    "psutil>=5.9.0",
-    "torch==2.10.0",
-    "uvicorn[standard]>=0.34.0",
-    "wandb>=0.18.7",
-]
-
-[tool.uv]
-default-groups = ["training-runtime"]
-conflicts = [
-    [
-        { group = "training-runtime" },
-        { group = "play-runtime" },
-    ],
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-training"
-url = "https://pypi.org/simple"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cuda"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cpu", group = "play-runtime" },
-    { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
-    { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["manabot", "academy"]
-=======
 ]
 
 [dependency-groups]
@@ -223,7 +146,6 @@ exclude = [
     "managym/target/**",
     "managym/libmanagym.dylib.dSYM/**",
 ]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -233,10 +155,7 @@ markers = [
 ]
 
 [tool.ruff]
-<<<<<<< HEAD
-=======
 extend-exclude = ["tests/fixtures/seventeenlands/mtga_follower.py"]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 line-length = 88
 target-version = "py312"
 
@@ -247,9 +166,5 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-<<<<<<< HEAD
-known-first-party = ["academy", "manabot"]
-=======
 known-first-party = ["academy", "experiments", "manabot"]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

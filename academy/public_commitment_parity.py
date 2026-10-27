@@ -12,8 +12,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
-<<<<<<< HEAD
-=======
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Command,
@@ -22,7 +20,6 @@ from managym.decision import (
     apply_semantic_command,
 )
 from managym.possible_worlds import PossibleWorldSpace
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 
 from manabot.belief.likelihood import (
@@ -33,17 +30,6 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
-<<<<<<< HEAD
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Command,
-    DecisionFrame,
-    SemanticTransition,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 from . import server, trace as trace_store
 from .authored_match_receipt import HISTORICAL_RECEIPT_PATH
@@ -497,15 +483,6 @@ def _source_manifest() -> dict[str, Any]:
         "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
-<<<<<<< HEAD
-        "managym/experience_projection.py",
-        "experiments/contracts/int-9-exact-range-v1.json",
-        "manabot/belief/likelihood.py",
-        "manabot/belief/tracker.py",
-        "managym/__init__.pyi",
-        "managym/decision.py",
-        "managym/possible_worlds.py",
-=======
         "manabot/managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
@@ -513,7 +490,6 @@ def _source_manifest() -> dict[str, Any]:
         "manabot/managym/__init__.pyi",
         "manabot/managym/decision.py",
         "manabot/managym/possible_worlds.py",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "managym/src/agent/env.rs",
         "managym/src/agent/structured_offer.rs",
         "managym/src/decision.rs",
@@ -525,10 +501,6 @@ def _source_manifest() -> dict[str, Any]:
         "tests/belief/test_tracker.py",
         "tests/academy/test_public_commitment_parity.py",
         "tests/sim/test_conditional_search.py",
-<<<<<<< HEAD
-        "tests/sim/test_exact_range_runner.py",
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())} for path in paths

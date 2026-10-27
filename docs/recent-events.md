@@ -1,12 +1,7 @@
 # Optional public recent-event input
 
-<<<<<<< HEAD
-`AgentSpec(recent_events=True)` enables shared policy/value context for the
-selected semantic pack. `Model(...)` and `with_recent_events(...)` select it
-=======
 `ModelConfig(recent_events=True)` enables shared policy/value context for the
 selected semantic pack. `ModelOverride(...)` and `with_recent_events(...)` select it
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 independently of capacity, value aggregation/output and learning rule.
 `TrainingRegime` derives `observation.policy_history_version=1`; ordinary
 construction outside recipes must provide that observation setting explicitly.
@@ -15,18 +10,6 @@ Generic policies without a semantic catalog reject history-on.
 This comparison **resolves unexecuted plans only**:
 
 ```python
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec
-from manabot.training.experiments import Case, Experiment, Model
-from manabot.training.presets import ataraxos_mtg_v1
-
-comparison = Experiment(
-    "recent-history-unexecuted",
-    ataraxos_mtg_v1(),
-    cases=(
-        Case("off", (Model(AgentSpec(recent_events=False)),)),
-        Case("on", (Model(AgentSpec(recent_events=True)),)),
-=======
 from manabot.infra.config import ModelConfig
 from manabot.experiment.config import Case, Experiment, ModelOverride
 from manabot.recipes.ataraxos import ataraxos
@@ -37,7 +20,6 @@ comparison = Experiment(
     cases=(
         Case("off", (ModelOverride(ModelConfig(recent_events=False)),)),
         Case("on", (ModelOverride(ModelConfig(recent_events=True)),)),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ),
 ).resolve()
 ```
@@ -149,8 +131,6 @@ contracts, Clippy and focused formatting/lint checks. A direct comparison with
 base `ab1f61c4` preserved all state-dict bytes, architecture receipts and outputs
 for four semantic history-off configurations (scalar/WDL × attention off/on).
 These are correctness fixtures, not scientific training or evaluation evidence.
-<<<<<<< HEAD
-=======
 
 ## Current continuation input
 
@@ -283,4 +263,3 @@ remains unverified locally. Evidence is retained under
 `.runs/observation-gate-20261026-final/` and
 `.runs/runpod-performance/evidence/paired/`; the latter includes all 27 successful
 commands, matched-work comparisons and final source/binary identity checks.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

@@ -150,8 +150,6 @@ def test_precommand_study_address_is_independent_of_command_id():
     RUST_VALIDATOR.validate(artifact)
 
 
-<<<<<<< HEAD
-=======
 def test_precommand_study_address_is_independent_of_selected_offer() -> None:
     artifact = _precommand_artifact()
     landmark = artifact["landmarks"][0]
@@ -172,7 +170,6 @@ def test_precommand_study_address_is_independent_of_selected_offer() -> None:
     RUST_VALIDATOR.validate(artifact)
 
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 @pytest.mark.parametrize("rebind_command_id", [False, True])
 def test_retained_study_address_binds_command_and_digest(
     rebind_command_id: bool,

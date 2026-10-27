@@ -6,17 +6,6 @@ import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-from experiments.runners.experiment_mirrors import recipe
-from manabot.arena.match import selected_match
-from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
-from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.net_opponent import SeatRoutedCollector
-from manabot.training.matchups import stream_matches
-from manabot.training.models import TrainingRegime
-=======
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
@@ -24,7 +13,6 @@ from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.matchup import selected_match
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import stream_matches
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import managym
 
 
@@ -52,21 +40,13 @@ def test_strata_balance_decks_and_play_order() -> None:
 def test_mirror_admission_requires_exact_roster_and_explicit_option() -> None:
     base = Match(selected_match())
     space = ObservationSpace()
-<<<<<<< HEAD
-    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
-=======
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     agent.world_binding = checkpoint_world(base.to_rust(), space)
     mirror = stream_matches(base, 12, "mirrors-balanced")[0]
     with pytest.raises(ValueError, match="setup differs"):
         validate_agent_setup(agent, mirror.to_rust())
     validate_agent_setup(agent, mirror.to_rust(), allow_deck_repetition=True)
-<<<<<<< HEAD
-    changed = mirror.hypers.model_copy(deep=True)
-=======
     changed = mirror.config.model_copy(deep=True)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     changed.hero_sideboard = {}
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(
@@ -78,15 +58,9 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
     torch.set_num_threads(1)
     match = Match(selected_match())
     space = ObservationSpace()
-<<<<<<< HEAD
-    agent = Agent(
-        space,
-        AgentSpec(
-=======
     agent = ActorCritic(
         space,
         ModelConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )
@@ -95,11 +69,7 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
         return SeatRoutedCollector(
             space,
             match,
-<<<<<<< HEAD
-            Reward(RewardHypers()),
-=======
             Reward(RewardConfig()),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             num_envs=12,
             seed=1250,
             opponent_mode="self",
@@ -122,11 +92,7 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
     engine.reset(Match(selected_match()).to_rust())
     expected = engine.content_pack_manifest()
     for deck in ("ur_lessons", "gw_allies"):
-<<<<<<< HEAD
-        mirror = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
-=======
         mirror = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         engine.reset(mirror.to_rust())
         assert engine.content_pack_manifest() == expected
         engine.reset(mirror.swapped().to_rust())
@@ -135,13 +101,3 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
         wrong[0].content_pack = None
         with pytest.raises(RuntimeError, match="explicit pack"):
             engine.reset(wrong)
-<<<<<<< HEAD
-
-
-def test_linked_stages_cannot_change_curriculum() -> None:
-    value = recipe("cross-balanced", 100, 3600).model_dump()
-    value["stages"][1]["matchup_curriculum"] = "mirrors-balanced"
-    with pytest.raises(ValueError, match="preserve streams, curriculum"):
-        TrainingRegime.model_validate(value)
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

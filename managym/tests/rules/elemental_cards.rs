@@ -1416,8 +1416,6 @@ fn announced_enter_trigger_keeps_its_controller_when_its_source_changes_control(
     assert_eq!(s.life(1), life);
     assert_eq!(s.life(0), 20);
 }
-<<<<<<< HEAD
-=======
 
 #[test]
 fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
@@ -1507,4 +1505,3 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
         .temp_subtypes
         .is_empty());
 }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

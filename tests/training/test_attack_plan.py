@@ -2,15 +2,9 @@
 
 import pytest
 
-<<<<<<< HEAD
-from manabot.infra.hypers import MatchHypers
-from manabot.training.attacks import AttackPlan, AttackTarget
-from manabot.training.models import FrozenOpponent, TrainingRegime, TrainSelfPlay
-=======
 from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig
 from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import managym
 
 
@@ -30,11 +24,7 @@ def _plan() -> AttackPlan:
         template=TrainingRegime(
             id="attacker",
             world=managym.WORLD_VERSION,
-<<<<<<< HEAD
-            match=MatchHypers(),
-=======
             match=MatchConfig(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             wall_seconds=30,
             stages=[TrainSelfPlay(id="policy", operation="train_self_play")],
         ),
@@ -52,10 +42,7 @@ def test_attack_ladder_continues_one_optimizer_against_identical_target() -> Non
     assert [stage.updates for stage in stages] == [2, 3, 4]
     assert [stage.initial for stage in stages] == [None, "attack-0", "attack-1"]
     assert all(stage.opponent == plan.targets[0].policy for stage in stages)
-<<<<<<< HEAD
-=======
     assert all(stage.learning_seats == "one" for stage in stages)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.mark.parametrize("seed", [17, 10017, 101, 10101, 20201, 30201])

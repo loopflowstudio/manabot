@@ -1,11 +1,7 @@
 # academy
 
 The Academy experience server: authoritative play, presentation, and
-<<<<<<< HEAD
-study. The Svelte client in [frontend/](../frontend/) renders what this
-=======
 study. The Svelte client in [academy/ui/](../academy/ui/) renders what this
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 package decides; the client never invents rules meaning.
 
 ## Authority model
@@ -38,14 +34,8 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
-<<<<<<< HEAD
-- **`opponent.py`**: trained opponents — the configured `candidate.json`
-  bundle and the checkpoint catalog (`GET /api/opponents`), both chosen by
-  exact SHA-256 and verified before play
-=======
 - **`opponent.py`**: trained opponents — the checkpoint catalog
   (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only
@@ -59,14 +49,6 @@ recorded offer and Command.
 ```bash
 ./scripts/play          # certified one-command path from fresh checkout
 ./scripts/play --demo learn  # checked prefix into Learn, then ordinary play
-<<<<<<< HEAD
-./scripts/verify-clean-machine   # the clean-machine proof
-```
-
-The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
-draw**, or **Decline Learn**. The first two modes show card previews and a
-Back control; only selecting a card commits the choice. **New Game** repeats
-=======
 ./scripts/play --demo precision  # Treasure-funded Deadly Precision
 ./scripts/play --demo precision-mana  # the four-mana additional-cost alternative
 ./scripts/verify-clean-machine   # the clean-machine proof
@@ -81,13 +63,10 @@ card treatment. Artist credits are available in the footer.
 The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
 Back control; only choosing its explicit offer commits the choice. **New Game** repeats
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
-<<<<<<< HEAD
-=======
 The table reads **Who decides / What is happening / Your choices**. Inspect any
 visible card without submitting; choose an explicit legal offer to commit one
 Command. Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
@@ -132,7 +111,6 @@ offer on a retained isolated root, then **Return to recorded decision** restores
 its original address/frame/Command; **Return to live** is a separate destination.
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Long action lists have an optional **Find an action** filter. See the
 [retained choice positions and local walkthrough](../docs/choice-navigation.md)
 for target, discard, Learn, combat and optional-cost coverage.
@@ -143,18 +121,10 @@ Development server without the launcher:
 uv run uvicorn academy.server:app --port 8000
 ```
 
-<<<<<<< HEAD
-The [local trained-challenger workflow](../docs/local-trained-challenger.md)
-covers training, the built same-origin server, feedback, and read-only SQL.
-Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
-
-Any other trained checkpoint is selectable from the Opponent menu. The table
-=======
 The [local challenger workflow](../docs/local-trained-challenger.md)
 covers the built same-origin server, feedback, and read-only SQL.
 
 Any trained checkpoint is selectable from the Opponent menu. The table
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
 and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
 Tournament files, separated by `:` — with world, model shape, training step
@@ -176,11 +146,7 @@ letting process interrupts escape. Do not broaden gameplay error suppression.
 
 Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
-<<<<<<< HEAD
-[frontend/e2e/](../frontend/e2e/) and documented in
-=======
 [academy/ui/e2e/](../academy/ui/e2e/) and documented in
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 [docs/clean-machine-play.md](../docs/clean-machine-play.md) and
 [docs/experience-proof.md](../docs/experience-proof.md).
 
@@ -206,17 +172,10 @@ choice time. Compound checkpoints record their conditional root-sequence
 factors and values; these are labeled separately from native microchoice
 marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
-<<<<<<< HEAD
-private analysis observation supplies **Show both hands**, enabled by default
-for bot spectators, including during active watches. Active inspection requires
-the watch credential; completed inspection remains shared. Switching it off
-shows only the acting bot's view. Ordinary trace reads always strip the analysis
-=======
 private analysis observation supplies **Show both hands**, available explicitly
 for bot spectators, including during active watches. Active inspection requires
 the watch credential; completed inspection remains shared. The default
 is the acting bot's view. Ordinary trace reads always strip the analysis
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 snapshot, and bot inputs and decision evidence retain their acting-view scope.
 
 **Try another line** uses retained Study roots from either acting seat, executes
@@ -226,8 +185,6 @@ have the ordinary table-session lifetime; saved completed inspection remains
 available after the session expires, while a fresh Study fork requires retained
 roots. Existing structured Study receipts and frozen `erd1` evidence keep their
 original command bindings.
-<<<<<<< HEAD
-=======
 
 
 ## Elemental roster
@@ -274,4 +231,3 @@ and protocol checks as well as attempt-store checks. SQLite is the trace
 authority; historical JSON is read-only. `ed2` names a pre-command frame;
 Command and offer validation belongs to its landmark. Preserve frozen `erd1`
 evidence and test recorder failure through the WebSocket boundary.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

@@ -9,14 +9,8 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, TypeAlias
 
-<<<<<<< HEAD
-from pydantic import Field, model_validator
-
-from managym.experience import ProtocolModel, UInt32, UInt64
-=======
 from managym.experience import ProtocolModel, UInt32, UInt64
 from pydantic import Field, model_validator
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 SHA256_PATTERN = r"^[0-9a-f]{64}$"
 

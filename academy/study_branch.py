@@ -11,20 +11,12 @@ from dataclasses import dataclass
 import json
 from typing import Any, Literal, Mapping
 
-<<<<<<< HEAD
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
-
-import managym
-from managym.decision import Command as SemanticCommand, DecisionFrame
-from managym.experience import Command
-=======
 from managym.decision import Command as SemanticCommand, DecisionFrame
 from managym.experience import Command
 from managym.experience_projection import decision_surface_view
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 import managym
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 from .replay_index import (
     CanonicalReplayV1,
@@ -128,12 +120,6 @@ class StudyBranch:
         self._published_offer_sets += 1
         return projection
 
-<<<<<<< HEAD
-    def current_observation(self) -> managym.Observation:
-        """Return the branch's current viewer-safe authority observation."""
-        env, restored = self._require_open()
-        return env.observation_for_player(restored.viewer)
-=======
     def presentation_subjects(self) -> dict[str, dict[str, Any]]:
         """Native public event-address map, captured at the transition boundary."""
         env, _ = self._require_open()
@@ -143,7 +129,6 @@ class StudyBranch:
         """Project the isolated root with the same native explanation as play."""
         env, restored = self._require_open()
         return decision_surface_view(env, restored.viewer)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def submit(
         self,
@@ -198,15 +183,9 @@ class StudyBranch:
         )
 
     def submit_semantic(self, command: Command) -> managym.Observation:
-<<<<<<< HEAD
-        """Execute an exact recorded watch offer on its isolated native root.
-
-        Watch records every native microchoice. These already bind one semantic
-=======
         """Execute an exact recorded offer on its isolated native root.
 
         Academy records every native microchoice. These already bind one semantic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         offer, so no structured-offer grouping or label matching is necessary.
         """
         env, restored = self._require_open()

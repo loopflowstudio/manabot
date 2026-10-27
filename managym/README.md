@@ -2,13 +2,9 @@
 
 The deterministic Magic: The Gathering rules engine and training environment
 behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-<<<<<<< HEAD
-and `academy` (the optional play UI).
-=======
 and `academy` (the optional play UI). The Python API is `manabot.managym`,
 bundled with the `manabot` distribution; `import managym` remains a compatibility
 alias. Rust sources stay in this directory.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Architecture
 
@@ -77,11 +73,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-<<<<<<< HEAD
-[semantic-kernel-w9-v1](../conformance/semantic-kernel-w9-v1/).
-=======
 [semantic-kernel-w13-v1](../conformance/semantic-kernel-w13-v1/).
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -90,8 +82,6 @@ uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
 
-<<<<<<< HEAD
-=======
 The [pinned Comprehensive Rules audit](../docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
 Card-shell checks and replay agreement do not independently prove rules
@@ -109,7 +99,6 @@ payment rules. See the audit's
 [ownership review](../docs/rules/audit-2026-10/unification.md#refreshed-ownership-and-delivery-boundary)
 before using its historical Task attribution.
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ## Style
 
 ```rust
@@ -156,8 +145,6 @@ cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
 legendary status in observations; canonical hashing includes their copied data.
-<<<<<<< HEAD
-=======
 
 Resolving optional costs use `Effect::OptionalPayment` and `PaymentProgress`.
 Their [ownership and authoring contract](../docs/rules/optional-payments.md)
@@ -200,4 +187,3 @@ layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/recent-events.md#current-continuation-input).
 The presentation context and text capture derive from the same typed frames;
 portable schema-6 viewer JSON is validated by the native observation types.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

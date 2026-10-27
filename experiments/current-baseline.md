@@ -352,11 +352,7 @@ service. Daily-test derivation and independent validation follow sustained evide
 
 ### Implementation boundary
 
-<<<<<<< HEAD
-The runner now consumes `regimes/current-baseline-mini-source.json`, extracted
-=======
 The runner now consumes `sustained_baseline_source()` in `experiments/ataraxos_mini.py`, extracted
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 unchanged from all three retained actor-critic recipes. It fixes 10000 updates,
 620/1240 linked early boundaries, explicit 400/800 exports, separate live random
 monitoring and 24 final cells. The 7200-second calibration amendment is implemented.

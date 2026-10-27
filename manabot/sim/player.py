@@ -1,99 +1,3 @@
-<<<<<<< HEAD
-from collections import Counter
-from enum import Enum
-import os
-from typing import Dict, Optional
-
-import numpy as np
-import torch
-import wandb
-
-# Local imports
-from manabot.infra.log import getLogger
-from manabot.model.agent import Agent
-
-# -----------------------------------------------------------------------------
-# Model Loading
-# -----------------------------------------------------------------------------
-
-
-def load_model_from_wandb(
-    model: str,
-    version: str = "latest",
-    project: Optional[str] = None,
-    device: str = "cpu",
-) -> Agent:
-    """
-    Load a trained model from wandb artifacts with minimal wandb interaction.
-
-    Args:
-        model: Name of the model (e.g. "quick_train")
-        version: Version string (e.g. "v3" or "latest")
-        project: Wandb project name
-        device: Device to load model on ("cpu" or "cuda")
-
-    Returns:
-        Loaded agent model ready for inference
-    """
-    logger = getLogger(__name__).getChild("load_model_from_wandb")
-    try:
-        # Force online mode to ensure artifact can be fetched
-        os.environ["WANDB_MODE"] = "online"
-
-        # Use a silent API object without starting a run
-        api = wandb.Api()
-        artifact_path = f"{project or 'manabot'}/{model}:{version}"
-        logger.info(f"Loading artifact: {artifact_path}")
-        artifact = api.artifact(artifact_path)
-        artifact_dir = artifact.download("/tmp")
-
-        # Directly use the expected filename pattern based on the save method
-        potential_paths = [
-            os.path.join(artifact_dir, f"{model}.pt"),
-            os.path.join(artifact_dir, f"{model}_latest.pt"),
-        ]
-
-        # Also look for any .pt files
-        pt_files = [f for f in os.listdir(artifact_dir) if f.endswith(".pt")]
-        potential_paths.extend([os.path.join(artifact_dir, f) for f in pt_files])
-
-        # Find the first valid checkpoint file
-        checkpoint_path = None
-        for path in potential_paths:
-            if os.path.exists(path):
-                checkpoint_path = path
-                break
-
-        if checkpoint_path is None:
-            raise FileNotFoundError(
-                f"No .pt files found in the artifact at {artifact_dir}"
-            )
-
-        logger.info(f"Loading checkpoint from {checkpoint_path}")
-        from manabot.sim.flat_mc import load_checkpoint_agent
-
-        agent, _ = load_checkpoint_agent(checkpoint_path)
-        agent = agent.to(device)
-
-        logger.info("Successfully loaded model")
-        return agent
-    except Exception as e:
-        logger.error(f"Error loading model from wandb: {e}")
-        # If the exception relates to artifact not found, show clear message
-        if "not found" in str(e).lower():
-            logger.error(
-                f"Could not find artifact '{model}:{version}'. Check if the name is correct and the artifact exists."
-            )
-        # If the exception relates to model loading, print more details
-        elif "state dictionary" in str(e) or "state_dict" in str(e):
-            logger.error(
-                "The model file was found but its structure doesn't match expectations."
-            )
-            logger.error(
-                "This could happen if the model was saved with a different format or version."
-            )
-        raise
-=======
 """Inference players for scalar simulation; model admission lives in model.checkpoint."""
 
 from enum import Enum
@@ -101,7 +5,6 @@ from typing import Dict
 
 import numpy as np
 import torch
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 # Local imports
 from manabot.model.actor_critic import ActorCritic
@@ -126,50 +29,11 @@ class Player:
         self.name = name
         self.player_type = player_type
         self.device = "cpu"
-<<<<<<< HEAD
-        self.wins = 0
-        self.games = 0
-        self.action_history = []  # Track actions for analysis
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from observation."""
         raise NotImplementedError
 
-<<<<<<< HEAD
-    @property
-    def win_rate(self) -> float:
-        """Calculate win rate."""
-        return self.wins / self.games if self.games > 0 else 0.0
-
-    def record_result(self, won: bool) -> None:
-        """Record game result."""
-        self.games += 1
-        if won:
-            self.wins += 1
-
-    def record_action(self, action: int, obs: Dict[str, np.ndarray]) -> None:
-        """Record an action for later analysis."""
-        self.action_history.append((action, obs.get("actions", []).shape[0]))
-
-    def get_action_distribution(self) -> Dict[str, float]:
-        """Get distribution of action types."""
-        if not self.action_history:
-            return {}
-
-        action_counts = Counter([action for action, _ in self.action_history])
-        total = len(self.action_history)
-        return {
-            f"action_{action}": count / total for action, count in action_counts.items()
-        }
-
-    def reset_history(self) -> None:
-        """Reset action history."""
-        self.action_history = []
-
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     def to(self, device: str) -> "Player":
         """Move player to specified device."""
         self.device = device
@@ -182,24 +46,13 @@ class ModelPlayer(Player):
     def __init__(
         self,
         name: str,
-<<<<<<< HEAD
-        agent: Agent,
-        deterministic: bool = False,
-        record_logits: bool = False,
-=======
         agent: ActorCritic,
         deterministic: bool = False,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ):
         super().__init__(name, PlayerType.MODEL)
         self.agent = agent
         self.deterministic = deterministic
         self.device = next(agent.parameters()).device
-<<<<<<< HEAD
-        self.record_logits = record_logits
-        self.logits_history = [] if record_logits else None
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from model."""
@@ -211,46 +64,10 @@ class ModelPlayer(Player):
 
         # Get action from model
         with torch.no_grad():
-<<<<<<< HEAD
-            logits, _ = self.agent(tensor_obs)
-            if self.record_logits:
-                assert self.logits_history is not None
-                self.logits_history.append(logits.detach().cpu().numpy())
-
-            action, _, _, _ = self.agent.get_action_and_value(
-                tensor_obs, deterministic=self.deterministic
-            )
-
-            # Record the action for analysis
-            action_value = action.item()
-            self.record_action(action_value, obs)
-            return action_value
-
-    def get_action_confidence(self) -> Dict[str, float]:
-        """Get statistics about action confidence."""
-        if not self.logits_history:
-            return {}
-
-        # Calculate softmax probabilities
-        probs = []
-        for logits in self.logits_history:
-            # Apply softmax to get probabilities
-            exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
-            probs.append(exp_logits / np.sum(exp_logits, axis=1, keepdims=True))
-
-        # Calculate statistics
-        chosen_probs = [p.max() for p in probs]
-        return {
-            "mean_confidence": np.mean(chosen_probs),
-            "min_confidence": np.min(chosen_probs),
-            "max_confidence": np.max(chosen_probs),
-        }
-=======
             action, _, _, _ = self.agent.get_action_and_value(
                 tensor_obs, deterministic=self.deterministic
             )
             return action.item()
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def to(self, device: str) -> "ModelPlayer":
         """Move player and model to device."""
@@ -271,13 +88,7 @@ class RandomPlayer(Player):
         if len(valid_actions) == 0:
             raise ValueError("No valid actions available")
 
-<<<<<<< HEAD
-        action = int(np.random.choice(valid_actions))
-        self.record_action(action, obs)
-        return action
-=======
         return int(np.random.choice(valid_actions))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class DefaultPlayer(Player):

@@ -8,44 +8,26 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
-=======
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.model.catalog import (
     NotAPolicyCheckpoint,
     discover_checkpoints,
     inspect_checkpoint,
 )
-<<<<<<< HEAD
-from manabot.model.world import WORLD
-from manabot.sim.distill import save_bc_checkpoint
-=======
 from manabot.model.checkpoint import save_checkpoint
 from manabot.model.world import WORLD
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import managym
 
 PACK = "ur-lessons-vs-gw-allies"
 
 
 def _write_checkpoint(path: Path) -> None:
-<<<<<<< HEAD
-    agent = Agent(
-        ObservationSpace(),
-        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
-    )
-    save_bc_checkpoint(
-=======
     agent = ActorCritic(
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         agent.observation_space,
         path,
@@ -73,11 +55,7 @@ def test_current_checkpoint_is_admissible_with_its_identity(tmp_path: Path) -> N
     assert summary.sha256 == hashlib.sha256(path.read_bytes()).hexdigest()
     assert summary.model == "width 8, 1 attention layer × 2 heads"
     assert summary.parameters > 0
-<<<<<<< HEAD
-    assert summary.producer == "supervised distillation"
-=======
     assert summary.producer == "unknown"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert summary.label == "run/step_0"
     assert len(summary.setups) == 2
 

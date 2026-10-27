@@ -8,24 +8,6 @@ import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-from manabot.arena.match import _execute_game
-from manabot.arena.models import (
-    PlayerRegistration,
-    SearchSemantics,
-    canonical_sha256,
-    file_sha256,
-)
-from manabot.arena.players import build_player
-from manabot.arena.replay import replay_games
-from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.local_compound import advance_compound, project_compound
-from manabot.sim.mcts import (
-=======
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -38,16 +20,11 @@ from manabot.sim.replay import replay_games
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.sim.search.compound import advance_compound, project_compound
 from manabot.sim.search.puct import (
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
     determinized_puct,
     puct_source_sha256,
 )
-<<<<<<< HEAD
-from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import managym
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
@@ -58,21 +35,12 @@ def _check() -> None:
     pass
 
 
-<<<<<<< HEAD
-def _flat_agent(*, categorical: bool = False) -> tuple[Agent, ObservationSpace]:
-    torch.set_num_threads(1)
-    space = ObservationSpace()
-    agent = Agent(
-        space,
-        AgentSpec(
-=======
 def _flat_agent(*, categorical: bool = False) -> tuple[ActorCritic, ObservationSpace]:
     torch.set_num_threads(1)
     space = ObservationSpace()
     agent = ActorCritic(
         space,
         ModelConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=16,
             num_attention_heads=2,
             value_kind="categorical_wdl" if categorical else "scalar",
@@ -119,39 +87,23 @@ def test_checkpoint_semantics_are_required_and_cannot_contradict_architecture(
     agent, space = _flat_agent()
     path = tmp_path / "unknown.pt"
     configs = Match(small_match()).to_rust()
-<<<<<<< HEAD
-    save_bc_checkpoint(agent, space, path, player_configs=configs)
-    loaded, _ = load_checkpoint_agent(str(path))
-=======
     save_checkpoint(agent, space, path, player_configs=configs)
     loaded, _ = load_checkpoint(str(path))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(ValueError, match="explicit value semantic"):
         AgentLeafEvaluator(loaded, space)
     AgentLeafEvaluator(loaded, space, value_mode="neutral")
     for semantic in ("signed_outcome", "win_logit"):
-<<<<<<< HEAD
-        save_bc_checkpoint(
-=======
         save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             agent,
             space,
             path,
             player_configs=configs,
             extra={"value_semantic": semantic},
         )
-<<<<<<< HEAD
-        loaded, _ = load_checkpoint_agent(str(path))
-        assert loaded.value_semantic == semantic
-    categorical, _ = _flat_agent(categorical=True)
-    save_bc_checkpoint(
-=======
         loaded, _ = load_checkpoint(str(path))
         assert loaded.value_semantic == semantic
     categorical, _ = _flat_agent(categorical=True)
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         categorical,
         space,
         path,
@@ -159,13 +111,8 @@ def test_checkpoint_semantics_are_required_and_cannot_contradict_architecture(
         extra={"value_semantic": "win_logit"},
     )
     with pytest.raises(ValueError, match="conflict"):
-<<<<<<< HEAD
-        load_checkpoint_agent(str(path))
-    save_bc_checkpoint(
-=======
         load_checkpoint(str(path))
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,
@@ -173,11 +120,7 @@ def test_checkpoint_semantics_are_required_and_cannot_contradict_architecture(
         extra={"value_semantic": "probability"},
     )
     with pytest.raises(ValueError, match="unsupported checkpoint value semantic"):
-<<<<<<< HEAD
-        load_checkpoint_agent(str(path))
-=======
         load_checkpoint(str(path))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_nonfinite_values_and_incomplete_offers_fail_closed() -> None:
@@ -300,21 +243,12 @@ def test_registered_puct_completes_games_and_replays(
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
-<<<<<<< HEAD
-    agent = Agent(
-        space,
-        AgentSpec(hidden_dim=16, num_attention_heads=2, compound_decisions=compound),
-    )
-    path = tmp_path / "fixture.pt"
-    save_bc_checkpoint(
-=======
     agent = ActorCritic(
         space,
         ModelConfig(hidden_dim=16, num_attention_heads=2, compound_decisions=compound),
     )
     path = tmp_path / "fixture.pt"
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,

@@ -78,11 +78,7 @@ pub struct Command {
 
 /// Typed identity for one composite Observation. `viewer_state_hash` digests
 /// the viewer-safe projection only; it never includes opponent-private state.
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct ObservationIdentity {
     pub schema_version: u16,
     pub revision: u64,
@@ -94,11 +90,7 @@ pub struct ObservationIdentity {
 /// state, the ordered newly-visible event increment, and the current semantic
 /// decision (only when this viewer is the actor). Model tensors and histories
 /// are derived from this, not the reverse.
-<<<<<<< HEAD
-#[derive(Clone, Debug, Serialize)]
-=======
 #[derive(Clone, Debug, Serialize, Deserialize)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct Observation {
     pub identity: ObservationIdentity,
     /// Viewer-safe projection from `agent::Observation::for_player`. Opponent
@@ -302,8 +294,6 @@ impl Game {
     /// `decision` is present only when `viewer` is the acting player, so a
     /// non-acting viewer never sees the actor's legal offers.
     pub fn semantic_observation(&self, viewer: PlayerId) -> Result<Observation, SemanticError> {
-<<<<<<< HEAD
-=======
         self.semantic_observation_with_input(viewer)
             .map(|(observation, _)| observation)
     }
@@ -314,7 +304,6 @@ impl Game {
         &self,
         viewer: PlayerId,
     ) -> Result<(Observation, AgentObservation), SemanticError> {
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if viewer.0 >= self.state.players.len() {
             return Err(SemanticError::ViewerOutOfBounds(viewer.0));
         }
@@ -346,11 +335,7 @@ impl Game {
             }
         };
 
-<<<<<<< HEAD
-        Ok(Observation {
-=======
         let observation = Observation {
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             identity: ObservationIdentity {
                 schema_version: SEMANTIC_DECISION_VERSION,
                 revision: self.decision_epoch,
@@ -360,12 +345,8 @@ impl Game {
             viewer_state,
             events: Vec::new(),
             decision,
-<<<<<<< HEAD
-        })
-=======
         };
         Ok((observation, agent_obs))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 
     /// Validate one revision-bound Command against the current authority,

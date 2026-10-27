@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-<<<<<<< HEAD
-=======
 from pathlib import Path
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 from pydantic import ValidationError
 import pytest
@@ -27,47 +24,29 @@ from academy.study_branch import (
 import managym
 
 
-<<<<<<< HEAD
-def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
-=======
 def _completed_session(tmp_path: Path) -> tuple[GameSession, CanonicalReplayV1]:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     session = GameSession(
         tmp_path,
         id_factory=lambda kind: f"study-fork-{kind}",
         clock=lambda: "2026-07-17T00:00:00+00:00",
         villain_offer_policy=lambda context: int(context.offers[-1]["id"]),
     )
-<<<<<<< HEAD
-    session.new_game(
-=======
     # Priority automation still records Commands and retains their Study roots.
     # Reuse each returned frame: requesting it again persists the growing replay.
     initial = session.new_game(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         {
             "villain_type": "passive",
             "seed": 7,
             "hero_deck": "ur_lessons",
             "villain_deck": "gw_allies",
-<<<<<<< HEAD
-            "auto_pass": False,
-        }
-    )
-=======
             "auto_pass": True,
         }
     )
     frame = initial["frame"]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     for index in range(2_000):
         assert session.obs is not None
         if session.obs.game_over:
             break
-<<<<<<< HEAD
-        frame = session._experience_frame()
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         outcome = session.hero_command(
             {
                 "command_id": f"study-source-{index}",
@@ -79,10 +58,7 @@ def _completed_session(tmp_path: Path) -> tuple[GameSession, CanonicalReplayV1]:
             }
         )
         assert outcome["status"] == "accepted"
-<<<<<<< HEAD
-=======
         frame = outcome["update"]["frame"]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     else:
         pytest.fail("deterministic Study source match did not terminate")
 

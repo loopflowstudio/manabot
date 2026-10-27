@@ -122,8 +122,6 @@ pub enum EffectValue {
     CardsDrawnMinus { subtract: u32 },
 }
 
-<<<<<<< HEAD
-=======
 /// A resolving obligation, distinct from the effects chosen by its outcome.
 /// Waterbend pays only generic mana; taps never count as mana production.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -141,7 +139,6 @@ impl PaymentCost {
     }
 }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     /// Copy the source's copiable characteristics, removing legendary.
@@ -151,15 +148,10 @@ pub enum Effect {
         power: i32,
         toughness: i32,
     },
-<<<<<<< HEAD
-    WaterbendOrDiscard {
-        generic: u8,
-=======
     OptionalPayment {
         cost: PaymentCost,
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     },
     Sacrifice {
         predicate: CardPredicate,
@@ -244,13 +236,10 @@ pub enum Effect {
         count: EffectValue,
         target: TargetSpec,
     },
-<<<<<<< HEAD
-=======
     AddSubtypeToTarget {
         target: TargetSpec,
         subtype: String,
     },
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ExileIfDiesThisTurn {
         target: TargetSpec,
     },
@@ -553,12 +542,8 @@ impl Effect {
             | Effect::ModifyTriggeringPermanent { .. } => None,
             Effect::DealDamageValue { target, .. }
             | Effect::PutCountersValue { target, .. }
-<<<<<<< HEAD
-            | Effect::ExileIfDiesThisTurn { target } => Some(target),
-=======
             | Effect::ExileIfDiesThisTurn { target }
             | Effect::AddSubtypeToTarget { target, .. } => Some(target),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Effect::IfCondition { effects, .. } => effects.iter().find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
@@ -571,16 +556,12 @@ impl Effect {
             Effect::UntapTarget { target } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
-<<<<<<< HEAD
-            Effect::IfKicked { then, otherwise }
-=======
             Effect::OptionalPayment {
                 if_paid: then,
                 if_declined: otherwise,
                 ..
             }
             | Effect::IfKicked { then, otherwise }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Effect::IfGraveyardAtLeast {
                 then, otherwise, ..
             } => then
@@ -592,10 +573,6 @@ impl Effect {
             }
             Effect::CreateNonlegendaryCopy
             | Effect::ModifyControlled { .. }
-<<<<<<< HEAD
-            | Effect::WaterbendOrDiscard { .. }
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }

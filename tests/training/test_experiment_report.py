@@ -4,19 +4,6 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
-<<<<<<< HEAD
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from manabot.training.report_study import ScientificStudy
-
-from nbclient import NotebookClient
-import nbformat
-import pytest
-
-from manabot.training.comparison_notebook import write_comparison_notebook
-from manabot.training.experiment_report import (
-=======
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -29,16 +16,11 @@ from pydantic import ValidationError
 import pytest
 
 from manabot.reports.experiment import (
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     load_evidence,
     matched_milestones,
     strength_figures,
     write_dashboard,
 )
-<<<<<<< HEAD
-
-DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
-=======
 from manabot.reports.notebook import write_comparison_notebook
 from manabot.training.records import TrainingRun
 from manabot.training.state.game_errors import GameErrorState
@@ -127,7 +109,6 @@ def test_malformed_training_run_still_fails_report_admission(tmp_path: Path) -> 
     (tmp_path / "run.json").write_text('{"id": "broken-training-run"}')
     with pytest.raises(ValidationError):
         load_evidence(tmp_path)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.mark.parametrize("individual_progress", [False, True])
@@ -302,11 +283,7 @@ def test_missing_observation_times_and_resources_are_unavailable(
 def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
     import math
 
-<<<<<<< HEAD
-    from manabot.training.experiment_report import diagnostic_figures
-=======
     from manabot.reports.experiment import diagnostic_figures
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -335,11 +312,7 @@ def test_diagnostic_smoothing_preserves_missing_records_and_raw_data() -> None:
 
 
 def _scientific_fixture() -> "ScientificStudy":
-<<<<<<< HEAD
-    from manabot.training.report_study import ScientificStudy
-=======
     from manabot.reports.study import ScientificStudy
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     evidence = load_evidence(DEMO)
     monitor = evidence.monitors[0]
@@ -389,11 +362,7 @@ def _scientific_fixture() -> "ScientificStudy":
 
 
 def test_scientific_cohort_matching_and_initialization() -> None:
-<<<<<<< HEAD
-    from manabot.training.report_study import study_strength_figures
-=======
     from manabot.reports.study import study_strength_figures
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     study = _scientific_fixture()
     figure = study_strength_figures(study)[0]
@@ -410,11 +379,7 @@ def test_scientific_cohort_matching_and_initialization() -> None:
 def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None:
     import pytest
 
-<<<<<<< HEAD
-    from manabot.training.report_study import study_strength_figures
-=======
     from manabot.reports.study import study_strength_figures
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     study = _scientific_fixture()
     study.measurements[0].score = 0.123
@@ -431,11 +396,7 @@ def test_scientific_mismatched_rows_and_worlds_are_not_silently_pooled() -> None
 
 
 def test_missing_retention_is_not_zero_and_run_histories_stay_separate() -> None:
-<<<<<<< HEAD
-    from manabot.training.experiment_report import strength_figures
-=======
     from manabot.reports.experiment import strength_figures
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     evidence = load_evidence(DEMO)
     run = evidence.runs[0]
@@ -481,8 +442,6 @@ def test_capacity_reports_match_steps_without_claiming_equal_samples() -> None:
         float(line.get_xdata()[0]) for line in samples.lines if line.get_marker() == "o"
     ) == [16, 32, 48, 64]
     assert strength_figures(evidence, "optimizer_updates") == []
-<<<<<<< HEAD
-=======
 
 
 def test_retained_recipe_is_readable_but_not_executable() -> None:
@@ -496,4 +455,3 @@ def test_retained_recipe_is_readable_but_not_executable() -> None:
     with pytest.raises(ValidationError):
         TrainingRun.model_validate(record.model_dump(mode="json"))
     assert json.loads(source.read_text()) == payload
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

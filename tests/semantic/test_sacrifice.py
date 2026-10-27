@@ -7,11 +7,7 @@ import numpy as np
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-<<<<<<< HEAD
-from manabot.infra.hypers import MatchHypers, RewardHypers
-=======
 from manabot.infra.config import MatchConfig, RewardConfig
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
 import managym
@@ -54,17 +50,10 @@ def test_sacrifice_live_manifest_binds_every_learning_program() -> None:
 
 
 def test_sacrifice_game_uses_the_training_observation_path() -> None:
-<<<<<<< HEAD
-    match = MatchHypers.authored(
-        "elemental-sacrifice-v1", "sacrifice_left", "sacrifice_right"
-    )
-    env = Env(Match(match), ObservationSpace(), Reward(RewardHypers()), seed=162)
-=======
     match = MatchConfig.authored(
         "elemental-sacrifice-v1", "sacrifice_left", "sacrifice_right"
     )
     env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=162)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     observation, _ = env.reset(seed=162)
     rng = np.random.default_rng(162)
     for _ in range(5000):

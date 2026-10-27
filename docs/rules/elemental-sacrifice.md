@@ -81,11 +81,7 @@ Learning schema 4 lives at `content/semantic/w8/learning_schema.json`; schemas
 2 and 3 retain their original opcode vocabularies and files. New instructions
 use opcodes 51–55. Frozen opcode 24 lowers into the same search operation.
 
-<<<<<<< HEAD
-The [w8 corpus](../../conformance/semantic-kernel-w8-v1/) records ten games,
-=======
 The [w8 corpus](../../experiments/data/archive/conformance/semantic-kernel-w8-v1/) records ten games,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 including both compiled sacrifice orientations. Its inherited Phase source
 comparison does not claim external-engine parity for the new cards. Separate
 w8 Academy authority/parity receipts and Learn fixture preserve the older

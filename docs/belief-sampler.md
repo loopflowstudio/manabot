@@ -7,11 +7,7 @@ complement is the opponent library multiset; library order and other hidden
 state are outside this domain.
 
 ```bash
-<<<<<<< HEAD
-uv run manabot train --regime experiments/regimes/belief-sampler.json --seed 421 --out .runs/belief-pilot
-=======
 uv run manabot train --regime-name belief_sampler --seed 421 --out .runs/belief-pilot
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 This bounded three-game, small-deck pilot demonstrates the dependency chain.
@@ -84,13 +80,8 @@ seeds, exact frozen policy/world identities, whole-game partitions, held-out
 foreign/adversarial histories, dropout arms, total cost cap and untouched
 complete-game evaluation deals. Compare exact, physical-prior and learned
 search at equal elapsed inference time, including sampling. Calibration alone
-<<<<<<< HEAD
-cannot establish search strength. The post-RL search consumer is now connected through
-`collect_local_update.sampler` and direct native count materialization; see
-=======
 cannot establish search strength. The post-RL search consumer is the
 `local_update` player's learned sampling with direct native count materialization; see
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 [local-search contracts](local-policy-search.md#learned-joint-hand-search).
 It preserves separate sampler/policy admission and labels learned beliefs as
 approximate. This does not replace the exact reference or establish calibration.
@@ -126,11 +117,7 @@ No training or game generation is needed. Use the immutable dataset and sampler
 from a completed run, and the sampler SHA-256 recorded in its artifact receipt:
 
 ```bash
-<<<<<<< HEAD
-uv run python -m manabot.belief.sampling_report \
-=======
 uv run python -m manabot.reports.belief \
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   --dataset /path/to/evaluation-dataset.json \
   --training-dataset /path/to/sampler-training-dataset.json \
   --checkpoint /path/to/sampler.pt \
@@ -203,20 +190,8 @@ uv run python -m manabot.belief.sampling_cohort \
 ```
 
 The command writes JSON and a Markdown companion, refuses overwrites and resolves
-<<<<<<< HEAD
-input report paths relative to the manifest. The [synthetic example generator](../experiments/runners/sampler_uncertainty_example.py)
-writes a complete manifest and hashed input reports; its [report](../experiments/data/sampler-uncertainty-synthetic/analysis.md)
-is **fabricated software evidence**, not measured calibration. Regenerate it in a
-fresh directory without training, games or hand sampling:
-
-```bash
-uv run python experiments/runners/sampler_uncertainty_example.py \
-  --out .runs/sampler-uncertainty-synthetic
-```
-=======
 input report paths relative to the manifest. Its retained [synthetic report](../experiments/data/sampler-uncertainty-synthetic/analysis.md)
 is **fabricated software evidence**, not measured calibration.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Each attempt declares its treatment, independent training seed, fit receipt and
 configuration identities, immutable training dataset, status, and either a hashed
@@ -274,11 +249,5 @@ source identities, bootstrap seed/count, analysis Python/NumPy and saved evaluat
 Statistical regeneration reads these frozen reports and does no sampling; measured
 sampling time and Python allocations remain in the hashed inputs. New sampling
 reports measure fresh costs and must not be substituted as if only their intervals
-<<<<<<< HEAD
-had changed. The synthetic and fixed-weight saved-artifact checks in
-`tests/belief/test_sampling_cohort.py` and `test_sampling_report.py` exercise this
-software contract. ETU-99 retains empirical cohorts and budget authorization.
-=======
 had changed. The fixed-weight saved-artifact checks in
 `tests/belief/test_sampling_report.py` exercise this software contract. ETU-99 retains empirical cohorts and budget authorization.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

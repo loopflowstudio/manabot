@@ -34,12 +34,8 @@ from academy.replay_index import (
 )
 from academy.server import GameSession
 from academy.study_protocol import StudyArtifact
-<<<<<<< HEAD
-from manabot.sim.conditional_search import (
-=======
 from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.sim.search.conditional import (
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ConditionalStrategyResult,
     HasCard,
     NotQuery,
@@ -50,10 +46,6 @@ from manabot.sim.search.conditional import (
     make_prior,
     make_query_plan,
 )
-<<<<<<< HEAD
-from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "protocol" / "fixtures"

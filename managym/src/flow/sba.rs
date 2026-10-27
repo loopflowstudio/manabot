@@ -164,13 +164,9 @@ impl Game {
         }
         for (card_id, owner) in tokens_to_remove {
             self.journal_zone_move(card_id, owner);
-<<<<<<< HEAD
-            self.state.zones.remove_card(card_id, owner);
-=======
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id, owner);
             self.capture_card_move(card_id, from, None, owner);
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             performed = true;
         }
 

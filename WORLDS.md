@@ -1,10 +1,6 @@
 # Worlds
 
-<<<<<<< HEAD
-An observation/action-shape change is a **world version**. Checkpoints,
-=======
 A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 shards, and reports are only comparable within a world; cross-world numbers
 never share a table untagged. New worlds are frozen deliberately (batch the
 shape changes), and on each freeze the headline baselines are re-run before
@@ -23,11 +19,6 @@ was dead on arrival in exp-10.)
 | **w7** | in development, MTG-161, 2026-10-20 | 28 / 40 / 27 / 16; hybrid cost metadata and Elemental native rule primitives | compiled Elemental validation pack; no promoted artifacts | no strength baseline |
 | **w8** | in development, MTG-162, 2026-10-20 | 28 / 40 / 27 / 16; sacrifice/payment continuations and native choice descriptions | compiled sacrifice validation pack; no promoted artifacts | no strength baseline |
 | **w9** | in development, MTG-163, 2026-10-21 | 40 / 41 / 27 / 16; restricted mana colors and copied-token legendary status | compiled Temur validation pack; no promoted artifacts | no strength baseline |
-<<<<<<< HEAD
-
-**Current development world: w9.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w8) are **not comparable** to w9; do not reuse their
-=======
 | **w10** | in development, MTG-164, 2026-10-21 | 40 / 41 / 28 / 16; temporary Avatar subtype feature | ten exact Elemental setups in one compiled pack; no promoted artifacts | no strength baseline |
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
@@ -35,18 +26,13 @@ checkpoints (including w8) are **not comparable** to w9; do not reuse their
 
 **Current development world: w13.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w12) are **not comparable** to w13; do not reuse their
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
 Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
-<<<<<<< HEAD
-Update this table in the same PR as any shape change.
-=======
 Update this table in the same PR as any rules-meaning or shape change.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 
@@ -213,8 +199,6 @@ and receipts retain their original contents. The current conformance corpus is
 [semantic-kernel-w9-v1](conformance/semantic-kernel-w9-v1/). The validation pack
 is separate from MTG-164's final ten-deck admission. These are rules and
 integration changes, without a strength claim or a promoted checkpoint.
-<<<<<<< HEAD
-=======
 
 
 ## w10: one ten-deck Elemental world
@@ -288,4 +272,3 @@ bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
 ordinary Command path. All earlier corpora and demo files retain their bytes.
 Current-world admission and monitoring must validate this combined runtime;
 historical w12 passes are scoped to their recorded sources.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

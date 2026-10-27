@@ -1,10 +1,7 @@
 """Focused test fixtures for belief contracts; production demos use managym."""
 
-<<<<<<< HEAD
-=======
 from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
 from managym.possible_worlds import PossibleWorldSpace
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import torch
 
 from manabot.belief import (
@@ -19,15 +16,8 @@ from manabot.belief import (
     ViewerHistory,
 )
 from manabot.env import ObservationSpace
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
-from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
-from managym.possible_worlds import PossibleWorldSpace
-=======
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def fixture_history() -> ViewerHistory:
@@ -143,15 +133,9 @@ def fixture_decision() -> tuple[ViewerDecision, BeliefEncodingSchema]:
 
 def fixture_manabot(schema: BeliefEncodingSchema) -> Manabot:
     torch.manual_seed(19)
-<<<<<<< HEAD
-    policy_value = Agent(
-        ObservationSpace(),
-        AgentSpec(
-=======
     policy_value = ActorCritic(
         ObservationSpace(),
         ModelConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,

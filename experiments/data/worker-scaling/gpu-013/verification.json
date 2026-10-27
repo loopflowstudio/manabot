@@ -1,8 +1,0 @@
-{
-  "run": "aab617f0f593",
-  "seconds": 15.580423000035807,
-  "authoritative_outputs_verified": 199,
-  "manifest_files_verified": 198,
-  "total_bytes": 21939344,
-  "method": "per-file authenticated4MiB ranges,4file readers,If-Match,exact receipt hashes"
-}

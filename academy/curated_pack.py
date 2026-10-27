@@ -13,12 +13,8 @@ import managym
 
 PACK_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
-<<<<<<< HEAD
-    / "frontend"
-=======
     / "academy"
     / "ui"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     / "src"
     / "lib"
     / "packs"
@@ -28,12 +24,8 @@ PACK_MANIFEST_PATH = (
 )
 JEONG_INCREMENT_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
-<<<<<<< HEAD
-    / "frontend"
-=======
     / "academy"
     / "ui"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     / "src"
     / "lib"
     / "packs"
@@ -41,13 +33,10 @@ JEONG_INCREMENT_MANIFEST_PATH = (
     / "v2"
     / "manifest.json"
 )
-<<<<<<< HEAD
-=======
 ELEMENTAL_WORLD_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
     / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
 )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 REMOTE_PREFIXES = ("http://", "https://", "//")
 RIGHTS_FIELDS = {
@@ -197,11 +186,8 @@ def _validate_identities(
     expected_names: set[str],
     token_names: set[str],
     rights: dict[str, Any],
-<<<<<<< HEAD
-=======
     *,
     allow_local_identity: bool = False,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> dict[str, Any]:
     identities = _record(raw_identities, "identities")
     actual_names = set(identities)
@@ -226,16 +212,12 @@ def _validate_identities(
         _rights_ref(
             provenance.get("rights_ref"), rights, f"{path}.provenance.rights_ref"
         )
-<<<<<<< HEAD
-        identity_field = "local_identity" if expected_kind == "token" else "oracle_id"
-=======
         identity_field = (
             "local_identity"
             if expected_kind == "token"
             or (allow_local_identity and "local_identity" in provenance)
             else "oracle_id"
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         _string(provenance.get(identity_field), f"{path}.provenance.{identity_field}")
 
         treatment = _record(identity.get("treatment"), f"{path}.treatment")
@@ -268,8 +250,6 @@ class CuratedPack:
     manifest: dict[str, Any]
 
     @property
-<<<<<<< HEAD
-=======
     def deck_ids(self) -> tuple[str, ...]:
         """All admitted setups; old pair manifests remain exact pairs."""
         if "roster" in self.manifest:
@@ -277,7 +257,6 @@ class CuratedPack:
         return self.hero_deck_id, self.villain_deck_id
 
     @property
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     def reference(self) -> dict[str, str]:
         return {
             "id": self.pack_id,
@@ -287,12 +266,6 @@ class CuratedPack:
 
     def player_config(self, deck_id: str, name: str) -> managym.PlayerConfig:
         """Resolve a complete setup from this pack's compiled authority."""
-<<<<<<< HEAD
-        if deck_id not in (self.hero_deck_id, self.villain_deck_id):
-            raise ValueError(f"Deck {deck_id!r} is not in pack {self.pack_id!r}")
-        setup = managym.authored_deck_setup(self.semantic_pack_key, deck_id)
-        return managym.PlayerConfig(name, setup.decklist, setup.sideboard)
-=======
         if deck_id not in self.deck_ids:
             raise ValueError(f"Deck {deck_id!r} is not in pack {self.pack_id!r}")
         setup = managym.authored_deck_setup(self.semantic_pack_key, deck_id)
@@ -302,7 +275,6 @@ class CuratedPack:
             setup.sideboard,
             self.semantic_pack_key if "roster" in self.manifest else None,
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
@@ -319,15 +291,10 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
 
     try:
         root = _record(manifest, "manifest")
-<<<<<<< HEAD
-        if root.get("schema_version") != 1:
-            raise ValueError("schema_version must be 1")
-=======
         if type(root.get("schema_version")) is not int or root[
             "schema_version"
         ] not in (1, 2):
             raise ValueError("schema_version must be 1 or 2")
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         pack = _record(root.get("pack"), "pack")
         pack_id = _string(pack.get("id"), "pack.id")
         version = _string(pack.get("version"), "pack.version")
@@ -350,8 +317,6 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
         if hero_deck_id == villain_deck_id:
             raise ValueError("hero and villain deck IDs must differ")
 
-<<<<<<< HEAD
-=======
         roster_names: set[str] = set()
         if root["schema_version"] == 2:
             roster = root.get("roster")
@@ -375,7 +340,6 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
         elif "roster" in root:
             raise ValueError("roster requires schema_version 2")
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         raw_tokens = matchup.get("reachable_tokens")
         if not isinstance(raw_tokens, list) or not raw_tokens:
             raise ValueError("matchup.reachable_tokens must be a non-empty list")
@@ -393,11 +357,6 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
             | set(hero_sideboard)
             | set(villain_sideboard)
             | token_names
-<<<<<<< HEAD
-        )
-        identities = _validate_identities(
-            root.get("identities"), expected_names, token_names, rights
-=======
             | roster_names
         )
         identities = _validate_identities(
@@ -406,7 +365,6 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
             token_names,
             rights,
             allow_local_identity=root["schema_version"] == 2,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         )
     except ValueError as exc:
         raise RuntimeError(f"Curated pack manifest is invalid: {path}: {exc}") from exc
@@ -431,12 +389,8 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
 
 CURATED_PACK = load_curated_pack()
 JEONG_INCREMENT_PACK = load_curated_pack(JEONG_INCREMENT_MANIFEST_PATH)
-<<<<<<< HEAD
-CURATED_PACK_CATALOG = (CURATED_PACK, JEONG_INCREMENT_PACK)
-=======
 ELEMENTAL_WORLD_PACK = load_curated_pack(ELEMENTAL_WORLD_MANIFEST_PATH)
 CURATED_PACK_CATALOG = (CURATED_PACK, JEONG_INCREMENT_PACK, ELEMENTAL_WORLD_PACK)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def curated_pack_for_matchup(
@@ -448,13 +402,8 @@ def curated_pack_for_matchup(
     matches = [
         pack
         for pack in catalog
-<<<<<<< HEAD
-        if {hero_deck_name, villain_deck_name}
-        == {pack.hero_deck_id, pack.villain_deck_id}
-=======
         if {hero_deck_name, villain_deck_name} <= set(pack.deck_ids)
         and ("roster" in pack.manifest or hero_deck_name != villain_deck_name)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ]
     if len(matches) > 1:
         raise RuntimeError(

@@ -7,29 +7,6 @@ from typing import Literal
 import pytest
 import torch
 
-<<<<<<< HEAD
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.belief.sampling_data import read_dataset
-from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers
-from manabot.model.agent import Agent
-from manabot.sim.distill import LOCAL_TARGET_KEY, load_shards, save_bc_checkpoint
-from manabot.sim.local_update import LocalSearchConfig
-from manabot.training.execution import atomic_json, execute_regime
-from manabot.training.models import (
-    ArtifactReference,
-    CollectBelief,
-    CollectLocalUpdate,
-    ImportPolicy,
-    Learning,
-    ProducerCost,
-    StageRecord,
-    TrainCompound,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-    TrainSupervised,
-=======
 from manabot.belief.sampling_data import read_dataset
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
@@ -48,7 +25,6 @@ from manabot.training.regime import (
     TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 )
 from manabot.verify.store import VerifyStore
 import managym
@@ -70,19 +46,11 @@ def published_fixture(
     recipe = TrainingRegime(
         id="fixture-producer",
         world=managym.WORLD_VERSION,
-<<<<<<< HEAD
-        match=MatchHypers(
-            hero_deck={"Mountain": 8, "Gray Ogre": 8},
-            villain_deck={"Forest": 8, "Llanowar Elves": 8},
-        ),
-        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
-=======
         match=MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
         agent=ModelConfig(hidden_dim=8, num_attention_heads=2),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         stages=[
             TrainSelfPlay(
                 id="producer",
@@ -108,15 +76,9 @@ def published_fixture(
     space = ObservationSpace(recipe.observation)
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(112)
-<<<<<<< HEAD
-        agent = Agent(space, recipe.agent)
-    path = tmp_path / "published.pt"
-    save_bc_checkpoint(
-=======
         agent = ActorCritic(space, recipe.agent)
     path = tmp_path / "published.pt"
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,
@@ -182,18 +144,6 @@ def test_saved_policy_consumers_and_costs(
                 games=3,
                 max_steps=1000,
             ),
-<<<<<<< HEAD
-            CollectLocalUpdate(
-                id="labels",
-                operation="collect_local_update",
-                policy="policy",
-                weights=weights,
-                games=2,
-                max_steps=1000,
-                search=LocalSearchConfig(depth=1, decision_seconds=5),
-            ),
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         ]
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
@@ -208,23 +158,10 @@ def test_saved_policy_consumers_and_costs(
     assert admission.learning_seconds == admission.collection_seconds == 0
     assert all(s.optimizer_exposures == 0 for s in run.stages)
     assert run.stages[1].games == 3
-<<<<<<< HEAD
-    assert run.stages[2].games == 2
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert ("raw" in admission.artifacts) == (weights == "raw")
     assert (run.selected_artifact is None) == (weights == "ema")
     dataset = read_dataset(Path(run.stages[1].artifacts["dataset"]["path"]))
     assert dataset.policy_identity == imported.checkpoint["sha256"]
-<<<<<<< HEAD
-    shards = [
-        a["path"]
-        for name, a in run.stages[2].artifacts.items()
-        if name.startswith("game-")
-    ]
-    assert load_shards(shards)[LOCAL_TARGET_KEY].shape[0] > 0
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     # The import is self-contained after the original publication is unavailable.
     Path(imported.checkpoint["path"]).unlink()
     assert (
@@ -307,32 +244,6 @@ def test_rejects_and_persists_failed_admission(
     assert not run.stages[0].artifacts
 
 
-<<<<<<< HEAD
-def test_declarative_weight_and_continuation_contracts(tmp_path: Path) -> None:
-    recipe = published_fixture(tmp_path, "ema")
-    labels = CollectLocalUpdate(
-        id="labels",
-        operation="collect_local_update",
-        policy="policy",
-        weights="ema",
-        games=2,
-    )
-    fit = TrainSupervised(
-        id="student",
-        operation="train_supervised",
-        initial="policy",
-        initial_weights="ema",
-        datasets=["labels"],
-        target="local_soft",
-    )
-    recipe.stages.extend([labels, fit])
-    assert TrainingRegime.model_validate_json(recipe.model_dump_json()) == recipe
-    fit.initial_weights = "raw"
-    with pytest.raises(ValueError, match="initial weights"):
-        TrainingRegime.model_validate(recipe.model_dump())
-    fit.initial_weights = "ema"
-    labels.weights = "raw"
-=======
 def test_declarative_weight_contracts(tmp_path: Path) -> None:
     recipe = published_fixture(tmp_path, "ema")
     histories = CollectBelief(
@@ -345,77 +256,10 @@ def test_declarative_weight_contracts(tmp_path: Path) -> None:
     recipe.stages.append(histories)
     assert TrainingRegime.model_validate_json(recipe.model_dump_json()) == recipe
     histories.weights = "raw"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(ValueError, match="weights differ"):
         TrainingRegime.model_validate(recipe.model_dump())
 
 
-<<<<<<< HEAD
-def test_pre_import_supervised_export_preserves_original_identity(
-    tmp_path: Path,
-) -> None:
-    """Pre-ETU-112 supervised receipts have no initial_weights/producer_cost fields."""
-    recipe = published_fixture(tmp_path)
-    stage = recipe.stages[0]
-    assert isinstance(stage, ImportPolicy)
-    export = Path(stage.source_run["path"])
-    # Construct the historical wire shape before binding its checkpoint/export.
-    source = json.loads(export.read_text())
-    source["regime"]["stages"] = [
-        {
-            "id": "teacher",
-            "operation": "collect_search",
-            "games": 2,
-            "execution": source["regime"]["stages"][0]["execution"],
-            "policy": "uniform-prior-determinized-puct",
-            "target": "visit_distribution",
-            "simulations": 64,
-            "worlds": 4,
-            "max_steps": 2000,
-        },
-        {
-            "id": "producer",
-            "operation": "train_supervised",
-            "trainer": "search_supervised",
-            "optimizer": "adam",
-            "trainable": "policy",
-            "target": "visit_distribution",
-            "datasets": ["teacher"],
-            "initial": None,
-            "epochs": 10,
-            "batch_size": 128,
-            "learning_rate": 0.001,
-            "execution": source["regime"]["stages"][0]["execution"],
-        },
-    ]
-    source["stages"][0].pop("producer_cost")
-    source["regime_digest"] = canonical_sha256(source["regime"])
-    path = Path(stage.checkpoint["path"])
-    payload = torch.load(path, weights_only=False)
-    payload["bc"]["regime_digest"] = source["regime_digest"]
-    payload["bc"]["value_semantic"] = "win_logit"
-    torch.save(payload, path)
-    stage.checkpoint = reference(path)
-    source["stages"][0]["artifacts"]["raw"] = reference(path)
-    atomic_json(export, source)
-    stage.source_run = reference(export)
-    frozen_receipt, frozen_checkpoint = export.read_bytes(), path.read_bytes()
-    parsed = TrainingRun.model_validate(source)
-    assert parsed.regime.stages[1].initial_weights == "raw"
-    assert (
-        canonical_sha256(parsed.regime.model_dump(mode="json"))
-        == source["regime_digest"]
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 112, tmp_path / "run", store)
-    assert run.status == "completed", run.error
-    assert (
-        export.read_bytes() == frozen_receipt and path.read_bytes() == frozen_checkpoint
-    )
-
-
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_original_wire_digest_precedes_default_normalization(tmp_path: Path) -> None:
     recipe = published_fixture(tmp_path)
     stage = recipe.stages[0]

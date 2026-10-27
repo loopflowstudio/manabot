@@ -14,13 +14,8 @@ MPS is unsupported. The resumed execution section defines the inclusive campaign
 ceiling and launch commands; earlier numerical examples are not frozen counts.
 
 ```bash
-<<<<<<< HEAD
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile smoke --out .runs/learning-speed
-uv run --extra notebook experiments/runners/run_training_regimes.py --report-only .runs/learning-speed
-=======
 uv run --extra notebook python -m experiments.direct_self_play --profile smoke --out .runs/learning-speed
 uv run --extra notebook python -m experiments.direct_self_play --report-only .runs/learning-speed
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 Reports list every retained comparison, exact-replay result, cost and source
@@ -220,17 +215,10 @@ be filled with future weights. Fixed update counts are not equal-cost evidence.
 After the final source lands, prepare and run the two timing cohorts:
 
 ```sh
-<<<<<<< HEAD
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile calibration --write-plan .runs/learning-calibration-plan.json
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile calibration --plan .runs/learning-calibration-plan.json --out .runs/learning-calibration-1
-uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile calibration --write-plan .runs/ablation-calibration-plan.json
-uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile calibration --plan .runs/ablation-calibration-plan.json --out .runs/ablation-calibration-1
-=======
 uv run --extra notebook python -m experiments.direct_self_play --profile calibration --write-plan .runs/learning-calibration-plan.json
 uv run --extra notebook python -m experiments.direct_self_play --profile calibration --plan .runs/learning-calibration-plan.json --out .runs/learning-calibration-1
 uv run --extra notebook python -m experiments.ataraxos_ablation --profile calibration --write-plan .runs/ablation-calibration-plan.json
 uv run --extra notebook python -m experiments.ataraxos_ablation --profile calibration --plan .runs/ablation-calibration-plan.json --out .runs/ablation-calibration-1
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 The generated plans each allow one CPU hour, use full width-64 models, two
@@ -275,13 +263,8 @@ Use `--prior-campaign-seconds` for actual prior time if it exceeds the reserved
 amend the envelope before scoring; the generator refuses to spend it silently.
 
 ```sh
-<<<<<<< HEAD
-uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile scientific --calibration .runs/ablation-calibration-1 --write-plan .runs/frozen-ablation-plan.json
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile scientific --calibration .runs/learning-calibration-1 --companion-plan .runs/frozen-ablation-plan.json --write-plan .runs/frozen-learning-plan.json
-=======
 uv run --extra notebook python -m experiments.ataraxos_ablation --profile scientific --calibration .runs/ablation-calibration-1 --write-plan .runs/frozen-ablation-plan.json
 uv run --extra notebook python -m experiments.direct_self_play --profile scientific --calibration .runs/learning-calibration-1 --companion-plan .runs/frozen-ablation-plan.json --write-plan .runs/frozen-learning-plan.json
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 The generator keeps the calibrated width, streams, transitions, optimizer,
@@ -317,15 +300,9 @@ drift; do not relabel old measurements.
 After committing the two generated plans, root alone runs:
 
 ```sh
-<<<<<<< HEAD
-uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile scientific --plan .runs/frozen-ablation-plan.json --out .runs/ablation-scientific-1
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile scientific --plan .runs/frozen-learning-plan.json --out .runs/learning-scientific-1
-uv run --extra notebook experiments/runners/run_training_regimes.py --report-only .runs/learning-scientific-1
-=======
 uv run --extra notebook python -m experiments.ataraxos_ablation --profile scientific --plan .runs/frozen-ablation-plan.json --out .runs/ablation-scientific-1
 uv run --extra notebook python -m experiments.direct_self_play --profile scientific --plan .runs/frozen-learning-plan.json --out .runs/learning-scientific-1
 uv run --extra notebook python -m experiments.direct_self_play --report-only .runs/learning-scientific-1
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 Existing output directories are never overwritten by a new execution. Failed
@@ -338,11 +315,7 @@ If **all training runs completed**, `--resume` can finish unattempted arena cell
 and reporting from verified immutable run/checkpoint artifacts, without training:
 
 ```sh
-<<<<<<< HEAD
-uv run --extra notebook experiments/runners/run_training_regimes.py --study learning-speed --profile scientific --plan .runs/frozen-learning-plan.json --out .runs/learning-scientific-1 --resume
-=======
 uv run --extra notebook python -m experiments.direct_self_play --profile scientific --plan .runs/frozen-learning-plan.json --out .runs/learning-scientific-1 --resume
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 An unclean kill leaving status `running` has no final elapsed-cost receipt and

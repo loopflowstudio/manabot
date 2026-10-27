@@ -11,11 +11,7 @@ from dataclasses import dataclass
 import json
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
-<<<<<<< HEAD
-from manabot.sim.structured_policy import (
-=======
 from manabot.sim.action.structured import (
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     DecodedSubmission,
     RaggedOfferBatch,
     StructuredPolicyError,
@@ -516,20 +512,11 @@ class SemanticDecisionAdapter:
         # This existing evidence helper owns the exact protocol-v1 viewer
         # projection. Keep its native-engine dependency lazy so compiler-only
         # imports of manabot.semantic work before managym is built.
-<<<<<<< HEAD
-        from manabot.sim.teacher1_evidence import (  # noqa: PLC0415
-            build_viewer_frame,
-            canonical_sha256,
-        )
-        from managym.experience import ExperienceFrame  # noqa: PLC0415
-
-=======
         from managym.experience import ExperienceFrame  # noqa: PLC0415
 
         from manabot.infra.identity import canonical_sha256
         from manabot.sim.search.teacher1_evidence import build_viewer_frame
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         frame = build_viewer_frame(
             observation,
             match_id=match_id,

@@ -5,18 +5,10 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
-<<<<<<< HEAD
-from pydantic import ValidationError
-import pytest
-
-from managym.experience import ProtocolV1ConformanceBundle
-
-=======
 from managym.experience import ProtocolV1ConformanceBundle
 from pydantic import ValidationError
 import pytest
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(
     (PROTOCOL_DIR / "fixtures" / "bolt-target.json").read_text(encoding="utf-8")

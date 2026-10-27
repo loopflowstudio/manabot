@@ -10,10 +10,7 @@ import ast
 from collections.abc import Sequence
 import importlib.abc
 import importlib.machinery
-<<<<<<< HEAD
-=======
 import importlib.util
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from pathlib import Path
 import subprocess
 import sys
@@ -64,17 +61,10 @@ _INDEPENDENCE_PROBE = textwrap.dedent(
     from tests.test_package_boundaries import _RefuseAcademy
 
     sys.meta_path.insert(0, _RefuseAcademy())
-<<<<<<< HEAD
-    import manabot.arena.players
-    import manabot.arena.replay
-    import manabot.semantic.policy
-    import manabot.sim.teacher1_evidence
-=======
     import manabot.sim.players
     import manabot.sim.replay
     import manabot.semantic.policy
     import manabot.sim.search.teacher1_evidence
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     assert not any(name.split(".")[0] == "academy" for name in sys.modules)
     """
@@ -89,8 +79,6 @@ def test_manabot_entry_points_import_without_academy() -> None:
         cwd=REPO_ROOT,
         check=True,
     )
-<<<<<<< HEAD
-=======
 
 
 def test_managym_legacy_import_is_the_bundled_engine() -> None:
@@ -197,4 +185,3 @@ def test_simulation_imports_and_plays_without_training() -> None:
 def test_retired_arena_package_is_absent() -> None:
     assert importlib.util.find_spec("manabot.arena") is None
     assert not (REPO_ROOT / "manabot" / "arena").exists()
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

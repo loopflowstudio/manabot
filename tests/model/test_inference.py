@@ -1,31 +1,13 @@
 """Serving preparation preserves policy meaning across collection and learning."""
 
 from copy import deepcopy
-<<<<<<< HEAD
-from dataclasses import dataclass
-=======
 from dataclasses import dataclass, fields
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-from experiments.runners.pipeline_benchmark import _batch_tensors
-from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import RewardHypers
-from manabot.model.agent import Agent
-from manabot.model.inference import PolicyInference
-from manabot.sim.net_opponent import SeatRoutedCollector
-from tests.training.test_recovery import recipe
-
-
-@dataclass
-class PolicyFixture:
-    agent: Agent
-=======
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
@@ -51,7 +33,6 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 @dataclass
 class PolicyFixture:
     agent: ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     collector: SeatRoutedCollector
     obs: dict[str, torch.Tensor]
 
@@ -64,19 +45,11 @@ def _policy(*, semantic: bool = True) -> PolicyFixture:
     if not semantic:
         config.agent.semantic_pack = None
     space = ObservationSpace(config.observation)
-<<<<<<< HEAD
-    agent = Agent(space, config.agent).eval()
-    collector = SeatRoutedCollector(
-        space,
-        Match(config.match),
-        Reward(RewardHypers()),
-=======
     agent = ActorCritic(space, config.agent).eval()
     collector = SeatRoutedCollector(
         space,
         Match(config.match),
         Reward(RewardConfig()),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         num_envs=2,
         seed=91,
         opponent_mode="self",

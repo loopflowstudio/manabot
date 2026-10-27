@@ -4,26 +4,16 @@ import gc
 import json
 import weakref
 
-<<<<<<< HEAD
-=======
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
 
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-<<<<<<< HEAD
-from manabot.sim.teacher1_evidence import _fresh_env
-import managym
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
-=======
 from manabot.sim.search.teacher1_evidence import _fresh_env
 import managym
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_prepared_python_handle_preserves_scalar_parity_and_live_root() -> None:
@@ -283,13 +273,8 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
     from manabot.env import ObservationSpace
-<<<<<<< HEAD
-    from manabot.infra.hypers import AgentSpec
-    from manabot.model.agent import Agent
-=======
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     root = managym.Env(seed=157)
     deck = {"Mountain": 4, "Raging Goblin": 4}
@@ -304,11 +289,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
     likelihood.counterfactual_seed = 907
     likelihood.obs_space = ObservationSpace()
     torch.manual_seed(19)
-<<<<<<< HEAD
-    likelihood.agent = Agent(likelihood.obs_space, AgentSpec()).eval()
-=======
     likelihood.agent = ActorCritic(likelihood.obs_space, ModelConfig()).eval()
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     progress = []
     likelihood.batch_observer = progress.append
     commitment = {"kind": "pass_priority"}

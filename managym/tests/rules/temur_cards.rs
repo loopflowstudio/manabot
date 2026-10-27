@@ -1,10 +1,7 @@
 // temur_cards.rs
 // Directed Temur payment, graveyard casting, and copied-token rules.
-<<<<<<< HEAD
-=======
 use std::collections::BTreeMap;
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 use super::{
     elemental_cards::{card, cast, pass_until, permanent, settle, setup},
     helpers::Scenario,
@@ -107,8 +104,6 @@ fn prism_consumes_generic_before_adding_chosen_color() {
 }
 
 #[test]
-<<<<<<< HEAD
-=======
 fn prism_payment_preserves_the_spells_required_green_mana() {
     for lands in [
         ["Forest", "Island", "Island", "Mountain"],
@@ -166,7 +161,6 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
 }
 
 #[test]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 fn guide_grants_tap_mana_with_sickness_and_removes_it_on_departure() {
     let mut s = setup(&["Great Divide Guide", "Hermitic Herbalist"]);
     let guide = enter(&mut s, "Great Divide Guide");
@@ -438,8 +432,6 @@ fn a_committed_nonlesson_cost_excludes_herbalists_restricted_activation() {
     settle(&mut s);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
-<<<<<<< HEAD
-=======
 
 fn lesson_payment(names: &[&str], pool: &str) -> (Scenario, CardId, usize) {
     let mut s = setup(names);
@@ -1297,4 +1289,3 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         }
     }
 }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

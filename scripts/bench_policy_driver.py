@@ -19,15 +19,9 @@ import numpy as np
 import torch
 
 from manabot.env import Match, ObservationSpace
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec
-from manabot.infra.profiler import Profiler
-from manabot.model import Agent
-=======
 from manabot.infra.config import ModelConfig
 from manabot.infra.profiler import Profiler
 from manabot.model import ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
@@ -48,16 +42,6 @@ def main() -> None:
         torch.set_num_threads(args.threads)
 
     obs_space = ObservationSpace()
-<<<<<<< HEAD
-    agent = Agent(obs_space, AgentSpec())
-    agent.eval()
-    sampler = BatchedSampler(agent, seed=args.seed, device=args.device)
-
-    from manabot.infra.hypers import MatchHypers
-
-    match = Match(
-        MatchHypers(
-=======
     agent = ActorCritic(obs_space, ModelConfig())
     agent.eval()
     sampler = BatchedSampler(agent, seed=args.seed, device=args.device)
@@ -66,7 +50,6 @@ def main() -> None:
 
     match = Match(
         MatchConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hero="a",
             villain="b",
             hero_deck=dict(INTERACTIVE_DECK),

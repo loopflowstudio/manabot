@@ -8,15 +8,6 @@ import numpy as np
 import pytest
 import torch
 
-<<<<<<< HEAD
-from manabot.arena.models import file_sha256
-from manabot.arena.replay import replay_games
-from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import make_player
-=======
 from manabot.env import Match, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -24,7 +15,6 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.replay import replay_games
 from manabot.sim.search.flat_mc import make_player
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint
 from manabot.verify.competency import SCENARIOS, build_scenario_env
 
@@ -35,15 +25,6 @@ def _checkpoint(
     torch.set_num_threads(1)
     torch.manual_seed(17)
     scenario = SCENARIOS[name]
-<<<<<<< HEAD
-    space = ObservationSpace(ObservationSpaceHypers(max_actions=max_actions))
-    agent = Agent(
-        space,
-        AgentSpec(hidden_dim=8, num_attention_heads=2, compound_decisions=compound),
-    )
-    path = tmp_path / f"{name}.pt"
-    save_bc_checkpoint(
-=======
     space = ObservationSpace(ObservationConfig(max_actions=max_actions))
     agent = ActorCritic(
         space,
@@ -51,16 +32,11 @@ def _checkpoint(
     )
     path = tmp_path / f"{name}.pt"
     save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,
         player_configs=Match(
-<<<<<<< HEAD
-            MatchHypers(
-=======
             MatchConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 hero_deck=scenario.hero_deck,
                 villain_deck=scenario.villain_deck,
             )

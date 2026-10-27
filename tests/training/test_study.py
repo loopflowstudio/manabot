@@ -5,11 +5,6 @@ import json
 
 import pytest
 
-<<<<<<< HEAD
-from experiments.runners.training_protocol import EvaluationProtocol
-from manabot.arena.models import canonical_sha256
-from manabot.training.analysis import cost_comparison, verify_saved_inputs
-=======
 from experiments.ataraxos_ablation import ARMS as ABLATIONS
 from manabot.experiment import study as regime_study
 from manabot.experiment.study import (
@@ -20,7 +15,6 @@ from manabot.experiment.study import (
 )
 from manabot.infra.identity import canonical_sha256
 from manabot.reports.analysis import cost_comparison, verify_saved_inputs
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def point(name, seconds, score):
@@ -85,14 +79,10 @@ def test_raw_and_averaged_checkpoints_remain_separate_cost_curves():
 
 
 def test_protocol_rejects_overlap_and_unbound_recipes():
-<<<<<<< HEAD
-    kwargs = dict(study="learning-speed", regime_digests=("a" * 64, "b" * 64))
-=======
     kwargs = dict(
         study="ataraxos-ablations",
         regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
     )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     EvaluationProtocol(**kwargs)
     with pytest.raises(ValueError, match="disjoint"):
         EvaluationProtocol(**kwargs, anchor_deals=(910001,))
@@ -140,11 +130,7 @@ def test_offline_reporting_rejects_changed_recipe(tmp_path):
 
 def test_report_regeneration_preserves_metrics_without_training(tmp_path):
     pytest.importorskip("nbclient")
-<<<<<<< HEAD
-    from manabot.training.analysis import report
-=======
     from manabot.reports.analysis import report
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     study = dict(
         study="ataraxos-ablations",
@@ -201,13 +187,8 @@ def test_report_regeneration_preserves_metrics_without_training(tmp_path):
 
 def test_scientific_profile_requires_replicates_and_explicit_uncertainty():
     kwargs = dict(
-<<<<<<< HEAD
-        study="learning-speed",
-        regime_digests=("a" * 64, "b" * 64),
-=======
         study="ataraxos-ablations",
         regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         purpose="scientific",
         process_seconds=3600,
         cost_cutoffs_seconds=(600, 1200),
@@ -221,34 +202,19 @@ def test_scientific_profile_requires_replicates_and_explicit_uncertainty():
         anchors=("random", "scripted-greedy", "puct-64"),
         endpoint_paired_deals=(950001,),
         endpoint_anchor_deals=(960001,),
-<<<<<<< HEAD
-        endpoint_seed_pairs=tuple(
-            (a, b) for a in (601, 1601, 2601) for b in (601, 1601, 2601)
-        ),
-=======
         endpoint_seed_pairs=tuple((s, s) for s in (601, 1601, 2601)),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     assert len(protocol.training_seeds) == 3
     with pytest.raises(ValueError, match="900 seconds"):
         EvaluationProtocol(
-<<<<<<< HEAD
-            study="learning-speed",
-            regime_digests=("a" * 64, "b" * 64),
-=======
             study="ataraxos-ablations",
             regime_digests=tuple("abcde"[i] * 64 for i in range(5)),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             process_seconds=901,
         )
 
 
 def test_cost_cutoffs_exclude_endpoint_and_future_weights():
-<<<<<<< HEAD
-    from manabot.training.analysis import cost_cutoffs
-=======
     from manabot.reports.analysis import cost_cutoffs
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     rows = [
         point("a", 10, 0.2),
@@ -263,11 +229,7 @@ def test_cost_cutoffs_exclude_endpoint_and_future_weights():
 
 
 def test_uncertainty_clusters_training_seeds_and_four_leg_deals():
-<<<<<<< HEAD
-    from manabot.training.analysis import paired_uncertainty
-=======
     from manabot.reports.analysis import paired_uncertainty
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     cells = [
         dict(
@@ -304,16 +266,8 @@ def test_uncertainty_clusters_training_seeds_and_four_leg_deals():
     assert paired_uncertainty(cells[:3])[0]["status"] == "unavailable"
 
 
-<<<<<<< HEAD
-def test_calibrated_plan_scales_work_and_reserves_both_studies(tmp_path, monkeypatch):
-    from experiments.runners.run_training_regimes import calibration_plan
-    from experiments.runners.training_plan import scientific_plan
-
-    plan = calibration_plan("learning-speed")
-=======
 def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
     plan = calibration_plan("ataraxos-ablations", ABLATIONS)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     entries = []
     for recipe in plan.recipes:
         stages = []
@@ -344,11 +298,7 @@ def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
         )
         entries.append(dict(path=str(path)))
     study = dict(
-<<<<<<< HEAD
-        study="learning-speed",
-=======
         study="ataraxos-ablations",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         profile="calibration",
         status="completed",
         runs=entries,
@@ -362,11 +312,7 @@ def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
                 evaluation_seconds=4,
             )
             for b in (
-<<<<<<< HEAD
-                "direct-self-play",
-=======
                 "separate-estimators",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 "random-smoke-anchor",
                 "scripted-greedy-fixed-anchor",
                 "puct-64-fixed-anchor",
@@ -375,18 +321,6 @@ def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
     )
     (tmp_path / "study.json").write_text(json.dumps(study))
     resolved = scientific_plan(tmp_path, 0)
-<<<<<<< HEAD
-    assert resolved.allocation_seconds == 132 * 3600
-    assert resolved.prior_campaign_seconds == 25 * 3600
-    assert resolved.protocol.checkpoint_count == 4
-    assert len(resolved.protocol.endpoint_seed_pairs) == 9
-    assert resolved.recipes[0]["stages"][0]["games"] > 4
-    assert resolved.recipes[1]["stages"][0]["updates"] > 8
-    assert resolved.recipes[1]["stages"][0]["transitions"] == 256
-    assert resolved.recipes[0]["stages"][-1]["datasets"] == [
-        f"collect-{i}" for i in range(4)
-    ]
-=======
     assert resolved.allocation_seconds == 21 * 3600
     assert resolved.prior_campaign_seconds == 4 * 3600
     assert resolved.protocol.checkpoint_count == 3
@@ -395,26 +329,17 @@ def test_calibrated_plan_scales_work_within_the_campaign(tmp_path, monkeypatch):
         assert len(recipe["stages"]) == 3
         assert recipe["stages"][0]["updates"] > 8
         assert recipe["stages"][0]["transitions"] == 256
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     from types import SimpleNamespace
 
     with monkeypatch.context() as patch:
         patch.setattr(
-<<<<<<< HEAD
-            "experiments.runners.training_plan.shutil.disk_usage",
-=======
             "manabot.experiment.study.shutil.disk_usage",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             lambda _: SimpleNamespace(free=0),
         )
         with pytest.raises(ValueError, match="storage infeasible"):
             scientific_plan(tmp_path, 0)
     with pytest.raises(ValueError, match="insufficient budget"):
-<<<<<<< HEAD
-        scientific_plan(tmp_path, 30 * 3600)
-=======
         scientific_plan(tmp_path, 140 * 3600)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     study["status"] = "failed"
     (tmp_path / "study.json").write_text(json.dumps(study))
     with pytest.raises(ValueError, match="completed integrated"):
@@ -426,15 +351,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
 ):
     import torch
 
-<<<<<<< HEAD
-    from experiments.runners import run_training_regimes as runner
-    from manabot.sim import teacher1_evidence
-    from manabot.training.models import StageRecord, TrainingRun
-=======
     from manabot.training.records import StageRecord, TrainingRun
 
     runner = regime_study
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     identities = {
         k: "a" * 64
@@ -449,24 +368,14 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         )
     }
     monkeypatch.setattr(
-<<<<<<< HEAD
-        teacher1_evidence, "runtime_fingerprints", lambda *a, **kw: identities.copy()
-    )
-    monkeypatch.setattr(teacher1_evidence, "source_bundle_sha256", lambda *a: "a" * 64)
-=======
         runner, "runtime_fingerprints", lambda *a, **kw: identities.copy()
     )
     monkeypatch.setattr(runner, "source_bundle_sha256", lambda *a: "a" * 64)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     monkeypatch.setattr(
         runner, "execute_regime", lambda *a: pytest.fail("resume must not retrain")
     )
     monkeypatch.setattr(
-<<<<<<< HEAD
-        runner, "load_checkpoint_agent", lambda *a: (torch.nn.Linear(1, 1), None)
-=======
         runner, "load_checkpoint", lambda *a: (torch.nn.Linear(1, 1), None)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     monkeypatch.setattr(runner, "report", lambda *a: None)
     calls = []
@@ -489,15 +398,9 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         )
 
     monkeypatch.setattr(runner, "play_cell", play_cell)
-<<<<<<< HEAD
-    recipes = [runner.smoke_recipe(n) for n in runner.STUDIES["learning-speed"]]
-    protocol = EvaluationProtocol(
-        study="learning-speed",
-=======
     recipes = [smoke_recipe(build()) for build in ABLATIONS]
     protocol = EvaluationProtocol(
         study="ataraxos-ablations",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         regime_digests=tuple(
             canonical_sha256(r.model_dump(mode="json")) for r in recipes
         ),
@@ -533,13 +436,8 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
             dict(path=str(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest())
         )
     failed = dict(
-<<<<<<< HEAD
-        a="search-distillation",
-        b="direct-self-play",
-=======
         a="rl-control",
         b="separate-estimators",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         training_seed=197,
         b_training_seed=197,
         phase="development",
@@ -551,11 +449,7 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         trace=None,
     )
     study = dict(
-<<<<<<< HEAD
-        study="learning-speed",
-=======
         study="ataraxos-ablations",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         profile="workflow-smoke",
         status="failed",
         seconds=1,
@@ -570,17 +464,10 @@ def test_resume_evaluates_remaining_cells_without_retraining_or_retrying_failure
         json.dumps([r.model_dump(mode="json") for r in recipes])
     )
     with pytest.raises(RuntimeError, match="incomplete arena cohort"):
-<<<<<<< HEAD
-        runner.run_study("learning-speed", tmp_path, resume=True)
-    saved = json.loads((tmp_path / "study.json").read_text())
-    assert len(calls) == 5
-    assert len(saved["comparisons"]) == 6
-=======
         runner.run_study("ataraxos-ablations", ABLATIONS, tmp_path, resume=True)
     saved = json.loads((tmp_path / "study.json").read_text())
     assert len(calls) == 17
     assert len(saved["comparisons"]) == 18
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert saved["comparisons"][0] == failed
     assert saved["status"] == "failed"
 

@@ -50,13 +50,10 @@ def test_permission_failures_still_surface() -> None:
         process_tree_rss(parent)  # type: ignore[arg-type]
 
 
-<<<<<<< HEAD
-=======
 def test_measures_the_real_process_tree() -> None:
     assert process_tree_rss(psutil.Process()) > 0
 
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_real_unreaped_child_does_not_abort_sampling() -> None:
     # An exited child that has not been waited on is a zombie; on macOS reading
     # its memory raises ZombieProcess (seed 12262's Mini abort, 2026-10-16).

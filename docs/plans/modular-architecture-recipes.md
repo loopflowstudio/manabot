@@ -298,11 +298,7 @@ Pydantic validation: unchecked `model_copy(update=...)` is not an admission path
 Experiment code must make coupled changes (for example WDL output and its value
 target contract) visible in the resolved diff.
 
-<<<<<<< HEAD
-Delivered helper API (`manabot/training/recipes.py`):
-=======
 Delivered helper API (`manabot/training/builders.py`):
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ```python
 def with_value_aggregation(
@@ -372,11 +368,7 @@ and a 60-second cell limit. Every input and allocation is explicit in Python.
 
 ```python
 from experiments.runners.run_value_models import smoke_baseline
-<<<<<<< HEAD
-from manabot.training.recipes import (
-=======
 from manabot.training.builders import (
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     value_outputs, with_capacity, with_value_aggregation,
 )
 

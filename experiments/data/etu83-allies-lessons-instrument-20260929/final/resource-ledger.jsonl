@@ -1,2 +1,0 @@
-{"event_sha256": "bf9643db83a204aae91d0a4d20aab116d60f291504487e10444f147493543d4c", "payload": {"protocol_sha256": "6ebfb3637acfe158a57b2978de5a7e85e2417cf460f8c71a3d7ca2fbe2de7f9a"}, "previous_event_sha256": null, "recorded_unix": 1790715765.07144, "stage": "start"}
-{"event_sha256": "9ffa1e71a70b503891fd1cb5a316ac581454d980a7f7a8fa765e716c64a1246a", "payload": {"failures": 0, "games": 4}, "previous_event_sha256": "bf9643db83a204aae91d0a4d20aab116d60f291504487e10444f147493543d4c", "recorded_unix": 1790715811.190277, "stage": "complete"}

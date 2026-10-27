@@ -2,13 +2,6 @@
 
 from pathlib import Path
 
-<<<<<<< HEAD
-from pydantic import BaseModel
-import pytest
-
-from academy.server import GameSession
-from managym.experience import ExperienceFrame
-=======
 from managym.experience import ExperienceFrame
 from pydantic import BaseModel
 import pytest
@@ -16,7 +9,6 @@ import pytest
 from academy import server
 from academy.server import GameSession
 import managym
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class PrefixStep(BaseModel):
@@ -25,11 +17,7 @@ class PrefixStep(BaseModel):
 
 
 class NavigationPosition(BaseModel):
-<<<<<<< HEAD
-    config: dict[str, str | int | bool]
-=======
     config: dict[str, str | int | bool | dict[str, int]]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     prefix: list[PrefixStep]
     digest: str
     frame: ExperienceFrame
@@ -39,20 +27,11 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-<<<<<<< HEAD
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w9.json"
-=======
 FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w11.json"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 
 @pytest.mark.parametrize("family", list(POSITIONS))
-<<<<<<< HEAD
-def test_retained_choice_position(tmp_path: Path, family: str) -> None:
-    # JSON is checked against the live producer, including full offers and projection.
-    position = POSITIONS[family]
-=======
 def test_retained_choice_position(
     tmp_path: Path, family: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -67,7 +46,6 @@ def test_retained_choice_position(
         return native_env(seed=seed, skip_trivial=True)
 
     monkeypatch.setattr(server.managym, "Env", historical_env)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     session = GameSession(tmp_path)
     frame = session.new_game(position.config)["frame"]
     for ordinal, step in enumerate(position.prefix):
@@ -88,8 +66,6 @@ def test_retained_choice_position(
     assert session.env is not None
     assert session.env.state_digest() == position.digest
     expected = position.frame.model_dump(mode="json", exclude_unset=True)
-<<<<<<< HEAD
-=======
     frame = dict(frame)
     frame["offers"] = [
         {**{k: v for k, v in offer.items() if k != "subjects"}, "source": None}
@@ -112,7 +88,6 @@ def test_retained_choice_position(
             {k: v for k, v in permanent.items() if k not in {"types", "is_token"}}
             for permanent in frame["projection"][player]["battlefield"]
         ]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     for field in (
         "revision",
         "action_space",
@@ -136,8 +111,6 @@ def test_retained_choice_position(
     )
     assert result["status"] == "rejected"
     assert session.env.state_digest() == position.digest
-<<<<<<< HEAD
-=======
 
 
 @pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
@@ -172,4 +145,3 @@ def test_current_explicit_choice_position(tmp_path: Path, family: str) -> None:
         assert actual.projection == current.frame.projection
     finally:
         session.close("test")
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

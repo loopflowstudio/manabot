@@ -87,11 +87,6 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
-<<<<<<< HEAD
-#[derive(Debug)]
-pub struct Env {
-    game: Option<Game>,
-=======
 /// Private scalar replay input retained only for diagnostics at vector failures.
 #[derive(Clone, Debug, serde::Serialize)]
 struct NativeActionTrace {
@@ -104,17 +99,13 @@ pub struct Env {
     game: Option<Game>,
     action_trace: Option<NativeActionTrace>,
     capture_cards: bool,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
     possible_world_space_constructions: AtomicU64,
-<<<<<<< HEAD
-=======
     pub(crate) capture_generation: u64,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 
 /// One canonical space prepared for bounded materialization against the same
@@ -191,21 +182,15 @@ impl Env {
     ) -> Self {
         Self {
             game: None,
-<<<<<<< HEAD
-=======
             action_trace: None,
             capture_cards: false,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
             possible_world_space_constructions: AtomicU64::new(0),
-<<<<<<< HEAD
-=======
             capture_generation: 0,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
     }
 
@@ -218,21 +203,15 @@ impl Env {
     fn branch_from_game(&self, game: Game) -> Env {
         Env {
             game: Some(game),
-<<<<<<< HEAD
-=======
             action_trace: None,
             capture_cards: false,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
-<<<<<<< HEAD
-=======
             capture_generation: 0,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
     }
 
@@ -250,11 +229,6 @@ impl Env {
         crate::semantic::content_pack_for_authored_match(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
-<<<<<<< HEAD
-        let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
-        let events = game.take_observation_events();
-        let observation = Observation::new(&game, &events);
-=======
         self.action_trace = Some(NativeActionTrace {
             player_configs: player_configs.clone(),
             actions: Vec::new(),
@@ -267,13 +241,10 @@ impl Env {
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation += 1;
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
     }
 
-<<<<<<< HEAD
-=======
     /// Must be enabled before reset so setup facts cannot be missed.
     pub fn enable_card_capture(&mut self) -> Result<(), AgentError> {
         if self.game.is_some() {
@@ -302,7 +273,6 @@ impl Env {
         .map_err(|e| AgentError(e.to_string()))
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub fn set_seed(&mut self, seed: u64) {
         self.seed = seed;
     }
@@ -318,8 +288,6 @@ impl Env {
         self.game.as_ref().map_or(0, |game| game.skip_trivial_count)
     }
 
-<<<<<<< HEAD
-=======
     /// Training-only error context. Public scalar/API errors do not expose
     /// hidden cards. The snapshot may be partially mutated by the failed step;
     /// the reset input and successful prefix reconstruct its pre-action root.
@@ -338,7 +306,6 @@ impl Env {
         }).to_string()
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub fn step(
         &mut self,
         action: i64,
@@ -371,12 +338,9 @@ impl Env {
         };
 
         let done = game.step(action)?;
-<<<<<<< HEAD
-=======
         if let Some(trace) = &mut self.action_trace {
             trace.actions.push(action);
         }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         let mut result = finish_game_step(game, agent, done);
         if done {
             self.add_profiler_info(&mut result.4);
@@ -494,8 +458,6 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
-<<<<<<< HEAD
-=======
     /// Public event identities used to explain a committed transition.
     pub fn presentation_subjects(
         &self,
@@ -547,7 +509,6 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Project the composite viewer-safe semantic observation for `viewer`.
     /// See [`Game::semantic_observation`].
     pub fn semantic_observation(&self, viewer: usize) -> Result<SemanticObservation, AgentError> {
@@ -904,21 +865,15 @@ impl Env {
             .clone();
         Ok(Env {
             game: Some(game),
-<<<<<<< HEAD
-=======
             action_trace: self.action_trace.clone(),
             capture_cards: false,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
-<<<<<<< HEAD
-=======
             capture_generation: 0,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         })
     }
 
@@ -931,21 +886,15 @@ impl Env {
         let game = FullCloneDriver.fork_exact(source);
         Ok(Env {
             game: Some(game),
-<<<<<<< HEAD
-=======
             action_trace: self.action_trace.clone(),
             capture_cards: false,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
-<<<<<<< HEAD
-=======
             capture_generation: 0,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         })
     }
 

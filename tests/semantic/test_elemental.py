@@ -4,24 +4,16 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
-<<<<<<< HEAD
-=======
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
 
 from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
-from manabot.model.agent import Agent
-=======
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.semantic.compiler import (
     SemanticCompileError,
     compile_paths,
@@ -30,11 +22,6 @@ from manabot.semantic.compiler import (
 )
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
-<<<<<<< HEAD
-from managym.decision import Command, DecisionFrame, SemanticTransition
-from managym.experience_projection import describe_actions
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 BASE = Path("content/semantic/v1")
 PACK = "elemental-combat-v1"
@@ -145,24 +132,15 @@ def test_compiled_search_reaches_belief_and_public_history_consumers() -> None:
     assert tracker.stats.updates == 1
     assert tracker.posterior.normalization_error < 1e-12
     assert engine.state_digest() != root
-<<<<<<< HEAD
-    history_space = ObservationSpace(ObservationSpaceHypers(policy_history_version=1))
-=======
     history_space = ObservationSpace(ObservationConfig(policy_history_version=1))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     obs = engine.observation_for_player(0)
     encoded = history_space.encode(obs)
     assert np.asarray(encoded["events_valid"]).any()
     assert np.asarray(encoded["events"])[..., [2, 7]].max() > 0
     torch.set_num_threads(1)
-<<<<<<< HEAD
-    agent = Agent(
-        history_space, AgentSpec(hidden_dim=16, semantic_pack=PACK, recent_events=True)
-=======
     agent = ActorCritic(
         history_space,
         ModelConfig(hidden_dim=16, semantic_pack=PACK, recent_events=True),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()

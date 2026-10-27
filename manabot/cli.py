@@ -1,18 +1,5 @@
 """CLI entrypoints for training and simulation."""
 
-<<<<<<< HEAD
-from pathlib import Path
-from typing import Optional, Sequence
-
-import typer
-
-from manabot.config.load import load_sim_config, load_train_config
-from manabot.config.presets import DEFAULT_SIM_PRESET, DEFAULT_TRAIN_PRESET
-from manabot.model.train import run_training
-from manabot.remote.cli import app as deploy_app
-from manabot.sim.sim import run_simulation
-from manabot.training.baseline import BASELINE_STEPS, run_baseline
-=======
 import importlib
 import inspect
 from pathlib import Path
@@ -27,26 +14,10 @@ from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
-<<<<<<< HEAD
-app.add_typer(deploy_app, name="deploy")
-
-
-def _run_train(preset: str, set_values: list[str]) -> None:
-    hypers = load_train_config(preset=preset, set_overrides=set_values)
-    run_training(hypers)
-
-
-def _run_sim(preset: str, set_values: list[str]) -> None:
-    sim_hypers, experiment_hypers = load_sim_config(
-        preset=preset, set_overrides=set_values
-    )
-    run_simulation(sim_hypers, experiment_hypers)
-=======
 
 # Named regimes are repository experiment code outside the installed package,
 # found by module name: experiments/<experiment>.py, one experiment per file.
@@ -96,15 +67,10 @@ def _run_sim(preset: str, set_values: list[str]) -> None:
         preset=preset, set_overrides=set_values
     )
     run_simulation(sim_config, runtime_config)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @app.command("train")
 def train_command(
-<<<<<<< HEAD
-    preset: Optional[str] = typer.Option(None, help="Training preset name"),
-    recipe: str | None = typer.Option(None, help="Complete training recipe: baseline"),
-=======
     preset: Optional[str] = typer.Option(
         None, help="Retired; select --recipe or --regime"
     ),
@@ -114,7 +80,6 @@ def train_command(
     learning_seats: Literal["one", "both"] | None = typer.Option(
         None, help="Learning seats for local/baseline recipes (default: both)"
     ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     steps: int | None = typer.Option(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
@@ -122,24 +87,18 @@ def train_command(
         None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
     ),
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
-<<<<<<< HEAD
-=======
     regime_name: str | None = typer.Option(
         None,
         help="Recipe in experiments/: <experiment> or <experiment>:<variant>",
     ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     seed: Optional[int] = typer.Option(None, help="Regime or recipe training seed"),
     out: Optional[str] = typer.Option(None, help="New run directory"),
     resume_from: Optional[str] = typer.Option(
         None, help="Stopped TrainingRun ID in the same store"
     ),
-<<<<<<< HEAD
-=======
     source_repair_reason: str | None = typer.Option(
         None, help="Explicit compatible source repair on complete-game recovery"
     ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     checkpoint_updates: int | None = typer.Option(
         None, min=1, help="Raw monitoring export every N absolute self-play iterations"
     ),
@@ -148,95 +107,6 @@ def train_command(
         help="Legacy elapsed-time monitoring interval for an explicitly frozen recipe",
     ),
     initial_admission: Optional[str] = typer.Option(None, hidden=True),
-<<<<<<< HEAD
-    allocation: Optional[str] = typer.Option(
-        None, help="Admitted allocation JSON, with absolute deadline"
-    ),
-    set_values: Optional[list[str]] = typer.Option(
-        None,
-        "--set",
-        help="Override config values with key.path=value (repeatable)",
-    ),
-) -> None:
-    if recipe is not None:
-        if recipe != "baseline":
-            raise typer.BadParameter("unknown recipe; available: baseline")
-        if (
-            any(
-                value is not None
-                for value in (
-                    preset,
-                    regime,
-                    resume_from,
-                    checkpoint_updates,
-                    checkpoint_seconds,
-                    initial_admission,
-                    allocation,
-                )
-            )
-            or set_values
-        ):
-            raise typer.BadParameter(
-                "--recipe cannot be combined with regime/preset overrides or resume/cadence controls"
-            )
-        result = run_baseline(
-            steps=BASELINE_STEPS if steps is None else steps,
-            seed=197 if seed is None else seed,
-            out=Path(out) if out else None,
-            seconds=seconds,
-        )
-        typer.echo(
-            f"baseline: {result.status}; report: {Path(result.notebook).with_name('report.md')}"
-        )
-        if result.status != "completed":
-            raise typer.Exit(1)
-        return
-    if steps is not None or seconds is not None:
-        raise typer.BadParameter("--steps and --seconds require --recipe")
-    if regime:
-        if preset is not None or set_values:
-            raise typer.BadParameter(
-                "--regime cannot be combined with --preset or --set"
-            )
-        if out is None:
-            raise typer.BadParameter("--regime requires --out")
-        from manabot.remote.plan import Allocation
-        from manabot.training.execution import execute_regime
-        from manabot.training.models import TrainingRegime
-        from manabot.verify.store import VerifyStore
-
-        regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
-        with VerifyStore(Path(out).parent / "training.sqlite") as store:
-            execute_regime(
-                regime_spec,
-                197 if seed is None else seed,
-                out,
-                store,
-                resume_from=resume_from,
-                allocation=Allocation.model_validate_json(Path(allocation).read_text())
-                if allocation
-                else None,
-                checkpoint_seconds=checkpoint_seconds,
-                checkpoint_updates=checkpoint_updates,
-                initial_admission=Path(initial_admission)
-                if initial_admission
-                else None,
-            )
-    else:
-        if (
-            out is not None
-            or seed is not None
-            or resume_from is not None
-            or checkpoint_seconds is not None
-            or checkpoint_updates is not None
-            or initial_admission is not None
-            or allocation is not None
-        ):
-            raise typer.BadParameter(
-                "--out, --seed, --resume-from and checkpoint cadence require --regime"
-            )
-        _run_train(preset or DEFAULT_TRAIN_PRESET, set_values or [])
-=======
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -326,7 +196,6 @@ def train_command(
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @app.command("sim")
@@ -365,13 +234,8 @@ def training_report_command(
     """Select and aggregate saved training runs; never launch compute."""
     from pathlib import Path
 
-<<<<<<< HEAD
-    from manabot.training.time_cohort import write_cohort_report
-    from manabot.training.time_sources import load_time_sources
-=======
     from manabot.reports.time_cohort import write_cohort_report
     from manabot.reports.time_sources import load_time_sources
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     try:
         cohort = load_time_sources(source, training_clock=training_clock)
@@ -428,11 +292,7 @@ def belief_learn_demo_command(
 ) -> None:
     """Compare population-trained exact-world beliefs with p0 on held-out deals."""
 
-<<<<<<< HEAD
-    from manabot.belief.learning_demo import main as run_belief_learn_demo
-=======
     from manabot.recipes.belief import main as run_belief_learn_demo
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     run_belief_learn_demo(
         episodes=episodes,

@@ -28,11 +28,7 @@ evaluation complete the recipe, which adapts
 [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y). Each piece is a
 switch we test on Magic rather than adopt by default. Many games step in
 lockstep so inference is batched; the GPU baseline is
-<<<<<<< HEAD
-`experiments/regimes/batched-baseline.json`.
-=======
 `batched_baseline()` in `experiments/batched_baseline.py`.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ### Current questions
 
@@ -75,11 +71,7 @@ they guide the next experiment rather than settle a method.
 | The observation encoding no longer hides decision-relevant differences. | The learnability search found 0 clean input collisions ([learnability](../experiments/learnability-search.md)). | A nightly check guards it; see [WORLDS.md](../WORLDS.md). |
 | Collection dominates GPU training time. | Collection was 82.5% of active time in the profiled run ([training time](../experiments/training-time.md)). | Engine and inference throughput are the cost levers. |
 
-<<<<<<< HEAD
-Belief sampling and local search with distillation run end to end. In their
-=======
 Belief sampling and local search run end to end. In their
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pilots, 840 held-out sampled hands had no support violations and local search
 replayed 183 commands with no mismatch. Neither has shown a strength gain over
 the policy alone yet.
@@ -112,20 +104,10 @@ self-play policy (frozen checkpoint)
         +----------+------------+
                    v
        local search at the decision
-<<<<<<< HEAD
-                   |
-                   v
-     distillation back into the policy
-```
-
-The pieces exist ([belief sampler](../docs/belief-sampler.md),
-[local policy search](../docs/local-policy-search.md)); the plan is to make
-=======
 ```
 
 The sampler and search exist ([belief sampler](../docs/belief-sampler.md),
 [local policy search](../docs/local-policy-search.md)). The plan is to make
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
@@ -153,17 +135,9 @@ Constraints that apply throughout:
 - A shallow search with a strong continuation policy may beat deeper search
   with a weak one, so depth, rollout count and continuation quality are
   measured rather than assumed.
-<<<<<<< HEAD
-- Distilled targets must keep genuine mixed strategies; hard targets cannot
-  represent bluffing.
-
-The protocols for sampler quality, search with learned sampling, distillation
-and exploiters are preregistered
-=======
 
 The protocols for sampler quality, search with learned sampling and exploiters
 are preregistered
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ([transfer protocols](../experiments/ataraxos-transfer.md)).
 
 ### Training dynamics
@@ -232,11 +206,7 @@ held-out opponents). The first two can improve while the third gets worse.
 ### Skill rating contract
 
 Strength is a population rating, not a win rate against random. The arena
-<<<<<<< HEAD
-(`manabot/arena/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
-=======
 (`manabot/eval/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 parameters on the familiar Elo scale; [Tournament](../experiments/head-to-head.md)
 files play chosen checkpoints against each other on shared deals.
 

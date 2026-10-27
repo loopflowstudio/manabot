@@ -1,10 +1,7 @@
 # ETU-87 — Which cards decide Allies versus Lessons?
 
-<<<<<<< HEAD
-=======
 > Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 **Status: exploratory.** No prediction was committed before these runs, so by
 the discipline in [README](README.md) the numbers below are a map for choosing
 the next decklists, not evidence for a claim. Runs: 2026-09-29 to 2026-10-04.
@@ -29,24 +26,15 @@ rule (PR #196). Rates are comparable within a world and a seed, not across.
 
 Result rows are in
 [`data/etu87-allies-lessons-balance-20260930/`](data/etu87-allies-lessons-balance-20260930/);
-<<<<<<< HEAD
-each row carries the full lists it played. Candidate files are in
-[`study/`](study/).
-=======
 each row carries the full lists it played. The candidate files these runs used
 are in [`study/` at e6a2aab1](https://github.com/loopflowstudio/manabot/tree/e6a2aab1/experiments/study).
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Results
 
 ### The gap is in the decks, not the pilot
 
 The 5,800-game play study (w3, seeds from 97000, configuration in
-<<<<<<< HEAD
-[`study/allies-lessons-10x-study.json`](study/allies-lessons-10x-study.json))
-=======
 [`study/allies-lessons-10x-study.json`](https://github.com/loopflowstudio/manabot/blob/e6a2aab1/experiments/study/allies-lessons-10x-study.json))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 gives UR Lessons the same share under either pilot:
 
 | Pilot in both seats | Games | UR Lessons wins | 95% interval |
@@ -111,12 +99,8 @@ on its own.
 
 ### Both levers together (w4)
 
-<<<<<<< HEAD
-Candidates: [`study/w4-combined-2026-10-04.json`](study/w4-combined-2026-10-04.json),
-=======
 Candidates: the `w4-combined` set in
 [`balance.py`](https://github.com/loopflowstudio/manabot/blob/62d2aa9ada5c0184ccbf24705dccd956a233a972/manabot/study/allies_lessons/balance.py),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 150 deals from seed 96000, the same deals as the two rows above.
 
 **Not yet run.** The first attempt (2026-09-30) crashed at startup on a card
@@ -138,11 +122,7 @@ reading is wrong.
 
 ```bash
 uv run python -m manabot.study.allies_lessons.balance \
-<<<<<<< HEAD
-    --candidates experiments/study/w4-combined-2026-10-04.json \
-=======
     --candidates w4-combined \
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     --deals 150 --seed 96000 --out .runs/study/w4-combined.jsonl
 ```
 

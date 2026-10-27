@@ -17,12 +17,6 @@ use crate::{
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TurnData {
-    pub turn_number: u32,
-    pub phase: PhaseKind,
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TurnData {
@@ -30,18 +24,13 @@ pub struct TurnData {
     #[serde(deserialize_with = "super::observation_json::phase")]
     pub phase: PhaseKind,
     #[serde(deserialize_with = "super::observation_json::step")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub step: StepKind,
     pub active_player_id: i32,
     pub agent_player_id: i32,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct PlayerData {
     pub player_index: i32,
     pub id: i32,
@@ -61,12 +50,8 @@ pub struct PlayerData {
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct CardTypeData {
     pub is_castable: bool,
     pub is_permanent: bool,
@@ -82,15 +67,10 @@ pub struct CardTypeData {
     pub is_battle: bool,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CardData {
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardData {
     #[serde(deserialize_with = "super::observation_json::zone")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub zone: ZoneType,
     pub owner_id: i32,
     pub id: i32,
@@ -110,21 +90,14 @@ pub struct CardData {
     pub kicker_cost: i32,
     pub card_types: CardTypeData,
     pub keywords: KeywordData,
-<<<<<<< HEAD
-=======
     #[serde(deserialize_with = "super::observation_json::mana_cost")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub mana_cost: ManaCost,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
 /// binds action focus; it is not an in-game object reference or a zone.
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct SideboardCardData {
     pub candidate_id: i32,
     pub owner_id: i32,
@@ -133,12 +106,8 @@ pub struct SideboardCardData {
     pub text_box: String,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
-=======
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct KeywordData {
     pub flying: bool,
     pub reach: bool,
@@ -194,15 +163,10 @@ pub enum StackTargetKindData {
     Card = 3,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StackTargetData {
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackTargetData {
     #[serde(deserialize_with = "super::observation_json::stack_target")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub kind: StackTargetKindData,
     pub player_id: Option<i32>,
     pub permanent_id: Option<i32>,
@@ -210,17 +174,11 @@ pub struct StackTargetData {
     pub card_id: Option<i32>,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StackObjectData {
-    pub stack_object_id: i32,
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StackObjectData {
     pub stack_object_id: i32,
     #[serde(deserialize_with = "super::observation_json::stack_kind")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub kind: StackObjectKindData,
     pub controller_id: i32,
     pub source_card_registry_key: i32,
@@ -230,12 +188,8 @@ pub struct StackObjectData {
     pub targets: Vec<StackTargetData>,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct PermanentData {
     pub id: i32,
     /// Definition of the backing card, in the match's bound content pack.
@@ -255,10 +209,7 @@ pub struct PermanentData {
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
     pub exile_if_dies_this_turn: bool,
-<<<<<<< HEAD
-=======
     pub temp_subtypes: Vec<String>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
@@ -294,12 +245,8 @@ pub enum EventEntityKind {
     Definition = 5,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub struct EventData {
     pub event_type: i32,
     pub source_kind: i32,
@@ -318,12 +265,6 @@ pub struct EventData {
     pub target_incarnation: i32,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ActionOption {
-    /// Engine-owned meaning for choices whose index alone is insufficient.
-    pub description: Option<String>,
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActionOption {
@@ -331,7 +272,6 @@ pub struct ActionOption {
     pub description: Option<String>,
     #[serde(deserialize_with = "super::observation_json::action")]
     #[serde(rename = "type")]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub action_type: ActionType,
     pub focus: Vec<i32>,
     /// Native yes/no declaration, shared by learning and experience consumers.
@@ -340,17 +280,6 @@ pub struct ActionOption {
     pub ability_index: Option<usize>,
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ActionSpaceData {
-    pub action_space_type: ActionSpaceKind,
-    pub actions: Vec<ActionOption>,
-    pub focus: Vec<i32>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Observation {
-=======
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActionSpaceData {
@@ -367,7 +296,6 @@ pub struct ActionSpaceData {
 pub struct Observation {
     #[serde(skip)]
     pub continuation: Vec<super::continuation::ContinuationFrame>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub game_over: bool,
     pub won: bool,
     pub turn: TurnData,
@@ -381,10 +309,7 @@ pub struct Observation {
     pub opponent_permanents: Vec<PermanentData>,
     pub stack_objects: Vec<StackObjectData>,
     pub recent_events: Vec<EventData>,
-<<<<<<< HEAD
-=======
     #[serde(skip)]
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
@@ -492,10 +417,7 @@ impl Observation {
         let opponent = Self::player_data(game, opponent_player, false);
 
         let mut obs = Self {
-<<<<<<< HEAD
-=======
             continuation: game.continuation_frames(agent_player),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             game_over,
             won,
             turn,
@@ -673,10 +595,7 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
-<<<<<<< HEAD
-=======
             temp_subtypes: permanent.temp_subtypes.clone(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,
             toughness,
@@ -1071,11 +990,7 @@ impl Observation {
         }
     }
 
-<<<<<<< HEAD
-    fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
-=======
     pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         match action {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]

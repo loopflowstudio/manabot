@@ -2,8 +2,6 @@
 
 from dataclasses import replace
 
-<<<<<<< HEAD
-=======
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
@@ -12,7 +10,6 @@ from managym.decision import (
     TransitionReceipt,
 )
 from managym.possible_worlds import WorldQuery
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 
@@ -31,17 +28,6 @@ from manabot.belief import (
     encode_belief,
     query_mass,
 )
-<<<<<<< HEAD
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Observation,
-    PublicCommitment,
-    SemanticContractError,
-    TransitionReceipt,
-)
-from managym.possible_worlds import WorldQuery
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 
@@ -184,16 +170,10 @@ def test_repeated_card_identity_projects_distinct_hand_and_library_rows() -> Non
 def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     """Pin float accumulation across a large support, including zero mass."""
 
-<<<<<<< HEAD
-    from manabot.belief.demo import _runtime_env, _schema_and_agent
-    from managym.possible_worlds import PossibleWorldSpace
-
-=======
     from managym.possible_worlds import PossibleWorldSpace
 
     from manabot.belief.demo import _runtime_env, _schema_and_agent
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     env, _ = _runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     schema, _ = _schema_and_agent(env._engine, viewer)

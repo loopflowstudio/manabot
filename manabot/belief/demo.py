@@ -7,10 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-<<<<<<< HEAD
-=======
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import torch
 
@@ -25,30 +22,17 @@ from manabot.belief.encoding import (
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env import Env, Match, ObservationSpace, Reward
-<<<<<<< HEAD
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.flat_mc import make_player
-from manabot.verify.util import INTERACTIVE_DECK
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
-=======
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.util import INTERACTIVE_DECK
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     observation_space = ObservationSpace()
     match = Match(
-<<<<<<< HEAD
-        MatchHypers(
-=======
         MatchConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hero="belief-demo-hero",
             villain="belief-demo-villain",
             hero_deck=dict(INTERACTIVE_DECK),
@@ -58,11 +42,7 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     env = Env(
         match,
         observation_space,
-<<<<<<< HEAD
-        Reward(RewardHypers()),
-=======
         Reward(RewardConfig()),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         seed=19,
         auto_reset=False,
         enable_profiler=False,
@@ -72,13 +52,9 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
     return env, observation
 
 
-<<<<<<< HEAD
-def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, Agent]:
-=======
 def _schema_and_agent(
     engine: Any, viewer: int
 ) -> tuple[BeliefEncodingSchema, ActorCritic]:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     space = PossibleWorldSpace.from_engine(engine, viewer)
     count_buckets = max(2, max(count for _, count in space.pool) + 1)
     schema = belief_schema_from_engine(
@@ -88,15 +64,9 @@ def _schema_and_agent(
     )
     card_vocab_size = 1 + max(row.card_def_id for row in schema.rows)
     torch.manual_seed(19)
-<<<<<<< HEAD
-    policy_value = Agent(
-        ObservationSpace(),
-        AgentSpec(
-=======
     policy_value = ActorCritic(
         ObservationSpace(),
         ModelConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,
@@ -110,11 +80,7 @@ def _run_swapped_world(
     engine: Any,
     observation: dict[str, np.ndarray],
     viewer: int,
-<<<<<<< HEAD
-    policy_value: Agent,
-=======
     policy_value: ActorCritic,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     schema: BeliefEncodingSchema,
 ) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)
@@ -133,11 +99,7 @@ def run_demo() -> dict[str, Any]:
     schema, policy_value = _schema_and_agent(env._engine, viewer)
     with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:
         checkpoint_path = Path(tmp_dir) / "belief.pt"
-<<<<<<< HEAD
-        save_bc_checkpoint(
-=======
         save_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             policy_value,
             policy_value.observation_space,
             checkpoint_path,

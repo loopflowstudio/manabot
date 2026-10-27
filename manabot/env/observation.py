@@ -18,34 +18,6 @@ Additional updates in this version:
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
-<<<<<<< HEAD
-import numpy as np
-
-# Local imports
-from manabot.infra.hypers import ObservationSpaceHypers
-from manabot.infra.log import getLogger
-import managym
-
-# Many modules import the enum mirrors from here; managym.enums owns them.
-from managym.enums import (  # noqa: F401
-    ActionEnum,
-    ActionSpaceEnum,
-    EventEntityKindEnum,
-    EventTypeEnum,
-    PhaseEnum,
-    StepEnum,
-    ZoneEnum,
-)
-
-# Native action tensor: family, declaration, mode/ability selectors, validity.
-ACTION_TYPE_DIM = len(ActionEnum)
-ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
-ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
-ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
-MAX_ACTION_SELECTOR = (1 << 24) - 1
-PERMANENT_DEFINITION_INDEX = 24
-
-=======
 
 # Many modules import the enum mirrors from here; managym.enums owns them.
 from managym.enums import (  # noqa: F401
@@ -74,7 +46,6 @@ PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
 RELATION_DIM = 32
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 # -----------------------------------------------------------------------------
 # Observation Encoding
@@ -86,15 +57,6 @@ class ObservationEncoder:
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
 
-<<<<<<< HEAD
-    def __init__(self, hypers: ObservationSpaceHypers):
-        self.hypers = hypers
-        self.cards_per_player = hypers.max_cards_per_player
-        self.perms_per_player = hypers.max_permanents_per_player
-        self.max_actions = hypers.max_actions
-        self.max_focus_objects = hypers.max_focus_objects
-        self.max_events = hypers.max_events
-=======
     def __init__(self, config: ObservationConfig):
         self.config = config
         self.cards_per_player = config.max_cards_per_player
@@ -102,7 +64,6 @@ class ObservationEncoder:
         self.max_actions = config.max_actions
         self.max_focus_objects = config.max_focus_objects
         self.max_events = config.max_events
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         self.num_phases = len(PhaseEnum.__members__)
         self.num_steps = len(StepEnum.__members__)
@@ -122,16 +83,10 @@ class ObservationEncoder:
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-<<<<<<< HEAD
-        # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
-        self.permanent_dim = 27
-        self.event_dim = 12 if hypers.policy_history_version == 1 else 7
-=======
         # (printed + until-EOT grants), death-to-exile replacement, definition,
         # temporary Avatar subtype, validity.
         self.permanent_dim = 28
         self.event_dim = 12 if config.policy_history_version == 1 else 7
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
@@ -145,14 +100,11 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
-<<<<<<< HEAD
-=======
             **(
                 {"relations": (RELATION_ROWS, RELATION_DIM)}
                 if self.config.policy_input_version == 2
                 else {}
             ),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             # Game objects
@@ -289,11 +241,7 @@ class ObservationEncoder:
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
-<<<<<<< HEAD
-        if self.hypers.policy_history_version == 1:
-=======
         if self.config.policy_history_version == 1:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
                 (self.max_events, self.event_dim), dtype=np.float32
@@ -305,18 +253,13 @@ class ObservationEncoder:
         else:
             out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
-<<<<<<< HEAD
-=======
         if self.config.policy_input_version == 2:
             out["relations"] = self._encode_relations(obs)
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out
 
-<<<<<<< HEAD
-=======
     def _encode_relations(self, obs: managym.Observation) -> np.ndarray:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
@@ -387,7 +330,6 @@ class ObservationEncoder:
             result[: len(rows)] = rows
         return result
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     # -------------------------------------------------------------------------
     # Players (with validity mask support)
     # -------------------------------------------------------------------------
@@ -551,10 +493,7 @@ class ObservationEncoder:
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
-<<<<<<< HEAD
-=======
         arr[26] = float("Avatar" in perm.temp_subtypes)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -668,15 +607,9 @@ class ObservationSpace(gym.spaces.Space):
     Gymnasium-compatible observation space optimized for attention processing.
     """
 
-<<<<<<< HEAD
-    def __init__(self, hypers: ObservationSpaceHypers | None = None):
-        super().__init__(shape=None, dtype=None)
-        self.encoder = ObservationEncoder(hypers or ObservationSpaceHypers())
-=======
     def __init__(self, config: ObservationConfig | None = None):
         super().__init__(shape=None, dtype=None)
         self.encoder = ObservationEncoder(config or ObservationConfig())
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.spaces = gym.spaces.Dict(
             {
                 name: gym.spaces.Box(

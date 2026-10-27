@@ -7,31 +7,18 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
-<<<<<<< HEAD
-=======
 from managym.decision import (
     Command,
     SemanticContractError,
     SemanticTransition,
 )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 # Local imports
 from manabot.infra.log import getLogger
 import managym
-<<<<<<< HEAD
-from managym.decision import (
-    Command,
-    SemanticContractError,
-    SemanticTransition,
-)
-
-# Local directory imports
-=======
 
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from .match import Match, Reward
 from .observation import ObservationSpace
 
@@ -132,19 +119,12 @@ class Env(gym.Env):
         if seed is not None and seed != self.seed:
             self.seed = seed
             self._engine.set_seed(seed)
-<<<<<<< HEAD
-=======
             self._capture.seed = seed
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         match = self.match if not options else options.get("match", self.match)
 
         # Get the initial managym observation
-<<<<<<< HEAD
-        raw_obs, raw_info = self._engine.reset(match.to_rust())
-=======
         raw_obs, raw_info = self._capture.reset(self._engine, match.to_rust())
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.match = match
         self._last_obs = raw_obs
         # Encode to our dictionary-of-numpy format
@@ -168,13 +148,9 @@ class Env(gym.Env):
             info: Additional debug info from managym, e.g. partial game logs.
         """
         log = getLogger(__name__).getChild("step")
-<<<<<<< HEAD
-        raw_obs, raw_reward, terminated, truncated, info = self._engine.step(action)
-=======
         raw_obs, raw_reward, terminated, truncated, info = self._capture.step(
             self._engine, action
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         info["true_terminated"] = terminated
         info["true_truncated"] = truncated
@@ -186,11 +162,7 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
-<<<<<<< HEAD
-                raw_obs, _ = self._engine.reset(self.match.to_rust())
-=======
                 raw_obs, _ = self._capture.reset(self._engine, self.match.to_rust())
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 terminated = False
                 truncated = False
 
@@ -210,13 +182,9 @@ class Env(gym.Env):
 
         try:
             transition_json, raw_obs, raw_reward, terminated, truncated, info = (
-<<<<<<< HEAD
-                self._engine.step_semantic_command(command.to_json())
-=======
                 self._capture.command(
                     self._engine, command.to_json(), transition_only=False
                 )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             )
         except Exception as error:  # managym.AgentError
             message = str(error)
@@ -241,8 +209,6 @@ class Env(gym.Env):
             transition,
         )
 
-<<<<<<< HEAD
-=======
     def rollout_pool(
         self, worlds: int, rollouts: int, seed: int, max_steps: int
     ) -> CapturedSearch:
@@ -263,7 +229,6 @@ class Env(gym.Env):
             [worlds, rollouts, seed, max_steps],
         ).native
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
         """Re-sync after managym scenario_* state injection.
 

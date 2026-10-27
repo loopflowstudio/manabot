@@ -1,11 +1,5 @@
 # experiments/
 
-<<<<<<< HEAD
-One experiment = one report (`exp-NN-<name>.md`). Raw data in `data/`.
-Run provenance lives in the verify store (`.runs/verify.sqlite`).
-**Runners:** the exp-specific driver scripts live in [runners/](runners/) —
-`manabot/` keeps only reusable instruments.
-=======
 One experiment = one report (`<name>.md`). Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
@@ -76,7 +70,6 @@ commit with the report. Every worktree on a machine shares one read-only cache,
 `experiment_data(...)`: they fetch what they name, or skip with this command
 when the store is unreachable. Data committed before the manifest remains in git
 history.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Discipline
 
@@ -104,8 +97,6 @@ history.
 
 ## Index
 
-<<<<<<< HEAD
-=======
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
 62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with
@@ -118,7 +109,6 @@ Early heuristic score at 250 updates: 51.5% [48.5, 54.5], versus one-seat 47.5%;
 paired delta +4 points [−1, +8.5], with unequal training cost. The $50 endpoint
 is pending; $4.01 estimated incurred at the retained cost observation.
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 [ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
 actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
 training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.
@@ -180,11 +170,5 @@ studies. Proposed budgets are separate from ETU-91 and grant no execution author
 [sps-closeout](sps-closeout.md).)
 
 Distributed-RL research and the unexecuted bounded workload plan live in
-<<<<<<< HEAD
-[the ETU-108 report](../docs/distributed-rl.md). Its supervisor is in
-[runners/distributed_benchmark.py](runners/distributed_benchmark.py); this is
-benchmark preparation, not a completed two-host training experiment.
-=======
 [the ETU-108 report](../docs/distributed-rl.md); its benchmark supervisor was
 removed unexecuted and remains in git history.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

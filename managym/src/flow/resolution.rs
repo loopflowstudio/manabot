@@ -6,21 +6,13 @@ use std::collections::VecDeque;
 
 use crate::{
     flow::{
-<<<<<<< HEAD
-        decision::{Decision, EffectFrame, FrameFinalize},
-=======
         decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress},
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
-<<<<<<< HEAD
-        ability::{Ability, Effect, EffectValue, TargetSpec},
-=======
         ability::{Ability, Effect, EffectValue, PaymentCost, TargetSpec},
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -528,13 +520,6 @@ impl Game {
                 }
                 None
             }
-<<<<<<< HEAD
-            Effect::WaterbendOrDiscard { generic } => Some(Decision::WaterbendOrDiscard {
-                player: frame.controller,
-                remaining: *generic,
-                started: false,
-            }),
-=======
             Effect::OptionalPayment {
                 cost,
                 if_paid,
@@ -545,7 +530,6 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Effect::ModifyUntilEot {
                 power_delta,
                 toughness_delta,
@@ -591,8 +575,6 @@ impl Game {
                     frame,
                 )
             }
-<<<<<<< HEAD
-=======
             Effect::AddSubtypeToTarget { target, subtype } => {
                 let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, target, frame.controller) {
@@ -607,7 +589,6 @@ impl Game {
                 }
                 None
             }
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Effect::ExileIfDiesThisTurn { target } => {
                 let chosen = frame.primary_target()?;
                 if self.target_is_legal(chosen, target, frame.controller) {
@@ -755,16 +736,6 @@ impl Game {
                 // countered in response) — the effect does nothing.
                 self.find_spell_on_stack_index(target_spell)?;
                 let spell_controller = self.spell_controller(target_spell)?;
-<<<<<<< HEAD
-                Some(Decision::PayOrNot {
-                    player: spell_controller,
-                    cost: cost.clone(),
-                    if_paid: Vec::new(),
-                    if_declined: vec![Effect::CounterSpell {
-                        target: TargetSpec::Spell,
-                    }],
-                })
-=======
                 Some(Decision::Payment(PaymentProgress::new(
                     spell_controller,
                     PaymentCost::Mana(cost.clone()),
@@ -773,7 +744,6 @@ impl Game {
                         target: TargetSpec::Spell,
                     }],
                 )))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             }
             Effect::IfKicked { then, otherwise } => {
                 let branch = if frame.kicked { then } else { otherwise };
@@ -1047,23 +1017,6 @@ impl Game {
             })
     }
 
-<<<<<<< HEAD
-    /// Hexproof (CR 702.11): a permanent with hexproof can't be targeted
-    /// by spells/abilities controlled by opponents of its controller.
-    fn hexproof_blocks(&self, permanent_id: PermanentId, targeter: PlayerId) -> bool {
-        let Some(permanent) = self
-            .state
-            .permanents
-            .get(permanent_id.0)
-            .and_then(|p| p.as_ref())
-        else {
-            return false;
-        };
-        permanent.controller != targeter && self.effective_keywords(permanent_id).hexproof
-    }
-
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
@@ -1094,82 +1047,6 @@ impl Game {
         spec: &TargetSpec,
         controller: PlayerId,
     ) -> bool {
-<<<<<<< HEAD
-        match (target, spec) {
-            (Target::Permanent(id), TargetSpec::PermanentYouControl { predicate }) => {
-                self.permanent_on_battlefield(id)
-                    && self.state.permanents[id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller == controller)
-                    && self.permanent_matches_predicate(id, predicate)
-            }
-            (Target::GraveyardCard(object), TargetSpec::GraveyardCardYouOwn { predicate }) => {
-                let card = CardId::from(object.entity);
-                self.current_object_ref(card) == Some(object)
-                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
-                    && self.state.cards[card].owner == controller
-                    && predicate.matches_card(&self.state.cards[card])
-            }
-            (Target::Player(_), TargetSpec::Player) => true,
-            (Target::Player(player), TargetSpec::Opponent) => player != controller,
-            (Target::Permanent(id), TargetSpec::Permanent { predicate }) => {
-                self.permanent_on_battlefield(id)
-                    && self.permanent_matches_predicate(id, predicate)
-                    && !self.hexproof_blocks(id, controller)
-            }
-            (Target::Player(_), TargetSpec::CreatureOrPlayer) => true,
-            (Target::Permanent(perm_id), TargetSpec::CreatureOrPlayer | TargetSpec::Creature) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::CreatureYouControl) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller == controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::CreatureOpponentControls) => {
-                self.permanent_is_battlefield_creature(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller != controller)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::Permanent(perm_id), TargetSpec::LandYouControl) => {
-                self.permanent_on_battlefield(perm_id)
-                    && self.state.permanents[perm_id].as_ref().is_some_and(|p| {
-                        p.controller == controller && self.state.cards[p.card].types.is_land()
-                    })
-            }
-            (Target::Permanent(perm_id), TargetSpec::PermanentOpponentControls { predicate }) => {
-                self.permanent_on_battlefield(perm_id)
-                    && self.state.permanents[perm_id]
-                        .as_ref()
-                        .is_some_and(|p| p.controller != controller)
-                    && self.permanent_matches_predicate(perm_id, predicate)
-                    && !self.hexproof_blocks(perm_id, controller)
-            }
-            (Target::StackSpell(card_id), TargetSpec::Spell) => {
-                self.find_spell_on_stack_index(card_id).is_some()
-            }
-            (Target::StackSpell(card_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
-                self.find_spell_on_stack_index(card_id).is_some()
-                    && self.card_mana_value(card_id) >= *min_mana_value
-            }
-            (Target::Permanent(perm_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
-                let Some(permanent) = self
-                    .state
-                    .permanents
-                    .get(perm_id.0)
-                    .and_then(|p| p.as_ref())
-                else {
-                    return false;
-                };
-                self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-                    && self.card_mana_value(permanent.card) >= *min_mana_value
-            }
-            _ => false,
-=======
         match target {
             Target::Permanent(id) => {
                 let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref())
@@ -1239,7 +1116,6 @@ impl Game {
                 }
                 _ => false,
             },
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
     }
 

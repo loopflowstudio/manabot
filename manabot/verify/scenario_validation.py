@@ -16,11 +16,7 @@ import json
 from pathlib import Path
 from typing import Literal, TypedDict
 
-<<<<<<< HEAD
-from manabot.infra.hypers import MatchHypers
-=======
 from manabot.infra.config import MatchConfig
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.competency import (
     SCENARIOS,
     SPACE_ATTACKER,
@@ -269,11 +265,7 @@ def _run_line(
 def validate_scenarios(
     *,
     seeds: tuple[int, ...] = (2,),
-<<<<<<< HEAD
-    selected_match: MatchHypers | None = None,
-=======
     selected_match: MatchConfig | None = None,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     max_steps: int = 1000,
 ) -> tuple[ScenarioValidation, ...]:
     """Run both lines per seed, retaining errors and exact source/content identities.

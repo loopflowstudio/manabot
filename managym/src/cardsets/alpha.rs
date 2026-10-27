@@ -43,11 +43,8 @@ pub struct ContentPack {
     compiled_semantics: Option<CompiledSemanticManifest>,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
-<<<<<<< HEAD
-=======
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 
 /// Legacy Rust name retained for conformance callers. Match state owns a
@@ -68,12 +65,6 @@ impl ContentPack {
     /// changes and preserves the contract-v1 digest across W2-179's move to
     /// shared definitions.
     pub fn content_digest(&self) -> String {
-<<<<<<< HEAD
-        let mut definitions: Vec<_> = self.definitions().collect();
-        definitions.sort_by(|left, right| left.name.cmp(&right.name));
-        let bytes = serde_json::to_vec(&definitions).expect("card definitions are serializable");
-        blake3::hash(&bytes).to_hex().to_string()
-=======
         self.digest
             .get_or_init(|| {
                 let mut definitions: Vec<_> = self.definitions().collect();
@@ -83,7 +74,6 @@ impl ContentPack {
                 blake3::hash(&bytes).to_hex().to_string()
             })
             .clone()
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 
     /// Read-only descriptor for binding derived consumers to this exact pack.
@@ -113,11 +103,8 @@ impl Default for ContentPack {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             compiled_semantics: None,
             cards_by_name: BTreeMap::new(),
-<<<<<<< HEAD
-=======
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             definitions: Vec::new(),
         };
         out.register_all_cards();
@@ -134,11 +121,8 @@ impl ContentPack {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             compiled_semantics: Some(compiled_semantics),
             cards_by_name: BTreeMap::new(),
-<<<<<<< HEAD
-=======
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             definitions: Vec::with_capacity(definitions.len()),
         };
         for definition in definitions {
@@ -165,9 +149,6 @@ impl ContentPack {
         self.register_temur();
     }
 
-<<<<<<< HEAD
-    pub fn register_card(&mut self, mut definition: CardDefinition) {
-=======
     /// Presentation entries for the isolated complexity catalog. The default
     /// registry and its checked content digest must remain unchanged.
     pub(crate) fn register_complexity_presentation(&mut self) {
@@ -203,7 +184,6 @@ impl ContentPack {
     pub fn register_card(&mut self, mut definition: CardDefinition) {
         self.digest.take();
         self.public_definitions.take();
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
         // becomes the target of a spell an opponent controls, counter it
         // unless that player pays [cost]."
@@ -260,8 +240,6 @@ impl ContentPack {
         self.definitions.get(id.0 as usize).map(Arc::as_ref)
     }
 
-<<<<<<< HEAD
-=======
     /// Immutable public characteristics reused by every capture of this content
     /// identity. Rules programs stay native and are not reconstructed from text.
     pub fn public_definition(&self, id: CardDefId) -> Option<&serde_json::Value> {
@@ -283,7 +261,6 @@ impl ContentPack {
             .get(id.0 as usize)
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
         let definition_id = self.definition_id(name)?;
         let definition = Arc::clone(self.definitions.get(definition_id.0 as usize)?);

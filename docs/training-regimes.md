@@ -6,10 +6,6 @@ ETU-89 owns this infrastructure. ETU-90 owns its direct-RL treatment correctness
 ETU-91 owns the comparison/ablation protocols and analysis.
 
 ```bash
-<<<<<<< HEAD
-uv run manabot train --regime experiments/regimes/direct-self-play.json --seed 197 --out .runs/direct-pilot
-uv run manabot train --regime experiments/regimes/search-distillation.json --seed 197 --out .runs/search-pilot
-=======
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 ```
 
@@ -25,7 +21,6 @@ for `--regime` from Python:
 
 ```bash
 uv run python -c "from experiments.batched_baseline import batched_baseline; print(batched_baseline().model_dump_json(indent=2))" > regime.json
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 The supplied recipes are bounded pilots, not the proposed week-long experiment.
@@ -35,19 +30,9 @@ output directory for every attempt; serving checkpoints are not process-resume
 files. Opt-in [bounded CPU self-play recovery](training-recovery.md) uses private
 complete-state snapshots and retains completed multistage work.
 
-<<<<<<< HEAD
-Policy stages are `collect_search`, `train_supervised`, and `train_self_play`.
-A supervised stage's `datasets` name earlier collection outputs. Its `initial`
-names an earlier supervised stage, carrying learner and Adam state; each source
-game keeps its identity and validation assignment as the corpus grows. Game IDs
-are unique within the run, and IDs divisible by ten form validation. At least
-one complete game must exist in each partition. Self-play `initial` carries the
-live collector/learner/optimizer within the same execution; streams pause at the
-=======
 Policy stages are `train_self_play`, `train_compound` and `import_policy`.
 Self-play `initial` carries the live collector/learner/optimizer within the
 same execution; streams pause at the
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 exact update boundary. External checkpoint reuse is not supported as implicit
 resume. Unsupported operations, forward references, and incompatible runtime
 worlds fail validation.
@@ -63,13 +48,8 @@ and do not turn an observation-only policy into a belief-enabled player.
 The [belief sampler guide](belief-sampler.md) describes the bounded pilot,
 physical-deal baseline, history-dropout treatment and scientific limits.
 
-<<<<<<< HEAD
-The recipe reuses `AgentSpec`, `ObservationSpaceHypers`, and authored
-`MatchHypers`, including both sideboards. Architecture and match binding live
-=======
 The recipe reuses `ModelConfig`, `ObservationConfig`, and authored
 `MatchConfig`, including both sideboards. Architecture and match binding live
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 once per regime. Every stage declares its device, float32 precision, worker
 count, Torch thread count, wall and memory limits. Learning settings independently
 select estimators, filtering, regularization reference, schedules, and EMA.
@@ -114,13 +94,8 @@ Training comparisons use [declarative typed-Python experiments](training-experim
 named components, frozen baselines/versioned presets, explicit overrides and ordered
 cases or matrices resolve to existing TrainingRegime values with setting provenance.
 The value-model and capacity examples preserve their previous configurations and
-<<<<<<< HEAD
-identities. `manabot.training.recipes` retains internal composition helpers.
-`AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
-=======
 identities. `manabot.recipes.builders` holds the reusable composition helpers.
 `ModelConfig` remains the model type; checkpoints retain the `agent_hypers` dictionary
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 and existing field meanings. Resolution never allocates compute or starts training.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
@@ -152,14 +127,8 @@ artifact provenance, not byte-identical stochastic training or exact process
 continuation unless the bounded recovery contract is explicitly selected. A fresh
 execution owns fresh costs; no pre-existing corpus is free.
 
-<<<<<<< HEAD
-[Learning-speed protocol](../experiments/training-regimes.md) and
-[ablation protocol](../experiments/ataraxos-mtg-ablations.md) describe the bounded
-smokes and the separately proposed scientific studies.
-=======
 The [ablation protocol](../experiments/ataraxos-mtg-ablations.md) describes the
 bounded smoke and the separately proposed scientific study.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Integrated bounded proof — 2026-10-04
 
@@ -178,22 +147,14 @@ owns final RL acceptance and ETU-91 owns final replayed study/notebook evidence.
 ETU-75 remains open for its unmet empirical evidence; shared delivery does not
 close those claims. No scientific experiment ran in this infrastructure pass.
 
-<<<<<<< HEAD
-The separate `ataraxos_move` gradient selector follows the final supplement's
-=======
 The separate `damped_policy` gradient selector follows the final supplement's
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 move recipe, including categorical outcome targets and iteration schedules.
 See [its source fidelity table and bounded commands](ataraxos.md). Existing PPO
 recipes remain controls; the new recipe does not alter a frozen study.
 
 ## Compound decisions
 
-<<<<<<< HEAD
-`AgentSpec.compound_decisions=true` selects the learned ragged policy, and
-=======
 `ModelConfig.compound_decisions=true` selects the learned ragged policy, and
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 `train_compound` collects complete self-play games before each optimizer update.
 Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
 are separate from the frozen ETU-91 campaign. Their defaults are bounded proof
@@ -276,23 +237,14 @@ latency. `skip_trivial` is a separate explicit collection setting. Arena traces
 retain underlying Commands and per-command latency; report complete-game wall
 cost alongside these counts. Fewer exposed prompts alone are not a speedup.
 
-<<<<<<< HEAD
-Scientific learning-speed and outcome/bootstrap comparisons belong to ETU-99.
-=======
 Scientific outcome/bootstrap comparisons belong to ETU-99.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Software acceptance uses deterministic fixtures and bounded correctness/integration
 checks; it does not require another training study. The retained comparison smoke
 uses the existing arena and offline notebook/report path:
 
 ```bash
-<<<<<<< HEAD
-OMP_NUM_THREADS=1 uv run --extra notebook -m experiments.runners.run_training_regimes --study compound-decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook -m experiments.runners.run_training_regimes --report-only .runs/compound-smoke
-=======
 OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
 uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ```
 
 This smoke has one initialization seed and four-leg, held-out complete-game
@@ -322,11 +274,7 @@ name a prior TrainingRun in the same VerifyStore; omit it for a policy stage in
 this run. Complete semantic receipt replay, artifact admission, failed-attempt
 retention and measured collection/diagnostic costs use the ordinary executor.
 No weights change. Scalar and categorical expected signed values are supported;
-<<<<<<< HEAD
-compound, belief-input and supervised win-logit policy sources are unsupported.
-=======
 compound and belief-input policy sources are unsupported.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 The [omitted-control protocol](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic)
 provides the bounded command and analysis contract. Reports compare retained and
@@ -342,11 +290,7 @@ into the ordinary stage graph. It uses the existing VerifyStore and run export;
 no training stage, model registry or separate runner is needed. For example:
 
 ```python
-<<<<<<< HEAD
-from manabot.training.models import CollectBelief, ImportPolicy
-=======
 from manabot.training.regime import CollectBelief, ImportPolicy
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 # References come from the retained publication manifest. Paths may relocate;
 # sha256 and bytes must identify the original published bytes.
@@ -368,11 +312,7 @@ histories = CollectBelief(
 # Resolution only declares work; execute_regime / manabot train --regime executes it.
 ```
 
-<<<<<<< HEAD
-The regime's AgentSpec, observation contract and world must match the producer
-=======
 The regime's ModelConfig, observation contract and world must match the producer
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 and checkpoint. Ordinary checkpoint loading validates model weights, architecture,
 native world/content/input bindings and the actual execution setup. The selected
 producer stage must be completed; a later failure in the producer run does not
@@ -386,20 +326,6 @@ incompatible inputs fail and retain a failed TrainingRun attempt.
 Admission copies exact source bytes into the destination run before loading.
 The imported stage exposes only the selected `raw` or `ema` artifact and retains
 its `source_run` JSON artifact. Downstream stages recheck these hashes. Set
-<<<<<<< HEAD
-`CollectBelief.weights` and `CollectLocalUpdate.weights` to that same selection;
-`TrainBelief` continues to consume the resulting dataset normally. Local-search
-samplers must still originate from that same policy and weight identity.
-
-`TrainSupervised(initial="policy", initial_weights="ema", ...)` can initialize
-from an imported EMA artifact; `initial_weights="raw"` remains the historical
-default and does not alter existing recipe digests. This starts fresh Adam,
-not producer optimizer or collector continuation. Local-target distillation
-requires signed-outcome producer value semantics. Imported compound policies
-can feed the existing belief/search collectors, but ordinary flat supervised
-training and compound EMA remain unsupported. Live self-play continuation and
-selection diagnostics retain their existing stage restrictions. An EMA import
-=======
 `CollectBelief.weights` to that same selection; `TrainBelief` continues to
 consume the resulting dataset normally. Local-search samplers must still
 originate from that same policy and weight identity.
@@ -407,7 +333,6 @@ originate from that same policy and weight identity.
 Imported compound policies can feed belief collection; compound EMA remains
 unsupported. Live self-play continuation and selection diagnostics retain their
 existing stage restrictions. An EMA import
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 never masquerades as raw or changes `last-complete-raw` selection.
 
 ### Start self-play from a pretrained policy
@@ -416,11 +341,7 @@ never masquerades as raw or changes `last-complete-raw` selection.
 instead of random weights, under a recipe of its own:
 
 ```python
-<<<<<<< HEAD
-from manabot.training.models import PretrainedPolicy
-=======
 from manabot.training.regime import PretrainedPolicy
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 stage.pretrained = PretrainedPolicy(
     source_run={"path": "/artifacts/producer/run.json",
@@ -438,11 +359,7 @@ The settings divide by what the weights depend on:
 | Must equal the producer | Free to change |
 | --- | --- |
 | world | learning rule and every schedule (learning rate, tau, filtering, EMA rate) |
-<<<<<<< HEAD
-| `AgentSpec` (architecture, value kind) | `streams`, `transitions`, `updates` |
-=======
 | `ModelConfig` (architecture, value kind) | `streams`, `transitions`, `updates` |
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | observation contract | `behavior`, `opponent`, execution device |
 | | training seed, and the match if the checkpoint validates against it |
 
@@ -481,8 +398,6 @@ ETU-112's fixed untrained fixtures exercise complete ordinary belief and local
 search collection, raw/EMA admission, historical receipt shape, immutable source
 bytes and rejection paths without optimizer training. ETU-99 owns actual producer
 selection, independent seeds, empirical cohorts and budgets.
-<<<<<<< HEAD
-=======
 
 ## Learning from both seats
 
@@ -542,4 +457,3 @@ The API supports raw behavior with PPO or Ataraxos learning and rejects shared
 model parameters, shared optimizers and implicit EMA. The caller owns bounded
 iteration schedules, checkpoint exports and cost receipts for both models; this
 API does not launch jobs or introduce a second remote regime executor.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

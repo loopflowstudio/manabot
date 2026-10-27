@@ -5,10 +5,6 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-<<<<<<< HEAD
-from manabot.semantic.learning import BoundSemanticPack
-import managym
-=======
 from manabot.semantic.policy_catalog import bind_policy_catalog
 
 
@@ -26,7 +22,6 @@ class CatalogShape:
     expanded_tokens: int
     maximum_program_tokens: int
     padded_tokens: int
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def admit_definition_ids(
@@ -68,21 +63,7 @@ class CardReferences:
 class SemanticCardEncoder(nn.Module):
     def __init__(self, pack_key: str, hidden_dim: int) -> None:
         super().__init__()
-<<<<<<< HEAD
-        decks = {
-            "ur-lessons-vs-gw-allies": ("ur_lessons", "gw_allies"),
-            "elemental-combat-v1": ("elemental_left", "elemental_right"),
-        }
-        if pack_key not in decks:
-            raise ValueError(f"unsupported policy semantic pack: {pack_key}")
-        engine = managym.Env(seed=0)
-        engine.reset(
-            [managym.authored_deck_setup(pack_key, key) for key in decks[pack_key]]
-        )
-        pack = BoundSemanticPack.from_env(engine)
-=======
         pack = bind_policy_catalog(pack_key)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         catalog = pack.catalog
         pairs = list(
             zip(
@@ -98,11 +79,7 @@ class SemanticCardEncoder(nn.Module):
             )
         )
 
-<<<<<<< HEAD
-        def definition_tokens(row, ancestors=()):
-=======
         def definition_tokens(row: int, ancestors: tuple[int, ...] = ()) -> list[int]:
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             if row in ancestors:
                 raise ValueError("cyclic semantic definition reference is not admitted")
             start, stop = catalog.definition_offsets[row : row + 2]
@@ -110,11 +87,7 @@ class SemanticCardEncoder(nn.Module):
             for program in pack.program_rows(row):
                 start, stop = catalog.program_offsets[program : program + 2]
                 spans.append((int(start), int(stop)))
-<<<<<<< HEAD
-            tokens = []
-=======
             tokens: list[int] = []
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             for start, stop in spans:
                 for offset in range(start, stop):
                     tokens.append(vocabulary[pairs[offset]])
@@ -128,8 +101,6 @@ class SemanticCardEncoder(nn.Module):
         # definitions come from the checked catalog. Nothing is truncated.
         rows = [definition_tokens(row) for row in range(len(pack.ir.definitions))]
         width = max(map(len, rows))
-<<<<<<< HEAD
-=======
         self.token_vocabulary = tuple(sorted(vocabulary))
         self.catalog_shape = CatalogShape(
             definitions=len(rows),
@@ -138,7 +109,6 @@ class SemanticCardEncoder(nn.Module):
             maximum_program_tokens=width,
             padded_tokens=len(rows) * width,
         )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.token_embedding = nn.Embedding(len(vocabulary) + 1, hidden_dim)
         self.encoder = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
         self.register_buffer(

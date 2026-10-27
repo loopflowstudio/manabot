@@ -228,11 +228,7 @@ impl Game {
         target_spec: &TargetSpec,
         controller: PlayerId,
     ) -> Vec<Target> {
-<<<<<<< HEAD
-        match target_spec {
-=======
         let mut candidates: Vec<Target> = match target_spec {
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             TargetSpec::GraveyardCardYouOwn { .. } => self
                 .state
                 .zones
@@ -240,59 +236,6 @@ impl Game {
                 .iter()
                 .filter_map(|card| self.current_object_ref(*card))
                 .map(Target::GraveyardCard)
-<<<<<<< HEAD
-                .filter(|target| self.target_is_legal(*target, target_spec, controller))
-                .collect(),
-            TargetSpec::Player => vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))],
-            TargetSpec::Opponent => vec![Target::Player(PlayerId((controller.0 + 1) % 2))],
-            TargetSpec::PermanentYouControl { .. }
-            | TargetSpec::Permanent { .. }
-            | TargetSpec::Creature
-            | TargetSpec::CreatureOrPlayer
-            | TargetSpec::CreatureYouControl
-            | TargetSpec::CreatureOpponentControls
-            | TargetSpec::LandYouControl
-            | TargetSpec::PermanentOpponentControls { .. }
-            | TargetSpec::SpellOrPermanent { .. } => {
-                let mut out = match target_spec {
-                    TargetSpec::CreatureOrPlayer => {
-                        vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
-                    }
-                    TargetSpec::SpellOrPermanent { min_mana_value } => {
-                        self.stack_spell_targets(*min_mana_value)
-                    }
-                    _ => Vec::new(),
-                };
-                for player in [PlayerId(0), PlayerId(1)] {
-                    for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
-                            continue;
-                        };
-                        let target = Target::Permanent(permanent_id);
-                        if self.target_is_legal(target, target_spec, controller) {
-                            out.push(target);
-                        }
-                    }
-                }
-                out
-            }
-            TargetSpec::Spell => self.stack_spell_targets(0),
-        }
-    }
-
-    fn stack_spell_targets(&self, min_mana_value: u8) -> Vec<Target> {
-        self.state
-            .stack_objects
-            .iter()
-            .rev()
-            .filter_map(|object| match object {
-                StackObject::Spell(spell) if self.card_mana_value(spell.card) >= min_mana_value => {
-                    Some(Target::StackSpell(spell.card))
-                }
-                _ => None,
-            })
-            .collect()
-=======
                 .collect(),
             TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
@@ -334,7 +277,6 @@ impl Game {
         }
         candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
         candidates
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 
     /// Match pending committed events against the applicable exact sources.
@@ -781,10 +723,7 @@ impl Game {
             .is_some_and(|permanent| permanent.card != source_card)
     }
 }
-<<<<<<< HEAD
-=======
 
 #[cfg(test)]
 #[path = "target_authority_tests.rs"]
 mod target_authority_tests;
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

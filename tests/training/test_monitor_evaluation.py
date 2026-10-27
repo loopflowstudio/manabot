@@ -2,28 +2,12 @@
 
 import json
 from pathlib import Path
-<<<<<<< HEAD
-=======
 import time
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from typing import Any, Literal
 
 import pytest
 import torch
 
-<<<<<<< HEAD
-from manabot.arena.match import selected_match
-from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
-from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.sim.teacher1_evidence import runtime_fingerprints
-from manabot.training import monitor_evaluation as monitor
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
-from manabot.training.monitoring import default_panels, evaluation_dashboard
-import managym
-=======
 from manabot.env import Match, ObservationSpace
 from manabot.eval import monitor as monitor
 from manabot.eval.models import EvaluationKey
@@ -42,7 +26,6 @@ from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 from tests.eval.test_batched_eval import fixture_policy
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def failure_summary(result: monitor.MonitorResult) -> str:
@@ -99,11 +82,7 @@ def _manifest() -> monitor.MonitorResult:
         compute_class_id="cpu",
         source_sha256="e" * 64,
     )
-<<<<<<< HEAD
-    key = ArenaKey(
-=======
     key = EvaluationKey(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         world="w4",
         content_suite="w4-allies-lessons-v1",
         viewer_boundary="acting-viewer",
@@ -216,13 +195,9 @@ def test_block_failure_retains_prior_rows_and_costs(
 ) -> None:
     manifest = _manifest()
     monkeypatch.setattr(
-<<<<<<< HEAD
-        monitor, "_manifest", lambda *args: manifest.model_copy(deep=True)
-=======
         checkpoint_evaluation,
         "checkpoint_manifest",
         lambda *args, **kwargs: manifest.model_copy(deep=True),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
 
     def play(
@@ -232,15 +207,9 @@ def test_block_failure_retains_prior_rows_and_costs(
             raise TimeoutError("retained block failure")
         return _rows(manifest, (101,)), {"sha256": "trace"}, {"passed": True}
 
-<<<<<<< HEAD
-    monkeypatch.setattr(monitor, "play_cell", play)
-    # The injected manifest isolates arena orchestration from checkpoint loading.
-    result = monitor.evaluate_checkpoint(
-=======
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play)
     # The injected manifest isolates arena orchestration from checkpoint loading.
     result = checkpoint_evaluation.evaluate_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         TrainingRun.model_construct(),
         manifest.artifact,
         manifest.coordinates,
@@ -257,11 +226,7 @@ def test_block_failure_retains_prior_rows_and_costs(
     )
     assert saved == result
     with pytest.raises(FileExistsError):
-<<<<<<< HEAD
-        monitor.evaluate_checkpoint(
-=======
         checkpoint_evaluation.evaluate_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             TrainingRun.model_construct(),
             manifest.artifact,
             manifest.coordinates,
@@ -308,13 +273,6 @@ def test_result_purpose_preserves_protocol_binding(
 
 
 @pytest.mark.parametrize(
-<<<<<<< HEAD
-    "max_commands,opponent",
-    [(1, "scripted_greedy"), (10000, "scripted_greedy"), (10000, "random")],
-)
-def test_real_arena_checkpoint_outcomes(
-    tmp_path: Path, max_commands: int, opponent: Literal["scripted_greedy", "random"]
-=======
     "max_commands,opponent,explicit_matrix,shared",
     [
         (1, "scripted_greedy", False, False),
@@ -330,16 +288,10 @@ def test_real_arena_checkpoint_outcomes(
     opponent: Literal["scripted_greedy", "random"],
     explicit_matrix: bool,
     shared: bool,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
-<<<<<<< HEAD
-        match = selected_match()
-        space = ObservationSpace()
-        hypers = AgentSpec(
-=======
         matrix = (
             AuthoredMatchup(
                 pack_key="ur-lessons-vs-gw-allies",
@@ -352,18 +304,12 @@ def test_real_arena_checkpoint_outcomes(
         match = matrix.match() if matrix else selected_match()
         space = ObservationSpace()
         config = ModelConfig(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         )
         torch.manual_seed(101)
         checkpoint = tmp_path / "untrained.pt"
-<<<<<<< HEAD
-        save_bc_checkpoint(
-            Agent(space, hypers),
-=======
         save_checkpoint(
             ActorCritic(space, config),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             space,
             checkpoint,
             player_configs=Match(match).to_rust(),
@@ -372,11 +318,7 @@ def test_real_arena_checkpoint_outcomes(
             id="monitor-fixture",
             world=managym.WORLD_VERSION,
             match=match,
-<<<<<<< HEAD
-            agent=hypers,
-=======
             agent=config,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             wall_seconds=10,
             stages=[
                 TrainSelfPlay(
@@ -395,18 +337,11 @@ def test_real_arena_checkpoint_outcomes(
             seed=17,
             seed_streams={},
             identities=runtime_fingerprints(
-<<<<<<< HEAD
-                17, match_hypers=match, observation_space=space
-            ),
-        )
-        result = monitor.evaluate_checkpoint(
-=======
                 17, match_config=match, observation_space=space
             ),
         )
         execution = EvalExecution(deadline_unix=time.time() + 360) if shared else None
         result = checkpoint_evaluation.evaluate_checkpoint(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             run,
             {
                 "path": str(checkpoint),
@@ -417,14 +352,6 @@ def test_real_arena_checkpoint_outcomes(
                 stage_id="unused", updates=0, training_seconds=0
             ),
             tmp_path / "arena",
-<<<<<<< HEAD
-            protocol=monitor.MonitorProtocol(
-                deal_seeds=(1910101000,),
-                max_commands=max_commands,
-                # The default per-game budget includes spawning the worker and
-                # loading torch; macOS runners have taken 30s for one
-                # random-opponent game. It guards hangs, not evaluator speed.
-=======
             execution=execution,
             protocol=monitor.MonitorProtocol(
                 deal_seeds=(1910101000,),
@@ -435,7 +362,6 @@ def test_real_arena_checkpoint_outcomes(
                 # Shared games include queue waits and contend with one another;
                 # busy macOS hosts have reached 120s before a terminal result.
                 game_seconds=240 if shared else 120,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 opponent=opponent,
                 comparison_sha256="a" * 64 if opponent == "random" else None,
             ),
@@ -450,11 +376,7 @@ def test_real_arena_checkpoint_outcomes(
             if opponent == "random"
             else "monitoring-not-scientific-evaluation"
         )
-<<<<<<< HEAD
-        assert len(result.rows) == 4
-=======
         assert len(result.rows) == (8 if explicit_matrix else 4)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if max_commands == 1:
             assert result.status == "incomplete"
             assert all(row.failure is not None for row in result.rows)
@@ -473,11 +395,6 @@ def test_real_arena_checkpoint_outcomes(
 
 def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
     manifest = _manifest()
-<<<<<<< HEAD
-    with pytest.raises(FileNotFoundError):
-        monitor.evaluate_checkpoint(
-            TrainingRun.model_construct(id="failed-admission"),
-=======
     match = selected_match()
     run = TrainingRun.model_construct(
         id="failed-admission",
@@ -489,7 +406,6 @@ def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         checkpoint_evaluation.evaluate_checkpoint(
             run,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             manifest.artifact,
             manifest.coordinates,
             tmp_path / "attempt",
@@ -513,16 +429,10 @@ def test_saved_monitor_dashboard_preserves_intervals_and_failed_attempts(
     assert dashboard.rows[0]["monitor/score/lower"] == 0
     assert dashboard.rows[1]["availability/monitor_rates"] is False
     assert "monitor/score/mean" not in dashboard.rows[1]
-<<<<<<< HEAD
-    assert len(default_panels(dashboard)) == 6
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     changed = complete.model_copy(deep=True)
     changed.protocol.deal_seeds = (200,)
     with pytest.raises(ValueError, match="same run"):
         evaluation_dashboard([complete, changed])
-<<<<<<< HEAD
-=======
 
 
 def test_registration_extraction_preserves_frozen_monitor_identity(
@@ -579,4 +489,3 @@ def test_registration_extraction_preserves_frozen_monitor_identity(
         )
     finally:
         torch.set_num_threads(previous_threads)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

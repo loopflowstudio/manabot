@@ -148,10 +148,7 @@ def source_paths() -> list[Path]:
     for relative, suffixes in (
         ("academy", {".py"}),
         ("managym/src", {".rs"}),
-<<<<<<< HEAD
-=======
         ("manabot/managym", {".py", ".pyi"}),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         ("content/semantic/v1", {".json"}),
     ):
         paths.update(
@@ -164,11 +161,7 @@ def source_paths() -> list[Path]:
         "managym/Cargo.lock",
         "managym/Cargo.toml",
         "managym/__init__.py",
-<<<<<<< HEAD
-        "managym/__init__.pyi",
-=======
         "manabot/managym/__init__.pyi",
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "pyproject.toml",
         "scripts/bench_study_branch.py",
         "tests/bench/test_study_branch_benchmark.py",

@@ -4,27 +4,12 @@ import json
 import math
 import random
 
-<<<<<<< HEAD
-import pytest
-
-from manabot.belief.encoding import belief_schema_from_engine
-from manabot.belief.learning import BeliefTrainingExample, pack_belief_examples
-from manabot.belief.likelihood import _matching_offer_indexes
-from manabot.belief.range import BeliefState
-from manabot.belief.state import ViewerHistory
-from manabot.belief.tracker import BeliefTracker
-from manabot.semantic.decision_contract import SemanticDecisionContract
-import managym
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
     SemanticContractError,
 )
 from managym.possible_worlds import PossibleWorldError, PossibleWorldSpace, WorldQuery
-<<<<<<< HEAD
-=======
 import pytest
 
 from manabot.belief.encoding import belief_schema_from_engine
@@ -35,7 +20,6 @@ from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.fixture(scope="module")
@@ -309,17 +293,10 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     import numpy as np
 
     from manabot.env.observation import ObservationEncoder
-<<<<<<< HEAD
-    from manabot.infra.hypers import ObservationSpaceHypers
-
-    obs = learn_root.observation_for_player(0)
-    scalar = ObservationEncoder(ObservationSpaceHypers()).encode(obs)
-=======
     from manabot.infra.config import ObservationConfig
 
     obs = learn_root.observation_for_player(0)
     scalar = ObservationEncoder(ObservationConfig()).encode(obs)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     native = learn_root.encode_observation(obs)
     for key in scalar:
         np.testing.assert_array_equal(scalar[key], native[key], err_msg=key)
@@ -344,15 +321,6 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
             assert row[1] == 1  # hand
             assert row[-2] == 0
     assert retrievals == 3
-<<<<<<< HEAD
-    for hypers in (
-        ObservationSpaceHypers(max_actions=2),
-        ObservationSpaceHypers(max_cards_per_player=len(obs.agent_cards)),
-        ObservationSpaceHypers(max_focus_objects=0),
-    ):
-        with pytest.raises(ValueError, match="capacity exceeded"):
-            ObservationEncoder(hypers).encode(obs)
-=======
     for config in (
         ObservationConfig(max_actions=2),
         ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
@@ -360,22 +328,15 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     ):
         with pytest.raises(ValueError, match="capacity exceeded"):
             ObservationEncoder(config).encode(obs)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     import numpy as np
 
     from manabot.env.observation import ObservationEncoder
-<<<<<<< HEAD
-    from manabot.infra.hypers import ObservationSpaceHypers
-
-    encoder = ObservationEncoder(ObservationSpaceHypers())
-=======
     from manabot.infra.config import ObservationConfig
 
     encoder = ObservationEncoder(ObservationConfig())
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     buffers = encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),

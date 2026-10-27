@@ -8,11 +8,7 @@ use crate::{
 pub const PLAYER_DIM: usize = 40;
 pub const CARD_DIM: usize = 41;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-<<<<<<< HEAD
-pub const PERMANENT_DIM: usize = 27;
-=======
 pub const PERMANENT_DIM: usize = 28;
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 pub const ACTION_TYPE_DIM: usize = 16;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -29,10 +25,7 @@ pub const STEP_DIM: usize = 12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
-<<<<<<< HEAD
-=======
     pub relations: bool,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
@@ -50,17 +43,12 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-<<<<<<< HEAD
-=======
             relations: true,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
     }
 }
 
 impl ObservationEncoderConfig {
-<<<<<<< HEAD
-=======
     pub fn relations_len(&self) -> usize {
         if self.relations {
             super::continuation::RELATION_ROWS * super::continuation::RELATION_DIM
@@ -69,7 +57,6 @@ impl ObservationEncoderConfig {
         }
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub fn cards_len(&self) -> usize {
         self.max_cards_per_player * CARD_DIM
     }
@@ -101,10 +88,7 @@ impl ObservationEncoderConfig {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
-<<<<<<< HEAD
-=======
     pub relations: Vec<f32>,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
     pub agent_player: Vec<f32>,
@@ -127,10 +111,7 @@ pub struct EncodedObservation {
 }
 
 pub struct EncodedObservationMut<'a> {
-<<<<<<< HEAD
-=======
     pub relations: &'a mut [f32],
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
     pub agent_player: &'a mut [f32],
@@ -152,8 +133,6 @@ pub struct EncodedObservationMut<'a> {
     pub events_valid: &'a mut [f32],
 }
 
-<<<<<<< HEAD
-=======
 impl EncodedObservation {
     /// Borrow the owned buffers for repeated encoding without allocating.
     pub fn buffers_mut(&mut self) -> EncodedObservationMut<'_> {
@@ -182,7 +161,6 @@ impl EncodedObservation {
     }
 }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
     Capacity {
@@ -227,10 +205,7 @@ pub fn encode(
     config: &ObservationEncoderConfig,
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
-<<<<<<< HEAD
-=======
         relations: vec![0.0; config.relations_len()],
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
         agent_player: vec![0.0; PLAYER_DIM],
@@ -252,33 +227,7 @@ pub fn encode(
         events_valid: vec![0.0; config.max_events],
     };
 
-<<<<<<< HEAD
-    let out = EncodedObservationMut {
-        semantic_cards: &mut encoded.semantic_cards,
-        known_hand: &mut encoded.known_hand,
-        agent_player: &mut encoded.agent_player,
-        opponent_player: &mut encoded.opponent_player,
-        agent_cards: &mut encoded.agent_cards,
-        opponent_cards: &mut encoded.opponent_cards,
-        agent_permanents: &mut encoded.agent_permanents,
-        opponent_permanents: &mut encoded.opponent_permanents,
-        actions: &mut encoded.actions,
-        events: &mut encoded.events,
-        action_focus: &mut encoded.action_focus,
-        agent_player_valid: &mut encoded.agent_player_valid,
-        opponent_player_valid: &mut encoded.opponent_player_valid,
-        agent_cards_valid: &mut encoded.agent_cards_valid,
-        opponent_cards_valid: &mut encoded.opponent_cards_valid,
-        agent_permanents_valid: &mut encoded.agent_permanents_valid,
-        opponent_permanents_valid: &mut encoded.opponent_permanents_valid,
-        actions_valid: &mut encoded.actions_valid,
-        events_valid: &mut encoded.events_valid,
-    };
-
-    encode_into(obs, config, out)?;
-=======
     encode_into(obs, config, encoded.buffers_mut())?;
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     Ok(encoded)
 }
 
@@ -451,9 +400,6 @@ pub fn encode_into(
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
     }
 
-<<<<<<< HEAD
-    let mut object_to_index: HashMap<i32, i32> = HashMap::new();
-=======
     let mut object_to_index: HashMap<i32, i32> = HashMap::with_capacity(
         2 + obs.agent_cards.len()
             + obs.opponent_cards.len()
@@ -461,7 +407,6 @@ pub fn encode_into(
             + obs.agent_permanents.len()
             + obs.opponent_permanents.len(),
     );
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     let mut current_object_index: i32 = 0;
 
     encode_player_features(
@@ -530,8 +475,6 @@ pub fn encode_into(
         &mut current_object_index,
     );
 
-<<<<<<< HEAD
-=======
     if config.relations {
         super::continuation::encode_into(
             &obs.continuation,
@@ -541,7 +484,6 @@ pub fn encode_into(
         )?;
     }
 
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     encode_actions(
         obs,
         config.max_actions,
@@ -741,10 +683,7 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[22] = bool_to_f32(permanent.keywords.hexproof);
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
     out[25] = bool_to_f32(permanent.keywords.indestructible);
-<<<<<<< HEAD
-=======
     out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
     out[PERMANENT_DIM - 1] = 1.0;
 }
@@ -895,10 +834,7 @@ mod tests {
 
     fn sample_observation() -> Observation {
         Observation {
-<<<<<<< HEAD
-=======
             continuation: Vec::new(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             game_over: false,
             won: false,
             turn: TurnData {
@@ -1113,10 +1049,7 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
-<<<<<<< HEAD
-=======
             temp_subtypes: Vec::new(),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             keywords: KeywordData::default(),
         }
     }
@@ -1131,10 +1064,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 2,
             policy_history: false,
-<<<<<<< HEAD
-=======
             relations: true,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         };
 
         let encoded = encode(&obs, &config).unwrap();
@@ -1248,10 +1178,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 1,
             policy_history: false,
-<<<<<<< HEAD
-=======
             relations: true,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         };
 
         let mut agent_player = vec![0.0; 1];
@@ -1275,10 +1202,7 @@ mod tests {
         let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
-<<<<<<< HEAD
-=======
             relations: &mut [],
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
             agent_player: &mut agent_player,

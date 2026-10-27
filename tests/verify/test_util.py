@@ -11,11 +11,7 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.verify.util import (
     _choice_set_name,
     _policy_action_type_probabilities,
-<<<<<<< HEAD
-    build_hypers,
-=======
     build_verification_config,
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     print_result,
     run_evaluation,
     wilson_lower_bound,
@@ -57,24 +53,6 @@ class FixedLogitAgent:
         return self._logits, torch.zeros((1,), dtype=torch.float32)
 
 
-<<<<<<< HEAD
-class TestBuildHypers:
-    def test_defaults_disable_attention_and_wandb(self):
-        hypers = build_hypers()
-        assert hypers.agent.attention_on is False
-        assert hypers.experiment.wandb is False
-        assert hypers.experiment.device == "cpu"
-
-    def test_nested_overrides_apply(self):
-        hypers = build_hypers(
-            experiment={"seed": 123},
-            train={"num_envs": 7},
-            match={"hero_deck": {"Mountain": 20}},
-        )
-        assert hypers.experiment.seed == 123
-        assert hypers.train.num_envs == 7
-        assert hypers.match.hero_deck == {"Mountain": 20}
-=======
 class TestVerificationConfig:
     def test_defaults_disable_attention(self):
         config = build_verification_config()
@@ -85,7 +63,6 @@ class TestVerificationConfig:
             match={"hero_deck": {"Mountain": 20}},
         )
         assert config.match.hero_deck == {"Mountain": 20}
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class TestWilsonBound:
@@ -102,11 +79,7 @@ class TestWilsonBound:
 
 class TestRunEvaluation:
     def test_seat_balance_restores_original_setup_after_swapped_game(self):
-<<<<<<< HEAD
-        hypers = build_hypers(
-=======
         config = build_verification_config(
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             match={
                 "hero_deck": {"Mountain": 8},
                 "villain_deck": {"Island": 16},
@@ -115,15 +88,9 @@ class TestRunEvaluation:
         )
         metrics = run_evaluation(
             FirstValidAgent(),
-<<<<<<< HEAD
-            ObservationSpace(hypers.observation),
-            Match(hypers.match),
-            Reward(hypers.reward),
-=======
             ObservationSpace(config.observation),
             Match(config.match),
             Reward(config.reward),
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             num_games=4,
             opponent_policy="passive",
             deterministic=True,
@@ -134,23 +101,12 @@ class TestRunEvaluation:
         assert metrics["wins"] == 0
 
     def test_evaluation_returns_expected_keys(self):
-<<<<<<< HEAD
-        hypers = build_hypers(
-            experiment={"seed": 7},
-            train={"num_envs": 1},
-            match={"hero_deck": {"Mountain": 20}, "villain_deck": {"Mountain": 20}},
-        )
-        obs_space = ObservationSpace(hypers.observation)
-        match = Match(hypers.match)
-        reward = Reward(hypers.reward)
-=======
         config = build_verification_config(
             match={"hero_deck": {"Mountain": 20}, "villain_deck": {"Mountain": 20}},
         )
         obs_space = ObservationSpace(config.observation)
         match = Match(config.match)
         reward = Reward(config.reward)
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         metrics = run_evaluation(
             FirstValidAgent(),

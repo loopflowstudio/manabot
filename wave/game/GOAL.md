@@ -41,14 +41,8 @@ and strength claims; Game displays their checkpoints and games without
 re-deriving them. Rules owns legality, hidden information and replay. Academy
 is a client of manabot, and manabot never imports Academy.
 
-<<<<<<< HEAD
-Start from what already exists: one configured trained opponent
-(`ACADEMY_PLAY_CANDIDATE`), the opponent selector, replay, Study forks, and
-advice. Widen each toward the measures above before adding new surfaces.
-=======
 Start from what already exists: the trained-checkpoint opponent selector,
 replay, Study forks, and advice. Widen each toward the measures above before adding new surfaces.
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Limits
 

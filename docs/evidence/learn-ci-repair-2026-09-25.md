@@ -12,11 +12,7 @@ Failed head: `83ca02e8a76b73900c16ac42ba347eafbce79b31`,
   after native preparation, inside the cleanup boundary. A regression test
   checks ordering and cleanup on pack validation failure.
 - Rust's checked semantic v1 receipts bind the pre-Learn source, content and
-<<<<<<< HEAD
-  state hash. The new [v2 corpus](../../conformance/semantic-kernel-v2/) keeps
-=======
   state hash. The new [v2 corpus](../../experiments/data/archive/conformance/semantic-kernel-v2/) keeps
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   the same four seeds, 560 commands and terminal outcomes. Differences are
   limited to source/content digests, state hashes, ten Learn prompt/action-space
   changes and eight `SelectCard` → `LearnDiscard` actions. Historical v1

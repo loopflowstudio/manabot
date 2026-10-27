@@ -17,11 +17,7 @@ from .server import DecisionContext, GameSession
 ROOT = Path(__file__).parents[1]
 SEMANTIC_IR_PATH = ROOT / "content/semantic/v1/generated/two_deck.ir.json"
 DEFAULT_RECEIPT_PATH = (
-<<<<<<< HEAD
-    ROOT / "conformance/authored-match-w9-v1/release-stack-ur-vs-gw-seed-0.json"
-=======
     ROOT / "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json"
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 )
 HISTORICAL_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json"

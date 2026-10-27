@@ -8,20 +8,12 @@ import functools
 import threading
 from typing import TYPE_CHECKING, Any
 
-<<<<<<< HEAD
-from manabot.sim.search_runtime import (
-    RetainedCheckpointRegistration,
-    retained_int7_policy_only_checkpoint,
-)
-from managym.decision import SemanticTransition
-=======
 from managym.decision import SemanticTransition
 
 from manabot.sim.search.runtime import (
     RetainedCheckpointRegistration,
     retained_int7_policy_only_checkpoint,
 )
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 if TYPE_CHECKING:
     from manabot.belief.likelihood import FrozenPolicyLikelihood

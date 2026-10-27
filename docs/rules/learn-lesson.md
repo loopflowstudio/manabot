@@ -26,11 +26,7 @@ retrieval logits distinguish all three UR Lessons, gradients reach the program
 encoder, public knowledge affects inference, and hidden-world substitutions
 preserve the new viewer inputs. This is not a transfer or strength experiment.
 
-<<<<<<< HEAD
-`Trainer.save`, BC/value writers, the ordinary loader, W&B loading and live
-=======
 Regime policy exports, BC/value writers, the ordinary loader, W&B loading and live
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 checkpoint play share `manabot/model/world.py`. Binding includes native world,
 full paired main/sideboard setups, content manifest, rules versions and input
 schema. Compiled matchup checkpoints require the complete program encoder.
@@ -61,11 +57,7 @@ interaction approval remains accepted with its original proof limits.
 
 A confirmed gate blocker is the frozen checkpoint-advice fixture: it records
 action ABI 3 and possible-world ABI 1, whereas the current request uses 6 and 2,
-<<<<<<< HEAD
-with different content, replay and observation identities. `.lf/steps/gate.md`
-=======
 with different content, replay and observation identities. `docs/development/validation.md`
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 explicitly requires preserving failures in frozen advice as blockers. Neither
 historical fixtures nor checkpoint validation were rewritten to conceal that
 mismatch. The broad Python gate returned 813 passed and 30 failed. Ten failures

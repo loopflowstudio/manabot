@@ -16,18 +16,6 @@ import numpy as np
 from pydantic import Field
 import torch
 
-<<<<<<< HEAD
-from manabot.arena.match import selected_decks
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.env.observation import ActionEnum
-from manabot.model.world import validate_agent_setup
-from manabot.sim.flat_mc import ACTION_SPACE_KIND_NAMES, load_checkpoint_agent
-from manabot.training.checkpoint_queue import Attempt, checkpoints
-from manabot.training.execution import atomic_json
-from manabot.training.experiment_execution import ExperimentRun
-from manabot.training.models import Strict, TrainingRun, TrainSelfPlay
-from manabot.training.monitor_evaluation import MonitorResult
-=======
 from manabot.env.observation import ActionEnum
 from manabot.eval.monitor import MonitorResult
 from manabot.experiment.evaluation_queue import Attempt, checkpoints
@@ -41,7 +29,6 @@ from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.action_cases import reorder_objects, reorder_offers
 from manabot.verify.choice_corpus import PACK, Case, collect_choices, input_collisions
 import managym
@@ -155,11 +142,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
                 chunk.maximum_invariance_error for chunk in chunks
             ),
         )
-<<<<<<< HEAD
-    agent, _ = load_checkpoint_agent(str(path))
-=======
     agent, _ = load_checkpoint(str(path))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     configs = [
         managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
     ]
@@ -169,11 +152,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
     probabilities = logits.softmax(-1)
     if not torch.isfinite(probabilities).all() or not torch.isfinite(values).all():
         raise ValueError("nonfinite frozen checkpoint output")
-<<<<<<< HEAD
-    restored, _ = load_checkpoint_agent(str(path))
-=======
     restored, _ = load_checkpoint(str(path))
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     loaded_logits, loaded_values = restored(batch)
     errors = [
         float((loaded_logits.softmax(-1) - probabilities).abs().max()),
@@ -418,15 +397,6 @@ def report_baseline(directory: Path) -> BaselineReport:
                 )
         report.families = family_changes(report.policies[0], report.policies[-1])
         exposure: dict[int, ActionExposure] = {}
-<<<<<<< HEAD
-        for stage in run.stages:
-            for diagnostic in stage.diagnostics:
-                for group in diagnostic.get("selection_groups", []):
-                    kind = group["action_type"]
-                    total = exposure.setdefault(kind, ActionExposure(action_type=kind))
-                    total.collected += group["rows"]
-                    total.retained += group["retained"]
-=======
         rows = stage_rows(run, read_updates(Path(attempt.path), [run]))
         for row in (row for stage in rows.values() for row in stage):
             for name, count in row.items():
@@ -441,7 +411,6 @@ def report_baseline(directory: Path) -> BaselineReport:
                     total.collected += count
                 else:
                     total.retained += count
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         report.exposure = [exposure[key] for key in sorted(exposure)]
         if sum(item.retained for item in report.exposure) == 0:
             raise ValueError("no observed training rows retained by learner")

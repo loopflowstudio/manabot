@@ -18,11 +18,6 @@ from pathlib import Path
 import re
 from typing import Any, Literal, TypeAlias
 
-<<<<<<< HEAD
-from pydantic import Field, model_validator
-
-=======
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.experience import (
     Command,
     ExperienceFrame,
@@ -32,10 +27,7 @@ from managym.experience import (
     UInt8,
     UInt64,
 )
-<<<<<<< HEAD
-=======
 from pydantic import Field, model_validator
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 CANONICAL_REPLAY_VERSION: Literal[1] = 1
 ADDRESS_PREFIX = "erd1."
@@ -141,15 +133,11 @@ class ReplayDecision(ProtocolModel):
         projection = self.frame.projection
         if projection.agent.player_index != self.viewer:
             raise ValueError("decision frame is not oriented to its acting viewer")
-<<<<<<< HEAD
-        if projection.opponent.hand or projection.opponent.sideboard:
-=======
         if (
             projection.opponent.hand
             or projection.opponent.sideboard
             or projection.opponent.inspected
         ):
->>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             raise ValueError(
                 "decision frame exposes opponent-private hand identities or sideboard candidates"
             )
