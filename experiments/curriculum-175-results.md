@@ -38,6 +38,63 @@ The earlier U/E snapshot remains in `early-outcomes.json`. U/E jobs have now
 succeeded; M was still delivering its completion receipt at the observation.
 Delivered valid games are retained independently of that operational status.
 
+## How the curricula changed actual game selection
+
+This matched training diagnostic uses updates **393–400**, read from retained
+Etude metrics at 2026-10-27T12:00:21Z (M) and 12:00:32Z (E). It is a later
+training window than the update-200 strength evaluation above. Each game start
+is counted once by its ordered anchor pairing; both seats still learn. These
+are observed allocation/exposure diagnostics, not additional evaluation games.
+
+After the initial 200-stratum sweep, both adapters reserve every fifth start
+for shuffled coverage. Remaining starts randomize one-quarter age refresh and
+three-quarters priority: approximately **20% coverage, 20% age, 60% priority**.
+M ranks supported pairings by proximity to 33/67 or 67/33 self-play outcomes;
+E ranks unnormalized value-target residuals. These are training-policy signals,
+not heuristic-evaluation scores. Priority is rank-based, capped at 5% per cell.
+
+| Observed allocation, updates 393–400 | M: 66/33 preference | E: value error |
+|---|---:|---:|
+| Physical game starts | 2,136 | 2,178 |
+| Priority / coverage / age starts | 58.7% / 20.0% / 21.3% | 59.1% / 20.0% / 20.8% |
+| Ordered pairings with at least one start | 100 / 100 | 100 / 100 |
+| Share of starts in the ten most-used pairings | 15.87% | 27.87% |
+| Games involving red-green on either side | 18.73% | 32.92% |
+| Learner decisions belonging to red-green | 5.68% | 11.90% |
+| Latest priority mass on its ten highest-priority cells | 26.27% | 41.67% |
+
+The ten most-used pairings are selected separately from each observed window;
+this is descriptive concentration, not a significance test against uniform.
+The final row instead describes the priority distribution frozen at update 400,
+not the realized start distribution across the window. Game starts and learner
+decisions have different denominators because games/roles yield different
+numbers of decisions: total learner decisions were 395,455 (M) and 345,399 (E).
+
+For M, black-red versus red-white had smoothed self-play win probability 33.05%
+and its reverse 66.95%; each received the maximum **5% priority weight** at
+update 400. They received 48 and 39 starts, respectively (2.25% and 1.83% of
+all recent starts). Only 46 of 100 cells had the required 20 completed roles
+per seat in the recent teacher window; unsupported cells retained neutral
+pre-cap priority rather than being treated as balanced or easy.
+
+For E, red-green versus blue-red and blue-green received 81 and 80 starts
+(3.72% and 3.67%). The red-green mirror illustrates signal disagreement: its
+smoothed outcome is exactly 50/50, so M gives it only **0.250% priority weight**,
+while E gives it **5.000%** because its residual is high. Actual mirror starts
+were 1.17% under M and 3.21% under E; safeguards and changing weights explain
+why the realized shares differ from the latest priority weights.
+
+Thus E is currently concentrating game starts more strongly, particularly on
+red-green pairings. That demonstrates changed sampling, not useful learning:
+high residual can reflect prediction difficulty or variance. The strength
+comparison, final costs and combined arm are still needed.
+
+Raw selected update rows, per-cell counts/weights, immutable block keys and the
+exact analysis source are published in
+`experiments/data/curriculum-175/distribution-400/m.json` and `e.json`.
+Per-update assignment counts reconcile with cumulative sampler starts after the
+window's first row, and role exposure totals reconcile with residual-row counts.
+
 ## Initial-policy evidence
 
 The common initial policy's held-out evaluation delivered **1,600 valid games

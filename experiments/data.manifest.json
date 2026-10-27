@@ -894,6 +894,14 @@
    "sha256": "faa2cf9713a08921e499376b9f8bfaffb02ad8037144814f3357f5c9524f0d28",
    "bytes": 267691
   },
+  "experiments/data/curriculum-175/distribution-400/e.json": {
+   "sha256": "265e4ea6d39c708fdbadf440b1f6303671164f44066d8ebe623f4d3b67212f61",
+   "bytes": 2636253
+  },
+  "experiments/data/curriculum-175/distribution-400/m.json": {
+   "sha256": "10402b139909e8479ea3dd4705f9512290663cb978e4ace69a9bd00746f54a09",
+   "bytes": 2614178
+  },
   "experiments/data/curriculum-175/initial-evaluation/operations.json": {
    "sha256": "4243717944b87503caba87a495a8bc9309f008b63fca6d1a680678326f3318bb",
    "bytes": 78208
