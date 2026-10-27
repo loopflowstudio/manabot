@@ -316,9 +316,8 @@ class InferenceRuntime:
         except queue.Full:
             self.fail("inference shutdown queue saturated")
         self.process.join(timeout=min(5, self.execution.remaining()))
-        if self.process.is_alive():
-            self.process.kill()
-            self.process.join()
+        self.process.kill()
+        self.process.join()
         self._reader.join(timeout=1)
         try:
             self._outgoing.put_nowait(None)

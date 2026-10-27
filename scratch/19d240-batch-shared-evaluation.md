@@ -177,6 +177,8 @@ second CPU engine before rental counters show a saturated CPU service.
 
 ## Delete — do not maintain
 
+All removed as of `c6c8f4c87`; no deletion target remains.
+
 - `PolicyKey` matchup/content-suite fields in `input_binding`.
 - Per-key `.to(device)` loops in `PolicyInference.prepare` and `_infer`'s
   non-catalog branch (one packed transfer replaces both).
@@ -302,6 +304,7 @@ still unmeasured.
 
 ## Check result
 
+Compress, 2026-10-27: `InferenceRuntime.close` relies on `ChildProcess.kill`'s liveness guard; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 24 passed, 1 skipped.
 Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
 
 Open for gate: the two
