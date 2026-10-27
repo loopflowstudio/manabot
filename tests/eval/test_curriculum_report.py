@@ -2,24 +2,31 @@
 
 import hashlib
 from pathlib import Path
+import shutil
 
+from duckdb import DuckDBPyConnection
 from etude.eval.match import Tables
+from etude.eval.query import statsdb
 from etude.eval.records import (
-    Agent,
-    AgentKey,
     Benchmark,
     CheckpointKey,
+    CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
+    MatchRecord,
     Matchup,
+    Model,
     Version,
     digest,
 )
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
-from etude.run.storage import DirectoryStorage
+from etude.run.storage import DirectoryStorage, Storage
 import pytest
 
+from experiments import curriculum_report
 from experiments.curriculum_report import (
     ARMS,
     Arm,
@@ -133,7 +140,7 @@ def test_shared_deal_noise_cancels_from_paired_contrasts() -> None:
 def _fixture_play(match: Match) -> Tables:
     # Controlled outcomes, never inference or training on the fixture bytes.
     rows = _results(_schedule())
-    arm = next(arm for arm in ARMS if arm == match.agents[0].name)
+    arm = next(arm for arm in ARMS if arm == match.players[0].name)
     selected = rows[arm]
     if match.conditions.get("invalid"):
         selected = [
@@ -150,24 +157,26 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
 ) -> None:
     source = DirectoryStorage(tmp_path / "tracking")
     world = Environment(name="fixture-world", files=digest("world"))
-    anchor = Agent(
-        key=AgentKey(code="heuristic"),
-        name="heuristic",
-        version=Version(source=digest("anchor")),
+    anchor = Code.model_validate(
+        {"name": "heuristic", "version": {"source": digest("anchor")}}
     )
-    policies: dict[Arm, Agent] = {}
+    policies: dict[Arm, Model] = {}
     for arm in ARMS:
         path = tmp_path / f"{arm}.pt"
         body = f"identity fixture {arm}; not a policy".encode()
         path.write_bytes(body)
-        policies[arm] = Agent(
-            key=AgentKey(checkpoint=CheckpointKey(run=f"train-{arm}", name="u0.pt")),
+        policies[arm] = Model(
             name=arm,
-            version=Version(source=digest("inference")),
-            artifact=ArtifactRef(
-                uri=path.as_uri(),
-                sha256=hashlib.sha256(body).hexdigest(),
-                size_bytes=len(body),
+            inference=Inference.model_validate(
+                {"version": {"source": digest("inference")}}
+            ),
+            checkpoint=CheckpointRef(
+                key=CheckpointKey(run=f"train-{arm}", name="u0.pt"),
+                artifact=ArtifactRef(
+                    uri=path.as_uri(),
+                    sha256=hashlib.sha256(body).hexdigest(),
+                    size_bytes=len(body),
+                ),
             ),
         )
     tournament = Benchmark(
@@ -204,7 +213,11 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
     )
     changed = dict(policies)
     changed["M"] = policies["M"].model_copy(
-        update={"version": Version(source=digest("changed"))}
+        update={
+            "inference": policies["M"].inference.model_copy(
+                update={"version": Version(source=digest("changed"))}
+            )
+        }
     )
     with pytest.raises(ValueError, match="identity mismatch"):
         load_games(
@@ -220,11 +233,14 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
         )
 
     changed_artifact = dict(policies)
-    assert policies["U"].artifact is not None
     changed_artifact["U"] = policies["U"].model_copy(
         update={
-            "artifact": policies["U"].artifact.model_copy(
-                update={"sha256": digest("other bytes")}
+            "checkpoint": policies["U"].checkpoint.model_copy(
+                update={
+                    "artifact": policies["U"].checkpoint.artifact.model_copy(
+                        update={"sha256": digest("other bytes")}
+                    )
+                }
             )
         }
     )
@@ -292,6 +308,48 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
         compare(_schedule(), invalid_rows, seed=1, replicates=8).coverage["U"].invalid
         == 6
     )
+
+
+def test_curriculum_reader_preserves_retained_025_players_and_native_seats(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = Path(__file__).parents[1] / "fixtures/etude_sdk_025/elemental"
+    store = tmp_path / "store"
+    shutil.copytree(fixture, store)
+    retained = {path: path.read_bytes() for path in store.rglob("*") if path.is_file()}
+    root = store / "mtg183-eval"
+    match = next(
+        record.match
+        for path in (root / "matches").glob("*.json")
+        if (record := MatchRecord.model_validate_json(path.read_bytes()))
+        and record.match.players[0].name == "u000000"
+        and isinstance(record.match.players[1], Code)
+    )
+    model, anchor = match.players
+    assert isinstance(model, Model) and isinstance(anchor, Code)
+    world = Environment.model_validate_json((root / "environment.json").read_bytes())
+
+    def legacy_database(experiment: str, source: Storage) -> DuckDBPyConnection:
+        assert experiment == "curriculum_adapters"
+        db = statsdb("mtg183-elemental-eval", source)
+        # This real pre-campaign fixture has no tournament. Give only its
+        # disposable SQL projection the selection label; retained bytes stay put.
+        db.execute("update runs set tournament = 'held-out'")
+        return db
+
+    monkeypatch.setattr(curriculum_report, "statsdb", legacy_database)
+    rows = load_games(
+        DirectoryStorage(store),
+        {"U": model},
+        anchor=anchor,
+        environment=world,
+        tournament="held-out",
+    )
+    assert len(rows["U"]) == match.games
+    assert {row.model_seat for row in rows["U"]} == {0, 1}
+    assert all(row.score == 1.0 and row.valid for row in rows["U"])
+    assert all(not rows[arm] for arm in ("M", "E", "ME"))
+    assert all(path.read_bytes() == content for path, content in retained.items())
 
 
 def test_deck_and_seat_strata_keep_equal_cell_weights_and_missing_games() -> None:

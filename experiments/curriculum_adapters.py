@@ -25,7 +25,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from etude.eval.records import Benchmark, Matchup, Model
+from etude.eval.records import Benchmark, Inference, Matchup
 from etude.experiment import Checkpoint, ExperimentState
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
@@ -38,7 +38,7 @@ from experiments.elemental_long import REGIME, recipe as elemental_recipe
 from experiments.elemental_long_eval import (
     INFERENCE_CODE,
     eval_environment,
-    heuristic_agent,
+    heuristic_code,
     play,
     rows,
 )
@@ -62,7 +62,7 @@ CONTROL = load_control()
 INITIAL = CONTROL.initial
 MONITOR = "curriculum-development"
 FINAL = "curriculum-held-out"
-MODEL = Model(code=list(INFERENCE_CODE))
+INFERENCE = Inference(source=list(INFERENCE_CODE))
 # CPU jobs queue behind existing work. No paid evaluation on-demand is selected.
 EVAL_WORKERS = 1
 EVAL_HOURS = 6.0
@@ -136,7 +136,7 @@ def _benchmark(held_out: bool) -> Benchmark:
             Matchup(
                 name="held-out grid" if held_out else "development grid",
                 tags=("held-out" if held_out else "development", "heuristic"),
-                players=(MODEL, heuristic_agent()),
+                players=(INFERENCE, heuristic_code()),
                 conditions=tuple(row.model_dump(mode="json") for row in conditions),
                 games=per_match,
             ),
