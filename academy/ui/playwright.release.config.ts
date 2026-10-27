@@ -10,7 +10,7 @@ const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.m
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'trigger-order.spec.ts'],
+  testMatch: ['decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'trigger-order.spec.ts'],
   outputDir,
   timeout: 120_000,
   fullyParallel: false,

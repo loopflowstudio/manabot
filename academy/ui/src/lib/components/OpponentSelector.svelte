@@ -47,12 +47,12 @@
   );
 </script>
 
-<div class="flex flex-wrap items-end gap-3">
-  <label class="flex flex-col gap-1.5">
+<div class="flex min-w-0 max-w-full flex-wrap items-end gap-3">
+  <label class="flex min-w-0 max-w-full flex-col gap-1.5">
     <span class="type-label text-ink-2">Opponent</span>
     <select
       data-testid="opponent-select"
-      class="max-w-[28rem] rounded border border-line bg-field px-3 py-2"
+      class="w-full min-w-0 max-w-[28rem] rounded border border-line bg-field px-3 py-2"
       {value}
       {disabled}
       aria-describedby="opponent-details"
@@ -80,7 +80,7 @@
       {/if}
     </select>
   </label>
-  <p id="opponent-details" data-testid="opponent-details" class="type-caption text-ink-2">
+  <p id="opponent-details" data-testid="opponent-details" class="type-caption min-w-0 break-words text-ink-2">
     {#if details}{details}{:else if catalogError}{catalogError}{:else if !trained.length}No trained checkpoints found.{/if}
   </p>
 </div>

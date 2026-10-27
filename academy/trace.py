@@ -109,7 +109,7 @@ class TraceEvent:
     # Authoritative semantic beats caused by this exact engine step. Live play,
     # replay, and the decision-inspector seam consume these same persisted
     # objects; no consumer reconstructs them from observation differences.
-    # True when the server auto-passed this priority window (stops system /
+    # True when the server advanced a forced action or passed priority (stops /
     # F6), False for explicit Commands, including declared validation prefixes.
     # Competency metrics must also use record origin; False alone is not human
     # provenance and auto-passes are never deliberate passes.

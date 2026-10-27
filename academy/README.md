@@ -81,10 +81,12 @@ its objects' pages without submitting a choice. Public mana
 pools, Lesson restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.
 
-Academy constructs the native environment with `skip_trivial=False`. Sole legal
-mana colors and payment continuations remain explicit and recoverable. Priority
-stop/F6 automation runs through recorded authority Commands and remains labeled
-as automation. This uses the existing native execution setting; training defaults,
+Academy constructs the native environment with `skip_trivial=False`. With
+automation enabled, sole legal actions for either seat advance through recorded
+authority Commands and appear as **Auto** in the decision log. Disable
+**Advance forced steps and use priority stops** to inspect each forced prompt.
+Priority stop/F6 automation also retains its Commands and automation labels.
+This uses the existing native execution setting; training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
@@ -189,9 +191,14 @@ original command bindings.
 
 ## Elemental roster
 
-Both deck selectors include all ten exact Elemental setups from the additive
-`elemental-world-v2` pack, including mirrors and either seat order. Their
-40-card main lists, Lesson pools, local treatments and retained card-identity
+The shared deck browser assigns either seat from all ten exact Elemental setups
+in the additive `elemental-world-v2` pack, including mirrors. Browse the main
+lists and Lesson pools, click cached card artwork for a printed preview, then
+use the assignment buttons to choose each seat. During play, **Choose decks**
+prepares the next matchup; only **New Game** replaces the current attempt.
+The [local MTG-183 launcher](../docs/local-trained-challenger.md#ten-deck-elemental-play-against-mtg-183)
+pins the latest published checkpoint for CPU play and populates the art cache.
+The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at
 `academy/ui/src/lib/packs/elemental-world/v2/manifest.json`. Native compiled setups
 validate every row. A roster manifest chooses a default pair from those rows;
