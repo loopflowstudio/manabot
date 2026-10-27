@@ -122,7 +122,7 @@ def verify(games: int, out: Path) -> dict[str, int | float | str]:
 
 
 def print_data(data: CardData) -> None:
-    subjects = ", ".join(data.subjects.values()) or "every agent"
+    subjects = ", ".join(data.subjects.values()) or "every player"
     print(
         f"{data.selection.experiment}: {subjects}; {data.games} games, "
         f"{data.deals} deals, {len(data.runs)} runs"

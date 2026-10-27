@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+from typing import Literal
 
 from etude.eval.match import Tables
 from etude.eval.records import Match
@@ -22,7 +23,7 @@ from experiments.elemental_long_eval import (
     EvalState,
     SegmentSource,
     admit,
-    checkpoint_agent,
+    checkpoint_model,
     done_keys,
     follow,
     game_rows,
@@ -148,15 +149,15 @@ def test_units_play_the_frozen_schedules_one_match_per_deck(tmp_path: Path) -> N
     assert deals(subset) == sorted(g.deal for g in schedule() if g.index < 10)
     assert deals(pair) == sorted(g.deal for g in h2h_schedule())
     # The heuristic is player 1 of every grid; the older checkpoint of every pair.
-    assert {m.agents[1].name for m in full.matches} == {"heuristic"}
-    assert {(m.agents[0].name, m.agents[1].name) for m in pair.matches} == {
+    assert {m.players[1].name for m in full.matches} == {"heuristic"}
+    assert {(m.players[0].name, m.players[1].name) for m in pair.matches} == {
         ("u000050", "u000000")
     }
 
 
-def test_agent_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
+def test_model_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
     state = _state(tmp_path, (0,), None)
-    local = checkpoint_agent(state.checkpoints[0])
+    local = checkpoint_model(state.checkpoints[0])
     moved = state.checkpoints[0].model_copy(
         update={
             "artifact": state.checkpoints[0].artifact.model_copy(
@@ -164,7 +165,7 @@ def test_agent_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
             )
         }
     )
-    assert checkpoint_agent(moved).key == local.key
+    assert checkpoint_model(moved).key == local.key
 
 
 def test_failed_group_is_stored_as_invalid_games(
@@ -178,9 +179,11 @@ def test_failed_group_is_stored_as_invalid_games(
     one = first.model_copy(
         update={"groups": (first.groups[0].model_copy(update={"deals": (1,)}),)}
     )
-    match = Match(agents=unit.matches[0].agents, conditions=one.model_dump(mode="json"))
+    match = Match(
+        players=unit.matches[0].players, conditions=one.model_dump(mode="json")
+    )
     games = play(match)["games"]
-    assert [(row["player"], row["valid"], row["score"]) for row in games] == [
+    assert [(row["seat"], row["valid"], row["score"]) for row in games] == [
         (0, False, None),
         (1, False, None),
     ]
@@ -188,11 +191,12 @@ def test_failed_group_is_stored_as_invalid_games(
     assert list((tmp_path / "arena" / match.key).glob("attempt-*/failed.txt"))
 
 
-def test_game_rows_mirror_each_game_for_both_players() -> None:
+@pytest.mark.parametrize("game_seat", [0, 1])
+def test_game_rows_mirror_each_game_for_both_players(game_seat: Literal[0, 1]) -> None:
     row = GameRow(
         model_deck="elemental_ur",
         heuristic_deck="elemental_bg",
-        model_seat=1,
+        model_seat=game_seat,
         deal=7,
         score=1.0,
         valid=True,
@@ -204,8 +208,18 @@ def test_game_rows_mirror_each_game_for_both_players() -> None:
         seconds=1.5,
     )
     first, second = game_rows([row], "full")
-    assert (first["deck"], first["seat"], first["score"]) == ("elemental_ur", 1, 1.0)
-    assert (second["deck"], second["seat"], second["score"]) == ("elemental_bg", 0, 0.0)
+    assert (first["deck"], first["seat"], first["game_seat"], first["score"]) == (
+        "elemental_ur",
+        0,
+        game_seat,
+        1.0,
+    )
+    assert (second["deck"], second["seat"], second["game_seat"], second["score"]) == (
+        "elemental_bg",
+        1,
+        1 - game_seat,
+        0.0,
+    )
     assert first["unit"] == second["unit"] == "full"
 
 
