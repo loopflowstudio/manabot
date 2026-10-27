@@ -90,6 +90,7 @@ fixtures['_shared_fixture'](root, llm_failure=True)
   assert.deepEqual(missing.runs, []);
   assert.ok(missing.inference_performance.attempts.every(a => a.run === null && a.observed_status === 'unknown' && a.evidence_status === 'unavailable'));
   await page.goto(`file://${join(directory, 'missing', 'report.html')}`);
+  await page.getByText(/declared attempts and their evidence status/).click();
   await page.locator('#attempt-policy-1').waitFor();
   assert.match(await page.locator('#attempt-policy-1').innerText(), /declared completed.*evidence unavailable.*observed unknown/);
   assert.equal(await page.getByRole('link', {name: 'Linked measurements'}).count(), 0);
@@ -135,6 +136,7 @@ fixtures['_shared_fixture'](root, llm_failure=True)
   }
 
   await page.goto(`file://${join(directory, 'mixed', 'report.html')}`);
+  await page.getByText(/declared attempts and their evidence status/).click();
   const llm = page.locator('[data-inference-receipt]');
   await llm.waitFor();
   assert.equal(await page.getByRole('heading', {name: 'Shared allocation allocation-1 · charged once'}).count(), 1);
@@ -153,6 +155,7 @@ fixtures['_shared_fixture'](root, llm_failure=True)
   assert.equal(await page.evaluate(() => location.hash), '#attempt-llm-1');
   assert.match(await llm.innerText(), /4\/4 selections.*3\/3 committed Commands.*0 replay-verified games/);
   assert.match(await llm.innerText(), /1 initial.*1 repaired.*1 fallback.*1 failed selections/);
+  await llm.getByText('Timing definitions, full measurements and evidence', {exact: true}).click();
   assert.match(await llm.innerText(), /p95 2.000000 s/);
   assert.match(await llm.innerText(), /inclusive cost.*unavailable/s);
   assert.match(await page.locator('#perf-body').innerText(), /policy-cuda.*unattempted.*unavailable/);

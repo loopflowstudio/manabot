@@ -107,3 +107,18 @@ Bounded new measurements use the [inference baseline runner](../inference_baseli
 Its manifest links the frozen protocol, whole-attempt boundaries and child cleanup,
 including failures before a game exists. Retained-input diagnostics keep their
 byte-pinned witnesses without creating evaluation rows or game throughput.
+
+Reasoning-enabled Qwen versus checkpoint games use this same reader and Perf
+page. A `qwen-v-checkpoint` summary adds an outcome card, exclusive game-host
+time shares and model-specific latency boundaries. Policy encoding and inference,
+native commands, rendering, replay, writes and unattributed time remain separate.
+Nested Qwen worker phases are shown below their host wait, never added to it.
+A sequence's `games.json` includes the entire plan so absent games stay visible;
+only games with final timing summaries contribute to the exclusive breakdown.
+Raw receipts, latency definitions and evidence inventories are under disclosures.
+
+The MTG-188 campaign protocol is `experiments/protocols/qwen-mtg183-188.md`.
+Download its output metadata and per-game archives, extract each archive beside
+`games.json`, then pass that directory as `--llm-receipt`. Keep `results.json`
+and the original archives as evidence. The builder does not extract archives,
+fetch model bytes, run a game or infer settled billing from elapsed time.

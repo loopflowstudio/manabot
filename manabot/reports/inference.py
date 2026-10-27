@@ -80,7 +80,7 @@ class _InferenceIdentity(_HistoricalRecord):
     deadline_seconds: Seconds
     fallback_seed: int
     decoding: Literal["greedy"]
-    enable_thinking: Literal[False] | None = None
+    enable_thinking: bool | None = None
 
 
 class _Selection(_HistoricalRecord):
@@ -119,6 +119,15 @@ class _Summary(_HistoricalRecord):
     replay_matches: bool
     decision_seconds_median: Seconds | None = None
     observations: dict[str, Seconds] = Field(default_factory=dict)
+    mode: str | None = None
+    winner: int | None = None
+    opponent_latencies: list[Seconds] = Field(default_factory=list)
+    reasoning_tokens: Count = 0
+    answer_tokens: Count = 0
+    output_tokens: Count = 0
+    token_split_attempts: Count = 0
+    generation_attempts: Count = 0
+    llm_phases: dict[str, Seconds] = Field(default_factory=dict)
 
 
 class _Command(_HistoricalRecord):
@@ -864,6 +873,7 @@ def project_llm(root: Path) -> dict[str, Any]:
             observed_status = "completed"
     return {
         "identity": evidence_identity(game_files),
+        "matchup": _matchup(summary, config, valid_game),
         "label": root.name,
         "observed_status": observed_status,
         "failure": summary.failure if summary else None,
@@ -907,6 +917,65 @@ def project_llm(root: Path) -> dict[str, Any]:
 class _GameSequence(_HistoricalRecord):
     version: Literal["llm-game-sequence-v1"]
     games: list[Annotated[str, Field(pattern=r"^game-[0-9]{3}$")]] = Field(min_length=1)
+
+
+def _matchup(
+    summary: _Summary | None, config: dict[str, JsonValue] | None, valid: bool
+) -> dict[str, Any] | None:
+    """Explicit same-game host accounting; never infer simulation from remainder."""
+    if summary is None or summary.mode != "qwen-v-checkpoint" or config is None:
+        return None
+    won = valid and summary.winner == config.get("model_seat")
+    draw = valid and summary.winner not in (0, 1)
+    return {
+        "games": 1,
+        "valid": int(valid),
+        "wins": int(won),
+        "draws": int(draw),
+        "losses": int(valid and not won and not draw),
+        "game_seconds": summary.game_seconds,
+        "exclusive": summary.observations,
+        "policy_samples": summary.opponent_latencies,
+        "policy_latency": asdict(
+            _distribution(summary.opponent_latencies, len(summary.opponent_latencies))
+        ),
+        "llm_phases": summary.llm_phases,
+        "reasoning_tokens": summary.reasoning_tokens,
+        "answer_tokens": summary.answer_tokens,
+        "output_tokens": summary.output_tokens,
+        "token_split_attempts": summary.token_split_attempts,
+        "generation_attempts": summary.generation_attempts,
+    }
+
+
+def _combine_matchups(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    matchups = [p["matchup"] for p in parts if p.get("matchup") is not None]
+    if not matchups:
+        return None
+    result = {
+        key: sum(m[key] for m in matchups)
+        for key in (
+            "games",
+            "valid",
+            "wins",
+            "draws",
+            "losses",
+            "game_seconds",
+            "reasoning_tokens",
+            "answer_tokens",
+            "output_tokens",
+            "token_split_attempts",
+            "generation_attempts",
+        )
+    }
+    for key in ("exclusive", "llm_phases"):
+        names = set.intersection(*(set(m[key]) for m in matchups))
+        # Missing a timer in any game is unavailable, not a zero contribution.
+        result[key] = {name: sum(m[key][name] for m in matchups) for name in names}
+    samples = [v for m in matchups for v in m["policy_samples"]]
+    result["policy_samples"] = samples
+    result["policy_latency"] = asdict(_distribution(samples, len(samples)))
+    return result
 
 
 def _project_llm_sequence(root: Path) -> dict[str, Any]:
@@ -1030,6 +1099,19 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
         readiness_seconds,
         "spawn/runtime construction/ready IPC; charged once, outside all game windows",
     )
+    if "policy_cpu_seconds" in readiness:
+        seconds = readiness["policy_cpu_seconds"]
+        if (
+            not isinstance(seconds, (int, float))
+            or not math.isfinite(seconds)
+            or seconds < 0
+        ):
+            raise ValueError("invalid policy readiness")
+        measure(
+            "policy_readiness",
+            seconds,
+            "checkpoint verification and CPU load, once outside games",
+        )
     walls = [p["metrics"]["game_wall"]["value"] for p in parts]
     measure(
         "game_wall",
@@ -1045,6 +1127,7 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
     metrics["inclusive_cost"]["unit"] = "USD"
     files = inventory(root)
     return {
+        "matchup": _combine_matchups(parts),
         "identity": hashlib.sha256(
             json.dumps([p["identity"] for p in parts]).encode()
         ).hexdigest(),

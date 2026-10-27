@@ -1102,3 +1102,57 @@ def test_device_samples_retain_uuid_and_declared_interval(tmp_path: Path) -> Non
     assert memory["device_uuid"] == "GPU-fixture"
     assert memory["sample_interval_seconds"] == 1
     assert memory["peak_used_bytes"] == 20 * 1024**2
+
+
+def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "sequence"
+    for i in range(2):
+        game = _fixture(root / f"game-{i:03d}") / "game"
+        path = game / "summary.json"
+        summary = json.loads(path.read_text())
+        summary.update(
+            mode="qwen-v-checkpoint",
+            winner=i,
+            opponent_latencies=[0.01, 0.03],
+            observations={
+                "llm_wait_and_dispatch": 12.0,
+                "native_command": 3.0,
+                "policy_inference": 0.04,
+                "unattributed": 4.96,
+            },
+            llm_phases={"generation_seconds": 10.0},
+            reasoning_tokens=30,
+            answer_tokens=3,
+            output_tokens=40,
+            token_split_attempts=5,
+            generation_attempts=5,
+        )
+        _write(path, summary)
+        for selection in game.glob("decision-*/selection.json"):
+            data = json.loads(selection.read_text())
+            data["config"]["enable_thinking"] = True
+            _write(selection, data)
+    _write(
+        root / "games.json",
+        {
+            "version": "llm-game-sequence-v1",
+            "games": ["game-000", "game-001", "game-002"],
+        },
+    )
+    _write(root / "readiness.json", {"seconds": 4.0, "policy_cpu_seconds": 0.2})
+    projection = project_llm(root)
+    matchup = projection["matchup"]
+    assert projection["observed_status"] == "partial"
+    assert projection["coverage"]["planned_games"] == 3
+    assert (matchup["wins"], matchup["losses"], matchup["valid"]) == (1, 1, 2)
+    assert sum(matchup["exclusive"].values()) == matchup["game_seconds"] == 40
+    assert matchup["llm_phases"]["generation_seconds"] == 20
+    assert matchup["policy_latency"]["n"] == 4
+    assert matchup["policy_latency"]["p50"] == 0.01
+    assert projection["metrics"]["worker_readiness"]["value"] == 4
+    assert projection["metrics"]["policy_readiness"]["value"] == 0.2
+    path = write_report([], [root], tmp_path / "report")
+    assert _report(path)["question"] == "Where does evaluation time go?"
+    assert _report(path)["inference_performance"]["runs"][0]["matchup"] == matchup

@@ -89,8 +89,9 @@ class PolicyChoice:
 class CheckpointOpponent:
     """One resident CPU policy; tensor offers bind back to native Commands.
 
-    Admission and loading happen once outside the game window. The complete
-    native offer space must fit the checkpoint encoder; truncation fails closed.
+    Loading happens once outside the game window; setup admission repeats for
+    each game and remains in its unattributed host overhead. The complete native
+    offer space must fit the checkpoint encoder; truncation fails closed.
     """
 
     def __init__(self, path: Path, sha256: str, size: int) -> None:

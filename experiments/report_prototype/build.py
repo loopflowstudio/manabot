@@ -261,6 +261,16 @@ def write_report(
         experiment["context"]["caveat"] = (
             "LLM and policy workloads are separate cohorts, never a speedup ratio. Missing startup, warmup and billing remain unavailable."
         )
+        if len(llm_receipts) == 1 and llm_receipts[0].projection.get("matchup"):
+            projection = llm_receipts[0].projection
+            experiment["title"] = "Qwen reasoning vs MTG-183"
+            experiment["question"] = "Where does evaluation time go?"
+            experiment["context"]["world"] = "Elemental v2 · retained native Command replay"
+            experiment["context"]["device"] = "Qwen GPU · policy CPU, one thread"
+            experiment["context"]["caveat"] = (
+                "Same-game time accounting; different models and hardware. "
+                "Outcome coverage, fallbacks and unattempted games remain visible."
+            )
     payload = json.dumps({"experiments": [experiment]}, allow_nan=False)
     (out / "data.js").write_text("window.REPORT=" + payload + ";\n")
     (out / "data.json").write_text(payload + "\n")
