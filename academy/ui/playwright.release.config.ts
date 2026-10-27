@@ -10,7 +10,7 @@ const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.m
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts'],
+  testMatch: ['decision-surface.spec.ts', 'learn.spec.ts', 'combat-presentation.spec.ts', 'choice-navigation.spec.ts', 'elemental-world.spec.ts', 'deck-browser.spec.ts', 'trigger-order.spec.ts'],
   outputDir,
   timeout: 120_000,
   fullyParallel: false,
@@ -27,7 +27,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `uv run --active --no-sync uvicorn academy.server:app --host 127.0.0.1 --port ${apiPort}`,
+      command: `uv run --active --no-sync python -m uvicorn trigger_order_server:app --app-dir tests/fixtures --host 127.0.0.1 --port ${apiPort}`,
       cwd: repoRoot,
       env: { ACADEMY_TRACES_DIR: traceDir },
       url: `http://127.0.0.1:${apiPort}/api/traces`,

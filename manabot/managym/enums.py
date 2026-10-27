@@ -50,6 +50,7 @@ class ActionEnum(IntEnum):
     TAP_FOR_COST = 13
     LEARN_TAKE_LESSON = 14
     LEARN_DISCARD = 15
+    CHOOSE_TRIGGER = 16
 
 
 class ActionSpaceEnum(IntEnum):
@@ -66,6 +67,7 @@ class ActionSpaceEnum(IntEnum):
     WATERBEND = 10
     DISCARD = 11
     LEGEND_RULE = 12
+    ORDER_TRIGGERS = 13
 
 
 class ZoneEnum(IntEnum):
