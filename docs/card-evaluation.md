@@ -80,8 +80,10 @@ are associations between cards and wins, not causal card values.
 
 The GIH interval is Etude's deterministic 95% percentile bootstrap over whole
 **deal seeds** across every pooled run, keeping each deal's correlated legs and
-opponent pairings together. Games sharing a seed share shuffles. It is
-unavailable with fewer than two deals.
+opponent pairings together. Games sharing a seed share shuffles. Every card
+in one filter combination shares one draw of deal weights, so a card's interval
+does not change when other cards are added or removed. It is unavailable with
+fewer than two deals.
 
 ## Tables and admission
 
