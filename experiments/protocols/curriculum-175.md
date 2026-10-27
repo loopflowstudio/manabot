@@ -194,6 +194,19 @@ The report remains required even for negative, incomplete or inconclusive work.
 Uniform tracking is an explicit imported-evidence projection, not a new training
 launch. Preserve the original paused outcome, source coordinates, artifact
 identity and historical cost. Its publication wall time is not training time.
+Etude's launched evaluations fetch checkpoint inputs relative to the imported
+run folder. Materialize identical, digest-verified policy bytes there with
+`curriculum_uniform --checkpoint-cache`, then deliver them with `etude sync`.
+The original reference records and source manifest stay retained; no policy
+weights are changed. All 28 run-relative policy inputs were read back from R2
+and verified before evaluation submission.
 Real adaptive exports must drive actual Etude evaluation requests on the owned
 CPU pool. One checkpoint per bounded evaluation job keeps queue units finite;
 no paid CPU rental or displacement of another Task's evaluator is selected.
+Use the queued-evaluation support in
+[Etude PR #56](https://github.com/loopflowstudio/etude/pull/56) while the mini is
+occupied. The operator uses a frozen Manabot runtime at
+`0fc90e4130aca0e28a5e1b56cd9f2004b86a6845` and Etude client source
+`18f6ecafc3e2b8f1652b5e45364d3e957e263183`; later Task edits do not change
+the live inference/evaluation implementation. Queue state is scoped to this
+Task; existing MTG-183 work is left running.

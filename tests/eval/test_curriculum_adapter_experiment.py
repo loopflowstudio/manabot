@@ -1,13 +1,16 @@
 """The four-arm declaration binds one recipe, disjoint evaluations and hard caps."""
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
 from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
 from etude.jobs import evaluation_spec
 from etude.run.records import ArtifactRef
+from etude.train.read import read
+import pytest
 
-from experiments import curriculum_adapters as study
+from experiments import curriculum_adapters as study, curriculum_uniform as uniform
 from experiments.elemental_long import recipe as baseline_recipe
 from experiments.elemental_long_eval import Conditions
 from manabot.experiment.job import TrainingJob
@@ -141,6 +144,55 @@ def test_reused_uniform_is_a_labelled_projection_of_real_export_references(
     second = read(tmp_path, EXPERIMENT, UNIFORM_RUN)
     assert len(second.checkpoints) == 28
     assert before == receipt.read_bytes()
+
+
+def test_imported_export_bytes_are_discoverable_as_etude_job_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Tiny identity fixtures, never admitted or played as actual checkpoints.
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    original = uniform.load_control()
+    checkpoints = []
+    for cp in original.checkpoints:
+        payload = f"checkpoint identity fixture {cp.updates}".encode()
+        digest = sha256(payload).hexdigest()
+        (cache / digest).write_bytes(payload)
+        checkpoints.append(
+            cp.model_copy(
+                update={
+                    "artifact": ArtifactRef(
+                        uri=f"r2://manabot/jobs/fixture/{digest}",
+                        sha256=digest,
+                        size_bytes=len(payload),
+                    )
+                }
+            )
+        )
+    control = original.model_copy(update={"checkpoints": tuple(checkpoints)})
+
+    def fixture_control() -> uniform.UniformControl:
+        return control
+
+    monkeypatch.setattr(uniform, "load_control", fixture_control)
+    directory = tmp_path / "projection"
+    uniform.publish_uniform(directory)
+    uniform.materialize_uniform(directory, cache)
+    found = read(directory, uniform.EXPERIMENT, uniform.UNIFORM_RUN)
+    for cp in found.checkpoints:
+        assert cp.artifact.sha256 is not None
+        path = directory / uniform.UNIFORM_RUN / "checkpoints" / cp.artifact.sha256
+        assert cp.artifact.uri == path.as_uri()
+        assert sha256(path.read_bytes()).hexdigest() == cp.artifact.sha256
+    first = (
+        directory / uniform.UNIFORM_RUN / "checkpoints" / str(control.initial.sha256)
+    )
+    before = first.read_bytes()
+    (cache / control.initial.sha256).write_bytes(b"corrupt cache fixture")
+    with pytest.raises(ValueError, match="cached uniform bytes differ"):
+        uniform.materialize_uniform(directory, cache)
+    assert first.read_bytes() == before
 
 
 def test_frozen_183_input_version_survives_job_and_bound_input_roundtrips() -> None:

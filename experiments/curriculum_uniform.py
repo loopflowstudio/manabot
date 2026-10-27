@@ -9,6 +9,7 @@ It never rents, starts learning, changes source checkpoints or fabricates rows.
 import argparse
 from decimal import Decimal
 from pathlib import Path
+import shutil
 from typing import Literal
 
 from etude.run.listing import runs as list_runs
@@ -21,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.experiment.job import StagedExport
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "experiments/protocols/curriculum-175-uniform.json"
@@ -110,6 +111,52 @@ def load_control() -> UniformControl:
     return UniformControl.model_validate_json(MANIFEST.read_bytes())
 
 
+def materialize_uniform(directory: Path, checkpoint_cache: Path) -> Path:
+    """Place verified original bytes where Etude's run-relative job inputs expect them.
+
+    The original reference records and source manifest remain unchanged. Etude
+    discovers these identical local copies when reading the imported run.
+    Deliver them with `etude sync` before queuing evaluations.
+    """
+    control = load_control()
+    for cp in control.checkpoints:
+        source = checkpoint_cache / str(cp.artifact.sha256)
+        if (
+            source.stat().st_size != cp.artifact.size_bytes
+            or file_sha256(source) != cp.artifact.sha256
+        ):
+            raise ValueError("cached uniform bytes differ from their retained export")
+    copied: list[dict[str, str | int]] = []
+    for cp in control.checkpoints:
+        name = cp.artifact.uri.rpartition("/")[2]
+        key = f"{UNIFORM_RUN}/checkpoints/{name}"
+        target = directory / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if file_sha256(target) != cp.artifact.sha256:
+                raise ValueError(
+                    "uniform checkpoint destination already holds different bytes"
+                )
+        else:
+            partial = target.with_name(target.name + ".partial")
+            shutil.copyfile(checkpoint_cache / str(cp.artifact.sha256), partial)
+            partial.replace(target)
+        copied.append(
+            {
+                "updates": cp.updates,
+                "source_uri": cp.artifact.uri,
+                "key": key,
+                "sha256": str(cp.artifact.sha256),
+                "bytes": target.stat().st_size,
+            }
+        )
+    receipt = directory / "mtg175-uniform-checkpoint-files.json"
+    atomic_json(
+        receipt, {"schema": "mtg175-uniform-checkpoint-files-v1", "files": copied}
+    )
+    return receipt
+
+
 def publish_uniform(
     directory: Path,
     *,
@@ -195,7 +242,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--storage")
+    parser.add_argument("--checkpoint-cache", type=Path)
     args = parser.parse_args()
+    if args.checkpoint_cache is not None:
+        print(materialize_uniform(args.directory, args.checkpoint_cache))
     storages = (storage_from_uri(args.storage),) if args.storage else ()
     print(publish_uniform(args.directory, storages=storages))
 
