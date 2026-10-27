@@ -300,3 +300,23 @@ children, per-row seeds, receipts); each device's engine owns process layout,
 batching, threads and transfer, and CPU performance is iterated on rental
 evidence rather than only gated. Implemented as slices 6–7. Proposal text at
 `303e65204`.
+
+## Concept review 5 (headless, 2026-10-27, at `302204fd7`)
+
+Against decisions 1a/2b/3b and the engine boundary, the concepts hold:
+a checkpoint has one way to play in evaluation (served; `is_served` →
+`bind_execution`, local CPU envelope from `resolve_execution`); code and
+search players play in their game child; one engine serves both devices, with
+the boundary written in `docs/shared-evaluation.md`. No open product choice.
+
+**Next implement direction (implied by 1a, a name only):** "scalar" no longer
+names an evaluation way of playing, but the child still calls its in-child
+players that. Rename `native_game._ScalarPlayers` → `_InChildPlayers` (local
+`scalar` → `in_child`) and say "served and in-child players" in the
+`supervision.py` header. Keep the `scalar_policy` performance span and the
+`cold_scalar` benchmark variant: both are retained receipt keys. MTG-183's
+runner `scalar` mode is MTG-183's name, not changed here. Remaining after
+that: the rental calibration and landing gate as written in Acceptance.
+
+The unstaged `tests/training/game_error_*` edits (a `ChildProcess` game-worker
+fixture) are another contribution in progress; preserve them.
