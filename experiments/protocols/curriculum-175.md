@@ -117,6 +117,11 @@ separately from new charges; do not bill the original Task twice.
 reserved for storage/observation/cleanup uncertainty. Thus new training caps
 sum to $28.50, new inclusive arm limits to $30, and the reused U costs less
 than its own $10 allowance. No retries, replacement seeds or automatic top-up.
+Submit each adaptive arm as its own single-job cohort capped at $9.50. A
+multi-job cohort spreads rental lifetime over its available slots and can
+quote more than one arm's allowance for a single rental. Separate cohorts
+prevent cross-arm budget transfers. Use at most the existing two L4 slots;
+the third arm waits for capacity and receives its own bounded rental.
 All three use seed 18301, the exact saved U initialization (SHA-256
 `1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688`), and the
 frozen v1 observation input. A fresh current model is not assumed to reproduce

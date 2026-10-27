@@ -18,6 +18,7 @@ def test_four_arms_share_learning_and_initialization_with_inclusive_reserves() -
     runs = study.runs("HEAD")
     assert len(runs) == 3
     assert len(study.runs("HEAD", reuse_uniform=False)) == 4
+    assert [run.params["arm"] for run in study.runs("HEAD", arm="ME")] == ["ME"]
     assert {run.seed for run in runs} == {18301}
     assert [run.params["arm"] for run in runs] == list(study.ARMS[1:])
     specs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]

@@ -12,7 +12,7 @@ checkpoint grids and a disjoint final grid, and `report` draws their scores.
 Evaluate on the owned CPU pool; no paid evaluation rental is authorized.
 
     uv run etude launch experiments/curriculum_adapters.py --revision COMMIT \\
-        --cohort mtg175-v1 --rent l4 --parallel 1 --max-usd 28.50 --quote
+        --arm M --cohort mtg175-v1-m --rent l4 --parallel 1 --max-usd 9.50 --quote
     uv run etude eval experiments/curriculum_adapters.py \\
         --source r2://manabot/jobs --pool mini --watch 60
     uv run etude report experiments/curriculum_adapters.py \\
@@ -89,21 +89,27 @@ def recipe(arm: Literal["U", "M", "E", "ME"]) -> TrainingRegime:
     return TrainingRegime.model_validate(regime.model_dump(mode="json"))
 
 
-def runs(revision: str, reuse_uniform: bool = True) -> list[Run]:
-    """One attempt per arm; no automatic retry or new seed after a failure."""
+def runs(
+    revision: str,
+    reuse_uniform: bool = True,
+    arm: Literal["M", "E", "ME"] | None = None,
+) -> list[Run]:
+    """One attempt per arm; submit separate cohorts to isolate rental budgets."""
     found: list[Run] = []
-    for arm in ARMS:
-        if arm == "U" and reuse_uniform:
+    for candidate in ARMS:
+        if (candidate == "U" and reuse_uniform) or (
+            arm is not None and candidate != arm
+        ):
             continue
         job = TrainingJob(
-            regime=recipe(arm),
+            regime=recipe(candidate),
             experiment=EXPERIMENT,
             milestones=CADENCE,
             finalization_seconds=600,
             validate_numerics=True,
             initial_checkpoint=INITIAL,
         ).job(repo=ROOT, revision=revision, max_hours=HOURS, max_usd=TRAINING_USD)
-        found += job.runs(SEED, params={"arm": arm})
+        found += job.runs(SEED, params={"arm": candidate})
     return found
 
 
