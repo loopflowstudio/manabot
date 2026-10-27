@@ -112,6 +112,16 @@ def worker(config: Campaign, out: Path) -> None:
         out / "schedule.json",
         json.dumps([g.model_dump(mode="json") for g in games], indent=2),
     )
+    _write(
+        out / "games.json",
+        json.dumps(
+            {
+                "version": "llm-game-sequence-v1",
+                "games": [f"game-{g.index:03d}" for g in games],
+            },
+            indent=2,
+        ),
+    )
     opponent = CheckpointOpponent(
         Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
         CHECKPOINT_SHA256,
@@ -126,6 +136,7 @@ def worker(config: Campaign, out: Path) -> None:
             {
                 "policy_cpu_seconds": opponent.load_seconds,
                 "llm_session_seconds": session.load_seconds,
+                "seconds": session.load_seconds,
                 "checkpoint_sha256": CHECKPOINT_SHA256,
                 "runtime": session.identity.model_dump(mode="json"),
                 "warmup": None,
@@ -160,7 +171,7 @@ def worker(config: Campaign, out: Path) -> None:
                 _write(record / "summary.json", summary.model_dump_json(indent=2))
             results.append(GameResult(game=game, summary=summary))
             _write(
-                out / "games.json",
+                out / "results.json",
                 json.dumps([r.model_dump(mode="json") for r in results], indent=2),
             )
             collect(out)
