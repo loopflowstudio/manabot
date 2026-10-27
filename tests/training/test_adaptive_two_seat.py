@@ -8,7 +8,12 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
@@ -20,6 +25,7 @@ from manabot.training.rollout.adaptive import (
     GameResult,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
+import managym
 
 
 def _config(signal: Literal["U", "M", "E", "ME"] = "ME") -> AdaptiveConfig:
@@ -168,11 +174,14 @@ def test_current_elemental_training_exports_scored_admitted_checkpoint(
     from manabot.model.world import validate_agent_setup
     from manabot.training.execution import execute_regime
     from manabot.verify.store import VerifyStore
-    import managym
     from tests.training.test_recovery import tracked_updates
 
     regime = recipe(1, hours=0.05, setup_seconds=0, finalization_seconds=5)
     regime.id = "curriculum-current-world-proof"
+    # This proof trains fresh weights on today's contract. The historical
+    # campaign recipe and its retained checkpoints keep their original identity.
+    regime.world = managym.WORLD_VERSION
+    regime.observation = ObservationConfig()
     regime.agent.hidden_dim = 8
     regime.agent.num_attention_heads = 2
     stage = regime.stages[0]

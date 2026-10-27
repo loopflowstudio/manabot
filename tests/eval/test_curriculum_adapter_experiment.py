@@ -236,7 +236,8 @@ def test_frozen_183_input_version_survives_job_and_bound_input_roundtrips() -> N
     from manabot.infra.config import ObservationConfig
     from manabot.training.regime import TrainingRegime
 
-    assert ObservationConfig().policy_input_version == 2
+    # Fresh defaults evolve; the historical campaign must still round-trip v1.
+    assert ObservationConfig().policy_input_version > 1
     regime = study.recipe("M")
     assert regime.observation.policy_input_version == 1
     raw = regime.model_dump(mode="json")
