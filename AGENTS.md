@@ -170,19 +170,21 @@ checks required by the affected package and workflow.
 
 ### Etude card evaluation
 
-Etude SDK 0.2.8 hashes tracked source paths (`git add -N` admits new files for
-local implementation checks). Card evidence is retained once under the eval
-run's `artifacts/evidence/` directory with content-addressed names. Ordinary
-Etude delivery carries those bytes with tables and match records. Keep the
-evidence with its run; do not publish indexes alone, overwrite immutable
-artifacts, or put card evidence in the checkpoint namespace. Historical
-evidence paths remain valid and must not be rewritten.
+Etude hashes tracked source paths (`git add -N` admits new files for local
+implementation checks). Eval runs are sealed blocks: each game's card evidence
+is a blob of its match, named in `card_plays` by SHA256 and read back through
+`etude.eval.query.read_blobs`. Card queries read only `CARD_ROLLUPS`; open the
+database with `manabot.eval.card_query.card_db`, and give a changed rollup a new
+name. Never put card evidence in the checkpoint namespace. Per-file runs from
+earlier SDKs become readable through `etude convert-eval`, which writes blocks
+beside their files and never rewrites them; converting stored data is an
+explicit step of its own.
 
 Etude evaluation tables use `seat` for the participant's index in
 `Match.players`, and `game_seat` for its native game seat (0 is on the play).
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
-group native play/draw reports by `game_seat`. SDK 0.2.8 owns the historical
-`player`/`seat` column conversion; never rewrite retained tables for this rename.
+group native play/draw reports by `game_seat`. Etude's conversion owns the
+historical `player`/`seat` column rename; never rewrite retained tables for it.
 
 ### Offline inference reports
 

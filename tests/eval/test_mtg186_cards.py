@@ -7,15 +7,14 @@ plays here.
 from pathlib import Path
 
 from etude.eval.match import evaluate
-from etude.eval.query import statsdb
-from etude.run.declaration import declare
 import pytest
 import torch
 
 from experiments import mtg186_cards as cards
 from experiments.mtg186_eval import GW, UR, Checkpoint, Pairing, Player
 from manabot.env import Match as EnvMatch, ObservationSpace
-from manabot.eval.card_query import CardSelection, card_data
+from manabot.eval.card_metrics import CARD_ROLLUPS
+from manabot.eval.card_query import CardSelection, card_data, card_db
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
@@ -68,14 +67,9 @@ def test_one_match_delivers_games_and_both_card_tables(
         for m in cards.matches(pairing)[:1]
     ]
     directory = tmp_path / "eval"
-    root = declare(
-        experiment=cards.EXPERIMENT,
-        clocks=(),
-        run=cards.RUN,
-        kind="evaluation",
-        directory=directory,
-    ).root
-    machine = cards.Machine(a=a, b=b, root=root.resolve(), work=tmp_path / "work")
+    machine = cards.Machine(
+        a=a, b=b, root=tmp_path / "evidence", work=tmp_path / "work"
+    )
     monkeypatch.setenv("MTG186_CARDS", machine.model_dump_json())
     evaluate(
         experiment=cards.EXPERIMENT,
@@ -84,8 +78,9 @@ def test_one_match_delivers_games_and_both_card_tables(
         play=cards.play,
         run=cards.RUN,
         directory=directory,
+        rollups=CARD_ROLLUPS,
     )
-    with statsdb(cards.EXPERIMENT, directory) as db:
+    with card_db(cards.EXPERIMENT, directory) as db:
         games = db.execute(
             "select deck, opponent_deck, game_seat, valid from games order by deck, game_seat"
         ).fetchall()

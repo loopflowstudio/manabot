@@ -3,11 +3,16 @@
 `reduce_cards` owns the counting rules. `normalize` splits its rows into the
 three author tables an evaluation delivers: `card_plays` (one row per game and
 seat, with the game's facts), `card_counts` (per card in that game) and
-`cards` (names for card keys)."""
+`cards` (names for card keys). `CARD_ROLLUPS` are the per-deal totals of
+those tables that card queries read: Etude sums them as each match is stored
+(or once per block for runs stored without them), so a query never re-reads
+card rows."""
 
 from __future__ import annotations
 
 from collections import Counter
+
+from etude.eval.records import Rollup
 
 from manabot.infra.identity import StrictModel
 from manabot.sim.card_evidence import GameEvidence, Seat
@@ -137,3 +142,43 @@ def normalize(rows: list[CardGame]) -> CardRows:
     return CardRows(
         plays=list(plays.values()), counts=counts, cards=list(cards.values())
     )
+
+
+# ---- Rollups ------------------------------------------------------------------
+
+# Every filter a card query offers, plus the deal (the bootstrap unit) and the
+# Etude-reserved `player`/`opponents` keys of the row's seat and the other seat.
+_SPLIT = ("deal", "on_play", "deck", "opponent_deck", "source_commit")
+_IN_DECK = "deck_copies > 0"
+_NOT_SEEN = "deck_copies > 0 and gih_copies = 0"
+
+# Per card: copy-weighted opportunities and winning copies of each column. Only
+# eligible games (a winner, a passed replay) count, so `win` is never null here.
+CARD_DEALS = Rollup(
+    name="card_deals",
+    table="card_counts",
+    join=("card_plays",),
+    by=("card", *_SPLIT, "player", "opponents"),
+    sums={
+        "gp": _IN_DECK,
+        "gp_won": f"({_IN_DECK})::INTEGER * win",
+        "oh": "opening_copies",
+        "oh_won": "opening_copies * win",
+        "gd": "drawn_copies",
+        "gd_won": "drawn_copies * win",
+        "gih": "gih_copies",
+        "gih_won": "gih_copies * win",
+        "gns": _NOT_SEEN,
+        "gns_won": f"({_NOT_SEEN})::INTEGER * win",
+    },
+    where="eligible",
+)
+# Per player-game, eligible or not: its `rows` count games, `wins` their wins,
+# and ineligible games are reported by outcome.
+GAME_DEALS = Rollup(
+    name="game_deals",
+    table="card_plays",
+    by=(*_SPLIT, "eligible", "outcome", "player", "opponents"),
+    sums={"wins": "win"},
+)
+CARD_ROLLUPS = (CARD_DEALS, GAME_DEALS)

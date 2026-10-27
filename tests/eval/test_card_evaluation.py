@@ -9,10 +9,8 @@ import time
 from typing import Any
 
 import duckdb
-from etude.eval.match import Tables, evaluate
-from etude.eval.query import statsdb
+from etude.eval.match import Result, Tables, evaluate
 from etude.eval.records import Code, Environment, Match
-from etude.run.declaration import declare
 from etude.run.delivery import sync
 from etude.run.storage import DirectoryStorage
 from pydantic import JsonValue
@@ -23,9 +21,7 @@ from manabot.env import Match as EnvMatch, ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
 from manabot.eval.card_evaluation import card_tables, evaluate_cards, trace_card_tables
 from manabot.eval.card_metrics import (
-    CARD_FIELDS,
-    COUNT_FIELDS,
-    PLAY_FIELDS,
+    CARD_ROLLUPS,
     CardGame,
     normalize,
     reduce_cards,
@@ -37,6 +33,7 @@ from manabot.eval.card_query import (
     CardSelection,
     audit,
     card_data,
+    card_db,
     load_game,
 )
 from manabot.eval.card_schedule import CardConditions, admit_card_runtime
@@ -217,10 +214,10 @@ def _rebind_fixture(raw: dict[str, Any]) -> GameEvidence:
 def _fixture_play(
     runtime: dict[str, JsonValue],
     change: dict[int, dict[str, Any]] | None = None,
-) -> Callable[[Match], Tables]:
-    """A `play` that retains synthetic games for every leg, edited per leg."""
+) -> Callable[[Match], Result]:
+    """A `play` that keeps synthetic games for every leg as blobs, edited per leg."""
 
-    def play(match: Match) -> Tables:
+    def play(match: Match) -> Result:
         root = Path(evaluation.os.environ["MANABOT_CARD_OUTPUT"])
         games = []
         for leg in range(8):
@@ -230,7 +227,10 @@ def _fixture_play(
                 raw.update(change[leg])
                 game = _rebind_fixture(raw)
             games.append((retain_evidence(root, game), game))
-        return card_tables(match, games)
+        return Result(
+            tables=card_tables(match, games),
+            blobs=[(root / ref.path).read_bytes() for ref, _ in games],
+        )
 
     return play
 
@@ -245,9 +245,9 @@ def test_audit_preserves_card_position_before_game_seat_column(
         runtime_fingerprints(match_config=spec.authored_matchup.match())
     )
 
-    def play(match: Match) -> Tables:
-        tables = fixture(match)
-        for row in tables["card_plays"]:
+    def play(match: Match) -> Result:
+        result = fixture(match)
+        for row in result.tables["card_plays"]:
             if native_column == "absent":
                 row.pop("game_seat")
             elif native_column == "mixed":
@@ -256,78 +256,54 @@ def test_audit_preserves_card_position_before_game_seat_column(
                     row["game_seat"] = None
             else:
                 row["game_seat"] = 1 if row["on_play"] else 0
-        return tables
+        return result
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
     evaluate_cards(spec, tmp_path)
-    with statsdb(spec.experiment, tmp_path) as db:
+    with card_db(spec.experiment, tmp_path) as db:
         result = audit(db, tmp_path)
     assert result.games == 8
     assert len(result.problems) == (8 if native_column == "corrupt" else 0)
 
 
 def _db(
+    directory: Path,
     matches: Sequence[tuple[str, tuple[str, str], list[CardGame]]],
 ) -> duckdb.DuckDBPyConnection:
-    """The statsdb tables card queries read, built straight from reducer rows."""
-    db = duckdb.connect()
-    db.execute(
-        "create table card_plays (run varchar, match varchar, seat bigint, game_seat bigint, game varchar,"
-        " deal bigint, deck varchar, opponent_deck varchar, on_play boolean,"
-        " eligible boolean, outcome varchar, win bigint, content varchar,"
-        " metric_version varchar, source_commit varchar)"
-    )
-    db.execute(
-        "create table card_counts (run varchar, match varchar, seat bigint, game varchar,"
-        " card varchar, deck_copies bigint, opening_copies bigint, drawn_copies bigint,"
-        " gih_copies bigint)"
-    )
-    db.execute(
-        "create table cards (run varchar, match varchar, seat bigint, card varchar,"
-        " content varchar, definition bigint, name varchar)"
-    )
-    db.execute(
-        "create table seats (run varchar, match varchar, seat bigint, player varchar)"
-    )
-    db.execute(
-        "create table players (player varchar, name varchar, kind varchar,"
-        " checkpoint varchar, artifact varchar,"
-        " uri varchar, config json)"
-    )
-    db.execute("create table matches (run varchar, match varchar, state varchar)")
-    names = {name for _, pair, _ in matches for name in pair}
-    for name in names:
-        db.execute(
-            "insert into players values (?, ?, 'code', null, ?, null, null)",
-            [f"id-{name}", name, "a" * 64],
+    """An experiment holding reducer rows, stored by Etude with the card rollups."""
+    by_key = {key: normalize(rows) for key, _, rows in matches}
+
+    def play(match: Match) -> Result:
+        normal = by_key[str(match.conditions["fixture"])]
+        return Result(
+            tables={
+                "card_plays": [{**row, "source_commit": "abc"} for row in normal.plays],
+                "card_counts": normal.counts,
+                "cards": normal.cards,
+            }
         )
-    for match, pair, rows in matches:
-        db.execute("insert into matches values ('run', ?, 'done')", [match])
-        for seat, name in enumerate(pair):
-            db.execute(
-                "insert into seats values ('run', ?, ?, ?)",
-                [match, seat, f"id-{name}"],
+
+    evaluate(
+        experiment="fixture",
+        environment=Environment(name="fixture", files="a" * 64),
+        matches=[
+            Match(
+                players=(Code(name=pair[0]), Code(name=pair[1])),
+                conditions={"fixture": key},
             )
-        normal = normalize(rows)
-        for play in normal.plays:
-            db.execute(
-                "insert into card_plays values ('run', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'abc')",
-                [match, *(play[field] for field in PLAY_FIELDS)],
-            )
-        for count in normal.counts:
-            db.execute(
-                "insert into card_counts values ('run', ?, ?, ?, ?, ?, ?, ?, ?)",
-                [match, *(count[field] for field in COUNT_FIELDS)],
-            )
-        for card in normal.cards:
-            db.execute(
-                "insert into cards values ('run', ?, ?, ?, ?, ?, ?)",
-                [match, *(card[field] for field in CARD_FIELDS)],
-            )
-    return db
+            for key, pair, _ in matches
+        ],
+        play=play,
+        run="run",
+        directory=directory,
+        rollups=CARD_ROLLUPS,
+    )
+    return card_db("fixture", directory)
 
 
-def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
+def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw(
+    tmp_path: Path,
+) -> None:
     game = card_fixture()
     rows = reduce_cards(game, ("player-two", "player-one"))
     red = next(r for r in rows if r.name == "Mountain")
@@ -347,7 +323,7 @@ def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
         else r
         for r in losing
     ]
-    db = _db([("one", ("two", "one"), rows), ("two", ("two", "one"), losing)])
+    db = _db(tmp_path, [("one", ("two", "one"), rows), ("two", ("two", "one"), losing)])
     data = card_data(db, CardSelection(experiment="fixture", subjects=("one",)))
     mountain = next(c for c in data.cards if c.name == "Mountain")
     assert mountain.gih.rate == 0.8 and mountain.gih.count == 5
@@ -357,14 +333,14 @@ def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
     assert mountain.gns.count == 0 and mountain.iwd is None
     assert mountain.gih_interval is not None
     assert data.opponents == {"two": 2}
-    assert data.subjects == {"id-one": "one"}
+    assert list(data.subjects.values()) == ["one"]
 
 
 def test_draws_zero_denominator_and_missing_facts_are_explicit(tmp_path: Path) -> None:
     game = card_fixture(winner=None)
     rows = reduce_cards(game, game.seat_players)
     assert all(not r.eligible and r.win is None for r in rows)
-    db = _db([("one", ("player-one", "player-two"), rows)])
+    db = _db(tmp_path / "db", [("one", ("player-one", "player-two"), rows)])
     data = card_data(db, CardSelection(experiment="fixture", subjects=("player-one",)))
     assert data.cards == () and data.games == 0
     assert data.excluded == {"draw": 1}
@@ -432,7 +408,7 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
-    with statsdb(spec.experiment, source) as db:
+    with card_db(spec.experiment, source) as db:
         data = card_data(db, selection)
         assert data.cards and sum(data.opponents.values()) == 8
         filtered = card_data(
@@ -441,8 +417,8 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
         assert sum(filtered.opponents.values()) == 2
         checked = audit(db, source, replay=True)
         assert (checked.games, checked.replayed, checked.problems) == (8, 8, ())
-        run, game_id, path = db.execute(
-            "select run, game, evidence from card_plays order by game limit 1"
+        run, game_id = db.execute(
+            "select run, game from card_plays order by game limit 1"
         ).fetchone()
         # Capture leaves every command, frame, state and outcome unchanged.
         game = load_game(db, source, run, game_id)
@@ -452,11 +428,14 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
     # Ordinary Etude delivery carries the evidence with the tables.
     delivered = tmp_path / "delivered"
     assert sync(source, storages=[DirectoryStorage(delivered)]) == {}
-    with statsdb(spec.experiment, delivered) as db:
+    with card_db(spec.experiment, delivered) as db:
         assert card_data(db, selection) == data
         assert audit(db, delivered).problems == ()
-        next(delivered.rglob(Path(path).name)).unlink()
-        assert len(audit(db, delivered).problems) == 1
+    # A missing blob pack leaves every game it held unchecked.
+    next(delivered.rglob("blobs.zip")).unlink()
+    with card_db(spec.experiment, delivered) as db:
+        problems = audit(db, delivered).problems
+    assert len(problems) == 8 and all("unreadable" in p for p in problems)
 
 
 @pytest.mark.parametrize("outcome", ["crash", "timeout", "truncated", "replay_failed"])
@@ -475,7 +454,7 @@ def test_all_excluded_games_have_no_card_rates(
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
-    with statsdb(spec.experiment, tmp_path) as db:
+    with card_db(spec.experiment, tmp_path) as db:
         # Etude omits a column when every retained value is null.
         assert "win" not in {
             row[0] for row in db.execute("describe card_plays").fetchall()
@@ -506,7 +485,7 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     )
     calls = 0
 
-    def play(match: Match) -> Tables:
+    def play(match: Match) -> Result:
         nonlocal calls
         calls += 1
         if calls == 2:
@@ -519,18 +498,18 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
-    with statsdb(spec.experiment, tmp_path) as db:
+    with card_db(spec.experiment, tmp_path) as db:
         data = card_data(db, selection)
     # The crash and timeout leave six eligible games of their deal, not zero.
     assert data.games == 6 and data.excluded == {"crash": 1, "timeout": 1}
     assert data.failed_matches == 1
     retried = evaluate_cards(spec, tmp_path)
     assert (retried.played, retried.skipped) == (1, 1)
-    with statsdb(spec.experiment, tmp_path) as db:
+    with card_db(spec.experiment, tmp_path) as db:
         data = card_data(db, selection)
     assert data.games == 12 and data.failed_matches == 0
     with pytest.raises(ValueError, match="no player in this experiment"):
-        with statsdb(spec.experiment, tmp_path) as db:
+        with card_db(spec.experiment, tmp_path) as db:
             card_data(db, selection.model_copy(update={"subjects": ("absent",)}))
 
 
@@ -558,7 +537,7 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
             tmp_path,
         )
     subject = spec.players[0].player_id
-    with statsdb(spec.experiment, tmp_path) as db:
+    with card_db(spec.experiment, tmp_path) as db:
         pooled = card_data(
             db, CardSelection(experiment=spec.experiment, subjects=(subject,))
         )
@@ -587,7 +566,7 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
         assert drawn.games == (8 if player == 0 else 6)
         both = card_data(db, CardSelection(experiment=spec.experiment))
         assert both.games == 28 and len(both.subjects) == 2
-    with statsdb("other-experiment", tmp_path) as db:
+    with card_db("other-experiment", tmp_path) as db:
         assert card_data(db, CardSelection(experiment="other-experiment")).runs == (
             "elsewhere",
         )
@@ -744,7 +723,7 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
         }
     )
     evaluate_cards(spec, tmp_path / "evaluation")
-    with statsdb(spec.experiment, tmp_path / "evaluation") as db:
+    with card_db(spec.experiment, tmp_path / "evaluation") as db:
         # The checkpoint digest selects the subject, as an artifact would.
         data = card_data(
             db,
@@ -757,7 +736,9 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
     assert any(c.gih.count > c.gp.count - c.gns.count for c in data.cards)
 
 
-def test_uncertainty_keeps_the_same_deal_across_opponents_together() -> None:
+def test_uncertainty_keeps_the_same_deal_across_opponents_together(
+    tmp_path: Path,
+) -> None:
     matches = []
     for deal in (1, 2):
         for opponent in ("zero", "one"):
@@ -776,7 +757,8 @@ def test_uncertainty_keeps_the_same_deal_across_opponents_together() -> None:
                 )
             )
     data = card_data(
-        _db(matches), CardSelection(experiment="fixture", subjects=("subject",))
+        _db(tmp_path, matches),
+        CardSelection(experiment="fixture", subjects=("subject",)),
     )
     mountain = next(c for c in data.cards if c.name == "Mountain")
     assert mountain.gih.rate == 0.5
@@ -803,7 +785,7 @@ def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
         run="old",
         directory=tmp_path,
     )
-    with statsdb("old", tmp_path) as db:
+    with card_db("old", tmp_path) as db:
         with pytest.raises(ValueError, match="no card evaluations"):
             card_data(db, CardSelection(experiment="old"))
 
@@ -848,8 +830,8 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
         pair = ("subject", "rival") if leg != 1 else ("rival", "subject")
         game = card_fixture(winner=deal % 2, deal=deal, leg=leg, players=pair)
         matches.append((f"m{deal}", pair, reduce_cards(game, pair)))
-    db = _db(matches)
-    selection = CardSelection(experiment="fixture <demo>", subjects=("subject",))
+    db = _db(tmp_path / "db", matches)
+    selection = CardSelection(experiment="fixture", subjects=("subject",))
     data = page_data(db, selection)
     variants = data["variants"]
     assert isinstance(variants, dict)
@@ -858,7 +840,7 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
     assert data["subjects"] == ["subject"] and data["opponents"] == ["rival"]
     path = write_page(db, selection, tmp_path / "cards.html")
     html = path.read_text()
-    assert "<title>fixture &lt;demo&gt; · card data</title>" in html
+    assert "<title>fixture · card data</title>" in html
     embedded = html.split('<script id="card-data" type="application/json">')[1].split(
         "</script>"
     )[0]
@@ -873,15 +855,9 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
     """An eval that calls `play_cell` itself adds card tables with one call."""
     spec = verification_spec(8)
     first, second = spec.players
-    root = declare(
-        experiment="grid-like",
-        clocks=(),
-        run="grid",
-        kind="evaluation",
-        directory=tmp_path,
-    ).root
+    root = tmp_path / "scratch"
 
-    def play(match: Match) -> Tables:
+    def play(match: Match) -> Result:
         out = root / "games" / match.key
         out.mkdir(parents=True)
         rows, trace, _ = play_cell(
@@ -901,10 +877,8 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
             card_evidence_dir=root,
         )
         own = {"games": [{"seat": 0, "score": float(r["score_a"] or 0)} for r in rows]}
-        return {
-            **own,
-            **trace_card_tables(root, trace, (first.player_id, second.player_id)),
-        }
+        cards = trace_card_tables(root, trace, (first.player_id, second.player_id))
+        return Result(tables={**own, **cards.tables}, blobs=cards.blobs)
 
     evaluate(
         experiment="grid-like",
@@ -922,7 +896,7 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
         run="grid",
         directory=tmp_path,
     )
-    with statsdb("grid-like", tmp_path) as db:
+    with card_db("grid-like", tmp_path) as db:
         data = card_data(
             db, CardSelection(experiment="grid-like", subjects=(first.player_id,))
         )
@@ -931,6 +905,7 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
             "games",
             "card_plays",
         }
+        assert not list(root.rglob("*.json.gz")), "handed-over evidence remains"
         checked = audit(db, tmp_path)
         assert (checked.games, checked.problems) == (2, ())
         db.execute("update card_counts set gih_copies = gih_copies + 1")

@@ -14,13 +14,19 @@ import resource
 import sys
 import time
 
-from etude.eval.query import statsdb
 from etude.run.storage import default_root
 
 from manabot.eval.arena_log import CardMapping, export_arena_log
 from manabot.eval.card_evaluation import CardEvaluationSpec, evaluate_cards
 from manabot.eval.card_page import write_page
-from manabot.eval.card_query import CardData, CardSelection, audit, card_data, load_game
+from manabot.eval.card_query import (
+    CardData,
+    CardSelection,
+    audit,
+    card_data,
+    card_db,
+    load_game,
+)
 from manabot.eval.evaluate import source_digest
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256
@@ -93,7 +99,7 @@ def verify(games: int, out: Path) -> dict[str, int | float | str]:
         )
         for p in spec.players
     ]
-    with statsdb(spec.experiment, out) as db:
+    with card_db(spec.experiment, out) as db:
         before = [card_data(db, selection) for selection in selections]
         if (
             sum(data.games + sum(data.excluded.values()) for data in before)
@@ -195,7 +201,7 @@ def main() -> None:
             opponent_deck=args.opponent_deck,
             on_play=None if args.position is None else args.position == "play",
         )
-        with statsdb(args.experiment, args.source, rebuild=args.rebuild) as db:
+        with card_db(args.experiment, args.source, rebuild=args.rebuild) as db:
             if args.html:
                 print(write_page(db, selection, args.html))
             elif args.json:
@@ -204,14 +210,14 @@ def main() -> None:
                 print_data(card_data(db, selection))
     elif args.command == "audit":
         source = args.source
-        with statsdb(args.experiment, source) as db:
+        with card_db(args.experiment, source) as db:
             result = audit(db, source or default_root(), replay=args.replay)
         print(result.model_dump_json(indent=2))
         if result.problems:
             sys.exit(1)
     elif args.command == "export-log":
         source = args.source
-        with statsdb(args.experiment, source) as db:
+        with card_db(args.experiment, source) as db:
             game = load_game(db, source or default_root(), args.run, args.game)
         log = export_arena_log(
             game,

@@ -1,64 +1,29 @@
-# MTG-188 assumptions and dependencies — 2026-10-26
+# MTG-206 assumptions and dependencies — 2026-10-27
 
-Jack Heart accepted `scratch/mtg188-context.md` with “seems fine, pursue” in the
-primary Task conversation. Implementation and publication are authorized; new
-paid execution and inherited spending allowances are not. The accepted design,
-measurement boundaries, evidence corrections and gate commands live in that file.
+The Task directive (Jack Heart, 2026-10-27) is the accepted design; the plan
+and remaining work are in `scratch/mtg206.md`. Inherited MTG-188 notes remain
+at `37e5ccd8d65527f63486f1d9770af20f612fa8c8:scratch/questions.md`.
 
-- The current checkout integrates MTG-184/185 at
-  `558e0186b585228dd2130cf14d9cb40de217e66f`. Historical L4 receipts retain source
-  `e747f0445e31ac08d674f855ad0128a4a722b100` and their older renderer. Runtime
-  integration is complete; historical rendering does not establish new results.
-- Use existing evaluation Perf and raw receipts with a typed manifest. The
-  execution protocol freezes source/native/input/runtime facts; the manifest
-  binds observations, not authority to execute. Rebuilding runs no model.
-- Empirical acceptance remains incomplete. The selected small trained reference
-  is MTG-181 seed 18101 raw u616. `ArtifactStore.download` failed because
-  `R2_ACCOUNT_ID` is missing; local bytes and current setup admission remain
-  unverified. No authentication was changed. Random-weight fixtures cannot
-  replace a trained baseline.
-- New GPU/LLM measurements require explicit hardware, inclusive time/cost,
-  cleanup and attempt limits. CPU observations independently need the pinned
-  checkpoint. Artifact publication and actual CPU/GPU plus LLM single/many-game
-  observations remain open; the Task cannot be marked complete.
-- Missing directories are unavailable; mismatched pins fail validation. Only
-  opposing completed/failed declarations and observations are contradictions.
-  Completion, replay coverage and availability remain independent. Shared
-  allocation pins preserve identity and once-only cost accounting, including
-  missing/restored external files; unpinned external measurements are not used.
-- Policy readiness precedes model admission; LLM readiness includes loading.
-  Worker, supervisor and service latency populations remain separate. RSS and
-  CUDA allocator peaks do not establish whole-device occupancy.
-- Reversible execution choices: explicit `play_cell` legs preserve request
-  identity; sequential LLM games share one session and charge readiness once.
-  Whole-attempt wall includes preparation, collection and cleanup, excludes the
-  final ledger write, and never sums overlapping worker intervals. Outer failure
-  can coexist with completed games; a completed attempt cannot contain failed
-  game evidence.
-- Collection uses the original deadline/RSS ceiling in a supervised child.
-  Interrupted collection retains received pins and raw progress, marks inventory
-  incomplete, and projects no game metrics from unpinned files. Incomplete child
-  cleanup prevents subsequent writers. No parent hashing/comparison loop returns.
-- Instrumentation comparison selects the latest completed same-compute,
-  opposite-instrumentation observation (including matching diagnostics), then
-  falls back to the first completed cohort observation. Selection and receipt
-  reads remain inside supervised collection; scalar-first/rotated order is covered.
-- The completed implement session `session_bedb0277823c41e79442e82ebdc8c15b`
-  failed to settle because SQLite was locked. Its effects are preserved; stopped
-  Graphs do not authorize replay. Jack Heart authorized a direct-session workaround for launch failures.
-  Compression, sync and review are complete; the mixed CLI/headless proof passed,
-  and affected suites passed (161 tests, one CUDA-only skip). Empirical dependencies do not block independent software work.
-
-Inherited MTG-186 notes remain at
-`a0dead2b5195853e0931bf244d84529c08944acb:scratch/questions.md`; MTG-184 notes
-remain at `ce43a5cf76d52b99c4c13c6debb21aab79ac9f82:scratch/questions.md`.
-The pre-compression uncommitted notes are preserved under
-`.runs/inference-compression-review/before/scratch/`.
-
-## Sync integration — 2026-10-27
-
-Preserve the MTG-188 assumptions above and the offline inference import boundary.
-The target introduces published Etude SDK 0.2.8, run-owned card evidence, and
-SDK-owned historical participant/seat conversion; its updated guidance applies.
-The target Task 9da33d notes remain at
-`5051c493fc4d47a3a63c6a5043d47639af6c5018:scratch/questions.md`.
+- **Blocks are unreleased.** The directive says blocks shipped "from etude-sdk
+  0.2.9 onward", but etude #63 (`2323782`) merged after the v0.2.9 tag, so no
+  published release has them. manabot pins etude-sdk to that commit through
+  `[tool.uv.sources]`, keeping `==0.2.9` in the requirement. Before landing,
+  release etude (one release carries #63 and #68) and pin it; a PyPI
+  install of manabot otherwise gets 0.2.9 without blocks.
+- **EXP-30 merged, unreleased (2026-10-27).** etude #68 (`e670a08`) adds
+  `estimate(keys, numerators, denominators) -> list[Estimate | None]` over
+  blocks × columns, keyed by deal. Until a release carries it, intervals use the
+  per-ratio `estimate` behind `card_query._intervals`, the one function to change.
+- **`excluded` now counts player-games**, like `games`: the rollups hold per-seat
+  rows, so a game excluded for both seats counts twice when no subject is chosen
+  (it was distinct games). With a subject, the counts are unchanged.
+- **`source_commit` added to both rollups' `by`** to keep `cards data --commit`;
+  not in the directive's column list.
+- **Historical per-file runs** (MTG-186 cards, the 0.2.5 fixtures, the MTG-183
+  bucket copy) are readable only after `etude convert-eval`. Conversion of retained
+  data is a separate explicit step; the MTG-186 docstring names the command.
+- **elemental_long_rent.py / GPU `demo` command** live on the MTG-183 branch
+  (`jack/mtg-183-...`), not on main, so the demo branch's launcher was not
+  brought over. The small real L4 eval needs a launcher on this branch.
+- PR #389 overlaps only at import lines of `cards.py`, `mtg186_cards.py` and
+  `elemental_long_eval.py`.

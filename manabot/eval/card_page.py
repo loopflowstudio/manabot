@@ -1,7 +1,8 @@
 """A self-contained HTML card data page in the layout of 17Lands' Card Data.
 
 `write_page` computes `card_data` for the base selection and for every
-combination of subject, opponent, position, deck and opponent deck that has games, then
+combination of subject, opponent, position, deck and opponent deck that has
+games, in one pass over the experiment's card rollups (`card_variants`), then
 embeds them, so the page's filters switch between precomputed selections and no
 metric is recomputed in the browser. Python is the only implementation of the
 statistics.
@@ -11,13 +12,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
-from itertools import product
 import json
 from pathlib import Path
 
 import duckdb
 
-from manabot.eval.card_query import CardData, CardSelection, card_data, selected_games
+from manabot.eval.card_metrics import METRIC_VERSION
+from manabot.eval.card_query import (
+    DIMENSIONS,
+    CardData,
+    CardSelection,
+    card_variants,
+)
 
 ALL = ""
 
@@ -64,47 +70,40 @@ def page_data(
     Subjects and opponents are offered by player name, so one player whose code
     identity changed between runs is still one choice.
     """
-    base = card_data(db, selection)
-    sql, parameters = selected_games(db, selection)
-    names = dict(db.execute("select player, name from players").fetchall())
-    present = {
-        (names[subject], names[opponent], "play" if on_play else "draw", deck, against)
-        for subject, opponent, on_play, deck, against in db.execute(
-            "select distinct subject, opponent, on_play, deck, opponent_deck"
-            f" from ({sql}) where eligible",
-            parameters,
-        ).fetchall()
+    variants = {
+        variant: data
+        for variant, data in card_variants(db, selection, DIMENSIONS).items()
+        if data.games
     }
-    combos = {
-        tuple(value if use else ALL for value, use in zip(row, mask, strict=True))
-        for row in present
-        for mask in product((False, True), repeat=5)
+
+    def label(value: str | bool | None) -> str:
+        if value is None:
+            return ALL
+        if isinstance(value, bool):
+            return "play" if value else "draw"
+        return value
+
+    present = [
+        tuple(label(value) for value in variant)
+        for variant in variants
+        if None not in variant
+    ]
+    keyed = {
+        _key(*(label(value) for value in variant)): _variant(data)
+        for variant, data in sorted(
+            variants.items(), key=lambda item: [label(v) for v in item[0]]
+        )
     }
-    variants: dict[str, dict[str, object]] = {}
-    for subject, opponent, position, deck, opponent_deck in sorted(combos):
-        narrowed = selection.model_copy(
-            update={
-                "subjects": (subject,) if subject else selection.subjects,
-                "opponents": (opponent,) if opponent else selection.opponents,
-                "on_play": None if not position else position == "play",
-                "deck": deck or selection.deck,
-                "opponent_deck": opponent_deck or selection.opponent_deck,
-            }
-        )
-        data = base if narrowed == selection else card_data(db, narrowed)
-        variants[_key(subject, opponent, position, deck, opponent_deck)] = _variant(
-            data
-        )
     return {
         "experiment": selection.experiment,
-        "runs": base.runs,
+        "runs": variants[(None,) * len(DIMENSIONS)].runs if variants else (),
         "subjects": sorted({row[0] for row in present}),
         "opponents": sorted({row[1] for row in present}),
         "positions": sorted({row[2] for row in present}),
         "decks": sorted({row[3] for row in present}),
         "opponent_decks": sorted({row[4] for row in present}),
-        "metric_version": base.metric_version,
-        "variants": variants,
+        "metric_version": METRIC_VERSION,
+        "variants": keyed,
     }
 
 

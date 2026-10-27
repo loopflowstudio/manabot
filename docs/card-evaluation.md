@@ -32,22 +32,24 @@ between selections computed in Python. Narrow any of them from the command line:
 
 `--source` is a directory or bucket of eval runs; by default, where runs are
 written on this computer. The database lives under `ETUDE_HOME/statsdb` and
-reads only files delivered since it was last opened; `--rebuild` reads everything
-again. Another experiment's games never appear.
+reads only blocks delivered since it was last opened; `--rebuild` reads everything
+again. Another experiment's games never appear. Queries read only the card
+rollups (below), never card rows, so the page's every filter combination is one
+pass over a subject/opponent pair's per-deal totals.
 
 ## Card data from any evaluation
 
 An evaluation that calls `play_cell` itself, such as a checkpoint grid or a
-head-to-head, can deliver card data beside its own tables. Pass
-`card_evidence_dir` as the eval run's folder, then merge the card tables into
-what `play` returns:
+head-to-head, can deliver card data beside its own tables. Pass a scratch
+folder as `card_evidence_dir`, merge the card tables and evidence blobs into
+the `Result` that `play` returns, and declare the card rollups with the run:
 
 ```python
-rows, trace, _ = play_cell(..., card_evidence_dir=run_folder)
-return {
-    "games": my_rows(rows),
-    **trace_card_tables(run_folder, trace, (player_a.player_id, player_b.player_id)),
-}
+rows, trace, _ = play_cell(..., card_evidence_dir=scratch)
+cards = trace_card_tables(scratch, trace, (player_a.player_id, player_b.player_id))
+return Result(tables={"games": my_rows(rows), **cards.tables}, blobs=cards.blobs)
+...
+evaluate(..., rollups=CARD_ROLLUPS)  # manabot.eval.card_metrics
 ```
 
 The participants are the two registered players in Etude row order (the order
@@ -88,13 +90,21 @@ Each match delivers four author tables; Etude adds `run` and `match`.
 the play):
 
 - `card_plays`: one row per game and player, with deal, decks, position,
-  outcome, eligibility, win, the evidence path and digests, and the source
-  commit and dirty flag that produced it.
+  outcome, eligibility, win, the evidence blob's SHA256 and size, the trace and
+  replay digests, and the source commit and dirty flag that produced it.
 - `card_counts`: deck, opening, drawn and GIH copies per card in that game.
 - `cards`: names for card keys (native content digest plus definition ID).
 - `plays`: the shared outcome table every Etude evaluation report reads.
 
-Subjects and opponents are joins against Etude's `seats` and `players`, never
+Etude sums `CARD_ROLLUPS` (`manabot/eval/card_metrics.py`) as each match is
+stored and keeps them in the run's blocks: `card_deals` holds each card's
+GP/OH/GD/GIH/GNS opportunities and winning copies per deal, position, decks,
+source commit, player and opponent over eligible games; `game_deals` holds
+player-games and wins per deal and the same splits, with eligibility and
+outcome. Open the database with `card_db`, which also sums them once for runs
+stored without them. A changed rollup takes a new name.
+
+Subjects and opponents are the rollups' Etude `player`/`opponents` keys, named by `players`, never
 fields copied into card rows; `players.artifact` is a checkpoint's digest.
 Within an experiment, games pool across engine and manabot commits; the source
 commit is provenance and a filter, not part of the pooling key.
@@ -111,11 +121,12 @@ uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXPERI
 
 `audit` re-reads every game's evidence, checks its bytes, its schedule binding
 and the runtime/content identity its eval run declared, and rebuilds its rows.
-`--replay` also replays each trace. Evidence lives in the eval run's folder at
-`artifacts/evidence/SHA256.json.gz` and travels with ordinary Etude delivery
-(`uv run etude sync`). Etude sends files under `artifacts/` once and never re-reads
-them, so delivery stays cheap with thousands of games. Earlier runs keep their
-evidence at `evidence/`; their rows name that path. Evidence contains
+`--replay` also replays each trace. Each game's evidence is a blob of its match
+(gzip JSON, named by SHA256), kept in the block's `blobs.zip` and delivered with
+it (`uv run etude sync`); `audit` and `export-log` read it with Etude's
+`read_blobs`, which verifies every digest. Runs written before blocks kept a
+file per game; `etude convert-eval RUN --source URI` turns those files into
+blobs without rewriting them, and only then can they be read. Evidence contains
 copy/incarnation identity, owner/controller, movement source/destination/cause,
 sequence and turn, original commands and hashes, and the replay receipt. These
 are private full-game artifacts, not viewer-safe public replay payloads.
