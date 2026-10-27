@@ -196,9 +196,16 @@ def play_group(request: Request) -> list[GameRow]:
     )
     if file_sha256(request.checkpoint) != request.sha256:
         raise ValueError("checkpoint byte identity differs")
-    model, _ = load_checkpoint(request.checkpoint)
+    model, space = load_checkpoint(request.checkpoint)
+    # The checkpoint's own observation space (its saved policy-input version)
+    # names its ABI; served admission rejects any other.
+    own = runtime_fingerprints(match_config=matchup.match(), observation_space=space)
     candidate = PlayerRegistration(
-        **common,
+        **{
+            **common,
+            "observation_abi_sha256": own["observation_abi_sha256"],
+            "action_abi_sha256": own["action_abi_sha256"],
+        },
         player_id="model",
         display_name="Checkpoint",
         role="challenger",
