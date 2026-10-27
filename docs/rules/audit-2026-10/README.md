@@ -1,9 +1,23 @@
-# Rules audit: October 26 review draft
+# Rules audit: October 26 resolution repair draft
 
-This continuation audits **150 individual obligations** in CR 115, 400.7,
+The selected CR 608.2b repair now retains clause-specific resolution eligibility
+across spells, activated abilities, triggers and suspended choices. Effect handlers
+use that result with separate object-presence guards. The retained hexproof probe
+is enabled; earthbend destination identity and deathtouch history remain ignored,
+unresolved proposals. See [resolution evidence](resolution-validation.json).
+
+This isolated checkout is `w15-resolution-draft` / hash 10, not an admitted world.
+MTG-195 still owns uncommitted w14 trigger-order work. Final integrated identity,
+fresh conformance/demo receipts and broader consumer acceptance remain pending;
+no historical evidence is relabeled and no publication or merge is selected.
+
+## Earlier obligation audit
+
+The earlier audit reviewed **150 individual obligations** in CR 115, 400.7,
 603, 608 and 704 on post-sync checkout `324db65f2`. The exact official TXT was
 recovered and its pinned digest verified; [source.json](source.json) is unchanged.
-Production behavior, frozen receipts and world identity are unchanged.
+That earlier audit changed no production behavior or world identity; its frozen
+receipts remain unchanged.
 
 Start with the [current coverage map](coverage-map.md) for prioritized findings.
 The per-entry [reviews](reviews.json) and generated [index](index.jsonl) retain
@@ -11,9 +25,9 @@ specific authorities, evidence and limits. Overall dispositions are now
 **3 implemented, 92 partial, 57 missing, 330 not applicable and 2,840 unknown**.
 A missing unsupported mechanic is not a reproduced admitted-game defect.
 
-Two new ordinary debug tests pass: optional choices wait until resolution, and
+Two ordinary debug tests passed: optional choices wait until resolution, and
 SBA life loss waits until a suspended resolution finishes. Three ignored proposals
-were explicitly run and fail at the required outcome: earthbend follows a land
+were explicitly run and failed at the required outcome: earthbend follows a land
 through a second zone change; surviving deathtouch remains lethal at a later SBA
 check; granting hexproof during resolution incorrectly suppresses a later damage
 instruction of that same ability. These controlled fixtures do not establish

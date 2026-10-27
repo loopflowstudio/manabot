@@ -145,8 +145,8 @@ MTG-177 primary conversation, with concrete choices and remaining findings.
   Keep unification.md and all frozen receipts intact.
 - Stale w12/current-payment wording and inherited MTG-184 questions are already
   removed. The latter remain at `324db65f2:scratch/questions.md`.
-- No production path is replaced by this audit-only increment. Proposed
-  behavior repairs remain review decisions, not deletion targets in this pass.
+- The earlier audit-only increment replaced no production path. The selected
+  resolution repair's deletion list and remaining integration work are below.
 
 ## Implementation — 2026-10-26
 
@@ -244,3 +244,52 @@ All three claims were checked against the pinned official text and native
 authority. Existing test receipts still apply; this review changed no code and
 ran no new behavior tests. Keep this as the reviewable repair plan. Shared-choice
 work remains MTG-195/196; no duplicate Task or worker was launched by this review.
+
+## Resolution repair implementation — 2026-10-26
+
+Frame decision: replace the frame's separate target/clause vectors with
+`ResolutionTarget { target, requirement, legal }` slots, preserving chosen order
+and illegal slots (the last-target damage instruction is positional). One
+resolution-entry helper evaluates these with the existing `target_is_legal`.
+All three stack paths reject a nonempty all-illegal set before effects. Suspended
+frames, cloning and canonical serialization retain the result. Trigger context
+remains untargeted and cannot substitute for an illegal chosen slot. Effects
+check live object presence separately; PermanentId and graveyard ObjectRef retain
+the existing incarnation guards. No stack-target ABI migration is included.
+
+Delete — do not maintain: per-handler `target_is_legal` calls, separate spell /
+trigger all-invalid predicates, frame `target_req_indices`, and the hexproof
+probe's ignore attribute. Preserve the two unrelated ignored proposals and
+legitimate selection/acceptance predicates. Migrate positional damage and
+ForEachTarget along with ordinary handlers and continuation projection.
+
+Integration: fresh read of MTG-195's checkout still shows its uncommitted w14
+implementation and fixtures. No supported handoff is available. Final world
+identity, new conformance/demo receipts and integrated consumer acceptance are
+pending that integration; do not claim this local repair as admitted w13 or w14.
+
+Canonical hash integration: EffectFrame serialization owns suspended eligibility;
+its shape changes the hash contract. MTG-195 locally reserves hash version 9
+alongside w14. This isolated draft uses hash 10 and `w15-resolution-draft` so
+native consumers cannot misidentify it as either 8/w13 or 9/w14. This is not the
+final integrated world or an admission claim. Select the final world and fresh
+receipts only after supported integration; no historical fixtures are relabeled.
+
+Resolution repair status: production deletion/migration is complete. All handler
+TargetSpec rechecks and frame clause-vector duplication are removed; positional
+power damage and ForEachTarget consume retained eligibility. The two unrelated
+ignored probes are unchanged. No final-world receipts were generated.
+
+Remaining accepted work: supported MTG-195 integration, final world assignment
+and new conformance/Academy prefixes; then gate owns full debug Rust/clippy and
+`docs/development/validation.md` world/admission, maintained model/separability,
+Command/recovery and consumer/replay checks. Earlier worlds, source pin and
+historical receipts stay frozen. Publication/merge/whole-Task completion remain
+unselected. This dependency is not an assertion that integrated acceptance passed.
+
+Check: focused debug Rust → 33 passes, 3 intentionally ignored proposals;
+inventory pytest → 6 passes; native release build + atomic install/import,
+rustfmt, pinned inventory verification and diff whitespace → pass. Exact
+commands/source hashes/failure correction: `docs/rules/audit-2026-10/resolution-validation.json`.
+Broader acceptance remains gate-owned after integration above. Conservative
+charge: 935 new lines, 8428 total of roughly 10k.

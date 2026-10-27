@@ -949,21 +949,24 @@
     },
     "608.2b": {
       "status": "partial",
-      "scope": "Restricted stack target resolves when legal; departing sole target prevents all instructions, including untargeted life gain. Existing trigger, Sokka mixed-target and graveyard-incarnation evidence retained.",
-      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
-      "dispersion": "shared predicate, but incorrect intra-resolution recheck timing demonstrated",
-      "comments": "Selection-time and start-of-resolution rechecks are required. The new probe distinguishes those from rechecks after earlier instructions; no production correction in this draft.",
+      "scope": "Resolution-start legality retained per chosen clause across spell, activated and triggered instructions, suspended choices, clone and undo. Mixed legal targets survive; all-invalid objects suppress untargeted instructions; zero optional targets resolve.",
+      "authority": "managym/src/flow/resolution.rs:Game::resolution_targets, Game::target_is_legal, Game::target_is_present; managym/src/flow/decision.rs:ResolutionTarget",
+      "dispersion": "shared predicate and one resolution-entry eligibility authority",
+      "comments": "CR 608.2b entry-time eligibility is distinct from CR 400.7 live-object presence. Effects no longer re-evaluate TargetSpec after earlier instructions. Positional target slots and clause identity survive suspension.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
         "managym/tests/rules/cr_603_triggers.rs",
         "managym/tests/rules/elemental_cards.rs",
-        "managym/tests/rules/cr_608_resolution.rs:audit_target_gaining_hexproof_during_resolution_is_still_affected"
+        "managym/tests/rules/cr_608_resolution.rs:audit_target_gaining_hexproof_during_resolution_is_still_affected",
+        "managym/src/flow/resolution_tests.rs"
       ],
-      "gap": "Not exhaustive effect/target-clause/identity proof. Stack CardId loses incarnation, but the directed bounce/recast sequence resolves the new spell before the old ability and has no stale-target effect. Activated abilities lack the spell/trigger whole-object all-invalid gate; current targeted effects recheck locally, so a multi-effect activated ability needs a separate witness before expansion. New synthetic failure: an initially legal target granted hexproof by the resolving trigger is skipped by a later damage instruction. Per-effect legality rechecks are not equivalent to the required initial resolution check; retain legal-target results across instructions while still respecting exact-object departure.",
+      "gap": "Not exhaustive effect/identity proof or whole-rule conformance. Stack CardId identity remains a representation limit without an admitted-play witness; full LKI and unsupported target types remain outside this repair. Multi-clause activation announcement is not represented. Final world identity, conformance/demo receipts and integrated consumer acceptance await MTG-195 supported handoff. Historical obligation-validation.json retains the original hexproof failure; the repaired draft has separate evidence.",
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life",
         "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability",
-        "managym/tests/rules/cr_608_resolution.rs::audit_target_gaining_hexproof_during_resolution_is_still_affected"
+        "managym/tests/rules/cr_608_resolution.rs::audit_target_gaining_hexproof_during_resolution_is_still_affected",
+        "managym/src/flow/resolution.rs::fn resolution_targets(",
+        "managym/src/flow/resolution_tests.rs::resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo"
       ]
     },
     "115.1c": {

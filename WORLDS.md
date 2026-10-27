@@ -1,5 +1,11 @@
 # Worlds
 
+> Unintegrated resolution repair: this checkout reports `w15-resolution-draft`
+> with hash contract 10. It retains clause-specific eligibility from resolution
+> start across instructions and suspended decisions. It is not admitted against
+> the frozen corpora below. MTG-195's uncommitted w14/hash-9 work must be integrated
+> before selecting a final world and recording fresh conformance/demo evidence.
+
 A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
 shards, and reports are only comparable within a world; cross-world numbers
 never share a table untagged. New worlds are frozen deliberately (batch the

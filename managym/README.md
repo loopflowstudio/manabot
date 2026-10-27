@@ -45,7 +45,11 @@ use the native Rust implementations so new visibility fields cannot drift.
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving
-frame retains its active clause across suspended decisions. Graveyard targets
+frame retains its active clause and each chosen slot's resolution-start eligibility
+across suspended decisions (CR 608.2b). Effects use those retained results; live
+presence checks separately prevent following departed objects (CR 400.7).
+Illegal slots remain positional, and zero optional targets still resolve.
+Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Journal permanent mutations at their event authority;
 source-relative effects require the original battlefield object.

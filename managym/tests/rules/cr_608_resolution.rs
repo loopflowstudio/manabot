@@ -161,7 +161,6 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
 /// CR 608.2b: target legality is checked as resolution starts, not again
 /// after each instruction changes the target's characteristics.
 #[test]
-#[ignore = "audit proposal: retain initial resolution legality across instructions"]
 fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     let mut s = Scenario::new(ogre_deck(), ogre_deck(), 608_115);
     s.advance_to_active_step(0, StepKind::Main);

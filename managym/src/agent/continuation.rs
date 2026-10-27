@@ -324,7 +324,14 @@ impl Game {
             kicked: effect.kicked,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
-            targets: self.clause_targets(&effect.targets, &effect.target_req_indices, viewer),
+            targets: effect
+                .targets
+                .iter()
+                .map(|slot| ClauseTarget {
+                    reference: self.target_reference(slot.target, viewer),
+                    clause: slot.requirement,
+                })
+                .collect(),
             context: effect
                 .context_target
                 .map(|t| self.target_reference(t, viewer)),

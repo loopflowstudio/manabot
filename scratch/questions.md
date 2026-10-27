@@ -10,3 +10,13 @@
   changes or external messages are part of this implementation step.
 - Inherited MTG-184 questions are preserved at
   `324db65f2:scratch/questions.md`; they do not direct this audit.
+- Resolution repair (2026-10-26): use clause-specific eligibility slots in the
+  existing EffectFrame; preserve invalid positions rather than compacting targets.
+  Untargeted trigger context is used only when no targets were chosen. Existing
+  stack CardId identity remains unchanged; no broader stack ABI is inferred.
+- MTG-195 still has uncommitted trigger-order/w14 work. Final world identity and
+  fresh integrated receipts require its supported handoff; local implementation
+  checks do not certify either frozen world.
+- The serialized frame changes canonical hashing. Use hash 10 (MTG-195 holds
+  9) and the provisional `w15-resolution-draft` identity to prevent frozen-world
+  admission while integration is unavailable. Final world assignment is pending.
