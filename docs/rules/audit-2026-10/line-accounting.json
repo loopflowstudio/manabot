@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 6891,
+  "combined_draft_churn_lines": 7493,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -156,7 +156,7 @@
     }
   ],
   "self_accounting": "This accounting file is itself an audit report artifact, excluded from draft budget.",
-  "untracked_official_source": "scratch/MagicCompRules-20260925.txt is retained input from Wizards, not authored draft lines. Task snapshots, CI API reads and raw local logs also remain in scratch. No source text is republished in the committed index.",
+  "untracked_official_source": ".cache/rules-audit/MagicCompRules-20260925.txt is the verified Wizards input, not authored lines. Exact command receipts are retained in obligation-validation.json.",
   "original_combined_draft_churn_lines": 621,
   "unification_increment": {
     "basis": "Additions plus deletions since ededb325; report/index artifacts excluded, original draft and local helper charge retained.",
@@ -503,5 +503,58 @@
     ],
     "local_helper_lines": 73,
     "charged_lines": 2617
+  },
+  "obligation_review_increment": {
+    "basis": "2026-10-26 working diff against 324db65f2. Tests, module registration, local authored helpers and question-note churn charged; reports/index/receipts/design notes and recovered official text excluded. Previous 6891-line charge retained.",
+    "files": [
+      {
+        "path": "managym/tests/rules/mod.rs",
+        "added": 1,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 12,
+        "deleted": 85
+      },
+      {
+        "path": "managym/tests/rules/cr_608_resolution.rs",
+        "added": 195,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/run_audit.py",
+        "added": 41,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/update_review.py",
+        "added": 195,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/finalize_audit.py",
+        "added": 73,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 602,
+    "excluded_reports": [
+      "README.md",
+      "coverage-map.md",
+      "reviews.json",
+      "index.jsonl",
+      "obligation-validation.json",
+      "line-accounting.json",
+      "unification.md"
+    ],
+    "excluded_local_notes": [
+      "scratch/plan.md"
+    ],
+    "retired_helpers": {
+      "archive": ".cache/rules-audit/retired-authoring-20261026.tar",
+      "sha256": "c3cb336bb0422ef681d7a297eefe5344df263391c75cfc1a7936285694e60bc9",
+      "policy": "The three one-shot scratch helpers are retired after byte-for-byte archival. Their original 309 authored lines remain charged above; historical effort is not refunded. Edit reviews.json and regenerate with scripts/audit_rules.py."
+    }
   }
 }
