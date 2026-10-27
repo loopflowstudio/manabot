@@ -13,8 +13,8 @@ pending units newest first (`plan`) and freezes each batch as one Etude job
 digest-checked inputs. On the machine, `machine` plays the batch with
 `etude.eval.match.evaluate` into a local eval run and returns that run's folder
 as `<run>.tar` plus `receipt.json` (wall time, games, workers, compute).
-`collect` copies a finished batch's run folder into
-`r2://manabot/evaluations/<run>/`, beside the mini's `mtg183-eval-cards`.
+`collect` folds a finished batch's run folder into MTG-183's combined
+database (`experiments.elemental_long_db`), which is published as one object.
 
 Two eval runs keep two compute contracts apart: `mtg183-eval-rent` plays the
 frozen scalar path (one Torch thread, one decision per forward pass), and
@@ -51,10 +51,11 @@ from typing import Literal
 from etude.eval.match import evaluate
 from etude.eval.records import Match
 from etude.launch.records import Input, Job, Run
-from etude.run.storage import run_directory, storage_from_uri
+from etude.run.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment
+from experiments.elemental_long_db import LocalFolder, connect, ingest
 from experiments.elemental_long_eval import (
     CARDS,
     COMPUTE,
@@ -571,7 +572,10 @@ def launch(
 
 
 def collect(run_id: str) -> Receipt:
-    """Copy a finished batch's eval run folder to the evaluations bucket."""
+    """Fold a finished batch's returned run folder into MTG-183's combined database.
+
+    `experiments.elemental_long_db publish` then uploads that database as one object.
+    """
     from etude.launch.client import default
 
     ledger = _ledger()
@@ -584,11 +588,9 @@ def collect(run_id: str) -> Receipt:
         archive = Path(scheduler.fetch(run_id, f"{batch.run}.tar", Path(folder)))
         with tarfile.open(archive) as opened:
             opened.extractall(folder, filter="data")
-        root = Path(folder) / batch.run
-        destination = storage_from_uri(f"{EVALUATIONS}/{batch.run}")
-        for path in sorted(root.rglob("*")):
-            if path.is_file():
-                destination.put(str(path.relative_to(root)), path.read_bytes())
+        # Folded into the combined database, never copied object by object.
+        with connect() as db:
+            print(ingest(db, LocalFolder(batch.run, Path(folder) / batch.run)))
     if run_id not in ledger.collected:
         ledger.collected.append(run_id)
         LEDGER.write_text(ledger.model_dump_json(indent=1) + "\n")
