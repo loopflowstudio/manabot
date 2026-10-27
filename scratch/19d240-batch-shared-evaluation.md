@@ -271,3 +271,14 @@ registration's setups are still validated on arrival. No open product choice.
 Done 2026-10-26: `hero_view`, `stack_names` and `zone_names` in
 `verify/scenarios.py` are public; no underscore name crosses a module boundary.
 `uv run --extra dev pytest tests/verify tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 88 passed, 1 skipped.
+
+## Concept review 3 (headless, 2026-10-26, at `2cc89c948`)
+
+Nothing to change; no open product choice. Verified in code: `PolicyKey`
+binds checkpoint, ABIs, world and numerics only; `group_worker` census is
+recorded in `eval/match.py` via `group_worker_budget`; the `verify/scenarios`
+helpers are public. Correction to review 2's record: one private name still
+crosses a module boundary, `supervision._failure` imported by `native_game`.
+It is inherited unchanged from `main` (`sim/match.py` imported it at
+`f5e7289b1`), so it is kept out of this Task's diff. Remaining work is slice 5,
+the rental before/after through MTG-183.

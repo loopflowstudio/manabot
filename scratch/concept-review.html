@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MTG-193 concept review</title>
+<title>MTG-193 concept review 3</title>
 <style>
 :root{--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--prop:#8a5a00;--code:#f0ede6}
 @media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--rule:#3a3833;--prop:#e0b060;--code:#2a2925}}
@@ -10,39 +10,29 @@ header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
 h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2.2rem;border-top:1px solid var(--rule);padding-top:1rem}
 code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.88em}
 table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--rule);padding:.4rem .3rem;text-align:left;vertical-align:top}
-.prop{color:var(--prop)}
 .callout{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem}
 </style></head><body><main>
 <header>
-<h1>Concept review 2: batched shared evaluation, light bounded children</h1>
-<p>Task MTG-193 · step concept-review (headless, after compress 2) · 2026-10-26</p>
-<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/serving.py</code>, <code>manabot/verify/{scenarios,checkpoint_scenarios,scenario_validation,competency}.py</code>, the working-tree diff</p>
+<h1>Concept review 3: batched shared evaluation, light bounded children</h1>
+<p>Task MTG-193 · step concept-review (headless) · 2026-10-26 · HEAD <code>2cc89c948</code></p>
+<p>Built from: <code>scratch/19d240-batch-shared-evaluation.md</code>, <code>manabot/sim/serving_protocol.py</code>, <code>manabot/sim/threads.py</code>, <code>manabot/eval/match.py</code>, <code>manabot/sim/native_game.py</code>, <code>manabot/verify/scenarios.py</code></p>
 </header>
 
-<p><strong>Decision needed:</strong> none. One small naming change follows from repository style, so the step iterates to implement.</p>
+<p><strong>Decision needed:</strong> none. Nothing changes, and the step advances.</p>
 
-<h2>Actions → concepts → APIs (unchanged, verified)</h2>
+<h2>Actions → concepts → APIs (existing, verified)</h2>
 <table>
 <tr><th>Operator action</th><th>Concept</th><th>API</th></tr>
-<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world, numerics. Matchup is in admission and evidence only. One admission per key, and each registration's setups are validated on arrival.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
-<tr><td>Run many games cheaply</td><td>Child process: a <code>module:function</code> target that never imports the parent's <code>__main__</code></td><td><code>ChildProcess</code>, <code>native_game.execute_game</code></td></tr>
-<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census, now including <code>group_worker</code> on both paths</td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>effective_cpus</code></td></tr>
+<tr><td>Evaluate a checkpoint across many matchups</td><td>Policy key: checkpoint, ABIs, world and numerics. The matchup appears only in admission and evidence.</td><td><code>PolicyKey.from_registration</code>, <code>PolicyStore.admit</code></td></tr>
+<tr><td>Run many games cheaply</td><td>Child process: a <code>module:function</code> target that does not import the parent's <code>__main__</code> and does not load Torch when served</td><td><code>ChildProcess</code>, <code>native_game</code></td></tr>
+<tr><td>Trust a rented host's CPU count</td><td>Thread budget by role, proven by a census, including <code>group_worker</code></td><td><code>ThreadBudget.account</code>, <code>ProcessCensus</code>, <code>group_worker_budget</code>, <code>effective_cpus</code></td></tr>
 </table>
 
-<h2>The one mismatch</h2>
+<h2>Only finding: the record, not the code</h2>
 <div class="callout">
-<p>Compress 2 made the shared helpers in the new <code>verify/scenarios.py</code> module public. Three of them are still private but are imported by other modules, so a private name crosses a module boundary.</p>
+<p>Review 2 recorded that no private name crosses a module boundary. One still does: <code>native_game</code> imports <code>supervision._failure</code>. That import came unchanged from <code>main</code>, where <code>sim/match.py</code> had it at <code>f5e7289b1</code>. It is kept out of this Task's diff, and the working design now records the correction.</p>
 </div>
-<table>
-<tr><th></th><th>Before (working tree)</th><th class="prop">Proposed</th></tr>
-<tr><td>Public</td><td><code>action_casts</code>, <code>battlefield_pairs</code>, <code>find_cast_action</code>, <code>pass_index</code></td><td class="prop">the same, plus <code>hero_view</code>, <code>stack_names</code>, <code>zone_names</code></td></tr>
-<tr><td>Imported while private</td><td><code>_hero_view</code> (checkpoint_scenarios, scenario_validation); <code>_stack_names</code> and <code>_zone_names</code> (scenario_validation)</td><td class="prop">none</td></tr>
-</table>
-<p>The module is new on this branch, so the change touches no external surface and no frozen evidence.</p>
-
-<h2>Kept as is</h2>
-<p>Keeping a single admission per key is correct, because <code>PolicyStore.get</code> loads only the first admission's checkpoint path. Code-anchor games still load Torch, which is a known limit with a candidate follow-up.</p>
 
 <h2>Questions</h2>
-<ol><li>None open. The calibration items (the culprit for the oversubscription, budget values, the target for served-child RSS) are in <code>scratch/questions.md</code> and need the rental run through MTG-183.</li></ol>
+<ol><li>None open. The remaining work is slice 5: the rental before/after run through MTG-183, which also settles the budgets, the RSS target and the cause of the oversubscription (<code>scratch/questions.md</code>).</li></ol>
 </main></body></html>
