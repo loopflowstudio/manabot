@@ -24,8 +24,10 @@ was dead on arrival in exp-10.)
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
 
-**Current development world: w13.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w12) are **not comparable** to w13; do not reuse their
+| **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
+
+**Current development world: w14.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w13) are **not comparable** to w14; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -272,3 +274,26 @@ bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
 ordinary Command path. All earlier corpora and demo files retain their bytes.
 Current-world admission and monitoring must validate this combined runtime;
 historical w12 passes are scoped to their recorded sources.
+
+
+## w14: controller-selected trigger placement
+
+Controllers explicitly choose the next waiting occurrence to place, within each
+of CR 603.3b's two APNAP passes. Targets are chosen at placement; a suspended
+placement round resumes before further state-based actions or collection.
+Trigger-on-trigger condition matching remains unsupported; typed native fixtures
+establish second-pass scheduling only. MTG-196 owns replacement ordering.
+
+Semantic decisions use schema 7, decision capture version 3, and canonical mutable
+state hash version 9. Fresh policy input v3 adds the seventeenth action family and
+an action-to-continuation frame join. All relations of that frame inform its action;
+occurrence counters never become numeric policy features. Missing checkpoint input
+versions still decode as v1 and explicitly saved v2 configurations retain their
+serialization. Historical-world checkpoints are rejected for current-world play.
+
+The new conformance root is `conformance/semantic-kernel-w14-v1`. Existing w13 and
+earlier corpora, play roots, decks and checkpoint evidence are retained unchanged.
+The existing-card trigger witness uses the explicit scenario recipe in
+`manabot.verify.trigger_order` before ordinary human Commands and agent actions;
+`academy/fixtures/trigger-order-w14.json` retains its root and content identities.
+This is a constructed root, not a seed-only authored-match prefix.

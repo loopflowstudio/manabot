@@ -27,7 +27,7 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w11.json"
+FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w14.json"
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 
@@ -37,9 +37,8 @@ def test_retained_choice_position(
 ) -> None:
     # JSON is checked against the live producer, including full offers and projection.
     position = POSITIONS[family]
-    # Reproduce this frozen evidence using its original native collapse mode.
-    # Current Academy uses explicit decisions; the retained engine preset and
-    # frozen frame bytes remain compatibility evidence, not current UX.
+    # Reproduce this w14 fixture with its explicitly recorded collapse mode.
+    # The companion fixtures cover Academy's explicit-decision mode.
     native_env = managym.Env
 
     def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
@@ -66,28 +65,6 @@ def test_retained_choice_position(
     assert session.env is not None
     assert session.env.state_digest() == position.digest
     expected = position.frame.model_dump(mode="json", exclude_unset=True)
-    frame = dict(frame)
-    frame["offers"] = [
-        {**{k: v for k, v in offer.items() if k != "subjects"}, "source": None}
-        for offer in frame["offers"]
-    ]
-    frame["projection"] = {
-        k: v
-        for k, v in frame["projection"].items()
-        if k not in {"decision_context", "stack_objects"}
-    }
-    for player in ("agent", "opponent"):
-        frame["projection"][player] = {
-            k: v
-            for k, v in frame["projection"][player].items()
-            if k not in {"mana", "lesson_mana", "combat_mana", "inspected"}
-        }
-        # Historical frames omit optional grouping metadata. All original
-        # object fields must still compare exactly.
-        frame["projection"][player]["battlefield"] = [
-            {k: v for k, v in permanent.items() if k not in {"types", "is_token"}}
-            for permanent in frame["projection"][player]["battlefield"]
-        ]
     for field in (
         "revision",
         "action_space",
@@ -116,7 +93,7 @@ def test_retained_choice_position(
 @pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
 def test_current_explicit_choice_position(tmp_path: Path, family: str) -> None:
     current = NavigationFixture.model_validate_json(
-        FIXTURE.with_name("choice-navigation-explicit-w11.json").read_text()
+        FIXTURE.with_name("choice-navigation-explicit-w14.json").read_text()
     ).positions[family]
     session = GameSession(tmp_path)
     try:

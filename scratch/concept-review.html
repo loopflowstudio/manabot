@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-195 — Choosing a triggered ability</title>
+<style>
+:root{color-scheme:light dark;--paper:#faf8f2;--ink:#242d29;--muted:#59645e;--line:#c8cec5;--panel:#f0f2eb;--accent:#245e4d;--wash:#e9f0e9}
+@media(prefers-color-scheme:dark){:root{--paper:#181e1b;--ink:#e9eee5;--muted:#aab8ad;--line:#48564c;--panel:#242e27;--accent:#a5d5b9;--wash:#293a2e}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,sans-serif}main{max-width:850px;margin:auto;padding:34px 26px 60px}header{font-size:13px;color:var(--muted)}h1{font:500 clamp(27px,4vw,38px)/1.15 Georgia,serif;letter-spacing:-.5px;margin:20px 0 14px}h2{font:500 23px/1.25 Georgia,serif;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}p{margin:9px 0}section{margin-top:30px}strong{font-weight:650}.lead{font-size:18px}.muted,small{color:var(--muted)}small{display:block;font-size:13px}.mismatch{border-left:3px solid var(--accent);padding-left:16px;margin:23px 0}.existing-offer{font-size:13px;padding:12px;border:1px solid var(--line);border-radius:5px;line-height:1.45}.example{padding:20px;background:var(--panel);border-radius:6px}.choices{display:grid;gap:10px;margin:16px 0}button{font:inherit;text-align:left;background:var(--paper);color:var(--ink);border:1px solid var(--line);padding:12px 15px;border-radius:5px;cursor:pointer}button:hover{border-color:var(--accent)}button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px}button:disabled{opacity:.65;cursor:default}.choices button strong{display:block}.choices button span{display:block;font-size:14px}button small{margin-top:6px}.tools{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.tools button{font-size:13px;padding:7px 10px}.stack{border-left:3px solid var(--accent);padding-left:18px;margin-top:17px}.stack ol{padding-left:22px;margin:7px 0}.stack li{padding:3px 0}.status{min-height:3em;color:var(--accent);font-size:14px}code{font:13px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:10px 9px;text-align:left;vertical-align:top}th{font-weight:600}details{border-top:1px solid var(--line);padding:14px 0}summary{cursor:pointer;font-weight:600}blockquote{margin:14px 0;padding-left:16px;border-left:2px solid var(--line)}.questions{border-top:2px solid var(--accent);padding-top:24px}.questions p{margin:12px 0}a{color:var(--accent)}@media(max-width:540px){main{padding:24px 17px 40px}.example{padding:14px}table{font-size:12px}th,td{padding:8px 5px}code{font-size:11px}}
+</style></head><body><p style="margin:1rem auto;max-width:960px">Accepted: option 1a. Shared exact-ability descriptions, followed by authorized landing (2026-10-27).</p><main>
+<header>MTG-195 · Concept review · 27 October 2026
+<details><summary>Built from the current working files</summary><p><code>scratch/trigger-order.md</code><br><code>managym/src/flow/action.rs</code><br><code>managym/src/flow/trigger.rs</code><br><code>managym/src/agent/continuation.rs</code><br><code>academy/ui/src/lib/components/ActionPanel.svelte</code><br><code>academy/README.md</code><br><code>tests/academy/test_trigger_order.py</code></p></details></header>
+<h1>Choose the ability that is waiting.</h1>
+<p class="lead">Decision: refine the shared ability descriptions before delivery, or keep the current full-card labels?</p>
+<p>I recommend the refinement. Keep the accepted one-at-a-time placement and its immediate commitment.</p>
+<div class="mismatch"><strong>The mismatch</strong><br>The action selects one occurrence of one ability. Its label currently includes every ability on the source card. The human has to work out which text applies.</div>
+<section aria-labelledby="existing"><h2 id="existing">Existing: a precise choice, described as a whole card</h2>
+<small>Exact offer labels read from the native two-trigger demo. The existing instruction correctly says later placements resolve first.</small>
+<p class="existing-offer">Bastion of Remembrance — triggered ability 2: When this enchantment enters, create a 1/1 white Human Soldier creature token.<br>Whenever a creature you control dies, each opponent loses 1 life and you gain 1 life.</p><p class="existing-offer">Callous Inspector — triggered ability 1: Menace (This creature can&#x27;t be blocked except by two or more creatures.)<br>When this creature dies, it deals 1 damage to you. Create a Clue token. (It&#x27;s an artifact with &quot;{2}, Sacrifice this token: Draw a card.&quot;)</p>
+</section>
+<section aria-labelledby="proposal"><h2 id="proposal">Proposed: put this ability on the stack next</h2>
+<small>Interactive illustration, not the running game. These example descriptions are proposed; their production source would be the native ability projection.</small>
+<div class="example">
+<p><strong>Your life: 1.</strong> Deadly Dispute is on the stack. Inspector has been sacrificed; its cost is already paid.</p>
+<p>Choose an ability to put on the stack next. Each choice commits. Later placements go above earlier ones.</p>
+<div class="choices" id="choices">
+<button type="button" data-choice="bastion"><strong>Bastion of Remembrance · creature died</strong><span>Each opponent loses 1 life and you gain 1 life.</span><small>Put this ability on the stack next</small></button>
+<button type="button" data-choice="inspector"><strong>Callous Inspector · this creature died</strong><span>Deal 1 damage to you. Create a Clue token.</span><small>Put this ability on the stack next · source has left the battlefield</small></button>
+</div>
+<div class="stack"><h3>Current stack · top resolves first</h3><ol id="stack"><li>Deadly Dispute</li></ol></div>
+<p class="status" id="status" role="status" aria-live="polite">Two abilities are waiting. Nothing is selected.</p>
+<div class="tools"><button id="recover" type="button">Illustrate reconnect</button><button id="reset" type="button">Reset illustration</button></div>
+<small>Reset is a review control, not a proposed game undo. This example has no target choices. A final trigger that needs targets still stops for them.</small>
+</div>
+</section>
+<section aria-labelledby="layers"><h2 id="layers">Actions → concepts → APIs</h2>
+<table><thead><tr><th>You do</th><th>The concept</th><th>Authority</th></tr></thead><tbody>
+<tr><td>Inspect the pending ability</td><td>One occurrence, its source and relevant context</td><td>Derived offer description + continuation frame; no mutation</td></tr>
+<tr><td>Choose “put next”</td><td>Commit its position; finish targets if required</td><td><code>Command → ChooseTrigger → TriggerPlacement.placing</code></td></tr>
+<tr><td>Reload after a lost response</td><td>Resume actual committed progress</td><td>Existing session resume, bound frame and duplicate receipt</td></tr>
+</tbody></table>
+<p class="muted">Before and after use the same state and Commands. The proposed change improves the shared description; it adds no editable order draft, saved UI plan or browser-owned legality.</p>
+</section>
+<section aria-label="Consequences and draft documentation">
+<details><summary>Normal path, lost response, recovery</summary>
+<p>Choose Inspector first. Bastion's remaining position is forced, so it is placed above Inspector. No ability has resolved yet. With ordinary priority passes and no responses, Bastion gains life before Inspector deals damage; you survive at 1.</p>
+<p>Choose Bastion first and Inspector sits above it. With those same passes, Inspector deals damage first; you lose at 0 before Bastion can resolve. These outcomes are existing fixture evidence, not a proposed general outcome predictor.</p>
+<p>If submission succeeded but its response was lost, reconnect shows the committed stack or outstanding target decision. If submission never arrived, reconnect shows the original pending choice. Resending the same accepted Command returns its receipt; a stale different submission is rejected. Costs stay paid.</p>
+</details>
+<details><summary>Counterexamples the simpler description must survive</summary>
+<p>Two abilities from one source; two occurrences with different causal subjects; a source that has left play; a delayed trigger with inline effects; and optional or multiple target clauses. “Card name + ability number” and splitting the card text by newline are insufficient.</p>
+<p>Describe the exact registered ability or inline effects at the shared native projection owner. Keep full source text available for inspection and keep distinct occurrences distinct. Preserve viewer privacy, APNAP, target timing and bounded-model admission. Trigger-on-trigger matching remains outside the accepted scope.</p>
+<p>An editable whole-order preview would be a new shared action and recovery design. It is not implied by this proposal. Calling the current click “resolve first” would misstate what it commits.</p>
+</details>
+<details><summary>Proposed usage documentation and demo instruction</summary>
+<p><strong>Draft addition to Academy's usage guide</strong></p>
+<blockquote>When several of your abilities are waiting, choose one ability to put on the stack next. Inspect its source for the full card text. Choosing commits its place in the order; if it needs targets, finish those choices before continuing. Later placements sit above earlier ones and resolve first if the stack proceeds without responses. The last remaining position is forced. Reload restores the actual pending order or target decision, or the current stack if placement has finished. A lost response does not undo a submitted choice.</blockquote>
+<p><strong>Draft Task demo instruction</strong></p><p>Demonstrate both existing-card orders with explicit Commands. Separate placement from resolution. Interrupt submission before acknowledgment and recover the native frame. Do not choose a preferred order for the person or present this illustration as a live game. Existing general skill guidance remains unchanged.</p>
+</details>
+</section>
+<section class="questions"><h2>1. Which direction?</h2>
+<p><strong>1a — Refine the shared descriptions before delivery.</strong> Recommended. Show the actual pending ability and explicit place-next action. Keep the accepted native model.</p>
+<p><strong>1b — Keep the current labels for this delivery.</strong> Full source text and the ability number remain the choice description.</p>
+<small>Both preserve every accepted legal choice, commitment and recovery requirement. Neither authorizes an editable whole-order interaction or publication. Reply “1a” or “1b” here.</small>
+</section>
+</main><script>
+let choice=null;
+const descriptions={bastion:'Bastion — each opponent loses 1 life; you gain 1 life',inspector:'Inspector — deal 1 damage to you; create a Clue'};
+function render(recovered=false){
+ const stack=document.getElementById('stack');stack.replaceChildren();
+ const order=choice===null?[]:choice==='inspector'?['bastion','inspector']:['inspector','bastion'];
+ for(const name of [...order.map(key=>descriptions[key]),'Deadly Dispute']){const li=document.createElement('li');li.textContent=name;stack.append(li)}
+ document.querySelectorAll('[data-choice]').forEach(button=>{button.disabled=choice!==null});
+ document.getElementById('status').textContent=choice===null?(recovered?'Illustrative recovery: neither choice was submitted; both are still available.':'Two abilities are waiting. Nothing is selected.'):(recovered?'Illustrative recovery after a lost acknowledgment: the same committed stack returns. No placement is repeated.':'Placement committed in this illustration. The other position was forced. No ability has resolved; priority returns.');
+}
+document.querySelectorAll('[data-choice]').forEach(button=>button.addEventListener('click',()=>{choice=button.dataset.choice;render()}));
+document.getElementById('recover').addEventListener('click',()=>render(true));
+document.getElementById('reset').addEventListener('click',()=>{choice=null;render()});
+</script></body></html>

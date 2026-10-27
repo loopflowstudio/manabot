@@ -41,6 +41,7 @@ ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
 ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
+ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
@@ -89,7 +90,9 @@ class ObservationEncoder:
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
-        self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
+        self.action_dim = (
+            self.num_actions + 5
+        )  # declaration, mode, ability, continuation join, validity
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -102,7 +105,7 @@ class ObservationEncoder:
         return {
             **(
                 {"relations": (RELATION_ROWS, RELATION_DIM)}
-                if self.config.policy_input_version == 2
+                if self.config.policy_input_version >= 2
                 else {}
             ),
             "semantic_cards": (2, self.cards_per_player),
@@ -163,6 +166,12 @@ class ObservationEncoder:
             for action in obs.action_space.actions
         ):
             raise ValueError("Observation capacity exceeded: action focus")
+        for action in obs.action_space.actions:
+            if action.continuation_index is not None and (
+                self.config.policy_input_version < 2
+                or not 0 <= action.continuation_index < len(obs.continuation)
+            ):
+                raise ValueError("invalid action continuation reference")
         out = {
             "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
             "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
@@ -253,7 +262,7 @@ class ObservationEncoder:
         else:
             out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
-        if self.config.policy_input_version == 2:
+        if self.config.policy_input_version >= 2:
             out["relations"] = self._encode_relations(obs)
 
         for key, value in out.items():
@@ -525,6 +534,7 @@ class ObservationEncoder:
             for column, selector in (
                 (ACTION_MODE_INDEX, action.mode_index),
                 (ACTION_ABILITY_INDEX, action.ability_index),
+                (ACTION_CONTINUATION_INDEX, action.continuation_index),
             ):
                 if selector is not None:
                     if not 0 <= selector <= MAX_ACTION_SELECTOR:

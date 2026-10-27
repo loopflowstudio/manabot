@@ -2,7 +2,7 @@
 
 The native handle owns origin and submission. These strict read-only models admit
 serialized evidence for pure rendering; they cannot reconstruct an origin handle.
-Schema-6 Observation and Command retain their existing owners in decision.py.
+Schema-7 Observation and Command retain their existing owners in decision.py.
 Native deserialization validates viewer fields and continuation frames; Python
 keeps only the portable presentation/content envelope.
 """
@@ -140,7 +140,7 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[2]
+    capture_version: Literal[3]
     world_version: str
     content_digest: str
     observation: SkipValidation[Observation]

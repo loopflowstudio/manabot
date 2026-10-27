@@ -12,6 +12,7 @@ from manabot.model import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.verify.text_observation import collision_branches, native_fixtures
+from manabot.verify.trigger_order import ordering_root
 import managym
 
 
@@ -139,3 +140,48 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
     current = ObservationSpace()
     left, right = [current.encode(obs) for obs in observations]
     assert not np.array_equal(left["relations"], right["relations"])
+
+
+@pytest.mark.parametrize("difference", ["ability", "context"])
+def test_same_source_trigger_choices_follow_facts_not_frame_positions(
+    difference: str,
+) -> None:
+    torch.manual_seed(195)
+    _, raw = ordering_root()
+    space = ObservationSpace()
+    encoded = space.encode(raw)
+    batch = {
+        key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
+    }
+    # A bounded policy fixture isolates two occurrences of the same source.
+    # Native projection of these facts is covered by trigger_order_same_source_joins.
+    rows = batch["relations"]
+    header = rows[0, (rows[0, :, 0] == 1) & (rows[0, :, 3] == 7)][0].clone()
+    rows.zero_()
+    for index in range(2):
+        rows[0, index] = header
+        rows[0, index, 1] = index + 1
+        rows[0, index, 2] = 0
+        rows[0, index, 8] = index + 1 if difference == "ability" else 1
+        if difference == "context":
+            rows[0, index + 2] = rows[0, index]
+            rows[0, index + 2, 0] = 3
+            rows[0, index + 2, 24:26] = index + 1
+    batch["actions"][0, 1, :-2] = batch["actions"][0, 0, :-2]
+    batch["actions"][0, :2, -2] = torch.tensor([1, 2])
+    batch["action_focus"].fill_(-1)
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16))
+    logits, _ = agent(batch)
+    assert not torch.isclose(logits[0, 0], logits[0, 1])
+    reordered = {key: value.clone() for key, value in batch.items()}
+    reordered["relations"] = rows.flip(1)
+    torch.testing.assert_close(agent(reordered)[0], logits)
+    swapped = {key: value.clone() for key, value in batch.items()}
+    swapped["actions"][0, :2, -2] = torch.tensor([2, 1])
+    torch.testing.assert_close(agent(swapped)[0][0, :2], logits[0, :2].flip(0))
+    batch["actions"][0, :2, -2] = 0
+    ablated, _ = agent(batch)
+    torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
+    batch["actions"][0, 0, -2] = 64
+    with pytest.raises(ValueError, match="reference has no frame"):
+        agent(batch)
