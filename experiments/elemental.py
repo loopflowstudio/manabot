@@ -29,7 +29,7 @@ Etude tracking and its segments track under `self-play`, so its follower
 from decimal import Decimal
 from pathlib import Path
 
-from etude.eval.records import Agent, Benchmark, Matchup, Model
+from etude.eval.records import Benchmark, Inference, Matchup, Player
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
@@ -59,7 +59,7 @@ from experiments.elemental_long_eval import (
     Kind,
     eval_environment,
     h2h_groups,
-    heuristic_agent,
+    heuristic_code,
     play,
     rows,
 )
@@ -78,7 +78,7 @@ WORKERS = 10
 EVAL_HOURS = 12.0
 
 # The checkpoint in the model's seat: the inference code is its version.
-MODEL = Model(code=list(INFERENCE_CODE))
+INFERENCE = Inference(source=list(INFERENCE_CODE))
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ def _rated(run: TrainingRun) -> tuple[dict[int, Checkpoint], int | None]:
 def _matchup(
     name: str,
     tags: tuple[str, ...],
-    players: tuple[Agent | Model, Agent | Model],
+    players: tuple[Player | Inference, Player | Inference],
     grid: list[Conditions],
 ) -> Matchup:
     """One match per grid row; every row of a grid plays the same number of games."""
@@ -149,7 +149,7 @@ def _grid(name: str, kind: Kind, games: list[Game]) -> Benchmark:
             _matchup(
                 f"vs heuristic, {kind} grid",
                 ("heuristic",),
-                (MODEL, heuristic_agent()),
+                (INFERENCE, heuristic_code()),
                 rows(kind, groups(games)),
             ),
         ),
@@ -165,7 +165,7 @@ def _pairs(
         _matchup(
             f"{run.name} u{pair.newer} vs u{pair.older}",
             (pair.role,),
-            (rated[pair.newer].agent(MODEL), rated[pair.older].agent(MODEL)),
+            (rated[pair.newer].model(INFERENCE), rated[pair.older].model(INFERENCE)),
             grid,
         )
         for pair in pair_design(tuple(sorted(rated)), endpoint)
@@ -248,7 +248,7 @@ def report() -> Report:
             ),
             Ranking(title="By model deck", by="deck", matches=heuristic),
             Ranking(title="By heuristic deck", by="opponent_deck", matches=heuristic),
-            Ranking(title="On the play or the draw", by="seat", matches=heuristic),
+            Ranking(title="On the play or the draw", by="game_seat", matches=heuristic),
             Curve(title="By model deck", split="deck", matches=heuristic),
             HeadToHead(matches=Matches(tournament=PAIRS)),
             Anchors(),

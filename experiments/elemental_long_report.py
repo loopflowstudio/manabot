@@ -35,8 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from etude.eval.query import statsdb
-from etude.eval.records import AgentKey, digest
-from etude.eval.source import digest_files
+from etude.eval.records import Code, digest
 from etude.run.storage import Storage, storage_from_uri
 import numpy as np
 from pydantic import BaseModel
@@ -48,7 +47,7 @@ from experiments.elemental_long_eval import (
     HEURISTIC,
     RUN,
     EvalState,
-    heuristic_agent,
+    heuristic_code,
     player,
     units,
 )
@@ -58,7 +57,6 @@ from manabot.eval.rating import (
     bootstrap_population,
     fit_population,
 )
-from manabot.sim.heuristic import heuristic_source_paths
 
 ANCHOR = HEURISTIC
 REPLICATES = 2000
@@ -77,55 +75,53 @@ class Results:
         return sorted(self.heuristic)
 
 
-# Player 0's row of every game, with both seats' agents and the opponent's version.
+# Participant 0's row of every game, with both players and the opponent's version.
 _GAMES = """
-    select g.*, a.name as subject, o.name as opponent, o.agent as opponent_agent,
-        t.source as opponent_source
+    select g.*, a.name as subject, o.name as opponent, o.player as opponent_player,
+        o.kind as opponent_kind, t.source as opponent_source
     from games g
-    join seats s on s.run = g.run and s.match = g.match and s.player = 0
-    join agents a on a.agent = s.agent
-    join seats t on t.run = g.run and t.match = g.match and t.player = 1
-    join agents o on o.agent = t.agent
-    where g.player = 0 and g.run = ?
+    join seats s on s.run = g.run and s.match = g.match and s.seat = 0
+    join players a on a.player = s.player
+    join seats t on t.run = g.run and t.match = g.match and t.seat = 1
+    join players o on o.player = t.player
+    where g.seat = 0 and g.run = ?
 """
 
 
 def _updates(name: str) -> int:
-    """A checkpoint agent's update, from its name (`elemental_long_eval.player`)."""
+    """A model's update, from its name (`elemental_long_eval.player`)."""
     if not name.startswith("u") or not name[1:].isdigit():
-        raise ValueError(f"not a rated checkpoint agent: {name}")
+        raise ValueError(f"not a rated checkpoint model: {name}")
     return int(name[1:])
 
 
 def _current_heuristic() -> set[tuple[str, str | None]]:
-    """The current heuristic's (agent key, source) pairs, as recorded by either SDK.
+    """The current heuristic's (player key, source) pairs, as recorded by either SDK.
 
     etude-sdk 0.2.5 keys the heuristic by name and records its source digest
     with each match; 0.2 folded that digest into the agent's identity, which
-    0.2.5 reads back as a recorded key with no source.
+    the current SDK reads as a code name `etude-sdk-0.2:DIGEST`, with no source.
     """
-    source = digest_files(heuristic_source_paths())
-    legacy = AgentKey(recorded=digest(["code", source, {}])).encoded
-    return {(heuristic_agent().key.encoded, source), (legacy, None)}
+    heuristic = heuristic_code()
+    source = heuristic.version.source
+    legacy = Code(name="etude-sdk-0.2:" + digest(["code", source, {}])).key
+    return {(heuristic.key, source), (legacy, None)}
 
 
 def load(directory: Path, store: Storage | Path) -> Results:
     """The state and every stored game; a design unit short of its games is missing."""
     state = EvalState.model_validate_json((directory / "state.json").read_bytes())
-    db = statsdb(EXPERIMENT, store)
-    try:
+    with statsdb(EXPERIMENT, store) as db:
         cursor = db.execute(_GAMES, [RUN])
         names = [column[0] for column in cursor.description]
-        found = [dict(zip(names, row)) for row in cursor.fetchall()]
-    finally:
-        db.close()
+        found = [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
     anchors = _current_heuristic()
     # (newer, older or None, unit kind) → deal → row
     played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
     for row in found:
-        if row["opponent"] == HEURISTIC:
+        if row["opponent_kind"] == "code":
             # Only the current heuristic anchors the curve (protocol amendment).
-            if (row["opponent_agent"], row["opponent_source"]) not in anchors:
+            if (row["opponent_player"], row["opponent_source"]) not in anchors:
                 continue
             key = (_updates(row["subject"]), None, row["unit"])
         else:
@@ -138,7 +134,7 @@ def load(directory: Path, store: Storage | Path) -> Results:
         target[row["deal"]] = GameRow(
             model_deck=row["deck"],
             heuristic_deck=row["opponent_deck"],
-            model_seat=row["seat"],
+            model_seat=row["game_seat"],
             deal=row["deal"],
             score=row["score"],
             valid=row["valid"],

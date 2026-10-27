@@ -54,3 +54,11 @@ Inherited MTG-186 notes remain at
 remain at `ce43a5cf76d52b99c4c13c6debb21aab79ac9f82:scratch/questions.md`.
 The pre-compression uncommitted notes are preserved under
 `.runs/inference-compression-review/before/scratch/`.
+
+## Sync integration — 2026-10-27
+
+Preserve the MTG-188 assumptions above and the offline inference import boundary.
+The target introduces published Etude SDK 0.2.8, run-owned card evidence, and
+SDK-owned historical participant/seat conversion; its updated guidance applies.
+The target Task 9da33d notes remain at
+`5051c493fc4d47a3a63c6a5043d47639af6c5018:scratch/questions.md`.
