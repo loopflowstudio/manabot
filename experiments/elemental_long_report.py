@@ -20,7 +20,7 @@ The analysis is the frozen protocol's
   on each prefix of rated checkpoints; `saturation` applies the declared rule.
 
     uv run --extra artifacts --extra evaluation --extra reports \
-        python -m experiments.elemental_long_report --directory ~/.manabot/mtg183-eval \
+        python -m experiments.elemental_long_report --directory ~/.manabot/mtg183-eval-cards \
         --storage r2://manabot/evaluations --out experiments/data/mtg183
 """
 

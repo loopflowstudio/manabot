@@ -279,6 +279,10 @@ class PretrainedPolicy(Strict):
     weights: Literal["raw", "ema"] = "raw"
 
 
+LearnerRole = Literal["raw", "ema", "optimizer"]
+_LEARNER_ROLES: tuple[LearnerRole, ...] = ("raw", "ema", "optimizer")
+
+
 class LearningStateImport(Strict):
     """Portable learner state; source bytes retain historical paths and identity.
 
@@ -290,16 +294,44 @@ class LearningStateImport(Strict):
     agent's own semantic pack, so card identities and the learned programs
     keep their meaning; only deck/sideboard composition changes. Omitted, the
     parent's match must equal the regime's.
+
+    `monitoring_update` declares a learner-state discontinuity: the parent
+    never exported its final state (it was interrupted), so the segment
+    continues from the raw weights of the parent's monitoring export at that
+    absolute update. Only `raw` is given; the EMA starts as a copy of it and
+    Adam starts fresh, and the origin records both resets.
     """
 
     source_run: ArtifactReference
     source_stage: str
     raw: ArtifactReference
-    ema: ArtifactReference
-    optimizer: ArtifactReference
+    ema: ArtifactReference | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    optimizer: ArtifactReference | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    monitoring_update: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
     source_match: MatchConfig | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+
+    @model_validator(mode="after")
+    def declared_roles(self) -> "LearningStateImport":
+        raw_only = self.monitoring_update is not None
+        if (self.ema is None, self.optimizer is None) != (raw_only, raw_only):
+            raise ValueError(
+                "learning state imports raw/EMA/Adam, or raw alone from a"
+                " declared monitoring export"
+            )
+        return self
+
+    @property
+    def roles(self) -> tuple[LearnerRole, ...]:
+        """The learner-state roles this import carries."""
+        return ("raw",) if self.monitoring_update is not None else _LEARNER_ROLES
 
 
 class LearningStateOrigin(Strict):
@@ -317,6 +349,10 @@ class LearningStateOrigin(Strict):
     streams: Literal["fresh"] = "fresh"
     optimizer_updates: int | None = Field(
         default=None, ge=0, exclude_if=lambda value: value is None
+    )
+    # Roles a raw-only import started afresh: EMA := raw, Adam new.
+    reset: tuple[Literal["ema", "optimizer"], ...] = Field(
+        default=(), exclude_if=lambda value: not value
     )
 
 

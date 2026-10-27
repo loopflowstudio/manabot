@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import asdict
+import math
 import os
 from pathlib import Path
 import platform
@@ -230,9 +231,16 @@ def execute_regime(
     initial_admission: Path | None = None,
     pause_path: Path | None = None,
     stop_path: Path | None = None,
+    stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
+
+    `stop_reserve_seconds` bounds a single step-target self-play stage by time
+    as well as updates: at an update boundary, once the remaining wall budget
+    cannot cover the slowest update so far plus this reserve, the stage stops,
+    exports raw/EMA/Adam as usual and the run ends `paused` short of its
+    target, so a successor can continue its complete learner state.
 
     Each self-play stage's metrics are an Etude run of `experiment`, or of an
     experiment named for the stage when it is None.
@@ -280,6 +288,19 @@ def execute_regime(
         raise ValueError("step continuation cannot repeat initialization admission")
     if pause_path is not None and not regime.recoverable:
         raise ValueError("safe pause requires complete-state recovery")
+    if stop_reserve_seconds is not None and (
+        not math.isfinite(stop_reserve_seconds)
+        or stop_reserve_seconds <= 0
+        or len(regime.stages) != 1
+        or not isinstance(regime.stages[0], TrainSelfPlay)
+        or regime.stages[0].active_seconds is not None
+        or stop_reserve_seconds
+        >= min(regime.wall_seconds, regime.stages[0].execution.wall_seconds)
+    ):
+        raise ValueError(
+            "a wall-bounded stop requires one step-target self-play stage"
+            " and a positive reserve inside its watchdog"
+        )
     destination = Path(out).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     lease = destination.with_name(destination.name + ".writer.lock")
@@ -346,6 +367,7 @@ def execute_regime(
             checkpoint_milestones=checkpoint_milestones,
             pause_path=pause_path,
             stop_path=stop_path,
+            stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
             experiment=experiment,
         )
@@ -365,6 +387,7 @@ def _execute_regime(
     checkpoint_milestones: tuple[int, ...] = (),
     pause_path: Path | None = None,
     stop_path: Path | None = None,
+    stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
     experiment: str | None = None,
 ) -> TrainingRun:
@@ -661,6 +684,8 @@ def _execute_regime(
             },
         )
         resources.enter_context(capture_scope(failures))
+        # Set when stop_reserve_seconds ends the (single) stage before its target.
+        wall_bounded = False
         for stage_index, stage in enumerate(regime.stages):
             if any(item.id == stage.id for item in run.stages):
                 continue
@@ -737,19 +762,25 @@ def _execute_regime(
 
             last_memory_sample = float("-inf")
 
+            def remaining() -> float:
+                """Seconds left before the first of the watchdog clocks expires."""
+                charged = run.prior_watchdog_seconds + budget_now() - watchdog_start
+                left = min(
+                    deadline - time.perf_counter(), regime.wall_seconds - charged
+                )
+                if regime.recoverable and not restoring_completed:
+                    left = min(
+                        left,
+                        stage.execution.wall_seconds
+                        - prior_stage_watchdog
+                        - budget_now()
+                        + stage_watchdog_start,
+                    )
+                return left
+
             def check() -> None:
                 nonlocal last_memory_sample
-                charged = run.prior_watchdog_seconds + budget_now() - watchdog_start
-                if (
-                    time.perf_counter() >= deadline
-                    or charged >= regime.wall_seconds
-                    or (
-                        regime.recoverable
-                        and not restoring_completed
-                        and prior_stage_watchdog + budget_now() - stage_watchdog_start
-                        >= stage.execution.wall_seconds
-                    )
-                ):
+                if remaining() <= 0:
                     raise TimeoutError("training resource wall deadline exceeded")
                 # Deadline checks run at every native step. On macOS, recursive
                 # child discovery scans the whole host process table; sampling
@@ -1048,7 +1079,7 @@ def _execute_regime(
                             f"learning_state/{role}": dict(
                                 getattr(stage.learning_state, role)
                             )
-                            for role in ("source_run", "raw", "ema", "optimizer")
+                            for role in ("source_run", *stage.learning_state.roles)
                         }
                     )
                     persist()
@@ -1247,7 +1278,9 @@ def _execute_regime(
                     run.metrics_run = str(experiment.run.files.root)
                     resources.callback(
                         lambda exp=experiment: exp.close(
-                            "finished" if run.status == "completed" else "failed"
+                            "finished"
+                            if run.status in ("completed", "paused")
+                            else "failed"
                         )
                     )
                     if snapshot is None:
@@ -1271,8 +1304,10 @@ def _execute_regime(
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
                     if imported is not None:
-                        learner.optimizer.load_state_dict(imported.optimizer)
-                        validate_adam(learner.optimizer)
+                        # A raw-only import declared a fresh Adam.
+                        if imported.optimizer is not None:
+                            learner.optimizer.load_state_dict(imported.optimizer)
+                            validate_adam(learner.optimizer)
                         assert ema is not None
                         ema.load_state_dict(imported.ema.state_dict())
                         iteration = imported.origin.iteration
@@ -1340,6 +1375,7 @@ def _execute_regime(
                     persist()
                 snapshot = None
                 incident_learner = learner
+                slowest_update = 0.0
                 timed = phase_seconds(record)
                 for update_index in range(first_update, stage.updates):
                     if stage.active_seconds is not None and (
@@ -1348,7 +1384,8 @@ def _execute_regime(
                     ):
                         break
                     check()
-                    tick = time.perf_counter()
+                    update_start = time.perf_counter()
+                    tick = update_start
                     behavior_agent = (
                         ema if stage.behavior == "ema-self" else learner.agent
                     )
@@ -1487,6 +1524,18 @@ def _execute_regime(
                         raise TrainingPaused(
                             "requested pause committed at an update boundary"
                         )
+                    if (
+                        stop_reserve_seconds is not None
+                        and update_index + 1 < stage.updates
+                    ):
+                        # Stop while another update and the final exports
+                        # still fit inside every watchdog clock.
+                        slowest_update = max(
+                            slowest_update, time.perf_counter() - update_start
+                        )
+                        if remaining() < slowest_update + stop_reserve_seconds:
+                            wall_bounded = True
+                            break
                 if stage.active_seconds is not None and (
                     record.collection_seconds + record.learning_seconds
                     < stage.active_seconds
@@ -1551,7 +1600,7 @@ def _execute_regime(
             check()
             record.seconds = time.perf_counter() - stage_start
             record.cpu_seconds = time.process_time() - cpu_start
-            record.status = "completed"
+            record.status = "paused" if wall_bounded else "completed"
             # Freeze the admission cost; later persistence belongs to later outputs.
             record.cumulative_seconds = run.prior_seconds + time.perf_counter() - start
             record.watchdog_seconds = (
@@ -1576,7 +1625,13 @@ def _execute_regime(
             item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
         ]
         run.selected_artifact = completed_models[-1] if completed_models else None
-        run.status = "completed"
+        if wall_bounded:
+            run.status = "paused"
+            run.error = (
+                "wall budget ended before the update target; learner state exported"
+            )
+        else:
+            run.status = "completed"
         persist()
     except BaseException as error:
         run.status = (
