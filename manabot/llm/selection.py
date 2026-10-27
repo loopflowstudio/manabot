@@ -13,6 +13,7 @@ from typing import Protocol
 from manabot.llm.schema import (
     Attempt,
     DecisionInput,
+    DecisionObjective,
     EncodedPrompt,
     Failure,
     FallbackEvidence,
@@ -43,6 +44,41 @@ class ContextOverflow(ValueError):
     """The complete prompt plus its generation allowance exceeds the budget."""
 
 
+def decision_messages(
+    decision: DecisionInput, *, objective: DecisionObjective = "legal-action"
+) -> tuple[Message, ...]:
+    """The shared protocol prompt, independent of runtime or chat template."""
+    instruction = (
+        "You are playing Magic: The Gathering as the player labeled You. "
+        "Choose the legal action that maximizes your probability of winning "
+        "this game.\n\n"
+        if objective == "win-game"
+        else ""
+    )
+    return (
+        Message(
+            role="user",
+            content=(
+                instruction
+                + decision.text
+                + "\n\nLegal action references:\n"
+                + "\n".join(decision.legal_references)
+                + "\n\nReturn exactly one listed action reference, with no other text."
+            ),
+        ),
+    )
+
+
+def uniform_fallback(decision: DecisionInput, seed: int) -> FallbackEvidence:
+    rng = random.Random(seed)
+    state = repr(rng.getstate())
+    return FallbackEvidence(
+        seed=seed,
+        state_before=state,
+        selected_index=rng.randrange(len(decision.legal_references)),
+    )
+
+
 def select(
     decision: DecisionInput,
     config: InferenceConfig,
@@ -60,17 +96,7 @@ def select(
     deadline = start + config.deadline_seconds
     result = SelectionResult(decision=decision, config=config, runtime=runtime.identity)
     attempts: list[Attempt] = []
-    messages = (
-        Message(
-            role="user",
-            content=(
-                decision.text
-                + "\n\nLegal action references:\n"
-                + "\n".join(decision.legal_references)
-                + "\n\nReturn exactly one listed action reference, with no other text."
-            ),
-        ),
-    )
+    messages = decision_messages(decision)
 
     def publish() -> None:
         nonlocal result
@@ -141,18 +167,14 @@ def select(
                 Message(role="user", content=REPAIR),
             )
         check_deadline()
-        rng = random.Random(config.fallback_seed)
-        state = repr(rng.getstate())
-        selected_index = rng.randrange(len(decision.legal_references))
+        fallback = uniform_fallback(decision, config.fallback_seed)
         result = result.model_copy(
             update={
-                "selected_reference": decision.legal_references[selected_index],
+                "selected_reference": decision.legal_references[
+                    fallback.selected_index
+                ],
                 "origin": "fallback",
-                "fallback": FallbackEvidence(
-                    seed=config.fallback_seed,
-                    state_before=state,
-                    selected_index=selected_index,
-                ),
+                "fallback": fallback,
             }
         )
     except Exception as error:
