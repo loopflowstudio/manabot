@@ -12,10 +12,9 @@ import hashlib
 import math
 from typing import Iterable, Mapping
 
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 from numpy.typing import NDArray
-
-from managym.possible_worlds import PossibleWorldSpace
 
 
 class BeliefError(ValueError):

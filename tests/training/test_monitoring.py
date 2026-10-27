@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+<<<<<<< HEAD
 from unittest.mock import Mock
 
 import numpy as np
@@ -45,6 +46,31 @@ def _recipe() -> TrainingRegime:
     value = TrainingRegime.model_validate_json(
         Path("experiments/regimes/direct-self-play.json").read_text()
     )
+=======
+
+from etude.train.read import read
+import pytest
+import torch
+
+from experiments.direct_self_play import direct_self_play
+from manabot.experiment.evaluation_queue import checkpoints
+from manabot.model.checkpoint import load_checkpoint
+from manabot.reports import training as monitoring
+from manabot.reports.training import (
+    Dashboard,
+    training_dashboard,
+)
+from manabot.training.execution import execute_regime
+from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.update_metrics import read_updates, stage_rows
+from manabot.verify.store import VerifyStore
+import managym
+
+
+def _recipe() -> TrainingRegime:
+    value = direct_self_play()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]
@@ -60,6 +86,7 @@ def _recipe() -> TrainingRegime:
     return value
 
 
+<<<<<<< HEAD
 class RetainedSink:
     def __init__(self) -> None:
         self.rows: list[dict[str, object]] = []
@@ -74,6 +101,9 @@ class RetainedSink:
 
 
 def test_backfill_preserves_missing_coordinates_and_resumes_suffix() -> None:
+=======
+def test_retained_rows_without_coordinates_stay_unavailable() -> None:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     run = TrainingRun(
         id="saved-fixture",
         regime=_recipe(),
@@ -83,11 +113,16 @@ def test_backfill_preserves_missing_coordinates_and_resumes_suffix() -> None:
         identities={},
         stages=[StageRecord(id="policy-0", diagnostics=[{"policy_loss": -0.4}])],
     )
+<<<<<<< HEAD
     dashboard = training_dashboard(run)
+=======
+    dashboard = training_dashboard(run, stage_rows(run, {}))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert dashboard.summary["history_incomplete"] is True
     assert "progress/training_seconds" not in dashboard.rows[0]
     assert dashboard.rows[0]["rl/policy_loss"] == -0.4
     assert dashboard.rows[0]["availability/rl/value_loss"] is False
+<<<<<<< HEAD
     sink = RetainedSink()
     append_history(dashboard, sink)
     append_history(dashboard, sink)
@@ -125,6 +160,18 @@ def test_fixed_validation_callback_and_leak_rejection() -> None:
         train_search_supervised(
             dataset, epochs=1, validation_games={1}, fixed_validation_dataset=fixed
         )
+=======
+
+
+def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
+
+    return [
+        table.row(index)["values"]
+        for table in read(directory / "etude", "manabot-monitoring", run_id).tables
+        for index in range(table.rows)
+        if "projection/row_sha256" in table.row(index)["values"]
+    ]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_monitor_exports_do_not_change_learning_and_survive_reload(
@@ -144,12 +191,23 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
     assert evaluated[-1].artifact == monitored.selected_artifact
     for checkpoint in monitored.monitoring_checkpoints:
         assert checkpoint.error is None and checkpoint.artifact is not None
+<<<<<<< HEAD
         load_checkpoint_agent(checkpoint.artifact["path"])
     plain, _ = load_checkpoint_agent(baseline.selected_artifact["path"])
     tracked, _ = load_checkpoint_agent(monitored.selected_artifact["path"])
     for key, weights in plain.state_dict().items():
         torch.testing.assert_close(weights, tracked.state_dict()[key], rtol=0, atol=0)
     dashboard = training_dashboard(monitored)
+=======
+        load_checkpoint(checkpoint.artifact["path"])
+    plain, _ = load_checkpoint(baseline.selected_artifact["path"])
+    tracked, _ = load_checkpoint(monitored.selected_artifact["path"])
+    for key, weights in plain.state_dict().items():
+        torch.testing.assert_close(weights, tracked.state_dict()[key], rtol=0, atol=0)
+    dashboard = training_dashboard(
+        monitored, stage_rows(monitored, read_updates(tmp_path, [monitored]))
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert dashboard.summary["history_incomplete"] is False
     assert len(dashboard.rows) == 2
     assert (
@@ -159,7 +217,11 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
     assert dashboard.rows[0]["availability/rl/policy_loss"] is True
 
 
+<<<<<<< HEAD
 def test_default_wandb_panels_and_offline_roundtrip() -> None:
+=======
+def test_dashboard_offline_roundtrip() -> None:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard = Dashboard(
         run_id="offline-fixture",
         config={},
@@ -167,14 +229,20 @@ def test_default_wandb_panels_and_offline_roundtrip() -> None:
         rows=[
             {
                 "progress/observation": 0,
+<<<<<<< HEAD
                 "distillation/train_cross_entropy": 0.3,
                 "distillation/growing_cross_entropy": 0.4,
                 "distillation/fixed_cross_entropy": 0.5,
+=======
+                "rl/loss": 0.3,
+                "rl/policy_loss": 0.4,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             }
         ],
     )
     reloaded = Dashboard.model_validate_json(dashboard.model_dump_json())
     assert reloaded == dashboard
+<<<<<<< HEAD
     panels = default_panels(reloaded)
     assert len(panels) == 1
     assert "dashboard/Teacher cross-entropy (nats)" in panels
@@ -288,12 +356,20 @@ def test_publisher_uses_remote_prefix_and_rejects_rewritten_history(
         return remote
 
     monkeypatch.setattr(monitoring.wandb, "init", initialize)
+=======
+
+
+def test_publisher_reads_etude_prefix_and_rejects_rewritten_history(
+    tmp_path: Path,
+) -> None:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard = Dashboard(
         run_id="fixture",
         config={},
         summary={},
         rows=[{"progress/observation": 0, "rl/entropy": 0.5}],
     )
+<<<<<<< HEAD
     monitoring.publish_dashboard(dashboard, tmp_path)
     monitoring.publish_dashboard(dashboard, tmp_path)
     assert remote.step == 1
@@ -301,12 +377,25 @@ def test_publisher_uses_remote_prefix_and_rejects_rewritten_history(
     dashboard.rows.append({"progress/observation": 1, "rl/entropy": 0.4})
     monitoring.publish_dashboard(dashboard, tmp_path)
     assert remote.step == 2
+=======
+    destination = tmp_path / "destination"
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    assert len(_history(tmp_path, dashboard.run_id)) == 1
+    dashboard.rows.append({"progress/observation": 1, "rl/entropy": 0.4})
+    monitoring.publish_dashboard(dashboard, tmp_path, destination=str(destination))
+    assert len(_history(tmp_path, dashboard.run_id)) == 2
+
+    copied = read(destination, "manabot-monitoring", dashboard.run_id)
+    assert list(copied.points("rl/entropy", "observation").y) == [0.5, 0.4]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard.rows[0]["rl/entropy"] = 0.6
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
 
 
 def test_publisher_waits_for_evaluation_completion_without_losing_local_progress(
+<<<<<<< HEAD
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     remote = Mock(step=0, summary={}, url="https://wandb.invalid/evaluation")
@@ -319,6 +408,10 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
 
     remote.log.side_effect = log
     monkeypatch.setattr(monitoring.wandb, "init", Mock(return_value=remote))
+=======
+    tmp_path: Path,
+) -> None:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard = Dashboard(
         run_id="monitor-fixture",
         config={},
@@ -335,9 +428,23 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
     dashboard.rows[0]["monitor/attempted_games"] = 8
     dashboard.summary["attempted_games"] = 8
     monitoring.publish_dashboard(dashboard, tmp_path)
+<<<<<<< HEAD
     assert not published
     assert remote.summary["attempted_games"] == 8
     assert dashboard.rows[0]["monitor/attempted_games"] == 8
+=======
+    assert not _history(tmp_path, dashboard.run_id)
+    assert dashboard.rows[0]["monitor/attempted_games"] == 8
+
+    summaries = [
+        table.row(index)["values"]["projection/summary_json"]
+        for table in read(
+            tmp_path / "etude", "manabot-monitoring", dashboard.run_id
+        ).tables
+        for index in range(table.rows)
+    ]
+    assert any(json.loads(summary)["attempted_games"] == 8 for summary in summaries)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard.rows[0]["monitor/status"] = "completed"
     monitoring.publish_dashboard(dashboard, tmp_path)
     dashboard.rows.append(
@@ -348,15 +455,25 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
         }
     )
     monitoring.publish_dashboard(dashboard, tmp_path)
+<<<<<<< HEAD
     assert len(published) == 1
     dashboard.rows[1]["monitor/status"] = "incomplete"
     monitoring.publish_dashboard(dashboard, tmp_path)
     assert [row["monitor/status"] for row in published] == ["completed", "incomplete"]
+=======
+    assert len(_history(tmp_path, dashboard.run_id)) == 1
+    dashboard.rows[1]["monitor/status"] = "incomplete"
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    assert sorted(
+        row["monitor/status"] for row in _history(tmp_path, dashboard.run_id)
+    ) == ["completed", "incomplete"]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     dashboard.rows[0]["monitor/attempted_games"] = 7
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
 
 
+<<<<<<< HEAD
 def test_fixed_reference_target_does_not_change_training_objective() -> None:
     torch.set_num_threads(1)
     dataset = _dataset()
@@ -386,6 +503,13 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
 ) -> None:
     from manabot.training.experiment_report import ReportEvidence, write_dashboard
     from manabot.training.models import NumericalFailure
+=======
+def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
+    tmp_path: Path,
+) -> None:
+    from manabot.reports.experiment import ReportEvidence, write_dashboard
+    from manabot.training.records import NumericalFailure
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     run = TrainingRun(
         id="numerical-fixture",
@@ -425,16 +549,23 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
             )
         ],
     )
+<<<<<<< HEAD
     dashboard = training_dashboard(run)
+=======
+    dashboard = training_dashboard(run, stage_rows(run, {}))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert len(dashboard.rows) == 3
     assert dashboard.rows[0]["numerical/parameter_delta_l2"] == 0.01
     assert "numerical/parameter_delta_l2" not in dashboard.rows[1]
     assert dashboard.rows[-1]["progress/updates"] == 2
     assert dashboard.rows[-1]["numerical/rejected_steps"] == 1
     assert dashboard.rows[-1]["failure/invariant"] == "nonfinite_gradients"
+<<<<<<< HEAD
     panels = default_panels(dashboard)
     assert "dashboard/Probability underflow" in panels
     assert "dashboard/Optimizer steps" in panels
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     evidence = ReportEvidence(tmp_path, (run,), (), (), (), ())
     path = write_dashboard(
         evidence,

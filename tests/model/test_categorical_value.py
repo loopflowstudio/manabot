@@ -9,12 +9,21 @@ import torch
 import torch.nn.functional as F
 
 from manabot.env import Match, ObservationSpace, Reward
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec, RewardHypers
 from manabot.model.agent import Agent
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import SeatRoutedCollector
+=======
+from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
+from manabot.model.world import checkpoint_world
+from manabot.semantic.decision_contract import SemanticDecisionContract
+from manabot.training.rollout.collection import SeatRoutedCollector
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import managym
 
 
@@ -24,10 +33,17 @@ def _agent(
         "historical_mean", "masked_mean", "value_token"
     ] = "historical_mean",
     depth: Literal[1, 2] = 1,
+<<<<<<< HEAD
 ) -> Agent:
     return Agent(
         ObservationSpace(),
         AgentSpec(
+=======
+) -> ActorCritic:
+    return ActorCritic(
+        ObservationSpace(),
+        ModelConfig(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=8,
             attention_on=True,
             value_kind=kind,
@@ -37,24 +53,40 @@ def _agent(
     )
 
 
+<<<<<<< HEAD
 def _collector(agent: Agent) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         agent.observation_space, Match(), Reward(RewardHypers()), num_envs=2, seed=17
+=======
+def _collector(agent: ActorCritic) -> SeatRoutedCollector:
+    return SeatRoutedCollector(
+        agent.observation_space, Match(), Reward(RewardConfig()), num_envs=2, seed=17
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
 
 
 def _save_checkpoint(
     path: Path,
+<<<<<<< HEAD
     agent: Agent,
     saved_hypers: dict[str, object],
+=======
+    agent: ActorCritic,
+    saved_config: dict[str, object],
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     weights: dict[str, torch.Tensor],
 ) -> None:
     torch.save(
         {
             "model_state_dict": weights,
             "hypers": {
+<<<<<<< HEAD
                 "agent_hypers": saved_hypers,
                 "observation_hypers": agent.observation_space.encoder.hypers.model_dump(),
+=======
+                "agent_hypers": saved_config,
+                "observation_hypers": agent.observation_space.encoder.config.model_dump(),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             },
             "world_binding": checkpoint_world(
                 Match().to_rust(), agent.observation_space
@@ -115,6 +147,7 @@ def test_value_interface_and_collection_likelihoods(
     torch.testing.assert_close(agent.get_value(obs), value)
 
     path = tmp_path / "critic.pt"
+<<<<<<< HEAD
     saved_hypers = agent.hypers.model_dump()
     if aggregation == "historical_mean":
         saved_hypers.pop("value_aggregation")
@@ -124,6 +157,17 @@ def test_value_interface_and_collection_likelihoods(
     assert loaded.hypers.value_kind == kind
     assert loaded.hypers.value_aggregation == aggregation
     assert loaded.hypers.attention_layers == depth
+=======
+    saved_config = agent.config.model_dump()
+    if aggregation == "historical_mean":
+        saved_config.pop("value_aggregation")
+        saved_config.pop("attention_layers")
+    _save_checkpoint(path, agent, saved_config, agent.state_dict())
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.config.value_kind == kind
+    assert loaded.config.value_aggregation == aggregation
+    assert loaded.config.attention_layers == depth
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     loaded_policy, loaded_value = loaded.forward_distribution(obs)
     torch.testing.assert_close(loaded_policy, policy, rtol=0, atol=0)
     torch.testing.assert_close(loaded_value, raw_value, rtol=0, atol=0)
@@ -155,10 +199,17 @@ def test_checkpoint_rejects_incompatible_saved_architecture(
     agent = _agent("categorical_wdl", "value_token", 2)
     path = tmp_path / "incompatible.pt"
     _save_checkpoint(
+<<<<<<< HEAD
         path, agent, {**agent.hypers.model_dump(), **fields}, agent.state_dict()
     )
     with pytest.raises((RuntimeError, ValueError), match=error):
         load_checkpoint_agent(str(path))
+=======
+        path, agent, {**agent.config.model_dump(), **fields}, agent.state_dict()
+    )
+    with pytest.raises((RuntimeError, ValueError), match=error):
+        load_checkpoint(str(path))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.mark.parametrize("damage", ["missing_token", "token_shape", "missing_layer"])
@@ -182,9 +233,15 @@ def test_checkpoint_rejects_incompatible_architecture_weights(
         }
         error = 'Missing key.*"extra_attention'
     path = tmp_path / "incompatible.pt"
+<<<<<<< HEAD
     _save_checkpoint(path, agent, agent.hypers.model_dump(), weights)
     with pytest.raises(RuntimeError, match=error):
         load_checkpoint_agent(str(path))
+=======
+    _save_checkpoint(path, agent, agent.config.model_dump(), weights)
+    with pytest.raises(RuntimeError, match=error):
+        load_checkpoint(str(path))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_distributional_supervision_reaches_shared_encoder() -> None:

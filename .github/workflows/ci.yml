@@ -6,6 +6,7 @@ on:
     branches:
       - main
   workflow_dispatch:
+<<<<<<< HEAD
     inputs:
       update_visual_references:
         description: Generate reviewed visual references on the pinned Linux profile
@@ -36,10 +37,23 @@ jobs:
   # docs/experiment-metrics.md, docs/benchmarks) counts as code. Pushes to main
   # and manual runs always run everything. "Tests Result" (the required check)
   # accepts a skipped job only when its area was off.
+=======
+
+# A newer PR revision replaces its obsolete run. Main and manual runs retain
+# independent groups, so publication does not cancel another main verification.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Job-level filters keep the required aggregate present, even for docs-only
+  # PRs. Renames select both old and new paths; manual runs exercise all jobs.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
+<<<<<<< HEAD
       docs_only: ${{ steps.classify.outputs.docs_only }}
       rust: ${{ steps.classify.outputs.rust }}
       manabot: ${{ steps.classify.outputs.manabot }}
@@ -94,6 +108,38 @@ jobs:
             esac
           done <<< "$files"
           emit
+=======
+      rust: ${{ steps.classify.outputs.rust }}
+      python_unit: ${{ steps.classify.outputs.python_unit }}
+      integration: ${{ steps.classify.outputs.integration }}
+      academy_integration: ${{ steps.classify.outputs.academy_integration }}
+      protocol_v1: ${{ steps.classify.outputs.protocol_v1 }}
+      semantic_coverage: ${{ steps.classify.outputs.semantic_coverage }}
+      semantic_conformance: ${{ steps.classify.outputs.semantic_conformance }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+      clean_machine_play: ${{ steps.classify.outputs.clean_machine_play }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            bash .github/ci/select-tests.sh --all | tee -a "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = pull_request ]; then
+            git diff --no-renames --name-only -z HEAD^1 HEAD | bash .github/ci/select-tests.sh | tee -a "$GITHUB_OUTPUT"
+          elif [ -z "$BEFORE" ] || [[ "$BEFORE" =~ ^0+$ ]]; then
+            bash .github/ci/select-tests.sh --all | tee -a "$GITHUB_OUTPUT"
+          else
+            git cat-file -e "$BEFORE^{commit}" || git fetch --no-tags --depth=1 origin "$BEFORE"
+            git diff --no-renames --name-only -z "$BEFORE" HEAD | bash .github/ci/select-tests.sh | tee -a "$GITHUB_OUTPUT"
+          fi
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   rust:
     name: Rust Tests
     needs: [changes]
@@ -123,7 +169,11 @@ jobs:
   python-unit:
     name: Python Unit Tests
     needs: [changes]
+<<<<<<< HEAD
     if: needs.changes.outputs.docs_only != 'true'
+=======
+    if: needs.changes.outputs.python_unit == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,6 +195,7 @@ jobs:
         working-directory: website
         run: uv run --python 3.12 --extra test pytest -q
 
+<<<<<<< HEAD
   # Two parallel groups per platform: "long" holds the three slowest modules
   # (about half the suite's runtime), "main" holds everything else.
   integration:
@@ -316,11 +367,33 @@ jobs:
           uv run --python 3.12 --extra dev pytest -q \
             tests/sim/test_local_update_sampling.py \
             tests/sim/test_local_update_compound.py
+=======
+  # PRs and pushes require Linux integration; the same suites run on macOS nightly.
+  integration:
+    name: Integration
+    needs: [changes]
+    if: needs.changes.outputs.integration == 'true'
+    uses: ./.github/workflows/manabot-integration.yml
+    with:
+      runner: ubuntu-latest
+
+  academy-integration:
+    name: Academy Integration
+    needs: [changes]
+    if: needs.changes.outputs.academy_integration == 'true'
+    uses: ./.github/workflows/academy-integration.yml
+    with:
+      runner: ubuntu-latest
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
   protocol-v1:
     name: Protocol v1 Conformance
     needs: [changes]
+<<<<<<< HEAD
     if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
+=======
+    if: needs.changes.outputs.protocol_v1 == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -341,7 +414,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+<<<<<<< HEAD
           cache-dependency-path: frontend/package-lock.json
+=======
+          cache-dependency-path: academy/ui/package-lock.json
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
       - name: Install Python dependencies
         run: |
@@ -361,7 +438,11 @@ jobs:
         run: uv run --extra dev pytest tests/academy/test_play_launcher.py -q
 
       - name: Certify TypeScript
+<<<<<<< HEAD
         working-directory: frontend
+=======
+        working-directory: academy/ui
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         run: |
           npm ci
           npm test -- --run src/lib/protocol-conformance.test.ts
@@ -370,7 +451,11 @@ jobs:
   semantic-coverage:
     name: Semantic Coverage Gate
     needs: [changes]
+<<<<<<< HEAD
     if: needs.changes.outputs.manabot == 'true'
+=======
+    if: needs.changes.outputs.semantic_coverage == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -390,13 +475,34 @@ jobs:
 
       - name: Check semantic coverage evidence
         run: |
+<<<<<<< HEAD
           uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py tests/semantic/test_opcode_alignment.py -q
           uv run scripts/generate_coverage_gaps.py --check
+=======
+          uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
+          uv run scripts/generate_coverage_gaps.py --check
+          uv run python scripts/compile_semantic_content.py --check \
+            --source content/semantic/v1/elemental_world.source.json \
+            --fixtures content/semantic/v1/elemental_world.fixtures.json \
+            --ir-output content/semantic/v1/generated/elemental_world.ir.json \
+            --coverage-output content/semantic/v1/generated/elemental_world.coverage.json
+      - name: Check optional payment content
+        run: |
+          uv run scripts/compile_semantic_content.py --check \
+            --source content/semantic/w11/elemental_world.source.json \
+            --fixtures content/semantic/w11/elemental_world.fixtures.json \
+            --ir-output content/semantic/w11/generated/elemental_world.ir.json \
+            --coverage-output content/semantic/w11/generated/elemental_world.coverage.json
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
   semantic-conformance:
     name: Semantic Kernel Conformance
     needs: [changes]
+<<<<<<< HEAD
     if: needs.changes.outputs.rust == 'true'
+=======
+    if: needs.changes.outputs.semantic_conformance == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-latest
     env:
       CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
@@ -417,10 +523,17 @@ jobs:
         run: cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests
 
       - name: Reproduce checked conformance artifacts
+<<<<<<< HEAD
         run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-w9-v1
 
       - name: Run bounded valid-action fuzzing
         run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w9-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+=======
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-w13-v1
+
+      - name: Run bounded valid-action fuzzing
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w13-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
       - name: Preserve exact fuzz replay seeds
         if: failure()
@@ -430,10 +543,17 @@ jobs:
           path: target/semantic-conformance/failures/*.json
           if-no-files-found: ignore
 
+<<<<<<< HEAD
   visual_reference:
     name: Visual Reference Gate
     needs: [changes]
     if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
+=======
+  frontend:
+    name: Academy UI
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -449,7 +569,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+<<<<<<< HEAD
           cache-dependency-path: frontend/package-lock.json
+=======
+          cache-dependency-path: academy/ui/package-lock.json
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
       - name: Install Python dependencies
         run: |
@@ -467,11 +591,16 @@ jobs:
         run: uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
 
       - name: Install frontend and Chromium
+<<<<<<< HEAD
         working-directory: frontend
+=======
+        working-directory: academy/ui
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
+<<<<<<< HEAD
       - name: Compare committed visual references
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.update_visual_references }}
         run: |
@@ -499,12 +628,31 @@ jobs:
         with:
           name: visual-reference-failure
           path: frontend/test-results/release
+=======
+      - name: Focused UI checks and browser interactions
+        working-directory: academy/ui
+        run: |
+          npm test
+          npm run check
+          npm run test:e2e:release
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: academy-browser-failure
+          path: academy/ui/test-results/release
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
           if-no-files-found: warn
 
   clean-machine-play:
     name: Clean-machine Play
     needs: [changes]
+<<<<<<< HEAD
     if: needs.changes.outputs.academy == 'true' || needs.changes.outputs.frontend == 'true'
+=======
+    if: needs.changes.outputs.clean_machine_play == 'true'
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -530,6 +678,17 @@ jobs:
       - name: Prove clean launch and offline reload
         run: ./scripts/verify-clean-machine
 
+<<<<<<< HEAD
+=======
+      - name: Report time to playable against the 90-second budget
+        run: |
+          jq -r '.launch | "Time to playable: \(.elapsed_to_playable_ms) ms of a \(.budget_ms) ms budget"' \
+            .cache/clean-machine/proof.json | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .launch.within_budget .cache/clean-machine/proof.json)" != true ]; then
+            echo "::warning title=Clean-machine budget::playable after the 90-second budget on this runner"
+          fi
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
       - name: Upload clean-machine receipt
         if: always()
         uses: actions/upload-artifact@v4
@@ -543,6 +702,7 @@ jobs:
   result:
     name: Tests Result
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
     if: always()
     steps:
@@ -554,6 +714,16 @@ jobs:
           MANABOT: ${{ needs.changes.outputs.manabot }}
           ACADEMY: ${{ needs.changes.outputs.academy }}
           FRONTEND: ${{ needs.changes.outputs.frontend }}
+=======
+    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-coverage, semantic-conformance, frontend, clean-machine-play]
+    if: always()
+    steps:
+      - name: Check all jobs
+        shell: bash
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SELECTED: ${{ toJSON(needs.changes.outputs) }}
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
           RESULTS: >-
             rust=${{ needs.rust.result }}
             python-unit=${{ needs.python-unit.result }}
@@ -562,6 +732,7 @@ jobs:
             protocol-v1=${{ needs.protocol-v1.result }}
             semantic-coverage=${{ needs.semantic-coverage.result }}
             semantic-conformance=${{ needs.semantic-conformance.result }}
+<<<<<<< HEAD
             visual_reference=${{ needs.visual_reference.result }}
             clean-machine-play=${{ needs.clean-machine-play.result }}
         run: |
@@ -584,16 +755,32 @@ jobs:
               *) return 0 ;;
             esac
           }
+=======
+            frontend=${{ needs.frontend.result }}
+            clean-machine-play=${{ needs.clean-machine-play.result }}
+        run: |
+          [ "$CHANGES" = success ] || exit 1
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
           failed=0
           for entry in $RESULTS; do
             job="${entry%%=*}"
             result="${entry#*=}"
+<<<<<<< HEAD
             if selected "$job"; then
               echo "$job: $result (selected)"
               [ "$result" = "success" ] || failed=1
             else
               echo "$job: $result (area off)"
               [ "$result" = "skipped" ] || [ "$result" = "success" ] || failed=1
+=======
+            key="${job//-/_}"
+            selected=$(jq -er --arg key "$key" '.[$key] | select(. == "true" or . == "false")' <<< "$SELECTED") || exit 1
+            echo "$job: $result (selected=$selected)"
+            if [ "$selected" = true ]; then
+              [ "$result" = success ] || failed=1
+            else
+              [ "$result" = skipped ] || [ "$result" = success ] || failed=1
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             fi
           done
           exit "$failed"

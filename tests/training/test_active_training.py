@@ -9,9 +9,17 @@ from typing import ParamSpec, TypeVar
 
 import pytest
 
+<<<<<<< HEAD
 from manabot.training import execution
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitor_evaluation import stage_checkpoint
+=======
+from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.experiment.checkpoint_evaluation import stage_checkpoint
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.store import VerifyStore
 from tests.training.test_ataraxos_regime import _recipe
 
@@ -21,10 +29,20 @@ R = TypeVar("R")
 
 class Clock:
     def __init__(self) -> None:
+<<<<<<< HEAD
         self.offset = 0.0
 
     def perf_counter(self) -> float:
         return time.perf_counter() + self.offset
+=======
+        # Keep native collection deadlines on the real epoch, but charge only
+        # injected durations so host speed cannot change the expected update count.
+        self.epoch = time.perf_counter()
+        self.offset = 0.0
+
+    def perf_counter(self) -> float:
+        return self.epoch + self.offset
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def __getattr__(self, name: str) -> object:
         return getattr(time, name)
@@ -39,7 +57,11 @@ class Clock:
 
 
 def recipe(updates: int = 10) -> TrainingRegime:
+<<<<<<< HEAD
     result = _recipe("ataraxos-move-scalar")
+=======
+    result = _recipe(ataraxos_move_scalar)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     result.stages = result.stages[:1]
     result.agent.hidden_dim = 8
     stage = result.stages[0]
@@ -59,10 +81,22 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     clock = Clock()
     monkeypatch.setattr(execution, "time", clock)
     monkeypatch.setattr(
+<<<<<<< HEAD
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
     monkeypatch.setattr(
         execution, "save_bc_checkpoint", clock.charge(execution.save_bc_checkpoint, 100)
+=======
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
+    monkeypatch.setattr(
+        execution, "update_iteration", clock.charge(execution.update_iteration, 10)
+    )
+    monkeypatch.setattr(
+        execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         if expected == "failed":
@@ -85,7 +119,11 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     assert run.status == expected
     stage = run.stages[0]
     if expected == "completed":
+<<<<<<< HEAD
         assert len(stage.diagnostics) == 2
+=======
+        assert stage.updates == 2
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         assert stage.collection_seconds + stage.learning_seconds >= 20
         assert len(run.monitoring_checkpoints) == 1
         point = run.monitoring_checkpoints[0]
@@ -103,7 +141,11 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
 
 
 def test_old_recipe_bytes_and_invalid_endpoint() -> None:
+<<<<<<< HEAD
     old = _recipe("ataraxos-move-scalar")
+=======
+    old = _recipe(ataraxos_move_scalar)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert all("active_seconds" not in stage for stage in old.model_dump()["stages"])
     payload = recipe().model_dump()
     payload["stages"][0]["active_seconds"] = 900
@@ -130,6 +172,14 @@ def test_initial_admission_precedes_collection(
     monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
     monkeypatch.setattr(
+<<<<<<< HEAD
+=======
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
+    monkeypatch.setattr(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
     gate = tmp_path / "initial-admission"
@@ -170,7 +220,11 @@ def test_initial_admission_precedes_collection(
         if admitted:
             finished = future.result(timeout=30)
             assert finished.status == "completed"
+<<<<<<< HEAD
             assert len(finished.stages[0].diagnostics) == 2
+=======
+            assert finished.stages[0].updates == 2
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             assert finished.stages[0].admission_wait_seconds is not None
             assert finished.stages[0].admission_wait_seconds >= 100
         else:

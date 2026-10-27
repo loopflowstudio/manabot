@@ -9,6 +9,7 @@ from nbclient import NotebookClient
 import nbformat
 import pytest
 
+<<<<<<< HEAD
 from experiments.runners import depth_screen, history_input
 from experiments.runners.experiment_demo import declaration as demo_declaration
 from experiments.runners.experiment_depth import declaration as depth_declaration
@@ -18,15 +19,30 @@ from experiments.runners.run_history_input import history_plan
 from manabot.training.checkpoint_queue import Attempt, MonitoringBudget
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.experiment_execution import (
+=======
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.experiment.config import Baseline, Case, Experiment, ModelOverride
+from manabot.experiment.evaluation_queue import Attempt, MonitoringBudget
+from manabot.experiment.execution import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ExperimentRun,
     ExperimentSchedule,
     Hardware,
     HardwareInventory,
 )
+<<<<<<< HEAD
 from manabot.training.experiment_runner import run_experiment
 from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
 from manabot.verify.store import VerifyStore
 from tests.training.test_history_input import calibration
+=======
+from manabot.experiment.runner import run_experiment
+from manabot.infra.config import ModelConfig
+from manabot.recipes.ataraxos import ataraxos
+from manabot.reports.notebook import write_comparison_notebook
+from manabot.verify.store import VerifyStore
+import managym
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from tests.training.test_monitor_evaluation import failure_summary
 
 
@@ -36,6 +52,50 @@ def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "test-account")
 
 
+<<<<<<< HEAD
+=======
+def demo_declaration() -> Experiment:
+    """Four short training runs and four milestones: a workflow fixture."""
+    base = ataraxos().regime()
+    base.world = managym.WORLD_VERSION
+    base.id = f"fixture-{base.world}"
+    base.stages = base.stages[:1]
+    # Work stays update-bounded; wall allowances include interpreter startup.
+    base.wall_seconds = 60
+    for stage in base.stages:
+        stage.execution.wall_seconds = 30
+        stage.streams = 2
+        stage.transitions = 8
+    base.agent.hidden_dim = 8
+    base.agent.num_attention_heads = 2
+    # Four real monitoring cohorts include process startup and exact replay.
+    cohort_seconds = MonitoringBudget.model_fields["attempt_seconds"].default
+    monitoring_seconds = 4 * cohort_seconds
+    return Experiment(
+        name="fixture",
+        baseline=Baseline.capture(f"fixture-{base.world}", base),
+        cases=(
+            Case("small"),
+            Case("wide", (ModelOverride(ModelConfig(hidden_dim=16)),)),
+        ),
+        schedule=ExperimentSchedule(
+            seeds=(117, 118),
+            hardware="fixture",
+            wall_seconds=monitoring_seconds + 300,
+            process_seconds=monitoring_seconds + 300,
+            monitoring=MonitoringBudget(
+                seconds=monitoring_seconds,
+                protocol=MonitorProtocol(
+                    deal_seeds=(1910101000,), bootstrap_replicates=20
+                ),
+            ),
+            checkpoint_updates=1000,
+            disk_reserve_bytes=0,
+        ),
+    )
+
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def hardware() -> HardwareInventory:
     return HardwareInventory(
         resources=(Hardware(name="fixture", host=socket.gethostname(), cpu_threads=2),)
@@ -68,6 +128,7 @@ def _experiment_failures(record: ExperimentRun, monitoring: Path) -> str:
     return "\n".join(lines)
 
 
+<<<<<<< HEAD
 def test_screen_declarations_preserve_frozen_recipes_and_cohorts() -> None:
     for spec, factory in (
         (history_input, history_declaration),
@@ -93,6 +154,8 @@ def test_screen_declarations_preserve_frozen_recipes_and_cohorts() -> None:
             )
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_configured_hardware_and_budget_admission(tmp_path: Path) -> None:
     experiment = demo_declaration()
     with pytest.raises(ValueError, match="not configured"):
@@ -182,9 +245,16 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+<<<<<<< HEAD
     from manabot.training import experiment_runner as runner
     from manabot.training.execution import atomic_json
     from manabot.training.models import TrainingRegime, TrainingRun
+=======
+    from manabot.experiment import runner as runner
+    from manabot.infra.files import atomic_json
+    from manabot.training.records import TrainingRun
+    from manabot.training.regime import TrainingRegime
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     launched: list[str] = []
 
@@ -265,8 +335,13 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
 
 
 def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) -> None:
+<<<<<<< HEAD
     from manabot.training.experiments import Baseline, Experiment
     from manabot.training.models import TrainingRun
+=======
+    from manabot.experiment.config import Baseline, Experiment
+    from manabot.training.records import TrainingRun
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     from tests.training.test_recovery import recipe
 
     value = recipe()

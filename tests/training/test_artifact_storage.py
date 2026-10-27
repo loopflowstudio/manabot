@@ -5,13 +5,17 @@ import hashlib
 import io
 import json
 from pathlib import Path
+<<<<<<< HEAD
 import sys
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from unittest.mock import MagicMock
 
 import boto3
 from botocore.exceptions import ClientError
 import pytest
 
+<<<<<<< HEAD
 from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training import monitoring
@@ -20,12 +24,25 @@ from manabot.training.artifacts import ArtifactManifest, publish_run
 
 @pytest.fixture
 def storage(monkeypatch: pytest.MonkeyPatch) -> tuple[S3ArtifactStore, MagicMock]:
+=======
+from manabot.experiment.artifacts import ArtifactManifest, publish_run
+from manabot.infra.artifacts import ArtifactStore, StoredArtifact
+from manabot.model.checkpoint import load_checkpoint
+
+
+@pytest.fixture
+def storage(monkeypatch: pytest.MonkeyPatch) -> tuple[ArtifactStore, MagicMock]:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     client = MagicMock()
     session = MagicMock()
     session.client.return_value = client
     monkeypatch.setattr(boto3, "Session", MagicMock(return_value=session))
     client.put_object.return_value = {"VersionId": "version-1"}
+<<<<<<< HEAD
     return S3ArtifactStore(), client
+=======
+    return ArtifactStore(), client
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _reference(data: bytes) -> StoredArtifact:
@@ -44,7 +61,11 @@ def _respond(client: MagicMock, data: bytes) -> None:
 
 
 def test_publish_and_fetch_verify_bytes_and_preserve_version(
+<<<<<<< HEAD
     tmp_path: Path, storage: tuple[S3ArtifactStore, MagicMock]
+=======
+    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     store, client = storage
     data = b"retained checkpoint bytes"
@@ -72,7 +93,11 @@ def test_publish_and_fetch_verify_bytes_and_preserve_version(
 
 
 def test_changed_source_never_uploads(
+<<<<<<< HEAD
     tmp_path: Path, storage: tuple[S3ArtifactStore, MagicMock]
+=======
+    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     store, client = storage
     reference = _reference(b"original")
@@ -86,7 +111,11 @@ def test_changed_source_never_uploads(
 
 
 def test_existing_remote_object_must_match(
+<<<<<<< HEAD
     tmp_path: Path, storage: tuple[S3ArtifactStore, MagicMock]
+=======
+    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     store, client = storage
     data = b"original"
@@ -100,12 +129,22 @@ def test_existing_remote_object_must_match(
         },
         "PutObject",
     )
+<<<<<<< HEAD
     _respond(client, data)
+=======
+    checksum = base64.b64encode(bytes.fromhex(reference.sha256)).decode()
+    client.head_object.return_value = {
+        "ContentLength": len(data),
+        "ChecksumSHA256": checksum,
+        "VersionId": "version-1",
+    }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     retried = store.publish(
         source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
     )
     assert retried.sha256 == reference.sha256
     assert retried.version_id == "version-1"
+<<<<<<< HEAD
     _respond(client, b"tampered")
     with pytest.raises(ValueError, match="differ"):
         store.publish(
@@ -115,6 +154,21 @@ def test_existing_remote_object_must_match(
 
 def test_bad_download_never_installs_cache(
     tmp_path: Path, storage: tuple[S3ArtifactStore, MagicMock]
+=======
+    client.head_object.return_value = {
+        "ContentLength": len(data),
+        "ChecksumSHA256": base64.b64encode(hashlib.sha256(b"other").digest()).decode(),
+    }
+    with pytest.raises(ValueError, match="differs"):
+        store.publish(
+            source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
+        )
+    client.get_object.assert_not_called()
+
+
+def test_bad_download_never_installs_cache(
+    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     store, client = storage
     reference = _reference(b"original")
@@ -132,18 +186,32 @@ def test_loader_checks_cached_digest_before_deserializing(
     (tmp_path / reference.sha256).write_bytes(b"tampered")
     monkeypatch.setenv("MANABOT_ARTIFACT_CACHE", str(tmp_path))
     loader = MagicMock()
+<<<<<<< HEAD
     monkeypatch.setattr("manabot.sim.flat_mc.torch.load", loader)
     with pytest.raises(ValueError, match="differ"):
         load_checkpoint_agent(reference)
+=======
+    monkeypatch.setattr("manabot.model.checkpoint.torch.load", loader)
+    with pytest.raises(ValueError, match="differ"):
+        load_checkpoint(reference)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     loader.assert_not_called()
 
 
 def test_run_publication_preserves_export_and_all_roles(
+<<<<<<< HEAD
     tmp_path: Path, storage: tuple[S3ArtifactStore, MagicMock]
 ) -> None:
     store, client = storage
     # Retained schema fixture; no trainer, optimizer, or game execution.
     fixture = Path("experiments/study/experiment-demo/training")
+=======
+    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+) -> None:
+    store, client = storage
+    # Retained schema fixture; no trainer, optimizer, or game execution.
+    fixture = Path("tests/fixtures/experiment-demo/training")
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     paths = list(fixture.glob("**/run.json"))
     assert paths
     payload = json.loads(paths[0].read_text())
@@ -200,6 +268,7 @@ def test_run_publication_preserves_export_and_all_roles(
     assert client.put_object.call_count == count
 
 
+<<<<<<< HEAD
 def test_monitor_publishes_only_references_bound_to_exact_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -250,3 +319,47 @@ def test_monitor_publishes_only_references_bound_to_exact_run(
     with pytest.raises(ValueError, match="another training run"):
         monitoring.main()
     assert len(published) == 1
+=======
+def test_r2_locations_round_trip_through_their_own_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stored: dict[str, bytes] = {}
+    client = MagicMock()
+
+    def put_object(**kwargs: object) -> dict[str, object]:
+        body = kwargs["Body"]
+        assert isinstance(body, io.BufferedReader)
+        stored[str(kwargs["Key"])] = body.read()
+        return {}
+
+    client.put_object.side_effect = put_object
+    client.get_object.side_effect = lambda **kwargs: {
+        "Body": io.BytesIO(stored[kwargs["Key"]]),
+        "ContentLength": len(stored[kwargs["Key"]]),
+    }
+    monkeypatch.setattr(boto3, "client", MagicMock(return_value=client))
+    monkeypatch.setattr(boto3, "Session", MagicMock(side_effect=AssertionError))
+    for name in ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(name, "fixture")
+    source = tmp_path / "weights.pt"
+    source.write_bytes(b"weights")
+    digest = hashlib.sha256(b"weights").hexdigest()
+    reference = ArtifactStore().publish(
+        source, "r2://manabot/", sha256=digest, size=len(b"weights")
+    )
+    assert reference.uri == f"r2://manabot/sha256/{digest}"
+    assert reference.version_id is None
+    fetched = ArtifactStore().fetch(reference, tmp_path / "cache")
+    assert fetched.read_bytes() == b"weights"
+
+
+def test_r2_without_credentials_names_the_missing_variable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("R2_ACCOUNT_ID", raising=False)
+    reference = _reference(b"x").model_copy(
+        update={"uri": f"r2://manabot/sha256/{_reference(b'x').sha256}"}
+    )
+    with pytest.raises(RuntimeError, match="R2_ACCOUNT_ID"):
+        ArtifactStore().fetch(reference, tmp_path / "cache")
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

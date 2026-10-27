@@ -8,17 +8,27 @@ from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
+<<<<<<< HEAD
 from types import SimpleNamespace
 from typing import cast
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 import numpy as np
 import pytest
 import torch
 from torch import Tensor
 
+<<<<<<< HEAD
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
+=======
+from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.env import Match, ObservationSpace, Reward
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -26,6 +36,7 @@ from manabot.model.policy_distribution import (
     legal_mask,
     policy_logs,
 )
+<<<<<<< HEAD
 from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
 from manabot.training import execution
 from manabot.training.ataraxos import damped_policy_loss, update_move_iteration
@@ -36,6 +47,18 @@ from manabot.training.models import (
     TrainingRun,
     TrainSelfPlay,
 )
+=======
+from manabot.training import execution
+from manabot.training.learning.damped_policy import (
+    damped_policy_loss,
+    update_damped_iteration,
+)
+from manabot.training.learning.health import NumericalHealth, OptimizerHealth
+from manabot.training.learning.learner import Learner
+from manabot.training.records import TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.rollout.collection import SeatRoutedCollector
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -275,7 +298,11 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
 
+<<<<<<< HEAD
 class ExtremeAgent(Agent):
+=======
+class ExtremeAgent(ActorCritic):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     def forward_distribution(self, obs: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         logits, values = super().forward_distribution(obs)
         # Keep real game/observation/learner flow, make one legal alternative
@@ -286,19 +313,29 @@ class ExtremeAgent(Agent):
 
 def test_extreme_real_collector_to_learner() -> None:
     space = ObservationSpace()
+<<<<<<< HEAD
     agent = ExtremeAgent(space, AgentSpec(hidden_dim=8, num_attention_heads=2)).to(
+=======
+    agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         DEVICE
     )
     collector = SeatRoutedCollector(
         space,
+<<<<<<< HEAD
         Match(MatchHypers()),
         Reward(RewardHypers()),
+=======
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         num_envs=2,
         opponent_mode="self",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
     assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
+<<<<<<< HEAD
     trainer = cast(
         NetOpponentTrainer,
         SimpleNamespace(
@@ -315,6 +352,19 @@ def test_extreme_real_collector_to_learner() -> None:
     result = update_move_iteration(trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
     assert result["numerical"]["optimizer_steps"] == 4
+=======
+    trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
+
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", advantage_quantile=0, min_advantage=0
+    )
+    result = update_damped_iteration(trainer, batch, learning, 1)
+    assert result["numerical"]["legal_underflow_count"] > 0
+    assert (
+        result["numerical"]["optimizer_steps"]
+        == (batch.actions.size + collector.num_envs - 1) // collector.num_envs
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert result["numerical"]["parameter_delta_l2"] > 0
     assert all(torch.isfinite(p).all() for p in agent.parameters())
 
@@ -323,9 +373,13 @@ def test_extreme_real_collector_to_learner() -> None:
 def test_failed_update_retains_state_and_excludes_prior_overhead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
+<<<<<<< HEAD
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
     )
+=======
+    recipe = ataraxos_move_scalar()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     recipe.world = managym.WORLD_VERSION
     recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.stages = recipe.stages[:1]
@@ -341,6 +395,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset[0])
     original_update = execution.update_iteration
     calls = [0]
+<<<<<<< HEAD
+=======
+    corrupted_rows: list[int] = []
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def update(*args: object, **kwargs: object) -> object:
         calls[0] += 1
@@ -350,6 +408,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         batch = args[1]
         probabilities = torch.as_tensor(batch.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
+<<<<<<< HEAD
+=======
+        corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         check_probabilities(
             probabilities,
             torch.as_tensor(batch.obs["actions_valid"]) > 0,
@@ -399,7 +461,11 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         assert "incident capture failed: OSError" in run["error"]
         return
     assert "incident capture failed" not in run["error"]
+<<<<<<< HEAD
     assert len(record["diagnostics"]) == 1
+=======
+    assert record["updates"] == 1
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert record["learning_seconds"] >= 0.25
     assert record["diagnostic_seconds"] >= 2
     assert record["learning_seconds"] < record["diagnostic_seconds"]
@@ -416,7 +482,11 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
     assert torch.isnan(tensors["probabilities"]).any()
+<<<<<<< HEAD
     assert tensors["row_indexes"].tolist() == [7]
+=======
+    assert tensors["row_indexes"].tolist() == corrupted_rows
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     state = torch.load(artifacts["numerical/state.pt"]["path"], weights_only=False)
     assert (
         state["optimizer"]["state"]
@@ -428,7 +498,11 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content
+<<<<<<< HEAD
     initial_agent, _ = execution.load_checkpoint_agent(str(initial_path))
+=======
+    initial_agent, _ = execution.load_checkpoint(str(initial_path))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert all(
         torch.isfinite(value).all() for value in initial_agent.state_dict().values()
     )

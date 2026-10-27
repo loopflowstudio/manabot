@@ -98,7 +98,11 @@ time/samples separately from unequal endpoints. Preserve old failures and Mini o
 
 The `2555c0e2` pilot passed CUDA admission/cleanup ($4.717918369190 estimated).
 PR263 repairs its endpoint race; CPU recovery retains the original omission.
+<<<<<<< HEAD
 Timing proves neither strength nor sustained throughput. The [remote contract](../../docs/remote-jobs.md),
+=======
+Timing proves neither strength nor sustained throughput. The [remote training guide](../../docs/remote-training.md),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 [capacity record](../../experiments/model-capacity.md) and `2a4fd419` own receipts.
 
 Jack Heart approved the separate restricted controller and secure Mini installation.
@@ -199,7 +203,11 @@ reconnect never restarts learning and unknown creates never retry speculatively.
 
 The initial scoped-S3 403 failure and successful mailbox repair remain retained.
 Both attempts cost $0.1158450 estimated; shared prior spending was $0.6518216.
+<<<<<<< HEAD
 The [remote contract](../../docs/remote-jobs.md) owns commands, scope and receipts;
+=======
+The [remote training guide](../../docs/remote-training.md) owns commands, scope and receipts;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 `.runs/etu123-disconnect` and `f6bcc83e` retain originals/details. No scientific
 allocation transfers. Personal SSO chaining bounds that old path below one hour.
 
@@ -1203,3 +1211,26 @@ cross matches main `a11d89bd`, not pre-mirror `83faa3c5` originals.
 The [protocol](../../experiments/head-to-head.md#tournament-files-mtg-134-2026-10-10)
 owns evidence limits. Grid evaluation runs from `18c6ef6f`; this rename starts
 no games and claims no strength. Publish for review; no merge authorization.
+<<<<<<< HEAD
+=======
+
+## Complexity experiment execution boundary (MTG-122, 2026-10-14)
+
+Jack Heart authorized running and analyzing the three-pool comparison through
+public etude-sdk, adding ability-free vanilla creatures, and either 48 hours on
+Mini or $25 GPU spending. No local experiment execution; alternatives are not
+additive. Include calibration, evaluation, failures and cleanup in the selected
+cap, preserve existing cohorts, and freeze counts from remote calibration before
+scoring. The earlier design-only hold/local CPU proposal is superseded. No
+scientific cohort has launched. Catalog-size and curriculum contrasts stay separate.
+
+Hold capacity, representation and learning fixed across worlds; compare each
+against its own frozen initialization, greedy/random anchors and four deck-role
+cells. Raw cross-world scores cannot identify difficulty. Semantic token embeddings
+and shared GRU encoding are not independent learned card embeddings. Research
+content/schema admission remains required; never bypass IDs or world checks.
+The explicit authored arena matrix and SDK tracking/worker/evaluation adapters
+have bounded software proofs, not learning evidence. Four streams ×64 transitions
+collect 256 learner transitions/update. Product content/frozen evidence remain
+unchanged; ETU-118 owns promotion.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

@@ -1,8 +1,14 @@
 # Policy numerics and update health
 
 Ordinary `train_self_play` regimes retain masked normalized policy logs through
+<<<<<<< HEAD
 collection and learning. `TrainingRun` owns local measurements and terminal
 incidents; W&B and the editable notebook/HTML report are optional projections.
+=======
+collection and learning. Per-update health is part of each update's Etude
+metrics (`numerical/...`); `TrainingRun` owns counters and terminal incidents,
+and the editable notebook/HTML report reads both.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 This contract is identified by `policy_numerics=masked-log-softmax-v1` in the
 run's source/runtime identities. Freeze a new source for any new experiment.
 

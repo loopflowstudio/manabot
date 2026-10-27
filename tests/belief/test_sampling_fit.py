@@ -3,9 +3,17 @@
 from dataclasses import replace
 from pathlib import Path
 
+<<<<<<< HEAD
 import pytest
 import torch
 
+=======
+from managym.possible_worlds import PossibleWorldSpace
+import pytest
+import torch
+
+from manabot.belief.checkpoint import load_belief_sampler
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling import (
     AutoregressiveBeliefSampler,
@@ -23,10 +31,15 @@ from manabot.belief.sampling_fit import (
     evaluate_sampler,
     evaluate_sampler_cohort,
     fit_belief_sampler,
+<<<<<<< HEAD
     load_belief_sampler,
     save_belief_sampler,
 )
 from managym.possible_worlds import PossibleWorldSpace
+=======
+    save_belief_sampler,
+)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _dataset() -> SamplerDataset:

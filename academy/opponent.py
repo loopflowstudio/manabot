@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Trained opponents: the configured candidate bundle and the checkpoint catalog.
 
 Two sources supply a table's trained opponent, both chosen by exact SHA-256:
@@ -12,6 +13,16 @@ Two sources supply a table's trained opponent, both chosen by exact SHA-256:
   checks them; incompatible entries stay listed with the mismatch so the
   table can say why they cannot play (``opponent_catalog``,
   ``catalog_opponent``).
+=======
+"""Trained opponents: the checkpoint catalog, chosen by exact SHA-256.
+
+The catalog lists checkpoints the researcher trained: everything under the
+manabot runs directory (``MANABOT_RUNS_DIR``, default ``./.runs``) plus the
+files, run directories and Tournament files in ``ACADEMY_PLAY_CHECKPOINTS``
+(``os.pathsep``-separated). manabot's ``manabot.model.catalog`` reads and
+checks them; incompatible entries stay listed with the mismatch so the table
+can say why they cannot play (``opponent_catalog``, ``catalog_opponent``).
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Paths are server configuration; the browser only ever names a digest. The
 catalog imports Torch, so it loads lazily and ordinary play never needs it.
@@ -19,10 +30,15 @@ catalog imports Torch, so it loads lazily and ordinary play never needs it.
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from dataclasses import asdict, dataclass, field, replace
 from functools import lru_cache
 import hashlib
 import json
+=======
+from dataclasses import asdict, dataclass, field
+import hashlib
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -30,7 +46,11 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from manabot.model.catalog import CheckpointSummary, UnavailableEntry
 
+<<<<<<< HEAD
 OpponentSource = Literal["candidate", "path", "runs", "tournament"]
+=======
+OpponentSource = Literal["path", "runs", "tournament"]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @dataclass(frozen=True)
@@ -40,12 +60,16 @@ class Opponent:
     sha256: str
     checkpoint: Path
     deterministic: bool
+<<<<<<< HEAD
     # Candidate bundles pin the engine's content manifest and their decks;
     # catalog checkpoints carry the same facts inside their world binding.
     content_manifest: dict | None
     decks: dict | None
     bot_id: str | None = None
     source: OpponentSource = "candidate"
+=======
+    source: OpponentSource
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     world: str | None = None
     model: str | None = None
     step: int | None = None
@@ -58,7 +82,10 @@ class Opponent:
             "name": self.name,
             "producer": self.producer,
             "sha256": self.sha256,
+<<<<<<< HEAD
             **({"bot_id": self.bot_id} if self.bot_id else {}),
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
 
     def record(self) -> dict:
@@ -86,6 +113,7 @@ class Opponent:
             )
 
 
+<<<<<<< HEAD
 @lru_cache(maxsize=1)
 def _load(path: str) -> Opponent:
     manifest = Path(path).resolve()
@@ -131,6 +159,8 @@ def configured_opponent() -> Opponent | None:
         ) from exc
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 # ---------------------------------------------------------------------------
 # Checkpoint catalog
 # ---------------------------------------------------------------------------
@@ -184,6 +214,7 @@ def _discover() -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
     return discover_checkpoints(checkpoint_sources(), runs_dir=runs_directory())
 
 
+<<<<<<< HEAD
 def _configured_entry() -> CatalogEntry | None:
     """The configured candidate, omitted when its bundle cannot be read."""
 
@@ -216,10 +247,20 @@ def opponent_catalog() -> dict:
 
     configured = _configured_entry()
     entries = [configured] if configured is not None else []
+=======
+def opponent_catalog() -> dict:
+    """Every trained opponent this server can name.
+
+    ``catalog_error`` explains a catalog that could not be read at all (for
+    example, a play-only install without Torch).
+    """
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     try:
         found, missing = _discover()
     except (ImportError, OSError, ValueError) as error:
         return {
+<<<<<<< HEAD
             "opponents": [asdict(entry) for entry in entries],
             "catalog_error": f"Checkpoints could not be listed: {error}",
         }
@@ -229,6 +270,12 @@ def opponent_catalog() -> dict:
         for summary in found
         if summary.sha256 not in known
     )
+=======
+            "opponents": [],
+            "catalog_error": f"Checkpoints could not be listed: {error}",
+        }
+    entries = [CatalogEntry.from_summary(summary) for summary in found]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     entries.extend(
         CatalogEntry(
             sha256=entry.sha256,
@@ -271,8 +318,11 @@ def catalog_opponent(sha256: str) -> Opponent | None:
         checkpoint=summary.path,
         # Trained policies play as sampled during training.
         deterministic=False,
+<<<<<<< HEAD
         content_manifest=None,
         decks=None,
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         source=summary.source,
         world=summary.world,
         model=summary.model,

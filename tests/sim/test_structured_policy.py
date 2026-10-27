@@ -5,7 +5,7 @@ import math
 
 import pytest
 
-from manabot.sim.structured_policy import (
+from manabot.sim.action.structured import (
     PolicyScores,
     RaggedPolicyDecoder,
     SeededSemanticScorer,

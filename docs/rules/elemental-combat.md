@@ -110,7 +110,11 @@ search Command through acting-view belief tracking and a history-enabled
 policy, checks nonzero history gradients, and preserves public history under
 determinization. It does not claim inference quality or new strength.
 
+<<<<<<< HEAD
 [The w7 corpus](../../conformance/semantic-kernel-w7-v1/) contains eight terminal
+=======
+[The w7 corpus](../../experiments/data/archive/conformance/semantic-kernel-w7-v1/) contains eight terminal
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 games and 1,107 reproducible commands, four on the compiled Elemental pack.
 CI and the current conformance test select this root. Its pinned Phase matrix
 retains the inherited 15-row source comparison; it makes no external-engine
@@ -127,8 +131,13 @@ rebuild tolerates only the additive empty-sideboard setup fields and verifies
 the complete original IR and token schema; historical experiment runners
 retain their preregistered compiler checks.
 
+<<<<<<< HEAD
 The new [w7 authority receipt](../../conformance/authored-match-w7-v1/) and
 [w7 parity proof](../../conformance/authored-match-parity-w7-v1/) preserve the
+=======
+The new [w7 authority receipt](../../experiments/data/archive/conformance/authored-match-w7-v1/) and
+[w7 parity proof](../../experiments/data/archive/conformance/authored-match-parity-w7-v1/) preserve the
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 older receipts. Live, headless and persisted replay agree on 156 Commands and
 942 viewer checks. A separate w7 Learn browser fixture preserves the older
 fixture and reaches Learn after 13 hero Commands. Browser coverage passes for

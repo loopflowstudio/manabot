@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import torch
 
+<<<<<<< HEAD
 from manabot.training import execution
 from manabot.training.models import (
     AtaraxosMoveLearning,
@@ -18,18 +19,58 @@ from manabot.training.models import (
     TrainSelfPlay,
 )
 from manabot.training.recovery import attempt_lock, load_update
+=======
+from experiments.direct_self_play import direct_self_play
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.state.recovery import attempt_lock, load_update
+from manabot.training.update_metrics import MetricRow, read_updates, stage_rows
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.store import VerifyStore
 import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+<<<<<<< HEAD
 def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> None:
     """Recovery preserves learning facts, while elapsed cost and host samples vary."""
     for a, b in zip(left.diagnostics, right.diagnostics, strict=True):
         assert {k: v for k, v in a.items() if k != "coordinates"} == {
             k: v for k, v in b.items() if k != "coordinates"
         }
+=======
+def tracked_updates(run: TrainingRun, source: Path) -> list[MetricRow]:
+    """Every update row of a run, read back from its Etude run under `source`."""
+    return [
+        row
+        for rows in stage_rows(run, read_updates(source, [run])).values()
+        for row in rows
+    ]
+
+
+def assert_learning_metrics_equal(
+    left: TrainingRun, right: TrainingRun, source: Path
+) -> None:
+    """Recovery preserves learning facts, while elapsed cost and host samples vary.
+
+    `coordinates/` holds host samples and `time/` each update's phase seconds.
+    """
+    left_rows, right_rows = (
+        tracked_updates(left, source),
+        tracked_updates(right, source),
+    )
+    assert left_rows
+
+    def learned(row: MetricRow) -> MetricRow:
+        return {
+            k: v for k, v in row.items() if not k.startswith(("coordinates/", "time/"))
+        }
+
+    for a, b in zip(left_rows, right_rows, strict=True):
+        assert learned(a) == learned(b)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for name in (
             "updates",
             "environment_decisions",
@@ -37,6 +78,7 @@ def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> 
             "optimizer_exposures",
             "games",
         ):
+<<<<<<< HEAD
             assert a["coordinates"][name] == b["coordinates"][name]
 
 
@@ -44,6 +86,13 @@ def recipe() -> TrainingRegime:
     value = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/direct-self-play.json").read_text()
     )
+=======
+            assert a[f"coordinates/{name}"] == b[f"coordinates/{name}"]
+
+
+def recipe() -> TrainingRegime:
+    value = direct_self_play()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     value.world = managym.WORLD_VERSION
     value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]
@@ -52,6 +101,12 @@ def recipe() -> TrainingRegime:
     stage.updates = 3
     stage.transitions = 32
     stage.streams = 2
+<<<<<<< HEAD
+=======
+    # This fixture exercises exact-quota tails across updates; whole-game
+    # both-seat recovery has its own collector and game-error coverage.
+    stage.learning_seats = "one"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     stage.learning.epochs = 1
     stage.learning.ema = 0.9
     value.agent.hidden_dim = 8
@@ -101,7 +156,11 @@ def interrupt(
         if (
             run.status == "running"
             and run.recovery_artifact is not None
+<<<<<<< HEAD
             and run.stages[-1].diagnostics
+=======
+            and run.stages[-1].updates
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         ):
             raise KeyboardInterrupt("injected after durable update")
         return run
@@ -116,6 +175,7 @@ def interrupt(
     return store.training_run(row[0])
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("gradient", ["ppo", "ataraxos_move"])
 def test_real_interruption_restores_complete_learning_state(
     tmp_path: Path,
@@ -129,6 +189,24 @@ def test_real_interruption_restores_complete_learning_state(
         value.agent.value_kind = "categorical_wdl"
         stage.learning = AtaraxosMoveLearning(
             gradient="ataraxos_move", ema=0.9, min_advantage=0, advantage_quantile=0
+=======
+@pytest.mark.parametrize("gradient", ["ppo", "damped_policy"])
+@pytest.mark.parametrize("seats", ["one", "both"])
+def test_real_interruption_restores_complete_learning_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    gradient: Literal["ppo", "damped_policy"],
+    seats: Literal["one", "both"],
+) -> None:
+    value = recipe()
+    stage = value.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning_seats = seats
+    if gradient == "damped_policy":
+        value.agent.value_kind = "categorical_wdl"
+        stage.learning = DampedPolicyLearning(
+            gradient="damped_policy", ema=0.9, min_advantage=0, advantage_quantile=0
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         )
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
@@ -143,7 +221,11 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
+<<<<<<< HEAD
         a, b = load_update(whole, store), load_update(resumed, store)
+=======
+        a, b = load_update(whole), load_update(resumed)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for name in (
             "learner",
             "optimizer",
@@ -158,10 +240,26 @@ def test_real_interruption_restores_complete_learning_state(
         assert_state_equal(a.collector.buffers, b.collector.buffers)
         assert_state_equal(a.collector.sampling_rng, b.collector.sampling_rng)
         assert a.iteration == b.iteration == 3
+<<<<<<< HEAD
         assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
         assert whole.stages[0].games == resumed.stages[0].games
         assert whole.stages[0].games > 0
         assert whole.stages[0].learner_transitions == 192
+=======
+        assert_learning_metrics_equal(whole, resumed, tmp_path)
+        assert whole.stages[0].games == resumed.stages[0].games
+        assert whole.stages[0].games > 0
+        transitions = whole.stages[0].learner_transitions
+        assert transitions == resumed.stages[0].learner_transitions
+        if seats == "one":
+            assert transitions == 192  # 3 updates x 2 streams x 32 decisions
+        else:
+            # Both seats finish their games past the quota; every native
+            # decision becomes exactly one learner row, including the overshoot.
+            assert transitions >= 192
+            assert transitions == a.collector.stats.micro_steps
+            assert a.collector.stats.opponent_decisions == 0
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         assert whole.stages[0].optimizer_exposures > 0
         with pytest.raises(ValueError, match="already has a recovery child"):
             execution.execute_regime(
@@ -239,7 +337,11 @@ import os
 import sys
 from pathlib import Path
 from manabot.training import execution
+<<<<<<< HEAD
 from manabot.training.models import TrainingRegime
+=======
+from manabot.training.regime import TrainingRegime
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.store import VerifyStore
 execution.PROGRESS_EXPORT_SECONDS = 0.0
 execution.PROGRESS_EXPORT_SHARE = float('inf')
@@ -285,7 +387,11 @@ with VerifyStore(Path(sys.argv[2])) as store:
         assert resumed.prior_seconds == parent.seconds
         assert (failed_out / "run.json").read_bytes() == evidence
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+<<<<<<< HEAD
         a, b = load_update(whole, store), load_update(resumed, store)
+=======
+        a, b = load_update(whole), load_update(resumed)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         assert_state_equal(a.learner, b.learner)
         assert_state_equal(a.optimizer, b.optimizer)
 
@@ -387,7 +493,11 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
             assert Path(path).read_bytes() == data
         for row in completed:
             assert not list((tmp_path / "child").glob(f"{row.id}-*.pt"))
+<<<<<<< HEAD
         a, b = load_update(whole, store), load_update(child, store)
+=======
+        a, b = load_update(whole), load_update(child)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for name in (
             "learner",
             "optimizer",
@@ -401,8 +511,13 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
         assert a.iteration == b.iteration
         assert a.collector.journal == b.collector.journal
         assert_state_equal(a.collector.buffers, b.collector.buffers)
+<<<<<<< HEAD
         for left, right in zip(whole.stages, child.stages, strict=True):
             assert_learning_diagnostics_equal(left, right)
+=======
+        assert_learning_metrics_equal(whole, child, tmp_path)
+        for left, right in zip(whole.stages, child.stages, strict=True):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             assert left.learner_transitions == right.learner_transitions
             assert left.environment_decisions == right.environment_decisions
             assert left.games == right.games
@@ -575,11 +690,15 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
         run_id: str, owner: VerifyStore, path: str | Path
     ) -> TrainingRun:
         run = export(run_id, owner, path)
+<<<<<<< HEAD
         if (
             run.status == "running"
             and run.stages
             and len(run.stages[-1].diagnostics) == 2
         ):
+=======
+        if run.status == "running" and run.stages and run.stages[-1].updates == 2:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             raise KeyboardInterrupt("unsnapshotted progress")
         return run
 
@@ -593,16 +712,29 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
         ).fetchone()
         failed = store.training_run(row[0])
+<<<<<<< HEAD
         assert len(failed.stages[0].diagnostics) == 2
         assert load_update(failed, store).iteration == 1
+=======
+        assert failed.stages[0].updates == 2
+        assert load_update(failed).iteration == 1
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         resumed = execution.execute_regime(
             value, 197, tmp_path / "resumed", store, resume_from=failed.id
         )
         assert resumed.status == "completed"
         assert resumed.prior_seconds == failed.seconds
+<<<<<<< HEAD
         a, b = load_update(whole, store), load_update(resumed, store)
         for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
             assert_state_equal(getattr(a, name), getattr(b, name))
         assert a.collector.journal == b.collector.journal
         assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
+=======
+        a, b = load_update(whole), load_update(resumed)
+        for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
+            assert_state_equal(getattr(a, name), getattr(b, name))
+        assert a.collector.journal == b.collector.journal
+        assert_learning_metrics_equal(whole, resumed, tmp_path)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         assert not list((tmp_path / "whole").glob("*update-00000002.pt"))

@@ -42,7 +42,11 @@ objects, preserving indexes; the token still influences policy representations
 through shared attention. `_value_from_objects` dispatches historical fixed-slot
 mean, masked mean after projection, or the trailing token through the existing
 critic weights. `forward` converts WDL logits to signed expectation. Compound
+<<<<<<< HEAD
 play has a separate decoder/critic path; AgentSpec rejects aggregation/depth
+=======
+play has a separate decoder/critic path; ModelConfig rejects aggregation/depth
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 variants there. The presence of MeanPoolingLayer in the constructor alone cannot
 establish which critic path executes. These are source findings, not new runtime
 or strength evidence.
@@ -109,10 +113,17 @@ unresolved algorithm change.
 
 ## Local system model and reusable seams
 
+<<<<<<< HEAD
 * `manabot/training/models.py`: `TrainingRegime` owns resolved AgentSpec, world,
   match, observation and stage configuration. `Execution` admits CPU float32
   and one worker here. Do not add a remote device string to bypass validation.
 * `manabot/sim/net_opponent.py`: `SeatRoutedCollector.collect` emits
+=======
+* `manabot/training/regime.py`: `TrainingRegime` owns resolved ModelConfig, world,
+  match, observation and stage configuration. `Execution` admits CPU float32
+  and one worker here. Do not add a remote device string to bypass validation.
+* `manabot/training/rollout/collection.py`: `SeatRoutedCollector.collect` emits
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   `RolloutBatch` with `[time, stream, ...]` observations, actions, logprobs,
   behavior distributions, values, end markers and exact next observations.
   Only learner-seat decisions train; opponent decisions and native microsteps
@@ -124,12 +135,16 @@ unresolved algorithm change.
   ordinary export admission and single-writer execution. JSON is an export.
   A distributed adapter should feed this learner path rather than invent a
   competing checkpoint schema or shared writable SQLite file.
+<<<<<<< HEAD
 * `experiments/runners/calibrate_training.py`: existing complete CPU collect,
   update, export, arena and exact-replay proof. Parent CPU time excludes arena
   workers; replay time is a subset of arena time. Existing calibration's seed
   and tiny model are smoke fixtures, not hardware or scientific calibration.
 * Tests worth reusing later: `tests/training/test_calibration.py`,
   `test_ataraxos_regime.py`, `test_ataraxos_gradients.py`, and collector boundary
+=======
+* Tests worth reusing later: `tests/training/test_ataraxos_regime.py`, `test_ataraxos_gradients.py`, and collector boundary
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   tests. None verifies remote packet admission or disconnect recovery yet.
 
 ## Proposed contracts beyond the Macs
@@ -204,9 +219,14 @@ are retained byte-for-byte. Their scratch paths, hashes and `prepared` inventory
 status describe the earlier harness; the listed commands were not executed.
 The mini error is a retained textual observation, not a network receipt.
 
+<<<<<<< HEAD
 `experiments/runners/distributed_benchmark.py` is a standard-library supervisor;
 `experiments/runners/distributed_workloads.py` contains optional repository-dependent workers.
 Each attempt gets a new directory, frozen command/source hashes, host metadata,
+=======
+The (since removed) standard-library supervisor ran optional repository-dependent
+workers. Each attempt gets a new directory, frozen command/source hashes, host metadata,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 stdout/stderr and result. Failed exits/timeouts remain visible. Its resource
 summary records child CPU seconds and OS-reported child max RSS, not a sampled
 aggregate memory peak, energy consumption or throttling estimate. No stored
@@ -466,7 +486,11 @@ Harness modes and their scopes:
 | --- | --- |
 | `inventory` | No Torch/native imports or training; host and source receipt only |
 | `simulator` | Four native streams, random legal actions, current authored setup; surfaced decisions/s including wrapper/tensor/sampling overhead, not pure Rust ticks/s |
+<<<<<<< HEAD
 | `inference` | Defaults to width-16 semantic WDL, batch 64; an explicit recipe selects AgentSpec, match/observation and first self-play stage streams × transitions. Forward observations/s excludes initialization and collection; no weights are trained or loaded |
+=======
+| `inference` | Defaults to width-16 semantic WDL, batch 64; an explicit recipe selects ModelConfig, match/observation and first self-play stage streams × transitions. Forward observations/s excludes initialization and collection; no weights are trained or loaded |
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | `train` | Defaults to two iterations, 4 streams × 16 transitions/iteration; an explicit recipe executes unchanged through TrainingRegime. Reports collection, learning and export clocks, completed iterations, learner transitions, optimizer exposures and empty-filter skips |
 | `complete` | Existing CPU calibration (its own direct-self-play recipe and seed), export plus eight exact-replayed arena games; outer cap can cut it short and is not relaxed on failure |
 
@@ -478,6 +502,7 @@ different objective from the Ataraxos micro workload and must be labeled as such
 The retained mini attempts exercise these paths; their single-run coverage is not
 a general runtime or hardware certification.
 
+<<<<<<< HEAD
 ### Reproduction and stopping
 
 From this checkout, without installing project dependencies:
@@ -551,6 +576,13 @@ harness at the pinned source on mini. Do not copy a Mac native extension blindly
 or infer the remote repository path. Do not launch another coding agent merely
 to obtain benchmark numbers. The local command above is the workload entry point,
 not a tested `lf` remote-execution recipe.
+=======
+### Reproduction
+
+The benchmark supervisor and workers were removed unexecuted beyond the attempts
+above; git history holds them with the commands this section used to list. A
+future measurement needs a new, separately authorized harness.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ### Remaining measurement plan
 
@@ -559,7 +591,11 @@ but not runtime patches or host load. Any controlled repeated comparison must
 address those differences and preserve cold startup separately from warm timing.
 Repeat only under a separately declared aggregate budget. Report device and thread
 counts, memory and host load beside the counters. Select intended value-token/depth
+<<<<<<< HEAD
 variants and PPO/Ataraxos contrasts through existing AgentSpec and TrainingRegime
+=======
+variants and PPO/Ataraxos contrasts through existing ModelConfig and TrainingRegime
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 fields. The explicit recipe path now
 exposes these choices without changing the learner. Do not retrofit future results.
 

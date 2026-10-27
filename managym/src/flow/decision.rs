@@ -12,9 +12,14 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{event::GameEvent, game::Game},
     state::{
+<<<<<<< HEAD
         ability::Effect,
         game_object::{CardId, ObjectRef, PlayerId, Target},
         mana::ManaCost,
+=======
+        ability::{Effect, PaymentCost},
+        game_object::{CardId, ObjectRef, PlayerId, Target},
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -92,15 +97,62 @@ impl EffectFrame {
     }
 }
 
+<<<<<<< HEAD
+=======
+/// Remaining obligation and outcome branches of one optional payment.
+/// Mana activation costs commit immediately through the mana authority. Only
+/// a waterbend contribution closes the decline branch (the existing contract).
+/// Exact contributed objects are retained as evidence, never followed or untapped.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PaymentProgress {
+    pub player: PlayerId,
+    pub remaining: PaymentCost,
+    pub waterbend_paid: Vec<ObjectRef>,
+    pub if_paid: Vec<Effect>,
+    pub if_declined: Vec<Effect>,
+}
+
+impl PaymentProgress {
+    pub fn new(
+        player: PlayerId,
+        cost: PaymentCost,
+        if_paid: Vec<Effect>,
+        if_declined: Vec<Effect>,
+    ) -> Self {
+        Self {
+            player,
+            remaining: cost,
+            waterbend_paid: Vec::new(),
+            if_paid,
+            if_declined,
+        }
+    }
+
+    pub fn can_decline(&self) -> bool {
+        self.waterbend_paid.is_empty()
+    }
+}
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+<<<<<<< HEAD
     WaterbendOrDiscard {
         player: PlayerId,
         remaining: u8,
         started: bool,
+=======
+    Payment(PaymentProgress),
+    /// A mana ability's printed upfront cost, before its output exists.
+    ManaUpfront {
+        player: PlayerId,
+        permanent: crate::state::game_object::PermanentId,
+        ability_index: usize,
+        resume: Option<Box<Decision>>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     },
     ManaChoice {
         player: PlayerId,
@@ -157,6 +209,7 @@ pub enum Decision {
         min_select: usize,
         max_select: usize,
     },
+<<<<<<< HEAD
     /// "You may pay [cost]" / "unless [player] pays [cost]".
     PayOrNot {
         player: PlayerId,
@@ -164,6 +217,8 @@ pub enum Decision {
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     },
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// "Choose one —".
     Modal {
         player: PlayerId,
@@ -195,7 +250,12 @@ fn is_true(value: &bool) -> bool {
 impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
+<<<<<<< HEAD
             Decision::WaterbendOrDiscard { player, .. }
+=======
+            Decision::Payment(payment) => payment.player,
+            Decision::ManaUpfront { player, .. }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Decision::ManaChoice { player, .. }
             | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
@@ -203,7 +263,10 @@ impl Decision {
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::LookAndSelect { player, .. }
+<<<<<<< HEAD
             | Decision::PayOrNot { player, .. }
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Decision::Modal { player, .. }
             | Decision::Learn { player }
             | Decision::Discard { player, .. }
@@ -216,7 +279,12 @@ impl Decision {
     /// `Game::determinize`. Search candidates are derived separately.
     pub fn revealed_cards(&self) -> &[CardId] {
         match self {
+<<<<<<< HEAD
             Decision::WaterbendOrDiscard { .. }
+=======
+            Decision::ManaUpfront { .. }
+            | Decision::Payment(_)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Decision::ManaChoice { .. }
             | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
@@ -224,7 +292,10 @@ impl Decision {
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::OptionalDiscardDraw { .. }
+<<<<<<< HEAD
             | Decision::PayOrNot { .. }
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Decision::Modal { .. }
             | Decision::Learn { .. }
             | Decision::Discard { .. }
@@ -297,6 +368,7 @@ impl Game {
             .map(|card| vec![self.state.cards[card].id])
             .unwrap_or_default();
         let space = match &suspended.decision {
+<<<<<<< HEAD
             Decision::WaterbendOrDiscard {
                 player,
                 remaining,
@@ -330,6 +402,43 @@ impl Game {
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::Waterbend,
+=======
+            Decision::ManaUpfront { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::PayOrNot,
+                actions: self.mana_ability_actions(*player, None),
+                focus: source_focus,
+            },
+            Decision::Payment(payment) => {
+                let player = payment.player;
+                let mut actions = self.mana_ability_actions(player, None);
+                if let PaymentCost::Waterbend { generic } = payment.remaining {
+                    if generic > 0 {
+                        for permanent in self.waterbend_candidates(player) {
+                            let mut probe = self.clone();
+                            probe.tap_permanent(permanent, false);
+                            if probe.can_pay_with_waterbend(
+                                player,
+                                &crate::state::mana::ManaCost::default().with_generic(generic - 1),
+                            ) {
+                                actions.push(Action::WaterbendTap { player, permanent });
+                            }
+                        }
+                    }
+                }
+                if self.can_pay_mana_cost(player, &payment.remaining.mana_cost()) {
+                    actions.push(Action::PayCost { player });
+                }
+                if payment.can_decline() {
+                    actions.push(Action::Decline { player });
+                }
+                ActionSpace {
+                    player: Some(player),
+                    kind: match payment.remaining {
+                        PaymentCost::Mana(_) => ActionSpaceKind::PayOrNot,
+                        PaymentCost::Waterbend { .. } => ActionSpaceKind::Waterbend,
+                    },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                     actions,
                     focus: source_focus,
                 }
@@ -467,6 +576,7 @@ impl Game {
                         .collect(),
                 }
             }
+<<<<<<< HEAD
             Decision::PayOrNot { player, cost, .. } => {
                 let mut actions = self.mana_ability_actions(*player, None);
                 if self.available_mana(*player).can_pay(cost) {
@@ -480,6 +590,8 @@ impl Game {
                     focus: source_focus,
                 }
             }
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Decision::Modal { player, modes } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -541,17 +653,25 @@ impl Game {
 
     /// Feed a player action into the pending mid-resolution decision.
     pub(crate) fn execute_decision_action(&mut self, action: &Action) -> Result<(), AgentError> {
+<<<<<<< HEAD
         let Some(mut suspended) = self.state.suspended_decision.take() else {
+=======
+        let Some(suspended) = &self.state.suspended_decision else {
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             return Err(AgentError("no pending decision".to_string()));
         };
 
         if let Some(player) = action_player(action) {
             if player != suspended.decision.player() {
+<<<<<<< HEAD
                 self.state.suspended_decision = Some(suspended);
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 return Err(AgentError("wrong player for pending decision".to_string()));
             }
         }
 
+<<<<<<< HEAD
         match (&mut suspended.decision, action) {
             (
                 Decision::WaterbendOrDiscard {
@@ -584,6 +704,61 @@ impl Game {
                 suspended
                     .frame
                     .prepend_effects([Effect::Discard].into_iter());
+=======
+        // Validate while the full continuation is still attached, so the
+        // payment model sees every reserved source and remaining obligation.
+        if let (
+            Decision::ManaChoice {
+                player, choices, ..
+            },
+            Action::ChooseMode { mode, .. },
+        ) = (&suspended.decision, action)
+        {
+            let mana = choices
+                .get(*mode)
+                .ok_or_else(|| AgentError("illegal mana color".into()))?;
+            if !self.mana_choice_completes_payment(*player, mana) {
+                return Err(AgentError("mana color cannot complete the payment".into()));
+            }
+        }
+        let mut suspended = self.state.suspended_decision.take().unwrap();
+        match (&mut suspended.decision, action) {
+            (
+                Decision::Payment(PaymentProgress {
+                    player,
+                    remaining: PaymentCost::Waterbend { generic },
+                    waterbend_paid,
+                    ..
+                }),
+                Action::WaterbendTap { permanent, .. },
+            ) if *generic > 0 && self.waterbend_candidates(*player).contains(permanent) => {
+                let object = self
+                    .permanent_object_ref(*permanent)
+                    .expect("waterbend candidate");
+                self.tap_permanent(*permanent, false);
+                *generic -= 1;
+                waterbend_paid.push(object);
+                self.state.suspended_decision = Some(suspended);
+                Ok(())
+            }
+            (Decision::Payment(payment), Action::PayCost { .. }) => {
+                let cost = payment.remaining.mana_cost();
+                if let Err(error) = self
+                    .produce_mana(payment.player, &cost)
+                    .and_then(|()| self.spend_mana(payment.player, &cost))
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(error);
+                }
+                let effects = std::mem::take(&mut payment.if_paid);
+                suspended.frame.prepend_effects(effects.into_iter());
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
+                let effects = std::mem::take(&mut payment.if_declined);
+                suspended.frame.prepend_effects(effects.into_iter());
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -595,6 +770,7 @@ impl Game {
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
+<<<<<<< HEAD
                 let Some(mana) = choices.get(*mode) else {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("illegal mana color".into()));
@@ -603,11 +779,18 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("mana color cannot complete the payment".into()));
                 }
+=======
+                let mana = &choices[*mode];
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 self.journal_player(*player);
                 self.state.players[player.0].mana_pool.add(mana);
                 if let Some(resume) = resume.take() {
                     suspended.decision = *resume;
                     self.state.suspended_decision = Some(suspended);
+<<<<<<< HEAD
+=======
+                    self.advance_mana_upfront()?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
@@ -846,6 +1029,7 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+<<<<<<< HEAD
             (
                 Decision::PayOrNot {
                     player,
@@ -876,6 +1060,8 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
                 if cards.contains(card) =>
             {
@@ -1012,6 +1198,10 @@ fn action_player(action: &Action) -> Option<PlayerId> {
         | Action::LearnDiscard { player, .. }
         | Action::LearnTakeLesson { player, .. }
         | Action::Decline { player }
+<<<<<<< HEAD
+=======
+        | Action::WaterbendTap { player, .. }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         | Action::PayCost { player }
         | Action::ChooseMode { player, .. } => Some(*player),
         _ => None,
@@ -1776,3 +1966,319 @@ mod learn_tests {
         rollback_knowledge(DensePageCowUndoDriver::default());
     }
 }
+<<<<<<< HEAD
+=======
+
+#[cfg(test)]
+mod payment_tests {
+    use super::*;
+    use crate::{
+        search_state::{
+            witness, BenchCommand, BranchDriver, ClonePlusUndoDriver, DensePageCowUndoDriver,
+            FullCloneDriver,
+        },
+        state::{
+            mana::{Mana, ManaCost},
+            player::PlayerConfig,
+        },
+    };
+    use std::collections::BTreeMap;
+
+    fn payment_game(cost: PaymentCost) -> Game {
+        payment_game_with_deck(cost, BTreeMap::from([("Island".into(), 40)]))
+    }
+
+    fn payment_game_with_deck(cost: PaymentCost, deck: BTreeMap<String, usize>) -> Game {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("payer", deck),
+                PlayerConfig::new("other", BTreeMap::from([("Plains".into(), 40)])),
+            ],
+            165,
+            false,
+        );
+        game.run_frame(EffectFrame {
+            source: None,
+            source_ref: None,
+            controller: PlayerId(0),
+            resolutions_this_turn: 0,
+            kicked: false,
+            targets: vec![],
+            target_req_indices: vec![],
+            active_requirement: 0,
+            context_target: None,
+            queue: VecDeque::from([
+                Effect::OptionalPayment {
+                    cost,
+                    if_paid: vec![Effect::DrawCards { count: 2 }],
+                    if_declined: vec![Effect::DrawCards { count: 1 }],
+                },
+                Effect::DrawCards { count: 3 },
+            ]),
+            finalize: FrameFinalize::None,
+        });
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        game
+    }
+
+    #[test]
+    fn either_method_runs_exactly_one_selected_continuation_before_the_suffix() {
+        for cost in [
+            PaymentCost::Mana(ManaCost::parse("{0}")),
+            PaymentCost::Waterbend { generic: 0 },
+        ] {
+            for paid in [false, true] {
+                let mut game = payment_game(cost.clone());
+                let before = game.state.zones.size(ZoneType::Hand, PlayerId(0));
+                let action = if paid {
+                    Action::PayCost {
+                        player: PlayerId(0),
+                    }
+                } else {
+                    Action::Decline {
+                        player: PlayerId(0),
+                    }
+                };
+                game.execute_decision_action(&action).unwrap();
+                assert!(game.state.suspended_decision.is_none());
+                assert_eq!(
+                    game.state.zones.size(ZoneType::Hand, PlayerId(0)),
+                    before + if paid { 5 } else { 4 }
+                );
+                assert!(game.execute_decision_action(&action).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn failed_payment_keeps_the_pending_obligation_and_continuations() {
+        for cost in [
+            PaymentCost::Mana(ManaCost::parse("{2}")),
+            PaymentCost::Waterbend { generic: 2 },
+        ] {
+            let mut game = payment_game(cost);
+            let before = witness(&game);
+            assert!(game
+                .execute_decision_action(&Action::PayCost {
+                    player: PlayerId(0)
+                })
+                .is_err());
+            assert_eq!(witness(&game), before);
+            let actions = &game.suspended_decision_action_space().unwrap().actions;
+            assert_eq!(
+                actions,
+                &[Action::Decline {
+                    player: PlayerId(0)
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn shared_payment_and_both_continuations_restore_through_nested_command_rollback() {
+        for cost in [
+            PaymentCost::Mana(ManaCost::parse("{0}")),
+            PaymentCost::Waterbend { generic: 0 },
+        ] {
+            let game = payment_game(cost);
+            let root = witness(&game);
+            let driver = ClonePlusUndoDriver::default();
+            for index in 0..game.action_space().unwrap().actions.len() {
+                let mut branch = driver.fork_exact(&game);
+                let outer = driver.mark(&mut branch);
+                driver
+                    .apply(
+                        &mut branch,
+                        BenchCommand {
+                            action_index: index,
+                            expected_action_hash: None,
+                            expected_state_hash: None,
+                        },
+                    )
+                    .unwrap();
+                let after_payment = driver.witness(&branch);
+                let inner = driver.mark(&mut branch);
+                driver
+                    .apply(
+                        &mut branch,
+                        BenchCommand {
+                            action_index: 0,
+                            expected_action_hash: None,
+                            expected_state_hash: None,
+                        },
+                    )
+                    .unwrap();
+                driver.rollback(&mut branch, inner);
+                assert_eq!(driver.witness(&branch), after_payment);
+                driver.rollback(&mut branch, outer);
+                assert_eq!(driver.witness(&branch), root);
+                assert_eq!(witness(&game), root);
+            }
+        }
+    }
+
+    fn apply_payment_action<D: BranchDriver<State = Game>>(
+        driver: &D,
+        game: &mut Game,
+        predicate: impl Fn(&Action) -> bool,
+    ) {
+        let before = witness(game);
+        let action_index = game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(predicate)
+            .expect("payment action is legal");
+        driver
+            .apply(
+                game,
+                BenchCommand {
+                    action_index,
+                    expected_action_hash: Some(before.legal_surface.hash),
+                    expected_state_hash: Some(before.authority.hash),
+                },
+            )
+            .unwrap();
+    }
+
+    fn rollback_suspended_waterbend<D: BranchDriver<State = Game>>(driver: D) {
+        let player = PlayerId(0);
+        let mut game = payment_game_with_deck(
+            PaymentCost::Waterbend { generic: 2 },
+            BTreeMap::from([
+                ("Island".into(), 40),
+                ("Hermitic Herbalist".into(), 1),
+                ("Prophetic Prism".into(), 1),
+            ]),
+        );
+        let mut sources = Vec::new();
+        for name in ["Hermitic Herbalist", "Prophetic Prism"] {
+            let card = game.state.players[0]
+                .deck
+                .iter()
+                .copied()
+                .find(|card| game.state.cards[*card].name == name)
+                .unwrap();
+            game.move_card(card, ZoneType::Battlefield);
+            sources.push(game.current_object_ref(card).unwrap());
+        }
+        let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
+        let prism = game.lookup_current_permanent(sources[1]).unwrap();
+        game.state.players[0].mana_pool = Mana::parse("1");
+        game.invalidate_mana_cache(player);
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let root = witness(&game);
+        let before_hand = game.state.zones.size(ZoneType::Hand, player);
+
+        // Keep a divergent sibling alive throughout all nested rollbacks.
+        let mut sibling = driver.fork_exact(&game);
+        apply_payment_action(&driver, &mut sibling, |a| {
+            matches!(a, Action::Decline { .. })
+        });
+        let sibling_witness = witness(&sibling);
+        assert_eq!(
+            sibling.state.zones.size(ZoneType::Hand, player),
+            before_hand + 4
+        );
+
+        let mut branch = driver.fork_exact(&game);
+        let outer = driver.mark(&mut branch);
+        apply_payment_action(
+            &driver,
+            &mut branch,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == waterbend),
+        );
+        let partial = witness(&branch);
+        let partial_resolution = branch.state.suspended_decision.clone().unwrap();
+        let Decision::Payment(payment) = &partial_resolution.decision else {
+            panic!("partial waterbend must retain its payment");
+        };
+        assert_eq!(payment.remaining, PaymentCost::Waterbend { generic: 1 });
+        assert_eq!(payment.waterbend_paid, vec![sources[0]]);
+        assert!(!payment.can_decline());
+        assert!(!branch
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::Decline { .. })));
+
+        let inner = driver.mark(&mut branch);
+        let activate_prism = |a: &Action| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == prism);
+        apply_payment_action(&driver, &mut branch, activate_prism);
+        assert_eq!(branch.state.players[0].mana_pool.total(), 0);
+        assert!(branch.state.permanents[prism].as_ref().unwrap().tapped);
+        let modal_resolution = branch.state.suspended_decision.clone().unwrap();
+        let Decision::ManaChoice {
+            resume: Some(resume),
+            ..
+        } = &modal_resolution.decision
+        else {
+            panic!("Prism must suspend the committed payment for its immediate color choice");
+        };
+        assert_eq!(**resume, partial_resolution.decision);
+        assert_eq!(modal_resolution.frame, partial_resolution.frame);
+        assert_eq!(branch.action_space().unwrap().kind, ActionSpaceKind::Modal);
+        let modal = witness(&branch);
+
+        let color_mark = driver.mark(&mut branch);
+        let choose_blue = |a: &Action| matches!(a, Action::ChooseMode { mode: 1, .. });
+        apply_payment_action(&driver, &mut branch, choose_blue);
+        assert_eq!(
+            branch.state.suspended_decision,
+            Some(partial_resolution.clone())
+        );
+        assert_eq!(branch.state.players[0].mana_pool, Mana::parse("U"));
+        for source in [waterbend, prism] {
+            assert!(branch.state.permanents[source].as_ref().unwrap().tapped);
+        }
+        assert!(!branch
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::Decline { .. })));
+        let resumed = witness(&branch);
+        apply_payment_action(&driver, &mut branch, |a| {
+            matches!(a, Action::PayCost { .. })
+        });
+        assert!(branch.state.suspended_decision.is_none());
+        assert_eq!(
+            branch.state.zones.size(ZoneType::Hand, player),
+            before_hand + 5
+        );
+        assert_eq!(branch.state.players[0].mana_pool.total(), 0);
+        let completed = witness(&branch);
+
+        driver.rollback(&mut branch, color_mark);
+        assert_eq!(witness(&branch), modal);
+        assert_eq!(branch.state.suspended_decision, Some(modal_resolution));
+        apply_payment_action(&driver, &mut branch, choose_blue);
+        assert_eq!(witness(&branch), resumed);
+        apply_payment_action(&driver, &mut branch, |a| {
+            matches!(a, Action::PayCost { .. })
+        });
+        assert_eq!(witness(&branch), completed);
+
+        driver.rollback(&mut branch, inner);
+        assert_eq!(witness(&branch), partial);
+        assert_eq!(branch.state.suspended_decision, Some(partial_resolution));
+        assert!(!branch.state.permanents[prism].as_ref().unwrap().tapped);
+        assert_eq!(branch.state.players[0].mana_pool, Mana::parse("1"));
+        apply_payment_action(&driver, &mut branch, activate_prism);
+        assert_eq!(witness(&branch), modal);
+        driver.rollback(&mut branch, outer);
+        assert_eq!(witness(&branch), root);
+        assert_eq!(witness(&game), root);
+        assert_eq!(witness(&sibling), sibling_witness);
+    }
+
+    #[test]
+    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
+        rollback_suspended_waterbend(FullCloneDriver);
+        rollback_suspended_waterbend(ClonePlusUndoDriver::default());
+        rollback_suspended_waterbend(DensePageCowUndoDriver::default());
+    }
+}
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

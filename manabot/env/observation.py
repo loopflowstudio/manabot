@@ -18,6 +18,7 @@ Additional updates in this version:
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
+<<<<<<< HEAD
 import numpy as np
 
 # Local imports
@@ -44,6 +45,36 @@ ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
 
+=======
+
+# Many modules import the enum mirrors from here; managym.enums owns them.
+from managym.enums import (  # noqa: F401
+    ActionEnum,
+    ActionSpaceEnum,
+    EventEntityKindEnum,
+    EventTypeEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
+import numpy as np
+
+# Local imports
+from manabot.infra.config import ObservationConfig
+from manabot.infra.log import getLogger
+import managym
+
+# Native action tensor: family, declaration, mode/ability selectors, validity.
+ACTION_TYPE_DIM = len(ActionEnum)
+ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
+ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
+ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
+MAX_ACTION_SELECTOR = (1 << 24) - 1
+PERMANENT_DEFINITION_INDEX = 24
+RELATION_ROWS = 64
+RELATION_DIM = 32
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 # -----------------------------------------------------------------------------
 # Observation Encoding
@@ -55,6 +86,7 @@ class ObservationEncoder:
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
 
+<<<<<<< HEAD
     def __init__(self, hypers: ObservationSpaceHypers):
         self.hypers = hypers
         self.cards_per_player = hypers.max_cards_per_player
@@ -62,6 +94,15 @@ class ObservationEncoder:
         self.max_actions = hypers.max_actions
         self.max_focus_objects = hypers.max_focus_objects
         self.max_events = hypers.max_events
+=======
+    def __init__(self, config: ObservationConfig):
+        self.config = config
+        self.cards_per_player = config.max_cards_per_player
+        self.perms_per_player = config.max_permanents_per_player
+        self.max_actions = config.max_actions
+        self.max_focus_objects = config.max_focus_objects
+        self.max_events = config.max_events
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         self.num_phases = len(PhaseEnum.__members__)
         self.num_steps = len(StepEnum.__members__)
@@ -81,9 +122,16 @@ class ObservationEncoder:
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
+<<<<<<< HEAD
         # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
         self.permanent_dim = 27
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
+=======
+        # (printed + until-EOT grants), death-to-exile replacement, definition,
+        # temporary Avatar subtype, validity.
+        self.permanent_dim = 28
+        self.event_dim = 12 if config.policy_history_version == 1 else 7
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
@@ -97,6 +145,14 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
+<<<<<<< HEAD
+=======
+            **(
+                {"relations": (RELATION_ROWS, RELATION_DIM)}
+                if self.config.policy_input_version == 2
+                else {}
+            ),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             # Game objects
@@ -162,11 +218,11 @@ class ObservationEncoder:
 
         ## NOTE: It is very important that we encode in this exact
         ## order.
-        # 1. Agent player
+        # 1. ActorCritic player
         # 2. Opponent player
-        # 3. Agent cards
+        # 3. ActorCritic cards
         # 4. Opponent cards
-        # 5. Agent permanents
+        # 5. ActorCritic permanents
         # 6. Opponent permanents
         # This ensures that the object_to_index mapping is always
         # consistent and matches the actual array order, because
@@ -233,7 +289,11 @@ class ObservationEncoder:
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
+<<<<<<< HEAD
         if self.hypers.policy_history_version == 1:
+=======
+        if self.config.policy_history_version == 1:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
                 (self.max_events, self.event_dim), dtype=np.float32
@@ -245,10 +305,89 @@ class ObservationEncoder:
         else:
             out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
+<<<<<<< HEAD
+=======
+        if self.config.policy_input_version == 2:
+            out["relations"] = self._encode_relations(obs)
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out
 
+<<<<<<< HEAD
+=======
+    def _encode_relations(self, obs: managym.Observation) -> np.ndarray:
+        """Reference implementation of native current-continuation relation rows."""
+        rows: list[np.ndarray] = []
+        viewer = obs.agent.player_index
+
+        def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
+            row[23] = 0 if value.definition is None else value.definition + 1
+            row[24] = self.object_to_index.get(value.object, -1) + 1
+            if value.player is not None:
+                row[25] = row[24] = 1 if value.player == viewer else 2
+
+        for index, frame in enumerate(obs.continuation):
+            row = np.zeros(RELATION_DIM, dtype=np.float32)
+            row[:5] = (
+                1,
+                index + 1,
+                0 if frame.parent is None else frame.parent + 1,
+                frame.kind,
+                1 if frame.controller == viewer else 2,
+            )
+            row[5] = (
+                0 if frame.source.definition is None else frame.source.definition + 1
+            )
+            row[6] = self.object_to_index.get(frame.source.object, -1) + 1
+            row[7:12] = (
+                0 if frame.mode is None else frame.mode + 1,
+                0 if frame.ability is None else frame.ability + 1,
+                frame.kicked,
+                0 if frame.active_clause is None else frame.active_clause + 1,
+                frame.cost is not None,
+            )
+            if frame.cost is not None:
+                row[12:19] = frame.cost
+            row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
+            row[30] = frame.resolutions_this_turn
+            row[28] = frame.decision
+            row[31] = 1
+            rows.append(row)
+            targets = [(2, target.reference, target.clause) for target in frame.targets]
+            if frame.context is not None:
+                targets.append((3, frame.context, 0))
+            if frame.sacrifice is not None:
+                targets.append((4, frame.sacrifice, 0))
+            for ordinal, (kind, target, clause) in enumerate(targets):
+                target_row = row.copy()
+                target_row[0], target_row[22] = kind, clause + 1
+                target_row[29] = ordinal + 1 if kind == 2 else 1
+                _reference(target_row, target)
+                rows.append(target_row)
+            for pair in frame.hybrid:
+                hybrid = row.copy()
+                hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
+                rows.append(hybrid)
+            for output in frame.mana_outputs:
+                for restricted, amounts in (
+                    (False, output.mana),
+                    (True, output.lesson),
+                ):
+                    produced = row.copy()
+                    produced[0], produced[7] = 6, output.mode + 1
+                    produced[12:18] = amounts
+                    produced[19] = restricted
+                    rows.append(produced)
+        if len(rows) > RELATION_ROWS:
+            raise ValueError("observation capacity exceeded: continuation relations")
+        result = np.zeros((RELATION_ROWS, RELATION_DIM), dtype=np.float32)
+        if rows:
+            result[: len(rows)] = rows
+        return result
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     # -------------------------------------------------------------------------
     # Players (with validity mask support)
     # -------------------------------------------------------------------------
@@ -412,6 +551,10 @@ class ObservationEncoder:
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
+<<<<<<< HEAD
+=======
+        arr[26] = float("Avatar" in perm.temp_subtypes)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -525,9 +668,15 @@ class ObservationSpace(gym.spaces.Space):
     Gymnasium-compatible observation space optimized for attention processing.
     """
 
+<<<<<<< HEAD
     def __init__(self, hypers: ObservationSpaceHypers | None = None):
         super().__init__(shape=None, dtype=None)
         self.encoder = ObservationEncoder(hypers or ObservationSpaceHypers())
+=======
+    def __init__(self, config: ObservationConfig | None = None):
+        super().__init__(shape=None, dtype=None)
+        self.encoder = ObservationEncoder(config or ObservationConfig())
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         self.spaces = gym.spaces.Dict(
             {
                 name: gym.spaces.Box(

@@ -11,11 +11,19 @@ from collections.abc import Iterator
 import pytest
 import torch
 
+<<<<<<< HEAD
 from manabot.training.ataraxos import (
     categorical_lambda_returns,
     damped_policy_loss,
 )
 from manabot.training.selection import selected_moves
+=======
+from manabot.training.learning.damped_policy import (
+    categorical_lambda_returns,
+    damped_policy_loss,
+)
+from manabot.training.learning.selection import selected_moves
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.fixture(autouse=True)

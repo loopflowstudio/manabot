@@ -2,12 +2,17 @@
 
 import random
 
+<<<<<<< HEAD
+=======
+from managym.experience_projection import describe_actions, serialize_observation
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
+<<<<<<< HEAD
 from manabot.infra.hypers import MatchHypers, RewardHypers
 import managym
 from managym.experience_projection import describe_actions, serialize_observation
@@ -15,6 +20,14 @@ from managym.experience_projection import describe_actions, serialize_observatio
 
 def candidate_match():
     authored = MatchHypers.authored(
+=======
+from manabot.infra.config import MatchConfig, RewardConfig
+import managym
+
+
+def candidate_match():
+    authored = MatchConfig.authored(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies"
     )
     deck = dict(authored.hero_deck)
@@ -36,23 +49,39 @@ def candidate_match():
         deck[name] = deck.get(name, 0) + count
     assert sum(deck.values()) == 40
     assert sum(authored.hero_deck.values()) == 41
+<<<<<<< HEAD
     return Match(MatchHypers(**{**authored.model_dump(), "hero_deck": deck}))
+=======
+    return Match(MatchConfig(**{**authored.model_dump(), "hero_deck": deck}))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("seed", [0, 1])
+<<<<<<< HEAD
 def test_match_hypers_candidate_finishes_with_complete_native_and_python_encoding(
+=======
+def test_match_config_candidate_finishes_with_complete_native_and_python_encoding(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     reverse: bool, seed: int
 ) -> None:
     match = candidate_match()
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
+<<<<<<< HEAD
     assert space.encoder.permanent_dim == 27
     assert managym.WORLD_VERSION == "w9"
     env = Env(match, space, Reward(RewardHypers()), seed=seed)
     obs, _ = env.reset(seed=seed)
     assert env.content_pack_manifest()["world_version"] == "w9"
+=======
+    assert space.encoder.permanent_dim == 28
+    assert managym.WORLD_VERSION == "w13"
+    env = Env(match, space, Reward(RewardConfig()), seed=seed)
+    obs, _ = env.reset(seed=seed)
+    assert env.content_pack_manifest()["world_version"] == "w13"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -135,6 +164,7 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
         pytest.fail("required choice was not reached")
 
 
+<<<<<<< HEAD
 def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> (
     None
 ):
@@ -150,6 +180,11 @@ def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels
         "permanent": 27,
         "action_types": 16,
     }
+=======
+def test_runtime_fingerprints_refuse_earlier_world_labels() -> None:
+    from manabot.infra.provenance import runtime_fingerprints
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     for old_world in ("w2", "w3", "w4", "w5", "w6"):
         with pytest.raises(ValueError, match="cannot register"):
             runtime_fingerprints(world=old_world)

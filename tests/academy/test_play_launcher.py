@@ -40,7 +40,10 @@ def test_build_output_and_phase_start_survive_an_unfinished_command(
 
 
 def test_gui_wire_enum_mirrors_match_the_native_engine():
+<<<<<<< HEAD
     import managym
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     from managym.enums import (
         ActionEnum,
         ActionSpaceEnum,
@@ -50,6 +53,11 @@ def test_gui_wire_enum_mirrors_match_the_native_engine():
         ZoneEnum,
     )
 
+<<<<<<< HEAD
+=======
+    import managym
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     for mirror, native in (
         (ActionEnum, managym.ActionEnum),
         (ActionSpaceEnum, managym.ActionSpaceEnum),

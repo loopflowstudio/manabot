@@ -12,10 +12,13 @@ from pathlib import Path
 import subprocess
 import sys
 
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace
 import pytest
 
 from manabot.belief import CompatibleDealBeliefModel, ViewerHistory
-from manabot.sim.conditional_search import (
+from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
+from manabot.sim.search.conditional import (
     CONDITION_TRUE,
     ConditionalSearchError,
     ConditionalStrategyResult,
@@ -34,11 +37,8 @@ from manabot.sim.conditional_search import (
     serialize_result,
     validate_result,
 )
-from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
-from managym.decision import Observation
-from managym.possible_worlds import PossibleWorldSpace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = (
@@ -68,9 +68,10 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
     return real_import(name, globals, locals, fromlist, level)
 
 builtins.__import__ = guarded
-import manabot.sim.conditional_search
-assert 'manabot.model.train' not in sys.modules
-assert 'manabot.sim.flat_mc' not in sys.modules
+import manabot.sim.search.conditional
+assert 'manabot.training.execution' not in sys.modules
+assert 'manabot.training.learning.learner' not in sys.modules
+assert 'manabot.sim.search.flat_mc' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True)
 
@@ -212,6 +213,9 @@ def test_generated_runtime_belief_passes_directly_to_search() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> None:
     """Keep INT-13 evidence frozen while checking its behavioral payload."""
 
@@ -492,6 +496,9 @@ def test_viewer_safe_layer_has_no_hidden_truth() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
+)
 def test_planner_named_determinized_puct() -> None:
     """The planner is 'determinized_puct', no ISMCTS or equilibrium claim."""
 

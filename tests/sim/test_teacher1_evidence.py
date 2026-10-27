@@ -8,17 +8,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from manabot.sim.mcts import determinized_puct
-from manabot.sim.teacher1_evidence import (
+from manabot.infra.provenance import (
     ContractError,
+    runtime_fingerprints,
+    validate_runtime_fingerprints,
+)
+from manabot.sim.search.puct import determinized_puct
+from manabot.sim.search.teacher1_evidence import (
     _fresh_env,
     build_command,
     build_viewer_frame,
     evaluate_root_stability,
     record_teacher_trajectories,
     replay_teacher_trajectories,
-    runtime_fingerprints,
-    validate_runtime_fingerprints,
 )
 
 
@@ -203,7 +205,7 @@ def test_superseded_contract_rejects_the_current_runtime() -> None:
 
     repo_root = Path(__file__).resolve().parents[2]
     contract = json.loads(
-        (repo_root / "experiments/contracts/w2-234-teacher1-pilot-v1.json").read_text()
+        (repo_root / "tests/fixtures/w2-234-teacher1-pilot-v1.json").read_text()
     )
     runtime = runtime_fingerprints(seed=int(contract["seeds"]["runtime"]))
 

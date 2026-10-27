@@ -4,6 +4,7 @@ from enum import Enum
 import math
 from typing import Literal
 
+<<<<<<< HEAD
 from pydantic import model_validator
 
 from academy.replay_index import (
@@ -11,6 +12,8 @@ from academy.replay_index import (
     decision_payload_sha256,
     parse_decision_address,
 )
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.experience import (
     Command,
     ExperienceFrame,
@@ -21,6 +24,16 @@ from managym.experience import (
     UInt32,
     UInt64,
 )
+<<<<<<< HEAD
+=======
+from pydantic import model_validator
+
+from academy.replay_index import (
+    DecisionAddressV2,
+    decision_payload_sha256,
+    parse_decision_address,
+)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 STUDY_VERSION: Literal[1] = 1
 
@@ -118,7 +131,15 @@ class RecordedDecisionInput(ProtocolModel):
             or decision.played.offer_id != decision.offer.id
         ):
             raise ValueError(f"{context}: played command identity drifted")
+<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
+=======
+        if (
+            frame.projection.opponent.hand
+            or frame.projection.opponent.sideboard
+            or frame.projection.opponent.inspected
+        ):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
@@ -228,7 +249,15 @@ class StudyDecisionIndex(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
+<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
+=======
+        if (
+            frame.projection.opponent.hand
+            or frame.projection.opponent.sideboard
+            or frame.projection.opponent.inspected
+        ):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
@@ -354,7 +383,15 @@ class StudyArtifact(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
+<<<<<<< HEAD
         if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
+=======
+        if (
+            frame.projection.opponent.hand
+            or frame.projection.opponent.sideboard
+            or frame.projection.opponent.inspected
+        ):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             raise ValueError(
                 f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )

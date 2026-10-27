@@ -23,7 +23,11 @@ from manabot.belief.sampling_data import (
     save_dataset,
 )
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
+<<<<<<< HEAD
 from manabot.belief.sampling_report import _pool_games, main, report_saved_sampler
+=======
+from manabot.reports.belief import _pool_games, main, report_saved_sampler
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:

@@ -228,7 +228,11 @@ impl Game {
         target_spec: &TargetSpec,
         controller: PlayerId,
     ) -> Vec<Target> {
+<<<<<<< HEAD
         match target_spec {
+=======
+        let mut candidates: Vec<Target> = match target_spec {
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             TargetSpec::GraveyardCardYouOwn { .. } => self
                 .state
                 .zones
@@ -236,6 +240,7 @@ impl Game {
                 .iter()
                 .filter_map(|card| self.current_object_ref(*card))
                 .map(Target::GraveyardCard)
+<<<<<<< HEAD
                 .filter(|target| self.target_is_legal(*target, target_spec, controller))
                 .collect(),
             TargetSpec::Player => vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))],
@@ -287,6 +292,49 @@ impl Game {
                 _ => None,
             })
             .collect()
+=======
+                .collect(),
+            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
+                vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
+            }
+            TargetSpec::Spell | TargetSpec::SpellOrPermanent { .. } => self
+                .state
+                .stack_objects
+                .iter()
+                .rev()
+                .filter_map(|object| match object {
+                    StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
+                    _ => None,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        // Preserve offer order: players or newest spells first, then permanents
+        // in player/zone order. Enumeration supplies candidates; legality below
+        // owns restrictions at selection (CR 601.2c) and resolution (608.2b).
+        if matches!(
+            target_spec,
+            TargetSpec::PermanentYouControl { .. }
+                | TargetSpec::Permanent { .. }
+                | TargetSpec::Creature
+                | TargetSpec::CreatureOrPlayer
+                | TargetSpec::CreatureYouControl
+                | TargetSpec::CreatureOpponentControls
+                | TargetSpec::LandYouControl
+                | TargetSpec::PermanentOpponentControls { .. }
+                | TargetSpec::SpellOrPermanent { .. }
+        ) {
+            for player in [PlayerId(0), PlayerId(1)] {
+                for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
+                    if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
+                        candidates.push(Target::Permanent(permanent_id));
+                    }
+                }
+            }
+        }
+        candidates.retain(|target| self.target_is_legal(*target, target_spec, controller));
+        candidates
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 
     /// Match pending committed events against the applicable exact sources.
@@ -733,3 +781,10 @@ impl Game {
             .is_some_and(|permanent| permanent.card != source_card)
     }
 }
+<<<<<<< HEAD
+=======
+
+#[cfg(test)]
+#[path = "target_authority_tests.rs"]
+mod target_authority_tests;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

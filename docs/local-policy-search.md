@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Frozen-policy local search and distillation
 
 ETU-95 supplies a frozen-policy rollout teacher, retained local-update targets,
@@ -27,12 +28,30 @@ local proof, not a portable scientific artifact.
 ## Contracts
 
 `manabot.sim.local_update.LocalUpdateTeacher` admits one checkpoint by exact
+=======
+# Frozen-policy local search
+
+ETU-95 supplies a frozen-policy rollout search, retained local-update receipts,
+arena lifecycle and an advice projection. Physical-prior and learned joint-hand
+sampling feed the search through one typed interface without enumerating support.
+The complete-history exact-posterior comparison remains blocked by Rules
+capabilities; no strength, bluffing or human-play result is established.
+
+## Contracts
+
+`manabot.sim.search.local_update.LocalUpdateTeacher` admits one checkpoint by exact
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 SHA-256 through the ordinary world/setup loader. Compound checkpoints use their
 decoder's signed-outcome prefix critic, never the unrelated flat head. Ordinary
 categorical heads return signed expected outcomes; ordinary scalar artifacts must declare
 `bc.value_semantic = signed_outcome`. TrainingRegime writes this declaration for
+<<<<<<< HEAD
 self-play and local distillation. Untagged historical scalar critics are rejected
 because previous supervised teachers used win logits. No checkpoint port or
+=======
+self-play. Untagged historical scalar critics are rejected because earlier
+search-trained critics used win logits. No checkpoint port or
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 renaming of frozen evidence occurs.
 
 For legal actions a, the update maximizes
@@ -50,6 +69,7 @@ moves to the declared depth (including the forced first action). At each step,
 only the acting player's ordinary Observation is encoded. Terminal values are
 -1/0/+1; nonterminal values are that acting player's signed estimate, reversed
 when the actor differs from the root viewer. Scalar estimates remain unbounded;
+<<<<<<< HEAD
 there is no silent sigmoid or clipping. There are no gradients in the teacher.
 The student gets fixed distributions and policy cross-entropy; gradients reach
 its policy head and shared encoder, not teacher weights. The critic's head is
@@ -58,6 +78,11 @@ not fitted by these policy-only stages; shared-encoder drift remains measurable.
 Collection follows the **base frozen policy**, not its search update, so the
 likelihood model matches the generating population where its history model is
 supported. Arena play samples the updated distribution and explicitly records
+=======
+there is no silent sigmoid or clipping. There are no gradients in the search.
+
+Arena play samples the updated distribution and explicitly records
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 that the actual opponent need not match the frozen belief model. Where exact likelihood is supported, policy, value,
 rollout and likelihood share one checkpoint identity. `sampling=compatible_prior`
 uses the physical compatible-deal measure, not equal mass over count vectors.
@@ -77,6 +102,7 @@ tracked belief, comparing all retained evidence except elapsed times. Hidden-wor
 swap tests verify root information invariance. Receipts alone are not a source
 trajectory or a policy-free historical reconstruction system.
 
+<<<<<<< HEAD
 Collection journals each complete target and played base action before stepping;
 failed runs and elapsed costs remain in TrainingRun/VerifyStore. Whole-game shard
 IDs determine immutable validation membership (`game_index % 10 == 0`). Cumulative
@@ -84,6 +110,8 @@ fitting retains both older teacher provenance and Adam state. Old score-only
 shards cannot claim to reconstruct a local target. Local receipt admission checks
 its target formula, full action coverage and rollout means.
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Decision deadlines charge prior construction/history filtering since the previous
 decision as well as search. Stage/run budgets also charge setup, export and failed
 work. Native operations and individual forwards are cooperative: a call can overrun,
@@ -99,6 +127,7 @@ cost; retain overruns and unavailable cells.
 full/cheap allocation. All positive-support actions receive coverage; all roots are retained.
 This is an instrument inspired by [KataGo's playout-cap randomization](https://arxiv.org/abs/1902.10565),
 not its target-selection recipe or a measured efficiency improvement. Every
+<<<<<<< HEAD
 receipt carries the resolved counts. Mixing diagnostics report entropy, KL to
 base and L1 distance; none establishes bluff quality.
 
@@ -111,13 +140,20 @@ Targets on the same retained roots:
 
 A same-root genuine PUCT-visit comparison remains separate scientific work.
 The existing `visit_distribution` trainer remains available for its own teacher.
+=======
+receipt carries the resolved counts.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## PUCT policy/value compatibility
 
 `make_player` also exposes `kind="agent_puct"` over the same saved policy:
 
 ```python
+<<<<<<< HEAD
 from manabot.sim.flat_mc import make_player
+=======
+from manabot.sim.search.flat_mc import make_player
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 player, space = make_player(
     {
@@ -163,7 +199,11 @@ retain the projection owner's explicit failures.
 
 Arena accepts `agent_puct` as a checkpoint registration with all search parameters
 explicit, plus `batch_size=1`, `branch_driver_id`, `branch_audit`, and
+<<<<<<< HEAD
 `implementation_source_sha256=puct_source_sha256()` from `manabot.sim.mcts`.
+=======
+`implementation_source_sha256=puct_source_sha256()` from `manabot.sim.search.puct`.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 The registered spec omits the checkpoint path; the arena binds verified bytes.
 Use search-call seed identity `mcts-mix-player-seed-decision-v1`, root prior
 `checkpoint-canonical-policy/v1`, and leaf evaluator
@@ -207,6 +247,7 @@ relabeling and new arena suites remain unsupported. Compound exact-history
 likelihood is unavailable; compound search requires a direct sampler. No automatic
 fallback or unmeasured replacement is provided.
 
+<<<<<<< HEAD
 The staged recipe makes repeated teacher/student rounds executable; whether they
 compound, whether immutable replay helps, and whether stronger-teacher relabeling
 beats new games require the separately frozen protocol in
@@ -214,6 +255,8 @@ beats new games require the separately frozen protocol in
 these scientific outcomes; ETU-95 owns the software described here. ETU-91 and
 its allocations remain unchanged.
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Validation on 2026-10-04: 73 affected Python tests and 21 native debug world/branch
 tests passed before upstream sync. After rebuilding the merged native extension,
 eight local-search/compound integration tests and nine native debug world tests
@@ -222,6 +265,7 @@ and retained failure on unsupported exact history.
 
 ## Learned joint-hand search
 
+<<<<<<< HEAD
 ```bash
 uv run manabot train --regime experiments/regimes/learned-belief-local-search.json \
   --seed 718 --out .runs/etu95-learned-search
@@ -241,6 +285,14 @@ same policy stage and raw/EMA choice as the rollout teacher. Admission checks
 sampler bytes, dataset, schema, world binding and generating-policy digest.
 The policy, rollout and signed-value identities remain the frozen policy's;
 only the separate sampler was fitted on hidden labels.
+=======
+`search.sampling = learned` takes a sampler fitted by a `train_belief` stage
+(see [the belief sampler](belief-sampler.md)) whose dataset used exactly the
+same policy and raw/EMA weights as the rollout search. Admission checks sampler
+bytes, dataset, schema, world binding and generating-policy digest. The policy,
+rollout and signed-value identities remain the frozen policy's; only the
+separate sampler was fitted on hidden labels.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 managym's `HiddenHandConstraints.materialize_hand` and Python
 `Env.materialize_sampled_hand` accept counts directly against a complete native
@@ -252,7 +304,11 @@ refresh an opponent's acting prompt. Reproducible seeds determine hidden library
 order; sampled hand counts do not model a posterior over library order.
 
 `LocalUpdatePlayer` retains each seat's canonical viewer history from game start.
+<<<<<<< HEAD
 Collection and search share `public_sampler_input`, including the same lossy,
+=======
+Belief collection and search share `public_sampler_input`, including the same lossy,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 order-invariant public-commitment features. Missing combat/target commitment
 semantics remain missing features, not inferred meanings or an exact posterior.
 Private labels and sampled hands never enter the acting policy's observation.
@@ -277,6 +333,7 @@ receipt replay and two-seat complete arena games with exact actual-Command repla
 These are mechanism proofs, not posterior calibration, stronger play, exact-history
 completion or authorization for scientific scoring.
 
+<<<<<<< HEAD
 Integrated proof after PR 212 on 2026-10-04: the recipe completed in 31.43 s,
 with three sampler-data games, eight label games (753 search decisions), 32
 sampler optimizer exposures and 661 student exposures. The exported student
@@ -297,6 +354,11 @@ merge.
 ## Search-facing sampler interface
 
 `manabot.sim.local_sampling.SearchHandSampler` separates native public-constraint
+=======
+## Search-facing sampler interface
+
+`manabot.sim.search.sampling.SearchHandSampler` separates native public-constraint
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 preparation from seeded sampling. `PreparedHands` binds distribution, viewer
 history, vocabulary and native snapshot; `HandBatch` retains ordered counts and
 joint log probabilities. `LocalUpdateTeacher(hand_sampler=...)` accepts an
@@ -324,7 +386,11 @@ complete a forced prefix; existing `tokens=` still requires a complete tape.
 No parameters or serialized checkpoint fields were added. The decoder exposes an
 end-prefix value for optionless roles as well as the existing per-factor values.
 
+<<<<<<< HEAD
 `manabot.sim.local_compound` projects a complete next-Command distribution and
+=======
+`manabot.sim.search.compound` projects a complete next-Command distribution and
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 checks every route through native lowering. It supports attacker include/exclude
 factors, native single-target casts, independent blocker roles (one optional
 attacker per blocker), and ordinary action-aligned fallback offers. Small joint
@@ -335,9 +401,13 @@ prefix replay use the selected branch runtime, never raw branch cloning.
 Each counterfactual fixes its root action and samples the remaining declaration
 once. A rollout retains one declaration at a time and drains its native Commands
 before admitting the next actor's root. Leaf values inside declarations use the
+<<<<<<< HEAD
 retained prefix. Base-policy collection
 also samples a whole declaration once, whereas improved search play computes a
 local update at each retained prefix. Actor/revision/state changes and incomplete
+=======
+retained prefix. Search play computes a local update at each retained prefix. Actor/revision/state changes and incomplete
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 canonical coverage fail explicitly. Saved observation capacity remains binding.
 
 Receipts retain the original viewer root, offer projection, fixed tokens and
@@ -370,10 +440,14 @@ probability underflow in the update still fails rather than silently losing mass
 
 The receipt reader checks support, null availability, per-hand supported-action
 coverage and rollout means. Historical v1/v2 receipts retain their complete
+<<<<<<< HEAD
 positive-support contract and serialized bytes. `local_soft` preserves zeros;
 `local_argmax` chooses only measured Q; `local_allocation` normalizes realized
 supported counts. Numeric legacy score columns use NaN for unavailable Q and
 cannot be admitted as score-softmax targets. Advice marks unvisited Q unavailable
+=======
+positive-support contract and serialized bytes. Advice marks unvisited Q unavailable
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 and computes the root value over the supported target. Receipts still require
 the original-root cursor for intermediate-prefix replay.
 
@@ -383,6 +457,7 @@ other documented admission, history, capacity and deadline limits still apply.
 This is software compatibility, not an arbitrary-game completion or strength
 claim. ETU-99 retains scientific comparison ownership.
 
+<<<<<<< HEAD
 `collect_local_update` accepts raw compound policy stages and compatible admitted
 samplers. Compound EMA remains unsupported by its training owner. Its canonical
 conditional targets load through the existing `local_soft`, `local_argmax` and
@@ -392,6 +467,8 @@ training into a compound TrainingRegime remains rejected. No training run or
 scientific comparison is required for this software proof, and the live advice
 provider is still unregistered.
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Fixture-only validation on 2026-10-04 passed 60 affected Python checks, six native
 debug compound tests and focused Ruff/format checks. It includes physical and
 learned saved-artifact search, complete-game target reader admission, compound

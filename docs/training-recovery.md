@@ -55,8 +55,13 @@ attributable exploratory work.
 Recovery is opt-in for bounded CPU self-play stages, including multistage chains
 that retain the latest collector or start a fresh learner. Set `schedule_clock`
 to `iteration_fraction` and `recovery_max_microsteps` to an explicit journal
+<<<<<<< HEAD
 ceiling. Every stage must be `train_self_play`; supervised, compound, collection
 and belief-training stages cannot opt into recovery. MPS/CUDA are unsupported.
+=======
+ceiling. Every stage must be `train_self_play`; compound, collection and
+belief-training stages cannot opt into recovery. MPS/CUDA are unsupported.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Ataraxos move stages may retain `run_elapsed_budget`: their learning-rate and tau
 formulas use absolute collection/update iteration regardless of that serialized
 field. Recovery rejects other elapsed-time learning schedules.
@@ -93,6 +98,7 @@ Snapshots are published at stage entry, at the configured update cadence (every
 update by default), and after completed export/admission. VerifyStore commits the snapshot reference and stage records
 together. Completed prefixes retain their original artifact paths, digests,
 counts and cost receipts; they are not re-exported into the child directory.
+<<<<<<< HEAD
 Format 3 snapshots keep each stage's diagnostic count and SHA-256 instead of
 copying its growing rows. `load_update` uses the canonical VerifyStore row of the
 snapshot's original writer, including when a later retry fails during setup.
@@ -102,6 +108,16 @@ changed prefixes fail admission. Snapshot metadata retains counters and artifact
 bindings at the original boundary. Preserve the canonical database as well as
 snapshot files. Historical format 2 bytes remain readable, without relaxing
 source/runtime admission or rewriting retained evidence.
+=======
+Format 4 snapshots hold the complete stage records at the boundary, which stay
+small because self-play update rows are Etude metrics; `StageRecord.updates`
+gives the stage-local update offset, so later uncommitted updates cannot advance
+recovery. Earlier snapshot formats are refused. The recovery attempt continues
+its parent's Etude run in place (`TrainingRun.metrics_run`): it seals rows the
+parent left unsealed, and Etude reads the later attempt's rows from the update
+it resumed at, so repeated updates are counted once. Preserve the canonical
+database, snapshot files and the parent's output directory.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Uncommitted work may repeat, but its failed-attempt cost remains charged. Orphan
 files never become authoritative merely because they exist on disk.
@@ -204,8 +220,13 @@ Clock fault injection tests accounting, not physical lid closure or a host reboo
 
 `recovery_every_updates` defaults to one, preserving existing recipe identities.
 An explicit cadence saves update 1, each multiple of that cadence, stage entry
+<<<<<<< HEAD
 and completed stage exports. Progress between snapshots remains in VerifyStore,
 but recovery replays learning from the latest committed snapshot. Unsnapshotted
+=======
+and completed stage exports. Progress between snapshots remains in VerifyStore
+and Etude, but recovery replays learning from the latest committed snapshot. Unsnapshotted
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 updates may repeat; failed-attempt time is retained, never refunded. Cadence
 changes persistence cost and recoverable progress, not sampling or learning rules.
 

@@ -1,11 +1,20 @@
 # Run an Experiment comparison
 
+<<<<<<< HEAD
 `manabot.training.experiments.Experiment` is the readable declaration of a
+=======
+`manabot.experiment.config.Experiment` is the readable declaration of a
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 comparison. Each real experiment lives in its own Python file with a thin entry
 point. `resolve()` remains side-effect free; `run_experiment()` explicitly executes
 its schedule on configured hardware. `ExperimentRun` records what actually ran,
 separately from the declaration. VerifyStore owns both ExperimentRun and
+<<<<<<< HEAD
 TrainingRun persistence; JSON exports and optional trackers are projections.
+=======
+TrainingRun persistence, and JSON exports are projections; self-play update
+rows are each run's Etude metrics, stored beside its attempt.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 The primary report is **one editable `comparison.ipynb` per execution directory**.
 It loads every regime's learning metrics, milestone win/draw/score rates and
@@ -21,6 +30,7 @@ A declaration adds an `ExperimentSchedule` to the existing components/cases API:
 
 ```python
 from pathlib import Path
+<<<<<<< HEAD
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.experiment_execution import ExperimentSchedule, HardwareInventory
 from manabot.training.experiment_runner import run_experiment
@@ -30,6 +40,17 @@ from manabot.training.presets import ataraxos_mtg_v1
 experiment = Experiment(
     name="my-comparison",
     baseline=ataraxos_mtg_v1(),
+=======
+from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.execution import ExperimentSchedule, HardwareInventory
+from manabot.experiment.runner import run_experiment
+from manabot.experiment.config import Case, Experiment
+from manabot.recipes.ataraxos import ataraxos
+
+experiment = Experiment(
+    name="my-comparison",
+    baseline=ataraxos(),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     cases=(Case("control"),),
     schedule=ExperimentSchedule(
         seeds=(117, 118),
@@ -68,6 +89,7 @@ native peak memory or correct throughput for contention.
 
 ## History and depth are declarations
 
+<<<<<<< HEAD
 The first real consumers are
 [`experiment_history.py`](../experiments/runners/experiment_history.py) and
 [`experiment_depth.py`](../experiments/runners/experiment_depth.py). They share
@@ -95,6 +117,8 @@ runner to those output directories. Historical launch scripts remain for their
 frozen evidence. Their scientific scoring remains separate from live monitoring;
 these new entry points do not silently consume scientific endpoint deals.
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ## Milestones and evidence
 
 The queue discovers completed stage raw checkpoints and admitted periodic exports
@@ -169,6 +193,7 @@ improvement, challenger strength or completion of Trained Challengers.
 
 ### Editable demo
 
+<<<<<<< HEAD
 [`experiment_demo.py`](../experiments/runners/experiment_demo.py) contains the full
 small declaration: two model widths, two seeds, one stage per run, one reserved
 four-leg monitoring deal per checkpoint and a 750-second maximum allocation.
@@ -177,6 +202,22 @@ Configure a local CPU resource named `fixture`, then run:
 ```bash
 uv run --extra notebook python -m experiments.runners.experiment_demo \
   --hardware /path/to/configured-hardware.json --out .runs/experiment-demo
+=======
+`demo_declaration()` in
+[`tests/training/test_experiment_runner.py`](../tests/training/test_experiment_runner.py)
+is the full small declaration: two model widths, two seeds, one stage per run,
+one reserved four-leg monitoring deal per checkpoint and a 750-second maximum
+allocation. Configure a local CPU resource named `fixture`, then run it:
+
+```bash
+uv run --extra notebook python -c "
+from pathlib import Path
+from manabot.experiment.execution import HardwareInventory
+from manabot.experiment.runner import run_experiment
+from tests.training.test_experiment_runner import demo_declaration
+hardware = HardwareInventory.model_validate_json(Path('hardware.json').read_text())
+print(run_experiment(demo_declaration(), hardware, Path('.runs/experiment-demo')).status)"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 uv run --extra notebook jupyter lab .runs/experiment-demo/comparison.ipynb
 ```
 
@@ -184,10 +225,17 @@ The notebook is the editable report generator; `comparison.html` is the default
 read-only viewing surface. Headless execution checks HTML figures and absence of
 inline notebook plots. Refresh preserves existing notebook bytes and edits.
 
+<<<<<<< HEAD
 The [revised retained generator](../experiments/study/experiment-demo/report-generator.ipynb)
 writes the [HTML demo](../experiments/study/experiment-demo/comparison.html).
 Jack Heart's original edited notebook and checkpoint copy remain unchanged.
 The [evidence note](../experiments/study/experiment-demo/README.md) records the
+=======
+The [revised retained generator](../tests/fixtures/experiment-demo/report-generator.ipynb)
+writes the [HTML demo](../tests/fixtures/experiment-demo/comparison.html).
+Jack Heart's original edited notebook and checkpoint copy remain unchanged.
+The [evidence note](../tests/fixtures/experiment-demo/README.md) records the
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 original fixture costs, failures and limits. This revision reruns reporting only.
 
 The default dashboard now starts with measured progress, latest deck-specific

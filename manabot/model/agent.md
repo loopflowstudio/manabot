@@ -76,7 +76,7 @@ Implementation Snippet:
 
 python
 Copy
-class Agent(nn.Module):
+class ActorCritic(nn.Module):
     def forward(self, obs: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         # Gather and encode all game objects.
         objects, controller_ids = self._gather_object_embeddings(obs)
@@ -165,10 +165,16 @@ do not change sampling, request shapes, optimizer state or recovery serializatio
 
 ## Capacity identity and accounting
 
+<<<<<<< HEAD
 `AgentSpec.hidden_dim`, positive `attention_layers`, optional
 `attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. The recipe helper
 `with_capacity` and `experiments.runners.model_capacity.regimes` reuse those
 fields; they introduce no second model schema. Heads must divide width when
+=======
+`ModelConfig.hidden_dim`, positive `attention_layers`, optional
+`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. The builder
+`manabot.recipes.builders.with_capacity` reuses those fields; they introduce no second model schema. Heads must divide width when
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
 The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.
@@ -183,7 +189,11 @@ RNG and does not change initialization, weights or forward equations. Counts
 depend on semantic inputs, observation dimensions, output representation and
 optional modules; the historical 138,434 figure is not a universal baseline.
 
+<<<<<<< HEAD
 The identity hashes resolved AgentSpec and observation settings under layout
+=======
+The identity hashes resolved ModelConfig and observation settings under layout
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 version 1. Equation/ownership changes require a new layout version even for equal
 shapes. World/content bindings, source/runtime digests and exact checkpoint bytes
 remain separate authorities. Run identities record the architecture hash; ordinary

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from __future__ import annotations
 
 from enum import IntEnum
@@ -435,3 +436,7 @@ class AgentError(RuntimeError): ...
 
 WORLD_VERSION: str
 CARD_DEFINITION_COUNT: int
+=======
+# Legacy type import for the engine bundled in Manabot.
+from manabot.managym import *  # noqa: F403 — re-export the canonical native type surface.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

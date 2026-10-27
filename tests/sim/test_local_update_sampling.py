@@ -4,6 +4,16 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Callable
 
+<<<<<<< HEAD
+=======
+from managym.decision import (
+    PUBLIC_COMMITMENT_KINDS,
+    Command,
+    DecisionFrame,
+    Observation,
+)
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
@@ -12,6 +22,7 @@ from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
 from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
+<<<<<<< HEAD
 from manabot.sim.distill import LOCAL_TARGET_KEY, generate_selfplay_shard, load_shards
 from manabot.sim.local_sampling import (
     HandBatch,
@@ -20,11 +31,15 @@ from manabot.sim.local_sampling import (
     PreparedHands,
 )
 from manabot.sim.local_update import (
+=======
+from manabot.sim.search.local_update import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     LocalUpdatePlayer,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
     SamplerArtifact,
 )
+<<<<<<< HEAD
 from manabot.sim.search_supervised import _validate_dataset
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
@@ -35,6 +50,16 @@ from managym.decision import (
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher, small_match
+=======
+from manabot.sim.search.sampling import (
+    HandBatch,
+    HandSample,
+    PhysicalHandSampler,
+    PreparedHands,
+)
+from tests.sim import test_local_update as fixtures
+from tests.sim.test_local_update import make_teacher
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def saved_sampler(teacher: LocalUpdateTeacher, path: Path) -> SamplerArtifact:
@@ -216,6 +241,7 @@ def test_learned_arena_replay_without_fitting(
     fixtures.test_arena_uses_exact_range_lifecycle_and_replays(tmp_path, learned=True)
 
 
+<<<<<<< HEAD
 def test_prior_targets_reload_through_distillation_reader(tmp_path: Path) -> None:
     teacher, _ = make_teacher(tmp_path)
     shard = tmp_path / "targets.npz"
@@ -241,6 +267,8 @@ def test_prior_targets_reload_through_distillation_reader(tmp_path: Path) -> Non
     np.testing.assert_array_equal(targets, dataset[LOCAL_TARGET_KEY])
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 class ExpiringSampler(PhysicalHandSampler):
     def __init__(self, clock: list[float]) -> None:
         self.clock = clock
@@ -274,6 +302,12 @@ def test_deadline_after_injected_sampling(
             env._engine.semantic_observation_json(env._engine.current_agent_index())
         )
     )
+<<<<<<< HEAD
     monkeypatch.setattr("manabot.sim.local_update.time.perf_counter", lambda: clock[0])
+=======
+    monkeypatch.setattr(
+        "manabot.sim.search.local_update.time.perf_counter", lambda: clock[0]
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(TimeoutError, match="target unavailable"):
         teacher.search(env._engine, history, seed=4)

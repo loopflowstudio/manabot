@@ -1,6 +1,6 @@
 [package]
 name = "managym"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # Agent worktrees build this crate once or twice, then disappear. Keep file and
@@ -20,6 +20,12 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = []
 python = ["dep:pyo3"]
+# Opt-in measurement only; ordinary wheels have no allocation-counter overhead.
+benchmark = []
+
+[[example]]
+name = "bench_observation"
+required-features = ["benchmark"]
 
 [dependencies]
 blake3 = "1"

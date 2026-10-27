@@ -6,13 +6,21 @@ use std::collections::VecDeque;
 
 use crate::{
     flow::{
+<<<<<<< HEAD
         decision::{Decision, EffectFrame, FrameFinalize},
+=======
+        decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress},
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
+<<<<<<< HEAD
         ability::{Ability, Effect, EffectValue, TargetSpec},
+=======
+        ability::{Ability, Effect, EffectValue, PaymentCost, TargetSpec},
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -520,11 +528,24 @@ impl Game {
                 }
                 None
             }
+<<<<<<< HEAD
             Effect::WaterbendOrDiscard { generic } => Some(Decision::WaterbendOrDiscard {
                 player: frame.controller,
                 remaining: *generic,
                 started: false,
             }),
+=======
+            Effect::OptionalPayment {
+                cost,
+                if_paid,
+                if_declined,
+            } => Some(Decision::Payment(PaymentProgress::new(
+                frame.controller,
+                cost.clone(),
+                if_paid.clone(),
+                if_declined.clone(),
+            ))),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Effect::ModifyUntilEot {
                 power_delta,
                 toughness_delta,
@@ -570,6 +591,23 @@ impl Game {
                     frame,
                 )
             }
+<<<<<<< HEAD
+=======
+            Effect::AddSubtypeToTarget { target, subtype } => {
+                let chosen = frame.primary_target()?;
+                if !self.target_is_legal(chosen, target, frame.controller) {
+                    return None;
+                }
+                if let Target::Permanent(id) = chosen {
+                    self.journal_permanent(id);
+                    let permanent = self.state.permanents[id].as_mut()?;
+                    if !permanent.temp_subtypes.contains(subtype) {
+                        permanent.temp_subtypes.push(subtype.clone());
+                    }
+                }
+                None
+            }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             Effect::ExileIfDiesThisTurn { target } => {
                 let chosen = frame.primary_target()?;
                 if self.target_is_legal(chosen, target, frame.controller) {
@@ -717,6 +755,7 @@ impl Game {
                 // countered in response) — the effect does nothing.
                 self.find_spell_on_stack_index(target_spell)?;
                 let spell_controller = self.spell_controller(target_spell)?;
+<<<<<<< HEAD
                 Some(Decision::PayOrNot {
                     player: spell_controller,
                     cost: cost.clone(),
@@ -725,6 +764,16 @@ impl Game {
                         target: TargetSpec::Spell,
                     }],
                 })
+=======
+                Some(Decision::Payment(PaymentProgress::new(
+                    spell_controller,
+                    PaymentCost::Mana(cost.clone()),
+                    Vec::new(),
+                    vec![Effect::CounterSpell {
+                        target: TargetSpec::Spell,
+                    }],
+                )))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             }
             Effect::IfKicked { then, otherwise } => {
                 let branch = if frame.kicked { then } else { otherwise };
@@ -998,6 +1047,7 @@ impl Game {
             })
     }
 
+<<<<<<< HEAD
     /// Hexproof (CR 702.11): a permanent with hexproof can't be targeted
     /// by spells/abilities controlled by opponents of its controller.
     fn hexproof_blocks(&self, permanent_id: PermanentId, targeter: PlayerId) -> bool {
@@ -1012,6 +1062,8 @@ impl Game {
         permanent.controller != targeter && self.effective_keywords(permanent_id).hexproof
     }
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
@@ -1042,6 +1094,7 @@ impl Game {
         spec: &TargetSpec,
         controller: PlayerId,
     ) -> bool {
+<<<<<<< HEAD
         match (target, spec) {
             (Target::Permanent(id), TargetSpec::PermanentYouControl { predicate }) => {
                 self.permanent_on_battlefield(id)
@@ -1116,6 +1169,77 @@ impl Game {
                     && self.card_mana_value(permanent.card) >= *min_mana_value
             }
             _ => false,
+=======
+        match target {
+            Target::Permanent(id) => {
+                let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref())
+                else {
+                    return false;
+                };
+                // CR 702.11b applies regardless of target wording. Recheck live
+                // presence and hexproof at selection and resolution (608.2b).
+                if self.state.zones.zone_of(permanent.card) != Some(ZoneType::Battlefield)
+                    || (permanent.controller != controller && self.effective_keywords(id).hexproof)
+                {
+                    return false;
+                }
+                match spec {
+                    TargetSpec::Permanent { predicate } => {
+                        self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentYouControl { predicate } => {
+                        permanent.controller == controller
+                            && self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::PermanentOpponentControls { predicate } => {
+                        permanent.controller != controller
+                            && self.permanent_matches_predicate(id, predicate)
+                    }
+                    TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
+                        self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureYouControl => {
+                        permanent.controller == controller && self.permanent_is_creature(id)
+                    }
+                    TargetSpec::CreatureOpponentControls => {
+                        permanent.controller != controller && self.permanent_is_creature(id)
+                    }
+                    TargetSpec::LandYouControl => {
+                        permanent.controller == controller
+                            && self.state.cards[permanent.card].types.is_land()
+                    }
+                    TargetSpec::SpellOrPermanent { min_mana_value } => {
+                        self.card_mana_value(permanent.card) >= *min_mana_value
+                    }
+                    _ => false,
+                }
+            }
+            Target::Player(player) => match spec {
+                TargetSpec::Player | TargetSpec::CreatureOrPlayer => true,
+                TargetSpec::Opponent => player != controller,
+                _ => false,
+            },
+            Target::StackSpell(card) => {
+                self.find_spell_on_stack_index(card).is_some()
+                    && match spec {
+                        TargetSpec::Spell => true,
+                        TargetSpec::SpellOrPermanent { min_mana_value } => {
+                            self.card_mana_value(card) >= *min_mana_value
+                        }
+                        _ => false,
+                    }
+            }
+            Target::GraveyardCard(object) => match spec {
+                TargetSpec::GraveyardCardYouOwn { predicate } => {
+                    let card = CardId::from(object.entity);
+                    self.current_object_ref(card) == Some(object)
+                        && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                        && self.state.cards[card].owner == controller
+                        && predicate.matches_card(&self.state.cards[card])
+                }
+                _ => false,
+            },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
     }
 

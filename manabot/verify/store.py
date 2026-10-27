@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from datetime import datetime, timezone
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import json
 import os
 from pathlib import Path
 import sqlite3
 from typing import TYPE_CHECKING, Any
 
+<<<<<<< HEAD
 from pydantic_core import to_jsonable_python
 
 from .util import EvaluationArtifacts
@@ -16,6 +20,11 @@ from .util import EvaluationArtifacts
 if TYPE_CHECKING:
     from manabot.training.experiment_execution import ExperimentRun
     from manabot.training.models import TrainingRun
+=======
+if TYPE_CHECKING:
+    from manabot.experiment.execution import ExperimentRun
+    from manabot.training.records import TrainingRun
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 RUN_CONFIG_FIELDS = (
     "experiment",
@@ -94,6 +103,7 @@ def _default_db_path() -> Path:
     return runs_dir / "verify.sqlite"
 
 
+<<<<<<< HEAD
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -106,12 +116,22 @@ def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
     entirely when opened read-only, so both layouts are read here.
     """
     stages = [
+=======
+def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
+    """Return one run's stage records in execution order.
+
+    Self-play update rows are Etude metrics, so a stage payload stays bounded
+    and is rewritten whole on every save.
+    """
+    return [
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         json.loads(payload)
         for (payload,) in con.execute(
             "SELECT payload FROM training_stages WHERE run_id=? ORDER BY rowid",
             (run_id,),
         )
     ]
+<<<<<<< HEAD
     if not con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='training_stage_diagnostics'"
     ).fetchone():
@@ -124,6 +144,8 @@ def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
         if rows or "diagnostics" not in stage:
             stage["diagnostics"] = [json.loads(payload) for (payload,) in rows]
     return stages
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _clean_json(value: Any) -> Any:
@@ -178,7 +200,11 @@ class VerifyStore:
             )
 
     def experiment_run(self, run_id: str) -> ExperimentRun:
+<<<<<<< HEAD
         from manabot.training.experiment_execution import ExperimentRun
+=======
+        from manabot.experiment.execution import ExperimentRun
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         row = self.con.execute(
             "SELECT payload FROM experiment_runs WHERE id=?", (run_id,)
@@ -197,6 +223,7 @@ class VerifyStore:
             for stage in run.stages:
                 self.con.execute(
                     "INSERT INTO training_stages VALUES (?, ?, ?) ON CONFLICT(run_id, stage_id) DO UPDATE SET payload=excluded.payload",
+<<<<<<< HEAD
                     (run.id, stage.id, stage.model_dump_json(exclude={"diagnostics"})),
                 )
                 self._save_stage_diagnostics(run.id, stage.id, stage.diagnostics)
@@ -227,6 +254,10 @@ class VerifyStore:
                 "INSERT INTO training_stage_diagnostics VALUES (?, ?, ?, ?) ON CONFLICT(run_id, stage_id, seq) DO UPDATE SET payload=excluded.payload",
                 (*key, seq, json.dumps(to_jsonable_python(diagnostics[seq]))),
             )
+=======
+                    (run.id, stage.id, stage.model_dump_json()),
+                )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def claim_training_recovery(self, parent_id: str, run: TrainingRun) -> None:
         """Atomically allow one continuation per stopped attempt, never a fork."""
@@ -248,7 +279,11 @@ class VerifyStore:
             )
 
     def training_run(self, run_id: str) -> TrainingRun:
+<<<<<<< HEAD
         from manabot.training.models import TrainingRun
+=======
+        from manabot.training.records import TrainingRun
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         row = self.con.execute(
             "SELECT payload FROM training_runs WHERE id=?", (run_id,)
@@ -276,6 +311,7 @@ class VerifyStore:
                 payload TEXT NOT NULL,
                 PRIMARY KEY (run_id, stage_id)
             );
+<<<<<<< HEAD
             CREATE TABLE IF NOT EXISTS training_stage_diagnostics (
                 run_id TEXT NOT NULL,
                 stage_id TEXT NOT NULL,
@@ -283,6 +319,8 @@ class VerifyStore:
                 payload TEXT NOT NULL,
                 PRIMARY KEY (run_id, stage_id, seq)
             );
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY,
                 created_at TEXT NOT NULL,
@@ -399,6 +437,7 @@ class VerifyStore:
             """
         )
         self.con.commit()
+<<<<<<< HEAD
 
     @staticmethod
     def _json_blob(value: Any) -> str:
@@ -659,3 +698,5 @@ class VerifyStore:
             (run_id,),
         ).fetchall()
         return [self._row_to_dict(row) for row in rows if row is not None]
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

@@ -11,14 +11,22 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+<<<<<<< HEAD
 
 import managym
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
 
+<<<<<<< HEAD
+=======
+import managym
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
 from .curated_pack import load_curated_pack
@@ -31,10 +39,17 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
+<<<<<<< HEAD
     / "conformance/authored-match-parity-w9-v1/release-live-headless-replay-seed-0.json"
 )
 AUTHORITY_SHA256 = "530afbfe6863e3edf65ad1ec9a4125e1751afbb9b3103aae76d0ed691cde72fb"
 TERMINAL_STATE = "243e9b59e5320b92b4b68ffb436c61f3f9881dab035b7c96395567fa3827ce8a"
+=======
+    / "conformance/authored-match-parity-w11-v1/release-live-headless-replay-seed-0.json"
+)
+AUTHORITY_SHA256 = "78d533368335094f7720c942229dc2cd2a1bcbc9d4e2a70d9b7fa34727fa7f2b"
+TERMINAL_STATE = "3f34856d96bdee401c8b50bb02fe0aa2443adeb80053bbe90b96ea97813ec0b2"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 COMMAND_COUNT = 156
 HISTORICAL_AUTHORITY_SHA256 = (
@@ -625,14 +640,23 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
+<<<<<<< HEAD
         "conformance/authored-match-w9-v1/release-stack-ur-vs-gw-seed-0.json",
+=======
+        "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json",
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "content/semantic/v1/generated/two_deck.ir.json",
         "content/semantic/v1/two_deck.source.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",
+<<<<<<< HEAD
         "managym/experience.py",
         "managym/experience_projection.py",
+=======
+        "manabot/managym/experience.py",
+        "manabot/managym/experience_projection.py",
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "academy/presentation.py",
         "academy/replay_index.py",
         "academy/semantic_boundary.py",
@@ -641,7 +665,11 @@ def _source_manifest() -> dict[str, Any]:
         "manabot/semantic/decision_contract.py",
         "managym/Cargo.lock",
         "managym/Cargo.toml",
+<<<<<<< HEAD
         "managym/decision.py",
+=======
+        "manabot/managym/decision.py",
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
         "tests/academy/test_authored_match_parity.py",

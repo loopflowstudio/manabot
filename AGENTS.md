@@ -6,7 +6,11 @@ Never add "Co-Authored by:" tags in commits
   The repository is `loopflowstudio/manabot` (renamed at Jack Heart's request
   on 2026-10-15).
 - **Academy** — the browser UI for inspecting bots and replays: the `academy`
+<<<<<<< HEAD
   package, the frontend, and their service namespaces. It is a client of
+=======
+  package, its Svelte frontend in `academy/ui`, and their service namespaces. It is a client of
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   manabot and secondary to training. The project website uses Manabot.
 - **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
@@ -40,8 +44,31 @@ identifiers stay unchanged.
 The shared Etude experiment services retain their names. "Sepia Etude" remains
 the name of the visual language.
 
+<<<<<<< HEAD
 Package dependencies flow academy → manabot → managym: manabot never imports
 academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+=======
+Code dependencies flow Academy → manabot → the engine in `manabot.managym`.
+PyPI distributes them in one `manabot` package; `import managym` is a compatibility
+alias, not a separate distribution. manabot never imports
+Academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+
+## Academy's shared decision surface
+
+Jack Heart's direction (2026-10-21): Academy should make the acting agent's
+viewer-safe observations and complete legal action space understandable to a
+human. Navigation, grouping and labels may clarify that shared contract; they
+must not hide strategic choices, silently select actions, reveal unavailable
+information or introduce human-only game semantics. Evaluate awkward decisions
+at the shared observation/action authority rather than disguising them in the
+browser. Preserve Command binding, stale rejection, actual pending decisions on
+reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
+explicit shared action and cannot erase committed costs or revealed information.
+Configured priority-stop automation must remain identifiable as automation,
+separate from deliberate human decisions.
+This direction does not approve a particular redesign or change frozen worlds,
+checkpoints or experiment evidence.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Style
 
@@ -89,6 +116,13 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+<<<<<<< HEAD
+=======
+- Saved observation configurations use `ObservationConfig.from_checkpoint` so
+  an absent policy-input version retains v1 semantics. Fresh construction uses
+  the current version. Keep version-specific zero/default exclusions stable:
+  architecture receipts hash the serialized configuration, including omissions.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 ## Commands
 
@@ -103,17 +137,46 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
+<<<<<<< HEAD
   `managym/_managym.cpython-312-darwin.so`.
+=======
+  `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
+  file, then rename); overwriting a mapped extension in place can trigger macOS
+  code-signature termination on subsequent imports.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
 ## Testing
 
+<<<<<<< HEAD
 - After a world or observation-shape change, validate current-world arena
   admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
   and run the full diagnostic with
   `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
   The `--pr` subset omits reward-driven PPO and cannot verify that path.
+=======
+**NEVER intentionally induce load for testing**, including debugging,
+benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
+busy loops, stress tools or artificial resource pressure. Use controlled
+fixtures and injected measurements; see [TESTING.md](TESTING.md).
+
+Read [validation by change area](docs/development/validation.md) for the
+checks required by the affected package and workflow.
+
+- Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
+  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  full vector diagnostic payloads in evidence.
+- Experiment results under `experiments/data/` live in the artifact store. Before
+  committing new results or merging a branch that tracked them, publish their
+  bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
+  commit `experiments/data.manifest.json`, and remove git tracking while retaining
+  the local files. Verify with
+  `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
+- After a world or observation-shape change, validate current-world arena
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 - Remote credential tests require the `artifacts` extra. Validate dependency
   changes in an isolated environment so locally installed extras cannot hide
   missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.
@@ -124,3 +187,19 @@ academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
   it `debug_assert!`s that the name resolves to a token definition, so passing
   an ordinary card name is release-silent and debug-fatal. Clippy does not
   catch this either.
+<<<<<<< HEAD
+=======
+- Finish frontend generation/check/build commands before starting Playwright's
+  Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
+  can reload active pages and destroy in-page revision probes; use isolated
+  ports and stable generated files for concurrent headless runs.
+
+### Etude card evaluation
+
+Etude SDK 0.2 hashes tracked source paths (`git add -N` admits new files for local
+implementation checks). Its built-in sync sends only known run folders and does
+not include arbitrary evidence artifacts. Card evaluations use the card
+publication operation to verify/copy their immutable evidence through Etude
+Storage before delivering scalar tables and match records. Do not publish their
+indexes alone or put card evidence in the checkpoint namespace.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

@@ -307,6 +307,17 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         focus = obs["action_focus"]
         mask = (focus >= offset) & (focus < offset + count)
         result["action_focus"][mask] = offset + count - 1 - (focus[mask] - offset)
+<<<<<<< HEAD
+=======
+        if "relations" in obs:
+            # Continuation references use object index + 1 (zero is absence).
+            for column in (6, 24):
+                refs = obs["relations"][..., column]
+                mask = (refs > offset) & (refs <= offset + count)
+                result["relations"][..., column][mask] = (
+                    2 * offset + count + 1 - refs[mask]
+                )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         offset += count
     return result
 

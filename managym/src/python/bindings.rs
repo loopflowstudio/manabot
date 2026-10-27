@@ -97,6 +97,23 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+<<<<<<< HEAD
+=======
+    if config.relations {
+        dict.set_item(
+            "relations",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.relations,
+                &[
+                    crate::agent::continuation::RELATION_ROWS,
+                    crate::agent::continuation::RELATION_DIM,
+                ],
+            )?,
+        )?;
+    }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     dict.set_item(
         "agent_player",
@@ -1408,6 +1425,11 @@ pub struct PyPermanent {
     pub has_exile_link: bool,
     #[pyo3(get, set)]
     pub exile_if_dies_this_turn: bool,
+<<<<<<< HEAD
+=======
+    #[pyo3(get, set)]
+    pub temp_subtypes: Vec<String>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1430,6 +1452,10 @@ impl From<PermanentData> for PyPermanent {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+<<<<<<< HEAD
+=======
+            temp_subtypes: value.temp_subtypes,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             keywords: value.keywords.into(),
         }
     }
@@ -1452,6 +1478,10 @@ impl From<PyPermanent> for PermanentData {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+<<<<<<< HEAD
+=======
+            temp_subtypes: value.temp_subtypes,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             keywords: value.keywords.into(),
         }
     }
@@ -1779,6 +1809,11 @@ impl From<PySideboardCard> for SideboardCardData {
 #[pyclass(name = "Observation")]
 #[derive(Clone)]
 pub struct PyObservation {
+<<<<<<< HEAD
+=======
+    #[pyo3(get)]
+    pub continuation: Vec<crate::agent::continuation::ContinuationFrame>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     #[pyo3(get, set)]
     pub game_over: bool,
     #[pyo3(get, set)]
@@ -1841,6 +1876,10 @@ impl From<Observation> for PyObservation {
                 .map(PyStackObject::from)
                 .collect(),
             policy_history: value.policy_history,
+<<<<<<< HEAD
+=======
+            continuation: value.continuation,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             recent_events: value
                 .recent_events
                 .into_iter()
@@ -1887,6 +1926,10 @@ impl From<PyObservation> for Observation {
                 .map(StackObjectData::from)
                 .collect(),
             policy_history: value.policy_history,
+<<<<<<< HEAD
+=======
+            continuation: value.continuation,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             recent_events: value
                 .recent_events
                 .into_iter()
@@ -1899,6 +1942,20 @@ impl From<PyObservation> for Observation {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyObservation {
+<<<<<<< HEAD
+=======
+    #[staticmethod]
+    fn from_json(text: &str) -> PyResult<Self> {
+        crate::agent::observation_json::parse(text)
+            .map(Self::from)
+            .map_err(PyValueError::new_err)
+    }
+
+    fn continuation_json(&self) -> String {
+        serde_json::to_string(&self.continuation).expect("continuation serializes")
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     fn encode_policy_history(&self, capacity: usize, cards_per_player: usize) -> Vec<Vec<f32>> {
         crate::agent::policy_history::encode(
             &Observation::from(self.clone()),
@@ -1919,10 +1976,36 @@ impl PyObservation {
     }
 }
 
+<<<<<<< HEAD
 #[cfg(feature = "python")]
 #[pyclass(name = "Env")]
 pub struct PyEnv {
     inner: Arc<Mutex<Env>>,
+=======
+/// Opaque origin binding. JSON is portable evidence; only this live handle can
+/// authorize submission back to its originating Env and reset generation.
+#[cfg(feature = "python")]
+#[pyclass(name = "DecisionCapture", frozen)]
+pub struct PyDecisionCapture {
+    source: Arc<Mutex<Env>>,
+    generation: u64,
+    capture: crate::decision_capture::DecisionCapture,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyDecisionCapture {
+    fn to_json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.capture)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "Env")]
+pub struct PyEnv {
+    pub(crate) inner: Arc<Mutex<Env>>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     selected_guard: bool,
     prepared_lease: Option<PreparedBranchLease>,
 }
@@ -2599,6 +2682,26 @@ impl PyEnv {
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
     }
 
+<<<<<<< HEAD
+=======
+    fn enable_card_capture(&self) -> PyResult<()> {
+        self.reject_guarded_mutation("Env.enable_card_capture")?;
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .enable_card_capture()
+            .map_err(map_agent_err)
+    }
+
+    fn card_capture_json(&self) -> PyResult<String> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .card_capture_json()
+            .map_err(map_agent_err)
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     fn set_seed(&self, seed: u64) -> PyResult<()> {
         let mut env = self
             .inner
@@ -2899,6 +3002,98 @@ impl PyEnv {
         serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+<<<<<<< HEAD
+=======
+    /// Public event identities used to explain a committed transition.
+    fn presentation_subjects_json(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.presentation_subjects().map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_offer_subjects_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let subjects = env.decision_offer_subjects(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&subjects).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn decision_context_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let context = env.decision_context(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&context).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (viewer, history_capacity=0))]
+    fn capture_decision(
+        &self,
+        viewer: usize,
+        history_capacity: usize,
+    ) -> PyResult<PyDecisionCapture> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyDecisionCapture {
+            source: Arc::clone(&self.inner),
+            generation: env.capture_generation,
+            capture: env
+                .capture_decision(viewer, history_capacity)
+                .map_err(map_agent_err)?,
+        })
+    }
+
+    /// Validate origin and all included input facts under the same lock as the
+    /// ordinary Command execution. A clone or a reset is a different authority.
+    fn execute_captured_command_json(
+        &self,
+        capture: &PyDecisionCapture,
+        command_json: &str,
+    ) -> PyResult<String> {
+        self.reject_guarded_mutation("Env.execute_captured_command_json")?;
+        if !Arc::ptr_eq(&self.inner, &capture.source) {
+            return Err(PyAgentError::new_err(
+                "wrong_origin: capture belongs to another environment/branch",
+            ));
+        }
+        let command: SemanticCommand = serde_json::from_str(command_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if env.capture_generation != capture.generation {
+            return Err(PyAgentError::new_err(
+                "stale_capture: environment was reset",
+            ));
+        }
+        let current = env
+            .capture_decision(
+                capture.capture.observation.identity.viewer as usize,
+                capture.capture.history.capacity,
+            )
+            .map_err(|error| PyAgentError::new_err(format!("stale_capture: {error}")))?;
+        if current.digest != capture.capture.digest {
+            return Err(PyAgentError::new_err(
+                "stale_capture: captured input has changed",
+            ));
+        }
+        let transition = env
+            .execute_semantic_command(&command)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Composite viewer-safe Observation for `viewer`, as canonical JSON.
     fn semantic_observation_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
@@ -3358,6 +3553,7 @@ impl PyEnv {
         })
     }
 
+<<<<<<< HEAD
     fn encode_observation(&self, py: Python<'_>, obs: PyObservation) -> PyResult<PyObject> {
         let env = self
             .inner
@@ -3369,6 +3565,25 @@ impl PyEnv {
             .encode_observation(&rust_obs)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
         drop(env);
+=======
+    #[pyo3(signature = (obs, policy_input_version=2))]
+    fn encode_observation(
+        &self,
+        py: Python<'_>,
+        obs: PyObservation,
+        policy_input_version: u8,
+    ) -> PyResult<PyObject> {
+        let rust_obs = Observation::from(obs);
+        if !matches!(policy_input_version, 1 | 2) {
+            return Err(PyValueError::new_err("unsupported policy input version"));
+        }
+        let config = ObservationEncoderConfig {
+            relations: policy_input_version == 2,
+            ..ObservationEncoderConfig::default()
+        };
+        let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         let out = encoded_to_dict(py, encoded, &config)?;
         Ok(out.into_any().unbind())
     }
@@ -3379,6 +3594,7 @@ impl PyEnv {
         obs: PyObservation,
         out: Bound<'_, PyDict>,
     ) -> PyResult<()> {
+<<<<<<< HEAD
         let env = self
             .inner
             .lock()
@@ -3390,12 +3606,22 @@ impl PyEnv {
             .encode_observation(&rust_obs)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
         drop(env);
+=======
+        let rust_obs = Observation::from(obs);
+        let config = ObservationEncoderConfig {
+            relations: out.contains("relations")?,
+            ..ObservationEncoderConfig::default()
+        };
+        let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
 }
 
 #[cfg(feature = "python")]
+<<<<<<< HEAD
 #[pyfunction]
 fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfig> {
     let packs = [
@@ -3422,6 +3648,83 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
     Err(PyValueError::new_err(format!(
         "unknown authored pack {pack_key:?}"
     )))
+=======
+fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticPack> {
+    crate::semantic::SemanticPack::catalog()
+        .map_err(|error| PyValueError::new_err(error.to_string()))?
+        .iter()
+        .find(|pack| pack.pack_key == pack_key)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown authored pack {pack_key:?}")))
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn parse_continuation_frames_json(
+    text: &str,
+) -> PyResult<Vec<crate::agent::continuation::ContinuationFrame>> {
+    let value: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let frames: Vec<crate::agent::continuation::ContinuationFrame> =
+        serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    if frames.iter().enumerate().any(|(index, frame)| {
+        !(1..=6).contains(&frame.kind)
+            || frame.decision > 13
+            || frame.parent.is_some_and(|parent| parent >= index)
+    }) {
+        return Err(PyValueError::new_err(
+            "invalid continuation frame relationship",
+        ));
+    }
+    if serde_json::to_value(&frames).unwrap() != value {
+        return Err(PyValueError::new_err("noncanonical continuation frames"));
+    }
+    Ok(frames)
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn validate_observation_json(text: &str) -> PyResult<()> {
+    let value: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let observation: crate::decision::Observation =
+        serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    if serde_json::to_value(&observation).unwrap() != value
+        || observation.identity.schema_version != crate::decision::SEMANTIC_DECISION_VERSION
+        || observation
+            .decision
+            .as_ref()
+            .is_some_and(|frame| frame.schema_version != crate::decision::SEMANTIC_DECISION_VERSION)
+    {
+        return Err(PyValueError::new_err("noncanonical semantic observation"));
+    }
+    crate::agent::observation_json::parse(&observation.viewer_state.to_string())
+        .map_err(PyValueError::new_err)?;
+    Ok(())
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfig> {
+    let config = authored_pack(pack_key)?
+        .player_config(deck_key, deck_key)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    Ok(PyPlayerConfig {
+        name: config.name,
+        decklist: config.decklist.into_iter().collect(),
+        sideboard: config.sideboard.into_iter().collect(),
+        content_pack: Some(pack_key.to_string()),
+    })
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
+    Ok(authored_pack(pack_key)?
+        .decks
+        .iter()
+        .map(|deck| deck.key.clone())
+        .collect())
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 
 #[cfg(feature = "python")]
@@ -3446,7 +3749,18 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
+<<<<<<< HEAD
     m.add_class::<PyObservation>()?;
+=======
+    m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
+    m.add_class::<PyObservation>()?;
+    m.add_class::<crate::agent::continuation::VisibleReference>()?;
+    m.add_class::<crate::agent::continuation::ClauseTarget>()?;
+    m.add_class::<crate::agent::continuation::ManaOutput>()?;
+    m.add_class::<crate::agent::continuation::ContinuationFrame>()?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
     m.add_class::<PyCard>()?;
@@ -3464,6 +3778,10 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStructuredOfferSet>()?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
+<<<<<<< HEAD
+=======
+    m.add_class::<PyDecisionCapture>()?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

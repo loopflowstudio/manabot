@@ -2,8 +2,13 @@
 // Continuous-effect queries: effective power/toughness, effective keywords,
 // animation-aware type checks, and static-condition evaluation.
 //
+<<<<<<< HEAD
 // Layer order (simplified CR 613.3/613.4):
 //   1. base P/T — printed, or characteristic-defining (CR 613.3a layer 7a:
+=======
+// Supported subset of CR 613.4 (September 25, 2026):
+//   1. base P/T — printed, or characteristic-defining (CR 613.4a layer 7a:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 //      Suki "power = creatures you control", Dragonfly Swarm "power =
 //      noncreature nonland cards in your graveyard"); earthbend animation
 //      sets base 0/0 by construction (lands print no P/T).
@@ -12,7 +17,13 @@
 //   3. until-end-of-turn P/T modifications (also layer 7c; all Milestone-1
 //      effects are additive, so ordering within the layer is immaterial and
 //      no timestamp system is kept).
+<<<<<<< HEAD
 //   4. +1/+1 counters (layer 7d).
+=======
+//   4. +1/+1 counters (also layer 7c, CR 613.4c).
+// These additive layer-7c terms commute. Layer 7d switches P/T, and is not
+// represented here; neither are general timestamp/dependency interactions.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 // Anthem scopes match printed characteristics plus animation (never
 // power), so the computation cannot recurse.
 
@@ -207,6 +218,25 @@ impl Game {
         }
         let mut predicate = predicate.clone();
         predicate.flying = false;
+<<<<<<< HEAD
+=======
+        let has_subtype = |name: &str| {
+            card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
+        };
+        if predicate
+            .subtype
+            .as_deref()
+            .is_some_and(|s| !has_subtype(s))
+            || (!predicate.subtypes_any.is_empty()
+                && !predicate.subtypes_any.iter().any(|s| has_subtype(s)))
+            || predicate.not_subtypes.iter().any(|s| has_subtype(s))
+        {
+            return false;
+        }
+        predicate.subtype = None;
+        predicate.subtypes_any.clear();
+        predicate.not_subtypes.clear();
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         predicate.matches(card, self.effective_power(permanent_id), permanent.animated)
     }
 }

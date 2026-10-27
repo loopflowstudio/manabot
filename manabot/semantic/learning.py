@@ -117,9 +117,15 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
+<<<<<<< HEAD
         if version not in {2, 3, 4, 5}:
             raise UnknownSchemaError(
                 f"learning_schema.schema_version: expected 2, 3, 4 or 5, got {version}"
+=======
+        if version not in {2, 3, 4, 5, 6, 7}:
+            raise UnknownSchemaError(
+                f"learning_schema.schema_version: expected 2, 3, 4, 5, 6 or 7, got {version}"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -174,6 +180,7 @@ class LearningSchema:
             )
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
+<<<<<<< HEAD
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -183,6 +190,14 @@ class LearningSchema:
                 or (version == 3 and int(opcode) <= 50)
                 or int(opcode) <= 23
             )
+=======
+        # Frozen schemas admit only the opcode prefix available at publication.
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65}[version]
+        expected_opcodes = {
+            opcode.name.lower(): int(opcode)
+            for opcode in Opcode
+            if int(opcode) <= max_opcode
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         }
         if opcodes != expected_opcodes:
             raise SemanticProjectionError(
@@ -240,7 +255,11 @@ def _walk_instructions(instructions: Sequence[Any]) -> Iterable[Mapping[str, Any
         yield instruction
         for mode in instruction.get("modes", []):
             yield from _walk_instructions(_sequence(mode, "instruction.modes[]"))
+<<<<<<< HEAD
         for field in ("then", "otherwise", "body", "if_declined"):
+=======
+        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             nested = instruction.get(field)
             if nested is not None:
                 yield from _walk_instructions(_sequence(nested, f"instruction.{field}"))
@@ -576,7 +595,11 @@ class _TokenBuilder:
                 self.structure("list_end")
             self.structure("list_end")
             return
+<<<<<<< HEAD
         if field in {"then", "otherwise", "body", "if_declined"}:
+=======
+        if field in {"then", "otherwise", "body", "if_paid", "if_declined"}:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             self.structure(f"{field}_begin")
             for instruction in values:
                 self.instruction(_mapping(instruction, f"{context}.{field}[]"), roles)
@@ -920,6 +943,19 @@ class BoundSemanticPack:
                     default_ir = (
                         ROOT / "content/semantic/v1/generated/elemental.ir.json"
                     )
+<<<<<<< HEAD
+=======
+                case "elemental-world-v2":
+                    default_schema = ROOT / "content/semantic/w11/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/w11/generated/elemental_world.ir.json"
+                    )
+                case "elemental-world-v1":
+                    default_schema = ROOT / "content/semantic/w10/learning_schema.json"
+                    default_ir = (
+                        ROOT / "content/semantic/v1/generated/elemental_world.ir.json"
+                    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 case "elemental-temur-v1":
                     default_schema = ROOT / "content/semantic/w9/learning_schema.json"
                     default_ir = ROOT / "content/semantic/v1/generated/temur.ir.json"

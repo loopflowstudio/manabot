@@ -104,6 +104,7 @@ def test_explicit_deal_reproduces_and_recording_failure_is_visible(
         game.current_recovery("explicit_resync")
 
 
+<<<<<<< HEAD
 def test_changed_candidate_cannot_replace_playable_match(tmp_path, monkeypatch):
     import hashlib
 
@@ -133,6 +134,8 @@ def test_changed_candidate_cannot_replace_playable_match(tmp_path, monkeypatch):
     assert rows(tmp_path)[0]["status"] == "active"
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_generated_deal_seed_reproduces_control_opponent_decisions(
     tmp_path, monkeypatch
 ):

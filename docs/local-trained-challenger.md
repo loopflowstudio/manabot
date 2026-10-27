@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Train, play, and retain a local challenger
 
 This workflow runs the existing search-distillation trainer on the corrected
@@ -72,20 +73,30 @@ do not copy results into a separate measurement store. Early ETU-79 feasibility
 used the pre-ETU-75 world and a flat search-64 teacher; those checkpoints do
 not bind to this world. The first corrected-world executions are in the
 [2026-09-29 record](evidence/corrected-world-training-2026-09-29.md).
+=======
+# Play, evaluate and retain a local challenger
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
 ```sh
+<<<<<<< HEAD
 npm --prefix frontend ci
 ACADEMY_STATIC_BUILD=1 npm --prefix frontend run build
 ACADEMY_PLAY_CANDIDATE="$PWD/.runs/my-challenger/candidate.json" \
 ACADEMY_FRONTEND_BUILD="$PWD/frontend/build" \
+=======
+npm --prefix academy/ui ci
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" \
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
 ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 uv run uvicorn deploy.play.asgi:app --host 127.0.0.1 --port 8000
 ```
 
+<<<<<<< HEAD
 Open `http://localhost:8000`. The trained opponent is selected automatically;
 its name and short digest remain visible through reconnect and Play Again.
 Search, Random and Passive remain selectable controls. The browser never needs
@@ -96,11 +107,24 @@ Checkpoints from `uv run manabot train`, regime runs and Tournament files
 are listed below the candidate under **Trained checkpoints**. Everything under
 `.runs/` appears automatically; add other files, run directories or Tournament
 JSON with `ACADEMY_PLAY_CHECKPOINTS="/path/a.pt:/path/run-dir:/path/grid.json"`.
+=======
+Open `http://localhost:8000` and choose a trained opponent under **Trained
+checkpoints**. Checkpoints from `uv run manabot train`, regime runs and
+Tournament files are listed there. Everything under `.runs/` appears
+automatically; add other files, run directories or Tournament JSON with
+`ACADEMY_PLAY_CHECKPOINTS="/path/a.pt:/path/run-dir:/path/grid.json"`.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Tournament entrants resolve beside the Tournament file or in a listed
 directory, and only with their pinned bytes. A checkpoint bound to another
 world, content or deck setup is listed with the mismatch and cannot be started.
 Choose the checkpoint's decks in either seat; its world, model, step and
 producer show under the menu, and its exact identity is recorded on the trace.
+<<<<<<< HEAD
+=======
+The browser names only a digest, never a checkpoint path; the server verifies
+the bytes before play, and replacing them fails clearly. Search, Random and
+Passive remain selectable controls.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Play, optionally save a note, and choose Play Again. Open replay beside the note
 to revisit that attempt. Attempts are saved at startup and each surfaced
@@ -155,22 +179,38 @@ browser APIs expose the authorized viewer projection. Keep this file private.
 New `deal_seed` values use hexadecimal text to preserve all unsigned 64 bits;
 the trace JSON retains the exact integer. Earlier feasibility rows used integers.
 Before any hosted deployment, configure persistent storage and bundle the
+<<<<<<< HEAD
 training runtime and candidate. The checked Fly deployment has no volume mount;
+=======
+training runtime and checkpoints. The checked Fly deployment has no volume mount;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 this local workflow does not deploy anything.
 
 
 ## Evaluate the selected matchup
 
+<<<<<<< HEAD
 Use the existing arena's bounded instrument command on the authored Allies
 versus Lessons setup, including both sideboards:
 
 ```bash
 uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
+=======
+Use the bounded evaluation instrument command on the authored Allies
+versus Lessons setup, including both sideboards:
+
+```bash
+uv run python -m manabot.eval.evaluate \
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
   --out-dir .runs/allies-lessons-arena-1 --deal-seeds 83001
 ```
 
 Without a candidate registration this runs Random against the shipped default
+<<<<<<< HEAD
 demo Search-64. It calls `manabot.sim.flat_search.FlatSearchPolicy` itself: 64 simulations
+=======
+demo Search-64. It calls `manabot.sim.search.flat.FlatSearchPolicy` itself: 64 simulations
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 per legal action, four rollouts per world, 2,000-step playout cap, deterministic
 first-maximum selection, CPU, one worker and one Torch thread. The baseline
 registration pins the policy source bytes; the protocol additionally pins the
@@ -192,7 +232,11 @@ parameter count, training seed, immutable artifact ID and explicit inference
 spec (`checkpoint`, `deterministic`, `cpu`, batch size 1). Compute the setup and
 ABI fingerprints with `runtime_fingerprints(match_hypers=selected_match(),
 observation_space=loaded_space, world="w4")`; both are existing Python APIs.
+<<<<<<< HEAD
 The ordinary checkpoint loader supplies `loaded_space`; the arena retains its
+=======
+The ordinary checkpoint loader supplies `loaded_space`; the simulator retains its
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 bounds in every trace. No checkpoint port or loader bypass is performed.
 Stochastic policies are reseeded per player decision, with the exact seed in
 the trace. Treat an untrained fixture as a fixture, never as training evidence.
@@ -251,10 +295,16 @@ SQLite record version 2 owns identity in `attempt_players` (two seats per game).
 It replaces the former `attempts.bot_sha256`, `hero_deck`, and `villain_deck`
 summary columns. Original trace configurations remain retained evidence, not
 another mutable player directory. `players` maps private browser credentials to
+<<<<<<< HEAD
 public human IDs; bot identities come from the configured artifact's optional
 `bot_id`, separate from producer, digest and loading path. Older artifacts lacking
 lineage retain an identity for their exact digest; we do not guess lineage from
 similar names. New local challenger exports declare `etude:local-challenger`.
+=======
+public human IDs; a trained bot's identity is its exact checkpoint digest,
+separate from producer and loading path. We do not guess lineage from similar
+names.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Declare record origin when launching the server with `ACADEMY_PLAY_RECORD_ORIGIN`:
 `human_exploratory`, `automated_validation`, `bot_evaluation`, or `training`.

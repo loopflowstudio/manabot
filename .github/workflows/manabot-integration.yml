@@ -1,0 +1,110 @@
+name: Manabot integration suite
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner label selected by PR CI or the macOS nightly
+        required: true
+        type: string
+
+jobs:
+  integration:
+    name: Integration (${{ inputs.runner }}, ${{ matrix.group }})
+    runs-on: ${{ inputs.runner }}
+    env:
+      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [main, long]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            managym -> target
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: uv sync --python 3.12 --extra dev --extra play
+
+      - name: Build managym extension
+        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+
+      - name: Setup Node for offline report tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Integration tests
+        if: matrix.group == 'main'
+        run: |
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
+            --ignore=tests/model/test_world.py \
+            tests/test_package_boundaries.py \
+            tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
+            tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
+            tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
+            tests/training/test_matchups.py \
+            tests/training/test_step_cadence.py tests/training/test_learning_state.py \
+            tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
+            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
+            tests/training/test_monitoring.py \
+            tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
+            tests/training/test_time_profile.py tests/training/test_time_cohort.py \
+            tests/training/test_active_training.py tests/training/test_active_recovery.py \
+            tests/training/test_process_tree_rss.py \
+            tests/training/test_experiment_data.py \
+            tests/training/test_checkpoint_queue.py \
+            tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \
+            tests/belief/test_sampling_report.py \
+            tests/bench/test_structured_policy_benchmark.py
+
+      - name: Long integration tests
+        if: matrix.group == 'long'
+        run: |
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
+            tests/training/test_experiment_runner.py \
+            tests/training/test_monitor_evaluation.py
+
+      - name: Two-seat and Etude evaluation integration
+        if: matrix.group == 'main'
+        run: |
+          uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
+            tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
+            tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/eval/ -q
+
+      - name: Evaluation Perf report proof
+        if: matrix.group == 'main'
+        run: |
+          npm --prefix academy/ui ci --ignore-scripts
+          npm --prefix academy/ui exec -- playwright install --with-deps chromium
+          ./scripts/verify-eval-performance-report
+
+      - name: Enum smoke test
+        if: matrix.group == 'main'
+        run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
+
+      - name: Training smoke test
+        if: matrix.group == 'main'
+        run: |
+          uv run --python 3.12 manabot train --out .runs/ci-local-smoke

@@ -12,7 +12,11 @@ export, setup, upload and cleanup remain separate machine/cost reserves.
 ```python
 import json
 from pathlib import Path
+<<<<<<< HEAD
 from manabot.training.experiment_execution import StepCalibration
+=======
+from manabot.experiment.execution import StepCalibration
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 pilots = {
     name: StepCalibration.from_export(Path(f".runs/{name}-pilot/run.json"))
@@ -47,6 +51,7 @@ boundary remains explicit. JobSpec still owns hours, credentials, watchdogs,
 export/upload/cleanup reserves and spending limits. Calibrate once per frozen
 configuration rather than retuning a running cohort when throughput changes.
 
+<<<<<<< HEAD
 The historical CUDA capacity/pilot runners and frozen live cohort retain their
 original source and hourly cadence. New declarations use Experiment/JobSpec and
 step cadence. This helper neither launches a replacement cohort nor migrates
@@ -254,3 +259,9 @@ reports all four parameter counts, CPU/MPS windows, memory and failure recovery.
 The 16.82M-parameter large model trained/exported; verification recovery checked
 those same bytes without retraining. Heavy changing host load prevents scaling
 or hardware-ranking claims.
+=======
+New declarations use Experiment/JobSpec and step cadence. This helper neither
+launches a cohort nor migrates saved records. Non-self-play and multi-stage
+recipes keep their own epoch/game units and explicit legacy cadence until their
+clock contract is defined.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

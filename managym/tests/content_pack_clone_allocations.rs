@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -6,6 +7,15 @@ use std::{
         Arc,
     },
 };
+=======
+use std::{hint::black_box, sync::Arc};
+
+#[cfg(not(feature = "benchmark"))]
+#[path = "../src/benchmark_allocations.rs"]
+mod benchmark_allocations;
+#[cfg(feature = "benchmark")]
+use managym::benchmark_allocations;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 use managym::{
     benchmark::build_fixture,
@@ -23,6 +33,7 @@ const EXPANDED_DEFINITION_COUNT: usize = 256;
 const SYNTHETIC_TEXT_BYTES: usize = 16 * 1_024;
 const MINIMUM_PAYLOAD_DELTA_BYTES: usize = 4 * 1_024 * 1_024;
 
+<<<<<<< HEAD
 struct CountingAllocator;
 
 static MEASURING: AtomicBool = AtomicBool::new(false);
@@ -62,6 +73,8 @@ unsafe impl GlobalAlloc for CountingAllocator {
 #[global_allocator]
 static GLOBAL: CountingAllocator = CountingAllocator;
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 struct AllocationCounts {
     allocations: u64,
@@ -108,6 +121,7 @@ struct AllocationReceipt {
 }
 
 fn measure(operation: impl FnOnce()) -> AllocationCounts {
+<<<<<<< HEAD
     assert!(!MEASURING.swap(true, Ordering::SeqCst));
     ALLOCATIONS.store(0, Ordering::SeqCst);
     ALLOCATED_BYTES.store(0, Ordering::SeqCst);
@@ -116,6 +130,14 @@ fn measure(operation: impl FnOnce()) -> AllocationCounts {
     AllocationCounts {
         allocations: ALLOCATIONS.load(Ordering::SeqCst),
         allocated_bytes: ALLOCATED_BYTES.load(Ordering::SeqCst),
+=======
+    benchmark_allocations::start();
+    operation();
+    let (allocations, allocated_bytes) = benchmark_allocations::stop();
+    AllocationCounts {
+        allocations,
+        allocated_bytes,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
 }
 

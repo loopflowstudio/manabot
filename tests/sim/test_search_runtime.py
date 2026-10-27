@@ -6,9 +6,8 @@ import json
 
 import pytest
 
-from experiments.runners.run_int7_value_target_comparison import manifest_digest
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.search_runtime import (
+from manabot.model.checkpoint import load_checkpoint
+from manabot.sim.search.runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
     INT7_VALUE_TARGET_RESULT,
     RetainedCheckpointMismatchError,
@@ -27,6 +26,7 @@ EXPECTED = {
 }
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 @pytest.mark.parametrize(("seed", "checkpoint_sha256"), EXPECTED.items())
 def test_retained_registry_verifies_all_policy_only_bytes(
     seed: int,
@@ -54,21 +54,21 @@ def test_retained_registry_missing_manifest_is_typed_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    import manabot.sim.search_runtime as runtime
+    import manabot.sim.search.runtime as runtime
 
     monkeypatch.setattr(runtime, "INT7_VALUE_TARGET_MANIFEST", tmp_path / "missing")
     with pytest.raises(RetainedCheckpointUnavailableError, match="unavailable"):
         retained_int7_policy_only_checkpoint(197)
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    import manabot.sim.search_runtime as runtime
+    import manabot.sim.search.runtime as runtime
 
     manifest = json.loads(runtime.INT7_VALUE_TARGET_MANIFEST.read_text())
-    assert retained_int7_manifest_digest(manifest) == manifest_digest(manifest)
     assert retained_int7_manifest_digest(manifest) == INT7_VALUE_TARGET_MANIFEST_SHA256
 
     manifest["evidence_class"] = "tampered-but-self-consistent"
@@ -85,6 +85,7 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
         retained_int7_policy_only_checkpoint(197)
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_retained_evidence_snapshot_closes_the_full_root() -> None:
     before = retained_int7_evidence_snapshot((197,))
     after = retained_int7_evidence_snapshot((197,))
@@ -119,9 +120,10 @@ def test_retained_evidence_snapshot_closes_the_full_root() -> None:
     assert selected.max_steps == 2000
 
 
+@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_seed_197_checkpoint_model_abis_match_the_registry() -> None:
     registration = retained_int7_policy_only_checkpoint(197)
-    agent, observation_space = load_checkpoint_agent(str(registration.checkpoint_path))
+    agent, observation_space = load_checkpoint(str(registration.checkpoint_path))
 
     assert sum(parameter.numel() for parameter in agent.parameters()) == 102_722
     assert (

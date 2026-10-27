@@ -353,9 +353,27 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     );
     super::elemental_cards::assert_choice_contract(&s);
     select(&mut s, victim);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "payment");
+    assert_eq!(context.mana_cost.0.as_deref(), Some("{B}"));
+    assert_eq!(
+        context.reserved_sacrifice.0.unwrap().entity_id,
+        victim.0 as u32
+    );
+    assert_eq!(context.targets[0].clause, 0);
+    let public = s.game().decision_context(PlayerId(1)).unwrap();
+    assert_eq!(public.actor, 0);
+    assert!(public.source.0.is_none() && public.targets.is_empty());
     let treasure = permanent(&s, "Treasure");
     activate(&mut s, treasure);
     assert_eq!(s.action_space().actions.len(), 1);
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "mana_color");
+    assert_eq!(context.source.0.unwrap().label, "Deadly Precision");
+    assert!(context
+        .recent_facts
+        .iter()
+        .any(|fact| fact.contains("sacrificed Treasure")));
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers[0].label, "Add {B}");
     super::elemental_cards::assert_choice_contract(&s);

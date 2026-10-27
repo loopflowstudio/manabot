@@ -20,11 +20,19 @@ mod content;
 pub(crate) use content::content_pack_for_authored_match;
 
 use std::collections::{BTreeMap, BTreeSet};
+<<<<<<< HEAD
+=======
+use std::sync::OnceLock;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 use serde_json::Value;
 
 use crate::cardsets::alpha::ContentPack;
+<<<<<<< HEAD
 use crate::state::card::CardDefId;
+=======
+use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
@@ -106,6 +114,13 @@ pub enum Opcode {
     CreateNonlegendaryCopy = 59,
     ModifyControlled = 60,
     WaterbendOrDiscard = 61,
+<<<<<<< HEAD
+=======
+    Discard = 62,
+    ExileIfDies = 63,
+    AddSubtype = 64,
+    OptionalPayment = 65,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 }
 
 impl Opcode {
@@ -172,6 +187,13 @@ impl Opcode {
             59 => Opcode::CreateNonlegendaryCopy,
             60 => Opcode::ModifyControlled,
             61 => Opcode::WaterbendOrDiscard,
+<<<<<<< HEAD
+=======
+            62 => Opcode::Discard,
+            63 => Opcode::ExileIfDies,
+            64 => Opcode::AddSubtype,
+            65 => Opcode::OptionalPayment,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -255,6 +277,17 @@ pub enum Condition {
 /// their own step lists, matching the compiler's `then`/`otherwise`/`body`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
+<<<<<<< HEAD
+=======
+    Discard,
+    ExileIfDies {
+        target: String,
+    },
+    AddSubtype {
+        target: String,
+        subtype: String,
+    },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     AddLessonMana {
         mana: String,
     },
@@ -268,8 +301,15 @@ pub enum Step {
         power: i64,
         toughness: i64,
     },
+<<<<<<< HEAD
     WaterbendOrDiscard {
         generic: u8,
+=======
+    OptionalPayment {
+        cost: PaymentCost,
+        if_paid: Vec<Step>,
+        if_declined: Vec<Step>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     },
 
     SearchBasicLands {
@@ -635,7 +675,48 @@ pub struct DefaultContext;
 
 impl InterpreterContext for DefaultContext {}
 
+<<<<<<< HEAD
 impl SemanticPack {
+=======
+const COMPLEXITY_IR: &str =
+    include_str!("../../../content/semantic/v1/generated/complexity.ir.json");
+
+impl SemanticPack {
+    /// Every admitted immutable pack; shared by runtime and Python setup discovery.
+    pub fn catalog() -> Result<&'static [Self], IrError> {
+        // Embedded documents never change during a process. Setup discovery
+        // and runtime compilation share their parsed definitions.
+        static CATALOG: OnceLock<Result<Vec<SemanticPack>, IrError>> = OnceLock::new();
+        CATALOG
+            .get_or_init(|| {
+                Ok(vec![
+                    Self::two_deck()?,
+                    Self::jeong_increment()?,
+                    Self::elemental()?,
+                    Self::sacrifice()?,
+                    Self::temur()?,
+                    Self::elemental_world()?,
+                    Self::optional_payments()?,
+                    Self::complexity()?,
+                ])
+            })
+            .as_deref()
+            .map_err(Clone::clone)
+    }
+
+    pub fn optional_payments() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/w11/generated/elemental_world.ir.json"
+        ))
+    }
+
+    pub fn elemental_world() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/v1/generated/elemental_world.ir.json"
+        ))
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     pub fn temur() -> Result<Self, IrError> {
         Self::from_json(include_str!(
             "../../../content/semantic/v1/generated/temur.ir.json"
@@ -660,6 +741,14 @@ impl SemanticPack {
         Self::from_json(JEONG_INCREMENT_IR)
     }
 
+<<<<<<< HEAD
+=======
+    /// Parse the isolated MTG-122 research catalog and its exact deck roster.
+    pub fn complexity() -> Result<Self, IrError> {
+        Self::from_json(COMPLEXITY_IR)
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     /// Parse an IR document from JSON text.
     pub fn from_json(text: &str) -> Result<Self, IrError> {
         let value: Value =
@@ -938,12 +1027,23 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
+<<<<<<< HEAD
             Step::AddLessonMana { .. }
+=======
+            Step::Discard
+            | Step::ExileIfDies { .. }
+            | Step::AddSubtype { .. }
+            | Step::AddLessonMana { .. }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Step::GrantFlashback
             | Step::GrantMana { .. }
             | Step::CreateNonlegendaryCopy
             | Step::ModifyControlled { .. }
+<<<<<<< HEAD
             | Step::WaterbendOrDiscard { .. }
+=======
+            | Step::OptionalPayment { .. }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1065,6 +1165,17 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::AddLessonMana => Step::AddLessonMana {
             mana: str_field(value, "mana")?.to_owned(),
         },
+<<<<<<< HEAD
+=======
+        Opcode::Discard => Step::Discard,
+        Opcode::ExileIfDies => Step::ExileIfDies {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::AddSubtype => Step::AddSubtype {
+            target: str_field(value, "target")?.to_owned(),
+            subtype: str_field(value, "subtype")?.to_owned(),
+        },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         Opcode::GrantFlashback => Step::GrantFlashback,
         Opcode::GrantMana => Step::GrantMana {
             predicates: array_field(value, "predicates")?
@@ -1078,9 +1189,43 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: i64_field(value, "power")?,
             toughness: i64_field(value, "toughness")?,
         },
+<<<<<<< HEAD
         Opcode::WaterbendOrDiscard => Step::WaterbendOrDiscard {
             generic: u8::try_from(u64_field(value, "generic")?)
                 .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+=======
+        Opcode::OptionalPayment => {
+            let cost = object_field(value, "cost")?;
+            // object_field has already checked the JSON type; exactly one key
+            // selects the payment method, so extra or mixed fields are invalid.
+            let fields = cost.as_object().unwrap();
+            let cost = match (fields.len(), fields.get("mana"), fields.get("waterbend")) {
+                (1, Some(_), None) => PaymentCost::Mana(ManaCost::parse(str_field(cost, "mana")?)),
+                (1, None, Some(_)) => PaymentCost::Waterbend {
+                    generic: u8::try_from(u64_field(cost, "waterbend")?)
+                        .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+                },
+                _ => {
+                    return Err(IrError::Malformed(
+                        "payment cost requires exactly one of mana or waterbend".into(),
+                    ))
+                }
+            };
+            Step::OptionalPayment {
+                cost,
+                if_paid: parse_steps(array_field(value, "if_paid")?)?,
+                if_declined: parse_steps(array_field(value, "if_declined")?)?,
+            }
+        }
+        // Frozen opcode 61 enters the shared representation at the read boundary.
+        Opcode::WaterbendOrDiscard => Step::OptionalPayment {
+            cost: PaymentCost::Waterbend {
+                generic: u8::try_from(u64_field(value, "generic")?)
+                    .map_err(|_| IrError::Malformed("waterbend cost exceeds u8".into()))?,
+            },
+            if_paid: Vec::new(),
+            if_declined: vec![Step::Discard],
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         },
         Opcode::AddMana => Step::AddMana {
             mana: str_field(value, "mana")?.to_owned(),

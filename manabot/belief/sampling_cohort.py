@@ -21,7 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from manabot.belief.sampling_data import Split
 from manabot.belief.sampling_fit import SamplerArmMetrics
+<<<<<<< HEAD
 from manabot.belief.sampling_report import SamplerQualityReport, SplitMeasurement
+=======
+from manabot.reports.belief import SamplerQualityReport, SplitMeasurement
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class Declaration(BaseModel):

@@ -1,6 +1,10 @@
 # Declarative training experiments
 
+<<<<<<< HEAD
 `manabot.training.experiments.Experiment` declares typed Python experiments.
+=======
+`manabot.experiment.config.Experiment` declares typed Python experiments.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 Resolution returns complete validated `TrainingRegime` values and a provenance
 receipt. It never constructs a model, opens a store, collects games or launches
 training. Existing `EvaluationProtocol`, `ResolvedStudy`, `TrainingRun`, checkpoint
@@ -10,6 +14,7 @@ the evaluation protocol declares the cohort of run seeds.
 ## Declare and inspect
 
 ```python
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec
 from manabot.training.experiments import Axis, Case, Experiment, Model
 from manabot.training.presets import ataraxos_mtg_v1
@@ -20,6 +25,18 @@ experiment = Experiment(
     matrix=(Axis("output", (
         Case("scalar", (Model(AgentSpec(value_kind="scalar")),), "Scalar"),
         Case("wdl", (Model(AgentSpec(value_kind="categorical_wdl")),), "WDL"),
+=======
+from manabot.infra.config import ModelConfig
+from manabot.experiment.config import Axis, Case, Experiment, ModelOverride
+from manabot.recipes.ataraxos import ataraxos
+
+experiment = Experiment(
+    name="value-output",
+    baseline=ataraxos(),
+    matrix=(Axis("output", (
+        Case("scalar", (ModelOverride(ModelConfig(value_kind="scalar")),), "Scalar"),
+        Case("wdl", (ModelOverride(ModelConfig(value_kind="categorical_wdl")),), "WDL"),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )),),
 )
 resolved = experiment.resolve()
@@ -44,9 +61,15 @@ are presentation, never substitutes for configuration or checkpoint identity.
 
 | Component | Owned properties and update semantics |
 | --- | --- |
+<<<<<<< HEAD
 | `Model(AgentSpec(...))` | `agent.*`; patch only explicitly supplied fields. |
 | `Environment(world=..., match=MatchHypers(...), observation=ObservationSpaceHypers(...))` | World, matchup and input capacity; explicit fields only. A supplied deck/sideboard map replaces that entire map. |
 | `LearningRule(Learning(...) or AtaraxosMoveLearning(...))` | Replace the complete learning rule on every self-play stage, including the selected rule's defaults. |
+=======
+| `ModelOverride(ModelConfig(...))` | `agent.*`; patch only explicitly supplied fields. |
+| `Environment(world=..., match=MatchConfig(...), observation=ObservationConfig(...))` | World, matchup and input capacity; explicit fields only. A supplied deck/sideboard map replaces that entire map. |
+| `LearningRule(Learning(...) or DampedPolicyLearning(...))` | Replace the complete learning rule on every self-play stage, including the selected rule's defaults. |
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | `Resources(execution=Execution(...), wall_seconds=...)` | Explicit execution fields on every stage plus the total run deadline. |
 | `Pipeline(stages=(...))` | Replace the complete ordered stage list, including stage-local learning/resources. Use existing typed operation models for heterogeneous stages. |
 | `RunControl(schedule_clock=..., recovery_max_microsteps=..., selection=...)` | Replace these three run controls together. New authoring defaults to `iteration_fraction`; `None` explicitly disables recovery. |
@@ -66,8 +89,13 @@ rules/resources directly in its typed stages. Disjoint writes commute; there is
 no last-write-wins order or hidden conflict priority.
 
 Pydantic models retain which fields were explicitly supplied. Thus
+<<<<<<< HEAD
 `Model(AgentSpec(hidden_dim=64))` changes only width, while supplying a fully
 populated AgentSpec explicitly replaces all its populated fields. An explicit
+=======
+`ModelOverride(ModelConfig(hidden_dim=64))` changes only width, while supplying a fully
+populated ModelConfig explicitly replaces all its populated fields. An explicit
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 default or `semantic_pack=None` remains an override in provenance. Whole-rule
 LearningRule and whole-pipeline Pipeline replacements deliberately include their
 defaults. Reuse existing model validation; typed patches must themselves be valid
@@ -88,6 +116,7 @@ exported receipt cannot change that baseline. Baseline identity includes the ful
 snapshot, not only its display name. Caller-supplied capacity baselines can have
 different digests under the same descriptive label; retain the digest.
 
+<<<<<<< HEAD
 `ataraxos_mtg_v1()` loads a checked-in, fully resolved snapshot with preset origin.
 There is no `latest` alias, mutable registry, inheritance chain or arbitrary import
 path. A semantic change needs a new preset version. Loading rejects incomplete
@@ -106,6 +135,21 @@ the whole recipe is capped at 180 s on one CPU thread. Those are small software
 workloads, not evidence of sufficient learning. Raw remains the existing default
 artifact selection; choosing EMA evaluation requires an explicit compatible
 EvaluationProtocol. No history or hidden truth is invented to make the name fit.
+=======
+`ataraxos()` captures a fresh current-world categorical-WDL recipe using the
+shared builder. All component provenance starts at the baseline; there is no
+second preset loader or legacy discriminator decoder. Snapshot validation still
+rejects incomplete settings or silent schema normalization.
+
+The retained `training/presets/ataraxos-mtg-v1.json` is historical w4 evidence,
+not an executable current recipe. Its bytes are unchanged. Recipes containing
+`ataraxos_move` require pinned source; current inputs must use `damped_policy`.
+Changing a frozen recipe produces a new identity and cannot resume its old run.
+
+The current Ataraxos-inspired recipe uses two cumulative one-update stages,
+categorical WDL and the semantic value-token model. It is a small software
+workload, not a paper reproduction or a scientific allocation.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 Fidelity is grounded in the [final paper](https://www.nature.com/articles/s41586-026-11036-y)
 and [supplement S3.4–S3.7, Tables S7/S10](https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41586-026-11036-y/MediaObjects/41586_2026_11036_MOESM1_ESM.pdf),
@@ -117,7 +161,11 @@ are in [the existing fidelity table](ataraxos.md#fidelity-table).
 | Matched move mechanism | Clipped surrogate, both reverse KLs, categorical outcome loss, separate trace parameters, filtering, iteration schedules and evaluation EMA use the delivered S3.4 implementation. |
 | MTG-adapted | Semantic legal offers, action-type magnet, same-viewer transitions and MTG terminal boundaries replace Stratego inputs and decisions. |
 | Compute-reduced | CPU float32, tiny batches/workload and a 2-layer width-64 model replace the paper's 8-layer width-384 move network and GPU scale. |
+<<<<<<< HEAD
 | Model departure | Delivered attention uses post-normalization and its existing feedforward/ownership conventions; the paper specifies pre-normalization. The value token is a supported local architectural choice, not a claim of matching the paper's architecture. |
+=======
+| ModelOverride departure | Delivered attention uses post-normalization and its existing feedforward/ownership conventions; the paper specifies pre-normalization. The value token is a supported local architectural choice, not a claim of matching the paper's architecture. |
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | Missing from this preset | Ordered past-move inputs, setup learning, trained belief-network stages and search augmentation. Separate sampler/search tools exist but are not selected here. |
 
 The closest coherent supported choice means retaining the delivered move mechanism
@@ -127,6 +175,7 @@ capacity allocation. Scalar output, historical/masked pooling and capacity chang
 are explicit experimental overrides. ETU-102 still owns capacity accounting and
 calibration. The value-token experiment remains independently runnable.
 
+<<<<<<< HEAD
 ## Existing studies and exports
 
 The [value-model example](../experiments/runners/run_value_models.py) declares four
@@ -152,6 +201,14 @@ current EvaluationProtocol discriminators still limit admitted cell counts,
 checkpoint counts, seeds, budgets and raw/EMA selection. Resolve any valid regime
 set independently; do not relabel it as an existing scientific study to bypass
 those requirements. Only an explicit call to the existing runner executes work.
+=======
+## Declarations and studies
+
+A declaration resolves complete regimes; it is not a study type. The arena
+studies in `manabot.experiment.study` admit only their own arm counts,
+checkpoint counts, seeds and budgets, so do not relabel a resolved set as one
+of them to bypass those requirements. Resolution never executes work.
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 `ResolvedCase.digest` is the existing canonical TrainingRegime digest, including
 its regime ID. `ResolvedCase.identity` additionally hashes the label, baseline

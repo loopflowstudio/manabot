@@ -20,7 +20,11 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
+<<<<<<< HEAD
 pub const MATCH_STATE_HASH_VERSION: u32 = 6;
+=======
+pub const MATCH_STATE_HASH_VERSION: u32 = 8;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -27,6 +27,10 @@
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cardsets::alpha::CardRegistry;
+<<<<<<< HEAD
+=======
+use managym::semantic::SemanticPack;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
@@ -189,12 +193,28 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
+<<<<<<< HEAD
+=======
+    let research = SemanticPack::complexity()
+        .and_then(|pack| pack.compile_content_pack())
+        .expect("complexity catalog compiles");
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
 
+<<<<<<< HEAD
     for def in registry.definitions() {
+=======
+    // The research-only cards use the same real-card checks without entering
+    // the default registry or changing its versioned content digest.
+    for def in registry.definitions().chain(
+        research
+            .definitions()
+            .filter(|def| registry.definition_id(&def.name).is_none()),
+    ) {
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         let name = def.name.as_str();
         if def.is_token {
             continue;

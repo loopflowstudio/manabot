@@ -111,7 +111,11 @@ number. No mechanism is retained solely because a single seed improved.
 ## ETU-95 implementation boundary (2026-10-04)
 
 The [local-search guide](../docs/local-policy-search.md) and executable
+<<<<<<< HEAD
 [`frozen-policy-local-update.json`](regimes/frozen-policy-local-update.json)
+=======
+[`frozen_policy_local_update()`](recipes/frozen_policy_local_update.py)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 now cover frozen raw/EMA collection, viewer-safe rollouts, the two-KL local
 update, complete target receipts, hard/soft/allocation controls, and cumulative
 multi-round fitting. The recipe is a bounded mechanism proof, not authorization

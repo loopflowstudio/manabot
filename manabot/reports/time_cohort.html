@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Training time profile · manabot</title>
+<style>
+:root {color-scheme:light dark;font:15px/1.5 system-ui,sans-serif;color:light-dark(#203440,#e2e5e6);background:light-dark(#faf9f6,#192126)}
+main{max-width:1350px;margin:auto;padding:28px}h1{font-size:30px}h2{margin-top:36px}
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:16px 0}
+input,select,button{font:inherit;padding:6px}button{cursor:pointer}label{display:inline-flex;gap:6px;align-items:center}
+.scroll{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:8px;border-bottom:1px solid #80808055;vertical-align:top;overflow-wrap:anywhere}th{white-space:nowrap}
+#flamegraph{padding:18px 0;min-height:120px}#flamegraph svg{min-width:700px}
+.lane{height:14px;background:#80808022}.segment{height:14px;background:#53758a}
+details{border-top:1px solid #80808055;padding:12px 0}summary{cursor:pointer}svg{width:100%;height:auto}
+.warning{color:light-dark(#804a20,#ecc18a)}[hidden]{display:none!important}a{color:light-dark(#256085,#9bcce9)}
+</style><main>
+<h1>Where training time goes</h1>
+<p>Training only. Select real runs to compare accumulated time and calendar overlap. No training or network access occurs in this page.</p>
+<p id="stamp"></p>
+<h2>Training time flamegraph</h2>
+<p id="flamegraph-coverage" role="status"></p>
+<p>Width is accumulated recorded time across the selected runs. Each lower row breaks down its parent; hover for seconds and share. This shows measured stages and phases, not execution order or GPU utilization.</p>
+<div id="flamegraph" class="scroll"></div>
+<details><summary>Source coverage and limitations</summary><div id="source-warnings" class="warning"></div></details>
+<h2>Select runs</h2><div class="controls">
+<label>Search <input id="search" type="search"></label>
+<label>Sort by <select id="sort"><option value="active_seconds">Active training time</option><option value="elapsed_seconds">Recorded training time</option><option value="learner_transitions">Learner transitions</option><option value="updates">Learning iterations</option><option value="cost_usd">Measured cost</option></select></label>
+<label><input id="include-benchmarks" type="checkbox">Include labeled benchmarks, smokes, fixtures and evaluations</label>
+<label>Largest <input id="top" type="number" min="1" max="10000" value="5" style="width:70px"></label>
+<button id="select-top">Select largest</button><button id="select-visible">Add visible</button><button id="clear">Clear selection</button>
+</div><p id="shown"></p><div class="scroll"><table><thead><tr><th>Include</th><th>Experiment / regime</th><th>Run</th><th>Kind</th><th>Model recipe</th><th>Hardware</th><th>Seed</th><th>Status</th><th>First observed (UTC)</th><th>Active seconds</th><th>Learner transitions</th><th>Learning iterations</th><th>Measured USD</th><th>Coverage</th></tr></thead><tbody id="run-rows"></tbody></table></div>
+<div class="controls"><button id="export">Save selection</button><label>Restore selection <input id="import" type="file" accept="application/json"></label><a href="__SNAPSHOT_LINK__" download>Download evidence snapshot (JSON)</a></div><p id="selection-message" role="status"></p>
+<h2>Selected cohort</h2><div id="summary" class="scroll"></div>
+<h2>Aggregate phase time</h2><p>Widths represent accumulated exclusive seconds, not chronology or utilization. Shares use covered recorded training time. Nested costs are counted once; unattributed time remains visible. Missing run durations are excluded from this denominator.</p><div id="phases" class="scroll"></div>
+<h2>Throughput by recipe and hardware</h2><p>Retained work divided by observed active seconds, including failed/replayed work in the time denominator. These are descriptive rates, not independent-seed confidence intervals. Unknown hardware is not pooled across runs.</p><div id="rates" class="scroll"></div>
+<h2>Training attempts over time</h2><p>Each interval basis is accounted separately. Calendar spans may include downtime; logged observation windows are not complete process lifetimes. Cross-machine clock uncertainty is unavailable.</p><div id="timeline" class="scroll"></div>
+<h2>Coverage and attribution</h2><div id="warnings" class="warning"></div>
+<h2>Individual training profiles</h2><p>Evaluation lanes and detailed collection/learning traces are deferred. Unclassified runs are eligible; inspect their provenance before treating them as long training.</p>
+__DETAILS__
+<noscript><p>JavaScript is required for selection and aggregation. Individual profiles and the JSON snapshot remain available.</p></noscript>
+</main><script id="cohort-data" type="application/json">__DATA__</script><script>__SCRIPT__</script></html>

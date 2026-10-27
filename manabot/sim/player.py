@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from collections import Counter
 from enum import Enum
 import os
@@ -92,7 +93,18 @@ def load_model_from_wandb(
                 "This could happen if the model was saved with a different format or version."
             )
         raise
+=======
+"""Inference players for scalar simulation; model admission lives in model.checkpoint."""
 
+from enum import Enum
+from typing import Dict
+
+import numpy as np
+import torch
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
+
+# Local imports
+from manabot.model.actor_critic import ActorCritic
 
 # -----------------------------------------------------------------------------
 # Player Classes
@@ -114,14 +126,18 @@ class Player:
         self.name = name
         self.player_type = player_type
         self.device = "cpu"
+<<<<<<< HEAD
         self.wins = 0
         self.games = 0
         self.action_history = []  # Track actions for analysis
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from observation."""
         raise NotImplementedError
 
+<<<<<<< HEAD
     @property
     def win_rate(self) -> float:
         """Calculate win rate."""
@@ -152,6 +168,8 @@ class Player:
         """Reset action history."""
         self.action_history = []
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     def to(self, device: str) -> "Player":
         """Move player to specified device."""
         self.device = device
@@ -164,16 +182,24 @@ class ModelPlayer(Player):
     def __init__(
         self,
         name: str,
+<<<<<<< HEAD
         agent: Agent,
         deterministic: bool = False,
         record_logits: bool = False,
+=======
+        agent: ActorCritic,
+        deterministic: bool = False,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     ):
         super().__init__(name, PlayerType.MODEL)
         self.agent = agent
         self.deterministic = deterministic
         self.device = next(agent.parameters()).device
+<<<<<<< HEAD
         self.record_logits = record_logits
         self.logits_history = [] if record_logits else None
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from model."""
@@ -185,6 +211,7 @@ class ModelPlayer(Player):
 
         # Get action from model
         with torch.no_grad():
+<<<<<<< HEAD
             logits, _ = self.agent(tensor_obs)
             if self.record_logits:
                 assert self.logits_history is not None
@@ -218,6 +245,12 @@ class ModelPlayer(Player):
             "min_confidence": np.min(chosen_probs),
             "max_confidence": np.max(chosen_probs),
         }
+=======
+            action, _, _, _ = self.agent.get_action_and_value(
+                tensor_obs, deterministic=self.deterministic
+            )
+            return action.item()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     def to(self, device: str) -> "ModelPlayer":
         """Move player and model to device."""
@@ -238,9 +271,13 @@ class RandomPlayer(Player):
         if len(valid_actions) == 0:
             raise ValueError("No valid actions available")
 
+<<<<<<< HEAD
         action = int(np.random.choice(valid_actions))
         self.record_action(action, obs)
         return action
+=======
+        return int(np.random.choice(valid_actions))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class DefaultPlayer(Player):

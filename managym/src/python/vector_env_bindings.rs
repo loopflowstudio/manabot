@@ -40,6 +40,10 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 
 #[cfg(feature = "python")]
 struct ObservationBuffers {
+<<<<<<< HEAD
+=======
+    relations: Option<Py<PyAny>>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
     agent_player: Py<PyAny>,
@@ -77,6 +81,28 @@ pub struct PyVectorEnv {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyVectorEnv {
+<<<<<<< HEAD
+=======
+    #[cfg(feature = "benchmark")]
+    fn _benchmark_load_root(&mut self, root: &crate::python::bindings::PyEnv) -> PyResult<()> {
+        let env = root
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        self.inner.benchmark_load_root(&env).map_err(map_agent_err)
+    }
+
+    #[cfg(feature = "benchmark")]
+    fn _benchmark_allocations_start(&self) {
+        crate::benchmark_allocations::start();
+    }
+
+    #[cfg(feature = "benchmark")]
+    fn _benchmark_allocations_stop(&self) -> (u64, u64) {
+        crate::benchmark_allocations::stop()
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     #[new]
     #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none", seed_stride=None))]
     fn new(
@@ -221,10 +247,61 @@ impl PyVectorEnv {
         self.inner.current_agent_indices()
     }
 
+<<<<<<< HEAD
+=======
+    fn set_uniform_roster(&mut self, roster: Vec<PyPlayerConfig>) -> PyResult<()> {
+        self.inner
+            .set_uniform_roster(roster.into_iter().map(PlayerConfig::from).collect())
+            .map_err(map_agent_err)
+    }
+
+    fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
+        self.inner.current_matchup_indices()
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
     }
 
+<<<<<<< HEAD
+=======
+    #[pyo3(signature = (active=None))]
+    fn semantic_decision_frames_json(
+        &self,
+        active: Option<Vec<bool>>,
+    ) -> PyResult<Vec<Option<String>>> {
+        self.inner
+            .semantic_decision_frames_json(active.as_deref())
+            .map_err(map_agent_err)
+    }
+
+    fn step_isolated_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+        active: Vec<bool>,
+    ) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            // Never leave a preceding terminal flag on a failed/inactive row.
+            for index in 0..inner.len() {
+                buffers.write_step_state(index, 0.0, false, false)?;
+            }
+            inner.step_isolated_into(&actions, &active, |index, obs, reward, done, truncated| {
+                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+            })
+        })
+    }
+
+    fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
+                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+            })
+        })
+    }
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
@@ -251,6 +328,10 @@ fn event_buffer_config(
         .ok_or_else(|| PyValueError::new_err("missing events"))?
         .getattr("shape")?
         .extract()?;
+<<<<<<< HEAD
+=======
+    config.relations = buffers.contains("relations")?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
     if config.policy_history {
         if shape.len() != 3
@@ -274,6 +355,26 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     Ok(ObservationBuffers {
+<<<<<<< HEAD
+=======
+        relations: if c.relations {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "relations",
+                    &[
+                        n,
+                        crate::agent::continuation::RELATION_ROWS,
+                        crate::agent::continuation::RELATION_DIM,
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -676,6 +777,10 @@ impl<T> SendSlice<T> {
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
+<<<<<<< HEAD
+=======
+    relations: Option<SendSlice<f32>>,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
     agent_player: SendSlice<f32>,
@@ -742,6 +847,20 @@ impl SendObservationFieldSlices {
         let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
+<<<<<<< HEAD
+=======
+            relations: if let Some(buffer) = self.relations {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.relations_len())?,
+                        config.relations_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             // SAFETY: each call uses disjoint per-env rows.
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
             // SAFETY: each call uses disjoint per-env rows.
@@ -869,6 +988,14 @@ fn with_send_write_buffers<R>(
     buffers: &ObservationBuffers,
     f: impl FnOnce(SendWriteBuffers) -> PyResult<R>,
 ) -> PyResult<R> {
+<<<<<<< HEAD
+=======
+    let relations_buffer = buffers
+        .relations
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "relations"))
+        .transpose()?;
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
@@ -911,6 +1038,13 @@ fn with_send_write_buffers<R>(
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
 
     let field_slices = SendObservationFieldSlices {
+<<<<<<< HEAD
+=======
+        relations: relations_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
+            .transpose()?,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,

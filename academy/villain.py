@@ -12,7 +12,11 @@ Supported villain types (see ``build_villain_policy``):
   - "random":     uniform random over legal actions
   - "search":     manabot's FlatSearchPolicy, flat determinized Monte Carlo
                   (strength dial: sims per legal action, default 64)
+<<<<<<< HEAD
   - "checkpoint": a trained Agent loaded from a .pt training checkpoint,
+=======
+  - "checkpoint": a trained ActorCritic loaded from a .pt training checkpoint,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                   acting stochastically or greedily (deterministic flag)
 """
 
@@ -22,11 +26,20 @@ from collections.abc import Sequence
 import random
 from typing import TYPE_CHECKING, Callable
 
+<<<<<<< HEAD
 from manabot.sim.flat_search import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 
 # Local imports
 import managym
 from managym.enums import ActionEnum
+=======
+from managym.enums import ActionEnum
+
+from manabot.sim.search.flat import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
+
+# Local imports
+import managym
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 from .bot_decision import BotDecision, PolicyFactor
 
@@ -68,7 +81,11 @@ class RandomVillain:
 
 
 class CheckpointVillain:
+<<<<<<< HEAD
     """A trained Agent loaded from a training checkpoint (.pt).
+=======
+    """A trained ActorCritic loaded from a training checkpoint (.pt).
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     Torch and the model stack are imported lazily so that search/random games
     never pay the import cost.
@@ -81,6 +98,7 @@ class CheckpointVillain:
         deterministic: bool = False,
         player_configs: Sequence[managym.PlayerConfig] | None = None,
     ) -> None:
+<<<<<<< HEAD
         from manabot.model.world import validate_agent_setup
 
         # Keep the optional Torch/model stack behind checkpoint construction.
@@ -88,13 +106,26 @@ class CheckpointVillain:
         from manabot.sim.flat_mc import load_checkpoint_agent
 
         self.agent, self.obs_space = load_checkpoint_agent(path)
+=======
+        from manabot.model.checkpoint import load_checkpoint
+        from manabot.model.world import validate_agent_setup
+
+        # Keep the optional Torch/model stack behind checkpoint construction.
+        from manabot.sim.action.compound import CompoundPolicy
+
+        self.agent, self.obs_space = load_checkpoint(path)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         if player_configs is not None:
             validate_agent_setup(self.agent, player_configs)
         self.deterministic = deterministic
         self.last_decision: BotDecision | None = None
         self.compound = (
             CompoundPolicy(self.agent, deterministic=deterministic)
+<<<<<<< HEAD
             if self.agent.hypers.compound_decisions
+=======
+            if self.agent.config.compound_decisions
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             else None
         )
 
@@ -126,7 +157,11 @@ class CheckpointVillain:
             from manabot.env import ObservationSpace
 
             space = ObservationSpace(
+<<<<<<< HEAD
                 space.encoder.hypers.model_copy(
+=======
+                space.encoder.config.model_copy(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                     update={
                         "max_actions": len(obs.action_space.actions),
                     }

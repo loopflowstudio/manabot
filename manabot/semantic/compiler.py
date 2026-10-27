@@ -97,6 +97,13 @@ class Opcode(IntEnum):
     CREATE_NONLEGENDARY_COPY = 59
     MODIFY_CONTROLLED = 60
     WATERBEND_OR_DISCARD = 61
+<<<<<<< HEAD
+=======
+    DISCARD = 62
+    EXILE_IF_DIES = 63
+    ADD_SUBTYPE = 64
+    OPTIONAL_PAYMENT = 65
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -183,12 +190,22 @@ CONDITION_KINDS = {
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
+<<<<<<< HEAD
+=======
+    "discard": (set(), set()),
+    "exile_if_dies": ({"target"}, set()),
+    "add_subtype": ({"target", "subtype"}, set()),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
     "create_nonlegendary_copy": (set(), set()),
     "modify_controlled": ({"predicate", "power", "toughness"}, set()),
     "waterbend_or_discard": ({"generic"}, set()),
+<<<<<<< HEAD
+=======
+    "optional_payment": ({"cost", "if_paid", "if_declined"}, set()),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     "search_basic_lands": (
         {"count", "tapped", "untap_if_lands", "bottom_source"},
         set(),
@@ -562,6 +579,23 @@ def _validate_instruction_scalars(
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:
                 _integer(instruction[field], f"{context}.{field}", minimum=minimum)
+<<<<<<< HEAD
+=======
+    if "cost" in instruction and op != "optional_payment":
+        _string(instruction["cost"], f"{context}.cost")
+    elif op == "optional_payment":
+        cost = _object(instruction["cost"], f"{context}.cost")
+        if set(cost) == {"mana"}:
+            _string(cost["mana"], f"{context}.cost.mana")
+        elif set(cost) == {"waterbend"}:
+            generic = _integer(
+                cost["waterbend"], f"{context}.cost.waterbend", minimum=0
+            )
+            if generic > 255:
+                _fail(context, "waterbend cost exceeds u8")
+        else:
+            _fail(context, "payment cost requires exactly one of mana or waterbend")
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     for field in {
         "target",
         "sources",
@@ -569,7 +603,10 @@ def _validate_instruction_scalars(
         "mana",
         "until",
         "duration",
+<<<<<<< HEAD
         "cost",
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         "zone",
         "controller",
         "destination",
@@ -645,7 +682,11 @@ def _compile_instructions(
                 _fail(item_context, f"unknown definition reference {reference!r}")
             lowered["definition_index"] = definition_indexes[reference]
         # Every nested instruction list crosses the same compiler boundary.
+<<<<<<< HEAD
         for field in ("then", "otherwise", "body", "if_declined"):
+=======
+        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             if field in instruction:
                 lowered[field] = _compile_instructions(
                     instruction[field], f"{item_context}.{field}", definition_indexes
@@ -725,7 +766,11 @@ def _walk_instructions(
         walked.append(instruction)
         for mode in instruction.get("modes", []):
             walked.extend(_walk_instructions(mode))
+<<<<<<< HEAD
         for field in ("then", "otherwise", "body", "if_declined"):
+=======
+        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             nested = instruction.get(field)
             if isinstance(nested, list):
                 walked.extend(_walk_instructions(nested))
@@ -766,7 +811,11 @@ def _validate_instruction_references(
                 f"{item_context}.body",
                 current_target_available=True,
             )
+<<<<<<< HEAD
         for field in ("then", "otherwise", "if_declined"):
+=======
+        for field in ("then", "otherwise", "if_paid", "if_declined"):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             nested = instruction.get(field)
             if isinstance(nested, list):
                 _validate_instruction_references(
@@ -1060,7 +1109,11 @@ def _opcode_trace(instructions: Sequence[Mapping[str, Any]]) -> list[str]:
         trace.append(instruction["op_name"])
         for mode in instruction.get("modes", []):
             trace.extend(f"mode:{item}" for item in _opcode_trace(mode))
+<<<<<<< HEAD
         for field in ("then", "otherwise", "body", "if_declined"):
+=======
+        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             nested = instruction.get(field)
             if isinstance(nested, list):
                 trace.extend(f"{field}:{item}" for item in _opcode_trace(nested))

@@ -13,8 +13,13 @@ from manabot.env.observation import (
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
 )
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
+=======
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.action_cases import (
     Family,
     decision_case,
@@ -52,9 +57,15 @@ def test_policy_choice_can_learn_either_preference(
 ) -> None:
     case = decision_case(kind)
     obs, candidates = case.observation, case.candidates
+<<<<<<< HEAD
     agent = Agent(
         ObservationSpace(),
         AgentSpec(
+=======
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hidden_dim=16,
             num_attention_heads=2,
             semantic_pack="ur-lessons-vs-gw-allies" if semantic else None,
@@ -89,19 +100,34 @@ def test_generic_definition_rejects_unadmitted_ids(bad: float, key: str) -> None
         obs[key][0, 0, 0] = bad
     else:
         obs[key][0, 0, PERMANENT_DEFINITION_INDEX] = bad
+<<<<<<< HEAD
     agent = Agent(ObservationSpace(), AgentSpec(hidden_dim=8, num_attention_heads=2))
+=======
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(ValueError, match="unadmitted card definition"):
         agent(obs)
 
 
 def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     obs = decision_case("land").observation
+<<<<<<< HEAD
     spec = AgentSpec(hidden_dim=8, num_attention_heads=2)
     agent = Agent(ObservationSpace(), spec)
     assert not agent._generic_definitions(torch.zeros(2, 3)).any()
     path = tmp_path / "weights.pt"
     torch.save(agent.state_dict(), path)
     restored = Agent(ObservationSpace(), spec)
+=======
+    spec = ModelConfig(hidden_dim=8, num_attention_heads=2)
+    agent = ActorCritic(ObservationSpace(), spec)
+    assert not agent._generic_definitions(torch.zeros(2, 3)).any()
+    path = tmp_path / "weights.pt"
+    torch.save(agent.state_dict(), path)
+    restored = ActorCritic(ObservationSpace(), spec)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     restored.load_state_dict(torch.load(path, weights_only=True))
     with torch.no_grad():
         for expected, actual in zip(agent(obs), restored(obs), strict=True):

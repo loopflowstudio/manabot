@@ -19,8 +19,13 @@ from manabot.belief.sampling_data import (
 )
 from manabot.env import ObservationSpace
 from manabot.env.match import Match
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
+=======
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.model.actor_critic import ActorCritic
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.model.world import checkpoint_world
 
 
@@ -76,6 +81,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     max_actions: int,
 ) -> None:
     torch.set_num_threads(1)
+<<<<<<< HEAD
     match_hypers = MatchHypers(
         hero_deck={"Mountain": 4, "Raging Goblin": 4},
         villain_deck={"Mountain": 4, "Raging Goblin": 4},
@@ -91,6 +97,23 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
             "hypers": {
                 "observation_hypers": obs_hypers.model_dump(),
                 "agent_hypers": agent_hypers.model_dump(),
+=======
+    match_config = MatchConfig(
+        hero_deck={"Mountain": 4, "Raging Goblin": 4},
+        villain_deck={"Mountain": 4, "Raging Goblin": 4},
+    )
+    obs_config = ObservationConfig(max_actions=max_actions)
+    obs_space = ObservationSpace(obs_config)
+    agent_config = ModelConfig(hidden_dim=8, compound_decisions=compound)
+    agent = ActorCritic(obs_space, agent_config)
+    checkpoint = tmp_path / "policy.pt"
+    torch.save(
+        {
+            "world_binding": checkpoint_world(Match(match_config).to_rust(), obs_space),
+            "hypers": {
+                "observation_hypers": obs_config.model_dump(),
+                "agent_hypers": agent_config.model_dump(),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             },
             "model_state_dict": agent.state_dict(),
         },
@@ -100,7 +123,11 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
         with pytest.raises(ValueError, match="Observation capacity exceeded: actions"):
             collect_frozen_policy(
                 checkpoint=checkpoint,
+<<<<<<< HEAD
                 match_hypers=match_hypers,
+=======
+                match_config=match_config,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
                 games=3,
                 seed=51,
                 max_steps=300,
@@ -108,7 +135,11 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
         return
     dataset = collect_frozen_policy(
         checkpoint=checkpoint,
+<<<<<<< HEAD
         match_hypers=match_hypers,
+=======
+        match_config=match_config,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         games=3,
         seed=51,
         max_steps=300,

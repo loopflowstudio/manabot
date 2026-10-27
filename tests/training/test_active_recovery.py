@@ -7,6 +7,7 @@ import socket
 import pytest
 import torch
 
+<<<<<<< HEAD
 from manabot.training import execution, recovery
 from manabot.training.checkpoint_queue import CheckpointQueue, MonitoringBudget
 from manabot.training.experiment_execution import (
@@ -23,6 +24,22 @@ from manabot.verify.store import VerifyStore
 from tests.training import test_recovery as proof
 from tests.training.test_recovery import (
     assert_learning_diagnostics_equal,
+=======
+from manabot.eval.monitor import MonitorProtocol
+from manabot.experiment.config import Baseline, Experiment
+from manabot.experiment.evaluation_queue import CheckpointQueue, MonitoringBudget
+from manabot.experiment.execution import ExperimentSchedule, Hardware, HardwareInventory
+from manabot.experiment.runner import run_experiment
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import RecoveryPolicy, TrainSelfPlay
+from manabot.training.state import recovery
+from manabot.training.state.recovery import TrainingPaused, load_update
+from manabot.verify.store import VerifyStore
+from tests.training import test_recovery as proof
+from tests.training.test_recovery import (
+    assert_learning_metrics_equal,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert_state_equal,
     recipe,
 )
@@ -66,7 +83,11 @@ def test_safe_pause_restores_current_games_and_exact_learning(
             (tmp_path / "paused/run.json").read_text()
         )
         assert stopped.status == "interrupted" and stopped.updates_through() == 3
+<<<<<<< HEAD
         assert load_update(stopped, store).iteration == 3
+=======
+        assert load_update(stopped).iteration == 3
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         pause.unlink()
         child = execution.execute_regime(
             value, 197, tmp_path / "resumed", store, resume_from=stopped.id
@@ -74,7 +95,11 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         assert child.status == "completed" and child.updates_through() == 12
         assert child.prior_seconds == stopped.seconds
         assert child.prior_watchdog_seconds == stopped.watchdog_seconds
+<<<<<<< HEAD
         a, b = load_update(whole, store), load_update(child, store)
+=======
+        a, b = load_update(whole), load_update(child)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for name in (
             "learner",
             "optimizer",
@@ -94,7 +119,11 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         )
         assert a.collector.journal == b.collector.journal == []
         assert_state_equal(a.collector.buffers, b.collector.buffers)
+<<<<<<< HEAD
         assert_learning_diagnostics_equal(whole.stages[0], child.stages[0])
+=======
+        assert_learning_metrics_equal(whole, child, tmp_path)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         assert (
             child.stages[0].learner_transitions == whole.stages[0].learner_transitions
         )
@@ -102,6 +131,7 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         assert child.recovery_artifact is not None
         with gzip.open(child.recovery_artifact["path"], "rb") as stream:
             compact = torch.load(stream, weights_only=False)
+<<<<<<< HEAD
         assert compact.format_version == 3
         assert compact.record.diagnostics == []
         assert all(not row.diagnostics for row in compact.completed_stages)
@@ -117,6 +147,11 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         with pytest.raises(ValueError, match="diagnostic prefix missing"):
             load_update(child, store)
         store.save_training_run(child)
+=======
+        assert compact.format_version == 4
+        # Snapshots hold counters, not update rows: those are Etude metrics.
+        assert compact.record.updates == 12 and compact.record.diagnostics == []
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def test_orphan_separates_known_sleep_from_uncertain_awake_gap(
@@ -158,6 +193,11 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+<<<<<<< HEAD
+=======
+    # The fixture must not acquire a running experiment's real host lease.
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "test-account")
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     value = recipe()
     value.recovery_max_microsteps = None
     value.recovery = RecoveryPolicy(checkpoint_updates=1)
@@ -193,11 +233,20 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
     def request_pause(
         queue: CheckpointQueue, sources: list[Path], *, launch: bool = True
     ) -> None:
+<<<<<<< HEAD
         tick(queue, sources, launch=launch)
         # The first coordinator poll occurs with a live child. Waiting for its
         # run.json races the five-second polling interval against this tiny run.
         # The learner handles this request at its first safe update boundary.
         (root / "pause.request").touch()
+=======
+        # The supervisor invokes this after starting the learner. Request at
+        # startup rather than waiting for a running export: twelve tiny updates
+        # can finish between its five-second polls. The worker must still reach
+        # an exact recovery boundary before honoring the request.
+        (root / "pause.request").touch()
+        tick(queue, sources, launch=launch)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     with monkeypatch.context() as patch:
         patch.setattr(CheckpointQueue, "tick", request_pause)

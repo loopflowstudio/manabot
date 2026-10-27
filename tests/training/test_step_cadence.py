@@ -4,12 +4,17 @@ from pathlib import Path
 
 import pytest
 
+<<<<<<< HEAD
 from manabot.training import execution
 from manabot.training.checkpoint_queue import (
+=======
+from manabot.experiment.evaluation_queue import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     CheckpointQueue,
     MonitoringBudget,
     checkpoints,
 )
+<<<<<<< HEAD
 from manabot.training.experiment_execution import StepCalibration
 from manabot.training.models import (
     CheckpointCadence,
@@ -17,12 +22,22 @@ from manabot.training.models import (
     TrainingRun,
     TrainSelfPlay,
 )
+=======
+from manabot.experiment.execution import StepCalibration
+from manabot.training import execution
+from manabot.training.records import TrainingRun
+from manabot.training.regime import CheckpointCadence, TrainSelfPlay
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.verify.store import VerifyStore
 from tests.training import (
     test_checkpoint_queue as queue_fixtures,
     test_learning_state as portable,
 )
 from tests.training.test_monitoring import _recipe
+<<<<<<< HEAD
+=======
+from tests.training.test_recovery import tracked_updates
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 producer = portable.producer
 fake_process = queue_fixtures.fake_process
@@ -45,7 +60,12 @@ def test_step_interval_is_a_positive_integer(interval: object) -> None:
 
 @pytest.mark.parametrize("cadence", [2, (2, 4)])
 def test_real_iterations_export_exact_milestones_and_one_endpoint(
+<<<<<<< HEAD
     tmp_path: Path, cadence: int | tuple[int, ...],
+=======
+    tmp_path: Path,
+    cadence: int | tuple[int, ...],
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ) -> None:
     recipe = _recipe()
     stage = recipe.stages[0]
@@ -56,8 +76,14 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
             recipe, 197, tmp_path / "run", store, checkpoint_updates=cadence
         )
     assert run.status == "completed", run.error
+<<<<<<< HEAD
     assert run.stages[0].optimizer_updates == sum(
         d["numerical"]["optimizer_steps"] for d in run.stages[0].diagnostics
+=======
+    rows = tracked_updates(run, tmp_path)
+    assert run.stages[0].optimizer_updates == sum(
+        d["numerical/optimizer_steps"] for d in rows
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     assert run.optimizer_updates_through() > 0
     assert [
@@ -75,7 +101,12 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
         6,
     ]
     assert all(
+<<<<<<< HEAD
         c.coordinates.learner_transitions == c.coordinates.updates * 32
+=======
+        c.coordinates.learner_transitions
+        == sum(d["rows"] for d in rows[: c.coordinates.updates])
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         for c in checkpoints(run)
     )
 
@@ -91,11 +122,19 @@ def test_continuation_anchors_after_inherited_step(
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 7
+<<<<<<< HEAD
     assert len(run.stages[0].diagnostics) == 5
     assert [
         c.coordinates.updates for c in checkpoints(run, include_initial=True)
     ] == milestones
     assert run.stages[0].diagnostics[0]["iteration"] == 3
+=======
+    assert run.stages[0].updates == 5
+    assert [
+        c.coordinates.updates for c in checkpoints(run, include_initial=True)
+    ] == milestones
+    assert tracked_updates(run, tmp_path)[0]["iteration"] == 3
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert [c.coordinates.segment_updates for c in checkpoints(run)] == [
         step - 2 for step in milestones
     ]
@@ -152,7 +191,11 @@ def test_recovery_preserves_prior_exports_and_cadence(
         )
     assert resumed.status == "completed", resumed.error
     assert resumed.optimizer_updates_through() == sum(
+<<<<<<< HEAD
         d["numerical"]["optimizer_steps"] for d in resumed.stages[0].diagnostics
+=======
+        d["numerical/optimizer_steps"] for d in tracked_updates(resumed, tmp_path)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     assert resumed.monitoring_checkpoints[0].model_dump() == original
     assert [c.coordinates.updates for c in checkpoints(resumed)] == [2, 4, 6]
@@ -209,12 +252,19 @@ def test_empty_filter_still_advances_steps_without_optimizer_calls(
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 2
+<<<<<<< HEAD
     assert run.stages[0].learner_transitions == 64
+=======
+    assert run.stages[0].learner_transitions == sum(
+        d["rows"] for d in tracked_updates(run, tmp_path)
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert run.stages[0].optimizer_exposures == run.optimizer_updates_through() == 0
     assert [c.coordinates.updates for c in checkpoints(run)] == [1, 2]
     assert all(c.coordinates.optimizer_updates == 0 for c in checkpoints(run))
 
 
+<<<<<<< HEAD
 def test_historical_optimizer_counts_are_never_inferred_from_exposures() -> None:
     old = StageRecord(id="old", optimizer_exposures=100, diagnostics=[{"loss": 1}])
     assert old.observed_optimizer_updates() is None
@@ -226,6 +276,8 @@ def test_historical_optimizer_counts_are_never_inferred_from_exposures() -> None
     assert old.observed_optimizer_updates() == 3
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_saved_calibration_freezes_counts_without_reinterpreting_time(
     tmp_path: Path, producer: TrainingRun
 ) -> None:

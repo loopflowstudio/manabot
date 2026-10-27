@@ -5,6 +5,7 @@ Profile the active Rust vector-env path, with or without model inference.
 """
 
 import argparse
+<<<<<<< HEAD
 
 import torch
 
@@ -20,6 +21,27 @@ def build_env(num_envs: int, seed: int) -> VectorEnv:
         match=Match(),
         observation_space=ObservationSpace(),
         reward=Reward(RewardHypers()),
+=======
+import json
+
+from bench_observation_support import identity, matched_breakdown
+import torch
+
+from manabot.env import Match, ObservationSpace, Reward, VectorEnv
+from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.infra.profiler import Profiler
+from manabot.model import ActorCritic
+
+
+def build_env(num_envs: int, seed: int, policy_input_version: int = 2) -> VectorEnv:
+    return VectorEnv(
+        num_envs=num_envs,
+        match=Match(),
+        observation_space=ObservationSpace(
+            ObservationConfig(policy_input_version=policy_input_version)
+        ),
+        reward=Reward(RewardConfig()),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         device="cpu",
         seed=seed,
         opponent_policy="passive",
@@ -31,6 +53,7 @@ def run_breakdown(
     total_steps: int,
     with_inference: bool,
     seed: int,
+<<<<<<< HEAD
 ) -> tuple[dict[str, dict[str, float]], float]:
     profiler = Profiler(enabled=True)
     env = build_env(num_envs, seed)
@@ -38,6 +61,16 @@ def run_breakdown(
     agent = None
     if with_inference:
         agent = Agent(env.observation_space, AgentSpec())
+=======
+    policy_input_version: int = 2,
+) -> tuple[dict[str, dict[str, float]], float]:
+    profiler = Profiler(enabled=True)
+    env = build_env(num_envs, seed, policy_input_version)
+
+    agent = None
+    if with_inference:
+        agent = ActorCritic(env.observation_space, ModelConfig())
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent.eval()
 
     obs, _ = env.reset()
@@ -116,21 +149,94 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--num-envs", type=int, default=16)
     parser.add_argument("--steps", type=int, default=2048)
+<<<<<<< HEAD
     parser.add_argument("--seed", type=int, default=42)
+=======
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Steady-game seed; the matched decision corpus is fixed at seed 23",
+    )
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     parser.add_argument(
         "--with-inference",
         action="store_true",
         help="Include a torch forward pass per step",
     )
+<<<<<<< HEAD
     args = parser.parse_args()
+=======
+    parser.add_argument("--policy-input-version", type=int, choices=(1, 2), default=2)
+    parser.add_argument(
+        "--matched-corpus",
+        action="store_true",
+        help="Measure identical native priority/target/payment/large-action roots (benchmark feature required)",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit a portable timing receipt"
+    )
+    args = parser.parse_args()
+    if args.steps < 1 or args.num_envs < 1:
+        parser.error("steps and num-envs must be positive")
+    if args.matched_corpus:
+        if args.with_inference:
+            parser.error(
+                "matched corpus measures environment encoding, without inference"
+            )
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        env = build_env(args.num_envs, args.seed, args.policy_input_version)
+        try:
+            env.reset()
+            before = identity()
+            rows = matched_breakdown(env, args.steps)
+            print(
+                json.dumps(
+                    {
+                        "identity": before,
+                        "identity_after": identity(),
+                        "num_envs": args.num_envs,
+                        "steps": args.steps,
+                        "policy_input_version": args.policy_input_version,
+                        "cases": rows,
+                    }
+                )
+            )
+        finally:
+            env.close()
+        return
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     stats, sps = run_breakdown(
         num_envs=args.num_envs,
         total_steps=args.steps,
         with_inference=args.with_inference,
         seed=args.seed,
+<<<<<<< HEAD
     )
     print_report(stats, sps, args.num_envs, args.steps, args.with_inference)
+=======
+        policy_input_version=args.policy_input_version,
+    )
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "seed": args.seed,
+                    "num_envs": args.num_envs,
+                    "steps": args.steps,
+                    "warmup_steps": 20,
+                    "policy_input_version": args.policy_input_version,
+                    "inference": args.with_inference,
+                    "stats": stats,
+                    "steps_per_second": sps,
+                }
+            )
+        )
+    else:
+        print_report(stats, sps, args.num_envs, args.steps, args.with_inference)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 if __name__ == "__main__":

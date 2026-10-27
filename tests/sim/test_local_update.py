@@ -4,12 +4,18 @@ from dataclasses import replace
 from pathlib import Path
 
 from managym._managym import AgentError
+<<<<<<< HEAD
+=======
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
 
 from academy.advice import BeliefNormalizationReceipt
 from academy.local_advice import local_update_scenario
+<<<<<<< HEAD
 from manabot.arena.match import _execute_game
 from manabot.arena.models import (
     PlayerRegistration,
@@ -17,29 +23,50 @@ from manabot.arena.models import (
     canonical_sha256,
 )
 from manabot.arena.replay import replay_games
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim import local_update
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.local_update import (
+=======
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.identity import canonical_sha256
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.match import _execute_game
+from manabot.sim.registration import PlayerRegistration, SearchSemantics
+from manabot.sim.replay import replay_games
+from manabot.sim.search import local_update
+from manabot.sim.search.local_update import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
     SamplerArtifact,
     regularized_update,
 )
+<<<<<<< HEAD
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
 def small_match() -> MatchHypers:
     return MatchHypers(
+=======
+
+
+def small_match() -> MatchConfig:
+    return MatchConfig(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         hero_deck={"Mountain": 8, "Gray Ogre": 8},
         villain_deck={"Forest": 8, "Llanowar Elves": 8},
     )
@@ -49,10 +76,17 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
+<<<<<<< HEAD
     agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     match = Match(small_match())
     path = tmp_path / "policy.pt"
     save_bc_checkpoint(
+=======
+    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    match = Match(small_match())
+    path = tmp_path / "policy.pt"
+    save_checkpoint(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,
@@ -65,7 +99,11 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
         LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
     env = Env(
+<<<<<<< HEAD
         match, space, Reward(RewardHypers()), auto_reset=False, enable_profiler=False
+=======
+        match, space, Reward(RewardConfig()), auto_reset=False, enable_profiler=False
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     env.reset(seed=42)
     return teacher, env
@@ -138,7 +176,10 @@ def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
         )
         result = teacher.search(swapped, swapped_tracker.posterior, seed=7)
         np.testing.assert_array_equal(receipt.target, result.target)
+<<<<<<< HEAD
     assert receipt.mixing_diagnostics()["target_entropy"] >= 0
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(TimeoutError):
         teacher.search(env._engine, tracker.posterior, seed=7, deadline=1)
     with pytest.raises(ValueError):
@@ -285,7 +326,11 @@ def attach_learned_sampler(
 
     dataset = collect_frozen_policy(
         checkpoint=teacher.likelihood.checkpoint,
+<<<<<<< HEAD
         match_hypers=small_match(),
+=======
+        match_config=small_match(),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         games=3,
         seed=719,
         max_steps=1000,

@@ -11,7 +11,7 @@ import torch
 from manabot.env import Env, Reward, VectorEnv
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.hypers import RewardHypers
+from manabot.infra.config import RewardConfig
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def sample_match() -> Match:
 @pytest.fixture
 def reward() -> Reward:
     """Create a reward for testing."""
-    return Reward(RewardHypers(trivial=True))
+    return Reward(RewardConfig(trivial=True))
 
 
 @pytest.fixture
@@ -226,7 +226,7 @@ class TestEnvironment:
             if done or truncated:
                 break
 
-        print(f"Agent turn counts: {turn_counts}")
+        print(f"ActorCritic turn counts: {turn_counts}")
         assert len(turn_counts) >= 2, (
             f"Expected at least 2 different agent indices, got {turn_counts}"
         )

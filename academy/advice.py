@@ -17,7 +17,10 @@ import json
 import math
 from pathlib import Path
 import statistics
+<<<<<<< HEAD
 import time
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -31,6 +34,15 @@ from typing import (
     TypeAlias,
 )
 
+<<<<<<< HEAD
+=======
+from managym.decision import DecisionFrame
+from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
+from managym.possible_worlds import (
+    PossibleWorldError,
+    PossibleWorldSpace,
+)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from pydantic import Field, TypeAdapter, model_validator
 
 from academy.advice_identity import (
@@ -52,6 +64,7 @@ from academy.study_branch import (
     StudyForkProvider,
 )
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
+<<<<<<< HEAD
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 from managym.possible_worlds import (
@@ -63,6 +76,11 @@ from managym.possible_worlds import (
 if TYPE_CHECKING:
     from manabot.belief.range import BeliefState
     from manabot.sim.conditional_search import (
+=======
+
+if TYPE_CHECKING:
+    from manabot.sim.search.conditional import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         ConditionalStrategyResult,
         ConditionResult,
     )
@@ -320,7 +338,13 @@ class AdvisorSemanticOffer(ProtocolModel):
 
 class AdvisorStrategyEvidence(ProtocolModel):
     schema_version: Literal[1] = 1
+<<<<<<< HEAD
     policy_semantic: Literal["puct_visit_distribution/v1", "regularized-local-update/v1"]
+=======
+    policy_semantic: Literal[
+        "puct_visit_distribution/v1", "regularized-local-update/v1"
+    ]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     decision_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     viewer_frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     advisor_identity: AdvisorIdentity
@@ -550,7 +574,11 @@ def int13_condition_to_decision_evidence(
     """INT-13 seam: map one ``ConditionResult`` to the ``DecisionEvidence`` shape.
 
     This is the explicit binding point where INT-13's determinized-PUCT search
+<<<<<<< HEAD
     evidence (``manabot.sim.conditional_search.ConditionResult``) becomes the
+=======
+    evidence (``manabot.sim.search.conditional.ConditionResult``) becomes the
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     per-action ``DecisionEvidence`` the shared live/Study surface renders. The
     prototype serves checked conditional-PUCT evidence from the static fixture
     at runtime. When INT-13's live search publishes, the ``POST /api/advice``
@@ -742,11 +770,14 @@ def request_advice(
     )
 
 
+<<<<<<< HEAD
 def landmark_alternative_ids(landmark: StudyLandmark) -> list[str]:
     """The shared action vocabulary for one landmark, in alternative-id order."""
     return [alternative.id for alternative in landmark.alternatives]
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def policy_mass_is_non_uniform(landmark: StudyLandmark) -> bool:
     """True if the landmark's policy mass is not uniform across alternatives."""
     probabilities = [row.probability for row in landmark.evidence.policy_mass]
@@ -829,6 +860,7 @@ class ResolvedAdvisorDecision:
     content_sha256: str
 
 
+<<<<<<< HEAD
 class AdvisorDecisionResolver(Protocol):
     def resolve(
         self,
@@ -846,6 +878,8 @@ class BeliefDistributionResolver(Protocol):
     ) -> BeliefDistributionPayload: ...
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 class LiveAdvisorRootProvider(Protocol):
     def resolve_live_advisor_decision(
         self,
@@ -944,6 +978,7 @@ class StudyAdvisorDecisionResolver:
 
 
 @dataclass(frozen=True)
+<<<<<<< HEAD
 class StaticBeliefDistributionResolver:
     """Checked fixture resolver for authored or retained model payloads."""
 
@@ -968,6 +1003,8 @@ class StaticBeliefDistributionResolver:
 
 
 @dataclass(frozen=True)
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 class RegisteredAdvisor:
     identity: AdvisorIdentity
     source_paths: tuple[Path, ...]
@@ -980,6 +1017,7 @@ class RegisteredAdvisor:
             return
         self._checkpoint_registration(artifact)
 
+<<<<<<< HEAD
     def checkpoint_evaluator(self) -> Any | None:
         """Build the sole registered checkpoint evaluator, if selected."""
 
@@ -1027,6 +1065,10 @@ class RegisteredAdvisor:
 
     def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
         from manabot.sim.search_runtime import (
+=======
+    def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
+        from manabot.sim.search.runtime import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             RetainedCheckpointMismatchError,
             RetainedCheckpointUnavailableError,
             retained_int7_policy_only_checkpoint,
@@ -1073,6 +1115,7 @@ ADVISOR_SOURCE_PATHS = (
     REPO_ROOT / "manabot" / "sim" / "mcts.py",
     REPO_ROOT / "manabot" / "sim" / "search_branch.py",
     REPO_ROOT / "manabot" / "sim" / "search_runtime.py",
+<<<<<<< HEAD
     REPO_ROOT / "managym" / "decision.py",
     REPO_ROOT / "managym" / "possible_worlds.py",
 )
@@ -1125,6 +1168,13 @@ def _scenario_provenance_identity(scenario: BeliefScenario) -> str:
     )
 
 
+=======
+    REPO_ROOT / "manabot" / "managym" / "decision.py",
+    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
+)
+
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def _canonical_bytes(value: Any) -> bytes:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json")
@@ -1152,12 +1202,15 @@ def serialize_advice_response(response: AdviceResponse) -> bytes:
     return _canonical_bytes(complete)
 
 
+<<<<<<< HEAD
 def parse_advice_response_bytes(payload: bytes) -> AdviceResponse:
     response = AdviceResponse.model_validate_json(payload)
     serialize_advice_response(response)
     return response
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def _identity_mismatch_reason(
     actual: AdvisorIdentity,
     expected: AdvisorIdentity,
@@ -1193,6 +1246,7 @@ def _identity_mismatch_reason(
     return next((reason for matches, reason in checks if not matches), None)
 
 
+<<<<<<< HEAD
 def _quantity_delta(
     left: AdviceQuantity,
     right: AdviceQuantity,
@@ -1545,6 +1599,8 @@ def _build_comparison(
     )
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def _contains_forbidden_key(value: Any, forbidden: set[str]) -> bool:
     if isinstance(value, Mapping):
         return any(
@@ -1703,7 +1759,10 @@ def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
     )
 
 
+<<<<<<< HEAD
 ADVICE_RESPONSE_ADAPTER = TypeAdapter(AdviceResponse)
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 ADVICE_FIXTURE_ADAPTER = TypeAdapter(VersionedAdviceFixture)
 
 

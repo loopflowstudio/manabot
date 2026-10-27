@@ -5,6 +5,10 @@ from itertools import product
 import json
 from pathlib import Path
 
+<<<<<<< HEAD
+=======
+from managym.decision import Observation
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
@@ -14,6 +18,7 @@ from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
@@ -25,14 +30,25 @@ from manabot.sim.distill import (
 )
 from manabot.sim.local_compound import advance_compound, project_compound
 from manabot.sim.local_update import (
+=======
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.search.compound import advance_compound, project_compound
+from manabot.sim.search.local_update import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     LocalSearchConfig,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
 )
+<<<<<<< HEAD
 from manabot.sim.search_supervised import _validate_dataset
 from manabot.training.models import CollectLocalUpdate, TrainCompound, TrainingRegime
 import managym
 from managym.decision import Observation
+=======
+import managym
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from tests.sim import test_local_update as local_fixtures
 from tests.sim.test_local_update import small_match
 from tests.sim.test_local_update_sampling import saved_sampler
@@ -136,10 +152,17 @@ def test_supported_root_rollout_reaching_payment_replays(
     agent = (
         _agent()
         if compound
+<<<<<<< HEAD
         else Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     )
     path = tmp_path / "compound.pt"
     save_bc_checkpoint(
+=======
+        else ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    )
+    path = tmp_path / "compound.pt"
+    save_checkpoint(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         space,
         path,
@@ -212,7 +235,10 @@ def test_supported_root_rollout_reaching_payment_replays(
     assert all((v is None) == zero for v, zero in zip(receipt.values, inactive))
     assert np.all(np.asarray(receipt.target)[inactive] == 0)
     assert np.all(np.asarray(receipt.allocation_counts)[inactive] == 0)
+<<<<<<< HEAD
     assert all(np.isfinite(v) for v in receipt.mixing_diagnostics().values())
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     with pytest.raises(TimeoutError):
         teacher.search(branch, history, seed=23, compound_cursor=cursor, deadline=1)
     for schema in ("regularized-local-update/v1", "regularized-local-update/v2"):
@@ -228,6 +254,7 @@ def test_supported_root_rollout_reaching_payment_replays(
             replace(receipt, target=tuple(bad_target)).to_json()
         )
 
+<<<<<<< HEAD
     encoded = space.encode(branch.observation_for_player(viewer))
     dataset = {key: np.expand_dims(value, 0) for key, value in encoded.items()}
     count = len(receipt.target)
@@ -246,6 +273,8 @@ def test_supported_root_rollout_reaching_payment_replays(
     saved = tmp_path / "payment-target.npz"
     np.savez(saved, **dataset)
     dataset = load_shards([saved])
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     evidence = local_update_scenario(
         receipt,
         BeliefNormalizationReceipt(
@@ -259,13 +288,18 @@ def test_supported_root_rollout_reaching_payment_replays(
             provenance_kind="model_inferred",
             provenance_identity=receipt.policy_sha256,
         ),
+<<<<<<< HEAD
         labels=["payment"] * count,
+=======
+        labels=["payment"] * len(receipt.target),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     assert evidence.sampled_worlds == 1
     for action, zero in zip(evidence.actions, inactive):
         assert (action.q.status == "unavailable") == zero
     assert evidence.root_value.status == "available"
     assert np.isfinite(evidence.root_value.value)
+<<<<<<< HEAD
     for kind in ("local_soft", "local_argmax", "local_allocation"):
         targets = _validate_dataset(
             dataset, policy_target_kind=kind, value_target_kind="terminal_outcome"
@@ -282,6 +316,8 @@ def test_supported_root_rollout_reaching_payment_replays(
             value_target_kind="terminal_outcome",
         )
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     # Direct count materialization changes hidden truth, never the viewer policy.
     constraints = branch.hidden_hand_constraints_json(viewer)
     hand = receipt.rollouts[0].sampled_hand
@@ -342,8 +378,13 @@ def test_saved_compound_teacher_replays(
     torch.set_num_threads(1)
     torch.manual_seed(3)
     space = ObservationSpace()
+<<<<<<< HEAD
     agent = Agent(
         space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+=======
+    agent = ActorCritic(
+        space, ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     )
     config = [
         managym.PlayerConfig(
@@ -355,7 +396,11 @@ def test_saved_compound_teacher_replays(
         managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
     ]
     path = tmp_path / "compound.pt"
+<<<<<<< HEAD
     save_bc_checkpoint(agent, space, path, player_configs=config)
+=======
+    save_checkpoint(agent, space, path, player_configs=config)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     teacher = LocalUpdateTeacher(
         path, file_sha256(path), LocalSearchConfig(depth=2, decision_seconds=20)
     )
@@ -384,6 +429,7 @@ def test_saved_compound_teacher_replays(
     )
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("learned", [False, True])
 def test_compound_complete_game_targets_without_fitting(
     tmp_path: Path, learned: bool
@@ -442,6 +488,8 @@ def test_compound_complete_game_targets_without_fitting(
     assert {receipt.viewer for receipt in receipts} == {0, 1}
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_prefix_completion_preserves_complete_tape_contract() -> None:
     env, _ = _root("attack", 3)
     agent = _agent()
@@ -474,6 +522,7 @@ def test_interrupted_prefix_fails_closed() -> None:
         project_compound(agent, env, cursor, check)
 
 
+<<<<<<< HEAD
 def test_compound_regime_admits_direct_collection() -> None:
     regime = TrainingRegime(
         id="saved-compound-collection-contract",
@@ -490,6 +539,8 @@ def test_compound_regime_admits_direct_collection() -> None:
     assert isinstance(regime.stages[-1], CollectLocalUpdate)
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 @pytest.mark.parametrize("kind,count", [("attack", 65), ("cast", 33), ("payment", 65)])
 def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -> None:
     env, _ = (
@@ -506,7 +557,11 @@ def test_wide_projection_has_no_declaration_enumeration(kind: str, count: int) -
 def test_saved_compound_rejects_exact_reference(tmp_path: Path) -> None:
     agent = _agent()
     checkpoint = tmp_path / "compound.pt"
+<<<<<<< HEAD
     save_bc_checkpoint(
+=======
+    save_checkpoint(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         agent,
         agent.observation_space,
         checkpoint,
@@ -525,12 +580,21 @@ def test_compound_arena_executes_and_replays_saved_policies(
 
     def make(directory: Path) -> tuple[LocalUpdateTeacher, Env]:
         original, env = original_make(directory)
+<<<<<<< HEAD
         agent = Agent(
             original.space,
             AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
         )
         checkpoint = directory / "compound.pt"
         save_bc_checkpoint(
+=======
+        agent = ActorCritic(
+            original.space,
+            ModelConfig(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
+        )
+        checkpoint = directory / "compound.pt"
+        save_checkpoint(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             agent, original.space, checkpoint, player_configs=env.match.to_rust()
         )
         return LocalUpdateTeacher(

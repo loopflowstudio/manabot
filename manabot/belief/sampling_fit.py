@@ -19,20 +19,34 @@ from pathlib import Path
 import tempfile
 import time
 import tracemalloc
+<<<<<<< HEAD
 from typing import Any, Callable, Sequence
 
 import torch
 
 from manabot.belief.learning import _deterministic_torch_cpu
+=======
+from typing import Callable, Sequence
+
+import torch
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling import (
     AutoregressiveBeliefSampler,
     SamplerInput,
+<<<<<<< HEAD
     SamplerSchema,
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     physical_deal_log_prob,
     sample_physical_deal,
 )
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
+<<<<<<< HEAD
+=======
+from manabot.infra.torch import deterministic_cpu
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,7 +310,11 @@ def fit_belief_sampler(
     if len(set(game_ids)) != len(game_ids):
         raise ValueError("game identities must be unique across dataset splits")
     _check(check)
+<<<<<<< HEAD
     with _deterministic_torch_cpu(), torch.random.fork_rng(devices=[]):
+=======
+    with deterministic_cpu(), torch.random.fork_rng(devices=[]):
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         torch.manual_seed(seed)
         model = AutoregressiveBeliefSampler(
             dataset.schema, hidden_size, history_dropout
@@ -390,6 +408,7 @@ def save_belief_sampler(
     return hashlib.sha256(data).hexdigest()
 
 
+<<<<<<< HEAD
 def load_belief_sampler(
     path: Path,
     *,
@@ -433,6 +452,8 @@ def load_belief_sampler(
     return model
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 @dataclass(frozen=True, slots=True)
 class ExactReferenceMetrics:
     """Expected joint log scores under an externally computed exact posterior."""

@@ -75,6 +75,7 @@ static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>>
 fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
     AUTHORED_RUNTIME_CATALOG
         .get_or_init(|| {
+<<<<<<< HEAD
             [
                 SemanticPack::two_deck()?,
                 SemanticPack::jeong_increment()?,
@@ -85,6 +86,13 @@ fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
             .into_iter()
             .map(AuthoredRuntime::compile)
             .collect()
+=======
+            SemanticPack::catalog()?
+                .iter()
+                .cloned()
+                .map(AuthoredRuntime::compile)
+                .collect()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         })
         .clone()
 }
@@ -180,6 +188,63 @@ mod catalog_tests {
     }
 
     #[test]
+<<<<<<< HEAD
+=======
+    fn complexity_roster_is_explicit_and_vanilla() {
+        let catalog = authored_runtime_catalog().unwrap();
+        let runtime = catalog
+            .iter()
+            .find(|r| r.pack_key == "mtg122-complexity-v1")
+            .unwrap();
+        assert_eq!(runtime.setups.len(), 6);
+        let semantic = SemanticPack::complexity().unwrap();
+        for key in [
+            "research.savannah_lions",
+            "research.glory_seeker",
+            "research.hill_giant",
+        ] {
+            let definition = semantic
+                .definitions
+                .iter()
+                .find(|d| d.semantic_key == key)
+                .unwrap();
+            assert!(ContentPack::default()
+                .definition_id(&definition.registry_name)
+                .is_none());
+            assert!(!semantic
+                .programs
+                .iter()
+                .any(|p| p.definition_index == definition.semantic_index));
+        }
+        for setup in &runtime.setups {
+            let mut config = setup.clone();
+            config.content_pack = Some(runtime.pack_key.clone());
+            assert_eq!(
+                select_authored_runtime(&[config.clone(), config], &catalog)
+                    .unwrap()
+                    .unwrap()
+                    .pack_key,
+                "mtg122-complexity-v1"
+            );
+        }
+        // An ordinary product pair must still choose the original product pack.
+        let pair = catalog
+            .iter()
+            .find(|r| r.pack_key == "ur-lessons-vs-gw-allies")
+            .unwrap()
+            .setups
+            .clone();
+        assert_eq!(
+            select_authored_runtime(&pair, &catalog)
+                .unwrap()
+                .unwrap()
+                .pack_key,
+            "ur-lessons-vs-gw-allies"
+        );
+    }
+
+    #[test]
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     fn duplicate_exact_catalog_entries_fail_closed() {
         let semantic = SemanticPack::jeong_increment().expect("Jeong IR parses");
         let player_configs = configs(&semantic, "ur_lessons", "gw_allies_jeong");
@@ -199,7 +264,14 @@ impl SemanticPack {
     /// presentation text across the migration boundary; every rules-relevant
     /// characteristic and program is lowered from this IR.
     pub fn compile_content_pack(&self) -> Result<ContentPack, IrError> {
+<<<<<<< HEAD
         let presentation = ContentPack::default();
+=======
+        let mut presentation = ContentPack::default();
+        if self.pack_key == "mtg122-complexity-v1" {
+            presentation.register_complexity_presentation();
+        }
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
@@ -756,7 +828,27 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             toughness: i32::try_from(*toughness)
                 .map_err(|_| malformed(program, "toughness exceeds i32"))?,
         },
+<<<<<<< HEAD
         Step::WaterbendOrDiscard { generic } => Effect::WaterbendOrDiscard { generic: *generic },
+=======
+        Step::Discard => Effect::Discard,
+        Step::ExileIfDies { target } => Effect::ExileIfDiesThisTurn {
+            target: target_for(program, target)?,
+        },
+        Step::AddSubtype { target, subtype } => Effect::AddSubtypeToTarget {
+            target: target_for(program, target)?,
+            subtype: subtype.clone(),
+        },
+        Step::OptionalPayment {
+            cost,
+            if_paid,
+            if_declined,
+        } => Effect::OptionalPayment {
+            cost: cost.clone(),
+            if_paid: lower_steps(pack, program, if_paid)?,
+            if_declined: lower_steps(pack, program, if_declined)?,
+        },
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         Step::UnblockableIf { .. } => {
             return unsupported(program, "unblockable_if requires static program")
         }

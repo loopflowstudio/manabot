@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
@@ -18,6 +19,13 @@ from manabot.sim.distill import (
 )
 from manabot.sim.flat_mc import make_player
 from manabot.sim.mcts import (
+=======
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.search.flat_mc import make_player
+from manabot.sim.search.puct import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
     determinized_puct,
@@ -92,7 +100,11 @@ def test_puct_rejects_more_worlds_than_simulations() -> None:
 def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
     root, observation = _fresh_engine_and_observation(seed=35)
     observation_space = ObservationSpace()
+<<<<<<< HEAD
     agent = Agent(observation_space, AgentSpec())
+=======
+    agent = ActorCritic(observation_space, ModelConfig())
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     agent.value_semantic = "win_logit"
     with torch.no_grad():
         for parameter in agent.parameters():
@@ -141,7 +153,11 @@ def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
 def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
     root, observation = _fresh_engine_and_observation(seed=36)
     observation_space = ObservationSpace()
+<<<<<<< HEAD
     agent = Agent(observation_space, AgentSpec())
+=======
+    agent = ActorCritic(observation_space, ModelConfig())
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     agent.value_semantic = "win_logit"
     learned = AgentLeafEvaluator(agent, observation_space, value_mode="learned")
     neutral = AgentLeafEvaluator(agent, observation_space, value_mode="neutral")
@@ -171,8 +187,13 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
 ) -> None:
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
+<<<<<<< HEAD
     save_bc_checkpoint(
         Agent(observation_space, AgentSpec()),
+=======
+    save_checkpoint(
+        ActorCritic(observation_space, ModelConfig()),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         observation_space,
         checkpoint,
         player_configs=interactive_player_configs,
@@ -206,7 +227,11 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
         )
 
 
+<<<<<<< HEAD
 def test_player_publishes_visit_and_value_targets() -> None:
+=======
+def test_player_plays_a_most_visited_action() -> None:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     root = _fresh_engine(seed=37)
     player = DeterminizedPuctPlayer(8, worlds=2, seed=41)
 
@@ -215,17 +240,26 @@ def test_player_publishes_visit_and_value_targets() -> None:
 
     action = player.act(_Wrapper(), {})
     assert 0 <= action < root.action_count()
+<<<<<<< HEAD
     assert player.last_visit_counts is not None
     assert player.last_scores is not None
     assert player.last_root_value is not None
     assert int(player.last_visit_counts.sum()) == 8
     assert player.last_visit_counts[action] == player.last_visit_counts.max()
+=======
+    result = player.last_result
+    assert result is not None
+    assert player.last_scores is not None
+    assert int(result.visit_counts.sum()) == 8
+    assert result.visit_counts[action] == result.visit_counts.max()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert player.stats.simulations == 8
     assert player.stats.decisions == 1
     assert player.stats.tree_nodes > player.worlds
     assert player.stats.worlds_sampled == player.worlds
     assert player.stats.max_depth_sum >= 1
     assert player.stats.max_depth_max >= 1
+<<<<<<< HEAD
 
 
 def test_selfplay_shard_records_real_tree_targets(tmp_path: Path) -> None:
@@ -256,3 +290,5 @@ def test_selfplay_shard_records_real_tree_targets(tmp_path: Path) -> None:
     assert np.all(chosen == dataset[VISIT_COUNT_KEY].max(axis=1))
     assert summary["search"]["tree_nodes"] > summary["search"]["worlds_sampled"]
     assert summary["search"]["max_depth_max"] >= 1
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

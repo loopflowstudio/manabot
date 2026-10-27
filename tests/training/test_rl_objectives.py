@@ -1,20 +1,35 @@
 """Independent RL estimator, policy-reference and update-clock contracts."""
 
 from copy import deepcopy
+<<<<<<< HEAD
 from types import SimpleNamespace
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 import numpy as np
 import pytest
 import torch
 
+<<<<<<< HEAD
 from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
 from manabot.training.models import Learning, Schedule
 from manabot.training.objectives import (
+=======
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     reference_distribution,
     update_ema,
     update_iteration,
 )
+<<<<<<< HEAD
 from manabot.training.selection import selected_rows
+=======
+from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.selection import selected_rows
+from manabot.training.regime import Learning, Schedule
+from manabot.training.rollout.collection import RolloutBatch
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class TinyPolicy(torch.nn.Module):
@@ -64,12 +79,17 @@ def fixture():
         probabilities=probabilities[:, None],
         log_probabilities=logits.log_softmax(-1).numpy()[:, None],
     )
+<<<<<<< HEAD
     trainer = SimpleNamespace(
         agent=agent,
         experiment=SimpleNamespace(device="cpu"),
         optimizer=torch.optim.Adam(agent.parameters(), lr=0.01),
         _obs_to_tensors=NetOpponentTrainer._obs_to_tensors,
     )
+=======
+    trainer = Learner(agent, "cpu", minibatch_rows=1)
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     return trainer, batch
 
 

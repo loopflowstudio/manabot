@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+<<<<<<< HEAD
 from manabot.training.experiment_report import (
     RetainedRun,
     load_evidence,
@@ -19,6 +20,13 @@ from manabot.training.learning_dashboard import (
 from manabot.training.monitor_evaluation import MonitorResult
 
 DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
+=======
+from manabot.eval.monitor import MonitorResult
+from manabot.reports.experiment import RetainedRun, load_evidence, write_dashboard
+from manabot.reports.learning import candidate_deck, checkpoint_panels, deck_results
+
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def _monitor() -> MonitorResult:
@@ -117,9 +125,15 @@ def test_newer_metadata_is_preserved_only_in_read_only_projection() -> None:
     run["regime"]["recovery"] = {"checkpoint_updates": 128}
     run["regime"]["future_metadata"] = {"producer_version": 2}
     projected = RetainedRun.model_validate(run)
+<<<<<<< HEAD
     assert projected.model_dump()["regime"]["recovery"] == {
         "checkpoint_updates": 128,
         "max_game_microsteps": 40000,
+=======
+    # Reading evidence must not add today's execution defaults to its recipe.
+    assert projected.model_dump()["regime"]["recovery"] == {
+        "checkpoint_updates": 128,
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     }
     assert projected.model_dump()["regime"]["future_metadata"] == {
         "producer_version": 2
@@ -153,7 +167,11 @@ def test_snapshot_reads_wal_consistently_and_preserves_payloads(tmp_path: Path) 
     import json
     import sqlite3
 
+<<<<<<< HEAD
     from manabot.training.report_snapshot import snapshot_report
+=======
+    from manabot.reports.snapshot import snapshot_report
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     source = tmp_path / "source"
     source.mkdir()
@@ -184,6 +202,7 @@ def test_snapshot_reads_wal_consistently_and_preserves_payloads(tmp_path: Path) 
     con.close()
 
 
+<<<<<<< HEAD
 def test_supervised_epoch_plans_are_not_reported_as_zero_updates(
     tmp_path: Path,
 ) -> None:
@@ -210,6 +229,8 @@ def test_supervised_epoch_plans_are_not_reported_as_zero_updates(
     assert "7 (includes epochs)" in html
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_mirror_matrix_reports_four_cells_without_pooling_opponent_decks() -> None:
     monitor = _monitor()
     seeds = tuple(monitor.protocol.deal_seeds)

@@ -9,6 +9,7 @@ training loop, and who owns which truth. Experiment reports live in
 
 | Doc | What |
 |---|---|
+<<<<<<< HEAD
 | [training-regimes.md](training-regimes.md) | `TrainingRegime` recipes and stages: self-play, search collection, distillation, belief fitting |
 | [training-experiments.md](training-experiments.md) | Declaring comparisons between recipes |
 | [ataraxos.md](ataraxos.md) | The Ataraxos-adapted move-learning rule, and how it differs from the paper |
@@ -18,6 +19,16 @@ training loop, and who owns which truth. Experiment reports live in
 | [training-calibration.md](training-calibration.md) | Measuring complete-loop training cost |
 | [training-recovery.md](training-recovery.md) | Recovering interrupted CPU self-play |
 | [remote-training.md](remote-training.md) / [remote-jobs.md](remote-jobs.md) | GPU training on RunPod, and jobs that survive a disconnected laptop |
+=======
+| [training-regimes.md](training-regimes.md) | `TrainingRegime` recipes and stages: self-play, compound decisions, policy import, belief fitting |
+| [training-experiments.md](training-experiments.md) | Declaring comparisons between recipes |
+| [ataraxos.md](ataraxos.md) | The Ataraxos-adapted move-learning rule, and how it differs from the paper |
+| [numerical-health.md](numerical-health.md) | Policy numerics and update-health diagnostics |
+| [recent-events.md](recent-events.md) | Optional viewer-safe recent-event history as model input |
+| [training-calibration.md](training-calibration.md) | Measuring complete-loop training cost |
+| [training-recovery.md](training-recovery.md) | Recovering interrupted CPU self-play |
+| [remote-training.md](remote-training.md) | GPU training on rented machines through Etude |
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | [training-monitoring.md](training-monitoring.md) | Dashboards, W&B, and S3 checkpoint storage |
 | [distributed-rl.md](distributed-rl.md) | Distributed RL research and CPU feasibility evidence |
 
@@ -26,7 +37,11 @@ training loop, and who owns which truth. Experiment reports live in
 | Doc | What |
 |---|---|
 | [belief-sampler.md](belief-sampler.md) | Hidden-hand samplers fit from a frozen policy's games |
+<<<<<<< HEAD
 | [local-policy-search.md](local-policy-search.md) | Frozen-policy local search and distillation |
+=======
+| [local-policy-search.md](local-policy-search.md) | Frozen-policy local search at play time |
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 | [frozen-policy-attacks.md](frozen-policy-attacks.md) | Training exploiters against a frozen policy |
 | [checkpoint-scenarios.md](checkpoint-scenarios.md) | Tactical scoring of checkpoints on constructed positions |
 | [experiment-execution.md](experiment-execution.md) / [experiment-metrics.md](experiment-metrics.md) | Running an Experiment comparison and reading its report |

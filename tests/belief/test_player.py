@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+<<<<<<< HEAD
+=======
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 import numpy as np
 import pytest
 import torch
@@ -14,11 +18,18 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
 from manabot.env import ObservationSpace
+<<<<<<< HEAD
 from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.flat_mc import play_games
 from manabot.sim.teacher1_evidence import _fresh_env
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+=======
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.sim.search.flat_mc import play_games
+from manabot.sim.search.teacher1_evidence import _fresh_env
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 class NeutralLikelihood:
@@ -229,10 +240,17 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
 
     tiny_deck = {"Mountain": 4, "Raging Goblin": 4}
     checkpoint = tmp_path / "tiny-policy.pt"
+<<<<<<< HEAD
     obs_hypers = ObservationSpaceHypers()
     agent_hypers = AgentSpec()
     obs_space = ObservationSpace(obs_hypers)
     agent = Agent(obs_space, agent_hypers)
+=======
+    obs_config = ObservationConfig()
+    agent_config = ModelConfig()
+    obs_space = ObservationSpace(obs_config)
+    agent = ActorCritic(obs_space, agent_config)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     torch.save(
         {
             "world_binding": checkpoint_world(
@@ -243,8 +261,13 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
                 obs_space,
             ),
             "hypers": {
+<<<<<<< HEAD
                 "observation_hypers": obs_hypers.model_dump(),
                 "agent_hypers": agent_hypers.model_dump(),
+=======
+                "observation_hypers": obs_config.model_dump(),
+                "agent_hypers": agent_config.model_dump(),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             },
             "model_state_dict": agent.state_dict(),
         },

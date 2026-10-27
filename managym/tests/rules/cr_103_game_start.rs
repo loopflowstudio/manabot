@@ -4,7 +4,7 @@ use managym::{state::player::PlayerConfig, Game};
 
 use super::helpers::*;
 
-/// CR 103.4, 103.5 — Each player shuffles and draws seven cards for opening hands.
+/// CR 103.3, 103.5 — Each player shuffles and draws seven cards for opening hands.
 #[test]
 fn cr_103_5_opening_hands_have_seven_cards() {
     let s = Scenario::new(mountain_deck(), forest_deck(), 7);
@@ -13,9 +13,9 @@ fn cr_103_5_opening_hands_have_seven_cards() {
     s.assert_zone_size(1, managym::state::zone::ZoneType::Hand, 7);
 }
 
-/// CR 103.3 — Players start the game at 20 life.
+/// CR 103.4 — Players start an ordinary two-player game at 20 life.
 #[test]
-fn cr_103_3_players_start_at_twenty_life() {
+fn cr_103_4_players_start_at_twenty_life() {
     let s = Scenario::new(mountain_deck(), forest_deck(), 13);
 
     s.assert_life(0, 20);

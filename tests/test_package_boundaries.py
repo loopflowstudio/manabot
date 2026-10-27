@@ -10,6 +10,10 @@ import ast
 from collections.abc import Sequence
 import importlib.abc
 import importlib.machinery
+<<<<<<< HEAD
+=======
+import importlib.util
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from pathlib import Path
 import subprocess
 import sys
@@ -60,10 +64,17 @@ _INDEPENDENCE_PROBE = textwrap.dedent(
     from tests.test_package_boundaries import _RefuseAcademy
 
     sys.meta_path.insert(0, _RefuseAcademy())
+<<<<<<< HEAD
     import manabot.arena.players
     import manabot.arena.replay
     import manabot.semantic.policy
     import manabot.sim.teacher1_evidence
+=======
+    import manabot.sim.players
+    import manabot.sim.replay
+    import manabot.semantic.policy
+    import manabot.sim.search.teacher1_evidence
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
     assert not any(name.split(".")[0] == "academy" for name in sys.modules)
     """
@@ -78,3 +89,112 @@ def test_manabot_entry_points_import_without_academy() -> None:
         cwd=REPO_ROOT,
         check=True,
     )
+<<<<<<< HEAD
+=======
+
+
+def test_managym_legacy_import_is_the_bundled_engine() -> None:
+    from managym.decision import Command as LegacyCommand
+
+    from manabot import managym as engine
+    from manabot.managym.decision import Command
+    import managym as legacy
+
+    assert legacy is engine
+    assert LegacyCommand is Command
+    assert Path(engine._managym.__file__).parent == REPO_ROOT / "manabot/managym"
+
+
+class _RefuseTraining(importlib.abc.MetaPathFinder):
+    """Simulation must remain usable without learning or run orchestration."""
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        if any(
+            fullname == root or fullname.startswith(root + ".")
+            for root in (
+                "manabot.training",
+                "manabot.experiment",
+                "manabot.reports",
+                "manabot.eval",
+            )
+        ):
+            raise ImportError(f"simulation must not import {fullname}")
+        return None
+
+
+def test_simulation_never_imports_training() -> None:
+    violations: list[str] = []
+    for path in sorted((REPO_ROOT / "manabot/sim").rglob("*.py")):
+        package = ".".join(path.relative_to(REPO_ROOT).parent.parts)
+        for node in ast.walk(ast.parse(path.read_text(), str(path))):
+            modules: list[str] = []
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if node.level:
+                    module = importlib.util.resolve_name(
+                        "." * node.level + module, package
+                    )
+                modules = [module, *(module + "." + alias.name for alias in node.names)]
+            for module in modules:
+                if any(
+                    module == root or module.startswith(root + ".")
+                    for root in (
+                        "manabot.training",
+                        "manabot.experiment",
+                        "manabot.reports",
+                        "manabot.eval",
+                    )
+                ):
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}:{node.lineno}: {module}"
+                    )
+    assert violations == []
+
+
+def test_simulation_imports_and_plays_without_training() -> None:
+    # Exercise both eager imports and the deferred checkpoint-player factory in
+    # a clean interpreter. Already-imported modules cannot hide a reverse edge.
+    probe = textwrap.dedent(
+        """
+        import importlib
+        from pathlib import Path
+        import pkgutil
+        import sys
+        import tempfile
+        from tests.test_package_boundaries import _RefuseTraining
+        sys.meta_path.insert(0, _RefuseTraining())
+        import manabot.sim
+        for module in pkgutil.walk_packages(manabot.sim.__path__, 'manabot.sim.'):
+            importlib.import_module(module.name)
+        from manabot.env import Env, Match, ObservationSpace, Reward
+        from manabot.infra.config import ModelConfig, RewardConfig
+        from manabot.model import ActorCritic
+        from manabot.model.checkpoint import save_checkpoint
+        from manabot.sim.search.flat_mc import make_player
+        match, space = Match(), ObservationSpace()
+        model = ActorCritic(space, ModelConfig())
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / 'policy.pt'
+            save_checkpoint(model, space, checkpoint, player_configs=match.to_rust())
+            player, _ = make_player({'kind': 'checkpoint', 'path': str(checkpoint)}, 17)
+            env = Env(match, space, Reward(RewardConfig()), seed=17)
+            observation, _ = env.reset(seed=17)
+            action = player.act(env, observation)
+            assert observation['actions_valid'][action] > 0
+        assert not any(name.startswith('manabot.training') for name in sys.modules)
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+def test_retired_arena_package_is_absent() -> None:
+    assert importlib.util.find_spec("manabot.arena") is None
+    assert not (REPO_ROOT / "manabot" / "arena").exists()
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f

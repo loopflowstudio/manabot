@@ -5,11 +5,14 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
+<<<<<<< HEAD
 import numpy as np
 import pytest
 
 from manabot.belief.likelihood import LikelihoodResult, RulesProviderGap
 from manabot.belief.tracker import BeliefTracker
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
@@ -22,6 +25,14 @@ from managym.possible_worlds import (
     PossibleWorld,
     PossibleWorldSpace,
 )
+<<<<<<< HEAD
+=======
+import numpy as np
+import pytest
+
+from manabot.belief.likelihood import LikelihoodResult, RulesProviderGap
+from manabot.belief.tracker import BeliefTracker
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 @dataclass

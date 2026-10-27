@@ -16,7 +16,11 @@ from manabot.verify.decision_profile import (
     play_profile_games,
     summarize_profiles,
 )
+<<<<<<< HEAD
 from manabot.verify.util import STANDARD_DECK, build_hypers
+=======
+from manabot.verify.util import STANDARD_DECK, build_verification_config
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 MOUNTAIN_ONLY = {"Mountain": 40}
 
@@ -24,7 +28,11 @@ MOUNTAIN_ONLY = {"Mountain": 40}
 @pytest.mark.parametrize("probed", [False, True])
 @pytest.mark.parametrize("game_offset", [0, 1])
 def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
+<<<<<<< HEAD
     from manabot.sim.flat_mc import play_games
+=======
+    from manabot.sim.search.flat_mc import play_games
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     from manabot.verify.competency import play_probed_games
 
     # The eight-card library loses to the sixteen-card library from either seat.
@@ -72,10 +80,17 @@ def _make_profile(game_index: int, hero_seat: int, winner: int | None) -> GamePr
 
 
 def test_match_swapped_exchanges_seats():
+<<<<<<< HEAD
     hypers = build_hypers(
         match={"hero_deck": MOUNTAIN_ONLY, "villain_deck": STANDARD_DECK}
     )
     match = Match(hypers.match)
+=======
+    config = build_verification_config(
+        match={"hero_deck": MOUNTAIN_ONLY, "villain_deck": STANDARD_DECK}
+    )
+    match = Match(config.match)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     swapped = match.swapped()
 
     assert swapped.hero == match.villain
@@ -117,11 +132,19 @@ def test_summarize_profiles_reports_per_seat_win_rates():
 
 
 def test_env_reset_seed_reaches_engine_rng():
+<<<<<<< HEAD
     hypers = build_hypers()
     env = Env(
         Match(hypers.match),
         ObservationSpace(hypers.observation),
         Reward(hypers.reward),
+=======
+    config = build_verification_config()
+    env = Env(
+        Match(config.match),
+        ObservationSpace(config.observation),
+        Reward(config.reward),
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         seed=0,
         auto_reset=False,
     )

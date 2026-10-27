@@ -30,7 +30,7 @@ class TestManagym:
         assert hasattr(obs, "opponent"), "Observation missing 'opponent' field"
         # Check that agent and opponent have different IDs
         assert obs.agent.id != obs.opponent.id, (
-            "Agent and opponent must have different IDs"
+            "ActorCritic and opponent must have different IDs"
         )
         # Also check turn and action_space fields exist
         assert hasattr(obs, "turn"), "Observation missing 'turn' field"

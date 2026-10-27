@@ -5,19 +5,35 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+<<<<<<< HEAD
 from manabot.training.experiment_report import load_evidence, write_time_profile
 from manabot.training.models import PhaseTiming, StageRecord, TrainingRun
 from manabot.training.time_cohort import native_cohort, phase_totals
 from manabot.training.time_profile import (
+=======
+from manabot.reports.experiment import load_evidence, write_time_profile
+from manabot.reports.records import RetainedRun
+from manabot.reports.time_cohort import native_cohort, phase_totals
+from manabot.reports.time_profile import (
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     training_intervals,
     training_profiles,
     training_time_report,
 )
+<<<<<<< HEAD
 
 DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
 
 
 def _run() -> TrainingRun:
+=======
+from manabot.training.records import PhaseTiming, StageRecord
+
+DEMO = Path(__file__).resolve().parents[2] / "tests/fixtures/experiment-demo"
+
+
+def _run() -> RetainedRun:
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     return (
         load_evidence(DEMO)
         .runs[0]
@@ -129,6 +145,34 @@ def test_collection_subphases_preserve_parent_total_and_deeper_svg() -> None:
     assert phase_totals([contradictory])["Collection"] == 5
 
 
+<<<<<<< HEAD
+=======
+def test_learning_subphases_nest_with_a_remainder_at_each_level() -> None:
+    run = _run()
+    learning_seconds = run.stages[0].learning_seconds
+    run.stages[0].learning_timings = {
+        "Targets": PhaseTiming(seconds=0.25, calls=1),
+        "Minibatches": PhaseTiming(seconds=1, calls=1),
+        "Minibatches/Forward and loss": PhaseTiming(seconds=0.25, calls=4),
+        "Minibatches/Backward and gradient clipping": PhaseTiming(seconds=0.5, calls=4),
+    }
+    profile = training_profiles([run])[0]
+    assert not profile.warnings
+    assert profile.root is not None
+    stage = next(p for p in profile.root.children if p.name == "train")
+    learning = next(p for p in stage.children if p.name == "Learning")
+    assert learning.seconds == learning_seconds
+    names = {p.name: p for p in learning.children}
+    assert names["Unattributed"].seconds == learning_seconds - 1.25
+    minibatches = names["Minibatches"]
+    assert {p.name: p.seconds for p in minibatches.children} == {
+        "Forward and loss": 0.25,
+        "Backward and gradient clipping": 0.5,
+        "Unattributed": 0.25,
+    }
+
+
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 def test_live_snapshot_keeps_observed_work_without_inventing_stage_duration() -> None:
     run = _run()
     run.status = "running"
@@ -182,7 +226,11 @@ def test_absent_historical_counters_are_not_reported_as_measured_zero() -> None:
     assert [(p.name, p.seconds) for p in stage.children] == [("Unattributed", 8.0)]
     payload = run.model_dump()
     del payload["seconds"]
+<<<<<<< HEAD
     absent = TrainingRun.model_validate(payload)
+=======
+    absent = RetainedRun.model_validate(payload)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     assert training_profiles([absent])[0].root is None
 
 

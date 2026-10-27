@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Tests for the value head, V-greedy, and value-at-leaf search (exp-10).
 
 Covers outcome-label construction, value training (loss decreases, policy
@@ -26,23 +27,55 @@ from manabot.sim.value import (
     train_value,
 )
 from manabot.verify.util import INTERACTIVE_DECK
+=======
+"""Frozen value inference, leaf perspective and value-guided player legality."""
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.rollout import OBS_KEYS, _allocate_buffers
+from manabot.sim.search.flat_mc import make_player, spec_name
+from manabot.sim.search.value import (
+    ValueScorer,
+    ValueSearchPlayer,
+    VGreedyPlayer,
+    spearman,
+)
+from manabot.verify.util import INTERACTIVE_DECK
+import managym
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 
 
 def make_env(seed: int = 3) -> tuple[Env, dict]:
     obs_space = ObservationSpace()
     match = Match(
+<<<<<<< HEAD
         MatchHypers(
+=======
+        MatchConfig(
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
             hero="a",
             villain="b",
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
+<<<<<<< HEAD
     env = Env(match, obs_space, Reward(RewardHypers()), seed=seed, auto_reset=False)
+=======
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
     obs, _ = env.reset(seed=seed)
     return env, obs
 
 
+<<<<<<< HEAD
 def tiny_dataset(num_rows: int = 96, seed: int = 0) -> dict[str, np.ndarray]:
     """Real encoded observations + synthetic winner/seat columns."""
 
@@ -85,6 +118,8 @@ class TestOutcomeLabels:
         assert len(usable) == int((dataset["winner"] >= 0).sum())
 
 
+=======
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
 class TestSpearman:
     def test_perfect_and_inverse(self):
         x = np.array([1.0, 2.0, 3.0, 4.0])
@@ -101,6 +136,7 @@ class TestSpearman:
         assert abs(spearman(np.arange(4.0), np.array([0.0, 2, 1, 3])) - 0.8) < 1e-12
 
 
+<<<<<<< HEAD
 class TestTrainValue:
     def test_loss_decreases_and_policy_head_untouched(self):
         dataset = tiny_dataset()
@@ -147,6 +183,12 @@ class TestValueScorer:
     def test_scores_are_probs(self):
         env, obs = make_env()
         scorer = ValueScorer(Agent(ObservationSpace(), AgentSpec()))
+=======
+class TestValueScorer:
+    def test_scores_are_probs(self):
+        env, obs = make_env()
+        scorer = ValueScorer(ActorCritic(ObservationSpace(), ModelConfig()))
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         batch = {
             key: np.asarray(obs[key])[None].astype(
                 np.int32 if key == "action_focus" else np.float32
@@ -183,12 +225,27 @@ class TestPoolPerspective:
 
 class TestPlayers:
     @pytest.fixture
+<<<<<<< HEAD
     def value_checkpoint(self, tmp_path, interactive_player_configs) -> str:
         obs_space = ObservationSpace()
         agent = Agent(obs_space, AgentSpec())
         path = tmp_path / "value.pt"
         save_value_checkpoint(
             agent, obs_space, path, player_configs=interactive_player_configs
+=======
+    def value_checkpoint(
+        self, tmp_path: Path, interactive_player_configs: list[managym.PlayerConfig]
+    ) -> str:
+        obs_space = ObservationSpace()
+        agent = ActorCritic(obs_space, ModelConfig())
+        path = tmp_path / "value.pt"
+        save_checkpoint(
+            agent,
+            obs_space,
+            path,
+            player_configs=interactive_player_configs,
+            extra={"value": {}},
+>>>>>>> 558e0186b585228dd2130cf14d9cb40de217e66f
         )
         return str(path)
 
