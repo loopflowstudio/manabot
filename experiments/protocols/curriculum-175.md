@@ -207,6 +207,7 @@ Use the queued-evaluation support in
 [Etude PR #56](https://github.com/loopflowstudio/etude/pull/56) while the mini is
 occupied. The operator uses a frozen Manabot runtime at
 `0fc90e4130aca0e28a5e1b56cd9f2004b86a6845` and Etude client source
-`18f6ecafc3e2b8f1652b5e45364d3e957e263183`; later Task edits do not change
+`596244996d713202d89385febe1af87ea0ede9d9` (the controller-compatible
+0.2.6 backport of PR #56); later Task edits do not change
 the live inference/evaluation implementation. Queue state is scoped to this
 Task; existing MTG-183 work is left running.
