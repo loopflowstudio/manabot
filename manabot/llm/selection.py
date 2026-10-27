@@ -50,6 +50,7 @@ def select(
     *,
     started: float | None = None,
     progress: Callable[[SelectionResult], None] | None = None,
+    expected_prompt: EncodedPrompt | None = None,
 ) -> SelectionResult:
     """Return evidence for success or failure; only invalid answers get recovery.
 
@@ -94,30 +95,55 @@ def select(
             attempt = Attempt(messages=messages)
             attempts.append(attempt)
             publish()
-            prompt = runtime.encode(messages)
+            phase_start = time.monotonic()
+            try:
+                prompt = runtime.encode(messages)
+            finally:
+                attempt = attempt.model_copy(
+                    update={"encode_seconds": time.monotonic() - phase_start}
+                )
+                attempts[-1] = attempt
             attempt = attempt.model_copy(
                 update={"prompt": prompt, "prompt_tokens": len(prompt.token_ids)}
             )
             attempts[-1] = attempt
             publish()
             check_deadline()
+            if (
+                origin == "initial"
+                and expected_prompt is not None
+                and prompt != expected_prompt
+            ):
+                raise ValueError(
+                    "retained prompt text/token IDs differ from current encoding"
+                )
             if len(prompt.token_ids) + config.max_new_tokens > config.context_tokens:
                 raise ContextOverflow(
                     "complete prompt plus generation exceeds context_tokens"
                 )
-            response = runtime.generate(prompt, deadline)
+            phase_start = time.monotonic()
+            try:
+                response = runtime.generate(prompt, deadline)
+            finally:
+                attempt = attempt.model_copy(
+                    update={"generation_seconds": time.monotonic() - phase_start}
+                )
+                attempts[-1] = attempt
+            validation_start = time.monotonic()
             reference = response.text.strip()
             error = None
             if response.finish_reason != "eos":
                 error = "incomplete response: generation limit reached"
             elif reference not in decision.legal_references:
                 error = "expected exactly one listed action reference"
+            validation_seconds = time.monotonic() - validation_start
             peak = runtime.peak_gpu_bytes()
             attempt = attempt.model_copy(
                 update={
                     "response": response,
                     "output_tokens": len(response.token_ids),
                     "validation_error": error,
+                    "validation_seconds": validation_seconds,
                     "seconds": time.monotonic() - attempt_start,
                     "peak_gpu_bytes": peak,
                 }

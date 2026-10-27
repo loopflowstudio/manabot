@@ -91,6 +91,11 @@ class Attempt(Record):
     # Null in a pending snapshot; never report unfinished inference as zero latency.
     seconds: float | None = None
     peak_gpu_bytes: int | None = None
+    # Worker monotonic host intervals, nested within seconds. Generation includes
+    # input/output transfer and decoding; it is not device-only prefill/decode.
+    encode_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    generation_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    validation_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class Failure(Record):

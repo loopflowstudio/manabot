@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 import json
+from multiprocessing.process import BaseProcess
 from pathlib import Path
 import time
 from typing import Literal
@@ -20,6 +21,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
+from manabot.sim import serving
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.performance import EvalPerformance
@@ -33,6 +35,8 @@ from manabot.sim.serving import (
     PolicyKey,
     PolicyStore,
     _infer,
+    _PendingRequest,
+    _record_dispatch,
     sample_rows,
 )
 from managym import WORLD_VERSION
@@ -236,6 +240,104 @@ def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
         with pytest.raises(InferenceFailure):
             runtime.infer(request)
     assert receipt["counters"]["batch_rows/1"] == 1
+    assert receipt["counters"]["completed_requests"] == 1
+    assert "batch_queue" not in receipt["measurements"]
+    assert receipt["measurements"]["dispatch_queue"]["population"] == 1
+    lifecycle = json.loads((tmp_path / "allocation/allocation.json").read_bytes())
+    assert lifecycle["measurements"]["service_start_to_ready"]["population"] == 1
+    assert lifecycle["measurements"]["admission_round_trip"]["population"] == 1
+    assert lifecycle["measurements"]["cleanup"]["population"] == 1
+    assert lifecycle["counters"]["completed_requests"] == 1
+    assert lifecycle["counters"]["failed_requests"] == 1
+    retained = json.loads((tmp_path / "allocation/serving.json").read_bytes())
+    assert retained["counters"]["model_loads"] == 1
+    assert retained["counters"]["rss_samples"] >= 1
+    assert retained["counters"]["peak_sampled_rss_bytes"] > 0
+    assert not runtime.process.is_alive()
+
+
+def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60)
+    _, (player,) = bind_execution(key, (player,), execution)
+    perf = EvalPerformance("controlled", started=0)
+    store = PolicyStore(execution, perf)
+    store.admissions[PolicyKey.from_registration(player, execution)] = PolicyAdmission(
+        player, str(path), (selected_match(),)
+    )
+    requests = [
+        replace(request_for(player, execution, seed), submitted=1) for seed in (5, 7)
+    ]
+    clock = [10.0]
+    load = serving.load_checkpoint
+
+    def delayed_load(filename: str) -> tuple[ActorCritic, ObservationSpace]:
+        result = load(filename)
+        clock[0] += 40  # Inject the duration; never create resource pressure.
+        return result
+
+    monkeypatch.setattr(serving, "load_checkpoint", delayed_load)
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    _record_dispatch(
+        perf, [_PendingRequest(r.request_id, r, 3) for r in requests], "batch"
+    )
+    try:
+        replies = _infer(store, requests, "batch")
+        assert len(replies) == 2
+        receipt = perf.snapshot()
+        measures = receipt["measurements"]
+        assert measures["dispatch_queue"]["maximum_seconds"] == 7
+        assert measures["submission_to_receipt"]["maximum_seconds"] == 2
+        assert measures["model_load"]["seconds"] == 40
+        phases = {
+            k: m["seconds"] for k, m in measures.items() if m["partitions_elapsed"]
+        }
+        assert sum(phases.values()) == 40
+        assert receipt["elapsed_seconds"] == 50
+        assert receipt["counters"]["resident_misses"] == 1
+    finally:
+        store.close()
+
+
+def test_failed_service_request_has_no_success_latency(tmp_path: Path) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60)
+    _, (player,) = bind_execution(key, (player,), execution)
+    with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
+        runtime.admit(PolicyAdmission(player, str(path), (selected_match(),)))
+        request = replace(request_for(player, execution), observation={})
+        with pytest.raises(InferenceFailure, match="observation fields"):
+            runtime.infer(request)
+    receipt = json.loads((tmp_path / "allocation/serving.json").read_bytes())
+    assert receipt["counters"]["received_requests"] == 1
+    assert receipt["counters"]["failed_requests"] == 1
+    assert receipt["counters"]["unanswered_requests"] == 0
+    assert receipt["request_p95_seconds"] is None
+    assert receipt["failed_request_p95_seconds"] is not None
+    assert receipt["first_request_outcome"] == "failed"
+    assert not runtime.process.is_alive()
+
+
+def test_service_start_failure_retains_unready_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_start(self: BaseProcess) -> None:
+        raise OSError("injected spawn failure")
+
+    monkeypatch.setattr(BaseProcess, "start", fail_start)
+    execution = EvalExecution(deadline_unix=time.time() + 60)
+    directory = tmp_path / "allocation"
+    with pytest.raises(OSError, match="injected spawn failure"):
+        InferenceRuntime(execution, directory)
+    lifecycle = json.loads((directory / "allocation.json").read_bytes())
+    assert lifecycle["counters"]["failed_service_starts"] == 1
+    assert "service_start_to_ready" not in lifecycle["measurements"]
+    assert lifecycle["measurements"]["failed_service_start"]["population"] == 1
+    execution_receipt = json.loads((directory / "execution.json").read_bytes())
+    assert execution_receipt["error"] == "OSError: injected spawn failure"
+    assert execution_receipt["cost"]["measured_usd"] is None
 
 
 def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
@@ -269,6 +371,11 @@ def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
     receipt = json.loads((tmp_path / "panel/allocation/serving.json").read_text())
     assert receipt["counters"]["model_loads"] == 1
     assert receipt["counters"]["catalog_builds"] == 1
+    assert all(
+        g["worker_performance"]["latency_sample_count"]
+        == sum(d["player_id"] == player.player_id for d in g["decisions"])
+        for g in games
+    )
     assert any(
         int(k.split("/")[1]) > 1
         for k in receipt["counters"]

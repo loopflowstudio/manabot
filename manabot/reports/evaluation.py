@@ -9,12 +9,13 @@ are different resources, and request queue intervals live only on the timeline.
 from __future__ import annotations
 
 from collections import defaultdict
+import gzip
 import json
 from pathlib import Path
 from typing import Any
 
+from manabot.reports.inference import BaselineAllocation, EvidenceReader, ObservedStatus
 from manabot.sim.performance import allocation_cost
-from manabot.sim.replay import read_trace
 
 
 def _tree(
@@ -53,32 +54,100 @@ def _tree(
     }
 
 
-def project_evaluations(directories: list[Path]) -> dict[str, Any]:
+def _project_allocation(
+    identity: str,
+    serving_path: Path,
+    serving: dict[str, Any] | None,
+    declaration: BaselineAllocation | None,
+    evidence: EvidenceReader,
+) -> dict[str, Any]:
+    """Project one shared charge and its dependencies, including missing files."""
+    execution_path = serving_path.parent / "execution.json"
+    allocation_path = serving_path.parent / "allocation.json"
+    execution = evidence.json(execution_path) or {}
+    allocation = evidence.json(allocation_path) or {}
+    dependencies = [serving_path, execution_path, allocation_path]
+    if serving is not None:
+        # Historical writers retained paths relative to their working
+        # directory. Resolve once for verification and portable links.
+        traces = [Path(trace).resolve() for trace in serving["traces"]]
+        serving["traces"] = [str(path) for path in traces]
+        dependencies.extend(traces)
+    if declaration is not None:
+        dependencies.extend(
+            (serving_path.parent / f.path).resolve() for f in declaration.files
+        )
+    dependencies = list(dict.fromkeys(dependencies))
+    for path in dependencies:
+        evidence.read(path)
+    serving_phases = {
+        k: v["seconds"]
+        for k, v in (serving or {}).get("measurements", {}).items()
+        if k != "batch_queue" and v.get("partitions_elapsed", True)
+    }
+    return {
+        "identity": identity,
+        "source": str(serving_path),
+        "serving": serving,
+        "lifecycle": allocation,
+        "elapsed_seconds": allocation.get("elapsed_seconds"),
+        "execution": execution.get("execution"),
+        "cost": execution.get("cost", allocation_cost(0)),
+        "tree": _tree(
+            "serving",
+            serving["elapsed_seconds"],
+            serving_phases,
+            str(serving_path),
+        )
+        if serving is not None
+        else None,
+        "evidence": str(serving_path) if serving is not None else None,
+        "dependencies": [evidence.files[p] for p in dependencies],
+    }
+
+
+def project_evaluations(
+    directories: list[Path],
+    *,
+    evidence: EvidenceReader | None = None,
+    declared_allocations: dict[Path, BaselineAllocation] | None = None,
+) -> dict[str, Any]:
     if len({p.resolve() for p in directories}) != len(directories):
         raise ValueError("duplicate evaluation evidence is not an independent run")
+    evidence = evidence or EvidenceReader()
+    declared_allocations = declared_allocations or {}
     runs, timings, details, series = [], [], [], []
     allocations: dict[str, dict[str, Any]] = {}
     for index, directory in enumerate(directories):
         receipt_path = directory / "performance.json"
-        receipt = json.loads(receipt_path.read_text())
+        receipt = evidence.json(receipt_path)
+        if receipt is None:
+            raise ValueError(f"missing evaluation performance: {receipt_path}")
         metadata_path = directory / "report-run.json"
-        metadata = (
-            json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
-        )
-        rows = json.loads((directory / "rows.json").read_text())
+        metadata = evidence.json(metadata_path) or {}
+        row_bytes = evidence.read(directory / "rows.json")
+        if row_bytes is None:
+            raise ValueError(f"missing evaluation rows: {directory}")
+        rows = json.loads(row_bytes)
         # Rows reference immutable block shards; the aggregate panel trace is
         # diagnostic evidence, not another population of games.
+        trace_paths = sorted(
+            {directory / row["trace_path"] for row in rows if "trace_path" in row}
+        )
         games = [
-            game
-            for path in sorted(
-                {directory / row["trace_path"] for row in rows if "trace_path" in row}
-            )
-            for game in read_trace(path)
+            json.loads(line)
+            for path in trace_paths
+            if (data := evidence.read(path)) is not None
+            for line in gzip.decompress(data).splitlines()
         ]
         elapsed = receipt["elapsed_seconds"]
         counters = receipt["counters"]
         decisions = counters.get("decisions", 0)
-        phases = {k: v["seconds"] for k, v in receipt["measurements"].items()}
+        phases = {
+            k: v["seconds"]
+            for k, v in receipt["measurements"].items()
+            if v.get("partitions_elapsed", True)
+        }
         timings.append(
             {
                 "run": index,
@@ -101,7 +170,8 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
             worker_cpu += worker["process_cpu_seconds"]
             spans.extend(worker["spans"])
             for name, measure in worker["measurements"].items():
-                worker_phases[name] += measure["seconds"]
+                if measure.get("partitions_elapsed", True):
+                    worker_phases[name] += measure["seconds"]
                 coverage[name] += 1
         if worker_wall:
             timings.append(
@@ -130,50 +200,42 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
                     ),
                 }
             )
-        serving_path = metadata.get("serving_path")
-        candidates = (
-            [Path(serving_path)]
-            if serving_path
-            else [directory / "allocation" / "serving.json"]
-        )
+        serving_path = Path(
+            metadata.get("serving_path") or directory / "allocation" / "serving.json"
+        ).resolve()
+        declaration = declared_allocations.get(serving_path)
         allocation_ids = []
-        for path in candidates:
-            if not path.exists():
-                continue
-            serving = json.loads(path.read_text())
-            identity = serving["identity"]
+        # No allocation was recorded for scalar evaluation. An explicit reference
+        # or declaration remains visible even when all shared files are absent.
+        if (
+            metadata.get("serving_path")
+            or serving_path.exists()
+            or declaration is not None
+        ):
+            serving = evidence.json(serving_path)
+            if (
+                serving is not None
+                and declaration is not None
+                and serving["identity"] != declaration.identity
+            ):
+                raise ValueError(
+                    f"allocation identity contradicts declaration: {serving_path}"
+                )
+            identity = (
+                declaration.identity
+                if declaration is not None
+                else serving["identity"]
+                if serving is not None
+                else str(serving_path)
+            )
             allocation_ids.append(identity)
-            if identity not in allocations:
-                execution_path = path.parent / "execution.json"
-                execution = (
-                    json.loads(execution_path.read_text())
-                    if execution_path.exists()
-                    else {}
+            if identity in allocations:
+                if allocations[identity]["source"] != str(serving_path):
+                    raise ValueError(f"conflicting sources for allocation {identity}")
+            else:
+                allocations[identity] = _project_allocation(
+                    identity, serving_path, serving, declaration, evidence
                 )
-                allocation_path = path.parent / "allocation.json"
-                allocation = (
-                    json.loads(allocation_path.read_text())
-                    if allocation_path.exists()
-                    else {}
-                )
-                serving_phases = {
-                    k: v["seconds"]
-                    for k, v in serving["measurements"].items()
-                    if k != "batch_queue"
-                }
-                allocations[identity] = {
-                    "identity": identity,
-                    "serving": serving,
-                    "elapsed_seconds": allocation.get("elapsed_seconds"),
-                    "execution": execution.get("execution"),
-                    "cost": execution.get(
-                        "cost", allocation_cost(serving["elapsed_seconds"])
-                    ),
-                    "tree": _tree(
-                        "serving", serving["elapsed_seconds"], serving_phases, str(path)
-                    ),
-                    "evidence": str(path),
-                }
 
         def valid(row: dict[str, Any]) -> bool:
             return (
@@ -193,6 +255,21 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
             for block in blocks.values()
         )
         failure_count = sum(row["failure"] is not None for row in rows)
+        # Panel completion covers every declared leg. Replay/integrity remain
+        # separate validity measures; a successful row cannot hide failed work.
+        observed_status: ObservedStatus
+        if failure_count:
+            observed_status = "failed"
+        elif (
+            rows
+            and all(row["terminated"] for row in rows)
+            and not counters.get("unattempted_games", 0)
+            and expected_legs is not None
+            and all(len(block) == expected_legs for block in blocks.values())
+        ):
+            observed_status = "completed"
+        else:
+            observed_status = "partial" if rows else "unknown"
         mechanisms = {
             "native_step_and_encoding": "Profile native rules and encoding on these retained roots; inference rewrites do not remove this work.",
             "inference_round_trip": "Join request/batch spans to distinguish queue, IPC, transfers and forward execution before choosing a serving intervention.",
@@ -226,8 +303,10 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
         details.append(
             {
                 "run": index,
+                "observed_status": observed_status,
                 "evidence": str(receipt_path),
                 "allocation_ids": allocation_ids,
+                "dependencies": [evidence.files[p.resolve()] for p in trace_paths],
                 "valid_games": valid_games,
                 "valid_blocks": valid_blocks,
                 "games_per_wall_hour": valid_games * 3600 / elapsed,
@@ -240,6 +319,30 @@ def project_evaluations(directories: list[Path]) -> dict[str, Any]:
                 ),
                 "coverage": dict(coverage),
                 "game_population": len(games),
+                "worker_request_latency": [
+                    {
+                        "game": game["match_id"],
+                        **{
+                            key: worker.get(key)
+                            for key in (
+                                "latency_boundary",
+                                "latency_method",
+                                "sample_coverage",
+                                "latency_sample_count",
+                                "failed_latency_sample_count",
+                                "request_p50_seconds",
+                                "request_p95_seconds",
+                                "failed_request_p50_seconds",
+                                "failed_request_p95_seconds",
+                                "first_request_seconds",
+                                "first_request_outcome",
+                            )
+                        },
+                    }
+                    for game in games
+                    if (worker := game.get("worker_performance")) is not None
+                    and worker.get("latency_boundary") is not None
+                ],
                 "spans": spans,
                 "sample_coverage": receipt["sample_coverage"],
                 "opportunities": opportunities,

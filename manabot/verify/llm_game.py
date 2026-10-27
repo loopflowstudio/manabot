@@ -7,6 +7,8 @@ before the next decision. This is a functional test, not a strength evaluation.
 
 import argparse
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 import json
 import os
@@ -56,6 +58,8 @@ class GameSummary(BaseModel):
     replay_matches: bool = True
     final_digest: str | None = None
     mode: str
+    # Monotonic host intervals; native execution includes capture validation.
+    observations: dict[str, float] = Field(default_factory=dict)
 
 
 def _write(path: Path, payload: str) -> None:
@@ -79,6 +83,22 @@ def play(
     out.mkdir(parents=True, exist_ok=False)
     _write(out / "config.json", config.model_dump_json(indent=2))
     started = time.monotonic()
+    observations: dict[str, float] = {}
+
+    @contextmanager
+    def observe(name: str) -> Iterator[None]:
+        phase_start = time.monotonic()
+        try:
+            yield
+        finally:
+            observations[name] = (
+                observations.get(name, 0) + time.monotonic() - phase_start
+            )
+
+    def retain(path: Path, payload: str) -> None:
+        with observe("evidence_write"):
+            _write(path, payload)
+
     env = managym.Env(seed=config.seed, skip_trivial=False)
     env.reset([managym.PlayerConfig(f"seat-{seat}", config.deck) for seat in (0, 1)])
     replay = env.clone_env()
@@ -86,7 +106,7 @@ def play(
     summary = GameSummary(mode="qwen-v-random" if session else "random-control")
     if session:
         summary.model_load_seconds = session.load_seconds
-        _write(out / "runtime.json", session.identity.model_dump_json(indent=2))
+        retain(out / "runtime.json", session.identity.model_dump_json(indent=2))
     origins: Counter[str] = Counter()
     latencies: list[float] = []
     try:
@@ -97,11 +117,12 @@ def play(
                 raise TimeoutError("game wall limit reached")
             step = out / f"decision-{summary.decisions:05d}"
             step.mkdir()
-            decision = capture_text_decision(
-                env, history_capacity=config.history_capacity
-            )
-            _write(step / "capture.json", decision.capture_json)
-            _write(step / "prompt.txt", decision.text)
+            with observe("render_capture"):
+                decision = capture_text_decision(
+                    env, history_capacity=config.history_capacity
+                )
+            retain(step / "capture.json", decision.capture_json)
+            retain(step / "prompt.txt", decision.text)
             actor = env.current_agent_index()
             if session and actor == config.model_seat:
                 supplied = DecisionInput(
@@ -112,7 +133,7 @@ def play(
                 )
 
                 def progress(result: SelectionResult) -> None:
-                    _write(step / "selection.json", result.model_dump_json(indent=2))
+                    retain(step / "selection.json", result.model_dump_json(indent=2))
 
                 result = session.decide(supplied, progress=progress)
                 progress(result)
@@ -134,8 +155,8 @@ def play(
             origins[producer] += 1
             command = resolve_action(decision, reference)
             # Retain intent before the potentially mutating native call.
-            _write(step / "command.json", command.to_json())
-            _write(
+            retain(step / "command.json", command.to_json())
+            retain(
                 step / "choice.json",
                 json.dumps(
                     {
@@ -145,20 +166,23 @@ def play(
                     }
                 ),
             )
-            transition = submit_response(env, decision, reference)
-            _write(step / "transition.json", json.dumps(asdict(transition)))
-            replayed = apply_semantic_command(replay, command)
-            summary.replay_matches = (
-                replayed == transition and replay.state_digest() == env.state_digest()
-            )
+            with observe("native_command"):
+                transition = submit_response(env, decision, reference)
+            retain(step / "transition.json", json.dumps(asdict(transition)))
+            with observe("clone_replay"):
+                replayed = apply_semantic_command(replay, command)
+                summary.replay_matches = (
+                    replayed == transition
+                    and replay.state_digest() == env.state_digest()
+                )
             if not summary.replay_matches:
                 raise RuntimeError("native command replay diverged")
             summary.decisions += 1
             summary.origins = dict(origins)
             summary.game_seconds = time.monotonic() - started
-            _write(out / "progress.json", summary.model_dump_json(indent=2))
+            retain(out / "progress.json", summary.model_dump_json(indent=2))
             if progress_path is not None:
-                _write(progress_path, summary.model_dump_json(indent=2))
+                retain(progress_path, summary.model_dump_json(indent=2))
             if summary.decisions % 10 == 0:
                 print(
                     f"decisions={summary.decisions} model={summary.model_decisions} seconds={summary.game_seconds:.1f}",
@@ -175,7 +199,8 @@ def play(
         if latencies:
             summary.decision_seconds_median = statistics.median(latencies)
             summary.decision_seconds_max = max(latencies)
-        _write(out / "summary.json", summary.model_dump_json(indent=2))
+        summary.observations = dict(observations)
+        retain(out / "summary.json", summary.model_dump_json(indent=2))
     return summary
 
 
