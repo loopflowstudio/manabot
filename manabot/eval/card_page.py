@@ -61,12 +61,12 @@ def page_data(
 ) -> dict[str, object]:
     """Every non-empty filter combination of `selection`, keyed for the page.
 
-    Subjects and opponents are offered by agent name, so one player whose code
+    Subjects and opponents are offered by player name, so one player whose code
     identity changed between runs is still one choice.
     """
     base = card_data(db, selection)
     sql, parameters = selected_games(db, selection)
-    names = dict(db.execute("select agent, name from agents").fetchall())
+    names = dict(db.execute("select player, name from players").fetchall())
     present = {
         (names[subject], names[opponent], "play" if on_play else "draw", deck, against)
         for subject, opponent, on_play, deck, against in db.execute(
@@ -290,7 +290,7 @@ select { max-width: 100%; }
     const subjects = $("subject").value ? [$("subject").value] : data.subjects;
     const excluded = Object.entries(variant.excluded).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(", ") || "none";
     summary.innerHTML = [
-      ["Subjects", subjects.length > 3 ? `${subjects.length} agents` : subjects.join(", ") || "—"],
+      ["Subjects", subjects.length > 3 ? `${subjects.length} players` : subjects.join(", ") || "—"],
       ["Opponents", $("opponent").value || "all"],
       ["Games", variant.games.toLocaleString()],
       ["Deals", variant.deals.toLocaleString()],

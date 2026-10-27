@@ -38,13 +38,13 @@ class CardConditions(StrictModel):
 
 def card_match_players(match: Match) -> tuple[PlayerRegistration, PlayerRegistration]:
     """Resolve the same registered participant pair for execution and admission."""
-    if len(match.agents) != 2 or match.games != 8:
+    if len(match.players) != 2 or match.games != 8:
         raise ValueError("card evaluation schedules eight legs per deal")
     first, second = (
-        PlayerRegistration.model_validate(agent.config["registration"])
-        for agent in match.agents
+        PlayerRegistration.model_validate(player.config["registration"])
+        for player in match.players
     )
-    if (first.player_id, second.player_id) != tuple(a.name for a in match.agents):
+    if (first.player_id, second.player_id) != tuple(a.name for a in match.players):
         raise ValueError("scheduled participant differs from registration")
     return first, second
 
