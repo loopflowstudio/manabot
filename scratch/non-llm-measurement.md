@@ -48,3 +48,10 @@ $0.59/hour, with the same $1.00 run ceiling. Dedicated supply
 `mtg188-policy-l4` copies the existing L4 machine/image/storage settings and
 limits this measurement to one rental. Prior Qwen pod absence was reverified
 before creating the supply; creating a supply rents nothing.
+
+The L4 quote subsequently lost capacity before launch (no rental). A fresh A6000
+quote succeeded at $0.59/hour, at most $0.74 including setup allowance under the
+$1.00 cohort ceiling. Run `4f8f34d188a7` launched from `bb47aafe0d3c` on
+`mtg188-a6000-bbb813fb57a2`; first read confirms `setting_up`, one attempt.
+The unused L4 supply has no rental. Observe only this run and the dedicated
+`mtg188-a6000` supply; never tick unrelated Etude work.

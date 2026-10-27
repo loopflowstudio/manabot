@@ -23,3 +23,16 @@ Acceptance
 
 Open decisions
 Which sampling/repair treatment improves answer completion? Is prefix reuse worth its complexity on actual prompts? What concurrency maximizes useful moves within memory and latency limits? Which future empirical campaign is authorized after reviewing retained evidence? Capture only: do not launch this Task now.
+
+
+Final cancellation reconciliation: run 7b8c16de1b60 ended cancelled, rental_ended
+true, provider pod crijtcbtuulx7w verified absent at 2026-10-27T14:03:49.843896Z.
+Its final rental charge was $0.6644956843132677425802264368; all seven Qwen
+rentals total $2.917705820125419603078713051. Ancillary final billing remains
+unavailable. Eight game archives were digest-verified and retained, with no
+completed games. Last committed progress contains 78 Qwen selections (27 initial
+successes, 16 repair successes, 35 fallbacks), 122 policy moves, 200 native
+decisions total. The other 92 games were unattempted. This is an interrupted
+observation, not an unbiased strength comparison. The vllm.log fetch failed
+integrity/range validation twice after metadata refresh; retain that publication
+gap rather than bypassing verification. No Qwen execution remains active.
