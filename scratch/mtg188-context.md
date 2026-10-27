@@ -1,3 +1,22 @@
+# Scope update — accepted 2026-10-27
+
+Jack Heart redirected MTG-188 to non-LLM evaluation timing and requested a
+Qwen inference follow-up. The existing unstarted MTG-191 is that owner. This
+supersedes the Qwen campaign as a completion requirement here. Preserve the
+existing reporting/runtime contributions and all earlier receipts; do not
+replay completed Graph work. The current briefs are retained locally in
+`scratch/qwen-inference-handoff.md` and `scratch/non-llm-measurement.md`. Their
+Task edits were saved locally; planning-provider confirmation is pending.
+
+The 16k Qwen run 7b8c16de1b60 was cancelled and its provider pod confirmed
+absent. All seven SDK-finalized rental charges total $2.91770582012541960308;
+ancillary final billing remains unavailable. The original $10 was a Qwen
+campaign ceiling, not new authorization for non-LLM GPU rentals. Continue
+local CPU measurements with the existing bounded runner and admitted MTG-183
+final raw u5950 checkpoint. CUDA remains an empirical dependency unless an
+authorized GPU is available. The earlier accepted design follows as history
+and implementation detail; its broader LLM scope is superseded above.
+
 # MTG-188 — Comparable inference performance receipts
 
 Status: accepted for implementation, 2026-10-26. After reviewing this file,

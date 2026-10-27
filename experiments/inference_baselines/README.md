@@ -89,7 +89,9 @@ includes transfers and decode, and does not establish prefill or decode time.
 No local timer establishes provider billing. UUID-tagged 1 Hz device sampling is
 optional; unavailable utilities remain explicitly unavailable.
 
-The MTG-188 empirical baseline is still pending pinned trained bytes, CPU/GPU and
-LLM single/many-game observations, and artifact publication. New paid execution
-has not been authorized. `mtg185-l4.json` remains the unchanged historical corpus
+MTG-188 now focuses on non-LLM evaluation timing (Jack Heart, 2026-10-27).
+MTG-183 final raw u5950 bytes are available for admitted local CPU measurements;
+CUDA comparisons and artifact publication remain empirical obligations. Further
+Qwen inference belongs to MTG-191. The earlier Qwen campaign's spending allowance
+does not authorize a new non-LLM GPU rental. `mtg185-l4.json` remains the unchanged historical corpus
 inventory; neither the runner nor this example converts it into new measurements.
