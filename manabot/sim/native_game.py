@@ -6,7 +6,7 @@ before native execution, and reports the settled game. Checkpoint players
 are served: they reach their policy through the supervisor's inference runtime.
 Code players (anchors, heuristic) are built Torch-free, so a game between them
 and served players never imports Torch. Search players (flat-MC, PUCT, local
-update) keep their policy in-child; `_ScalarPlayers` is the one place this
+update) keep their policy in-child; `_InChildPlayers` is the one place this
 module imports Torch-bearing code.
 
 Before reporting, the child counts its threads against the declared game
@@ -50,7 +50,7 @@ from manabot.sim.supervision import _failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
 
 
-class _ScalarPlayers:
+class _InChildPlayers:
     """Builds in-process players and answers which game hooks they take.
 
     Code players (anchors, heuristic, demo search) come from the Torch-free
@@ -123,7 +123,7 @@ def execute_game(
     """Play one game, sending phase, pending and decision events, then its result.
 
     Served players reach a policy only through `infer`; code and search players
-    are built in-process (`_ScalarPlayers`); only search players import Torch.
+    are built in-process (`_InChildPlayers`); only search players import Torch.
     """
     responsible = None
     perf = EvalPerformance(
@@ -139,7 +139,7 @@ def execute_game(
             else None
         )
         policies: dict[str, PolicyKey] = {}
-        scalar = _ScalarPlayers()
+        in_child = _InChildPlayers()
         for registration in registrations:
             responsible = registration.player_id
             send(("phase", responsible))
@@ -157,7 +157,7 @@ def execute_game(
                 built[responsible] = (None, ObservationSpace(config))
             else:
                 with perf.span("player_startup"):
-                    built[responsible] = scalar.build(
+                    built[responsible] = in_child.build(
                         registration,
                         seed=game["player_seeds"][responsible],
                         checkpoint_path=checkpoint_paths.get(responsible),
@@ -187,10 +187,10 @@ def execute_game(
         send(("initial", game["initial_state_digest"]))
         for seat, player_id in enumerate(game["seat_players"]):
             player = built[player_id][0]
-            if scalar.starts_game(player):
+            if in_child.starts_game(player):
                 player.start_game(env, seat)
         local_players = [
-            player for player, _ in built.values() if scalar.observes_steps(player)
+            player for player, _ in built.values() if in_child.observes_steps(player)
         ]
         decision_counts = dict.fromkeys(built, 0)
         for revision in range(max_commands):
@@ -217,7 +217,7 @@ def execute_game(
             if registrations[actor].runner_kind == "checkpoint" and (
                 player_id not in policies
             ):
-                scalar.seed(policy_seed)
+                in_child.seed(policy_seed)
             started = time.perf_counter()
             if player_id in policies:
                 assert execution is not None and infer is not None
@@ -311,7 +311,7 @@ def execute_game(
             perf.count("native_step_calls")
             decision["post_state_digest"] = env._engine.state_digest()
             player = built[player_id][0]
-            if scalar.observes_steps(player) and player.last_receipt is not None:
+            if in_child.observes_steps(player) and player.last_receipt is not None:
                 # Arena traces are private. Advice uses the explicit public projection.
                 decision["local_update_receipt"] = player.last_receipt.to_json()
                 decision["latency_seconds"] += player.last_receipt.belief_seconds

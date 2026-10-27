@@ -1,4 +1,4 @@
-"""Killable game supervision shared by scalar and resident-inference execution.
+"""Killable game supervision shared by served and in-child players.
 
 The pending Command is fsynced before acknowledgement. Each call owns one
 native `ChildProcess` (game or replay); allocation slots bound concurrent

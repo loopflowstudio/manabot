@@ -98,7 +98,7 @@ thread count within its declared bound.
   and `_game_worker` move here from `sim/match.py`. Scalar players are built
   Torch-free by `players.build_code_player` (random, scripted, heuristic);
   only search players (flat-MC, PUCT, local update) import Torch, lazily in
-  `_ScalarPlayers`, and only they call `torch.manual_seed`. Plain checkpoint
+  `_InChildPlayers`, and only they call `torch.manual_seed`. Plain checkpoint
   players never build in-child (slice 6).
 - Split `serving.py`: Torch-free `sim/serving_protocol.py` (`PolicyKey`,
   `DecisionRequest`, `DecisionReply`, `PolicyAdmission`, `InferenceFailure`)
@@ -247,8 +247,8 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 ### Implementation decisions (2026-10-26)
 
-- Scalar hooks keep exact `isinstance` dispatch, with the classes imported
-  lazily in `native_game._ScalarPlayers`, instead of a Protocol: a structural
+- In-child hooks keep exact `isinstance` dispatch, with the classes imported
+  lazily in `native_game._InChildPlayers`, instead of a Protocol: a structural
   check would newly call `flat_mc` players' `start_game` (compound reset) and
   could change Commands.
 - Census is `ProcessCensus` (threads, Linux thread names, RSS, Torch loaded),
@@ -264,15 +264,7 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 
 ## Check result
 
-Realign, 2026-10-27, at `46d52b1e0`: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py -q` → 50 passed, 1 skipped (the stale `cold_scalar` argument was already removed in `fbbbd517a`). Full suite belongs to gate/CI.
-
-Implement, 2026-10-27: `test_arena_lost_worker_retains_acknowledged_command`
-timed out because its fixture child imported the Torch-loading test module
-(~7 s) inside the 5 s game budget. The fixture workers now live in Torch-free
-`tests/training/game_error_fixtures.py` (collector adapters moved to
-`test_game_error_recovery.py`): `pytest tests/training/test_game_errors.py
-tests/training/test_game_error_recovery.py tests/test_package_boundaries.py -q`
-→ 32 passed.
+Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
 
 Open for gate: the two
 `test_two_policies_never_share_a_forward_and_hung_service_is_bounded` cases
