@@ -151,3 +151,32 @@ command success means failure evidence was retained, not evaluation success.
 Provider absence was verified at 2026-10-27 06:03:11 UTC; estimated charge
 $0.03861355726111111192. Four prior estimates total $0.15916180364444444437.
 The next job/cohort cap is **$9.34** plus the unchanged $0.50 reserve.
+
+## Measured deadline and concurrency revision
+
+Run `12f050b52057` admitted four games. Three initial requests hit 120 seconds;
+the fourth game made 23 native decisions and six successful Qwen selections
+before its seventh selection timed out. No games completed; 96 remained
+unattempted. The retained server logs show approximately 129 aggregate generated
+tokens/s with four requests, versus 34 tokens/s with one. Warm 2,048-token
+responses take approximately 60.7 seconds, leaving too little of 120 seconds
+for a full protocol repair; cold first requests also include additional work.
+These are observed request windows, not completed-game throughput or a
+like-for-like backend speedup.
+
+The next declared treatment uses **16 concurrent scheduled games**, a **300-second
+selection deadline** including repair, and a **7,200-second between-decision game
+limit**. The campaign still has its 10-hour watchdog, 11-hour job ceiling, one
+active allocation and all original money safeguards. The original 100 decks,
+seeds, seat assignments, BF16 weights, greedy decoding, enabled reasoning,
+2,048-token per-generation limit, complete legal choices and native execution
+contracts are unchanged. Effective inference settings are written to
+`inference.json` before admission and carried by the scheduled game records.
+Server cache sizing suggests capacity for a larger batch; actual 16-game fit
+and throughput remain measurements to obtain, not established results.
+
+All outputs from `12f050b52057` were fetched and its pod was verified absent at
+2026-10-27 06:23:40 UTC. Its estimate is $0.13343769908333333976; five earlier
+attempts total **$0.29259950272777778413**. The next job/cohort cap is **$9.20**
+with the same $0.50 ancillary reserve. This execution adjustment follows Jack
+Heart's authorization to retry without a count limit within the original $10.

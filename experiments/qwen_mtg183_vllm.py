@@ -1,7 +1,7 @@
-"""Resume the accepted matchup with four isolated games sharing one vLLM server.
+"""Run the accepted matchup with isolated games sharing one vLLM server.
 
 Each game process owns its CPU policy RNG and native state. The coordinator
-reserves the unchanged schedule first and submits at most four games at once.
+reserves the unchanged schedule first and submits the declared number at once.
 A failed game stops new admissions; already admitted games retain their outcomes.
 The existing campaign watchdog kills the whole game process group on timeout.
 """
@@ -25,7 +25,25 @@ from manabot.verify.llm_game import GameSummary, _write
 
 
 class Campaign(original.Campaign):
-    concurrency: int = Field(default=4, ge=1, le=4)
+    concurrency: int = Field(default=16, ge=1, le=16)
+    decision_seconds: float = Field(default=300, gt=0, le=300)
+    game_seconds: float = Field(default=7200, gt=0, le=7200)
+
+
+def _schedule(config: Campaign, out: Path) -> list[original.ScheduledGame]:
+    """Keep deal/seat identity while retaining the effective inference deadline."""
+    inference = InferenceConfig.model_validate_json(original.INFERENCE.read_text())
+    inference = inference.model_copy(
+        update={"deadline_seconds": config.decision_seconds}
+    )
+    path = (out / "inference.json").absolute()
+    _write(path, inference.model_dump_json(indent=2))
+    return [
+        game.model_copy(
+            update={"config": game.config.model_copy(update={"inference": path})}
+        )
+        for game in original.schedule(config)
+    ]
 
 
 def play_game(
@@ -43,7 +61,9 @@ def play_game(
     record = out.parent / "game-records" / f"game-{game.index:03d}"
     started = time.monotonic()
     try:
-        inference = InferenceConfig.model_validate_json(original.INFERENCE.read_text())
+        inference = InferenceConfig.model_validate_json(
+            game.config.inference.read_text()
+        )
         opponent = CheckpointOpponent(
             Path(os.environ["ETUDE_INPUTS_DIR"]) / "checkpoint.pt",
             original.CHECKPOINT_SHA256,
@@ -87,7 +107,7 @@ def play_game(
 def worker(config: Campaign, out: Path) -> None:
     started = time.monotonic()
     deadline = time.time() + config.seconds
-    games = original.schedule(config)
+    games = _schedule(config, out)
     _write(
         out / "schedule.json",
         json.dumps([g.model_dump(mode="json") for g in games], indent=2),
@@ -138,7 +158,7 @@ def worker(config: Campaign, out: Path) -> None:
 
         def admit() -> None:
             nonlocal stop_reason
-            if deadline - time.time() < 240:
+            if deadline - time.time() < config.decision_seconds + 120:
                 stop_reason = "campaign time reserve reached"
                 return
             game = next(queued, None)
@@ -197,7 +217,7 @@ def run(config: Campaign) -> None:
 
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    games = original.schedule(config)
+    games = _schedule(config, out)
     _write(
         out / "schedule.json",
         json.dumps([g.model_dump(mode="json") for g in games], indent=2),
@@ -226,7 +246,9 @@ def run(config: Campaign) -> None:
             }
         ),
     )
-    inference = InferenceConfig.model_validate_json(original.INFERENCE.read_text())
+    inference = InferenceConfig.model_validate_json(
+        (out / "inference.json").read_text()
+    )
     started = time.monotonic()
     try:
         with VLLMServer(inference, out, config.concurrency) as server:

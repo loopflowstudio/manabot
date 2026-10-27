@@ -184,15 +184,17 @@ def test_generation_defaults_can_come_from_model_config(
     assert loaded.eos_ids == {1, 7}
 
 
+@pytest.mark.parametrize("concurrency", [4, 16])
 def test_failed_batch_retains_every_admitted_game_and_stops_queue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    concurrency: int,
 ) -> None:
     submitted: list[int] = []
 
     class Pool:
         def __init__(self, **kwargs: object) -> None:
-            assert kwargs["max_workers"] == 4
+            assert kwargs["max_workers"] == concurrency
 
         def __enter__(self) -> "Pool":
             return self
@@ -223,13 +225,19 @@ def test_failed_batch_retains_every_admitted_game_and_stops_queue(
             return future
 
     monkeypatch.setattr(campaign, "ProcessPoolExecutor", Pool)
-    campaign.worker(campaign.Campaign(), tmp_path)
+    campaign.worker(campaign.Campaign(concurrency=concurrency), tmp_path)
     receipt = json.loads((tmp_path / "campaign.json").read_text())
-    assert len(submitted) == len(set(submitted)) == 4
-    assert receipt["planned"] == 100 and receipt["attempted"] == receipt["settled"] == 4
+    assert len(submitted) == len(set(submitted)) == concurrency
+    assert receipt["planned"] == 100
+    assert receipt["attempted"] == receipt["settled"] == concurrency
     assert receipt["completed"] == 0 and receipt["session_closed"] is True
-    assert len(json.loads((tmp_path / "results.json").read_text())) == 4
+    assert len(json.loads((tmp_path / "results.json").read_text())) == concurrency
     assert json.loads((tmp_path / "games.json").read_text())["mode"] == "concurrent"
+    effective = InferenceConfig.model_validate_json(
+        (tmp_path / "inference.json").read_text()
+    )
+    assert effective.deadline_seconds == 300 and effective.max_new_tokens == 2048
+    assert effective.enable_thinking is True
 
 
 def test_expired_campaign_retains_all_unattempted_games(tmp_path: Path) -> None:
