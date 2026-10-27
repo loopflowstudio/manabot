@@ -149,6 +149,42 @@ exact analysis source are published in
 Per-update assignment counts reconcile with cumulative sampler starts after the
 window's first row, and role exposure totals reconcile with residual-row counts.
 
+### Sampling differences persisted through update 500
+
+A second matched eight-update window, **493–500**, was read at 13:33 UTC on
+2026-10-27 using the same allocation estimator. Both runs have genuine,
+downloaded and digest-verified update-500 checkpoints. These are additional
+training diagnostics; there are no new strength-evaluation results here.
+
+| Observed allocation | M, 393–400 | M, 493–500 | E, 393–400 | E, 493–500 |
+|---|---:|---:|---:|---:|
+| Physical game starts | 2,136 | 2,129 | 2,178 | 2,197 |
+| Share in the ten most-used pairings | 15.87% | 16.67% | 27.87% | 27.26% |
+| Games involving red-green on either side | 18.73% | 18.69% | 32.92% | 34.27% |
+| Learner decisions belonging to red-green | 5.68% | 5.89% | 11.90% | 11.30% |
+| Ordered pairings with at least one start | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 |
+| Latest priority mass on the ten highest-priority cells | 26.27% | 23.15% | 41.67% | 41.67% |
+
+E continued to concentrate starts more strongly than M, particularly on
+red-green pairings. The two windows do not establish a monotonic trend or
+causal learning benefit. The top-ten sets are selected separately in each
+window; priority mass describes the latest frozen weights, not observed starts.
+The unchanged E top-ten priority mass follows its rank transformation and cap;
+it does not imply unchanged error magnitudes or unchanged favored pairings.
+
+In the new window, priority/coverage/age accounted for **59.93%/19.96%/20.10%**
+of M starts and **59.63%/19.98%/20.39%** of E starts. All decision exposures
+reconcile with the retained residual counts: **402,914** M decisions and
+**343,066** E decisions. M had sufficient recent outcome support for 38 cells,
+down from 46 at update 400; the other cells retain neutral pre-cap mass.
+
+Exact analysis source, immutable metric-block keys, selected rows and per-cell
+counts/weights are retained in
+`experiments/data/curriculum-175/distribution-500/m.json` and `e.json`.
+This window was inspected after it existed and is descriptive, not a new
+preregistered efficacy endpoint. Final strength, uncertainty, full-history
+coverage/forgetting and the combined arm remain outstanding.
+
 ## Initial-policy evidence
 
 The common initial policy's held-out evaluation delivered **1,600 valid games
