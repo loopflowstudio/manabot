@@ -252,3 +252,26 @@ identity before admitting rows. Missing score/failure columns in all-null Etude
 tables remain null. It preserves invalid outcomes and passes duplicate rows to
 the estimator for rejection. Controlled integration tests write real Etude
 tournament records with fixture outcomes; they are not study evaluations.
+
+## Update-200 evaluation capacity amendment — 2026-10-27
+
+The owned mini remains occupied by MTG-183. Permit one first-available mini or
+A4000 development evaluation at the already-declared update 200 for each arm,
+with the same checkpoint, match keys and deals. Each has one attempt, a one-hour
+execution limit, ten independent single-threaded CPU workers and a $0.34
+allocation ceiling. This supersedes the earlier owned-only default solely
+for this point. It does not retry U's incomplete initial held-out evaluation.
+
+M/E's retained training rentals each cap at $8.9975. With prior startup charges,
+the full $0.50 reserve and the $0.34 evaluation cap, each remains below $10.
+ME's queued training rental may cost at most $9.15 at the configured $0.60/hour
+ceiling over 15.25 hours; with its $0.0029743 startup charge, $0.50 reserve and
+$0.34 evaluation cap, its upper bound is below $10. Its evaluation is submitted
+only after a genuine update-200 export and a fresh budget check. U's historical
+$7.2252361 plus the initial rental cap $0.3125, the $0.34 new evaluation cap and
+the $0.50 reserve also remain below $10. No allowance moves between arms.
+
+Only verified unstarted requests may move: retain the original cancellation,
+zero attempts/cost, full match-key ledger and replacement receipt. Other
+points remain on the owned pool. Selection of this predeclared point uses
+capacity and retained rental ceilings, not a measured curriculum effect.
