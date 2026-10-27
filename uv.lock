@@ -386,8 +386,8 @@ wheels = [
 
 [[package]]
 name = "etude-sdk"
-version = "0.2.8"
-source = { git = "https://github.com/loopflowstudio/etude?rev=d3a67a38aeccff6bd883dd781252aa18bd820029#d3a67a38aeccff6bd883dd781252aa18bd820029" }
+version = "0.2.9"
+source = { git = "https://github.com/loopflowstudio/etude?rev=79bf4b74d7118ee05d67521b4e32af73d9f57888#79bf4b74d7118ee05d67521b4e32af73d9f57888" }
 dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
@@ -1003,9 +1003,9 @@ training-runtime = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
-    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=d3a67a38aeccff6bd883dd781252aa18bd820029" },
-    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", git = "https://github.com/loopflowstudio/etude?rev=d3a67a38aeccff6bd883dd781252aa18bd820029" },
-    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", git = "https://github.com/loopflowstudio/etude?rev=d3a67a38aeccff6bd883dd781252aa18bd820029" },
+    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=79bf4b74d7118ee05d67521b4e32af73d9f57888" },
+    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", git = "https://github.com/loopflowstudio/etude?rev=79bf4b74d7118ee05d67521b4e32af73d9f57888" },
+    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", git = "https://github.com/loopflowstudio/etude?rev=79bf4b74d7118ee05d67521b4e32af73d9f57888" },
     { name = "fastapi", marker = "extra == 'academy'", specifier = ">=0.116.0" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
@@ -1032,7 +1032,7 @@ provides-extras = ["reports", "artifacts", "academy", "evaluation", "play", "dev
 
 [package.metadata.requires-dev]
 play-runtime = [
-    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=d3a67a38aeccff6bd883dd781252aa18bd820029" },
+    { name = "etude-sdk", git = "https://github.com/loopflowstudio/etude?rev=79bf4b74d7118ee05d67521b4e32af73d9f57888" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "maturin", specifier = ">=1.5,<2.0" },

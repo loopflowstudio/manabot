@@ -99,7 +99,7 @@ explicit = true
 
 [tool.uv.sources]
 # Demo only: Etude PR #63 (sealed eval blocks with blobs and rollups).
-etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "d3a67a38aeccff6bd883dd781252aa18bd820029" }
+etude-sdk = { git = "https://github.com/loopflowstudio/etude", rev = "79bf4b74d7118ee05d67521b4e32af73d9f57888" }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },

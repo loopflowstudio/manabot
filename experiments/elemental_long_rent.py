@@ -585,7 +585,7 @@ def launch(
     print("queued", *ids)
 
 
-DEMO_RUN = "eb70f8-demo-gpu"
+DEMO_RUN = "eb70f8-demo-gpu-2"
 
 
 def demo(
