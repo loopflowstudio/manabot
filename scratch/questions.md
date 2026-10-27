@@ -75,3 +75,13 @@ context, not new execution direction. No rental is launched by this sync.
   launch it. No spend: the ledger is $0.00 of $5.
 - **Search players stay in-child (Jack Heart, 2026-10-27):** serving search
   players' model calls is out of scope for MTG-193; follow-up MTG-205.
+
+## Code-anchor source identity moves to `sim/anchors.py` (compress, 2026-10-27)
+
+Scripted-greedy and random registrations now pin `manabot/sim/anchors.py`
+bytes (random formerly pinned `search/flat_mc.py`; scripted pinned
+`sim/players.py`, whose bytes this slice changes anyway). New anchor
+registrations therefore get new `source_sha256` values and do not reuse
+earlier deal evidence; frozen evidence is untouched. Assumed acceptable
+under decision 2b (Torch-free anchors); revisit if a frozen v1 anchor must
+keep matching for resumption.
