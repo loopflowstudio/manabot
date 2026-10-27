@@ -23,6 +23,7 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.model import ActorCritic
 from manabot.verify.action_cases import encode, initial, reach, reorder_objects
+from manabot.verify.trigger_order import ordering_root
 import managym
 
 ChoiceName = Literal[
@@ -36,6 +37,7 @@ ChoiceName = Literal[
     "look_select",
     "learn_discard",
     "waterbend",
+    "trigger_order",
 ]
 CHOICES: tuple[ChoiceName, ...] = (
     "land_pass",
@@ -48,6 +50,7 @@ CHOICES: tuple[ChoiceName, ...] = (
     "look_select",
     "learn_discard",
     "waterbend",
+    "trigger_order",
 )
 
 
@@ -72,7 +75,10 @@ def _indices(raw: managym.Observation, kind: managym.ActionEnum) -> list[int]:
 
 
 def _choice(name: ChoiceName) -> NativeChoice:
-    if name in {"block_decline", "block_target"}:
+    if name == "trigger_order":
+        env, raw = ordering_root()
+        candidates = (0, 1)
+    elif name in {"block_decline", "block_target"}:
         env = initial(
             authored=False,
             deck={"Gray Ogre": 16, "Water Tribe Rallier": 16, "Mountain": 8},
@@ -261,7 +267,10 @@ def _remove_discriminant(
     """Reproduce a specific information-loss hypothesis for each choice pair."""
     erased = {key: value.clone() for key, value in obs.items()}
     a, b = case.candidates
-    if case.name in {"scry", "pay_decline"}:
+    if case.name == "trigger_order":
+        erased["actions"][..., -2] = 0
+        erased["action_focus"].fill_(-1)
+    elif case.name in {"scry", "pay_decline"}:
         erased["actions"][..., :ACTION_TYPE_DIM] = 0
     elif case.name in {"look_select", "learn_discard"}:
         erased["semantic_cards"].zero_()

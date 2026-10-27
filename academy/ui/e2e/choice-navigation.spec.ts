@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import currentPositionsJson from '../../fixtures/choice-navigation-explicit-w11.json' with { type: 'json' };
-import positionsJson from '../../fixtures/choice-navigation-w11.json' with { type: 'json' };
+import currentPositionsJson from '../../fixtures/choice-navigation-explicit-w14.json' with { type: 'json' };
+import positionsJson from '../../fixtures/choice-navigation-w14.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 

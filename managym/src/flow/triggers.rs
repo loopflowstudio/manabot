@@ -3,7 +3,12 @@
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::{event::GameEvent, game::Game, trigger::PendingTrigger, turn::StepKind},
+    flow::{
+        event::GameEvent,
+        game::Game,
+        trigger::{PendingTrigger, TriggerId, TriggerOrderingClass, TriggerPlacement},
+        turn::StepKind,
+    },
     state::{
         ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
@@ -47,13 +52,16 @@ impl Game {
     ) -> Result<(), AgentError> {
         let trigger = self
             .state
-            .pending_trigger_choice
+            .trigger_placement
             .as_ref()
+            .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending target choice".into()))?;
         let requirements = self
             .trigger_requirements(trigger)
             .ok_or_else(|| AgentError("missing triggered ability".into()))?;
-        let requirement = &requirements[trigger.requirement_index];
+        let requirement = requirements
+            .get(trigger.requirement_index)
+            .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         let duplicate = trigger
             .targets
             .iter()
@@ -67,8 +75,9 @@ impl Game {
         }
         let trigger = self
             .state
-            .pending_trigger_choice
+            .trigger_placement
             .as_mut()
+            .and_then(|p| p.placing.as_mut())
             .expect("validated trigger");
         trigger.targets.push(target);
         trigger.target_req_indices.push(trigger.requirement_index);
@@ -85,12 +94,55 @@ impl Game {
     }
 
     pub(crate) fn flush_triggers(&mut self) -> Option<ActionSpace> {
-        while let Some(mut trigger) = self
-            .state
-            .pending_trigger_choice
-            .take()
-            .or_else(|| self.pop_next_pending_trigger())
-        {
+        if self.state.trigger_placement.is_none() {
+            if self.state.pending_triggers.is_empty() {
+                return None;
+            }
+            self.state.trigger_placement = Some(TriggerPlacement {
+                remaining: std::mem::take(&mut self.state.pending_triggers),
+                active: self.active_player(),
+                group: 0,
+                placing: None,
+            });
+        }
+        loop {
+            let placement = self.state.trigger_placement.as_mut().unwrap();
+            if placement.placing.is_none() {
+                while placement.group < 4 {
+                    let candidates: Vec<_> = placement
+                        .remaining
+                        .iter()
+                        .filter(|t| placement.in_current_group(t))
+                        .map(|t| t.id)
+                        .collect();
+                    if candidates.len() > 1 {
+                        let player = placement.controller();
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::OrderTriggers,
+                            actions: candidates
+                                .into_iter()
+                                .map(|trigger_id| Action::ChooseTrigger { player, trigger_id })
+                                .collect(),
+                            focus: Vec::new(),
+                        });
+                    }
+                    if let Some(id) = candidates.first() {
+                        let index = placement
+                            .remaining
+                            .iter()
+                            .position(|t| t.id == *id)
+                            .unwrap();
+                        placement.placing = Some(placement.remaining.remove(index));
+                        break;
+                    }
+                    placement.group += 1;
+                }
+            }
+            let Some(mut trigger) = placement.placing.take() else {
+                self.state.trigger_placement = None;
+                return None;
+            };
             let Some(requirements) = self.trigger_requirements(&trigger) else {
                 continue;
             };
@@ -131,7 +183,7 @@ impl Game {
                 if count >= requirement.min && requirement.max > requirement.min {
                     actions.push(Action::Decline { player: controller });
                 }
-                self.state.pending_trigger_choice = Some(trigger);
+                self.state.trigger_placement.as_mut().unwrap().placing = Some(trigger);
                 return Some(ActionSpace {
                     player: Some(controller),
                     kind: ActionSpaceKind::ChooseTarget,
@@ -143,19 +195,21 @@ impl Game {
                 self.place_triggered_ability_on_stack(trigger);
             }
         }
-        None
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let trigger = self
             .state
-            .pending_trigger_choice
+            .trigger_placement
             .as_ref()
+            .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
         let requirements = self
             .trigger_requirements(trigger)
             .ok_or_else(|| AgentError("missing triggered ability".into()))?;
-        let requirement = &requirements[trigger.requirement_index];
+        let requirement = requirements
+            .get(trigger.requirement_index)
+            .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         let count = trigger
             .target_req_indices
             .iter()
@@ -168,30 +222,34 @@ impl Game {
             return Err(AgentError("trigger cannot decline target".into()));
         }
         self.state
-            .pending_trigger_choice
+            .trigger_placement
             .as_mut()
+            .and_then(|p| p.placing.as_mut())
             .expect("validated trigger")
             .requirement_index += 1;
         Ok(())
     }
 
-    fn pop_next_pending_trigger(&mut self) -> Option<PendingTrigger> {
-        let active = self.active_player();
-        let next_index = self
+    pub(crate) fn choose_trigger(
+        &mut self,
+        player: PlayerId,
+        id: TriggerId,
+    ) -> Result<(), AgentError> {
+        let placement = self
             .state
-            .pending_triggers
+            .trigger_placement
+            .as_mut()
+            .ok_or_else(|| AgentError("no trigger order pending".into()))?;
+        if placement.placing.is_some() || placement.controller() != player {
+            return Err(AgentError("not the pending trigger controller".into()));
+        }
+        let index = placement
+            .remaining
             .iter()
-            .enumerate()
-            .min_by_key(|(_, trigger)| {
-                let apnap_rank = if trigger.controller == active {
-                    0_u8
-                } else {
-                    1_u8
-                };
-                (apnap_rank, trigger.enqueue_order)
-            })
-            .map(|(index, _)| index)?;
-        Some(self.state.pending_triggers.remove(next_index))
+            .position(|t| t.id == id && placement.in_current_group(t))
+            .ok_or_else(|| AgentError("trigger is not in the current group".into()))?;
+        placement.placing = Some(placement.remaining.remove(index));
+        Ok(())
     }
 
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
@@ -382,12 +440,16 @@ impl Game {
                 source_lki: Some(source_lki),
                 ability_index,
                 controller,
-                enqueue_order: self.state.trigger_enqueue_counter,
+                id: TriggerId(self.state.trigger_enqueue_counter),
+                ordering_class: TriggerOrderingClass::Ordinary,
                 context,
                 inline_effects: None,
             });
-            self.state.trigger_enqueue_counter =
-                self.state.trigger_enqueue_counter.saturating_add(1);
+            self.state.trigger_enqueue_counter = self
+                .state
+                .trigger_enqueue_counter
+                .checked_add(1)
+                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -409,11 +471,16 @@ impl Game {
             source_lki: Some(source_lki),
             ability_index: 0,
             controller,
-            enqueue_order: self.state.trigger_enqueue_counter,
+            id: TriggerId(self.state.trigger_enqueue_counter),
+            ordering_class: TriggerOrderingClass::Ordinary,
             context: None,
             inline_effects: Some(effects),
         });
-        self.state.trigger_enqueue_counter = self.state.trigger_enqueue_counter.saturating_add(1);
+        self.state.trigger_enqueue_counter = self
+            .state
+            .trigger_enqueue_counter
+            .checked_add(1)
+            .expect("trigger occurrence identity exhausted");
     }
 
     /// Cards whose triggered abilities can see this event: every permanent on
