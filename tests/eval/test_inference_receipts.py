@@ -1053,15 +1053,21 @@ def test_nested_shared_evidence_can_disappear_without_hiding_cell(
             assert (tmp_path / "out" / attempt["execution_evidence"]).is_file()
 
 
+@pytest.mark.parametrize("mode", ["sequential", "concurrent"])
 def test_sequential_llm_games_charge_readiness_once_and_keep_game_populations(
     tmp_path: Path,
+    mode: str,
 ) -> None:
     root = tmp_path / "sequence"
     for name in ("game-000", "game-001"):
         _fixture(root / name)
     _write(
         root / "games.json",
-        {"version": "llm-game-sequence-v1", "games": ["game-000", "game-001"]},
+        {
+            "version": "llm-game-sequence-v1",
+            "mode": mode,
+            "games": ["game-000", "game-001"],
+        },
     )
     _write(root / "readiness.json", {"seconds": 7.0, "ready": True})
     projection = project_llm(root)
@@ -1075,6 +1081,9 @@ def test_sequential_llm_games_charge_readiness_once_and_keep_game_populations(
     ]
     assert projection["metrics"]["worker_readiness"]["value"] == 7
     assert projection["metrics"]["game_wall"]["value"] == 40
+    if mode == "concurrent":
+        assert "not campaign wall" in projection["metrics"]["game_wall"]["boundary"]
+        assert "overlap" in projection["notes"][0]
     report = write_report([], [root], tmp_path / "report")
     assert report.is_file()
     # The session stopped before its second planned game: retained first-game

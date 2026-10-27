@@ -24,6 +24,7 @@ from manabot.llm.schema import (
     Message,
     RuntimeIdentity,
 )
+from manabot.llm.tokenization import decode_response, encode_prompt
 
 
 class TransformersRuntime:
@@ -119,22 +120,7 @@ class TransformersRuntime:
         )
 
     def encode(self, messages: tuple[Message, ...]) -> EncodedPrompt:
-        text = self.tokenizer.apply_chat_template(
-            [message.model_dump() for message in messages],
-            chat_template=self.template,
-            tokenize=False,
-            add_generation_prompt=True,
-            **(
-                {"enable_thinking": self.config.enable_thinking}
-                if self.config.enable_thinking is not None
-                else {}
-            ),
-        )
-        # The chat template already supplies its special tokens. Never truncate.
-        tokens = self.tokenizer(text, add_special_tokens=False, truncation=False)[
-            "input_ids"
-        ]
-        return EncodedPrompt(text=text, token_ids=tuple(tokens))
+        return encode_prompt(self.tokenizer, self.config, messages)
 
     def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
         remaining = deadline - time.monotonic()
@@ -151,32 +137,8 @@ class TransformersRuntime:
                 max_time=remaining,
             )
         tokens = tuple(int(token) for token in output[0, inputs.shape[1] :].tolist())
-        ended = bool(tokens) and tokens[-1] in self.eos_ids
-        text = self.tokenizer.decode(
-            tokens[:-1] if ended else tokens,
-            skip_special_tokens=False,
-            clean_up_tokenization_spaces=False,
-        )
-        reasoning_tokens = answer_tokens = None
-        if self.config.enable_thinking is True:
-            boundary = self.tokenizer.encode("</think>", add_special_tokens=False)
-            if len(boundary) != 1:
-                raise ValueError(
-                    "thinking requires a single-token Qwen closing delimiter"
-                )
-            content = tokens[:-1] if ended else tokens
-            if content.count(boundary[0]) == 1:
-                split = content.index(boundary[0])
-                reasoning_tokens = split
-                answer_tokens = len(content) - split - 1
-            elif boundary[0] not in content:
-                reasoning_tokens, answer_tokens = len(content), 0
-        return GeneratedResponse(
-            text=text,
-            token_ids=tokens,
-            finish_reason="eos" if ended else "length",
-            reasoning_tokens=reasoning_tokens,
-            answer_tokens=answer_tokens,
+        return decode_response(
+            self.tokenizer, tokens, self.eos_ids, self.config.enable_thinking
         )
 
     def peak_gpu_bytes(self) -> int | None:

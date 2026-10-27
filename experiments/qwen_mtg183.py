@@ -77,12 +77,14 @@ def schedule(config: Campaign) -> list[ScheduledGame]:
     return games
 
 
-def collect(out: Path) -> None:
+def collect(out: Path, *, settled_games: set[str] | None = None) -> None:
     """Archive only new/current games; finalized archives are never rewritten."""
     records = out.parent / "game-records"
     if not records.exists():
         return
     for game in sorted(records.glob("game-*")):
+        if settled_games is not None and game.name not in settled_games:
+            continue
         archive = out / f"{game.name}.tar.gz"
         if (
             archive.exists()
@@ -204,7 +206,12 @@ def worker(config: Campaign, out: Path) -> None:
 
 
 def run(config: Campaign) -> None:
-    """Etude entry point: supervise the whole process tree, then collect."""
+    """Etude entry point for the sequential treatment."""
+    supervise(config, worker_module="experiments.qwen_mtg183")
+
+
+def supervise(config: Campaign, *, worker_module: str) -> None:
+    """Supervise the whole game process tree, then collect."""
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
     config_path = out / "campaign-config.json"
@@ -222,7 +229,7 @@ def run(config: Campaign) -> None:
         [
             sys.executable,
             "-m",
-            "experiments.qwen_mtg183",
+            worker_module,
             "--worker",
             "--config",
             str(config_path),

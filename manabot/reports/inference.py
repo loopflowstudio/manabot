@@ -916,6 +916,7 @@ def project_llm(root: Path) -> dict[str, Any]:
 
 class _GameSequence(_HistoricalRecord):
     version: Literal["llm-game-sequence-v1"]
+    mode: Literal["sequential", "concurrent"] = "sequential"
     games: list[Annotated[str, Field(pattern=r"^game-[0-9]{3}$")]] = Field(min_length=1)
 
 
@@ -979,8 +980,9 @@ def _combine_matchups(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def _project_llm_sequence(root: Path) -> dict[str, Any]:
-    """One resident session, multiple sequential games; keep game populations."""
+    """One shared model, multiple games; keep overlap and game populations explicit."""
     sequence = _GameSequence.model_validate(_object(root / "games.json"))
+    concurrent = sequence.mode == "concurrent"
     if len(set(sequence.games)) != len(sequence.games):
         raise ValueError("duplicate game in LLM sequence")
     available = [
@@ -1056,7 +1058,9 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
                 else "recorded",
                 "sequence parent",
                 boundary,
-                "one sequential resident session",
+                "one shared model with concurrent games"
+                if concurrent
+                else "one sequential resident session",
                 "Read from retained evidence" if value is not None else "Not retained",
             )
         )
@@ -1116,7 +1120,9 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
     measure(
         "game_wall",
         sum(walls) if walls and all(v is not None for v in walls) else None,
-        "sum of sequential attempted game windows, including failed work",
+        "sum of overlapping game windows, including failed work; not campaign wall or a throughput denominator"
+        if concurrent
+        else "sum of sequential attempted game windows, including failed work",
         derived=True,
     )
     measure(
@@ -1148,7 +1154,9 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
             for name, part in zip(available, parts, strict=True)
         ],
         "notes": [
-            "One sequential resident session; readiness is charged once.",
+            "Concurrent game processes share one model; readiness is charged once. Game windows overlap."
+            if concurrent
+            else "One sequential resident session; readiness is charged once.",
             "Per-game distributions remain separate below. Selection distributions describe this one declared workload/session.",
             "Missing planned games remain incomplete; no renderer is run by this report.",
         ],

@@ -70,3 +70,41 @@ actual CPU policy and GPU Qwen workloads with labels; do not call their ratio a
 backend speedup. Prefill/decode device timing remains unavailable. Token split
 coverage is explicit. Retain sampled whole-device memory separately from Torch
 allocator peak. Billing is not inferred from game seconds.
+
+## Accepted batched continuation — 2026-10-26
+
+The first attempt `b6a4716bb321` completed zero games: the second Qwen selection
+hit the 120-second deadline. Its original receipts remain unchanged. Provider
+absence was verified on 2026-10-27 at 05:12 UTC; the retained estimated charge is
+$0.06238391746666666459, with final inclusive billing unavailable.
+
+Jack Heart selected a faster batched backend. The next attempt is a separate
+treatment using vLLM 0.17.1, pinned by the hashed Linux lock at
+`configs/llm/vllm-0.17.1-linux.lock`. The client keeps the root `uv.lock` and
+exact pinned tokenizer. The model remains BF16, with the same reasoning,
+context, output-token and selection-time limits. No quantization or prefix
+reuse. Exact prompt/output token IDs cross a loopback completion endpoint;
+the ordinary selection validator, repair and native Command binding still apply.
+
+Four isolated game processes share one GPU server. Each game loads the same
+CPU checkpoint and seeds its own policy RNG. The original 100-game schedule,
+decks, deals and seats remain fixed. All 100 games are reserved before execution;
+admissions are recorded before submission. A failed game stops new admissions;
+already admitted games settle under their original bounds. No replacement games
+or automatic retry. Startup and per-game client/policy preparation are retained
+separately; overlapping game windows are never summed into campaign throughput.
+
+The next allocation retains the RTX A6000 48GB hardware and $0.60/hour quote
+limit, 11-hour job ceiling, 10-hour game watchdog, independent rental guardian
+and cleanup/absence verification. vLLM startup has a 900-second ceiling within
+the job lifetime. One new allocation/attempt is authorized by the backend choice.
+Its job/cohort cap is **$9.40**, plus the original **$0.50 ancillary reserve** and
+the first attempt's estimated charge: $9.96238391746666666459 total maximum
+commitment against the original **$10**, not a new allowance. Stop early on
+completion or failure and retain setup failures as attempts.
+
+The supported model and exact-token completion contracts were checked against
+the [official Qwen recipe](https://recipes.vllm.ai/Qwen/Qwen3.5-9B) and the
+[v0.17.1 completion protocol](https://github.com/vllm-project/vllm/blob/v0.17.1/vllm/entrypoints/openai/completion/protocol.py).
+Local controlled tests establish binding and accounting; actual GPU startup,
+fit, latency and complete-game outcomes remain to be observed.

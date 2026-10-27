@@ -1,0 +1,2 @@
+# Separate server environment; the game client retains uv.lock's tokenizer.
+vllm==0.17.1
