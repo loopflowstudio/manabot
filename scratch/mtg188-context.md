@@ -11,14 +11,14 @@ Reconciled with integrated MTG-184/185 at
 Reconciled again against the execution continuation and retained fixture evidence
 on 2026-10-26: the runner and separate LLM host observations exist. The earlier
 feedback describing them as absent predates this implementation. Collection now
-shares the original supervised budget; gate validation and empirical baselines remain open.
+shares the original supervised budget. The software publication gate passed; empirical baselines remain open.
 
 Current continuation, 2026-10-26: Jack Heart asked to work around Loopflow's
 SQLite launch/settlement failures. Finish the remaining review and publication
 in this primary conversation, preserving the completed implementation. No new
 Graph or worker is needed. Direct synchronization with main succeeded; the
-mixed CLI/headless Perf proof and changed-file Ruff checks passed. The broader
-evaluation/LLM regression run is in progress. Empirical baseline dependencies
+mixed CLI/headless Perf proof and changed-file Ruff checks passed. The affected
+evaluation/LLM regression run passed: 161 tests, one CUDA-only skip. Empirical baseline dependencies
 remain unchanged.
 
 ## Problem and observable outcome
@@ -56,8 +56,7 @@ native replay, download or GPU workload.
 
 The implemented mixed-report path adds `--eval-receipt <policy-panel>` and a
 baseline manifest. Controlled fixtures cover linked policy/LLM attempts,
-contradiction rejection and missing/restored evidence; browser verification is
-pending gate. The empirical demo still requires CPU/GPU policy cells within their
+contradiction rejection and missing/restored evidence; the mixed CLI/headless browser proof passed on 2026-10-26. The empirical demo still requires CPU/GPU policy cells within their
 declared cohort, startup separated from warm work, and finite many-game
 denominators. LLM and trained-policy workloads remain separate cohorts, never
 one speedup ratio. Generated data/text are inspectable headlessly.
@@ -467,7 +466,7 @@ LLM imports. No runtime copy or additional integration step is needed.
 
 ## Internal slices and Done when
 
-1. **Implemented slice — retained evidence to Perf; gate pending.** Typed readers,
+1. **Implemented slice — retained evidence to Perf; software gate passed.** Typed readers,
    builder, projection and existing UI validate/deduplicate sources and show LLM
    latency, startup, memory, coverage and failure states without fake score rows.
    Compact schema-faithful fixtures and a real corpus manifest are present.
@@ -476,7 +475,7 @@ LLM imports. No runtime copy or additional integration step is needed.
    test (new): `uv run --extra dev pytest tests/eval/test_inference_receipts.py -q`.
    Done when the demo command explains the actual L4 run offline without
    modifying raw bytes, importing a model or zero-filling missing measurements.
-2. **Instrumentation and execution — implemented; gate pending.**
+2. **Instrumentation and execution — implemented; software gate passed.**
    Policy readiness, admission, transport/queue, success/failure latency, residency
    misses, process RSS and allocated/reserved CUDA peaks now use existing owners.
    The experimental runner now freezes recipes, replays retained roots, records
@@ -511,7 +510,7 @@ and restoration with unchanged attempt identities and declaration bytes. Both
 policy and LLM measurements link back to their declarations; replay coverage
 remains independent of observed completion.
 
-Pending gate checks for the implemented slice:
+Passed gate checks for the implemented slice (2026-10-26):
 
 ```sh
 uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_inference_receipts.py tests/eval/test_inference_baseline_execution.py tests/eval/test_eval_performance.py tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/test_package_boundaries.py -q
@@ -779,3 +778,5 @@ CI watcher is not running. The optional broader evaluation run was interrupted
 during the existing eight-game card audit after 26 passes and one CUDA skip;
 the publication gate uses the design's affected suites instead. Earlier failures
 were source admission of the new untracked helper, repaired with Git intent-to-add.
+
+Final software check, 2026-10-26: affected receipt/execution, Perf, batched/local evaluation, all LLM and package-boundary tests — 161 passed, one CUDA-only skip in 688.55 s; `./scripts/verify-eval-performance-report` passed; changed-file Ruff check/format and `git diff --check` passed; exact evaluation CI collection found 235 tests. No empirical or paid run occurred.

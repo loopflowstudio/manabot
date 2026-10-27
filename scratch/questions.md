@@ -47,7 +47,7 @@ measurement boundaries, evidence corrections and gate commands live in that file
   failed to settle because SQLite was locked. Its effects are preserved; stopped
   Graphs do not authorize replay. Jack Heart authorized a direct-session workaround for launch failures.
   Compression, sync and review are complete; the mixed CLI/headless proof passed,
-  and affected suites are running before publication. Empirical dependencies do not block independent software work.
+  and affected suites passed (161 tests, one CUDA-only skip). Empirical dependencies do not block independent software work.
 
 Inherited MTG-186 notes remain at
 `a0dead2b5195853e0931bf244d84529c08944acb:scratch/questions.md`; MTG-184 notes
