@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+DecisionObjective = Literal["legal-action", "win-game"]
+
 
 class Record(BaseModel):
     # Importing infra's shared base also loads its training runtime and Torch.
