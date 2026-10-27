@@ -47,7 +47,7 @@ def benchmark(original: Benchmark) -> Benchmark:
         if not isinstance(candidate, Model):
             raise ValueError("GPU curriculum benchmark requires one model placeholder")
         inference = Model(
-            source=[*INFERENCE_CODE, ROOT / "manabot/sim", Path(__file__)],
+            code=[*INFERENCE_CODE, ROOT / "manabot/sim", Path(__file__)],
             config=candidate.config,
         )
         conditions = tuple(
