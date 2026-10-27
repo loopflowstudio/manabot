@@ -748,5 +748,16 @@
       "tests/fixtures/resolution-eligibility-captures.json",
       "scratch/eligibility-*.json"
     ]
+  },
+  "resolution_stack_integration": {
+    "basis": "MTG-195 merged as PR386; local merge b25b90610 includes main 37e5ccd8d. Upstream trigger work is not charged to this audit. New conflict-resolution churn remains to be measured against both parents before final gate.",
+    "prior_combined_draft_churn_lines": 9096,
+    "accounting_pending": true,
+    "excluded_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures-v4.json"
+    ],
+    "preserved_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures.json"
+    ]
   }
 }

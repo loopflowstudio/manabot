@@ -427,7 +427,7 @@ class ActorCritic(nn.Module):
             rows = obs["relations"]
             present = (
                 (indexes.unsqueeze(-1) == rows[:, None, :, 1])
-                & (rows[:, None, :, -1] == 1)
+                & (rows[:, None, :, 31] == 1)
             ).any(-1)
             if ((indexes != 0) & ~present).any():
                 raise ValueError("action continuation reference has no frame")

@@ -1,7 +1,7 @@
 [
   {
     "capture": {
-      "capture_version": 4,
+      "capture_version": 3,
       "content_digest": "d58632847ac3758a9838fdb0d2b017bf77514bda2a28082ca565e1a963f9f0d0",
       "continuation": {
         "actor": 0,
@@ -185,7 +185,7 @@
           "ward": null
         }
       },
-      "digest": "081912efa5a675b7dadb0235409a1f621d1dfe9b8d089fe37770e4a2e0c0861b",
+      "digest": "cb2cc56340db0954b5cd0ff2b9399390c1260029ef4571fee1a120ef3dc0c0a0",
       "frames": [
         {
           "ability": null,
@@ -351,7 +351,7 @@
       "observation": {
         "decision": {
           "actor": 0,
-          "fingerprint": "f7fb7ca110d2ff12d8a4c22f34babee668990e4f95e11dc28a9092caef82680a",
+          "fingerprint": "b4ec3046624a8a1a04a5697be91c8d08c4443f3697ae2ba537aa6202b7970374",
           "object_candidates": [],
           "offers": [
             {
@@ -376,21 +376,20 @@
             }
           ],
           "revision": 2,
-          "schema_version": 7
+          "schema_version": 6
         },
         "events": [],
         "identity": {
           "revision": 2,
-          "schema_version": 7,
+          "schema_version": 6,
           "viewer": 0,
-          "viewer_state_hash": "7ab1c2bd9949a44bc2ea1a2c76f9d92c86d967f89968022cfed2e35bffda614c"
+          "viewer_state_hash": "a216aed8b4789c9e93825d3e5f1a7d5994ff377c6f82f263d574f814ed3e5f68"
         },
         "viewer_state": {
           "action_space": {
             "actions": [
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "description": "Decline",
                 "focus": [
@@ -401,7 +400,6 @@
               },
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "focus": [
                   14
@@ -1135,7 +1133,6 @@
               "ability_index": null,
               "chosen_mode": null,
               "controller_id": 0,
-              "description": null,
               "kind": 0,
               "source_card_registry_key": 7,
               "source_permanent_id": null,
@@ -3288,7 +3285,7 @@
   },
   {
     "capture": {
-      "capture_version": 4,
+      "capture_version": 3,
       "content_digest": "d58632847ac3758a9838fdb0d2b017bf77514bda2a28082ca565e1a963f9f0d0",
       "continuation": {
         "actor": 0,
@@ -3472,7 +3469,7 @@
           "ward": null
         }
       },
-      "digest": "fe386d186db852d5e01734907c4b463152eac05a08d3357fb79e82c12ff20976",
+      "digest": "c38e4b2043f8b6d63ad5ba9731d7723a3bebb00f1e96a7f1dc9c2ba0f5d21af2",
       "frames": [
         {
           "ability": null,
@@ -3638,7 +3635,7 @@
       "observation": {
         "decision": {
           "actor": 0,
-          "fingerprint": "f7fb7ca110d2ff12d8a4c22f34babee668990e4f95e11dc28a9092caef82680a",
+          "fingerprint": "b4ec3046624a8a1a04a5697be91c8d08c4443f3697ae2ba537aa6202b7970374",
           "object_candidates": [],
           "offers": [
             {
@@ -3663,21 +3660,20 @@
             }
           ],
           "revision": 2,
-          "schema_version": 7
+          "schema_version": 6
         },
         "events": [],
         "identity": {
           "revision": 2,
-          "schema_version": 7,
+          "schema_version": 6,
           "viewer": 0,
-          "viewer_state_hash": "7ab1c2bd9949a44bc2ea1a2c76f9d92c86d967f89968022cfed2e35bffda614c"
+          "viewer_state_hash": "a216aed8b4789c9e93825d3e5f1a7d5994ff377c6f82f263d574f814ed3e5f68"
         },
         "viewer_state": {
           "action_space": {
             "actions": [
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "description": "Decline",
                 "focus": [
@@ -3688,7 +3684,6 @@
               },
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "focus": [
                   14
@@ -4422,7 +4417,6 @@
               "ability_index": null,
               "chosen_mode": null,
               "controller_id": 0,
-              "description": null,
               "kind": 0,
               "source_card_registry_key": 7,
               "source_permanent_id": null,
@@ -6575,7 +6569,7 @@
   },
   {
     "capture": {
-      "capture_version": 4,
+      "capture_version": 3,
       "content_digest": "d58632847ac3758a9838fdb0d2b017bf77514bda2a28082ca565e1a963f9f0d0",
       "continuation": {
         "actor": 1,
@@ -6759,7 +6753,7 @@
           "ward": null
         }
       },
-      "digest": "99806bb8258f0e9ecd488f97e8b9c85e9385f212d37f6e8a21adacf2bcfd66b6",
+      "digest": "b2c6e3942b6551b0b2171aa7e0e8ec3050cb547b1a04e42e33283e8027230c6c",
       "frames": [
         {
           "ability": null,
@@ -6921,7 +6915,7 @@
       "observation": {
         "decision": {
           "actor": 1,
-          "fingerprint": "71fe0c308b76ae664f3f852272123a6864447718ef6b9250cdf1d9eea8ed2999",
+          "fingerprint": "8340c52d2b149a12302826ae86f19e5ac80ae71e0f4824fae1e45e91868e5ec1",
           "object_candidates": [],
           "offers": [
             {
@@ -6946,21 +6940,20 @@
             }
           ],
           "revision": 2,
-          "schema_version": 7
+          "schema_version": 6
         },
         "events": [],
         "identity": {
           "revision": 2,
-          "schema_version": 7,
+          "schema_version": 6,
           "viewer": 1,
-          "viewer_state_hash": "fd667f18e2999a4589d00b3577fc60a4b1551e75fafef9075acdade8cbe9e101"
+          "viewer_state_hash": "5ff6ece85179ba279b4755e44b163cd4f69331fb32b34225116f4378b2842132"
         },
         "viewer_state": {
           "action_space": {
             "actions": [
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "description": "Decline",
                 "focus": [
@@ -6971,7 +6964,6 @@
               },
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "focus": [
                   54
@@ -7648,7 +7640,6 @@
               "ability_index": null,
               "chosen_mode": null,
               "controller_id": 1,
-              "description": null,
               "kind": 0,
               "source_card_registry_key": 7,
               "source_permanent_id": null,
@@ -9801,7 +9792,7 @@
   },
   {
     "capture": {
-      "capture_version": 4,
+      "capture_version": 3,
       "content_digest": "d58632847ac3758a9838fdb0d2b017bf77514bda2a28082ca565e1a963f9f0d0",
       "continuation": {
         "actor": 1,
@@ -9985,7 +9976,7 @@
           "ward": null
         }
       },
-      "digest": "4dd7ce86897a60a7f538bc1c00363a41f2c38b5c6a5f9bc496aa3a8b3afe8f5a",
+      "digest": "5b66ccb4d2c00da82c9f3dda096b33851591042d194f414d91563a55162c2029",
       "frames": [
         {
           "ability": null,
@@ -10147,7 +10138,7 @@
       "observation": {
         "decision": {
           "actor": 1,
-          "fingerprint": "71fe0c308b76ae664f3f852272123a6864447718ef6b9250cdf1d9eea8ed2999",
+          "fingerprint": "8340c52d2b149a12302826ae86f19e5ac80ae71e0f4824fae1e45e91868e5ec1",
           "object_candidates": [],
           "offers": [
             {
@@ -10172,21 +10163,20 @@
             }
           ],
           "revision": 2,
-          "schema_version": 7
+          "schema_version": 6
         },
         "events": [],
         "identity": {
           "revision": 2,
-          "schema_version": 7,
+          "schema_version": 6,
           "viewer": 1,
-          "viewer_state_hash": "fd667f18e2999a4589d00b3577fc60a4b1551e75fafef9075acdade8cbe9e101"
+          "viewer_state_hash": "5ff6ece85179ba279b4755e44b163cd4f69331fb32b34225116f4378b2842132"
         },
         "viewer_state": {
           "action_space": {
             "actions": [
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "description": "Decline",
                 "focus": [
@@ -10197,7 +10187,6 @@
               },
               {
                 "ability_index": null,
-                "continuation_index": null,
                 "declared": null,
                 "focus": [
                   54
@@ -10874,7 +10863,6 @@
               "ability_index": null,
               "chosen_mode": null,
               "controller_id": 1,
-              "description": null,
               "kind": 0,
               "source_card_registry_key": 7,
               "source_permanent_id": null,

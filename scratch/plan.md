@@ -3,6 +3,25 @@
 Draft implementation integrated with merged MTG-195 on 2026-10-27.
 Final world admission and broader acceptance remain pending.
 
+Integration checkpoint: merge `b25b90610` contains MTG-195's merge commit and
+main `37e5ccd8d`. Debug resolution checks passed 8/8 and trigger ordering 7/7.
+The release wheel rebuilt in 7m11s and its cp312 extension was installed by
+atomic rename. Combined continuation/text Python checks passed 30/30 after
+correcting the last action-to-frame validity lookup from the final column to
+column 31. Initial Python result was 28 pass/2 fail; required assertions stayed.
+The first compile exposed two remaining calls to the removed boolean relations
+config; both now use policy_input_version. Ruff, Rust format, pinned-index and
+diff checks passed. No full gate or current-world admission is claimed here.
+
+Continue the authorized pursuit on this integrated source: finalize the current
+world/version assignment and fresh affected conformance/demo prefixes, reconcile
+the audit's live claims, complete the remaining review steps, and prepare the
+affected gate proof. Reuse the above focused results unless code changes warrant
+reruns. Measure integration-specific authored churn without charging inherited
+MTG-195/main changes; the previous total is 9,096 of roughly 10k. Return for review
+without ready publication, merge or whole-audit completion. No parent handoff
+dependency remains. Deathtouch and earthbend remain follow-ups.
+
 ## Requested stack — 2026-10-27
 
 Jack Heart directed "stack on 195": MTG-177 is to build on MTG-195's
@@ -122,7 +141,7 @@ resolution versus present at entry, with a second legal clause allowing both
 effects to suspend. Current observations and v2 tensors are identical; retained
 eligibility, v4 tensors, portable text and model values differ. Independent
 expected slot values precede encoder parity assertions. Checked generated
-captures live in `tests/fixtures/resolution-eligibility-captures.json`; these are
+captures live in `tests/fixtures/resolution-eligibility-captures-v4.json`; these are
 synthetic observation evidence, not executable Academy setups or proof of deck
 reachability. Existing witnesses now assert capture/clone/rollback preservation,
 nonacting privacy and absent replacement links for departed permanent/graveyard
