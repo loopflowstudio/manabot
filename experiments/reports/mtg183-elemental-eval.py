@@ -5,11 +5,12 @@ experiment its eval runs record. It only reports; the follower
 (`experiments.elemental_long_eval`) and the rented batches
 (`experiments.elemental_long_rent`) play it. Seats declare each checkpoint's
 update and its line, so the evaluation-only page draws curves over updates
-(`experiments.elemental_long_db.place` declares them on older records).
+(`experiments.elemental_long_db.normalize` declares them on older records).
 
     uv run --extra evaluation python -m experiments.elemental_long_db build
-    uv run etude report experiments/reports/mtg183-elemental-eval.py \\
-        --source ~/.manabot/mtg183-eval-db/runs --out ~/.manabot/mtg183-eval-db/reports --open
+    ETUDE_HOME=~/.manabot/mtg183-eval-db/etude uv run --extra evaluation \\
+        etude report experiments/reports/mtg183-elemental-eval.py \\
+        --source ~/.manabot/mtg183-eval-db/store --out ~/.manabot/mtg183-eval-db/reports --open
 """
 
 from etude.report import Anchors, Crosstable, Curve, Earlier, Report, Score

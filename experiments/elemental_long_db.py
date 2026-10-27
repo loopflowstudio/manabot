@@ -16,12 +16,13 @@ it unchanged, plus one table:
   `sha256`, size and gzipped bytes.
 
 `ingest` folds one eval run's folder into a local mirror of everything but
-evidence (`MIRROR`, which statsdb reads) and evidence into `EVIDENCE`; it skips
+evidence (`MIRROR`) and evidence into `EVIDENCE`; it skips
 what is already there and keys a live writer removed after listing. Sources are
 an eval run's folder in the evaluations bucket (the Mac mini's
 `mtg183-eval-cards`, earlier rented calibrations) or a rented batch's returned
-run folder (`experiments.elemental_long_rent.collect`). `build` assembles the
-database; `publish` uploads it as one object.
+run folder (`experiments.elemental_long_rent.collect`). `build` normalizes a
+copy of the mirror (`normalize`), assembles the database from it, and
+`publish` uploads it as one object.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_db \\
         ingest-bucket mtg183-eval-cards
@@ -35,6 +36,7 @@ import argparse
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -52,11 +54,21 @@ HOME = Path("~/.manabot/mtg183-eval-db").expanduser()
 MIRROR = HOME / "runs"
 EVIDENCE = HOME / "evidence.duckdb"
 DATABASE = HOME / "mtg183-eval.duckdb"
+# Etude's home for this database's builds and reports (`ETUDE_HOME`).
+ETUDE = HOME / "etude"
 # The published database: one object, replaced on each publish.
 PUBLISHED = f"{PREFIX}/mtg183/mtg183-eval.duckdb"
 _EVIDENCE = "artifacts/evidence/"
 # A rated checkpoint's player name, `uNNNNNN` (its update).
 _UPDATES = re.compile(r"u\d{6}")
+# Environment source digests verified to play the same game (`_same_game`).
+_SAME_GAME = {
+    "525fed818d16c1aebaa759dd04240c89a9593af0ee3c1575ab67caf8e86a9ad6": (
+        "a3d0309ec8d75da3bdada81da9fc3635c015eb45f69a4cb9723dc0281c70ea6b"
+    ),
+}
+# The address the Mac mini's run keyed a checkpoint by.
+_ADDRESS = re.compile(r"mtg183:(?P<run>[\w.-]+)/updates-(?P<updates>\d+)")
 
 
 class Folder(Protocol):
@@ -206,57 +218,135 @@ def _insert(db: duckdb.DuckDBPyConnection, rows: list[list[Any]]) -> None:
     db.commit()
 
 
-def place(record: bytes) -> bytes | None:
-    """A match record whose checkpoints declare where they stood, or None if it already does.
+def normalize(record: bytes) -> tuple[str, str, bytes]:
+    """A match record as this database keeps it: its old key, new key and normalized record.
 
-    Matches played before MTG-183's seats declared `at` and `line` (etude-sdk
-    0.2.6) leave Etude's report no position for a checkpoint no training run of
-    this experiment recorded. Both are part of no key, so declaring them keeps
-    the match's key and file; the record is upgraded to the current format.
+    Two fixes to what MTG-183's earlier eval runs recorded, both about the
+    rated checkpoints (`uNNNNNN`), so Etude's report draws one curve per line:
+
+    - Seats declare where each checkpoint stood (`at`) and its learner
+      (`LINE`). Matches played before the seats did (etude-sdk 0.2.6) give the
+      report no position for a checkpoint no training run of this experiment
+      recorded. Neither is part of a key.
+    - The Mac mini's run (`fb71050cf`) put each checkpoint's update and size in
+      its inference config. A config is how a model plays, part of its key, so
+      every checkpoint was its own config and the rented runs' `{}` seated
+      different players. Position now lives in `at`, so the config is dropped;
+      the match's key changes, and `_stage` re-keys its table rows to match.
+    - The same run's checkpoints were keyed by an address
+      (`mtg183:RUN/updates-N`); the current key is the run and player name
+      (`RUN/uNNNNNN`), as `checkpoint_model` seats it. Under two keys one
+      checkpoint was two players at one position.
     """
-    from etude.eval.records import MatchRecord, Model
+    from etude.eval.records import CheckpointKey, MatchRecord, Model
 
     from experiments.elemental_long_eval import LINE
 
     found = MatchRecord.model_validate_json(record)
     players = []
     for seated in found.match.players:
-        name = seated.name
-        if isinstance(seated, Model) and _UPDATES.fullmatch(name):
-            ref = seated.checkpoint.model_copy(
-                update={"at": {"updates": int(name[1:])}, "line": LINE}
+        if isinstance(seated, Model) and _UPDATES.fullmatch(seated.name):
+            updates = int(seated.name[1:])
+            config = seated.inference.config
+            if config and set(config) - {"updates", "bytes"}:
+                raise ValueError(f"{seated.name} plays under config {config}")
+            if config.get("updates", updates) != updates:
+                raise ValueError(f"{seated.name} says it stood at {config}")
+            key = seated.checkpoint.key
+            if key.address is not None:
+                found_key = _ADDRESS.fullmatch(key.address)
+                if found_key is None or int(found_key["updates"]) != updates:
+                    raise ValueError(f"{seated.name} is keyed {key.address}")
+                key = CheckpointKey(run=found_key["run"], name=seated.name)
+            seated = seated.model_copy(
+                update={
+                    "checkpoint": seated.checkpoint.model_copy(
+                        update={"key": key, "at": {"updates": updates}, "line": LINE}
+                    ),
+                    "inference": seated.inference.model_copy(update={"config": {}}),
+                }
             )
-            seated = seated.model_copy(update={"checkpoint": ref})
         players.append(seated)
-    placed = found.model_copy(
-        update={"match": found.match.model_copy(update={"players": tuple(players)})}
+    match = found.match.model_copy(update={"players": tuple(players)})
+    # Re-validate so the key is computed from the normalized players.
+    normalized = MatchRecord.model_validate(
+        found.model_copy(update={"match": match}).model_dump(mode="json")
     )
-    if placed.match.key != found.match.key:
-        raise ValueError(f"declaring positions changed match {found.match.key}")
-    if placed == found:
-        return None
-    return placed.model_dump_json().encode()
+    return found.match.key, normalized.match.key, normalized.model_dump_json().encode()
 
 
-def _place_mirror() -> int:
-    """Declare positions in every mirrored match record; returns how many changed."""
-    changed = 0
-    for path in MIRROR.glob("*/*/matches/*.json"):
-        placed = place(path.read_bytes())
-        if placed is not None:
-            path.with_name(path.name + ".partial").write_bytes(placed)
-            path.with_name(path.name + ".partial").replace(path)
-            changed += 1
-    return changed
+def _same_game(record: bytes) -> bytes:
+    """An eval run's environment, with source digests known to play the same game merged.
+
+    The environment digests `elemental_long.py` and `elemental_grid.py`, which
+    also hold orchestration. Between the Mac mini's revision (`fb71050cf`) and
+    the rented batches' (`e71539d1f` on), they changed only how groups reach
+    inference (CUDA endpoint, compute contract) and how training continues; the
+    world, pack, limits and the pinned pair schedule are unchanged, and CPU and
+    GPU agreed on the pair both played (u5950 v u5600: 0.504, 0.494). Any other
+    digest stays its own environment until it is checked the same way.
+    """
+    found = json.loads(record)
+    if found.get("files") in _SAME_GAME:
+        found["files"] = _SAME_GAME[found["files"]]
+    return json.dumps(found, separators=(",", ":")).encode()
+
+
+def _stage() -> Path:
+    """A fresh copy of the mirror with every match record normalized; returns it.
+
+    The mirror stays as its sources hold it. Match records move to their new
+    key's file, and each table part's `match` column is re-keyed alongside.
+    """
+    store = HOME / "store"
+    # Etude updates a store's cached statsdb incrementally, which would keep
+    # the previous staging's match keys; every staging starts it afresh.
+    for found in (ETUDE / "statsdb").glob(f"{EXPERIMENT}.*"):
+        found.unlink()
+    if store.exists():
+        shutil.rmtree(store)
+    keys: dict[str, str] = {}
+    for run in MIRROR.glob("*/*"):
+        target = store / run.relative_to(MIRROR)
+        for source in run.rglob("*"):
+            if source.is_dir():
+                continue
+            relative = source.relative_to(run)
+            if relative.parts[0] == "matches" and source.suffix == ".json":
+                old, key, normalized = normalize(source.read_bytes())
+                keys[old] = key
+                suffix = source.name.removeprefix(old)
+                destination = target / "matches" / f"{key}{suffix}"
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(normalized)
+            elif relative == Path("environment.json"):
+                (target / relative).parent.mkdir(parents=True, exist_ok=True)
+                (target / relative).write_bytes(_same_game(source.read_bytes()))
+            elif relative.parts[0] != "tables" or source.suffix != ".parquet":
+                (target / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target / relative)
+    mapping = duckdb.connect()
+    mapping.execute("CREATE TABLE rekey (old VARCHAR PRIMARY KEY, new VARCHAR)")
+    mapping.executemany("INSERT INTO rekey VALUES (?, ?)", list(keys.items()))
+    for part in MIRROR.glob("*/*/tables/*.parquet"):
+        destination = store / part.relative_to(MIRROR)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        mapping.execute(
+            f"COPY (SELECT t.* REPLACE (coalesce(r.new, t.match) AS match)"
+            f" FROM read_parquet('{part}') t LEFT JOIN rekey r ON r.old = t.match)"
+            f" TO '{destination}' (FORMAT parquet)"
+        )
+    mapping.close()
+    return store
 
 
 def build() -> Path:
-    """Etude's statsdb over the mirror, with the evidence table, as `DATABASE`."""
+    """Etude's statsdb over the normalized mirror, with the evidence table, as `DATABASE`."""
     from etude.eval.query import statsdb
 
-    _place_mirror()
-    os.environ["ETUDE_HOME"] = str(HOME / "etude")
-    db = statsdb(EXPERIMENT, MIRROR, rebuild=True)
+    store = _stage()
+    os.environ["ETUDE_HOME"] = str(ETUDE)
+    db = statsdb(EXPERIMENT, store, rebuild=True)
     try:
         db.execute(f"ATTACH '{EVIDENCE}' AS evidence_store (READ_ONLY)")
         db.execute(
