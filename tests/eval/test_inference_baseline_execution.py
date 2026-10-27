@@ -757,3 +757,29 @@ def test_collection_exhaustion_retains_pins_and_reaps_children(
     (directory / "a.json").write_text("{}")
     with pytest.raises(ValueError, match="mismatch"):
         write_report([], [], tmp_path / "changed", out / "manifest.json")
+
+
+def test_gpu_replay_resolves_portable_cell_trace(tmp_path: Path) -> None:
+    from experiments.policy_inference_gpu import replay_recipe
+
+    single = PolicyWorkload(
+        id="single", kind="policy", request=tmp_path / "single.json"
+    )
+    many = single.model_copy(update={"id": "many"})
+    recipe = Recipe(
+        workloads=(single, many),
+        cells=(
+            Cell(id="single", workload="single"),
+            Cell(id="batch1", workload="many"),
+            Cell(id="batch4", workload="many"),
+        ),
+    )
+    cell = tmp_path / "completed-cell"
+    cell.mkdir()
+    (cell / "trace.json").write_text(json.dumps({"artifact_path": "traces/game.gz"}))
+    replay = replay_recipe(recipe, cell)
+    assert replay.workloads[0].trace == cell / "traces/game.gz"
+    assert [c.id for c in replay.cells] == ["batch1", "batch4"]
+    (cell / "trace.json").write_text("{}")
+    with pytest.raises(ValueError, match="no trace artifact"):
+        replay_recipe(recipe, cell)

@@ -18,3 +18,27 @@ Existing checkout: /Users/jack/src/manabot.mtg-188-measure-inference-startup. Cu
 
 Qwen boundary
 MTG-191 now owns further Qwen reasoning/generation/backend diagnostics and long-running LLM experiments, coordinating MTG-192 for prefix caching. Preserve source through 6ea6e0bef45d and all seven MTG-188 campaign attempt identities in its handoff; no silent deletion of LLM support or evidence from this branch. Run 7b8c16de1b60 is being cancelled and its rental cleanup/partial outputs reconciled as part of this refocus. The prior $10 RunPod authorization was for the Qwen campaign; it is neither replenished nor automatically reassigned to non-LLM GPU experiments. Begin independent local CPU measurements; surface unavailable CUDA evidence before spending on a new allocation.
+
+## GPU direction — 2026-10-27
+
+Jack Heart subsequently requested: “do the inference perf testing on a gpu for
+policy v policy batched inference.” This supersedes the CPU-first execution
+plan and authorizes this finite GPU measurement within the original cumulative
+$10 cap; it does not replenish that cap. All seven Qwen rentals have ended,
+with $2.917705820125419603078713051 finalized rental charges. Preserve $0.50
+for ancillary billing. The first GPU policy job reserves at most $1.00 and one
+hour on the existing RTX A6000 supply; no concurrent allocation.
+
+Both seats use admitted MTG-183 u5950 with independent player registrations and
+policy RNG. Compare resident CUDA batch-1 against four concurrent games/rows:
+three rotated repeats, one single game and two eight-game cells per repeat
+(51 game opportunities), then the first 64 retained roots from a completed
+many-game cell, two warmup passes and one measured pass per replay cell.
+Each phase is bounded at 900 seconds, each cell 300 seconds, each game 120
+seconds. Record actual batch distribution; four games is not a GPU saturation
+claim. Preserve failures and unattempted reservations. No artificial load.
+
+The CPU-versus-heuristic invocation was interrupted on this direction. Its first
+cell completed one replay-verified native game (150 decisions), but collection
+was interrupted, so the raw attempt ledger remains unsettled. Retain it under
+`.runs/policy-baseline`; do not report it as a completed GPU measurement.
