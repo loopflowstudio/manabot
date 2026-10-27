@@ -42,3 +42,9 @@ The CPU-versus-heuristic invocation was interrupted on this direction. Its first
 cell completed one replay-verified native game (150 decisions), but collection
 was interrupted, so the raw attempt ledger remains unsettled. Retain it under
 `.runs/policy-baseline`; do not report it as a completed GPU measurement.
+
+The A6000 quote reported no stock. The replacement is NVIDIA L4, available at
+$0.59/hour, with the same $1.00 run ceiling. Dedicated supply
+`mtg188-policy-l4` copies the existing L4 machine/image/storage settings and
+limits this measurement to one rental. Prior Qwen pod absence was reverified
+before creating the supply; creating a supply rents nothing.

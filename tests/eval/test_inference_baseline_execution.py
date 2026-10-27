@@ -763,7 +763,7 @@ def test_gpu_replay_resolves_portable_cell_trace(tmp_path: Path) -> None:
     from experiments.policy_inference_gpu import replay_recipe
 
     single = PolicyWorkload(
-        id="single", kind="policy", request=tmp_path / "single.json"
+        id="single", kind="policy", request=tmp_path / "single.json", legs=(0,)
     )
     many = single.model_copy(update={"id": "many"})
     recipe = Recipe(
