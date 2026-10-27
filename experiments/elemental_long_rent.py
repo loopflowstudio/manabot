@@ -517,7 +517,14 @@ def launch(
     state = admitted()
     design = units(state)
     done = stored([MINI_RUN, SCALAR_RUN, BATCHED_RUN, GPU_RUN])
-    taken = {key for batch in ledger.launched.values() for key in batch.units}
+    # Units of batches still live; a settled batch's played matches are `done`,
+    # and the rest of its units are pending again.
+    taken = {
+        key
+        for run, batch in ledger.launched.items()
+        if run not in ledger.spent
+        for key in batch.units
+    }
     bundle = bundle_at(ROOT, revision)
     runs, frozen = [], []
     for mode in modes:
