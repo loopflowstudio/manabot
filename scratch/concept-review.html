@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-206 · Card evaluation concept review</title>
+<style>
+  :root { color-scheme: light dark; --paper:#faf8f2; --ink:#272b27; --muted:#555e56; --line:#c4ccc2; --accent:#315f49; }
+  @media (prefers-color-scheme:dark) { :root { --paper:#191d1a; --ink:#e6ece5; --muted:#b6c1b5; --line:#4d5b4e; --accent:#a9d4b9; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:17px/1.6 system-ui,sans-serif; }
+  main { max-width:760px; margin:auto; padding:40px 24px 64px; }
+  header, small { color:var(--muted); font-size:13px; }
+  h1 { font:600 32px/1.2 Georgia,serif; margin:24px 0 16px; }
+  h2 { font-size:19px; margin:32px 0 10px; }
+  p { margin:12px 0; }
+  code { font:0.85em/1.5 ui-monospace,monospace; overflow-wrap:anywhere; }
+  table { width:100%; border-collapse:collapse; font-size:15px; margin:20px 0; }
+  td, th { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:12px 8px 12px 0; }
+  th { font-weight:600; }
+  blockquote { margin:20px 0; padding:4px 0 4px 20px; border-left:3px solid var(--accent); }
+  a { color:var(--accent); }
+  li { margin:10px 0; }
+  @media(max-width:480px) { main { padding:24px 16px 40px; } h1 { font-size:28px; } table { font-size:13px; } }
+</style>
+<main>
+  <header>
+    MTG-206 · concept-review · 2026-10-27<br>
+    Built from <code>scratch/mtg206.md</code>, <code>docs/card-evaluation.md</code>,
+    <code>manabot/eval/card_query.py</code>, <code>card_page.py</code>,
+    <code>card_metrics.py</code>, <code>card_evaluation.py</code> and
+    <code>tests/eval/test_card_evaluation.py</code>.
+  </header>
+  <h1>No further product decision is needed.</h1>
+  <p><strong>Review outcome: nothing further to change; no open product choice
+    within MTG-206.</strong> Excluded games now remain visible through the page.
+    The accepted design stands. The exact-cohort performance proof remains open.</p>
+  <p>The match owns its evidence; the experiment pools its runs; a selection
+    chooses player-games. Blocks and rollups remain storage and query machinery.</p>
+
+  <table>
+    <caption>Actions → concepts → APIs, before and after the implemented correction</caption>
+    <thead><tr><th>Action</th><th>Concept and experience</th><th>API</th></tr></thead>
+    <tbody>
+      <tr><td>Generate card page</td><td>Existing: experiment → selection → precomputed results. Unchanged.</td><td><code>cards data --html</code><br><code>card_db → card_variants → page_data</code></td></tr>
+      <tr><td>Select a deck with only failed replays</td><td>Before: choice disappears or says no games.<br>Current: keep the choice and show exclusions.</td><td><code>CardData → page_data → embedded variant</code></td></tr>
+      <tr><td>Investigate and recover</td><td>Existing: audit retained evidence; restore missing original bytes, then audit again. Unchanged.</td><td><code>cards audit --replay</code><br><code>read_blobs</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>The consequential mismatch is resolved</h2>
+  <p>The query returns eight excluded player-games for one subject and zero
+    eligible games. The former <code>if data.games</code> removed that result;
+    the page now preserves it.</p>
+  <blockquote>
+    <p><strong>Before</strong><br>No games match these filters.</p>
+    <p><strong>Current — illustrative fixture values</strong><br>
+      Eligible player-games: 0 · Excluded: 8 replay failed · Runs: 1<br>
+      No eligible games. Card rates are unavailable for this selection.</p>
+  </blockquote>
+  <p>Every result returned by <code>card_variants</code> survives into the page;
+    choices come from retained games. A nonexistent deck shows “No games
+    match”; a card search hiding rows shows “No cards match.” Python owns the
+    rates and intervals, and the browser selects precomputed results.</p>
+
+  <h2>Recovery keeps the evidence</h2>
+  <p>Change or clear the filter to inspect another cohort. Audit the retained
+    run to investigate failures. A missing blob remains an audit failure even
+    when rollups render; restore its original delivered bytes and repeat the
+    audit. Historical conversion and deletion remain separate, explicitly
+    authorized work.</p>
+  <p>A failed match can be retried by resuming with the same players and
+    conditions; completed matches survive. <code>Result(tables, blobs)</code>
+    gives evidence and rows one delivery lifecycle. Temporary worker files
+    remain an internal handoff, and checkpoints remain separate.</p>
+  <p><small>This pass inspected the current implementation and existing
+    all-excluded, mixed-cohort, absent-selection and recovery fixtures. Prior
+    validation is recorded in the working design. No tests were rerun and no
+    visual proof is claimed. Only the review records changed.</small></p>
+  <p>The usage docs already explain these empty states. Their older log-import
+    idea remains <strong>proposed, not implemented</strong> and outside MTG-206.</p>
+
+  <h2>Questions resolved and proof remaining</h2>
+  <ol>
+    <li><strong>Does this require a new product choice?</strong> No. Showing
+      exclusions follows the documented contract, and the correction is
+      implemented. No additional approval is attributed to Jack Heart.</li>
+    <li><strong>What would invalidate the correction?</strong> Inventing rows
+      for a nonexistent selection, changing rates for eligible games, or hiding
+      exclusions in a mixed page. Existing fixtures now cover those distinctions
+      through the page payload and compare grouped and standalone queries.</li>
+    <li><strong>Is the Task's performance acceptance complete?</strong> No.
+      The exact u005950-versus-heuristic cohort timing remains required. The
+      completed L4 smoke and substitute timings do not waive it.</li>
+  </ol>
+  <p><small>Decision record: <a href="mtg206.md">scratch/mtg206.md</a>.
+    This review supplies evidence for loop-or-next; it does not choose a route.</small></p>
+</main>
+</html>

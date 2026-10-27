@@ -1,0 +1,8 @@
+{
+  "original_converted_source": "/private/tmp/claude-501/-Users-jack-src-etude-eb70f8-keep-each-eval/af5d648d-451c-4dce-9ad4-003076c612d7/scratchpad/demo/runs",
+  "exists": true,
+  "cached_database": "/Users/jack/src/manabot.mtg-206-run-card-evaluation/.runs/mtg206/etude-home/statsdb/mtg183-elemental-eval.2b094f04a63a073f.duckdb",
+  "l4_source": "/private/tmp/mtg206-smoke2/runs",
+  "prior_comparison": "('u005950',) ('heuristic',) {} old 13s summary equal: True cards: 90 differing: []\n  excluded new {} old {}\n('u005950',) ('heuristic',) {'on_play': False} old 6s summary equal: True cards: 90 differing: []\n  excluded new {} old {}\n() () {} old 12s summary equal: True cards: 90 differing: []\n  excluded new {} old {}\n",
+  "prior_timing": "card_db: 22.7s wall, 9.9s cpu\ncard_data: 5.91s wall, 2.42s cpu; 5000 games, 5000 deals, 90 cards\npage: 51.30s wall, 13.40s cpu\npeak rss MB 1862.96875\n"
+}

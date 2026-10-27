@@ -30,6 +30,11 @@ between selections computed in Python. Narrow any of them from the command line:
 - `--position play|draw`, `--deck`, `--opponent-deck`.
 - `--run` and `--commit` (a prefix) narrow to some runs or source commits.
 
+Page filters include retained games even when none qualify for card rates.
+Such a selection shows zero eligible player-games, unavailable rates and its
+exclusions by outcome. “No games match” means no retained games match the
+selection; “No cards match” means the card search or minimum hides the card rows.
+
 `--source` is a directory or bucket of eval runs; by default, where runs are
 written on this computer. The database lives under `ETUDE_HOME/statsdb` and
 reads only blocks delivered since it was last opened; `--rebuild` reads everything

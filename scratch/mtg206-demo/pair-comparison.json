@@ -1,0 +1,14 @@
+{
+  "variants": 1452,
+  "base": {
+    "games": 5000,
+    "deals": 5000,
+    "runs": 1,
+    "win_rate": 0.8012,
+    "excluded": {},
+    "failed_matches": 0
+  },
+  "cards": 90,
+  "comparison": "All variant summaries and card metrics compared to retained pre-batched page, excluding interval endpoints",
+  "different_variants": []
+}

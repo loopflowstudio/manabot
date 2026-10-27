@@ -28,12 +28,14 @@ from manabot.eval.card_metrics import (
 )
 from manabot.eval.card_page import page_data, write_page
 from manabot.eval.card_query import (
+    DIMENSIONS,
     AuditResult,
     CardData,
     CardSelection,
     audit,
     card_data,
     card_db,
+    card_variants,
     load_game,
 )
 from manabot.eval.card_schedule import CardConditions, admit_card_runtime
@@ -301,6 +303,17 @@ def _db(
     return card_db("fixture", directory)
 
 
+def _page_payload(path: Path) -> dict[str, JsonValue]:
+    embedded = (
+        path.read_text()
+        .split('<script id="card-data" type="application/json">')[1]
+        .split("</script>")[0]
+    )
+    data = json.loads(embedded)
+    assert isinstance(data, dict)
+    return data
+
+
 def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw(
     tmp_path: Path,
 ) -> None:
@@ -465,6 +478,24 @@ def test_all_excluded_games_have_no_card_rates(
         assert sum(data.opponents.values()) == 8
         assert data.subjects and data.runs == (spec.run,)
         assert data.failed_matches == 0
+        page = page_data(db, selection)
+        assert page["runs"] == data.runs
+        assert page["subjects"] == sorted(data.subjects.values())
+        assert page["positions"] == ["draw", "play"]
+        for field in ("opponents", "decks", "opponent_decks"):
+            assert page[field]
+        variants = page["variants"]
+        assert isinstance(variants, dict)
+        assert variants["||||"]["excluded"] == {outcome: 8}
+        for variant in variants.values():
+            assert variant["games"] == variant["deals"] == 0
+            assert variant["win_rate"] is None
+            assert variant["cards"] == []
+            assert variant["runs"] == 1
+            assert variant["failed_matches"] == 0
+            assert variant["excluded"][outcome] > 0
+        path = write_page(db, selection, tmp_path / "cards.html")
+        assert _page_payload(path) == json.loads(json.dumps(page))
         empty = card_data(db, selection.model_copy(update={"deck": "absent"}))
         assert (empty.games, empty.win_rate, empty.cards, empty.excluded) == (
             0,
@@ -832,6 +863,25 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
         matches.append((f"m{deal}", pair, reduce_cards(game, pair)))
     db = _db(tmp_path / "db", matches)
     selection = CardSelection(experiment="fixture", subjects=("subject",))
+    # A shared query must equal standalone selections, including sparse cards
+    # across deals and fixed subject/opponent dimensions expanded back out.
+    computed = card_variants(db, selection, DIMENSIONS)
+    for on_play, deck, opponent_deck in (
+        (None, None, None),
+        (True, "red", "green"),
+        (False, "green", "red"),
+    ):
+        narrowed = selection.model_copy(
+            update={
+                "opponents": ("rival",),
+                "on_play": on_play,
+                "deck": deck,
+                "opponent_deck": opponent_deck,
+            }
+        )
+        assert computed[
+            ("subject", "rival", on_play, deck, opponent_deck)
+        ] == card_data(db, narrowed)
     data = page_data(db, selection)
     variants = data["variants"]
     assert isinstance(variants, dict)
@@ -841,10 +891,78 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
     path = write_page(db, selection, tmp_path / "cards.html")
     html = path.read_text()
     assert "<title>fixture · card data</title>" in html
-    embedded = html.split('<script id="card-data" type="application/json">')[1].split(
-        "</script>"
-    )[0]
-    assert json.loads(embedded)["variants"].keys() == variants.keys()
+    assert _page_payload(path) == json.loads(json.dumps(data))
+
+
+def test_card_page_keeps_excluded_choices_in_a_mixed_cohort(tmp_path: Path) -> None:
+    matches = []
+    for deal, pair, outcome in (
+        (1, ("subject", "rival"), "win"),
+        (2, ("rival", "subject"), "replay_failed"),
+    ):
+        game = card_fixture(deal=deal, players=pair)
+        if outcome == "replay_failed":
+            game = game.model_copy(update={"outcome": outcome})
+        matches.append((f"m{deal}", pair, reduce_cards(game, pair)))
+    selection = CardSelection(experiment="fixture", subjects=("subject",))
+    with _db(tmp_path / "db", matches) as db:
+        page = page_data(db, selection)
+        assert page["runs"] == ("run",)
+        assert page["subjects"] == ["subject"]
+        assert page["opponents"] == ["rival"]
+        assert page["positions"] == ["draw", "play"]
+        assert page["decks"] == page["opponent_decks"] == ["green", "red"]
+        variants = page["variants"]
+        assert isinstance(variants, dict)
+        assert variants["||||"]["games"] == 1
+        assert variants["||||"]["excluded"] == {"replay_failed": 1}
+        eligible = variants["subject|rival|play|red|green"]
+        assert eligible["games"] == eligible["deals"] == eligible["runs"] == 1
+        assert eligible["win_rate"] == 1.0 and eligible["cards"]
+        assert eligible["excluded"] == {}
+        for key in ("subject|rival|draw|green|red", "||draw||", "|||green|"):
+            excluded = variants[key]
+            assert excluded["games"] == excluded["deals"] == 0
+            assert excluded["win_rate"] is None and excluded["cards"] == []
+            assert excluded["excluded"] == {"replay_failed": 1}
+            assert excluded["runs"] == 1
+        assert "subject|rival|play|green|red" not in variants
+        grouped = card_variants(db, selection, DIMENSIONS)
+        narrowed = selection.model_copy(update={"on_play": False, "deck": "green"})
+        assert grouped[(None, None, False, "green", None)] == card_data(db, narrowed)
+        path = write_page(db, selection, tmp_path / "cards.html")
+    assert _page_payload(path) == json.loads(json.dumps(page))
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        CardSelection(experiment="fixture", runs=("absent",)),
+        CardSelection(experiment="fixture", commits=("absent",)),
+        CardSelection(experiment="fixture", deck="absent"),
+        CardSelection(experiment="fixture", opponent_deck="absent"),
+    ],
+    ids=["run", "commit", "deck", "opponent-deck"],
+)
+def test_card_page_with_no_matching_games(
+    tmp_path: Path, selection: CardSelection
+) -> None:
+    pair = ("subject", "rival")
+    game = card_fixture(players=pair)
+    with _db(tmp_path / "db", [("m1", pair, reduce_cards(game, pair))]) as db:
+        assert card_data(db, selection).games == 0
+        path = write_page(db, selection, tmp_path / "cards.html")
+    data = _page_payload(path)
+    assert data["variants"] == {}
+    for field in (
+        "runs",
+        "subjects",
+        "opponents",
+        "positions",
+        "decks",
+        "opponent_decks",
+    ):
+        assert data[field] == []
 
 
 @pytest.mark.parametrize("shared", [False, True])

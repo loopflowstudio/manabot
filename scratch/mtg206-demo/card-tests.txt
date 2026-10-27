@@ -1,0 +1,4 @@
+2026-10-27
+uv run --extra dev --extra evaluation pytest tests/eval/test_card_evaluation.py -q
+42 passed in 277.92s (0:04:37)
+Exit code: 0

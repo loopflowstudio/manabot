@@ -21,6 +21,19 @@ at `37e5ccd8d65527f63486f1d9770af20f612fa8c8:scratch/questions.md`.
   data is a separate explicit step; the MTG-186 docstring names the command.
 - **elemental_long_rent.py / GPU `demo` command** live on the MTG-183 branch,
   not on main, so the L4 smoke uses `experiments/mtg206_cards.py` (MTG-186's
-  card match on fresh deals) instead of the demo's heuristic grids.
-- PR #389 overlaps only at import lines of `cards.py`, `mtg186_cards.py` and
-  `elemental_long_eval.py`.
+  evaluation infrastructure with the checkpoint-free `cards verify` schedule)
+  instead of the demo's heuristic grids.
+- **PR #389 local snapshot** (`d2f46c62c`, inspected 2026-10-27) changes
+  `cards.py`'s verification source identity to `sim/anchors.py` and replaces
+  subprocess environment dictionaries with `child_environment()` in
+  `mtg186_cards.py` and `elemental_long_eval.py`, alongside imports. The changes
+  are compatible in purpose with this Task's blobs/rollups port; the earlier
+  claim that overlap was limited to imports was inaccurate.
+- **Headless demo acceptance (2026-10-27).** The caller explicitly delegated
+  the decision. Use the stated completion requirement, generation in seconds,
+  rather than treating the 1.5-second prototype as an unstated hard cap. The
+  recovered original cohort takes 16.01 s wall / 5.28 s CPU for the page;
+  database catch-up adds 30.48 s wall in the separated measurement. All card
+  metrics match prior results and the L4 audit replays 96/96. This supports
+  advance, not a claim of human approval or a 1.5-second CLI. See
+  [the demo record](mtg206-demo.md). No stored-data conversion was needed.

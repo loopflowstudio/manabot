@@ -1,0 +1,25 @@
+{
+  "source": "/private/tmp/claude-501/-Users-jack-src-etude-eb70f8-keep-each-eval/af5d648d-451c-4dce-9ad4-003076c612d7/scratchpad/demo/runs",
+  "selection": {
+    "experiment": "mtg183-elemental-eval",
+    "subjects": [
+      "u005950"
+    ],
+    "opponents": [
+      "heuristic"
+    ],
+    "runs": [],
+    "commits": [],
+    "on_play": null,
+    "deck": null,
+    "opponent_deck": null
+  },
+  "database_catch_up": {
+    "wall_seconds": 30.475980125018395,
+    "cpu_seconds": 10.208027
+  },
+  "page": {
+    "wall_seconds": 16.006649624963757,
+    "cpu_seconds": 5.2764099999999985
+  }
+}
