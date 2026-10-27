@@ -1,29 +1,31 @@
-"""MTG-183's evaluation as one combined DuckDB database: matches, tables and card evidence.
+"""MTG-183's evaluation as one combined DuckDB database: Etude's statsdb plus card evidence.
 
 Jack Heart's direction (2026-10-27): the evaluation's records belong in one
 combined database, not a storage object per game, and the arrangement should
 be cost-efficient over the long term. Until Etude keeps eval runs that way
-itself (Etude Task eb70f8), this module folds every MTG-183 eval run into one
-file and publishes it as a single R2 object.
+itself (Etude Task eb70f8), this module builds one file and publishes it as a
+single R2 object.
 
-Tables, one row per stored fact, each with the eval run (`source`) it came from:
+The database is Etude's own experiment database (`etude.eval.query.statsdb`:
+matches, agents, `games`, `card_plays`, `card_counts`, `cards`), so the
+17Lands-style card page (`manabot.eval.card_page`) and every Etude query read
+it unchanged, plus one table:
 
-- `matches`: one row per stored match (`key`, the Etude record as JSON);
-- `games`, `card_plays`, `card_counts`, `cards`: the eval tables' rows, as
-  Etude delivered them (its `run` and `match` columns included);
-- `evidence`: each game's replay-verified card evidence, by the relative
-  `path` card tables reference, with its `sha256`, size and gzipped bytes;
-- `parts`: every source object or file already folded in, so ingestion is
-  idempotent and resumable.
+- `evidence`: each game's replay-verified card evidence, by the eval run
+  (`source`) and the relative `path` that `card_plays.evidence` names, with its
+  `sha256`, size and gzipped bytes.
 
-Sources are an eval run's folder in the evaluations bucket (the Mac mini's
-`mtg183-eval-cards`, and earlier rented calibrations) or a rented batch's
-returned run folder (`experiments.elemental_long_rent.collect`). A table part
-its writer merged away (listed in a `tables/<id>.removed` note) is skipped.
-Nothing is deleted from any source.
+`ingest` folds one eval run's folder into a local mirror of everything but
+evidence (`MIRROR`, which statsdb reads) and evidence into `EVIDENCE`; it skips
+what is already there and keys a live writer removed after listing. Sources are
+an eval run's folder in the evaluations bucket (the Mac mini's
+`mtg183-eval-cards`, earlier rented calibrations) or a rented batch's returned
+run folder (`experiments.elemental_long_rent.collect`). `build` assembles the
+database; `publish` uploads it as one object.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_db \\
         ingest-bucket mtg183-eval-cards
+    ... build
     ... publish
 """
 
@@ -33,52 +35,58 @@ import argparse
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
-import json
 import os
 from pathlib import Path
-import re
-import tempfile
+import shutil
 from typing import Any, Protocol
 
 import duckdb
-import pandas as pd
 
+EXPERIMENT = "mtg183-elemental-eval"
 BUCKET = "manabot"
 PREFIX = "evaluations"
-DATABASE = Path("~/.manabot/mtg183-eval-db/mtg183-eval.duckdb").expanduser()
+HOME = Path("~/.manabot/mtg183-eval-db").expanduser()
+# Every eval run's folder except its evidence, as statsdb reads a store:
+# `MIRROR/<tag>/<run>/…`, one tag per source folder.
+MIRROR = HOME / "runs"
+EVIDENCE = HOME / "evidence.duckdb"
+DATABASE = HOME / "mtg183-eval.duckdb"
 # The published database: one object, replaced on each publish.
 PUBLISHED = f"{PREFIX}/mtg183/mtg183-eval.duckdb"
-TABLES = ("games", "card_plays", "card_counts", "cards")
-_PART = re.compile(
-    r"^tables/(?P<table>[a-z_]+)\.(?P<ordinal>\d+)\.(?P<id>[0-9a-f]+)\.parquet$"
-)
+_EVIDENCE = "artifacts/evidence/"
 
 
 class Folder(Protocol):
     """An eval run's folder: relative keys and their bytes."""
 
-    name: str
+    run: str
+    tag: str
 
     def keys(self) -> Iterator[str]: ...
 
     def read(self, key: str) -> bytes: ...
 
 
+def _client() -> Any:
+    import boto3
+
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto",
+    )
+
+
 class BucketFolder:
     """An eval run's folder in the evaluations bucket."""
 
     def __init__(self, run: str) -> None:
-        import boto3
-
-        self.name = run
+        self.run = run
+        self.tag = f"bucket-{run}"
         self.prefix = f"{PREFIX}/{run}/"
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-            aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-            aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-            region_name="auto",
-        )
+        self.client = _client()
 
     def keys(self) -> Iterator[str]:
         pages = self.client.get_paginator("list_objects_v2").paginate(
@@ -96,8 +104,9 @@ class BucketFolder:
 class LocalFolder:
     """An eval run's folder on this machine, such as a rented batch's returned one."""
 
-    def __init__(self, name: str, root: Path) -> None:
-        self.name = name
+    def __init__(self, run: str, root: Path, tag: str) -> None:
+        self.run = run
+        self.tag = tag
         self.root = root
 
     def keys(self) -> Iterator[str]:
@@ -107,112 +116,6 @@ class LocalFolder:
 
     def read(self, key: str) -> bytes:
         return (self.root / key).read_bytes()
-
-
-def connect(path: Path = DATABASE) -> duckdb.DuckDBPyConnection:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    db = duckdb.connect(str(path))
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS parts (source TEXT, key TEXT, PRIMARY KEY (source, key))"
-    )
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS matches (source TEXT, key TEXT, record JSON, PRIMARY KEY (source, key))"
-    )
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS evidence (source TEXT, path TEXT, sha256 TEXT, bytes BIGINT,"
-        " data BLOB, PRIMARY KEY (source, path))"
-    )
-    return db
-
-
-def _known(db: duckdb.DuckDBPyConnection, source: str) -> set[str]:
-    rows = db.execute("SELECT key FROM parts WHERE source = ?", [source]).fetchall()
-    return {key for (key,) in rows}
-
-
-def _append(db: duckdb.DuckDBPyConnection, table: str, frame: pd.DataFrame) -> None:
-    """Append rows by column name, adding any column the table lacks."""
-    exists = db.execute(
-        "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [table]
-    ).fetchone()
-    db.register("incoming", frame)
-    if not exists or not exists[0]:
-        db.execute(f"CREATE TABLE {table} AS SELECT * FROM incoming")
-    else:
-        have = {row[0] for row in db.execute(f"DESCRIBE {table}").fetchall()}
-        for name, kind, *_ in db.execute("DESCRIBE incoming").fetchall():
-            if name not in have:
-                db.execute(f'ALTER TABLE {table} ADD COLUMN "{name}" {kind}')
-        db.execute(f"INSERT INTO {table} BY NAME SELECT * FROM incoming")
-    db.unregister("incoming")
-
-
-def ingest(
-    db: duckdb.DuckDBPyConnection, folder: Folder, workers: int = 32
-) -> dict[str, int]:
-    """Fold one eval run's folder into the database; what is already there is skipped."""
-    source = folder.name
-    keys = list(folder.keys())
-    known = _known(db, source)
-    # A writer's `tables/<id>.removed` note lists the parts it merged into a newer one.
-    retired = {
-        line
-        for key in keys
-        if key.endswith(".removed")
-        for line in (_read(folder, key) or b"").decode().splitlines()
-        if line
-    }
-    counts = {"matches": 0, "parts": 0, "evidence": 0, "skipped": 0}
-
-    def fetch(key: str) -> tuple[str, bytes | None]:
-        return key, _read(folder, key)
-
-    pending = [k for k in keys if k not in known and not k.endswith(".removed")]
-    matches = [
-        k
-        for k in pending
-        if k.startswith("matches/") and not k.endswith(".failed.json")
-    ]
-    parts = [k for k in pending if _PART.match(k)]
-    evidence = [k for k in pending if k.startswith("artifacts/evidence/")]
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for key, data in pool.map(fetch, matches):
-            if data is None:
-                continue
-            record = json.loads(data)
-            db.execute(
-                "INSERT OR IGNORE INTO matches VALUES (?, ?, ?)",
-                [source, Path(key).name.removesuffix(".json"), json.dumps(record)],
-            )
-            db.execute("INSERT OR IGNORE INTO parts VALUES (?, ?)", [source, key])
-            counts["matches"] += 1
-        for key, data in pool.map(fetch, parts):
-            found = _PART.match(key)
-            assert found is not None
-            if data is None or key in retired:
-                # Merged away by its writer, possibly while this listing ran.
-                counts["skipped"] += 1
-            else:
-                frame = _parquet(data)
-                frame.insert(0, "source", source)
-                _append(db, found["table"], frame)
-                counts["parts"] += 1
-            db.execute("INSERT OR IGNORE INTO parts VALUES (?, ?)", [source, key])
-        batch: list[list[Any]] = []
-        for key, data in pool.map(fetch, evidence):
-            if data is None:
-                continue
-            batch.append(
-                [source, key, hashlib.sha256(data).hexdigest(), len(data), data]
-            )
-            if len(batch) >= 500:
-                _evidence(db, batch)
-                counts["evidence"] += len(batch)
-                batch = []
-        if batch:
-            _evidence(db, batch)
-            counts["evidence"] += len(batch)
-    return counts
 
 
 def _read(folder: Folder, key: str) -> bytes | None:
@@ -227,38 +130,101 @@ def _read(folder: Folder, key: str) -> bytes | None:
         raise
 
 
-def _parquet(data: bytes) -> pd.DataFrame:
-    """A parquet part's rows, read by DuckDB itself (no pyarrow needed)."""
-    with tempfile.NamedTemporaryFile(suffix=".parquet") as part:
-        part.write(data)
-        part.flush()
-        return duckdb.sql(f"SELECT * FROM read_parquet('{part.name}')").df()
+def _evidence_db() -> duckdb.DuckDBPyConnection:
+    HOME.mkdir(parents=True, exist_ok=True)
+    db = duckdb.connect(str(EVIDENCE))
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS evidence (source TEXT, path TEXT, sha256 TEXT,"
+        " bytes BIGINT, data BLOB, PRIMARY KEY (source, path))"
+    )
+    return db
 
 
-def _evidence(db: duckdb.DuckDBPyConnection, rows: list[list[Any]]) -> None:
+def ingest(folder: Folder, workers: int = 32) -> dict[str, int]:
+    """Mirror one eval run's folder and fold its evidence in; what is there is skipped.
+
+    A run's files that change in place (`run.json`, `state.json`, Etude's
+    `.removed` notes) are always taken again; parts and matches are immutable.
+    """
+    target = MIRROR / folder.tag / folder.run
+    keys = list(folder.keys())
+    with _evidence_db() as db:
+        have = {
+            path
+            for (path,) in db.execute(
+                "SELECT path FROM evidence WHERE source = ?", [folder.run]
+            ).fetchall()
+        }
+        evidence = [k for k in keys if k.startswith(_EVIDENCE) and k not in have]
+        files = [
+            k
+            for k in keys
+            if not k.startswith(_EVIDENCE)
+            and (
+                not (target / k).exists()
+                or k.endswith((".removed", "run.json", "state.json"))
+            )
+        ]
+        counts = {"files": 0, "evidence": 0, "vanished": 0}
+
+        def fetch(key: str) -> tuple[str, bytes | None]:
+            return key, _read(folder, key)
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for key, data in pool.map(fetch, files):
+                if data is None:
+                    counts["vanished"] += 1
+                    continue
+                path = target / key
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.with_name(path.name + ".partial").write_bytes(data)
+                path.with_name(path.name + ".partial").replace(path)
+                counts["files"] += 1
+            rows: list[list[Any]] = []
+            for key, data in pool.map(fetch, evidence):
+                if data is None:
+                    counts["vanished"] += 1
+                    continue
+                digest = hashlib.sha256(data).hexdigest()
+                rows.append([folder.run, key, digest, len(data), data])
+                if len(rows) >= 500:
+                    _insert(db, rows)
+                    counts["evidence"] += len(rows)
+                    rows = []
+            if rows:
+                _insert(db, rows)
+                counts["evidence"] += len(rows)
+    return counts
+
+
+def _insert(db: duckdb.DuckDBPyConnection, rows: list[list[Any]]) -> None:
     db.begin()
     db.executemany("INSERT OR IGNORE INTO evidence VALUES (?, ?, ?, ?, ?)", rows)
-    db.executemany(
-        "INSERT OR IGNORE INTO parts VALUES (?, ?)", [[row[0], row[1]] for row in rows]
-    )
     db.commit()
 
 
-def publish(path: Path = DATABASE) -> str:
-    """Upload the database as one object (multipart), replacing the published one."""
-    import boto3
+def build() -> Path:
+    """Etude's statsdb over the mirror, with the evidence table, as `DATABASE`."""
+    from etude.eval.query import statsdb
 
-    client = boto3.client(
-        "s3",
-        endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
-    )
-    db = duckdb.connect(str(path))
-    db.execute("CHECKPOINT")
-    db.close()
-    client.upload_file(str(path), BUCKET, PUBLISHED)
+    os.environ["ETUDE_HOME"] = str(HOME / "etude")
+    db = statsdb(EXPERIMENT, MIRROR, rebuild=True)
+    try:
+        db.execute(f"ATTACH '{EVIDENCE}' AS kept (READ_ONLY)")
+        db.execute("CREATE OR REPLACE TABLE evidence AS SELECT * FROM kept.evidence")
+        db.execute("DETACH kept")
+        db.execute("CHECKPOINT")
+        kept = Path(db.execute("PRAGMA database_list").fetchall()[0][2])
+    finally:
+        db.close()
+    shutil.copyfile(kept, DATABASE.with_suffix(".partial"))
+    DATABASE.with_suffix(".partial").replace(DATABASE)
+    return DATABASE
+
+
+def publish() -> str:
+    """Upload `DATABASE` as one object (multipart), replacing the published one."""
+    _client().upload_file(str(DATABASE), BUCKET, PUBLISHED)
     return f"r2://{BUCKET}/{PUBLISHED}"
 
 
@@ -267,34 +233,15 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     bucket = commands.add_parser("ingest-bucket")
     bucket.add_argument("run")
-    local = commands.add_parser("ingest-folder")
-    local.add_argument("run")
-    local.add_argument("root", type=Path)
+    commands.add_parser("build")
     commands.add_parser("publish")
-    commands.add_parser("summary")
     args = parser.parse_args()
-    if args.command == "publish":
+    if args.command == "ingest-bucket":
+        print(ingest(BucketFolder(args.run)))
+    elif args.command == "build":
+        print(build())
+    else:
         print(publish())
-        return
-    db = connect()
-    if args.command == "summary":
-        for (source,) in db.execute(
-            "SELECT DISTINCT source FROM parts ORDER BY 1"
-        ).fetchall():
-            row = db.execute(
-                "SELECT (SELECT count(*) FROM matches WHERE source = $s),"
-                " (SELECT count(*) FROM games WHERE source = $s AND player = 0),"
-                " (SELECT count(*) FROM evidence WHERE source = $s)",
-                {"s": source},
-            ).fetchone()
-            print(source, "matches", row[0], "games", row[1], "evidence", row[2])
-        return
-    folder: Folder = (
-        BucketFolder(args.run)
-        if args.command == "ingest-bucket"
-        else LocalFolder(args.run, args.root)
-    )
-    print(ingest(db, folder))
 
 
 if __name__ == "__main__":

@@ -55,7 +55,7 @@ from etude.run.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment
-from experiments.elemental_long_db import BucketFolder, LocalFolder, connect, ingest
+from experiments.elemental_long_db import MIRROR, BucketFolder, LocalFolder, ingest
 from experiments.elemental_long_eval import (
     CARDS,
     COMPUTE,
@@ -380,18 +380,17 @@ def _match_identity(match: Match) -> tuple[str, str, str, str]:
 
 
 def stored() -> set[tuple[str, str, str, str]]:
-    """Matches the combined database holds from any eval run, by seated names and conditions.
+    """Matches stored by any MTG-183 eval run, from the combined database's mirror.
 
     The mini's run is folded in first, so its newest matches count. Runs at
     different source revisions key the same match differently, so matches are
     compared by what they play, not by key.
     """
-    with connect() as db:
-        ingest(db, BucketFolder(MINI_RUN))
-        records = db.execute("SELECT record FROM matches").fetchall()
+    ingest(BucketFolder(MINI_RUN))
     return {
-        _match_identity(Match.model_validate(json.loads(record)["match"]))
-        for (record,) in records
+        _match_identity(Match.model_validate(json.loads(path.read_bytes())["match"]))
+        for path in MIRROR.glob("*/*/matches/*.json")
+        if not path.name.endswith(".failed.json")
     }
 
 
@@ -574,8 +573,7 @@ def collect(run_id: str) -> Receipt:
         with tarfile.open(archive) as opened:
             opened.extractall(folder, filter="data")
         # Folded into the combined database, never copied object by object.
-        with connect() as db:
-            print(ingest(db, LocalFolder(batch.run, Path(folder) / batch.run)))
+        print(ingest(LocalFolder(batch.run, Path(folder) / batch.run, run_id)))
     if run_id not in ledger.collected:
         ledger.collected.append(run_id)
         LEDGER.write_text(ledger.model_dump_json(indent=1) + "\n")
