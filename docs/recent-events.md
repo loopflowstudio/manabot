@@ -204,11 +204,12 @@ ordinal, including ineligible slots. This fact cannot be reconstructed from
 current hexproof, control or type. It does not certify current presence: expired
 object references never join a replacement incarnation. Only the acting viewer
 receives the suspended facts. Clone/rollback preserve them with the frame.
-The draft input/capture versions and `w15-resolution-draft` include merged MTG-195 and await final world admission; historical benchmark evidence below
-still describes its recorded v2 sources.
+Development world w15 includes merged MTG-195 and this resolution contract.
+Broader consumer acceptance remains gate-owned; historical benchmark evidence
+below still describes its recorded v2 sources.
 
 The v2 measurement protocol and receipts below are historical; they do not
-establish w14 performance. Measure encode-only behavior with
+establish w15 performance. Measure encode-only behavior with
 `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`
 (`-- --legacy` isolates the old layout after refactoring). The seeded corpus
 contains priority, target, additional-cost and large-legal positions and reports

@@ -1,4 +1,4 @@
-# Rules audit: October 26 resolution repair draft
+# Rules audit: integrated resolution repair draft
 
 The selected CR 608.2b repair now retains clause-specific resolution eligibility
 across spells, activated abilities, triggers and suspended choices. Effect handlers
@@ -6,10 +6,11 @@ use that result with separate object-presence guards. The retained hexproof prob
 is enabled; earthbend destination identity and deathtouch history remain ignored,
 unresolved proposals. See [resolution evidence](resolution-validation.json).
 
-This isolated checkout is `w15-resolution-draft` / hash 10, not an admitted world.
-MTG-195 still owns uncommitted w14 trigger-order work. Final integrated identity,
-fresh conformance/demo receipts and broader consumer acceptance remain pending;
-no historical evidence is relabeled and no publication or merge is selected.
+The repair is integrated with MTG-195’s merged PR386 in development world w15 /
+hash 10. Policy-input and capture/text v4 expose retained eligibility while v2/v3
+relation widths remain frozen. Fresh conformance/demo receipts bind the combined
+source; broader consumer acceptance remains gate-owned. Historical evidence stays
+unchanged. Publication, merge and whole-audit completion remain unselected.
 
 ## Earlier obligation audit
 

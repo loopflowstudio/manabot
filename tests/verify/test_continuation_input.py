@@ -157,7 +157,7 @@ class EligibilityEvidence(BaseModel):
 
 def _eligibility_evidence() -> list[EligibilityEvidence]:
     """Native directed captures; no invented continuation or reconstructed legality."""
-    path = Path(__file__).parents[1] / "fixtures/resolution-eligibility-captures-v4.json"
+    path = Path(__file__).parents[1] / "fixtures/resolution-eligibility-captures-v4-w15.json"
     return TypeAdapter(list[EligibilityEvidence]).validate_json(path.read_text())
 
 

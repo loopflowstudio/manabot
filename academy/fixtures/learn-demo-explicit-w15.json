@@ -1,0 +1,433 @@
+{
+  "config": {
+    "seed": 0,
+    "villain_type": "random",
+    "auto_pass": false
+  },
+  "manifest": {
+    "world_version": "w15",
+    "schema_version": 1,
+    "content_digest": "5952d9c2156d8e068d1c50bb636d61afe9c006ed94f2f0baea76b4a14a6fbca4",
+    "compiled_semantics": {
+      "pack_key": "ur-lessons-vs-gw-allies",
+      "ir_hash": "7a70679a4f4952976a286c4a31ffa90318bd0569745aace26353348fe6ee1edd",
+      "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c"
+    },
+    "definitions": [
+      {
+        "card_def_id": 0,
+        "registry_name": "Forest"
+      },
+      {
+        "card_def_id": 1,
+        "registry_name": "Island"
+      },
+      {
+        "card_def_id": 2,
+        "registry_name": "Mountain"
+      },
+      {
+        "card_def_id": 3,
+        "registry_name": "Plains"
+      },
+      {
+        "card_def_id": 4,
+        "registry_name": "Divide by Zero"
+      },
+      {
+        "card_def_id": 5,
+        "registry_name": "Igneous Inspiration"
+      },
+      {
+        "card_def_id": 6,
+        "registry_name": "Pop Quiz"
+      },
+      {
+        "card_def_id": 7,
+        "registry_name": "Accumulate Wisdom"
+      },
+      {
+        "card_def_id": 8,
+        "registry_name": "Allies at Last"
+      },
+      {
+        "card_def_id": 9,
+        "registry_name": "Badgermole Cub"
+      },
+      {
+        "card_def_id": 10,
+        "registry_name": "Compassionate Healer"
+      },
+      {
+        "card_def_id": 11,
+        "registry_name": "Dragonfly Swarm"
+      },
+      {
+        "card_def_id": 12,
+        "registry_name": "Earth Kingdom Jailer"
+      },
+      {
+        "card_def_id": 13,
+        "registry_name": "Earth King's Lieutenant"
+      },
+      {
+        "card_def_id": 14,
+        "registry_name": "Fancy Footwork"
+      },
+      {
+        "card_def_id": 15,
+        "registry_name": "Fire Nation Cadets"
+      },
+      {
+        "card_def_id": 16,
+        "registry_name": "Firebending Lesson"
+      },
+      {
+        "card_def_id": 17,
+        "registry_name": "First-Time Flyer"
+      },
+      {
+        "card_def_id": 18,
+        "registry_name": "Forecasting Fortune Teller"
+      },
+      {
+        "card_def_id": 19,
+        "registry_name": "Invasion Reinforcements"
+      },
+      {
+        "card_def_id": 20,
+        "registry_name": "It'll Quench Ya!"
+      },
+      {
+        "card_def_id": 21,
+        "registry_name": "Kyoshi Warriors"
+      },
+      {
+        "card_def_id": 22,
+        "registry_name": "Otter-Penguin"
+      },
+      {
+        "card_def_id": 23,
+        "registry_name": "South Pole Voyager"
+      },
+      {
+        "card_def_id": 24,
+        "registry_name": "Suki, Kyoshi Warrior"
+      },
+      {
+        "card_def_id": 25,
+        "registry_name": "Tiger-Seal"
+      },
+      {
+        "card_def_id": 26,
+        "registry_name": "Water Tribe Rallier"
+      },
+      {
+        "card_def_id": 27,
+        "registry_name": "White Lotus Reinforcements"
+      },
+      {
+        "card_def_id": 28,
+        "registry_name": "Yip Yip!"
+      },
+      {
+        "card_def_id": 29,
+        "registry_name": "Ally"
+      },
+      {
+        "card_def_id": 30,
+        "registry_name": "Clue"
+      }
+    ]
+  },
+  "prefix": [
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "675df8e42fb017918f3f4f934da3914ed3b672ab9a3dfd19057b7e2bb52af5fe"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "ce0e60605de262131b6d87cb1d330d2183fcf4a88d87d7c6d150dd250f63d1fe"
+    },
+    {
+      "offer_id": 0,
+      "label": "Play Mountain",
+      "before_digest": "977dcdc18b070ef501843aee5427f2f0d9b3894b4b625e8defb0edcc130cfdf3"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "bae246c6f7f3f77bd083c7f0838bdc40626a8d53453f5770d3edae4295a3e4c1"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "8a268eb72573c4b1ba6b494843cfa99d6e1183077a00ab7701c53fa8f6a7e3c4"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "5aba59b8668d1c44405311d68b78e6b3fccc0c1ea964bc5f1767212e44e672d1"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "171ce5780de0b492a9109ec70629b1ed78269929e5ef3987b2c08e5f0a681313"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "bace9e4d01f659e2950366914abb7cfe42e6db769b72b6c5ccf0b778e475472c"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "5b13cde72393712fac320e34ebb71dc9d7bbc356155cf2eab703128a87f86db7"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "f3647dcb8180359fd47f323b65c5ab66748541b00ae22788f3f67d8fdf73cfee"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "269a3a3c41d9246ea6b5d0bce1bce64bd58a13acc634342d74fd31b8304a90c9"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "f79752d6fba19cbc9145625b4c5590befd1fd3060b90792c34293cf2750aa6b3"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "2005b9839d537b8f6ad00bb79a4dffecbe2b7446645d9a68b16e0c2addaae28b"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "04e500efe94933f94ee90a6c815778779e2fa86b9c414cef32b595e1047adbb0"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "cd81ade790f3d8b93f70ac51f4a1306c2c821303a71778d2b90caee3782fcba9"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "37eaebd1b8e1066155e8c91da9675f425492aed615f0816f3674dc59e4e3ac10"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "9ae959d53c7249fa9e99297dc44a38c78aab9dd21678f4f5a9e1eed27259ff89"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "b0c1c45c884e1318abcac727981a1ffbc7284754a33b7955846316b73012d459"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "6e3e827079197c2f95bee921fda54475dace4752958c70770d032c1f569b7c7f"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "da2314244382e1bb671c800764c535af1a9413d838ceaac4b85fb04fbdbbd1b0"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "837b4d3042cfa3fac6b3877cf2568f6144e4ddad7ed6240a12e14e831f5fcc15"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "7840a27b20d15f237aedfd25bbe624918d2087a017cdd2d3ff64caf87bd50e86"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "27e2b4fea0ab989743c6eefd80d6eab4dd464decfdf7d42dacf44a40f17d1c9b"
+    },
+    {
+      "offer_id": 0,
+      "label": "Play Island",
+      "before_digest": "6599e3ad5f1ccc06bf11bb1bee990e1eb4f56756395d93d21d4c327d55f01e79"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast Tiger-Seal",
+      "before_digest": "bf0879bcf20f7e31697ba93ef4028689b2b858b6fb5ede7a7c86c2c2ce4b92da"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "0ca3339b7ab6722f7c258be7afd4d2901d488eb188548f558e1b6a98ecfceb81"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast Firebending Lesson",
+      "before_digest": "ad445e2784bd664c1cf0212727dc2b1d6aa3a686e0965ea0c04b1b6f19f67e89"
+    },
+    {
+      "offer_id": 0,
+      "label": "Target Tiger-Seal",
+      "before_digest": "781633750038e4f7daf23f929a23fd11692e2f0111528f94fc28c4b0824eeed6"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "ce1567e39aeba802db15bab2bf63e3bcc70e89175edc73b9e3bf0a4cd32b204a"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "12fd9b8eb9e3a7921dbd145d1b27ac6fa391842d70e13ce1f669bd8dc5a59d0c"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "59fc96c624542252bb5c5c7d727ffcd7a14642aa0aaf2911cc7c6fd6ab855adc"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "6b59f998ad05a55e082e61fdfe342ca89b8af9a51044cde2959d5adaebddf7b7"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "f48ed7ad4483a0504317b5f0b3ecf84521a63c6c1cf4a669b7546b014b01a1c2"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "114c38e61178fc1a6ac735fa759aaf1b0b81992fc2efef7795ef1271b651d431"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "49188c919ea99e557f5c4eabb07c52f0d6e5a45d8a9afea43a29299d1e5ee04d"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "d10ed67b748432664aa160832bf03369f76b993a8d1af2c1798029479e01c743"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "e17fb642081ab682954c3f5bb59b9e89a54d78783e7e146e133a7c97b5f47acf"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "21e4d20623a0a35a38a680c73bca879a1272265b014885ad05852588327e8b0f"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "bd9e080284429043f15cad607f048a49e32960caa3ba978b717f4ccbfe71cb52"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "cc0c289cdf0a5cc756c9ca21a4d0fdebe5fb45af790b7055efd67d0238009b7e"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "8053e39b6b6fd8ed2e806440f593176419244c0a6ed92368f2faf904ba714e3d"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "ad9aa1155ad3084296d940ac31faf4833e87e44056355666a918305c0716dba1"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "177fdb9f3a0bd38fe0040a2281eb794dd6f25d263d074e305509d578304e87d2"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "3f9adc13c1c58a3cc9d9edb104a43e31155604ee6acd8036d74f79a2458af8df"
+    },
+    {
+      "offer_id": 0,
+      "label": "Tiger-Seal: do not block",
+      "before_digest": "0869d4454c4b478a1c6407a580927e4aba9aa9d185beedf84c01c3ab1e010251"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "d5f2278b0f030fbc82da4bca88666d3c8737ae0a229b4081ed8a077b3a0acd96"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "716ed85d95a375eb29b615927065b815b810862eef2f0e0c4fb7e458861ada8f"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "fa471b1cfd4f9be220b97cec9ebb60823678c9b18a378358a14a4717871f6b8b"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "3356d4feae03bac38c95a3e3ad2dc6886af9c6ac255b02b5c0b7c78bf0c24a7d"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "e80dd5f14c85e1fa743ba3e3b5e753a3af8bd7bcc74476b573ff8d25fb523b63"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "1aba706ca92e1afc2938c708f83502e01ce66ff09a35729c4ddc07a8cc0f6637"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "6f5459efe661776ba5a5293deb6c9ddd3f4425a859bc82def9bd947976c6c444"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "505753227dddfc53a59c8b6f91ac3354d99b518a9dd22a74ee3af49e8969a65e"
+    },
+    {
+      "offer_id": 0,
+      "label": "Play Island",
+      "before_digest": "b947e2654d9f44882744b4c51441816a5af2432dff0fa6b3b3a463b0bd5fbd8f"
+    },
+    {
+      "offer_id": 0,
+      "label": "Cast Divide by Zero",
+      "before_digest": "4e48b713823aa1f192941e625bf3e126af971f196eadad851d8bec46158cbc62"
+    },
+    {
+      "offer_id": 0,
+      "label": "Target Tiger-Seal",
+      "before_digest": "8c5562028f926c0ecbc3dbf5ca0a07193555f6c168397f0b8015a078cabf5731"
+    },
+    {
+      "offer_id": 0,
+      "label": "Pass priority",
+      "before_digest": "ed051402b84ee68a491ca2137185c466b8586209f24249efbc997652bffad535"
+    }
+  ],
+  "decision_digest": "4cfbedd18c54de8382097388bfe6ee74157e979ac91c78574f592fb33f6e03e6",
+  "decision_revision": 109,
+  "decision_kind": "LEARN"
+}

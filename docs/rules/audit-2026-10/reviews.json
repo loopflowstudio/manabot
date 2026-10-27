@@ -957,7 +957,7 @@
       "scope": "Resolution-start legality retained per chosen clause across spell, activated and triggered instructions, suspended choices, clone and undo. Mixed legal targets survive; all-invalid objects suppress untargeted instructions; zero optional targets resolve.",
       "authority": "managym/src/flow/resolution.rs:Game::resolution_targets, Game::target_is_legal, Game::target_is_present; managym/src/flow/decision.rs:ResolutionTarget",
       "dispersion": "shared predicate and one resolution-entry eligibility authority",
-      "comments": "CR 608.2b entry-time eligibility is distinct from CR 400.7 live-object presence. Effects no longer re-evaluate TargetSpec after earlier instructions. Positional target slots and clause identity survive suspension.",
+      "comments": "CR 608.2b entry-time eligibility is distinct from CR 400.7 live-object presence. Effects no longer re-evaluate TargetSpec after earlier instructions. Positional target slots and clause identity survive suspension. Acting-viewer continuation and policy/capture v4 project the retained fact without recomputing legality; v2/v3 relation layouts remain frozen.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
         "managym/tests/rules/cr_603_triggers.rs",
@@ -965,7 +965,7 @@
         "managym/tests/rules/cr_608_resolution.rs:audit_target_gaining_hexproof_during_resolution_is_still_affected",
         "managym/src/flow/resolution_tests.rs"
       ],
-      "gap": "Not exhaustive effect/identity proof or whole-rule conformance. Stack CardId identity remains a representation limit without an admitted-play witness; full LKI and unsupported target types remain outside this repair. Multi-clause activation announcement is not represented. Final world identity, conformance/demo receipts and integrated consumer acceptance await MTG-195 supported handoff. Historical obligation-validation.json retains the original hexproof failure; the repaired draft has separate evidence.",
+      "gap": "Not exhaustive effect/identity proof or whole-rule conformance. Stack CardId identity remains a representation limit without an admitted-play witness; full LKI and unsupported target types remain outside this repair. Multi-clause activation announcement is not represented. The repair is integrated with MTG-195 in development world w15/hash 10, with policy/capture v4 retaining eligibility. Fresh w15 conformance/demo paths preserve earlier evidence; broader integrated consumer acceptance remains gate-owned. Historical obligation-validation.json retains the original hexproof failure; the repaired draft has separate evidence.",
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life",
         "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability",
@@ -2220,12 +2220,12 @@
     },
     "608.2": {
       "status": "partial",
-      "scope": "Spells/triggers check targets, execute a resumable ordered frame, and finalize. ",
+      "scope": "Spells, activated abilities and triggers evaluate clause-specific targets at entry, execute a resumable ordered frame, and finalize.",
       "authority": "managym/src/flow/resolution.rs:resolve_spell_object; managym/src/flow/resolution.rs:resolve_triggered_ability; managym/src/flow/decision.rs:run_frame",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
-      "gap": "Subrules reviewed individually; activated whole-object target gate, generic intervening-if and ability stack lifetime remain narrower.",
+      "gap": "Subrules reviewed individually; generic intervening-if and ability stack lifetime remain narrower.",
       "anchors": [
         "managym/src/flow/resolution.rs::resolve_spell_object",
         "managym/src/flow/resolution.rs::resolve_triggered_ability",

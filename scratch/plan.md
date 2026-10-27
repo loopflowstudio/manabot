@@ -1,26 +1,20 @@
 # MTG-177 — resolution legality and the continuing rules audit
 
 Draft implementation integrated with merged MTG-195 on 2026-10-27.
-Final world admission and broader acceptance remain pending.
+Final development identity is w15/hash 10 with policy/capture/text v4.
+Fresh evidence is recorded and focused checks pass; broader acceptance remains gate-owned.
 
-Integration checkpoint: merge `b25b90610` contains MTG-195's merge commit and
-main `37e5ccd8d`. Debug resolution checks passed 8/8 and trigger ordering 7/7.
-The release wheel rebuilt in 7m11s and its cp312 extension was installed by
-atomic rename. Combined continuation/text Python checks passed 30/30 after
-correcting the last action-to-frame validity lookup from the final column to
-column 31. Initial Python result was 28 pass/2 fail; required assertions stayed.
-The first compile exposed two remaining calls to the removed boolean relations
-config; both now use policy_input_version. Ruff, Rust format, pinned-index and
-diff checks passed. No full gate or current-world admission is claimed here.
+Integration checkpoint: `b25b90610` incorporates MTG-195 PR386 and main
+`37e5ccd8d`; `4f0511233` fixes the remaining validity-column lookup. Prior
+combined checks cover eight resolution and seven trigger tests, plus 30 Python
+continuation/text cases. The native extension was rebuilt for that snapshot.
+Finalization selects w15, refreshes affected receipt paths and reconciles live
+claims. The final native wheel is built and installed atomically. No full gate or final admission pass is claimed yet.
 
-Continue the authorized pursuit on this integrated source: finalize the current
-world/version assignment and fresh affected conformance/demo prefixes, reconcile
-the audit's live claims, complete the remaining review steps, and prepare the
-affected gate proof. Reuse the above focused results unless code changes warrant
-reruns. Measure integration-specific authored churn without charging inherited
-MTG-195/main changes; the previous total is 9,096 of roughly 10k. Return for review
-without ready publication, merge or whole-audit completion. No parent handoff
-dependency remains. Deathtouch and earthbend remain follow-ups.
+Return for review without ready publication, merge or whole-audit completion.
+Deathtouch and earthbend remain follow-ups. The approximate 10k authored-churn
+budget retains the earlier 9,096-line charge; integration accounting is separate
+from inherited MTG-195/main changes and generated evidence.
 
 ## Requested stack — 2026-10-27
 
@@ -44,8 +38,8 @@ eligibility at column 32 only for v4. Row validity remains column 31 for pooling
 frame joins and padding. Embedded decision schema 7 and trigger ordering survive.
 Historical capture v3 lacks eligibility; v4 carries the fact. No fixed-order
 fallback or second legality authority is introduced. Parent w14 evidence stays
-unchanged; the combined draft remains `w15-resolution-draft`/hash 10 until final
-world admission and fresh evidence are prepared.
+unchanged. The integrated development world is w15/hash 10; fresh evidence and
+gate acceptance bind that final identity.
 
 ## Accepted direction and boundary
 
@@ -91,6 +85,10 @@ all-invalid predicates, frame `target_req_indices`, and the hexproof probe's
 ignore attribute. Positional damage, ForEachTarget and continuation consumers
 use the surviving frame contract. No remaining production deletion target.
 
+Completed finalization cut: replaced all current w14 conformance/demo/navigation/trigger-root
+selectors with w15 selectors in CI, native checks, Academy and their tests. Retain
+the old receipt files as frozen evidence; they are not a parallel execution path.
+
 Completed projection correction: removed the boolean native encoder `relations`
 selector and its single-width assumption. The existing policy-input version
 contract selects the layout; the same continuation encoder consumes v4. Frozen
@@ -128,20 +126,20 @@ Python bindings and native portable validation retain the fact. Missing historic
 fields mean unknown; malformed facts and eligibility on nonresolution frames
 fail validation. Capture v3 cannot acquire known eligibility retroactively.
 
-Draft policy-input v4 appends column 32 to `relations[64,33]`: unknown=0,
+Policy-input v4 appends column 32 to `relations[64,33]`: unknown=0,
 legal=1, illegal=2. Columns 0–31 preserve v2 semantics, including row validity
 at 31. Scalar/vector buffer widths bind the version; reference encoding and the
 model use the configured width. V1/v2/v3 checkpoint layouts, initialization order
-and serialized omissions remain intact. Draft capture v4 and text representation
+and serialized omissions remain intact. Capture v4 and text representation
 `manabot-text-4` expose “Legal when resolution began”; embedded Observation and
-Command schema 7 are unchanged. Final version reservation remains integration work.
+Command schema 7 are unchanged. Final development identity is w15; release certification remains gate-owned.
 
 The native paired witness covers both controllers: hexproof gained during
 resolution versus present at entry, with a second legal clause allowing both
 effects to suspend. Current observations and v2 tensors are identical; retained
 eligibility, v4 tensors, portable text and model values differ. Independent
 expected slot values precede encoder parity assertions. Checked generated
-captures live in `tests/fixtures/resolution-eligibility-captures-v4.json`; these are
+captures live in `tests/fixtures/resolution-eligibility-captures-v4-w15.json`; these are
 synthetic observation evidence, not executable Academy setups or proof of deck
 reachability. Existing witnesses now assert capture/clone/rollback preservation,
 nonacting privacy and absent replacement links for departed permanent/graveyard
@@ -150,25 +148,24 @@ was added. Command/reconnect acceptance remains gate-owned after integration.
 
 ## Integration and remaining acceptance
 
-MTG-195's supported handoff is now its merged PR386. The current sync includes
-that source and newer main changes. Prior isolated receipts remain historical;
-combined acceptance needs fresh focused proofs and final conformance/Academy
-prefixes. No source copying or change to the parent checkout was necessary.
+MTG-195 PR386 is merged and included through main; no parent handoff remains.
+The final development identity is w15/hash 10. Policy/capture/text v4 extends
+the parent's v3 contract without changing embedded decision schema 7. Fresh
+`semantic-kernel-w15-v1`, Academy w15 demo/navigation/trigger-root fixtures and
+w15 eligibility captures bind the combined runtime. Their w14 and provisional
+predecessors remain unchanged. Recording replays the existing bounded inputs,
+checks exact offer labels and decision outcomes, and never searches new seeds.
 
-The combined draft retains `w15-resolution-draft` and canonical hash 10 because
-EffectFrame serialization changed beyond w14/hash 9. Policy input and capture v4
-extend the parent's shipped v3 contracts. Final world assignment, fixture roots
-and admission remain explicit next work before delivery.
-
-Gate owns broader affected acceptance once: full debug Rust/clippy,
-world/admission/monitoring, maintained model/choice-separability, Command/recovery
-and consumer/replay checks in `docs/development/validation.md`. This includes
-`tests/academy/test_choice_navigation.py`, `test_learn_setup.py`, the model suite
-and focused browser interactions against refreshed world-bound positions.
-MTG-195's accepted maintained-learnability interpretation agrees with this plan;
-the retired verifier remains excluded. Historical worlds, checkpoints,
-experiments, source pin and failure evidence remain frozen. Integration is a dependency,
-not a claim that acceptance passed.
+Implementation sanity checks cover fresh native recording, the paired eligibility
+witness and a focused Python consumer check. Gate owns broader acceptance once:
+full debug Rust/clippy, current-world admission/monitoring, maintained model and
+choice-separability, Command/recovery/replay checks, complete choice navigation
+and Learn setup suites, and focused browser interactions. Follow the affected
+checks in `docs/development/validation.md`; reuse the implementation checks when
+still applicable. The retired learnability verifier remains excluded. Historical
+worlds, checkpoints, experiments, source pin and failure evidence stay frozen.
+No paid compute, strength experiments or current-world release certification is
+implied by fixture generation.
 
 ## Audit findings and historical evidence
 
@@ -209,10 +206,14 @@ inherited MTG-184 questions: `324db65f2:scratch/questions.md`.
 
 ## Resource limits and validation
 
-The approximately 10k authored-churn-line ceiling remains; 9,096 are charged, including
-94 lines for the inherited reduction and 574 for this correction. Reports/index/receipts/design notes are excluded; runtime demos
-and helpers count. Deleted code retains its prior charges. Current
-accounting is `docs/rules/audit-2026-10/line-accounting.json`.
+Authored churn totals 10,104 lines against the approximate 10k guideline
+(104 over, about 1%). The historical 9,096 charge is retained; merge/follow-up
+integration adds 238 and this finalization adds 770. The six fresh runtime
+fixture files contain 10,413 physical lines, with 550 changed lines against their
+inherited w14 inputs; unchanged inherited bytes are excluded from authored churn.
+Reports, indexes, conformance/observation receipts and design notes are excluded.
+The accounting records both measurements in
+`docs/rules/audit-2026-10/line-accounting.json`. No earlier charges were refunded.
 
 Validation uses debug Rust with two Cargo jobs, uv-managed Python and controlled fixtures.
 Limits: 900s cold Rust, 180s warm Rust, 120s per Python check. No paid compute,
@@ -226,14 +227,17 @@ agreement between consumers alone cannot prove rule correctness. Its GOAL.md was
 read; MEMORY.md is absent, and directory inspection found no child scopes or
 child memories in this checkout. No Wave files changed.
 
-Earlier repair and reduction receipts remain historical source snapshots:
-`docs/rules/audit-2026-10/resolution-validation.json` and
-`scratch/compress-*.json`. The current correction's bounded command outputs and
-source digests are in `scratch/eligibility-{native-tests,encoding-tests,python-tests,native-build,native-install}.json`.
-The generated capture receipt is consumed by the maintained Python proof.
+Earlier repair/reduction evidence is historical at `resolution-validation.json`
+and `scratch/compress-*.json`; projection evidence is in `scratch/eligibility-*.json`.
+Finalization receipts are `scratch/w15-{native-build,native-install,conformance-record,
+conformance-handoff,eligibility-native,fixtures-record,python-focused,academy-focused}.json`.
+The initial fixture recorder rejected the manifest's expected world change;
+`scratch/w15-fixtures.json` retains that failure. The corrected recorder permits
+exactly w14 → w15 and asserts equality of every other manifest field, all prefix
+labels and final navigation projections. No expected outcome was relaxed.
 
-Check: focused debug resolution/continuation/encoder/capture tests → 18 pass;
-focused Python continuation/text tests → 26 pass; release wheel built and cp312
-extension installed atomically; Ruff, format, diff and context checks pass.
-Full debug/clippy, world/admission/model/training/replay/Academy acceptance and
-final version identity remain deferred to integration and gate as above.
+Check (2026-10-27): release wheel built in 9m38s and installed atomically;
+14 conformance cases / 3,420 Commands recorded; paired debug eligibility and public
+handoff tests passed (2); focused Python registration/capture/Academy checks passed
+(9); all six Academy fixtures replayed; pinned inventory, Ruff, format and diff
+checks pass. Full affected suites/browser acceptance remain gate-owned above.
