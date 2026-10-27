@@ -133,9 +133,15 @@ def test_watch_roots_fork_both_seats_without_mutating_match(
 
 def test_search_captures_actual_scores(watch: WatchCreated) -> None:
     from academy.villain import choose_bot
-    from manabot.sim.flat_search import FlatSearchPolicy
+    from manabot.sim.search.flat import FlatSearchPolicy
 
     game = server._live_record_for_trace(watch["id"]).game
+    # Forced actions bypass search; reach a real choice before checking scores.
+    for revision in range(64):
+        if len(game.obs.action_space.actions) > 1:
+            break
+        step_watch(watch["id"], watch["token"], revision)
+    assert len(game.obs.action_space.actions) > 1
     outputs = choose_bot(FlatSearchPolicy(sims=1, max_steps=2), game.env, game.obs)
     assert len(outputs.search_scores) == len(game.obs.action_space.actions)
     assert outputs.action == max(
@@ -151,12 +157,12 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     import json
 
     from academy.watch import import_arena
-    from manabot.arena.match import play_cell
-    from manabot.arena.models import ArenaContract
-    from manabot.arena.replay import read_trace
+    from manabot.eval.match import play_cell
+    from manabot.eval.models import EvaluationContract
+    from manabot.sim.replay import read_trace
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
-    contract = ArenaContract.model_validate(
+    contract = EvaluationContract.model_validate(
         json.loads(Path("tests/fixtures/int-6-skill-arena-v1.json").read_text())
     )
     _, trace, receipt = play_cell(
@@ -207,8 +213,8 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
 
     from academy.villain import CheckpointVillain, choose_bot
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentSpec
-    from manabot.model.agent import Agent
+    from manabot.infra.config import ModelConfig
+    from manabot.model.actor_critic import ActorCritic
     from manabot.model.world import checkpoint_world
 
     config = server._parse_game_config(
@@ -220,13 +226,13 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         }
     )
     space = ObservationSpace()
-    spec = AgentSpec(hidden_dim=16, compound_decisions=compound)
-    agent = Agent(space, spec)
+    spec = ModelConfig(hidden_dim=16, compound_decisions=compound)
+    agent = ActorCritic(space, spec)
     checkpoint = tmp_path / "agent.pt"
     torch.save(
         {
             "hypers": {
-                "observation_hypers": space.encoder.hypers.model_dump(),
+                "observation_hypers": space.encoder.config.model_dump(),
                 "agent_hypers": spec.model_dump(),
             },
             "model_state_dict": agent.state_dict(),

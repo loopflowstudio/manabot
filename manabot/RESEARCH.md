@@ -71,7 +71,7 @@ they guide the next experiment rather than settle a method.
 | The observation encoding no longer hides decision-relevant differences. | The learnability search found 0 clean input collisions ([learnability](../experiments/learnability-search.md)). | A nightly check guards it; see [WORLDS.md](../WORLDS.md). |
 | Collection dominates GPU training time. | Collection was 82.5% of active time in the profiled run ([training time](../experiments/training-time.md)). | Engine and inference throughput are the cost levers. |
 
-Belief sampling and local search with distillation run end to end. In their
+Belief sampling and local search run end to end. In their
 pilots, 840 held-out sampled hands had no support violations and local search
 replayed 183 commands with no mismatch. Neither has shown a strength gain over
 the policy alone yet.
@@ -104,13 +104,10 @@ self-play policy (frozen checkpoint)
         +----------+------------+
                    v
        local search at the decision
-                   |
-                   v
-     distillation back into the policy
 ```
 
-The pieces exist ([belief sampler](../docs/belief-sampler.md),
-[local policy search](../docs/local-policy-search.md)); the plan is to make
+The sampler and search exist ([belief sampler](../docs/belief-sampler.md),
+[local policy search](../docs/local-policy-search.md)). The plan is to make
 them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
@@ -138,11 +135,9 @@ Constraints that apply throughout:
 - A shallow search with a strong continuation policy may beat deeper search
   with a weak one, so depth, rollout count and continuation quality are
   measured rather than assumed.
-- Distilled targets must keep genuine mixed strategies; hard targets cannot
-  represent bluffing.
 
-The protocols for sampler quality, search with learned sampling, distillation
-and exploiters are preregistered
+The protocols for sampler quality, search with learned sampling and exploiters
+are preregistered
 ([transfer protocols](../experiments/ataraxos-transfer.md)).
 
 ### Training dynamics
@@ -211,7 +206,7 @@ held-out opponents). The first two can improve while the third gets worse.
 ### Skill rating contract
 
 Strength is a population rating, not a win rate against random. The arena
-(`manabot/arena/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
+(`manabot/eval/`) fits a seat-aware Bradley-Terry model and expresses its log-odds
 parameters on the familiar Elo scale; [Tournament](../experiments/head-to-head.md)
 files play chosen checkpoints against each other on shared deals.
 

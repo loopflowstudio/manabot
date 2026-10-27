@@ -57,16 +57,16 @@ jobs:
       - name: Integration tests
         if: matrix.group == 'main'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/remote/ \
+          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
-            tests/sim/test_structured_policy.py \
-            tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
-            tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_matchups.py \
-            tests/training/test_local_service.py \
-            tests/training/test_allocation.py tests/training/test_step_cadence.py tests/training/test_learning_state.py \
+            tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
+            tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
+            tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
+            tests/training/test_matchups.py \
+            tests/training/test_step_cadence.py tests/training/test_learning_state.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
-            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
+            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_monitoring.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
@@ -90,7 +90,15 @@ jobs:
         run: |
           uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
-            tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py -q
+            tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/eval/ -q
+
+      - name: Evaluation Perf report proof
+        if: matrix.group == 'main'
+        run: |
+          npm --prefix academy/ui ci --ignore-scripts
+          npm --prefix academy/ui exec -- playwright install --with-deps chromium
+          ./scripts/verify-eval-performance-report
 
       - name: Enum smoke test
         if: matrix.group == 'main'
@@ -99,12 +107,4 @@ jobs:
       - name: Training smoke test
         if: matrix.group == 'main'
         run: |
-          uv run --python 3.12 python manabot/model/train.py \
-            --set train.total_timesteps=128 \
-            --set train.num_envs=2 \
-            --set train.num_steps=8 \
-            --set train.update_epochs=1 \
-            --set train.num_minibatches=1 \
-            --set experiment.wandb=false \
-            --set experiment.profiler_enabled=false \
-            --set agent.attention_on=false
+          uv run --python 3.12 manabot train --out .runs/ci-local-smoke

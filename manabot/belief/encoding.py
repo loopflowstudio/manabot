@@ -7,12 +7,12 @@ import hashlib
 import json
 from typing import Any, Mapping
 
+from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefError, BeliefState
-from managym.possible_worlds import PossibleWorldSpace
 
 OPPONENT_OWNER_ROLE_ID = 1
 LIBRARY_ZONE_ID = 0
@@ -159,7 +159,9 @@ def belief_checkpoint_fields(
 
     if count_buckets <= 0:
         if schema is not None:
-            raise ValueError("a belief-free Agent cannot save a belief schema binding")
+            raise ValueError(
+                "a belief-free ActorCritic cannot save a belief schema binding"
+            )
         return {}
     if schema is None:
         raise ValueError("belief-enabled checkpoints require an exact belief schema")

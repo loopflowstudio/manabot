@@ -5,8 +5,8 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.semantic.test_learn_contract import learn_root  # noqa: F401
 
@@ -25,9 +25,9 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     before = engine.observation_for_player(actor)
     torch.manual_seed(75)
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )
@@ -66,9 +66,9 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
 
 def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F811
     space = ObservationSpace()
-    agent = Agent(
+    agent = ActorCritic(
         space,
-        AgentSpec(
+        ModelConfig(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )

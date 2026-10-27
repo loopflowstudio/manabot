@@ -1,0 +1,29 @@
+{
+  "machine": {
+    "schema_version": 1,
+    "provider": "runpod",
+    "role": "training",
+    "gpu_count": 1,
+    "gpu_types": [
+      "NVIDIA L4"
+    ],
+    "workers": 1,
+    "thread_limit": 4,
+    "vcpus": 6,
+    "memory_gb": 48,
+    "container_gb": 30,
+    "volume_gb": 20,
+    "image": "runpod/pytorch@sha256:cb154fcca15d1d6ce858cfa672b76505e30861ef981d28ec94bd44168767d853",
+    "hourly_ceiling": 0.6,
+    "storage_hourly_allowance": 0.02
+  },
+  "lifetime_hours": 11.9,
+  "spending_limit": 7.48,
+  "access": {
+    "destination": "s3://etudefantasia/manabot/jobs"
+  },
+  "setup_seconds": 900,
+  "checkpoint_seconds": 120,
+  "upload_seconds": 300,
+  "cleanup_seconds": 120
+}

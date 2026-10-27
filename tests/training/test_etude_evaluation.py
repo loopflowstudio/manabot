@@ -1,29 +1,28 @@
 """Etude retains complete arena deal blocks and stable checkpoint-independent protocols."""
 
 from pathlib import Path
+import time
 from typing import Any
 
 import pytest
-from test_monitor_evaluation import _manifest, _rows
+
+from tests.training.test_monitor_evaluation import _manifest, _rows
 
 pytest.importorskip("etude.eval.match")
 
-from etude.eval.query import connect  # noqa: E402
+from etude.eval.query import statsdb  # noqa: E402
 from etude.eval.tournament import curves  # noqa: E402
 
-from manabot.arena.match import selected_decks, selected_match
-from manabot.arena.models import file_sha256
-from manabot.remote.live_evaluation import Ledger, _checkpoints, report
-from manabot.training import etude_evaluation as evaluation
-from manabot.training.models import (
-    MonitoringCheckpoint,
-    StageRecord,
-    TrainingRegime,
-    TrainingRun,
-    TrainSelfPlay,
-)
-from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
-import managym
+from manabot.eval import benchmark as evaluation
+from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.evaluation import evaluation_status
+from manabot.eval.execution import bind_execution
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.results import EvaluationRow
+from manabot.infra.identity import file_sha256
+from manabot.sim.execution import EvalExecution
+from manabot.sim.matchup import selected_decks
+from tests.eval.test_local_evaluation import _publish_blocks
 
 
 def _admission(tmp_path: Path) -> MonitorResult:
@@ -76,25 +75,64 @@ def test_checkpoint_progress_does_not_change_benchmark(tmp_path: Path) -> None:
     assert evaluation.benchmark(first) == evaluation.benchmark(second)
 
 
+def test_allocation_window_does_not_change_model_or_benchmark(tmp_path: Path) -> None:
+    original = _admission(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60)
+    benchmarks = []
+    for settings in (
+        execution,
+        execution.model_copy(
+            update={"deadline_unix": time.time() + 3600, "instrumentation": False}
+        ),
+        execution.model_copy(update={"max_batch_rows": 1}),
+    ):
+        manifest = original.model_copy(deep=True)
+        manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
+            manifest.key, (manifest.candidate, manifest.opponent), settings
+        )
+        benchmarks.append(evaluation.benchmark(manifest))
+    assert benchmarks[0] == benchmarks[1]
+    assert benchmarks[0] != benchmarks[2]
+    assert "execution" not in original.candidate.player_spec
+
+
+@pytest.mark.parametrize("shared", [False, True])
 def test_etude_resumes_complete_deals_and_report_counts_them(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shared: bool
 ) -> None:
     manifest = _admission(tmp_path)
     played: list[int] = []
+    execution = (
+        EvalExecution(deadline_unix=time.time() + 60, max_active_games=1)
+        if shared
+        else None
+    )
 
     def play_cell(
         **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
         deal = kwargs["deal_seeds"][0]
         played.append(deal)
-        return _play_rows(manifest, deal, kwargs["out_dir"]), {}, {}
+        bound = manifest.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        return _play_rows(bound, deal, kwargs["out_dir"]), {}, {}
 
-    monkeypatch.setattr(evaluation, "play_cell", play_cell)
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    monkeypatch.setattr(InferenceEndpoint, "play_cell", staticmethod(play_cell))
     target = tmp_path / "evaluations" / "one"
-    evaluation.evaluate(manifest, target)
-    evaluation.evaluate(manifest, target)
+    evaluation.evaluate(manifest, target, execution=execution)
+    if execution is not None:
+        execution = execution.model_copy(update={"deadline_unix": time.time() + 3600})
+    evaluation.evaluate(manifest, target, execution=execution)
     assert sorted(played) == [101, 102]
-    db = connect(tmp_path / "track")
+    if shared:
+        assert len(list((target / "allocation").glob("*/execution.json"))) == 2
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
         points = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
             0
@@ -104,10 +142,6 @@ def test_etude_resumes_complete_deals_and_report_counts_them(
         assert points[0].value == 0.5
     finally:
         db.close()
-    ledger = Ledger(cohort_sha256="a" * 64, observed_at=1)
-    report(tmp_path, ledger)
-    assert "heuristic" in (tmp_path / "public/eval.html").read_text()
-    assert "whole deals" in (tmp_path / "public/index.html").read_text()
 
 
 def test_failed_deal_retains_evidence_and_etude_failure(
@@ -122,17 +156,12 @@ def test_failed_deal_retains_evidence_and_etude_failure(
         rows[0]["replay_passed"] = False
         return rows, {}, {}
 
-    monkeypatch.setattr(evaluation, "play_cell", play_cell)
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
     with pytest.raises(Exception, match="match_failed"):
         evaluation.evaluate(manifest, tmp_path / "evaluations/one")
     assert list((tmp_path / "track").rglob("*.failed.json"))
     assert list((tmp_path / "evaluations/one/arena").rglob("rows.json"))
     assert not (tmp_path / "evaluations/one/result.json").exists()
-
-    # A live run can have its declaration and failed match records before any
-    # score table exists. Rendering that state must not stop the observer.
-    report(tmp_path, Ledger(cohort_sha256="a" * 64, observed_at=1))
-    assert (tmp_path / "public/status.json").is_file()
 
 
 def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
@@ -145,73 +174,15 @@ def test_changed_checkpoint_bytes_are_refused_before_declaring_eval(
     assert not (tmp_path / "track").exists()
 
 
-@pytest.mark.parametrize(
-    "status", ["paused", "completed", "running", "failed", "interrupted"]
-)
-def test_budget_endpoint_between_milestones_is_selected_only_after_export(
-    status: str,
-) -> None:
-    regime = TrainingRegime(
-        id="endpoint",
-        world=managym.WORLD_VERSION,
-        match=selected_match(),
-        stages=[
-            TrainSelfPlay(
-                id="self",
-                operation="train_self_play",
-                updates=1000,
-                streams=2,
-                transitions=8,
-            )
-        ],
-    )
-    milestone = MonitoringCheckpoint(
-        stage_id="self",
-        ordinal=0,
-        updates=250,
-        training_seconds=90,
-        artifact={"path": "monitor.pt", "sha256": "a" * 64, "bytes": 1},
-    )
-    stage = StageRecord.model_validate(
-        {
-            "id": "self",
-            "status": status,
-            "cumulative_seconds": 100,
-            "optimizer_updates": 253,
-            "diagnostics": [{} for _ in range(253)],
-            "artifacts": {"raw": {"path": "final.pt", "sha256": "b" * 64, "bytes": 2}},
-        }
-    )
-    run = TrainingRun(
-        id="endpoint",
-        regime_digest="c" * 64,
-        regime=regime,
-        seed=1,
-        seed_streams={},
-        identities={},
-        stages=[stage],
-        monitoring_checkpoints=[milestone],
-    )
-    selected = _checkpoints(run)
-    assert [item.coordinates.updates for item in selected] == (
-        [250, 253] if status in {"paused", "completed"} else [250]
-    )
-    if status in {"paused", "completed"}:
-        assert selected[-1].artifact["sha256"] == "b" * 64
-        assert selected[-1].coordinates.training_seconds == 100
-        stage.artifacts["raw"] = milestone.artifact
-        assert len(_checkpoints(run)) == 1
-
-
 def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
     tmp_path: Path,
 ) -> None:
     manifest = _admission(tmp_path)
     rows = [
-        evaluation.ArenaRow.model_validate(row)
+        evaluation.EvaluationRow.model_validate(row)
         for row in _play_rows(manifest, 101, tmp_path)
     ]
-    projected = evaluation.arena_tables(rows)["plays"]
+    projected = evaluation.evaluation_tables(rows)["plays"]
     expected = {"LvA": {0, 3}, "AvL": {1, 2}, "LvL": {4, 5}, "AvA": {6, 7}}
     for matchup, legs in expected.items():
         assert {
@@ -225,8 +196,76 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
         "LvA",
         "AvL",
     ]
+    # The candidate plays Lessons in legs 0 and 3, so a deck matrix puts those
+    # games in its Lessons column against the heuristic's Allies row.
+    candidate = [row for row in projected if row["player"] == 0]
+    assert {row["game"] for row in candidate if row["deck"] == "ur_lessons"} == {
+        0,
+        3,
+        4,
+        5,
+    }
+    named = {"L": "ur_lessons", "A": "gw_allies"}
+    for row in projected:
+        assert (row["deck"], row["opponent_deck"]) == (
+            named[row["matchup"][0]],
+            named[row["matchup"][-1]],
+        )
     corrupted = rows[0].model_dump(mode="json")
     corrupted["player_a_seat"] = 1
-    rows[0] = evaluation.ArenaRow.model_validate(corrupted)
+    rows[0] = evaluation.EvaluationRow.model_validate(corrupted)
     with pytest.raises(ValueError, match="deck/seat assignment"):
-        evaluation.arena_tables(rows)
+        evaluation.evaluation_tables(rows)
+
+
+def test_etude_explicit_reentry_continues_failed_deal_and_keeps_completed_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    manifest = _admission(tmp_path)
+    played: list[int] = []
+    interrupted = True
+
+    def play_cell(
+        **kwargs: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        deal = kwargs["deal_seeds"][0]
+        played.append(deal)
+        bound = manifest.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(bound, deal, kwargs["out_dir"])
+        ]
+        if interrupted and deal == 102:
+            rows[-1].replay_passed = False
+        _publish_blocks(kwargs["out_dir"], rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {}
+
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    target = tmp_path / "evaluations/one"
+    with pytest.raises(Exception, match="match_failed"):
+        evaluation.evaluate(manifest, target)
+    panels = list((target / "arena").iterdir())
+    before = {
+        p: p.read_bytes() for panel in panels for p in panel.rglob("*") if p.is_file()
+    }
+    interrupted = False
+    evaluation.evaluate(manifest, target)
+    assert played.count(101) == 1 and played.count(102) == 2
+    assert all(p.read_bytes() == content for p, content in before.items())
+    assert all(evaluation_status(panel).status == "completed" for panel in panels)
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
+    try:
+        point = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
+            0
+        ].points[0]
+        assert point.rows == 16 and point.matches == 2 and point.value == 0.5
+    finally:
+        db.close()

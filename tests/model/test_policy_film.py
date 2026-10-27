@@ -8,35 +8,33 @@ give state-conditioned offer choices a gradient.
 import pytest
 import torch
 
-from manabot.config.load import load_train_config
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec, Hypers
-from manabot.model import Agent
-from manabot.training.baseline import baseline
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
+from manabot.recipes.baseline import baseline
+from manabot.recipes.local import local_smoke
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
 
 
-def _agent(seed: int, film: bool) -> Agent:
+def _agent(seed: int, film: bool) -> ActorCritic:
     torch.manual_seed(seed)
-    return Agent(ObservationSpace(), AgentSpec(**SPEC, policy_film=film))
+    return ActorCritic(ObservationSpace(), ModelConfig(**SPEC, policy_film=film))
 
 
 def test_disabled_film_preserves_serialized_spec() -> None:
-    assert "policy_film" not in AgentSpec(**SPEC).model_dump()
-    assert AgentSpec(**SPEC, policy_film=True).model_dump()["policy_film"] is True
+    assert "policy_film" not in ModelConfig(**SPEC).model_dump()
+    assert ModelConfig(**SPEC, policy_film=True).model_dump()["policy_film"] is True
     with pytest.raises(ValueError, match="compound"):
-        AgentSpec(compound_decisions=True, policy_film=True)
+        ModelConfig(compound_decisions=True, policy_film=True)
 
 
 def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
-    assert Hypers().agent.policy_film
-    assert load_train_config("local").agent.policy_film
+    assert local_smoke().agent.policy_film
     recipe = baseline(1)
     assert recipe.version == "baseline-v3" and recipe.regime.agent.policy_film
-    assert not AgentSpec.model_validate({"hidden_dim": 64}).policy_film
-    assert not Hypers.model_validate({"agent": {}}).agent.policy_film
+    assert not ModelConfig.model_validate({"hidden_dim": 64}).policy_film
 
 
 def test_film_starts_as_the_additive_policy() -> None:

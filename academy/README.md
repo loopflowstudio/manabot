@@ -34,9 +34,8 @@ offline. Schemas and three-language conformance fixtures live in
   nonparticipants. `ACADEMY_PLAY_RECORD_ORIGIN` distinguishes declared automated
   validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: trained opponents — the configured `candidate.json`
-  bundle and the checkpoint catalog (`GET /api/opponents`), both chosen by
-  exact SHA-256 and verified before play
+- **`opponent.py`**: trained opponents — the checkpoint catalog
+  (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
 
 Keep training and belief dependencies lazy at their execution boundaries.
 Ordinary play must import, advance and record without NumPy or Torch; type-only
@@ -122,11 +121,10 @@ Development server without the launcher:
 uv run uvicorn academy.server:app --port 8000
 ```
 
-The [local trained-challenger workflow](../docs/local-trained-challenger.md)
-covers training, the built same-origin server, feedback, and read-only SQL.
-Configure `ACADEMY_PLAY_CANDIDATE` on the server, never in player input.
+The [local challenger workflow](../docs/local-trained-challenger.md)
+covers the built same-origin server, feedback, and read-only SQL.
 
-Any other trained checkpoint is selectable from the Opponent menu. The table
+Any trained checkpoint is selectable from the Opponent menu. The table
 lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
 and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
 Tournament files, separated by `:` — with world, model shape, training step
@@ -211,3 +209,25 @@ human-only choice or extra information. See the
 Optional resolving costs share typed payment progress and effect continuations.
 See [optional payments](../docs/rules/optional-payments.md) for authoring,
 commitment and frozen-content boundaries.
+
+## Isolated browser validation
+
+Use unused backend and frontend ports for this checkout. Playwright can reuse an
+existing server; another worktree's server is not evidence for this source.
+
+```bash
+ACADEMY_API_PORT=8123 ACADEMY_FRONTEND_PORT=5293 \
+  npm --prefix academy/ui run test:e2e -- testing-house.spec.ts
+```
+
+For a built SPA, set an absolute `ACADEMY_FRONTEND_BUILD` for build and ASGI,
+a separate `ACADEMY_TRACES_DIR`, and
+`ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`. Keep existing human-play
+stores and sibling servers untouched. Shared-history proofs use separate
+browser identities and cover private unfinished replays and participant feedback.
+
+Changes to persistence or Study addresses require presentation, Study runtime,
+and protocol checks as well as attempt-store checks. SQLite is the trace
+authority; historical JSON is read-only. `ed2` names a pre-command frame;
+Command and offer validation belongs to its landmark. Preserve frozen `erd1`
+evidence and test recorder failure through the WebSocket boundary.

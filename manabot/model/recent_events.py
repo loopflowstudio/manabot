@@ -37,7 +37,9 @@ class RecentEventEncoder(nn.Module):
         sanitized before any lookup, including nonfinite padded payloads.
         """
         if "events" not in obs or "events_valid" not in obs:
-            raise ValueError("recent-event Agent requires events and events_valid")
+            raise ValueError(
+                "recent-event ActorCritic requires events and events_valid"
+            )
         events, valid = obs["events"], obs["events_valid"]
         if (
             events.ndim != 3

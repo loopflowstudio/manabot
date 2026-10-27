@@ -14,8 +14,9 @@ from pathlib import Path
 import re
 from typing import Any
 
-import managym
 from managym.experience_projection import redact_observation
+
+import managym
 
 from .bot_decision import BotDecision
 
@@ -277,7 +278,3 @@ def prepare_trace_payload(
             redact_observation(observation)
 
     return prepared
-
-
-def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return prepare_trace_payload(payload, reveal_hidden=False)

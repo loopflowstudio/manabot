@@ -121,7 +121,10 @@ jobs:
           uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation]"
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.training.experiment_report; import manabot.training.time_sources'
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.reports.experiment; import manabot.reports.time_sources'
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.eval.cards --help
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.experiment.monitor_worker --help
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
 
   artifacts:

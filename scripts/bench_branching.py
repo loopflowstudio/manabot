@@ -25,10 +25,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from typing import Any, NamedTuple
 
 import psutil
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "docs/benchmarks/search-branching-contract-v1.md"
@@ -1044,7 +1044,9 @@ def run_benchmark(
 ) -> dict[str, Any]:
     initial_source = source or source_identity()
     build = dict(build_metadata) if build_metadata is not None else build_binary()
-    measured_hardware = dict(hardware) if hardware is not None else hardware_metadata(oversubscribed)
+    measured_hardware = (
+        dict(hardware) if hardware is not None else hardware_metadata(oversubscribed)
+    )
     measured_revision = revision or measurement_code_revision()
     assert_binary_unchanged(build)
     manifest = native_json(["--manifest", "--driver", driver])
@@ -1106,7 +1108,9 @@ def run_benchmark(
     if completed_source != initial_source:
         raise RuntimeError("source tree changed during benchmark execution")
     if measurement_code_revision() != measured_revision:
-        raise RuntimeError("measurement code revision changed during benchmark execution")
+        raise RuntimeError(
+            "measurement code revision changed during benchmark execution"
+        )
     assert_binary_unchanged(build)
     payload: dict[str, Any] = {
         "schema": SCHEMA,
@@ -1838,7 +1842,9 @@ def verify_matrix_payloads(payloads: dict[str, dict[str, Any]]) -> None:
     reference = matched_matrix_projection(payloads[FULL_CLONE_DRIVER])
     for driver in (CLONE_PLUS_UNDO_DRIVER, PAGE_COW_DRIVER):
         if matched_matrix_projection(payloads[driver]) != reference:
-            raise RuntimeError(f"matched logical/provenance matrix differs for {driver}")
+            raise RuntimeError(
+                f"matched logical/provenance matrix differs for {driver}"
+            )
 
 
 def cell_summaries(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1890,9 +1896,7 @@ def decision_outcome(payloads: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "subsequent runtime gate. Keep full clone as the conformance reference."
         )
     elif page_retained:
-        sequential = (
-            "clone plus undo" if undo_sequential else "compact full clone"
-        )
+        sequential = "clone plus undo" if undo_sequential else "compact full clone"
         selection = (
             f"workload-specific hybrid: {sequential} for sequential flat rollouts, "
             "dense event-page COW plus undo for retained slots"
@@ -2114,9 +2118,7 @@ def main() -> int:
     run_parser.add_argument("--output", type=Path, default=None)
     run_parser.add_argument("--report", type=Path, default=None)
     matrix_parser = subparsers.add_parser("run-matrix")
-    matrix_parser.add_argument(
-        "--profile", choices=("full", "smoke"), default="full"
-    )
+    matrix_parser.add_argument("--profile", choices=("full", "smoke"), default="full")
     matrix_parser.add_argument("--oversubscribed", action="store_true")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument(

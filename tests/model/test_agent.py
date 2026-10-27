@@ -1,7 +1,7 @@
 """
 test_agent.py
 
-This module provides comprehensive testing for the ManaBot Agent architecture.
+This module provides comprehensive testing for the ManaBot ActorCritic architecture.
 Tests are organized into logical groups that mirror the agent's processing pipeline:
 
 1. Basic functionality (forward pass, gradient flow)
@@ -22,8 +22,8 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model import Agent
+from manabot.infra.config import ModelConfig
+from manabot.model import ActorCritic
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,19 +41,21 @@ def observation_space() -> ObservationSpace:
 
 
 @pytest.fixture
-def agent_hypers() -> AgentSpec:
+def agent_config() -> ModelConfig:
     """Create agent hyperparameters optimized for testing."""
-    return AgentSpec(
+    return ModelConfig(
         hidden_dim=4,  # Small embedding dimension for fast testing
         num_attention_heads=2,  # Multiple heads but keep it small
     )
 
 
 @pytest.fixture
-def agent(observation_space: ObservationSpace, agent_hypers: AgentSpec) -> Agent:
+def agent(
+    observation_space: ObservationSpace, agent_config: ModelConfig
+) -> ActorCritic:
     """Create an agent instance with controlled randomization."""
     torch.manual_seed(42)  # Ensure reproducible initialization
-    return Agent(observation_space, agent_hypers)
+    return ActorCritic(observation_space, agent_config)
 
 
 @pytest.fixture
@@ -69,9 +71,9 @@ def real_observation(
     # Local imports
     from manabot.env import Reward
     from manabot.env.match import Match
-    from manabot.infra.hypers import RewardHypers
+    from manabot.infra.config import RewardConfig
 
-    reward = Reward(RewardHypers(trivial=True))
+    reward = Reward(RewardConfig(trivial=True))
     match = Match()
     from manabot.env import VectorEnv
 
@@ -94,7 +96,7 @@ def real_observation(
 
 
 def test_forward_pass_shapes(
-    agent: Agent,
+    agent: ActorCritic,
     real_observation: Dict[str, torch.Tensor],
     observation_space: ObservationSpace,
 ):
@@ -126,7 +128,7 @@ def test_forward_pass_shapes(
     assert not torch.isinf(value).any(), "Inf in value"
 
 
-def test_gradient_flow(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
     """
     Verify that gradients flow properly through the entire network.
     """
@@ -149,7 +151,7 @@ def test_gradient_flow(agent: Agent, real_observation: Dict[str, torch.Tensor]):
 
 
 def test_object_embeddings(
-    agent: Agent,
+    agent: ActorCritic,
     real_observation: Dict[str, torch.Tensor],
     observation_space: ObservationSpace,
 ) -> None:
@@ -168,7 +170,7 @@ def test_object_embeddings(
     assert objects.shape == (
         batch_size,
         expected_objects,
-        agent.hypers.hidden_dim,
+        agent.config.hidden_dim,
     ), f"Wrong shape for objects tensor: {objects.shape}"
     assert is_agent.shape == (
         batch_size,
@@ -191,7 +193,7 @@ def test_object_embeddings(
 
 
 def test_attention_mechanism(
-    agent: Agent, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
 ) -> None:
     """
     Verify the attention mechanism's behavior and output properties.
@@ -215,7 +217,7 @@ def test_attention_mechanism(
 
 
 def test_focus_object_incorporation(
-    agent: Agent, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
 ) -> None:
     """
     Verify that focus objects are correctly incorporated into action representations.
@@ -231,7 +233,7 @@ def test_focus_object_incorporation(
     actions_with_focus = agent._add_focus(actions, post_attention, obs["action_focus"])
 
     batch_size = obs["actions"].shape[0]
-    expected_dim = (1 + agent.max_focus_objects) * agent.hypers.hidden_dim
+    expected_dim = (1 + agent.max_focus_objects) * agent.config.hidden_dim
     assert actions_with_focus.shape == (
         batch_size,
         obs["actions"].shape[1],
@@ -241,16 +243,16 @@ def test_focus_object_incorporation(
     # Check that invalid focus indices (-1) yield zero embeddings
     invalid_focus = obs["action_focus"] == -1
     if invalid_focus.any():
-        focus_start = agent.hypers.hidden_dim
+        focus_start = agent.config.hidden_dim
         for i in range(agent.max_focus_objects):
             focus_slice = slice(
-                focus_start + i * agent.hypers.hidden_dim,
-                focus_start + (i + 1) * agent.hypers.hidden_dim,
+                focus_start + i * agent.config.hidden_dim,
+                focus_start + (i + 1) * agent.config.hidden_dim,
             )
             invalid_positions = (
                 invalid_focus[..., i]
                 .unsqueeze(-1)
-                .expand(-1, obs["actions"].shape[1], agent.hypers.hidden_dim)
+                .expand(-1, obs["actions"].shape[1], agent.config.hidden_dim)
             )
             focus_embeddings = actions_with_focus[..., focus_slice]
             assert torch.all(focus_embeddings[invalid_positions] == 0), (
@@ -263,7 +265,7 @@ def test_focus_object_incorporation(
 # -----------------------------------------------------------------------------
 
 
-def test_action_masking(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_action_masking(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
     """Verify that action masking properly prevents selection of invalid actions."""
     obs = real_observation
     with torch.no_grad():
@@ -283,7 +285,9 @@ def test_action_masking(agent: Agent, real_observation: Dict[str, torch.Tensor])
 # -----------------------------------------------------------------------------
 
 
-def test_value_estimate_range(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_value_estimate_range(
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
+):
     """
     Verify that value estimates stay within reasonable bounds.
     """
@@ -298,7 +302,7 @@ def test_value_estimate_range(agent: Agent, real_observation: Dict[str, torch.Te
 
 
 def test_probability_distribution(
-    agent: Agent, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
 ):
     """
     Verify that action probabilities form a valid distribution.
@@ -323,7 +327,7 @@ def test_probability_distribution(
         )
 
 
-def test_policy_head_initial_logits(agent: Agent):
+def test_policy_head_initial_logits(agent: ActorCritic):
     """Final policy layer should have small initial scale for exploration."""
     final_layer = agent.policy_head[2]
     assert isinstance(final_layer, nn.Linear)
@@ -331,7 +335,7 @@ def test_policy_head_initial_logits(agent: Agent):
 
 
 def test_attention_stability(
-    agent: Agent, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
 ) -> None:
     """
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
@@ -355,7 +359,7 @@ def test_attention_stability(
 
 
 def test_policy_output_consistency(
-    agent: Agent, real_observation: Dict[str, torch.Tensor]
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor]
 ):
     """
     Verify consistency between direct forward pass and action sampling interface.
@@ -369,7 +373,7 @@ def test_policy_output_consistency(
     )
 
 
-def test_action_entropy(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_action_entropy(agent: ActorCritic, real_observation: Dict[str, torch.Tensor]):
     """
     Verify that action distribution entropy behaves reasonably.
     """
@@ -385,7 +389,7 @@ def test_action_entropy(agent: Agent, real_observation: Dict[str, torch.Tensor])
 
 
 def test_categorical_logits(
-    agent: Agent, real_observation: Dict[str, torch.Tensor], monkeypatch
+    agent: ActorCritic, real_observation: Dict[str, torch.Tensor], monkeypatch
 ):
     """Action distribution should be built from logits for numerical stability."""
     call_kwargs = {}

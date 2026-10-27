@@ -4,22 +4,46 @@ One experiment = one report (`<name>.md`). Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 Each experiment people run today is one module beside its report: its recipes,
-built from [`manabot.training.builders`](../manabot/training/builders.py), and
+built from [`manabot.recipes.builders`](../manabot/training/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
 | module | recipes (`--regime-name`) | runs and reports |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / `manabot deploy` |
+| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/remote-training.md) |
 | [gpu_training_profile](gpu_training_profile.py) | `gpu_training_profile` ([training time](training-time.md)) | `manabot train` |
 | [ataraxos_mini](ataraxos_mini.py) | `ataraxos_mini`, `:mirror_screen_baseline`, `:sustained_baseline_source` | `manabot train` |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
 | [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/ataraxos.md)) | `manabot train` |
-| [direct_self_play](direct_self_play.py) | `direct_self_play`, `:search_distillation` ([learning speed](training-regimes.md)) | `python -m experiments.direct_self_play` |
+| [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
 | [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler`, `:learned_belief_local_search` ([guide](../docs/belief-sampler.md)) | `manabot train` |
-| [frozen_policy_local_update](frozen_policy_local_update.py) | `frozen_policy_local_update` ([guide](../docs/local-policy-search.md)) | `manabot train` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/belief-sampler.md)) | `manabot train` |
+| [heuristic_strength](heuristic_strength.py) | heuristic against a checkpoint, optional search ([report](heuristic-strength.md)) | `python -m experiments.heuristic_strength` |
+
+## Etude experiment files
+
+```sh
+uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
+uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+```
+
+A file defining `report()` or `eval(state)` is an Etude experiment, named for
+its stem. Its training runs track under that stem (`TrainingJob.experiment`),
+so `etude eval` and `etude report` find them; Etude's launcher does not pass
+the name itself yet.
+
+| file | `runs()` | `eval(state)` | `report()` |
+| --- | --- | --- | --- |
+| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, pairs |
+| [seat_comparison](seat_comparison.py) (MTG-165) | one- and two-seat arms × four seeds | — | score on learner transitions, one-seat dotted |
+| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
+
+Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
+including a flame graph of each update's `time/` seconds. The two-deck
+experiments' evaluation is still bound to each checkpoint's training record
+(`manabot.eval.benchmark`), and their retained results predate Etude eval runs.
 
 Reports of finished studies stay as the record. The runners, contracts, plans
 and fixtures they cite were removed once nothing current used them; git
@@ -35,14 +59,14 @@ uv run --extra artifacts python -m manabot.data publish experiments/data/<new-ru
 
 `data/` is not in git. [`data.manifest.json`](data.manifest.json) records each
 file's path, sha256 and size; the bytes live once per digest at
-`s3://etudefantasia/manabot/sha256/<sha256>` and need the team's AWS
-credentials. `fetch` restores files to their original paths, verifies every
+`r2://manabot/sha256/<sha256>` and need the team's R2
+credentials (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, in Doppler `manabot/prd`). `fetch` restores files to their original paths, verifies every
 digest, skips files already present and refuses to overwrite a file whose bytes
-differ. Runs still write results under `data/`; `publish` uploads them (S3
+differ. Runs still write results under `data/`; `publish` uploads them (storage
 checks each SHA-256; nothing is read back) and updates the manifest, which you
 commit with the report. Every worktree on a machine shares one read-only cache,
 `$MANABOT_DATA_CACHE` (default `~/.cache/manabot/sha256/<sha256>`), filled by
-`publish` and by downloads, so a machine reads each digest from S3 at most once. Tests that read data are marked
+`publish` and by downloads, so a machine reads each digest from the store at most once. Tests that read data are marked
 `experiment_data(...)`: they fetch what they name, or skip with this command
 when the store is unreachable. Data committed before the manifest remains in git
 history.
@@ -72,6 +96,12 @@ history.
    changes that break them are failing changes regardless of green tests.
 
 ## Index
+
+[Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
+`heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
+62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with
+faster decisions. Flat Monte Carlo over it adds +6.3 points [0.0, 12.7] at 16
+worlds, for about 3,000 times the decision time.
 
 [MTG-165 two-seat scale ladder](two-seat-ladder.md): **running, interim report** —
 20.9M learner/environment decisions retained in a verified 704-update snapshot.

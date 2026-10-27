@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "id": "elemental-ur-gw-186-v1",
+  "world": "w13",
+  "match": {
+    "content_pack": "elemental-world-v2",
+    "hero": "gaea",
+    "villain": "urza",
+    "hero_deck": {
+      "Firebending Lesson": 3,
+      "Igneous Inspiration": 2,
+      "Fabled Passage": 2,
+      "Monastery Swiftspear": 1,
+      "Gran-Gran": 1,
+      "Mountain": 8,
+      "Deserter's Disciple": 1,
+      "Island": 7,
+      "Combustion Technique": 1,
+      "Octopus Form": 1,
+      "Pop Quiz": 1,
+      "Fire Nation Cadets": 4,
+      "Abandon Attachments": 2,
+      "Dragonfly Swarm": 2,
+      "Lightning Strike": 1,
+      "Divide by Zero": 2,
+      "Accumulate Wisdom": 1
+    },
+    "villain_deck": {
+      "Jeong Jeong's Deserters": 1,
+      "White Lotus Reinforcements": 1,
+      "Enter the Avatar State": 1,
+      "Allies at Last": 2,
+      "Fancy Footwork": 1,
+      "Earth Kingdom Jailer": 2,
+      "South Pole Voyager": 1,
+      "Invasion Reinforcements": 3,
+      "Water Tribe Rallier": 2,
+      "Compassionate Healer": 2,
+      "Plains": 8,
+      "Yip Yip!": 1,
+      "Ostrich-Horse": 2,
+      "True Ancestry": 1,
+      "Origin of Metalbending": 1,
+      "Fabled Passage": 2,
+      "Forest": 7,
+      "Professor of Symbology": 1,
+      "Haru, Hidden Talent": 1
+    },
+    "hero_sideboard": {
+      "Combustion Technique": 1,
+      "Accumulate Wisdom": 1,
+      "Firebending Lesson": 1,
+      "Zuko's Exile": 1
+    },
+    "villain_sideboard": {
+      "Zuko's Exile": 1,
+      "Origin of Metalbending": 1,
+      "Enter the Avatar State": 1
+    }
+  },
+  "observation": {
+    "max_cards_per_player": 60,
+    "max_permanents_per_player": 40,
+    "max_actions": 64,
+    "max_focus_objects": 2,
+    "max_events": 32
+  },
+  "agent": {
+    "semantic_pack": "elemental-world-v2",
+    "value_kind": "scalar",
+    "value_aggregation": "masked_mean",
+    "attention_layers": 2,
+    "hidden_dim": 64,
+    "num_attention_heads": 4,
+    "attention_on": true,
+    "belief_count_buckets": 0,
+    "belief_card_vocab_size": 0,
+    "belief_owner_role_vocab_size": 2,
+    "belief_hidden_zone_vocab_size": 7
+  },
+  "stages": [
+    {
+      "id": "self-play",
+      "execution": {
+        "device": "cuda",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 27000.0,
+        "memory_bytes": 42949672960
+      },
+      "game_errors": {
+        "threshold": 0.1,
+        "window": 100,
+        "warmup": 100,
+        "max_game_actions": 40000
+      },
+      "operation": "train_self_play",
+      "trainer": "net_opponent",
+      "optimizer": "adam",
+      "trainable": "policy_value",
+      "behavior": "current-self",
+      "opponent": null,
+      "initial": null,
+      "updates": 616,
+      "streams": 256,
+      "transitions": 64,
+      "learning_seats": "both",
+      "matchup_curriculum": "cross-balanced",
+      "learning": {
+        "gradient": "damped_policy",
+        "policy_lambda": 0.5,
+        "value_lambda": 0.8,
+        "filter_kind": "quantile",
+        "filter_scope": "actor_critic",
+        "advantage_quantile": 0.75,
+        "min_advantage": 0.01,
+        "reference": "action_type_uniform",
+        "clip": 0.2,
+        "collection_kl": 0.1,
+        "learning_rate_scale": 0.5,
+        "learning_rate_power": 1.1,
+        "learning_rate_min": 5e-06,
+        "learning_rate_max": 0.0001,
+        "tau_scale": 0.05,
+        "tau_power": 0.3,
+        "max_grad_norm": 0.267,
+        "ema": 0.999
+      }
+    }
+  ],
+  "wall_seconds": 27000.0,
+  "schedule_clock": "iteration_fraction",
+  "recovery_max_microsteps": null,
+  "selection": "last-complete-raw"
+}

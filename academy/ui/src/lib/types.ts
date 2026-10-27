@@ -470,13 +470,12 @@ export interface TraceSummary {
 
 export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
 
-// One entry of GET /api/opponents: the configured candidate or a checkpoint
-// the server found. `reason` names why an unavailable entry cannot play.
+// One entry of GET /api/opponents: a checkpoint the server found. `reason` names why an unavailable entry cannot play.
 export interface TrainedOpponent {
   sha256: string;
   name: string;
   producer: string;
-  source: 'candidate' | 'path' | 'runs' | 'tournament';
+  source: 'path' | 'runs' | 'tournament';
   world: string | null;
   model: string | null;
   parameters: number | null;

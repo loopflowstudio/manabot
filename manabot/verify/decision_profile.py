@@ -47,7 +47,7 @@ from manabot.env.single_agent_env import RandomPolicy
 from .util import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
-    build_hypers,
+    build_verification_config,
     step_with_fallback,
     suppress_truncation_logs,
     winner_from_info_or_obs,
@@ -93,11 +93,11 @@ class GameProfile:
     aborted: bool = False
 
 
-def _untrained_agent(observation_space: ObservationSpace, hypers, seed: int):
-    from manabot.model import Agent
+def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
+    from manabot.model import ActorCritic
 
     torch.manual_seed(seed)
-    agent = Agent(observation_space, hypers.agent)
+    agent = ActorCritic(observation_space, config.agent)
     agent.eval()
     return agent
 
@@ -120,15 +120,15 @@ def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
 def build_hero_policy(
     name: str,
     observation_space: ObservationSpace,
-    hypers,
+    config,
     seed: int,
 ) -> Callable[[dict[str, np.ndarray]], int]:
-    """Hero policies: 'random' (uniform over valid) or 'untrained' (fresh Agent)."""
+    """Hero policies: 'random' (uniform over valid) or 'untrained' (fresh ActorCritic)."""
 
     if name == "random":
         return RandomPolicy()
     if name == "untrained":
-        return _agent_policy(_untrained_agent(observation_space, hypers, seed))
+        return _agent_policy(_untrained_agent(observation_space, config, seed))
     raise ValueError(f"Unsupported hero policy: {name}")
 
 
@@ -155,13 +155,13 @@ def play_profile_games(
 
     hero_deck = STANDARD_DECK if hero_deck is None else hero_deck
     villain_deck = STANDARD_DECK if villain_deck is None else villain_deck
-    hypers = build_hypers(
+    config = build_verification_config(
         match={"hero_deck": hero_deck, "villain_deck": villain_deck}
     )
-    observation_space = ObservationSpace(hypers.observation)
-    match = Match(hypers.match)
+    observation_space = ObservationSpace(config.observation)
+    match = Match(config.match)
     match_swapped = match.swapped()
-    reward = Reward(hypers.reward)
+    reward = Reward(config.reward)
 
     env = Env(
         match,
@@ -175,7 +175,7 @@ def play_profile_games(
     hero_policy = build_hero_policy(
         hero_policy_name,
         observation_space,
-        hypers,
+        config,
         seed if agent_seed is None else agent_seed,
     )
     villain_policy = build_opponent_policy(villain_policy_name)
@@ -315,9 +315,7 @@ def summarize_profiles(profiles: list[GameProfile]) -> dict[str, Any]:
         [float(p.surfaced_villain) for p in clean]
     )
     summary["skipped"] = _distribution_summary([float(p.skipped) for p in clean])
-    summary["collapse_ratio"] = _distribution_summary(
-        [p.collapse_ratio for p in clean]
-    )
+    summary["collapse_ratio"] = _distribution_summary([p.collapse_ratio for p in clean])
     summary["turns"] = _distribution_summary([float(p.turns) for p in clean])
     for kind in DECISION_KINDS:
         summary[f"hero_{kind}"] = _distribution_summary(
@@ -398,8 +396,10 @@ def run_matchup(
 
 
 def _print_summary(label: str, summary: dict[str, Any]) -> None:
-    print(f"\n=== {label} ({summary['num_games']} games, "
-          f"{summary['num_aborted']} aborted) ===")
+    print(
+        f"\n=== {label} ({summary['num_games']} games, "
+        f"{summary['num_aborted']} aborted) ==="
+    )
     rows = [
         ("surfaced decisions (both)", "surfaced_total"),
         ("surfaced decisions (hero)", "surfaced_hero"),
@@ -450,28 +450,55 @@ def _print_summary(label: str, summary: dict[str, Any]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--games-random", type=int, default=500,
-                        help="random-vs-random games (E0a + E0c)")
-    parser.add_argument("--games-untrained", type=int, default=200,
-                        help="untrained-vs-random games (E0a + E0c)")
-    parser.add_argument("--games-baseline", type=int, default=200,
-                        help="untrained-vs-passive games (E0c)")
+    parser.add_argument(
+        "--games-random",
+        type=int,
+        default=500,
+        help="random-vs-random games (E0a + E0c)",
+    )
+    parser.add_argument(
+        "--games-untrained",
+        type=int,
+        default=200,
+        help="untrained-vs-random games (E0a + E0c)",
+    )
+    parser.add_argument(
+        "--games-baseline",
+        type=int,
+        default=200,
+        help="untrained-vs-passive games (E0c)",
+    )
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--deck", choices=sorted(DECKS), default="standard",
-                        help="deck for both players")
-    parser.add_argument("--seat-balanced", action=argparse.BooleanOptionalAction,
-                        default=True,
-                        help="alternate the hero between seats 0 and 1 "
-                             "(--no-seat-balanced reproduces the C0 protocol)")
-    parser.add_argument("--untrained-inits", type=int, default=1,
-                        help="number of fresh untrained inits for "
-                             "untrained-vs-random (each plays "
-                             "--games-untrained games)")
-    parser.add_argument("--baseline-inits", type=int, default=1,
-                        help="number of fresh untrained inits for "
-                             "untrained-vs-passive")
-    parser.add_argument("--out", type=str, default=None,
-                        help="write full JSON results to this path")
+    parser.add_argument(
+        "--deck",
+        choices=sorted(DECKS),
+        default="standard",
+        help="deck for both players",
+    )
+    parser.add_argument(
+        "--seat-balanced",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="alternate the hero between seats 0 and 1 "
+        "(--no-seat-balanced reproduces the C0 protocol)",
+    )
+    parser.add_argument(
+        "--untrained-inits",
+        type=int,
+        default=1,
+        help="number of fresh untrained inits for "
+        "untrained-vs-random (each plays "
+        "--games-untrained games)",
+    )
+    parser.add_argument(
+        "--baseline-inits",
+        type=int,
+        default=1,
+        help="number of fresh untrained inits for untrained-vs-passive",
+    )
+    parser.add_argument(
+        "--out", type=str, default=None, help="write full JSON results to this path"
+    )
     args = parser.parse_args()
 
     suppress_truncation_logs()
@@ -496,8 +523,7 @@ def main() -> None:
             matchups.append(
                 run_matchup(
                     label=(
-                        f"untrained-vs-random ({args.deck}, "
-                        f"init seed {agent_seed})"
+                        f"untrained-vs-random ({args.deck}, init seed {agent_seed})"
                     ),
                     hero="untrained",
                     villain="random",
@@ -514,8 +540,7 @@ def main() -> None:
             matchups.append(
                 run_matchup(
                     label=(
-                        f"untrained-vs-passive ({args.deck}, "
-                        f"init seed {agent_seed})"
+                        f"untrained-vs-passive ({args.deck}, init seed {agent_seed})"
                     ),
                     hero="untrained",
                     villain="passive",

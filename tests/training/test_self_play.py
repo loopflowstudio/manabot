@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from manabot.training.experiment_report import load_evidence
-from manabot.training.self_play import SelfPlayCounter, deck_identity
-from manabot.training.self_play_report import self_play_figures, self_play_points
+from manabot.reports.experiment import load_evidence
+from manabot.reports.self_play import self_play_figures, self_play_points
+from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.update_metrics import stage_rows
 
 
 def test_both_seats_deck_swaps_and_drawn_games() -> None:
@@ -53,7 +54,7 @@ def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:
     run = evidence.runs[0].model_copy(deep=True)
     stage = run.stages[0]
     stage.diagnostics = []
-    assert self_play_points(run) == []
+    assert self_play_points(stage_rows(run, {})) == []
     counter = SelfPlayCounter()
     counter.record(("a", "b"), 0)
     stage.diagnostics.append(
@@ -64,7 +65,7 @@ def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:
     stage.diagnostics.append(
         {"coordinates": {"updates": 2}, "self_play_outcomes": counter.drain()}
     )
-    points = self_play_points(run, 100)
+    points = self_play_points(stage_rows(run, {}), 100)
     first = next(p for p in points if p.deck == "a")
     assert (first.wins, first.games, first.update) == (1, 10, 2)
     figures = self_play_figures(replace(evidence, runs=(run,)))
@@ -74,4 +75,4 @@ def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:
     missing = self_play_figures(replace(evidence, runs=(run,)))
     assert "unavailable" in missing[0].axes[0].texts[0].get_text()
     with pytest.raises(ValueError, match="positive"):
-        self_play_points(run, 0)
+        self_play_points(stage_rows(run, {}), 0)

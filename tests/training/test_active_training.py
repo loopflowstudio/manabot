@@ -10,9 +10,10 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.training import execution
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
-from manabot.training.monitor_evaluation import stage_checkpoint
+from manabot.training.records import TrainingRun
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 from tests.training.test_ataraxos_regime import _recipe
 
@@ -22,10 +23,13 @@ R = TypeVar("R")
 
 class Clock:
     def __init__(self) -> None:
+        # Keep native collection deadlines on the real epoch, but charge only
+        # injected durations so host speed cannot change the expected update count.
+        self.epoch = time.perf_counter()
         self.offset = 0.0
 
     def perf_counter(self) -> float:
-        return time.perf_counter() + self.offset
+        return self.epoch + self.offset
 
     def __getattr__(self, name: str) -> object:
         return getattr(time, name)
@@ -60,10 +64,15 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     clock = Clock()
     monkeypatch.setattr(execution, "time", clock)
     monkeypatch.setattr(
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
+    monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
     monkeypatch.setattr(
-        execution, "save_bc_checkpoint", clock.charge(execution.save_bc_checkpoint, 100)
+        execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
     )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         if expected == "failed":
@@ -86,7 +95,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     assert run.status == expected
     stage = run.stages[0]
     if expected == "completed":
-        assert len(stage.diagnostics) == 2
+        assert stage.updates == 2
         assert stage.collection_seconds + stage.learning_seconds >= 20
         assert len(run.monitoring_checkpoints) == 1
         point = run.monitoring_checkpoints[0]
@@ -131,6 +140,11 @@ def test_initial_admission_precedes_collection(
     monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
     monkeypatch.setattr(
+        execution.SeatRoutedCollector,
+        "collect",
+        clock.charge(execution.SeatRoutedCollector.collect, 2),
+    )
+    monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
     gate = tmp_path / "initial-admission"
@@ -171,7 +185,7 @@ def test_initial_admission_precedes_collection(
         if admitted:
             finished = future.result(timeout=30)
             assert finished.status == "completed"
-            assert len(finished.stages[0].diagnostics) == 2
+            assert finished.stages[0].updates == 2
             assert finished.stages[0].admission_wait_seconds is not None
             assert finished.stages[0].admission_wait_seconds >= 100
         else:

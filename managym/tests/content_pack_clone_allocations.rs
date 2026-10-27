@@ -1,11 +1,10 @@
-use std::{
-    alloc::{GlobalAlloc, Layout, System},
-    hint::black_box,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
-    },
-};
+use std::{hint::black_box, sync::Arc};
+
+#[cfg(not(feature = "benchmark"))]
+#[path = "../src/benchmark_allocations.rs"]
+mod benchmark_allocations;
+#[cfg(feature = "benchmark")]
+use managym::benchmark_allocations;
 
 use managym::{
     benchmark::build_fixture,
@@ -22,45 +21,6 @@ const MEASURED_CLONE_COUNT: usize = 1_024;
 const EXPANDED_DEFINITION_COUNT: usize = 256;
 const SYNTHETIC_TEXT_BYTES: usize = 16 * 1_024;
 const MINIMUM_PAYLOAD_DELTA_BYTES: usize = 4 * 1_024 * 1_024;
-
-struct CountingAllocator;
-
-static MEASURING: AtomicBool = AtomicBool::new(false);
-static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
-
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if MEASURING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        }
-        System.alloc(layout)
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if MEASURING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
-        }
-        System.alloc_zeroed(layout)
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if MEASURING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-            ALLOCATED_BYTES.fetch_add(new_size as u64, Ordering::Relaxed);
-        }
-        System.realloc(ptr, layout, new_size)
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-    }
-}
-
-#[global_allocator]
-static GLOBAL: CountingAllocator = CountingAllocator;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 struct AllocationCounts {
@@ -108,14 +68,12 @@ struct AllocationReceipt {
 }
 
 fn measure(operation: impl FnOnce()) -> AllocationCounts {
-    assert!(!MEASURING.swap(true, Ordering::SeqCst));
-    ALLOCATIONS.store(0, Ordering::SeqCst);
-    ALLOCATED_BYTES.store(0, Ordering::SeqCst);
+    benchmark_allocations::start();
     operation();
-    MEASURING.store(false, Ordering::SeqCst);
+    let (allocations, allocated_bytes) = benchmark_allocations::stop();
     AllocationCounts {
-        allocations: ALLOCATIONS.load(Ordering::SeqCst),
-        allocated_bytes: ALLOCATED_BYTES.load(Ordering::SeqCst),
+        allocations,
+        allocated_bytes,
     }
 }
 

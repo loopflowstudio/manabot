@@ -166,3 +166,24 @@ Search retains identities rather than grouping equal outputs. Its total and
 spend-purpose bounds only reject impossible branches; every accepted payment
 still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
+
+`Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
+v2: the unchanged semantic Observation, shared native continuation frames, bound public card
+characteristics, visible object joins, world/content identity and optional public
+history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
+all fields except the digest itself using recursively key-sorted compact JSON.
+`DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
+`SEMANTIC_DECISION_VERSION` still owns embedded schema 6. No frozen world or
+existing observation consumer changes meaning.
+
+The opaque native capture binds an Env and reset generation. Use
+`execute_captured_command_json(capture, command_json)` for atomic origin and
+current-digest validation plus ordinary semantic execution. Portable capture JSON
+is evidence, not execution authority; clones need their own live capture.
+
+
+Fresh policy input v2 adds native current stack/continuation relation rows. Its
+layout, legacy checkpoint admission and measurement commands are documented in
+[the observation input contract](../docs/recent-events.md#current-continuation-input).
+The presentation context and text capture derive from the same typed frames;
+portable schema-6 viewer JSON is validated by the native observation types.

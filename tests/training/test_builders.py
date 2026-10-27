@@ -6,8 +6,8 @@ from pydantic import ValidationError
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import (
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import (
     ataraxos_baseline,
     move_checkpoints,
     ppo_checkpoints,
@@ -16,7 +16,7 @@ from manabot.training.builders import (
     with_capacity,
     with_value_aggregation,
 )
-from manabot.training.models import Learning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -77,7 +77,7 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
         assert isinstance(stage, TrainSelfPlay)
         stage.learning = Learning()
     before = base.model_dump()
-    with pytest.raises(ValidationError, match="requires ataraxos_move"):
+    with pytest.raises(ValidationError, match="requires damped_policy"):
         value_outputs((base,), ("scalar", "categorical_wdl"))
     assert base.model_dump() == before
     with pytest.raises(ValueError, match="nonempty"):
@@ -86,7 +86,7 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
 
 def test_variations_revalidate_mutated_input_objects() -> None:
     base = _baseline()
-    agent = AgentSpec()
+    agent = ModelConfig()
     agent.compound_decisions = True
     with pytest.raises(ValidationError, match="compound"):
         with_agent(base, id="invalid", agent=agent)

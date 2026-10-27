@@ -1,6 +1,6 @@
 """Derived architecture identities and parameter accounting for ordinary Agents.
 
-AgentSpec remains the configuration authority. This receipt versions the executable
+ModelConfig remains the configuration authority. This receipt versions the executable
 layout and binds resolved inputs; world/content and checkpoint bytes retain their
 separate identities. Counting never constructs a model or advances its RNG.
 """
@@ -9,10 +9,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.arena.models import canonical_sha256
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
+from manabot.infra.config import ModelConfig
+from manabot.infra.identity import canonical_sha256
+from manabot.model.actor_critic import ActorCritic
 
 
 class ParameterCount(BaseModel):
@@ -35,13 +35,13 @@ class ArchitectureReceipt(BaseModel):
     components: dict[str, ParameterCount]
 
 
-def architecture_identity(spec: AgentSpec, space: ObservationSpace) -> str:
+def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     """Hash resolved meaning, not recipe labels, device, seeds or weight bytes.
 
     Increment layout_version when equations or parameter ownership change, even
     if tensor shapes stay equal. Source/runtime receipts additionally bind code.
     """
-    resolved = AgentSpec.model_validate(spec.model_dump())
+    resolved = ModelConfig.model_validate(spec.model_dump())
     payload = resolved.model_dump(mode="json")
     if (
         resolved.attention_feedforward_dim
@@ -52,12 +52,12 @@ def architecture_identity(spec: AgentSpec, space: ObservationSpace) -> str:
         {
             "layout_version": 2,
             "agent": payload,
-            "observation": space.encoder.hypers.model_dump(mode="json"),
+            "observation": space.encoder.config.model_dump(mode="json"),
         }
     )
 
 
-def architecture_receipt(agent: Agent) -> ArchitectureReceipt:
+def architecture_receipt(agent: ActorCritic) -> ArchitectureReceipt:
     """Count each distinct parameter once under its first named top-level owner.
 
     Buffers are excluded. Trainability describes the model at export, not optimizer
@@ -72,7 +72,7 @@ def architecture_receipt(agent: Agent) -> ArchitectureReceipt:
             parameter.numel() if parameter.requires_grad else 0
         )
     return ArchitectureReceipt(
-        identity=architecture_identity(agent.hypers, agent.observation_space),
+        identity=architecture_identity(agent.config, agent.observation_space),
         parameters=ParameterCount(
             total=sum(totals.values()), trainable=sum(trainable.values())
         ),
@@ -83,7 +83,7 @@ def architecture_receipt(agent: Agent) -> ArchitectureReceipt:
     )
 
 
-def validate_architecture_receipt(agent: Agent, saved: object) -> None:
+def validate_architecture_receipt(agent: ActorCritic, saved: object) -> None:
     """Reject contradictory new metadata; callers allow absent historical receipts."""
     receipt = ArchitectureReceipt.model_validate(saved)
     actual = architecture_receipt(agent)

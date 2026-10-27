@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
+from managym.experience import ExperienceFrame
 from pydantic import BaseModel
 import pytest
 
 from academy import server
 from academy.server import GameSession
 import managym
-from managym.experience import ExperienceFrame
 
 
 class PrefixStep(BaseModel):

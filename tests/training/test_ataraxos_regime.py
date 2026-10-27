@@ -8,9 +8,10 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move, ataraxos_move_scalar
-from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -25,7 +26,7 @@ def _recipe(build: Callable[[], TrainingRegime] = ataraxos_move) -> TrainingRegi
 
 
 def test_iteration_schedule_and_invalid_config() -> None:
-    learning = AtaraxosMoveLearning(gradient="ataraxos_move")
+    learning = DampedPolicyLearning(gradient="damped_policy")
     assert learning.rates(1) == (1e-4, 0.05)
     rate, tau = learning.rates(10000)
     assert rate == pytest.approx(0.5 / 10000**1.1)
@@ -34,7 +35,7 @@ def test_iteration_schedule_and_invalid_config() -> None:
     with pytest.raises(ValueError, match="positive"):
         learning.rates(0)
     with pytest.raises(ValueError):
-        AtaraxosMoveLearning.model_validate({"gradient": "ataraxos_move", "epochs": 4})
+        DampedPolicyLearning.model_validate({"gradient": "damped_policy", "epochs": 4})
     bad = _recipe().model_dump()
     bad["stages"][0]["learning"] = {"gradient": "ppo"}
     with pytest.raises(ValueError, match="categorical"):
@@ -53,26 +54,28 @@ def test_real_collection_update_export_reload(
     recipe.agent.hidden_dim = 8
     for stage in recipe.stages:
         assert isinstance(stage, TrainSelfPlay)
-        assert isinstance(stage.learning, AtaraxosMoveLearning)
+        assert isinstance(stage.learning, DampedPolicyLearning)
         stage.transitions = 4
         stage.learning.min_advantage = 0
         stage.learning.advantage_quantile = 0
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(recipe, 601, tmp_path / "run", store)
     assert run.status == "completed"
+    updates = stage_rows(run, read_updates(tmp_path, [run]))
     for iteration, stage in enumerate(run.stages, 1):
-        assert stage.learner_transitions == sum(d["rows"] for d in stage.diagnostics)
+        rows = updates[stage.id]
+        assert stage.learner_transitions == sum(d["rows"] for d in rows)
         assert stage.learner_transitions >= 16
         assert stage.optimizer_exposures == stage.learner_transitions
         assert stage.collection_seconds > 0
         assert stage.learning_seconds > 0
         assert stage.export_seconds > 0
-        assert stage.diagnostics[0]["iteration"] == iteration
-        assert stage.diagnostics[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
+        assert rows[0]["iteration"] == iteration
+        assert rows[0]["tau"] == pytest.approx(0.05 / iteration**0.3)
         for variant in ("raw", "ema"):
-            loaded, _ = load_checkpoint_agent(stage.artifacts[variant]["path"])
-            assert loaded.hypers.value_kind == recipe.agent.value_kind
-            assert loaded.hypers.semantic_pack == "ur-lessons-vs-gw-allies"
+            loaded, _ = load_checkpoint(stage.artifacts[variant]["path"])
+            assert loaded.config.value_kind == recipe.agent.value_kind
+            assert loaded.config.semantic_pack == "ur-lessons-vs-gw-allies"
             assert all(
                 torch.isfinite(parameter).all() for parameter in loaded.parameters()
             )

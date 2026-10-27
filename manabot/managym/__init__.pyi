@@ -24,6 +24,9 @@ class PreparedPossibleWorldMaterializer:
         refresh_opponent_commitment: bool = False,
     ) -> List[Env]: ...
 
+class DecisionCapture:
+    def to_json(self) -> str: ...
+
 class Env:
     def __init__(
         self,
@@ -35,6 +38,8 @@ class Env:
     def reset(
         self, player_configs: List[PlayerConfig]
     ) -> Tuple[Observation, Dict[str, Any]]: ...
+    def enable_card_capture(self) -> None: ...
+    def card_capture_json(self) -> str: ...
     def set_seed(self, seed: int) -> None: ...
     def step(
         self, action: int
@@ -60,6 +65,12 @@ class Env:
     def decision_offer_subjects_json(self, viewer: int) -> str: ...
     def presentation_subjects_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
+    def capture_decision(
+        self, viewer: int, history_capacity: int = 0
+    ) -> DecisionCapture: ...
+    def execute_captured_command_json(
+        self, capture: DecisionCapture, command_json: str
+    ) -> str: ...
     def observation_for_player(self, player_index: int) -> Observation: ...
     def execute_semantic_command_json(self, command_json: str) -> str: ...
     def hidden_hand_constraints_json(self, viewer: int) -> str: ...
@@ -127,7 +138,9 @@ class Env:
         rollouts: int,
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
-    def encode_observation(self, obs: Observation) -> Dict[str, np.ndarray]: ...
+    def encode_observation(
+        self, obs: Observation, policy_input_version: int = 2
+    ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]
     ) -> None: ...
@@ -160,6 +173,7 @@ class VectorEnv:
         seed: int = 0,
         skip_trivial: bool = True,
         opponent_policy: str = "none",
+        seed_stride: int | None = None,
     ) -> None: ...
     def reset_all(
         self, player_configs: List[PlayerConfig]
@@ -172,7 +186,19 @@ class VectorEnv:
     def reset_each_into_buffers(
         self, player_configs: list[list[PlayerConfig]]
     ) -> None: ...
-    def step_into_buffers(self, actions: List[int]) -> None: ...
+    def step_into_buffers(
+        self, actions: list[int], active: list[bool] | None = None
+    ) -> None: ...
+    def step_isolated_into_buffers(
+        self, actions: list[int], active: list[bool]
+    ) -> None: ...
+    def replace_failed_into_buffers(self, failed: list[bool]) -> None: ...
+    def semantic_decision_frames_json(
+        self, active: list[bool] | None = None
+    ) -> list[str | None]: ...
+    def current_game_seeds(self) -> list[int]: ...
+    def current_agent_indices(self) -> list[int]: ...
+    def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
     def skip_trivial_counts(self) -> List[int]: ...
     def get_last_info(self) -> List[Dict[str, Any]]: ...
 
@@ -423,6 +449,11 @@ class EventData:
     controller_id: int
 
 class Observation:
+    continuation: list[ContinuationFrame]
+
+    @staticmethod
+    def from_json(text: str) -> Observation: ...
+    def continuation_json(self) -> str: ...
     game_over: bool
     won: bool
     turn: Turn
@@ -444,3 +475,41 @@ class AgentError(RuntimeError): ...
 
 WORLD_VERSION: str
 CARD_DEFINITION_COUNT: int
+
+class VisibleReference:
+    object: int | None
+    definition: int | None
+    player: int | None
+
+class ClauseTarget:
+    reference: VisibleReference
+    clause: int
+
+class ContinuationFrame:
+    kind: int
+    decision: int
+    parent: int | None
+    controller: int
+    source: VisibleReference
+    mode: int | None
+    ability: int | None
+    kicked: bool
+    active_clause: int | None
+    targets: list[ClauseTarget]
+    context: VisibleReference | None
+    sacrifice: VisibleReference | None
+    cost: list[int] | None
+    hybrid: list[list[int]]
+    lesson: bool
+    waterbend: bool
+    can_decline: bool
+    mana_outputs: list[ManaOutput]
+    resolutions_this_turn: int
+
+def validate_observation_json(text: str) -> None: ...
+def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...
+
+class ManaOutput:
+    mode: int
+    mana: list[int]
+    lesson: list[int]

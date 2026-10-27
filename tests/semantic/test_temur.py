@@ -7,7 +7,7 @@ import numpy as np
 from manabot.env import Env, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationEncoder, ObservationSpace
-from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
+from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
 import managym
@@ -41,8 +41,8 @@ def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> No
 
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:
-    match = MatchHypers.authored("elemental-temur-v1", "temur_left", "temur_right")
-    env = Env(Match(match), ObservationSpace(), Reward(RewardHypers()), seed=163)
+    match = MatchConfig.authored("elemental-temur-v1", "temur_left", "temur_right")
+    env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=163)
     observation, _ = env.reset(seed=163)
     assert observation["agent_player"].shape[-1] == 40
     assert observation["agent_cards"].shape[-1] == 41
@@ -84,7 +84,7 @@ def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
     assert any(card.is_legendary for card in observation.agent_cards)
-    expected = ObservationEncoder(ObservationSpaceHypers()).encode(observation)
+    expected = ObservationEncoder(ObservationConfig()).encode(observation)
     actual = env.encode_observation(observation)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)

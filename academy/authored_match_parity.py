@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
-
-import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
+
+import managym
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH

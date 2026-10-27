@@ -12,7 +12,7 @@ from academy.authored_match_receipt import (
 from academy.learn_lesson_evidence import attempt, verify_attempt
 from academy.server import GameSession
 from manabot.semantic.decision_contract import SemanticDecisionContract
-from manabot.sim.flat_search import FlatSearchPolicy
+from manabot.sim.search.flat import FlatSearchPolicy
 import managym
 
 

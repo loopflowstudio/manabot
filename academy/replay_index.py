@@ -18,8 +18,6 @@ from pathlib import Path
 import re
 from typing import Any, Literal, TypeAlias
 
-from pydantic import Field, model_validator
-
 from managym.experience import (
     Command,
     ExperienceFrame,
@@ -29,6 +27,7 @@ from managym.experience import (
     UInt8,
     UInt64,
 )
+from pydantic import Field, model_validator
 
 CANONICAL_REPLAY_VERSION: Literal[1] = 1
 ADDRESS_PREFIX = "erd1."

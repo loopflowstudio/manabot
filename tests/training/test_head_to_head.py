@@ -2,17 +2,23 @@
 
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import pytest
 
 pytest.importorskip("etude.eval.match")
 
-from test_etude_evaluation import _admission, _play_rows
-
-from manabot.training import head_to_head as duel_eval
-from manabot.training.execution import atomic_json
-from manabot.training.monitor_evaluation import MonitorProtocol
+from manabot.eval import duel as duel_eval
+from manabot.eval.endpoint import InferenceEndpoint
+from manabot.eval.evaluation import EvaluationRequest, EvaluationResult
+from manabot.eval.match import derive_seed
+from manabot.eval.monitor import MonitorProtocol
+from manabot.eval.results import EvaluationRow
+from manabot.infra.files import atomic_json
+from manabot.sim.execution import EvalExecution
+from tests.eval.test_local_evaluation import _publish_blocks
+from tests.training.test_etude_evaluation import _admission, _play_rows
 
 
 def _duel(tmp_path: Path) -> duel_eval.Duel:
@@ -34,10 +40,20 @@ def _duel(tmp_path: Path) -> duel_eval.Duel:
     return duel_eval.Duel(two_seat=first, one_seat=first.model_copy(deep=True))
 
 
+@pytest.mark.parametrize("shared", [False, True])
 def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, shared: bool
 ) -> None:
     duel = _duel(tmp_path)
+    candidate, opponent = duel_eval.registrations(duel)
+    seed_key = duel.two_seat.key.model_copy(
+        update={"anchor_cohort_sha256": opponent.identity_sha256}
+    )
+    execution = (
+        EvalExecution(deadline_unix=time.time() + 60, max_active_games=1)
+        if shared
+        else None
+    )
     target = tmp_path / "evaluations" / "1000"
     target.mkdir(parents=True)
     atomic_json(target / "duel.json", duel.model_dump(mode="json"))
@@ -53,31 +69,42 @@ def test_direct_etude_plays_two_checkpoint_players_and_balanced_cells(
         )
         assert set(kwargs["checkpoint_paths"]) == {"one-seat", "two-seat"}
         seed = kwargs["deal_seeds"][0]
+        pair = (candidate.player_id, opponent.player_id)
+        assert derive_seed(
+            kwargs["key"], pair, seed, candidate.player_id
+        ) == derive_seed(seed_key, pair, seed, candidate.player_id)
         played.append(seed)
-        return _play_rows(duel.two_seat, seed, kwargs["out_dir"]), {}, {}
+        manifest = duel.two_seat.model_copy(
+            update={
+                "key": kwargs["key"],
+                "candidate": kwargs["player_a"],
+                "opponent": kwargs["player_b"],
+            }
+        )
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(manifest, seed, kwargs["out_dir"])
+        ]
+        _publish_blocks(kwargs["out_dir"], rows)
+        return [row.model_dump(mode="json") for row in rows], {}, {}
 
-    monkeypatch.setattr(duel_eval, "play_cell", play_cell)
-    duel_eval.evaluate(target / "duel.json")
+    monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
+    monkeypatch.setattr(InferenceEndpoint, "play_cell", staticmethod(play_cell))
+    duel_eval.evaluate(target / "duel.json", execution=execution)
     result = json.loads((target / "result.json").read_bytes())
-    public = tmp_path / "source" / "public"
-    public.mkdir(parents=True)
-    duel_eval.report(
-        tmp_path,
-        public.parent,
-        {
-            "1000": duel_eval.DirectAttempt(
-                phase="completed", started_at=1, two_seat="a" * 64, one_seat="b" * 64
-            )
-        },
-    )
-    assert "W/D/L" in (public / "head-to-head.html").read_text()
     assert len(played) == 25
     assert result["groups"]["all"]["games"] == 200
     assert [
         result["groups"][label]["games"] for label in ("LvA", "AvL", "LvL", "AvA")
     ] == [50] * 4
-    duel_eval.evaluate(target / "duel.json")
+    if execution is not None:
+        execution = execution.model_copy(
+            update={"deadline_unix": time.time() + 3600, "instrumentation": False}
+        )
+    duel_eval.evaluate(target / "duel.json", execution=execution)
     assert len(played) == 25
+    if shared:
+        assert len(list((target / "allocation").glob("*/execution.json"))) == 2
     assert json.loads((target / "result.json").read_bytes())["etude"]["skipped"] == 25
 
 
@@ -96,59 +123,44 @@ def test_duel_rejects_unequal_updates_runtime_and_bytes(tmp_path: Path) -> None:
         duel.validate_inputs()
 
 
-def test_follower_selects_1000_and_retains_failure_without_retry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("historical", [False, True])
+def test_summary_reads_continuation_after_empty_attempt_and_historical_rows(
+    tmp_path: Path, historical: bool
 ) -> None:
-    from manabot.remote.live_evaluation import Attempt, Ledger
-
-    duel = _duel(tmp_path)
-    duel.two_seat.coordinates.updates = duel.one_seat.coordinates.updates = 1000
-    source = tmp_path / "source"
-    (source / "public").mkdir(parents=True)
-    controls = tmp_path / "controls"
-    controls.mkdir()
-    atomic_json(controls / "1000.json", duel.one_seat.model_dump(mode="json"))
-    digest = duel.two_seat.artifact["sha256"]
-    target = source / "evaluations" / f"{digest}-attempt-1"
-    target.mkdir(parents=True)
-    atomic_json(target / "admission.json", duel.two_seat.model_dump(mode="json"))
-    ledger = Ledger(
-        cohort_sha256="a" * 64,
-        cohort_phase="completed",
-        attempts={
-            digest: Attempt(
-                digest=digest,
-                job="job",
-                updates=1000,
-                learner_decisions=1,
-                training_seconds=1,
-                phase="completed",
-                started_at=1,
+    manifest = _admission(tmp_path)
+    for seed in range(101, 126):
+        panel = tmp_path / "arena" / str(seed)
+        panel.mkdir(parents=True)
+        rows = [
+            EvaluationRow.model_validate(row)
+            for row in _play_rows(manifest, seed, panel)
+        ]
+        if historical:
+            atomic_json(
+                panel / "rows.json", [row.model_dump(mode="json") for row in rows]
             )
-        },
-    )
-    atomic_json(source / "ledger.json", ledger.model_dump(mode="json"))
-    calls: list[object] = []
-
-    class FailedChild:
-        pid = 123
-        returncode = 1
-
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            calls.append(args)
-
-        def poll(self) -> int:
-            return 1
-
-        def wait(self, timeout: float | None = None) -> int:
-            return 1
-
-    monkeypatch.setattr(duel_eval.subprocess, "Popen", FailedChild)
-    for _ in range(2):
-        duel_eval.follow(
-            source, controls, tmp_path / "direct", deadline=duel_eval.time.time() + 10
+            continue
+        original = EvaluationResult(
+            request=EvaluationRequest(
+                key=manifest.key,
+                candidate=manifest.candidate,
+                opponent=manifest.opponent,
+                checkpoint_paths={
+                    manifest.candidate.player_id: manifest.artifact["path"]
+                },
+                deal_seeds=(seed,),
+                matchup_mode="all",
+            ),
+            evaluation_id=str(seed),
+            error="interrupted before publishing a block",
         )
-    assert len(calls) == 1
-    ledger = json.loads((tmp_path / "direct/ledger.json").read_bytes())
-    assert ledger["1000"]["phase"] == "failed"
-    assert "failed" in (source / "public/head-to-head.html").read_text()
+        atomic_json(panel / "evaluation.json", original.model_dump(mode="json"))
+        attempt = panel / "attempts/000001"
+        attempt.mkdir(parents=True)
+        _publish_blocks(attempt, rows)
+        retained = original.model_copy(update={"rows": rows, "error": None})
+        atomic_json(attempt / "evaluation.json", retained.model_dump(mode="json"))
+        assert not (panel / "rows.json").exists()
+    groups = duel_eval.summarize(tmp_path)
+    assert groups["all"].games == 200
+    assert [groups[label].games for label in ("LvA", "AvL", "LvL", "AvA")] == [50] * 4

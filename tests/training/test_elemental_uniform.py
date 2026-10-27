@@ -9,24 +9,33 @@ import numpy as np
 import pytest
 import torch
 
+from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
-from manabot.model.agent import Agent
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint
+from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.sim.flat_mc import load_checkpoint_agent
-from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.matchups import elemental_roster
-from manabot.training.models import TrainingRegime, TrainSelfPlay
-from manabot.training.self_play import deck_identity
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.rollout.self_play import deck_identity
+from manabot.training.state.game_errors import (
+    GameAttempt,
+    GameErrorLedger,
+    GameErrorPolicy,
+    replay_attempt,
+)
 from manabot.verify.store import VerifyStore
 import managym
+from tests.training.test_recovery import tracked_updates
 
 PACK = "elemental-world-v2"
 
 
 def _match() -> Match:
-    return Match(MatchHypers.authored(PACK, "elemental_ug", "elemental_bg"))
+    return Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"))
 
 
 def _collector(
@@ -37,7 +46,7 @@ def _collector(
     return SeatRoutedCollector(
         ObservationSpace(),
         _match(),
-        Reward(RewardHypers()),
+        Reward(RewardConfig()),
         num_envs=streams,
         seed=17402,
         opponent_mode="self",
@@ -54,9 +63,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     recovery: str, learning_seats: Literal["one", "both"]
 ) -> None:
     torch.set_num_threads(1)
-    agent = Agent(
+    agent = ActorCritic(
         ObservationSpace(),
-        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
     first = _collector(recovery, learning_seats=learning_seats)
     initial_pairs = first._env.current_matchup_indices()
@@ -64,7 +73,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
     exposure = first.stats.exposure
-    assert sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
+    assert (
+        sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size
+    )
     if learning_seats == "one":
         assert batch.actions.size == 4 * 128
     else:
@@ -143,9 +154,9 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
     collector = _collector("current", 256)
     np.testing.assert_array_equal(collector.learner_seat, np.arange(256) % 2)
     assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 256
-    agent = Agent(
+    agent = ActorCritic(
         ObservationSpace(),
-        AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
     )
     agent.world_binding = checkpoint_world(_match().to_rust(), ObservationSpace())
     assert len(agent.world_binding["setups"]) == 10
@@ -155,7 +166,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
             validate_agent_setup(agent, [a, b])
     with pytest.raises(ValueError, match="exact Elemental"):
         elemental_roster(Match())
-    bad = _match().hypers.model_copy(deep=True)
+    bad = _match().config.model_copy(deep=True)
     bad.hero_sideboard = {}
     with pytest.raises(ValueError, match="exact Elemental"):
         elemental_roster(Match(bad))
@@ -168,7 +179,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
             SeatRoutedCollector(
                 ObservationSpace(),
                 _match(),
-                Reward(RewardHypers()),
+                Reward(RewardConfig()),
                 num_envs=4,
                 matchup_curriculum="elemental-uniform",
                 workers=workers,
@@ -184,19 +195,21 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
 
 def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     torch.set_num_threads(1)
-    value = json.loads(
-        Path("experiments/regimes/ataraxos-move-scalar.json").read_text()
-    )
+    value = ataraxos_move_scalar().model_dump(mode="json")
     value.update(
         world=managym.WORLD_VERSION,
         id="uniform-cpu-proof",
-        match=_match().hypers.model_dump(),
+        match=_match().config.model_dump(),
     )
     value["agent"].update(hidden_dim=8, semantic_pack=PACK, policy_film=False)
     value["stages"] = value["stages"][:1]
     stage = value["stages"][0]
     stage.update(
-        streams=4, transitions=64, updates=2, matchup_curriculum="elemental-uniform"
+        streams=4,
+        transitions=64,
+        updates=2,
+        matchup_curriculum="elemental-uniform",
+        learning_seats="one",
     )
     stage["execution"]["wall_seconds"] = 180
     stage["learning"].update(min_advantage=0, advantage_quantile=0)
@@ -221,13 +234,22 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     result = run.stages[0]
     assert result.learner_transitions == 4 * 64 * 2
     assert result.optimizer_exposures > 0
-    assert len(result.diagnostics) == 2
-    exposure = result.diagnostics[-1]["cumulative_matchup_exposure"]
-    assert sum(c["learner_transitions"] for c in exposure.values()) == 512
-    assert sum(c["terminal_games"] for c in exposure.values()) == result.games
-    raw, _ = load_checkpoint_agent(result.artifacts["raw"]["path"])
-    ema, _ = load_checkpoint_agent(result.artifacts["ema"]["path"])
-    initial, _ = load_checkpoint_agent(result.artifacts["initial_raw"]["path"])
+    assert result.updates == 2
+    last = tracked_updates(run, tmp_path)[-1]
+
+    def exposure(count: str) -> int:
+        prefix = "cumulative_matchup_exposure/"
+        return sum(
+            int(value)
+            for name, value in last.items()
+            if name.startswith(prefix) and name.endswith(f"/{count}")
+        )
+
+    assert exposure("learner_transitions") == 512
+    assert exposure("terminal_games") == result.games
+    raw, _ = load_checkpoint(result.artifacts["raw"]["path"])
+    ema, _ = load_checkpoint(result.artifacts["ema"]["path"])
+    initial, _ = load_checkpoint(result.artifacts["initial_raw"]["path"])
     assert any(
         not torch.equal(a, b)
         for a, b in zip(raw.parameters(), initial.parameters(), strict=True)
@@ -235,3 +257,81 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     assert len(raw.world_binding["setups"]) == 10
     assert len(ema.world_binding["setups"]) == 10
     assert all(torch.isfinite(p).all() for p in raw.parameters())
+
+
+def test_uniform_crash_refill_retains_sampled_setups(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch.set_num_threads(1)
+    policy = GameErrorPolicy()
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+    )
+    collector = SeatRoutedCollector(
+        ObservationSpace(),
+        _match(),
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=17402,
+        opponent_mode="self",
+        games_per_stream=1,
+        matchup_curriculum="elemental-uniform",
+        game_errors=policy,
+        record_attempt=lambda row: ledger.record(row, {}),
+    )
+    original = collector._sample_learning_rows
+    calls = 0
+
+    def sample(
+        agent: ActorCritic,
+        rows: np.ndarray,
+        acting: np.ndarray,
+        inference: PolicyInference,
+    ) -> np.ndarray:
+        nonlocal calls
+        actions = original(agent, rows, acting, inference)
+        calls += 1
+        if calls == 4:
+            actions[0] = -1
+        return actions
+
+    monkeypatch.setattr(collector, "_sample_learning_rows", sample)
+    try:
+        batch = collector.collect(agent, 1)
+        attempts = [
+            GameAttempt.model_validate(json.loads(line)["attempt"])
+            for line in ledger.path.read_text().splitlines()
+        ]
+        assert ledger.state.crashed == 1 and ledger.state.completed == 2
+        failed = next(row for row in attempts if row.outcome == "engine_error")
+        assert len(failed.actions) == 4
+        replay = replay_attempt(failed)
+        assert replay["status"] == "failed" and replay["at_retained_failure"]
+        assert replay["frame"] == failed.frame_json
+        # Independently reset native roots at every retained seed: receipts must
+        # bind the sampled pair, including the replacement, rather than the recipe pair.
+        for attempt in attempts:
+            probe = managym.VectorEnv(num_envs=1, seed=attempt.seed)
+            roster = elemental_roster(_match())
+            probe.set_uniform_roster(roster)
+            probe.reset_all(_match().to_rust())
+            a, b = probe.current_matchup_indices()[0]
+            assert attempt.matchup.hero_deck == roster[a].decklist
+            assert attempt.matchup.villain_deck == roster[b].decklist
+            assert attempt.matchup.hero_sideboard == roster[a].sideboard
+            assert attempt.matchup.villain_sideboard == roster[b].sideboard
+        replacement = next(
+            row for row in attempts if row.stream == 0 and row.outcome == "completed"
+        )
+        assert replacement.seed == failed.seed + 2
+        assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 5
+        assert (
+            sum(c["learner_transitions"] for c in collector.stats.exposure.values())
+            == batch.actions.size
+        )
+        assert sum(c["terminal_games"] for c in collector.stats.exposure.values()) == 2
+        assert ledger.state.discarded_samples == 4
+    finally:
+        collector.close()

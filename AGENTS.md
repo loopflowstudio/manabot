@@ -107,6 +107,10 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Saved observation configurations use `ObservationConfig.from_checkpoint` so
+  an absent policy-input version retains v1 semantics. Fresh construction uses
+  the current version. Keep version-specific zero/default exclusions stable:
+  architecture receipts hash the serialized configuration, including omissions.
 
 ## Commands
 
@@ -129,6 +133,18 @@ checkpoints or experiment evidence.
 
 ## Testing
 
+**NEVER intentionally induce load for testing**, including debugging,
+benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
+busy loops, stress tools or artificial resource pressure. Use controlled
+fixtures and injected measurements; see [TESTING.md](TESTING.md).
+
+Read [validation by change area](docs/development/validation.md) for the
+checks required by the affected package and workflow.
+
+- Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
+  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  full vector diagnostic payloads in evidence.
 - Experiment results under `experiments/data/` live in the artifact store. Before
   committing new results or merging a branch that tracked them, publish their
   bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
@@ -136,10 +152,7 @@ checkpoints or experiment evidence.
   the local files. Verify with
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
-  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/arena/test_models.py tests/arena/test_mirror_admission.py tests/training/test_monitor_evaluation.py -q`,
-  and run the full diagnostic with
-  `uv run python -m manabot.verify.learnability --out .runs/learnability/<new-run>`.
-  The `--pr` subset omits reward-driven PPO and cannot verify that path.
+  admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
 - Remote credential tests require the `artifacts` extra. Validate dependency
   changes in an isolated environment so locally installed extras cannot hide
   missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.
@@ -154,3 +167,12 @@ checkpoints or experiment evidence.
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+
+### Etude card evaluation
+
+Etude SDK 0.2 hashes tracked source paths (`git add -N` admits new files for local
+implementation checks). Its built-in sync sends only known run folders and does
+not include arbitrary evidence artifacts. Card evaluations use the card
+publication operation to verify/copy their immutable evidence through Etude
+Storage before delivering scalar tables and match records. Do not publish their
+indexes alone or put card evidence in the checkpoint namespace.

@@ -7,16 +7,16 @@ import signal
 import pytest
 import torch
 
-from manabot.arena.match import selected_match
-from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentSpec
-from manabot.model.agent import Agent
-from manabot.sim.distill import save_bc_checkpoint
-from manabot.training import attack_execution
-from manabot.training.attack_execution import execute_attack_plan
-from manabot.training.attacks import AttackPlan, AttackTarget
-from manabot.training.models import (
+from manabot.experiment import attack_execution
+from manabot.experiment.attack_execution import execute_attack_plan
+from manabot.experiment.attacks import AttackPlan, AttackTarget
+from manabot.infra.config import ModelConfig
+from manabot.infra.identity import file_sha256
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.matchup import selected_match
+from manabot.training.regime import (
     FrozenOpponent,
     Learning,
     TrainingRegime,
@@ -29,13 +29,13 @@ def _plan(tmp_path: Path) -> AttackPlan:
     torch.set_num_threads(1)
     match = selected_match()
     space = ObservationSpace()
-    hypers = AgentSpec(
+    config = ModelConfig(
         hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
     )
     target = tmp_path / "target.pt"
     torch.manual_seed(17)
-    save_bc_checkpoint(
-        Agent(space, hypers), space, target, player_configs=Match(match).to_rust()
+    save_checkpoint(
+        ActorCritic(space, config), space, target, player_configs=Match(match).to_rust()
     )
     plan = AttackPlan(
         id="attack-smoke",
@@ -53,7 +53,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
             id="attacker",
             world=managym.WORLD_VERSION,
             match=match,
-            agent=hypers,
+            agent=config,
             wall_seconds=30,
             stages=[
                 TrainSelfPlay(

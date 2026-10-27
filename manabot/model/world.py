@@ -7,14 +7,14 @@ import hashlib
 import json
 from typing import Any
 
-from manabot.semantic.learning import BoundSemanticPack
-from manabot.semantic.policy_catalog import learning_schema_path
-import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
+from manabot.semantic.learning import BoundSemanticPack
+from manabot.semantic.policy_catalog import learning_schema_path
+import managym
+
 WORLD = managym.WORLD_VERSION
-POLICY_INPUT_VERSION = 1
 _ROSTER_PACKS = {"elemental-world-v1", "elemental-world-v2"}
 
 
@@ -73,7 +73,7 @@ def validate_agent_setup(
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
     compiled = binding["content_manifest"].get("compiled_semantics")
-    if compiled is not None and agent.hypers.semantic_pack != compiled["pack_key"]:
+    if compiled is not None and agent.config.semantic_pack != compiled["pack_key"]:
         raise ValueError(
             "compiled matchup checkpoint requires its complete semantic program input"
         )
@@ -110,7 +110,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     schema_path = learning_schema_path(compiled["pack_key"] if compiled else None)
     return {
         "world": WORLD,
-        "policy_input_version": POLICY_INPUT_VERSION,
+        "policy_input_version": observation_space.encoder.config.policy_input_version,
         "rules": {
             "decision_version": SEMANTIC_DECISION_VERSION,
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,

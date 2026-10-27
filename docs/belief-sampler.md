@@ -80,8 +80,8 @@ seeds, exact frozen policy/world identities, whole-game partitions, held-out
 foreign/adversarial histories, dropout arms, total cost cap and untouched
 complete-game evaluation deals. Compare exact, physical-prior and learned
 search at equal elapsed inference time, including sampling. Calibration alone
-cannot establish search strength. The post-RL search consumer is now connected through
-`collect_local_update.sampler` and direct native count materialization; see
+cannot establish search strength. The post-RL search consumer is the
+`local_update` player's learned sampling with direct native count materialization; see
 [local-search contracts](local-policy-search.md#learned-joint-hand-search).
 It preserves separate sampler/policy admission and labels learned beliefs as
 approximate. This does not replace the exact reference or establish calibration.
@@ -117,7 +117,7 @@ No training or game generation is needed. Use the immutable dataset and sampler
 from a completed run, and the sampler SHA-256 recorded in its artifact receipt:
 
 ```bash
-uv run python -m manabot.belief.sampling_report \
+uv run python -m manabot.reports.belief \
   --dataset /path/to/evaluation-dataset.json \
   --training-dataset /path/to/sampler-training-dataset.json \
   --checkpoint /path/to/sampler.pt \

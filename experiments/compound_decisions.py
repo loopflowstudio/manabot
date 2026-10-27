@@ -8,11 +8,11 @@ runs the four-arm study (smoke by default; see `--help`).
 
 from typing import Literal
 
-from manabot.arena.match import selected_match
-from manabot.infra.hypers import AgentSpec
-from manabot.training.builders import PACK
-from manabot.training.models import Learning, Schedule, TrainCompound, TrainingRegime
-from manabot.training.regime_study import main
+from manabot.experiment.study import main
+from manabot.infra.config import ModelConfig
+from manabot.recipes.builders import PACK
+from manabot.sim.matchup import selected_match
+from manabot.training.regime import Learning, Schedule, TrainCompound, TrainingRegime
 import managym
 
 
@@ -32,7 +32,7 @@ def _arm(
         id=f"compound-{grouping}-{short}",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=AgentSpec(semantic_pack=PACK, compound_decisions=True),
+        agent=ModelConfig(semantic_pack=PACK, compound_decisions=True),
         stages=[
             TrainCompound(
                 id=f"policy-{index}",

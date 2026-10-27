@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from manabot.sim.structured_benchmark import (
+from manabot.sim.action.benchmark import (
     evaluate_gates,
     load_workload,
     render_report,

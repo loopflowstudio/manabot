@@ -43,12 +43,12 @@ native legal offers, revision checks and information boundary.
 Training uses the ordinary APIs, for example:
 
 ```python
-from manabot.infra.hypers import AgentSpec, MatchHypers
+from manabot.infra.config import ModelConfig, MatchConfig
 
-match = MatchHypers.authored(
+match = MatchConfig.authored(
     "elemental-world-v2", "elemental_ug", "elemental_bg"
 )
-agent = AgentSpec(semantic_pack="elemental-world-v2", policy_film=True)
+agent = ModelConfig(semantic_pack="elemental-world-v2", policy_film=True)
 ```
 
 These values go into the existing environment/model/trainer configuration.
@@ -129,7 +129,7 @@ UR→GW and GW→UR. Each uses game seed 164, uniform legal-offer selection from
 uv run python -m scripts.verify_elemental_world --out conformance/elemental-world-w11-v1/command-cohort.json
 ```
 
-The [retained result](../../../conformance/elemental-world-w10-v1/command-cohort.json)
+The [retained result](../../../experiments/data/archive/conformance/elemental-world-w10-v1/command-cohort.json)
 records **14 terminal games / 13,126 Commands**, with **268** isolated fork and
 stale-rejection checks. Every Command was replayed on a second root with equal
 frames, transition receipts and state digests. Both viewer projections were

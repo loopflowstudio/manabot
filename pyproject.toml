@@ -15,17 +15,21 @@ dependencies = [
     "gymnasium>=1.0.0",
     "pydantic>=2.12.0",
     "typer>=0.12.5",
-    "wandb>=0.18.7",
     "psutil>=5.9.0",
-    "etude-sdk==0.2.0",
+    "etude-sdk==0.2.5",
 ]
 
 [project.scripts]
 manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
+llm = [
+    "huggingface-hub>=1.3,<2",
+    "transformers[chat-template]==5.3.0",
+    "torch==2.10.0",
+]
 reports = [
-    "etude-sdk[s3]==0.2.0 ; python_version >= '3.12'",
+    "etude-sdk[s3]==0.2.5 ; python_version >= '3.12'",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -36,7 +40,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
-    "etude-sdk[eval]==0.2.0",
+    "etude-sdk[eval]==0.2.5",
     "matplotlib>=3.9",
 ]
 play = [
@@ -54,7 +58,6 @@ notebook = [
     "jupyterlab>=4.0",
     "nbclient>=0.10",
     "matplotlib>=3.9",
-    "wandb-workspaces>=0.4.13",
 ]
 
 [dependency-groups]
@@ -72,8 +75,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
-    "wandb>=0.18.7",
-    "etude-sdk==0.2.0",
+    "etude-sdk==0.2.5",
 ]
 
 [tool.uv]
@@ -126,6 +128,8 @@ zip64 = true
 include = [
     { path = "content/semantic/**/*.json", format = ["sdist", "wheel"] },
     { path = "docs/experiment-metrics.md", format = ["sdist", "wheel"] },
+    { path = "protocol/experience-v1.schema.json", format = ["sdist", "wheel"] },
+    { path = ".manabot-source.json", format = ["sdist", "wheel"] },
     { path = "README.md", format = "sdist" },
 ]
 exclude = [
@@ -151,6 +155,7 @@ markers = [
 ]
 
 [tool.ruff]
+extend-exclude = ["tests/fixtures/seventeenlands/mtga_follower.py"]
 line-length = 88
 target-version = "py312"
 

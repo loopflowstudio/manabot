@@ -2,13 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from manabot.semantic.decision_contract import (
-    SemanticContractError,
-    SemanticDecisionContract,
-)
-import managym
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     DecisionFrame,
@@ -16,6 +9,13 @@ from managym.decision import (
     PublicCommitment,
     TransitionReceipt,
 )
+import pytest
+
+from manabot.semantic.decision_contract import (
+    SemanticContractError,
+    SemanticDecisionContract,
+)
+import managym
 
 
 def _env() -> managym.Env:
