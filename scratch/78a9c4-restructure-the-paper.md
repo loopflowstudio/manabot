@@ -1,31 +1,49 @@
-# Paper restructure
+# Paper update — MTG-173
 
-## Accepted outcome
+## Accepted direction
 
-Jack Heart's October 21, 2026 Task direction: open with 2–4 pages of demonstrated results and failures, then methods as cited recipes for an RL-literate reader. Both `main.tex` and `drafts/01-refuted-ledger.tex` subtitles must read exactly “Written by AI. Not yet intended for distribution.” Build with the existing paper Makefile and describe the structure in the README. The paper remains an internal draft.
+Jack Heart, October 26, 2026: “lets take another pass at updating the paper based
+on latests results”. Preserve the October 21 results-first structure: 2–4 pages
+of demonstrated results/failures, then cited recipes for RL-literate readers;
+both required distribution subtitles remain exact. No training or evaluation
+allocation is part of this update. Earlier implementation/review notes are at
+`1860caf8f:scratch/78a9c4-restructure-the-paper.md`.
 
-## Reconciled approach and implementation
+## Evidence and implementation
 
-The active paper now opens with three pages of selected results, including failed acceptance criteria and the reset-seeding correction; methods begin on page 4. Results retain their original worlds, recipes, seeds, opponents, uncertainty and report provenance. Historical measurements do not certify w9, FiLM, human strength or a general advantage over PPO. Methods name code owners and cited influences, with local adaptations distinguished from exact reproduction. Report and correction-ledger links share source pin `a04dcdc2`.
+Latest inspected main: `558e0186b`, October 26. Main's history had been rewritten
+since this branch's original base, producing broad add/add sync conflicts.
+The reconciled tree takes current main outside the retained paper rewrite and
+this Task's notes. No runtime or frozen-report changes are intended.
 
-The generic difficulty introduction, stale platform census, challenge tables and claim ledger have been replaced. Unused table/math packages and the unused results label are gone. The README is a reading/build/source map. The first archive changes only its requested subtitle; frozen reports remain untouched.
+New evidence: MTG-181 three-seed ten-deck learning and strengthened-heuristic
+addendum; four-seed seat-comparison-v1; MTG-186 specialist head-to-head and
+fresh-deal card cohort; heuristic revision/search study; Qwen single functional
+game. The three external reports were copied from the shared artifact cache
+after checking their manifest SHA-256 hashes. Normal fetch was unavailable in
+the stale local environments (`etude` / `etude.run` missing); no auth was changed.
+MTG-183 has a protocol and report generator but no final retained report in the
+inspected source. Its expected endpoint is not a result.
 
-The October 21 upstream change `f15196e1` independently introduced a current report, retained the July source/PDF as `drafts/02-platform-and-challenges`, and renamed the active output to `manabot.pdf`. The integrated rewrite retains that archive, output name and the union of bibliography entries. There are no intervening changes to runtime code, experiment reports or methods documentation between source pin `a04dcdc2` and this upstream base; the pinned implementation descriptions remain applicable.
+Delete/replace: stale w9/source pin, baseline-v2/one-seat default, retired Agent
+and training/search paths, supervised policy training and standalone learnability
+claims. Preserve historical reports, archive files and exact experiment identities.
+New methods cover baseline-v3, complete-game both-seat credit, maintained learner
+ownership, policy input v2, Etude and the bounded text-selection contract.
 
-Prior build evidence records seven total pages, exact subtitles, three results pages, no final layout/citation warnings, resolved draft citation keys and report paths, a successful isolated first-archive compilation and an unchanged July archive. Focused reconciliation confirmed the baseline-v2/FiLM description against its code and the move-learning recipe against its existing fidelity guide. No implementation mismatch requiring repair was found.
+Evidence limits: old/new heuristics are different anchors; frozen Elemental
+policies are additive/v1, not FiLM/v2; Wilson game intervals do not resample
+shared deals or training seeds; matched updates are not matched transitions or
+cost. Qwen proof is one small game on the pre-final renderer. No general method,
+human-strength, transfer or saturation claim is added.
 
-## Remaining work and evidence limits
+## Validation and delivery
 
-No implementation work or product decision remains identified. Visual judgment remains with review; the headless checks do not establish visual quality or strategic strength. Publication and Task completion remain separate delivery actions.
-
-The associated Wave is `intelligence`; its local objective, memory and child directories are absent from this checkout. The Task's Project context retains separate goals for repeatable training, full-game improvement and human comparison, none certified by this paper. Local Wave memory could not be reconciled; historical chapter files are not substitutes for current memory.
-
-Check: `make -q -C paper` and `git diff --check HEAD` passed; active PDF is current and the full diff has no whitespace errors. Prior build/page/citation evidence retained above; visual review remains with review.
-
-## Concept decision
-
-The October 21 concept review leaves Jack Heart's accepted experience and model unchanged. An RL-literate reader opens the active PDF, reads bounded findings and failures, follows a source-pinned report to audit a claim, then reads the current recipes and their influences. A result, a current recipe and a historical draft remain distinct records: world, seed, opponent and cost identities belong to the result, not to whichever implementation is newest.
-
-Failure and recovery preserve that contract: a reader encountering the July seat claims can follow the active paper's reset-seeding explanation to F1–F3, retain the archived claim as history and recover the corrected interpretation. A counterexample would be carrying an earlier result forward as evidence for w9/FiLM, or silently replacing the report after correction; the active text explicitly rules out both. The README already expresses the reading/build interaction, so no proposed usage or skill changes are needed.
-
-Across layers, TeX owns the narrative, retained reports and correction records own measured evidence, source pins identify the described implementation, and the existing Makefile derives the active PDF. No runtime types, APIs, experiment persistence or execution lifecycle need to change for this outcome. No unresolved product choice or next implementation direction was found. Next proof remains review of the built paper's readability and layout; headless build checks do not establish those qualities.
+Verified: warning-free `make -C paper`; eight PDF pages, three results pages
+and methods beginning on page 4; all eight rendered pages inspected; six
+citation keys, 15 pinned source links, README file links and both subtitles
+checked; `git diff --check` and `make -q -C paper` pass. Relative to current main,
+the final tree changes only the paper and this Task note. Updated TeX, PDF and
+README are available for local review. PDF artifact-marker helper is absent in this repository;
+use the existing TeX build and system Poppler for validation. Prior PR #336 was
+closed unmerged; this request does not reopen or land it.

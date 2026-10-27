@@ -1,68 +1,94 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
-\usepackage{amsmath,microtype,natbib}
+\usepackage{amsmath,booktabs,microtype,natbib}
 \usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue]{hyperref}
 \setlength{\emergencystretch}{3em}
 \newcommand{\code}[1]{\texttt{\small #1}}
 % Reports and corrections share the source revision described by this note.
-\newcommand{\source}[2]{\href{https://github.com/loopflowstudio/manabot/blob/a04dcdc27d6d705cb2daade8b6071b7e29c35537/#1}{#2}}
+\newcommand{\source}[2]{\href{https://github.com/loopflowstudio/manabot/blob/558e0186b585228dd2130cf14d9cb40de217e66f/#1}{#2}}
 \newcommand{\report}[2]{\source{experiments/#1}{#2}}
 
 \title{\textbf{Manabot}: What We Have Demonstrated\\and the Recipes We Use}
 \author{Jack Heart\\\small Loopflow Studio}
-\date{October 21, 2026\\[0.5em]\small\textit{Written by AI. Not yet intended for distribution.}}
+\date{October 26, 2026\\[0.5em]\small\textit{Written by AI. Not yet intended for distribution.}}
 
 \begin{document}
 \maketitle
 
 \section{What we have demonstrated}
 
-Manabot trains agents to play a bounded, two-player subset of \textit{Magic: The Gathering}. Batched self-play can produce policies that improve against fixed scripted opponents, batching sharply reduces training time, and several plausible interventions have failed to earn their cost. Evaluation bugs and weak opponents can make apparent progress misleading.
+Manabot trains agents to play a bounded, two-player subset of \textit{Magic: The Gathering}. We now have repeated full-game learning across ten authored decks, a four-seed comparison of one-seat and two-seat learning, and a direct specialist-versus-generalist comparison. Stronger opponents expose weaknesses hidden by the earlier anchor. A separate pretrained-language-model proof completes one small native game; it is an integration result, not a strength benchmark.
 
-This section selects results from retained experiment reports; it is not a new experiment or a pooled meta-analysis. Each number belongs to its original world, code, recipe, seeds and opponents. October studies use the authored Allies/Lessons matchup; July search experiments use earlier decks and encodings. Current development is world w9, and current new-run policies use FiLM conditioning. Earlier measurements do not certify either change. Section~\ref{sec:methods} describes the present implementation separately.
+This is a selective account of retained results through October 26, not a new experiment or pooled meta-analysis. Each number retains its world, recipe, seeds, opponents and cost basis. The Elemental studies use w13 and historical additive policies, not the current FiLM/policy-input-v2 recipe. Reports stored outside git are digest-indexed in the \report{data.manifest.json}{artifact manifest}; \code{paper/README.md} gives exact fetch commands. Section~\ref{sec:methods} describes current source separately.
 
-\subsection{Batching made useful experiments cheaper}
+\subsection{Three seeds learned across the ten-deck Elemental roster}
 
-The completed October 19 \report{longer-learning-017.md}{longer-learning study (protocol 017)} trained 22 fits on RTX 5090 rentals, with two training seeds per recipe and 524,288 learner transitions per fit. Four raw checkpoints per fit were evaluated locally, totaling 18,304 replay-verified games. At equal collected experience, the width-64, two-layer model took 109--111 minutes with four streams, 12.6--13.3 minutes with 64 streams, and 4.8--5.2 minutes with 256 streams. Larger models showed no advantage at this horizon; two seeds are insufficient to rank their underlying performance.
+The completed \report{protocols/elemental-181.md}{MTG-181 trial} trained three seeds of one two-seat self-play recipe: a width-64, two-layer, four-head semantic policy with a scalar masked-mean critic, 256 streams, uniform ordered deck-pair sampling including mirrors, and damped policy learning. Each L4 allocation lasted five hours. Endpoints reached 474--616 updates and 22.4--27.4 million learner decisions; inclusive conservative rental cost was approximately \$9.12 of a \$10 cap, with cleanup confirmed.
 
-The operational qualification rule required \emph{both} seeds to score at least 50\% against scripted greedy, at least 75\% against random, and at least 20 percentage points above their own initialization against greedy, at a checkpoint and every later checkpoint. The 64-by-2 model at 256 streams qualified in a worst-seed 5.2 minutes; at 64 streams it qualified in 6.9 minutes. These are threshold crossings under a declared rule, not significance tests or estimates of eventual strength.
+Each scored checkpoint played a frozen 10-by-10 grid against heuristic v1: 50 games per cell, 5,000 per grid. All 13 grids completed with zero invalid games and endpoint load, legality, completion and replay checks passed. Mean overall score rose from 20.6\% at initialization to 85.1\% at the endpoints. Every deck improved. Endpoint spread across seeds was 1.5 percentage points; the predicted 35--70\% endpoint band was refuted high.
 
-Batching changed learning as well as speed. At 64 streams, scores rose by roughly 131k--262k transitions and then flattened; at 256 streams they rose more slowly per transition and were still increasing at the endpoint. At equal experience, the comparison also changes Adam steps (8,192 versus 2,048), filtering and policy staleness. It therefore supports the whole recipe's cost advantage, not a causal claim that stream count alone improves learning. The deepest model at 64 streams used only about 57k of 131k planned selected exposures and performed poorly; its cause remains unexplained.
+An explicitly separate, post-protocol addendum scored the same endpoints against the strengthened heuristic, on the same grid. All 15,000 games were valid. The mean fell to 60.2\% (seed standard deviation 2.6 points), and the seed range widened to 4.8 points:
 
-The settled GPU charge was \$10. Local CPU evaluation occupied 7.6 coordinator hours, separate from that rental charge. Each endpoint had 104 games per anchor. Reported paired-deal intervals condition on one trained seed; they do not measure training variance or adjust for selection across many recipes. A cheap recipe that clears these anchors is useful infrastructure, but it is not yet evidence of broad strategic competence.
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+Seed & Endpoint update & Heuristic v1 & Strengthened heuristic \\
+\midrule
+18101 & 616 & 85.1\% & 58.4\% $[57.0,59.8]$ \\
+18102 & 474 & 84.4\% & 59.0\% $[57.6,60.3]$ \\
+18103 & 568 & 85.9\% & 63.2\% $[61.9,64.6]$ \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-\subsection{More optimization work did not reliably buy better play}
+These are reported 95\% Wilson game intervals, not training-seed intervals or paired-deal bootstrap intervals. The newer anchor separates endpoints that v1 barely distinguished. UW is the policy's only losing deck on average against it (37.3\%); UR is best (75.1\%). Training length alone does not explain the seed ordering: seed 18102's shorter run slightly outscored 18101. This establishes repeated learning against declared anchors in one authored world, not broad \textit{Magic} competence.
 
-Two completed October screens distinguish collection count from the work actually optimized. In the \report{pooling-filter-followup.md}{pooling and advantage-floor follow-up}, three paired training seeds crossed masked-mean versus value-token aggregation with an absolute advantage floor of .01 versus zero. All twelve runs collected 153,600 learner transitions over 600 updates. Every endpoint was judged on the same 25 deals in four deck/seat assignments against scripted greedy; midpoint and endpoint together supplied 2,400 terminal, replay-verified games.
+Failures remain part of the result. The earlier w10 \report{elemental-uniform-baseline.md}{MTG-174 attempt} stopped after four updates on illegal mana activation, retaining initialization but no trained checkpoint. MTG-181's seed 18102 instead stopped at its allocation deadline: all 256 unfinished games were deadline cuts, despite the old record labeling them a game-error-rate stop. No engine or agent game failed in that trial. Those two outcomes must not be conflated.
 
-Removing the floor raised value-token optimizer exposures from 15,102--19,028 to 38,400, yet endpoint changes were $-1,+10,-12$ points across seeds. The mean was $-1.00$ points with a 95\% paired seed/deal bootstrap interval of $[-11.33,10.33]$. Masked mean's floor-removal effect was $+0.33$ points $[-4.00,4.33]$. Neither intervention met the registered promotion or rejection rule. This is an unresolved result, not evidence of equivalence. Sparse comparisons at common elapsed cost also differ from equal-update comparisons. The value token changes shared policy representations, so this experiment does not isolate a critic-only mechanism.
+\subsection{Learning from both seats reduced collection cost}
 
-The \report{ataraxos-technique-screen.md}{filter-scope mini screen} kept the scalar masked-mean architecture, quantile/floor, learning rule and schedules fixed. Allowing the critic to train on every collected row, while filtering only actor rows, increased mean wall cost by 45\% at 317,440 transitions. Final greedy-score changes were $+7,+7,-4$ points: mean $+3.33$, interval $[-4.33,11.33]$, resampling paired seeds and shared deals. All 1,200 final/diagnostic and 2,400 monitoring games replayed exactly. The endpoint and sparse common-cost contrasts pointed in different directions. Extra critic coverage has not demonstrated that it earns its cost, and a lower loss on a different row population would not itself establish calibration.
+The completed \report{protocols/seat-comparison-v1.md}{from-scratch seat comparison} used four seeds per arm on Allies/Lessons, 256 streams, complete games, identical initial weights within seed, and matched learner-decision milestones through 64 million. The one-seat arm collected two games per stream per update; the two-seat arm collected one and learned from both players. All eight runs passed 64 million learner decisions and all 60 scheduled evaluations completed.
 
-A separate \report{current-baseline.md}{current-baseline debugging cohort} failed its predeclared 10-point mean-gain criterion. Against a fixed random opponent, three short runs improved from 31.25\% to 37.50\%, from 33.33\% to 41.67\%, and from 33.33\% to 39.58\%. Frozen controls matched initialization. Mean gain was 6.94 points with a paired training-seed bootstrap interval of $[6.25,8.33]$; all 432 games replayed. This short cohort cannot establish sustained self-play improvement.
+At 8 million learner decisions, mean heuristic scores were 53.0\% for one seat and 57.6\% for both. At 64 million they were 67.1\% and 65.9\%; seed standard deviations were 2--6 points. The small early advantages do not establish a reliable method-level strength advantage or statistical equivalence. At matched learner decisions, two-seat training needed about half the games and reached 64 million decisions in a mean 7.81 training hours versus 10.74, approximately 1.4 times faster. The saving came from collection; learning time per learner decision was unchanged. Inclusive cost was about \$54.40, including calibration and an earlier stopped warm-start attempt. Setup is excluded from the training-hour comparison.
 
-\subsection{Historical failures changed what we measure}
+At matched environment decisions two-seat led in all 19 reported seed comparisons, but the one-seat values were interpolated in log environment decisions. That is a descriptive comparison, not an additional independently evaluated cohort. The operational case for two-seat collection is stronger than the evidence for better learning per retained row.
 
-The July draft treated extreme random-play seat effects as a domain finding. That interpretation was wrong. \report{exp-06-newworld-training.md}{The reset-seeding investigation} found that the Python wrapper accepted a seed without passing it to the engine. Repeated resets could replay one opening deal. Seat balancing alone did not repair that instrument: it balanced repeated rollouts of the same deal. The corrected record in \source{paper/understanding.md}{correction ledger (F1--F3)} reports deal-averaged random mirror parity (49.9\% interactive, 49.8\% standard; at least 1,000 games each) and retracts the proposed competence-emergent seat effect. We retain the old draft as history, not as current evidence.
+\subsection{A specialist gained narrowly on its matchup and lost elsewhere}
 
-The \report{exp-10-value-gate.md}{value-gate experiment} makes the distinction concrete. Its learned value head saw 225 training games drawn from only three opening deals. After repairing evaluation seeding, search over that head beat greedy one-step use of the same head 60.25\% $[55.4,64.9]$ in 400 fresh-deal games. Yet value-search-64 lost 76.5\% to random-rollout search-64 and 61.5\% to random-rollout search-16 at approximate wall-time parity. Search helped relative to a weak greedy use of this particular estimator; it did not make that estimator an adequate replacement for full rollouts. The narrow training corpus and single training seed prevent a general verdict on learned value functions.
+\report{protocols/mtg186.md}{MTG-186} trained one UR-versus-GW-only seed and compared it directly with MTG-181 seed 18101, at updates 200, 400, 600 and their common endpoint of 616. Each pairing played 1,000 UR/GW games balanced over decks and seats, plus 1,000 games sampled from the other 98 ordered pairs. All 8,000 games were valid and replayed. The specialist's UR/GW scores were 58.4\%, 56.8\%, 51.9\% and 55.4\%: the margin did not grow with training, and the update-600 interval included 50\%.
 
-Other failures remain useful warnings with bounded scope. The July \report{exp-07-expert-iteration.md}{expert-iteration attempt} produced a student that lost 74--26 to its predecessor in 100 head-to-head games. Its affordable new teacher used eight simulations and short policy continuations; this refutes that attempted crank, not expert iteration in principle. Its historical judge and data limitations remain in the report. The \report{exp-09-control-competency.md}{control-competency suite} showed that a search pilot with attractive aggregate wins could fail known-correct control lines. Win rate against random is not a sufficient behavioral test.
+At the endpoint, the specialist scored 55.4\% $[52.3,58.5]$ on its matchup and 37.5\% $[34.6,40.5]$ elsewhere (reported 95\% Wilson intervals). A further 2,000 valid endpoint games on 500 fresh deals scored 56.2\% $[54.0,58.4]$. This is one seed on each side; the game intervals do not estimate seed variance, and shared-deal dependence is not captured by these Wilson summaries. Equal updates also did not mean equal data or compute: the specialist retained 20.49 million decisions versus 26.88 million for the generalist, with different collection/learning times. Inclusive settled cost was \$3.72, covering failed launches, training, cancelled evaluation and scored cohorts.
+
+Deck asymmetry matters. In the fresh-deal cohort, the specialist scored 83.9\% as UR and 28.5\% as GW. The model comparison requires both deck assignments; the high UR number alone mostly measures the matchup. Associated Games-in-Hand card tables also mix deck strength with card occurrence. They describe associations, not causal card values or a mechanism for the specialist's gain.
+
+\subsection{The judge and the interface need their own measurements}
+
+The \report{heuristic-strength.md}{heuristic revision study} used one MTG-183 checkpoint as opponent. On 300 held-out UR-versus-GW games, revising timing, targeting, blocking and Lesson choices raised the heuristic from 18.3\% to 62.0\%. A separate fixed-game single-process timing probe fell from 27.0 to 23.4 microseconds per decision. This changed anchor must not be spliced into v1 learning curves. Flat determinized search at 16 worlds reached 68.3\%, a paired-deal gain of 6.3 points $[0.0,12.7]$, at 346 milliseconds per decision under six concurrent games. The point estimate improved at a large cost; the interval touches zero.
+
+The \source{docs/llm-harness.md}{cached Qwen3.5-9B GPU proof} won one seed-23 functional game against random on an L4: a 60-card mirror containing only Mountains, Gray Ogres and Lightning Bolts. All 160 model selections were valid on the first response, with no repairs or fallbacks; all 308 game Commands replayed on the worker and locally. Game time was 280.55 seconds, median model decision 1.96 seconds, loading 10.04 seconds, and the largest prompt 4,329 tokens. Sampled device memory peaked at 22,494 of 23,034 MiB. This establishes fit and completion for that one game at its original renderer/source, not general 8,192-token capacity, later-renderer performance, or playing strength.
+
+\subsection{Earlier negative results still bound our claims}
+
+The \report{longer-learning-017.md}{October batching study} made the 64-by-2 recipe cheaper at fixed experience: 109--111 minutes at four streams versus 4.8--5.2 at 256 on RTX 5090. Optimizer-step counts changed too, so this is a whole-recipe result. More optimization did not reliably improve play: the three-seed \report{pooling-filter-followup.md}{advantage-floor screen} gave a value-token floor-removal effect of $-1.00$ points $[-11.33,10.33]$; the \report{ataraxos-technique-screen.md}{critic-coverage screen} cost 45\% more wall time for an uncertain $+3.33$ points $[-4.33,11.33]$. These paired seed/deal intervals do not prove equivalence.
+
+The July \report{exp-06-newworld-training.md}{reset-seeding bug} invalidated extreme random-play seat claims: repeated resets could replay one opening deal. \source{paper/understanding.md}{Corrections F1--F3} retain the retraction and corrected mirror parity. A \report{exp-07-expert-iteration.md}{failed expert-iteration crank} and \report{exp-09-control-competency.md}{known-correct control scenarios} further showed that attractive aggregate wins need not imply competent decisions. Their earlier worlds and limitations remain attached to them.
 
 \paragraph{What remains unestablished.}
-Monitoring curves, toy learnability controls, legal replay and runnable belief/search pipelines answer different questions. None supplies a held-out human comparison, unseen-card transfer result, exploitability bound, or broad method ranking, including an advantage over PPO. Retained reports preserve each cohort's scope and acceptance rule, including failures.
+No result here supplies held-out human strength, unseen-card transfer, a general exploitability bound, or an advantage over PPO. MTG-183's longer-training \report{protocols/elemental-183.md}{protocol and rating machinery} are not a completed saturation result: no final report is retained in this source snapshot. The retained reports, rather than live progress or an expected endpoint, define what is demonstrated.
 
 \clearpage
 \section{Methods: recipes and their influences}
 \label{sec:methods}
 
-This section assumes familiarity with RL and describes implementable choices rather than the general difficulty of card games. Code paths refer to repository base \code{a04dcdc2}. Experiments above retain their own source identities. The recipes combine established methods with local engineering choices; they are not proposed as new algorithms.
+This section assumes familiarity with RL and describes implementable choices rather than the general difficulty of card games. Code paths refer to repository base \code{558e0186b} (October 26). Experiments above retain their own source identities. The recipes combine established methods with local engineering choices; they are not proposed as new algorithms.
 
 \subsection{Keep rules, observations and experiment identity together}
 
 \textbf{Recipe.} Use managym as the authoritative Rust rules engine and manabot as its learning client. Construct the authored deck and sideboard setup, encode only the acting viewer's observation, and score the engine's legal offers. Bind checkpoints to native world version, rules schemas, both deck/sideboard pairs, content manifest and input schema. Reject mismatches before loading weights. A rules-meaning or observation/action-shape change starts a new world; never draw a single learning curve across incompatible worlds.
 
 \textbf{Implementation.} \code{manabot/env/} owns wrappers and encoding; \code{manabot/model/world.py} owns checkpoint bindings. Academy is the inspection/play client and does not define the training objective. Etude is the separate experiment launching/recording system. The deterministic, forkable engine makes simulated branches practical, but a sampled hidden world is not an observation that a policy may inspect. Source-pinned replay and viewer-equivalence checks are local integrity requirements, not borrowed claims of strategic correctness.
+
+Current development is w13. Fresh observation configurations select policy input v2; saved configurations missing a version retain v1. The shared native decision capture supplies current stack and pending-payment relations to tensor and text clients. The v2 encoder uses a bounded 64-by-32 relation table with frame order, parent links, targets, costs and visible object/definition joins; overflow rejects input. \code{manabot/model/continuation.py} projects this stateless context into object and action representations. Optional public history is separately versioned. Neither current support nor a representation fix retroactively changes the inputs of the measured Elemental policies.
 
 \subsection{Score legal offers from objects and state}
 
@@ -75,18 +101,18 @@ The attention block follows the multi-head attention/residual/normalization patt
 \]
 A shared head scores $\widetilde e_a$. Unlike a state-only additive offset shared by every logit, this multiplication can change relative action preferences. There is no separate FiLM shift term here. The masked mean and shared action head preserve object/offer permutation contracts.
 
-\textbf{Implementation.} \code{Agent} in \code{manabot/model/agent.py} owns object attention, focus gathering, FiLM and the critic readout. The current ordinary baseline uses a width-64, two-layer, four-head semantic model with a scalar masked-mean critic and \code{policy\_film=True}. Omitted FiLM settings retain historical additive-policy semantics. Value-token and categorical-outcome models are explicit alternatives; do not relabel a scalar checkpoint as categorical or attribute earlier additive-policy results to FiLM.
+\textbf{Implementation.} \code{ActorCritic} in \code{manabot/model/actor\_critic.py} owns object attention, focus gathering, FiLM and the critic readout. The current ordinary baseline uses a width-64, two-layer, four-head semantic model with a scalar masked-mean critic and \code{policy\_film=True}. Omitted FiLM settings retain historical additive-policy semantics, including MTG-181/186. Value-token and categorical-outcome models are explicit alternatives; do not relabel a scalar checkpoint as categorical or attribute earlier additive-policy results to FiLM or policy input v2.
 
 \subsection{Collect transitions between decisions of the same player}
 
-\textbf{Recipe.} Batch independent games. Within a collection batch freeze the policy, but allow games to continue across successive updates. A learner row ends at that player's next decision or at game termination; intervening opponent actions receive no learner policy gradient. Save chosen actions, full legal behavior log probabilities, values, terminal outcomes and the exact paused next observation. Bootstrap from that observation; end markers stop the trace before reset observations enter it. Treat truncation as failure, not as a draw.
+\textbf{Recipe.} Batch independent games and freeze collection weights within each batch. Default self-play learns from both seats: collect at least the declared combined decision floor per stream, then finish current games before updating. Pack each player's trajectory separately, with end markers between players and games. Opponent actions are not the next step of the other player's return. One-seat exact-quota controls may span updates; explicit games-per-stream controls instead finish the stated number of games. Save actions, full legal behavior log probabilities, values and terminal outcomes. Bootstrap incomplete tails only from the exact paused next observation. Treat truncation as failure, not as a draw.
 
-\textbf{Influences and implementation.} The PPO control uses \citet{schulman2017ppo} and GAE \citep{schulman2015gae}. \code{manabot/model/train.py} explicitly follows CleanRL's flat rollout-tensor organization \citep{cleanrlcode}; this is an implementation influence, not a claim of byte-for-byte derivation. \code{SeatRoutedCollector} and \code{transition\_gae} in \code{manabot/sim/net\_opponent.py} supply the same-viewer collection path. For transition-end flag $d_t$:
+\textbf{Influences and implementation.} The PPO control uses \citet{schulman2017ppo} and GAE \citep{schulman2015gae}. The earlier trainer followed CleanRL's flat rollout-tensor organization \citep{cleanrlcode}; the maintained path now shares collection and learner ownership across objectives. \code{SeatRoutedCollector} in \code{training/rollout/collection.py} and \code{transition\_gae} in \code{training/learning/returns.py}, both under \code{manabot/}, supply same-viewer credit. For transition-end flag $d_t$:
 \[
  \delta_t=r_t+\gamma(1-d_t)V_{t+1}-V_t,\qquad
  A_t=\delta_t+\gamma\lambda(1-d_t)A_{t+1}.
 \]
-Targets and saved behavior estimates are detached. Terminal signed outcomes label training rows without exposing true hidden cards as policy inputs. Games spanning updates make this close-to-on-policy continuation; there is no trajectory-level correction for changing historical state occupancy.
+Targets and saved behavior estimates are detached. Terminal signed outcomes label training rows without exposing true hidden cards as policy inputs. The one-seat path spanning updates is close-to-on-policy continuation; there is no trajectory-level correction for changing historical state occupancy. \code{Learner} owns train mode and Adam; \code{execute\_regime} owns collection, update clocks, EMA, exports and recovery. Learning from both seats doubles eligible rows per game, not necessarily speed or statistical information.
 
 \subsection{Use the damped move update as an explicit adaptation}
 
@@ -100,11 +126,11 @@ Targets and saved behavior estimates are detached. Terminal signed outcomes labe
 \]
 Both reverse KLs sum over the entire legal support. The first damps movement from collection behavior; the second pulls toward a fixed reference. Our default reference chooses uniformly among present action types, then uniformly among offers of the chosen type. This replaces Stratego's piece/move grouping with an MTG engineering choice; a spell with many targets does not receive proportionally more prior mass solely from offer count.
 
-Use $\gamma=1$, policy trace $\lambda=.5$, and value trace $\lambda=.8$. Keep rows whose absolute advantage reaches the inclusive .75 quantile and the .01 floor; ties can retain more than one quarter. Do not normalize advantages after selection. Default filtering applies to actor and critic; the actor-only switch keeps all critic rows. Perform one epoch in increasing learner-timestep groups across streams, without shuffling. Earlier groups change parameters, so saved action likelihoods still matter within that epoch.
+Use $\gamma=1$, policy trace $\lambda=.5$, and value trace $\lambda=.8$. Keep rows whose absolute advantage reaches the inclusive .75 quantile and the .01 floor; ties can retain more than one quarter. Do not normalize advantages after selection. Default filtering applies to actor and critic; the actor-only switch keeps all critic rows. Perform one epoch in collection order, without shuffling. Complete-game packing puts consecutive same-player trajectories into one column; the native stream count sets the minibatch width. Earlier minibatches change parameters, so saved action likelihoods still matter within that epoch.
 
 For categorical loss/draw/win heads, terminal targets are one-hot outcomes and nonterminal targets recursively mix next predictions and lambda returns; minimize soft-target cross-entropy. The ordinary baseline instead uses a scalar critic and MSE lambda-return loss, an explicit representation departure from Ataraxos. The value loss has unit weight. Gradients reach current policy/critic heads and their shared encoder; behavior distributions, references and targets remain fixed.
 
-\textbf{Implementation and constants.} \code{manabot/training/ataraxos.py} owns loss/targets/update grouping; \code{references.py} owns the reference; \code{selection.py} owns selection. \code{AtaraxosMoveLearning} in \code{models.py} sets $\epsilon=.2$, $c=.1$, gradient norm cap .267, and
+\textbf{Implementation and constants.} Under \code{manabot/training/learning/}, \code{damped\_policy.py} owns loss, targets and update grouping, \code{references.py} the reference, and \code{selection.py} selection. \code{DampedPolicyLearning} in \code{training/regime.py} sets $\epsilon=.2$, $c=.1$, gradient norm cap .267, and
 \[
  \eta_i=\operatorname{clip}(.5/i^{1.1},5\!\times\!10^{-6},10^{-4}),
  \qquad \tau_i=.05/i^{.3}.
@@ -115,9 +141,11 @@ Adam uses the existing betas .9/.999 and epsilon $10^{-5}$. Evaluation EMA uses 
 
 \textbf{Recipe.} Declare model, world/setup, learner, schedules, opponent mode, collection budget, checkpoint selection and evaluation before launch. Preserve raw and EMA exports separately. Collection updates, learner transitions, selected exposures and elapsed cost are distinct quantities. Retain empty filters and failed attempts in that accounting.
 
-\textbf{Implementation.} \code{manabot/training/baseline.py} resolves the current \code{baseline-v2}: four streams by 64 transitions, 128 updates by default, current-self collection, terminal outcome reward and the FiLM scalar model above. Its horizon-dependent schedule maps first and last positions onto historical iterations 1 and 10,000; a shorter run is a compressed schedule, not a prefix. The frozen GPU regime \code{experiments/regimes/batched-baseline.json} retains its own tested settings and identity. Neither recipe silently inherits the other's evidence.
+\textbf{Implementation.} \code{manabot/recipes/baseline.py} resolves \code{baseline-v3}: four streams with a floor of 64 combined decisions each, complete games from both seats, 128 updates by default, current-self collection, terminal outcome reward and the FiLM scalar model above. Its horizon-dependent schedule maps first and last positions onto historical iterations 1 and 10,000; a shorter run is a compressed schedule, not a prefix. The frozen Elemental regimes instead retain additive policies, 256 streams and absolute-iteration schedules. MTG-181 samples uniform ordered pairs from ten decks at game roots; MTG-186 fixes UR/GW. Uniform roots do not promise equal transition exposure. Neither recipe silently inherits the other's evidence.
 
-PPO remains a selectable control, with its own discounting, normalization and reuse settings. Do not call a bundled PPO-versus-Ataraxos recipe comparison a single-mechanism ablation. \code{TrainingRegime}, the experiment runner and VerifyStore retain resolved configuration, source/native/setup identities, seed lineage, exports and cost. A bounded local run checks the operational path; it does not certify the scientific comparison.
+PPO remains a selectable control, with its own discounting, normalization and reuse settings. Do not call a bundled PPO-versus-Ataraxos recipe comparison a single-mechanism ablation. Experiment modules resolve recipes; \code{TrainingRegime} and \code{TrainingRun} retain configuration, source/native/setup identities, seeds, exports and counters, with Etude owning current remote jobs, metrics and storage. Segmented learner continuation retains raw/EMA weights, Adam and absolute counters, but restarts collector/game/RNG streams. This is not byte-identical process recovery.
+
+Opt-in game-error recovery quarantines failed games before optimizing their rows and stops above the declared rolling error threshold. Deadline-cut games are recorded as interruptions, not engine errors. Evaluation remains strict: missing or invalid games stay visible rather than being replaced to complete a favorable denominator.
 
 \subsection{Separate search labels from strategic evidence}
 
@@ -131,13 +159,19 @@ The local policy update follows Ataraxos supplement S3.7, equations (7)--(8). Fo
  q_a\propto\exp\!\left(\frac{\widehat Q_a+\alpha\log\rho_a+\beta\log p_a}
                                   {\alpha+\beta}\right).
 \]
-\code{manabot/sim/local\_update.py} owns the teacher and receipts. Distillation uses fixed soft targets on retained roots with policy cross-entropy; gradients do not enter the teacher. Whole-game partitions separate training and validation. The critic head is not fitted by these policy-only stages, though the shared encoder can drift. This is a later local-update path, distinct from the July flat-search experiment. It is runnable machinery whose strategic benefit still needs a matched comparison.
+\code{manabot/sim/search/local\_update.py} owns the teacher and receipts. This instrument is distinct from the July flat-search/distillation experiment. Supervised policy training has since been retired from the maintained runtime; historical distillation results require their pinned source. The maintained heuristic-search comparison above uses full heuristic rollouts, not this regularized local update or a learned belief posterior. Its measured gain cannot be transferred to these separate instruments.
+
+\subsection{Give text agents the same decision authority}
+
+\textbf{Recipe.} Render a viewer-safe native decision capture with the complete legal reference list; resolve the selected reference back to its revision-bound Command. The pretrained LLM harness uses pinned model/tokenizer revisions and chat templates, greedy BF16 text inference, and no fine-tuning or writable model memory. Accept exactly one legal reference completed by EOS; allow one repair for malformed output, then an explicitly marked seeded-uniform fallback. Runtime, context and deadline failures stop rather than becoming fallback choices. Count first-response validity, repairs and fallbacks separately.
+
+\textbf{Implementation.} \code{manabot/llm/} owns selection and persistent model loading. Under \code{manabot/verify/}, \code{llm\_game.py} binds the text renderer, Commands and replay. The game recipe declares bounded public history and includes full chat-template tokens in admission, without clipping. Reuse model weights between decisions, but retain no conversational/KV state across them. The October 25 GPU measurement predates the final capture-v2 renderer, so current interface support has no inherited latency, capacity or strength result.
 
 \subsection{Measure outcomes, behavior and cost separately}
 
 \textbf{Recipe.} Freeze an opponent cohort, independent training seeds, held-out paired deals, deck/seat assignments and inference envelope. Score complete games and replay every retained command. Keep inspected monitoring deals separate from a final holdout. Bootstrap whole paired-deal blocks for a fixed checkpoint; resample training seeds as well when estimating a method contrast. A large number of games from one seed cannot supply independent training replicates. Keep payoff matrices and competency failures alongside aggregate scores.
 
-\textbf{Implementation.} \code{manabot/arena/} owns registration, matches, replay and seat-aware ratings; checkpoint monitoring lives in \code{monitor\_evaluation.py} under \code{manabot/training/}. Ratings are local to a world, matchup suite, information boundary, compute class and arena version. \code{manabot/verify/learnability/} checks capacity/invariance, while its full diagnostic includes reward-driven PPO and reload. Passing that diagnostic is a software/optimization result, separate from full-game strength. Frozen experiment reports, not live process state or this paper's prose, remain the authority for measured results.
+\textbf{Implementation.} \code{manabot/sim/} executes games and replay; \code{manabot/eval/} owns benchmark admission, monitoring and ratings. Etude experiment modules declare schedules, deliver game tables and render reports. The Elemental grid and specialist reports use game-level Wilson intervals; their shared deals and training seeds require separate uncertainty treatment for a method claim. Ratings are local to a world, matchup suite, information boundary, compute class and evaluator version. The old standalone learnability verifier is retired. Frozen reports, artifact manifests and replay receipts remain the authority for measurements, including failed attempts, missing evidence and cost exclusions.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
