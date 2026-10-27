@@ -1,6 +1,7 @@
 """Exact token boundaries and failure accounting without GPU allocation."""
 
 from concurrent.futures import Future
+from functools import partial
 import json
 from pathlib import Path
 import tarfile
@@ -9,6 +10,9 @@ from types import TracebackType
 from typing import Callable
 from urllib.request import Request
 
+from huggingface_hub import _snapshot_download, snapshot_download
+from huggingface_hub._tree_cache import TreeCacheEntry
+from huggingface_hub.errors import IncompleteSnapshotError
 import pytest
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
@@ -16,7 +20,7 @@ from tokenizers.pre_tokenizers import WhitespaceSplit
 from transformers import PreTrainedTokenizerFast
 
 from experiments import qwen_mtg183_vllm as campaign
-from manabot.llm import vllm_runtime
+from manabot.llm import vllm_runtime, vllm_server
 from manabot.llm.schema import InferenceConfig, Message, RuntimeIdentity
 from manabot.verify.llm_game import GameSummary
 
@@ -208,3 +212,60 @@ def test_collection_waits_for_game_owner_to_finish(tmp_path: Path) -> None:
     campaign.original.collect(out, settled_games={record.name})
     with tarfile.open(out / "game-096.tar.gz") as archive:
         assert "game-096/actor-startup.json" in archive.getnames()
+
+
+@pytest.mark.parametrize("server", [False, True])
+def test_offline_snapshot_matches_prepared_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: vllm_runtime.VLLMRuntime,
+    server: bool,
+) -> None:
+    """Exercise Hub's real completeness check with uncached repository docs."""
+    config = runtime.config.model_copy(
+        update={"tokenizer_revision": runtime.config.model_revision}
+    )
+    cache_dir = tmp_path / "hub"
+    snapshot = (
+        cache_dir / "models--fixture--model" / "snapshots" / config.model_revision
+    )
+    snapshot.mkdir(parents=True)
+    required = ["config.json", "tokenizer.json", "model.safetensors"]
+    for filename in required:
+        (snapshot / filename).write_text("{}")
+
+    def tree(*args: object) -> dict[str, TreeCacheEntry]:
+        return {
+            name: TreeCacheEntry(size=2, blob_id="0" * 40)
+            for name in [*required, "README.md", "LICENSE", ".gitattributes"]
+        }
+
+    monkeypatch.setattr(_snapshot_download, "read_tree_cache", tree)
+    owner = vllm_server if server else vllm_runtime
+    monkeypatch.setattr(
+        owner, "snapshot_download", partial(snapshot_download, cache_dir=cache_dir)
+    )
+
+    class AdmittedSnapshot(Exception):
+        pass
+
+    def tokenizer(path: str, **kwargs: object) -> None:
+        assert Path(path) == snapshot
+        raise AdmittedSnapshot
+
+    monkeypatch.setattr(owner.AutoTokenizer, "from_pretrained", tokenizer)
+    identity = tmp_path / "identity.json"
+    identity.write_text(runtime.identity.model_dump_json())
+
+    def construct() -> None:
+        if server:
+            with vllm_server.VLLMServer(config, tmp_path, 4):
+                pytest.fail("fixture must stop before process startup")
+        else:
+            vllm_runtime.VLLMRuntime(config, identity_path=identity)
+
+    with pytest.raises(AdmittedSnapshot):
+        construct()
+    (snapshot / ("model.safetensors" if server else "tokenizer.json")).unlink()
+    with pytest.raises(IncompleteSnapshotError):
+        construct()

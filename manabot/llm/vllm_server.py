@@ -19,6 +19,7 @@ from urllib.request import urlopen
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
+from manabot.llm.cache import MODEL_PATTERNS
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 
 
@@ -74,6 +75,7 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
             model = snapshot_download(
                 self.config.model_id,
                 revision=self.config.model_revision,
+                allow_patterns=MODEL_PATTERNS,
                 local_files_only=True,
             )
             tokenizer = AutoTokenizer.from_pretrained(

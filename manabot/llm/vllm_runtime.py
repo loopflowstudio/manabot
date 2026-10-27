@@ -15,6 +15,7 @@ from huggingface_hub import snapshot_download
 from pydantic import BaseModel, ConfigDict, Field
 from transformers import AutoTokenizer
 
+from manabot.llm.cache import TOKENIZER_PATTERNS
 from manabot.llm.schema import (
     EncodedPrompt,
     GeneratedResponse,
@@ -50,6 +51,7 @@ class VLLMRuntime:
         snapshot = snapshot_download(
             config.tokenizer_id,
             revision=config.tokenizer_revision,
+            allow_patterns=TOKENIZER_PATTERNS,
             local_files_only=True,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(

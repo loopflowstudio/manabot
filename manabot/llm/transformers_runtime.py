@@ -17,6 +17,7 @@ from transformers import (
     GenerationConfig,
 )
 
+from manabot.llm.cache import MODEL_PATTERNS, TOKENIZER_PATTERNS
 from manabot.llm.schema import (
     EncodedPrompt,
     GeneratedResponse,
@@ -38,12 +39,12 @@ class TransformersRuntime:
         model_path = snapshot_download(
             config.model_id,
             revision=config.model_revision,
-            allow_patterns=["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=MODEL_PATTERNS,
         )
         tokenizer_path = snapshot_download(
             config.tokenizer_id,
             revision=config.tokenizer_revision,
-            allow_patterns=["*.json", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=TOKENIZER_PATTERNS,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_path,

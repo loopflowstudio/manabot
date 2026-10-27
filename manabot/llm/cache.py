@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from manabot.llm.schema import InferenceConfig
 
+MODEL_PATTERNS = ["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"]
+TOKENIZER_PATTERNS = ["*.json", "*.jinja", "*.txt", "*.model"]
+
 
 class CachedFile(BaseModel):
     name: str
@@ -49,14 +52,14 @@ def prepare(
         snapshot_download(
             config.model_id,
             revision=config.model_revision,
-            allow_patterns=["*.json", "*.safetensors", "*.jinja", "*.txt", "*.model"],
+            allow_patterns=MODEL_PATTERNS,
             local_files_only=offline,
         )
     )
     tokenizer_path = snapshot_download(
         config.tokenizer_id,
         revision=config.tokenizer_revision,
-        allow_patterns=["*.json", "*.jinja", "*.txt", "*.model"],
+        allow_patterns=TOKENIZER_PATTERNS,
         local_files_only=offline,
     )
     acquired = time.monotonic()
