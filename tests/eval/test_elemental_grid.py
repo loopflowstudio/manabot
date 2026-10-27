@@ -2,22 +2,91 @@
 
 from collections import Counter
 from pathlib import Path
+import time
+from typing import Literal
 
 import pytest
+import torch
 
 from experiments.elemental_grid import (
     DECKS,
     GAMES_PER_CELL,
+    PACK,
     SCHEDULE_SHA256,
     GameRow,
     Group,
+    Request,
     _legs,
     groups,
+    play_group,
     schedule,
     schedule_sha256,
     summarize,
 )
+from manabot.env import Match, ObservationSpace
+from manabot.eval.execution import bind_execution
+from manabot.eval.models import EvaluationKey
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.provenance import runtime_fingerprints
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup
+from manabot.sim.performance import EvalPerformance
+from manabot.sim.registration import PlayerRegistration
+from manabot.sim.serving import PolicyAdmission, PolicyStore
+
+
+@pytest.mark.parametrize("version", (1, 2))
+def test_grid_registers_saved_policy_inputs_for_shared_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: Literal[1, 2]
+) -> None:
+    torch.set_num_threads(1)
+    setup = AuthoredMatchup(pack_key=PACK, role_a=DECKS[0], role_b=DECKS[1])
+    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    model = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK)
+    )
+    path = tmp_path / "policy.pt"
+    save_checkpoint(model, space, path, player_configs=Match(setup.match()).to_rust())
+    admitted: list[int] = []
+
+    def admit(
+        *,
+        key: EvaluationKey,
+        player_a: PlayerRegistration,
+        player_b: PlayerRegistration,
+        **kwargs: object,
+    ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+        # Exercise the real shared-service admission without playing a game.
+        # The anchor/key retain the legacy seed inputs independently of policy ABI.
+        legacy = runtime_fingerprints(match_config=setup.match())
+        assert player_b.observation_abi_sha256 == legacy["observation_abi_sha256"]
+        assert key.anchor_cohort_sha256 == canonical_sha256(player_b.model_dump())
+        execution = EvalExecution(deadline_unix=time.time() + 60)
+        _, (bound,) = bind_execution(key, (player_a,), execution)
+        store = PolicyStore(execution, EvalPerformance("grid-admission"))
+        try:
+            actual = store.admit(PolicyAdmission(bound, str(path), (setup.match(),)))
+            admitted.append(actual.policy_input_version)
+        finally:
+            store.close()
+        return [], {}, {}
+
+    monkeypatch.setattr("manabot.eval.match.play_cell", admit)
+    play_group(
+        Request(
+            checkpoint=path,
+            sha256=file_sha256(path),
+            training_seed=18301,
+            group=Group(
+                model_deck=DECKS[0], heuristic_deck=DECKS[1], model_seat=0, deals=(1,)
+            ),
+            output=tmp_path / "evidence",
+        )
+    )
+    assert admitted == [version]
 
 
 def test_schedule_is_frozen_and_complete() -> None:
