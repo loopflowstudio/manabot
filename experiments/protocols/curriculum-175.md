@@ -275,3 +275,12 @@ Only verified unstarted requests may move: retain the original cancellation,
 zero attempts/cost, full match-key ledger and replacement receipt. Other
 points remain on the owned pool. Selection of this predeclared point uses
 capacity and retained rental ceilings, not a measured curriculum effect.
+
+A provider refusal before machine acquisition and command start is retained as
+a capacity failure, not a played evaluation. Such a request may be requeued
+only with evidence of zero charge and no claim, unchanged match identities,
+and the same aggregate $0.34 allocation. At most one evaluation command may
+start for the point. U/E acquired both A4000 slots after M's first request was
+refused without acquisition; M's unchanged request waits for a released slot.
+All pre-start refusals and zero-attempt cancellations remain in the report's
+operational history. The timed-out U-initial point remains withheld from replay.
