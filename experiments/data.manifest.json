@@ -1218,6 +1218,74 @@
    "sha256": "bd3bada800271a8a7ded12b986b7a37048073dcb0f93ac150a3327aeed621a83",
    "bytes": 23509
   },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/game-attempts.json": {
+   "sha256": "a1df0fa36fd7cfdb62a3d00ed3da612793b053441ddb30b9c4b165c0bae19e74",
+   "bytes": 51901
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/gpu.csv": {
+   "sha256": "4d00b5ac5fa964d86f4d3eaea1624bad74a4b22d332a9ca61f25aedc5217be9a",
+   "bytes": 80
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/job-wall.json": {
+   "sha256": "0c857b83556bb49653c2628ef349d1fc189c62b8b2eb4753c7d69c42e681f2ec",
+   "bytes": 160
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/perf-report.tar.gz": {
+   "sha256": "03368b5904216c262d55e541e84a881bcab4c34a54d31bcbaa12005208e812bc",
+   "bytes": 17508198
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/policy-inference.tar.gz": {
+   "sha256": "a887020f786346ef27dcd93755bb6a9476691c7a517d3e9dcc7d809775099f53",
+   "bytes": 17769459
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/rental-ended.json": {
+   "sha256": "fd0824c7fc14ec34f9b33d732c12d2d5274f8f5a3ba5076d2e0e0e931ddaa4ce",
+   "bytes": 519
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/replay-attempts.json": {
+   "sha256": "8ac511e7fa80c2d4d11f51e6415c56b0ec60ef23736259626d24997227833e6b",
+   "bytes": 142060
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/summary.json": {
+   "sha256": "b9c443a2d479e2936b10917682ed4b4264058cbbd7c6ec980ed1df2eb48c8641",
+   "bytes": 12165
+  },
+  "experiments/data/inference-policy-gpu/0e85d66534f3/trajectory-agreement.json": {
+   "sha256": "5e5de25c20a80f609670fc12119938e51646b86d6c8a81df89bcce94f4509494",
+   "bytes": 313
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/game-attempts.json": {
+   "sha256": "1236c8e81db0d24f92840666dca344256f75aaf82b0d7456bff322a4ba6075f4",
+   "bytes": 51901
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/gpu.csv": {
+   "sha256": "4d00b5ac5fa964d86f4d3eaea1624bad74a4b22d332a9ca61f25aedc5217be9a",
+   "bytes": 80
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/job-wall.json": {
+   "sha256": "a7e6a505c29a83c176f6d64b9cb970e40821ddfc5867c4a5b4cfaba8560e79c0",
+   "bytes": 159
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/perf-report.tar.gz": {
+   "sha256": "7aac1aa81d3434fd9c51d0f4575cf1cbf1843090c35c80fdf962371c77854cc6",
+   "bytes": 17394550
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/policy-inference.tar.gz": {
+   "sha256": "afce62e8b9d984163e09d8faba79a7cc2387f6f300a94dd69f36caa7dadbc474",
+   "bytes": 17665262
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/rental-ended.json": {
+   "sha256": "631a7778eae0f325bb09037e4109fe18170129dcb7c0499790b13f0a53a77c58",
+   "bytes": 519
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/replay-attempts.json": {
+   "sha256": "1d55ae63955b94ce5e7b0a1cc2905d134aca97db07f733f24eec35e1167ed5c4",
+   "bytes": 142060
+  },
+  "experiments/data/inference-policy-gpu/4f8f34d188a7/summary.json": {
+   "sha256": "f9bef549953604249b9b8a5e355413d40b034140d2e5f6ed8a719ae1e39f76da",
+   "bytes": 12070
+  },
   "experiments/data/int-11-semantic-runtime-policy-v1.json": {
    "sha256": "0a707e622ea2d83c1262408b04e9a6f415c8aaaa0a12c7bd0f42a179ac431067",
    "bytes": 12534

@@ -73,3 +73,32 @@ unchanged. No serving implementation is replaced. Repeat the same fixed
 checkpoint/game protocol, retaining both treatments separately and charging
 both to the original $10 budget. Next job ceiling remains $1.00; no allocation
 may overlap the ended first run.
+
+The second treatment launched as `0e85d66534f3`, source `563c77f93882`, machine
+`mtg188-a6000-0f51258113d5`. Three focused recipe/trace tests passed after the
+5 ms bound change. Existing runner fixtures passed 18 cases; the new trace test
+initially lacked its required legs fixture field and passed separately after
+correction. First run raw archive is retained at
+`.runs/policy-gpu/result/policy-inference.tar.gz`; its offline Perf report is
+`.runs/policy-gpu/report-complete/report.html`. Display inputs relocate only the
+historical absolute serving-file locators and regenerate their inventory;
+`report-inputs/relocation.json` records the transformation, preserving the raw
+archive and all measured values.
+
+Final GPU outcome: second run 0e85d66534f3 succeeded and its provider pod was
+verified absent at 2026-10-27T14:43:33Z. Across both runs: 102/102 complete,
+replay-verified games, 12/12 retained-input cells. The 5 ms treatment's eight-game
+medians were 68.75 s serial and 27.21 s with four active games (2.53x). Fixed-input
+batch-4 was 3.47x faster including witness writes, with exact selected-action
+agreement. Live forwards averaged 1.134 rows: 2926 singleton, 401 two-row,
+23 three-row, one four-row dispatch across the three many-game repeats.
+All six second-run many-game cells also matched ordered Command hashes,
+post-state digests and policy RNG seeds by deal/leg. Both report archives and
+raw receipts are published through experiments/data.manifest.json. Results and
+limits are in experiments/inference_baselines/policy-gpu-20261027.md.
+Rental estimates for the two GPU runs total $0.133454; combined with prior Qwen
+finalized rental charges, approximately $3.05116 of the original $10 is used.
+Both latest receipts still label cost estimated; ancillary final billing remains
+unknown. No active rental or next reservation remains. CPU-versus-GPU equivalence,
+larger batch/concurrency sweeps and production optimization are unmeasured;
+this completed measurement is available for review, not a Task-completion claim.
