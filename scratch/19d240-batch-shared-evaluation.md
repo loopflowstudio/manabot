@@ -242,8 +242,34 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
    The calibration also settles the RSS target, the thread budgets and the oversubscription
    culprit. If `cpu32` served is slower, iterate the CPU engine (several
    workers per allocation, then intra-op threads, which need a compute-contract
-   decision) before Jack Heart decides on retaining scalar play. Ledger:
-   $0.00 of $5; no rental launched.
+   decision) before Jack Heart decides on retaining scalar play.
+
+### Calibration (implement, 2026-10-27)
+
+Branch `jack-heart/mtg193-calibration` (worktree
+`~/src/manabot.mtg193-calibration`, unpushed) = this branch at `c6c8f4c87` +
+MTG-183 `a75df8b5e`, commit `950e2066e`: `elemental_grid.py` keeps both
+imports (+`os`); the other three overlaps auto-merged; MTG-183 rent/eval tests
+pass (22). Runner edits: runs `mtg193-cal-{rent,batched,gpu}`, `GPU`
+`max_active_games=256` (`max_batch_rows` 64 as in `d0955f2a44b6`), fixed
+units skip `stored()` (MTG-183's database is not read or written; no
+`collect`), receipts returned as `receipts.tar` (per-group
+`performance.json`/`serving.json`) and `progress.jsonl` (per-minute load,
+threads/RSS by child target). Unit `pair-005950-v-005600` (1,000 games).
+Launch path: etude-sdk 0.2.9 refuses the shared launcher DB (schema 10, held
+by MTG-183's 0.2.6 controller), so runs are built with the branch
+(`~/.manabot/mtg193-calibration/build_runs.py`) and queued with the
+controller's 0.2.6 client (`queue_runs.py`), under
+`doppler run -p manabot -c prd -- doppler run -p etude -c prd --`.
+
+Ledger (cap $5; committed = caps until settled):
+
+| Etude run | arm | rental | cap | settled |
+|---|---|---|---|---|
+| `091840ecd017` | `cpu32` `batched` (6 × 12) | cpu3c 32 vCPU, $0.96/h | $2.50 | — |
+| `a8182c3ea633` | A4500 `gpu` (256 active) | a4500 ≤ $0.40/h | $0.40 | — |
+
+Committed $2.90 of $5.
 
 ### Implementation decisions (2026-10-26)
 
