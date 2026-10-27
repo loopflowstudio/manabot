@@ -59,6 +59,8 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
         ("academy/server.py", {"academy_integration", "protocol_v1", "frontend"}),
         ("academy/study_runtime.py", {"academy_integration", "protocol_v1"}),
         ("scripts/play.py", {"python_unit", "protocol_v1", "clean_machine_play"}),
+        ("scripts/play-elemental", {"academy_integration", "clean_machine_play"}),
+        ("scripts/play_elemental.py", {"academy_integration", "clean_machine_play"}),
         ("managym/src/flow/decision.rs", JOBS),
         ("content/semantic/v1/fixtures.json", JOBS),
         ("uv.lock", JOBS),
