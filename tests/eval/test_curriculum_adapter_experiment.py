@@ -31,6 +31,8 @@ def test_gpu_benchmark_preserves_deals_seats_and_anchor_with_distinct_identity(
     assert gpu.name == original.name + "-gpu"
     for scalar, batched in zip(original.matchups, gpu.matchups, strict=True):
         assert scalar.players[1] == batched.players[1]
+        assert not {"development", "held-out"}.intersection(batched.tags)
+        assert ("held-out-gpu" if held_out else "development-gpu") in batched.tags
         assert scalar.games == batched.games
         assert scalar.definition != batched.definition
         for first, second in zip(scalar.conditions, batched.conditions, strict=True):

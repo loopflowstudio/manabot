@@ -195,7 +195,15 @@ def report() -> Report:
         baseline="curriculum-175-u",
         evals=(
             Curve(title="Development score vs heuristic v2", matches=development),
+            Curve(
+                title="GPU development score vs heuristic v2",
+                matches=Matches(tag="development-gpu"),
+            ),
             Curve(title="Held-out endpoint", matches=held_out),
+            Curve(
+                title="GPU held-out endpoint",
+                matches=Matches(tag="held-out-gpu"),
+            ),
             Matrix(
                 title="Held-out model deck × heuristic deck",
                 rows="opponent_deck",
