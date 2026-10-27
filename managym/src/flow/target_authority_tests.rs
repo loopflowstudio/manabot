@@ -765,6 +765,15 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
     let context = branch.decision_context(PlayerId(0)).unwrap();
     assert_eq!(context.stage, "trigger_targets");
     assert_eq!(context.source.0.unwrap().label, "Lightning Bolt");
+    assert!(context
+        .instruction
+        .contains("Lightning Bolt — delayed ability:"));
+    assert!(context.instruction.contains("You gain 1 life"));
+    assert!(!branch
+        .decision_context(PlayerId(1))
+        .unwrap()
+        .instruction
+        .contains("Lightning Bolt"));
     let targeting = driver.witness(&branch);
     let inner = driver.mark(&mut branch);
     driver

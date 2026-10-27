@@ -343,11 +343,16 @@ impl Game {
                 "order_triggers"
             }
             .into();
-            view.instruction = if placement.placing.is_some() {
-                "Choose targets for this triggered ability before placing the next one. Earlier placements and paid costs remain committed."
+            view.instruction = if let Some(trigger) = &placement.placing {
+                let description = crate::agent::ability_description::trigger_description(
+                    &self.state.cards[trigger.source_card],
+                    trigger.ability_index,
+                    trigger.inline_effects.as_deref(),
+                );
+                format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
             } else {
-                "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately."
-            }.into();
+                "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
+            };
         }
         Some(view)
     }

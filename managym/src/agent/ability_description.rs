@@ -70,9 +70,17 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Attacks {
             subject: TriggerSubject::This,
         } => "When this attacks".into(),
-        TriggerCondition::Attacks { subject } => format!(
-            "When one or more of {} attack",
-            subject_description(subject)
+        TriggerCondition::Attacks {
+            subject: TriggerSubject::AnotherYouControl(predicate),
+        } => format!(
+            "When one or more other {} you control attack",
+            predicate_description(predicate, "permanents")
+        ),
+        TriggerCondition::Attacks {
+            subject: TriggerSubject::AnyYouControl(predicate),
+        } => format!(
+            "When one or more {} you control attack",
+            predicate_description(predicate, "permanents")
         ),
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))

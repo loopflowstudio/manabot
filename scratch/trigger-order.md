@@ -472,3 +472,75 @@ Task/Graph status refresh currently fails in `lf` with a serialization error,
 `missing field interactive`. Session and process inventories read successfully;
 no execution was launched. Last verified implementation results remain dated
 above; this review does not claim a fresh Task execution disposition.
+
+
+### Accepted refinement and delivery preparation — 2026-10-27
+
+Implemented option 1a after Jack Heart's “1a” and “after that you can land.”
+Native ability/effect projection now describes only the exact triggered ability
+(or the inline delayed payload), with an explicit “Put on stack next” operation.
+Academy stack labels and text capture reuse that description. The shared typed
+state, occurrence joins, immediate commitment and recovery remain authoritative.
+Tests cover different abilities on one source, an inline payload with no valid
+card ability slot, optional target clauses and conditional payment branches,
+exact demo labels, public stack/text parity, reconnect after commit, duplicate
+receipts, and automation stopping at the native ordering choice.
+
+Synced main 84e6427b2 using `lf sync --manual`; resolved the release-suite list
+conflict by keeping deck-browser and trigger-order coverage together. No live
+Graph was launched. Task/Graph reads still fail with `missing field interactive`;
+Session and Process inventories remain readable. The native extension was rebuilt
+and installed atomically. Fresh w14 navigation fixtures were regenerated; the
+14-case / 3,420-Command / 15-Phase conformance recording is unchanged. Current
+release browsers: 24 passed, 2 existing optional deck-browser cases skipped
+(no required art cache or retained local checkpoint configured). Frontend check
+and build, changed-file Ruff checks and Clippy pass. Full debug Rust and affected
+Python/model/arena checks are running; do not call these passed until recorded.
+A broad Ruff invocation also found three pre-existing notebook `study_path`
+parameter references; the configured changed Python-file checks pass, and that
+unrelated notebook was left unchanged.
+
+Current-tooling correction: installed `lf 0.14.17` does not provide `lf task
+automation` or `lf ci watch --status`; those historical activity reports cannot be
+refreshed through the supplied commands. No background watcher was launched here.
+`lf land --wait-and-fix` remains available and will own delivery observation.
+The focused Python consumer/recovery/navigation/automation suite passed 84 tests.
+
+The maintained model/continuation/PPO/arena/monitor run passed 234 tests with one
+existing inapplicable value-token-without-attention parameter skipped. The exact
+current integration CI invocation collects 669 tests. Final review found that a
+trigger target-stage reconnect still named only its source; that instruction now
+uses the same exact-ability formatter, with an actor-only privacy assertion.
+The earlier default-debug follow-up run was intentionally stopped during search
+contract tests after 493 tests across completed targets (including all 316 rules
+tests) because this final projection change required a new check. It is not
+claimed as a complete pass. The final full debug run uses the repository's CI
+`CARGO_PROFILE_DEV_OPT_LEVEL=1`, with assertions and overflow checks retained;
+Clippy passes in that configuration. No test timeout was relaxed. The host's
+observed load average exceeded 200 during these checks; this is environmental
+context, not a controlled performance result.
+
+
+Final local gate: the rebuilt extension passes 57 projection/fixture/recovery
+checks, and all 7 focused debug native trigger-order tests pass, including the
+exact ability in target recovery and nonactor privacy. Final Clippy passes.
+The final release browser run passed 23 cases (both trigger orders included),
+skipped 2 optional art/checkpoint cases, and timed out on the checked Learn demo's
+unchanged 5-second readiness assertion. Its focused retry also timed out while
+still preparing the checked prefix. The same demo opened in 1.2 seconds in each
+of the prior two full browser passes; its final headless checked-prefix tests
+pass. Host load was above 240. This is an unresolved local timing result, not a
+passing final full browser run. No timeout was increased.
+
+The final CI-profile full Rust build was stopped after more than 20 minutes of
+heavy host contention. The final complete Rust suite and unchanged Learn browser
+readiness check are deferred to the existing `Rust Tests` and `Academy UI` CI
+jobs before merge. Prepared PR copy retains both deferrals and failures. The
+existing workflow runs the complete release browser configuration, including the
+new trigger-order cases; no new watcher or weakened gate is added.
+
+Fresh Task reads now work with the externally updated installed lf version
+0.14.17+fd29cbcde. Status confirms started/idle, no PR, no workflow, and only the
+completed task-design Graph. Its kickoff succeeded; no live Graph owns delivery.
+The primary conversation has implementation and landing authorization recorded
+above. Proceed through `lf land --wait-and-fix`, then verify main and complete.

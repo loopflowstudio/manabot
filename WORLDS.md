@@ -291,6 +291,10 @@ occurrence counters never become numeric policy features. Missing checkpoint inp
 versions still decode as v1 and explicitly saved v2 configurations retain their
 serialization. Historical-world checkpoints are rejected for current-world play.
 
+Native offers say “Put on stack next” and describe the exact triggered ability
+or delayed payload. Public stack inspection and text capture reuse that derived
+description; full card text remains available in source inspection.
+
 The new conformance root is `conformance/semantic-kernel-w14-v1`. Existing w13 and
 earlier corpora, play roots, decks and checkpoint evidence are retained unchanged.
 The existing-card trigger witness uses the explicit scenario recipe in

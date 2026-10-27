@@ -184,6 +184,14 @@ def test_survival_orders_cross_consumers(
     assert "Menace" not in inspector
     assert "Each opponent loses 1 life and you gain 1 life" in bastion
     assert "enters the battlefield" not in bastion
+    session.auto_pass = True
+    session._advance()
+    assert session.env.state_digest() == env.state_digest()
+    assert (
+        session.obs.action_space.action_space_type
+        == managym.ActionSpaceEnum.ORDER_TRIGGERS
+    )
+    session.auto_pass = False
     scalar = ObservationSpace().encode(obs)
     native = env.encode_observation(obs)
     for key in native:
