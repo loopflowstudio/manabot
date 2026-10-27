@@ -143,3 +143,51 @@ verified the full pinned-source index, and passed `git diff --check`.
 No managym or inventory-tool changes occurred between the tested base and the
 sync merge, so the recorded focused tests remain applicable. The draft is
 available for review; no new production repair, publication or merge is selected.
+
+## Candidate review — 2026-10-26
+
+Jack Heart accepted reviewing the three candidates with "sounds good". This
+selects a review and priority recommendation, not implementation or shipping.
+Fresh Task/Session/process reads confirm no live audit Graph; the interrupted
+sync record remains historical. Rules backlog and open PRs were inspected.
+No existing Rules Task owns these three repairs. MTG-195 still owns trigger
+ordering and touches adjacent trigger/stabilization machinery; coordinate any
+future repair against its actual diff. Open PR383 is adaptive game selection,
+not an overlapping rules repair.
+
+Recommended order, measured against the original authority-unification goal:
+
+1. **Resolution legality first.** `target_is_legal` is already shared, but
+   resolution entry and individual effect handlers call it at different times.
+   CR 608.2b requires the initial resolution check; subsequent characteristic
+   changes must not retroactively invalidate that decision. Establish one owner
+   for clause-specific resolution eligibility across spells, activated abilities,
+   triggered abilities and suspended frames. Preserve offer/acceptance checks,
+   response-time rechecks, mixed/all-invalid behavior, and object-incarnation
+   guards when an instruction itself moves an object. Merely deleting every
+   effect-level check is not a sufficient design. Acceptance includes the retained
+   hexproof probe, both controllers, multi-clause targets, interrupted resolution,
+   and target departure/reentry. The probe is synthetic, not an admitted-deck
+   exploit. Review the precise frame contract before implementation.
+2. **Deathtouch history second.** CR 704.5h says since the previous SBA check;
+   the current flag persists until cleanup. Consume the relevant damage history
+   at the shared SBA boundary while preserving simultaneous checks, new damage,
+   ordinary lethal damage, indestructibility and journal/undo behavior. Retain
+   the positive first-check case and the negative later-check probe. This is a
+   lifetime correction in one authority, not two competing engines. Coordinate
+   changes to stabilization with MTG-195 rather than starting parallel edits.
+3. **Earthbend destination identity third.** The watcher retains ObjectRef,
+   but the return effect reduces identity to CardId plus graveyard/exile presence.
+   CR 400.7e allows finding the first destination object, not following another
+   zone change. Preserve that destination incarnation through trigger placement
+   and resolution using existing identity machinery. Keep normal graveyard and
+   exile returns working; reject a second move and leave/reenter, including a
+   round trip to the same zone. No general stack-target ABI migration is needed
+   merely because this narrower gap exists. Coordinate trigger context with
+   MTG-195. Current probe directly moves zones, so real-card reachability remains
+   an explicit evidence gap.
+
+All three claims were checked against the pinned official text and native
+authority. Existing test receipts still apply; this review changed no code and
+ran no new behavior tests. Keep this as the reviewable repair plan. Shared-choice
+work remains MTG-195/196; no duplicate Task or worker was launched by this review.
