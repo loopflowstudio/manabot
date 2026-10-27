@@ -16,11 +16,11 @@ Checkpoints come from two places, merged by absolute update:
   to continue (`--continues`), in which case the next segment's run is named on
   restart.
 
-Each admitted checkpoint is an Etude checkpoint agent `uNNNNNN`, keyed by its
-window or segment run and update; the heuristic is the code agent `heuristic`,
-whose version is the digest of `heuristic_source_paths()`. Under etude-sdk 0.2,
-which the running follower uses, an agent's identity was its digest instead, so
-v1 and v2 heuristic results never pooled.
+Each admitted checkpoint is an Etude model `uNNNNNN`, keyed by its
+window or segment run and update; the heuristic is the code player `heuristic`,
+whose version is the digest of `heuristic_source_paths()`. Historical SDK 0.2
+results keyed agents by digest instead, so v1 and v2 heuristic results never
+pooled.
 
 `play`, `Conditions` and `game_rows` are also what `experiments/elemental.py`
 plays; the follower below remains only until MTG-183's evaluation ends, then
@@ -67,15 +67,16 @@ import sys
 import time
 from typing import Literal
 
-from etude.eval.match import Row, Tables, agent, environment, evaluate
+from etude.eval.match import Row, Tables, environment, evaluate
 from etude.eval.records import (
-    Agent,
-    AgentKey,
     CheckpointKey,
+    CheckpointRef,
+    Code,
     Environment,
+    Inference,
     Match,
-    Version,
-    version_of,
+    Model,
+    Player,
 )
 from etude.run.records import ArtifactRef
 from etude.run.storage import Storage, run_directory, storage_from_uri
@@ -104,6 +105,7 @@ from experiments.elemental_long import (
     STAGE,
     H2HGame,
     Pair,
+    Role,
     h2h_schedule,
     h2h_schedule_sha256,
     heuristic_games,
@@ -126,7 +128,9 @@ EXPERIMENT = "mtg183-elemental-eval"
 # match keys this code does not reproduce, so this run replays them.
 RUN = "mtg183-eval-cards"
 HEURISTIC = "heuristic"
-# The code that turns a checkpoint's bytes into play; a change makes new agents.
+# The learner every MTG-183 checkpoint belongs to: its one seed.
+LINE = f"mtg183-seed-{SEED}"
+# Inference provenance is versioned independently of player identity.
 INFERENCE_CODE = (
     ROOT / "manabot/model",
     ROOT / "manabot/env",
@@ -267,7 +271,7 @@ def admit(
 
 
 # ---------------------------------------------------------------------------
-# Agents and matches
+# Players and matches
 
 
 def eval_environment() -> Environment:
@@ -288,31 +292,32 @@ def eval_environment() -> Environment:
 
 
 @cache
-def _inference_version() -> Version:
-    return version_of(INFERENCE_CODE)
+def _inference() -> Inference:
+    return Inference(source=INFERENCE_CODE)
 
 
-def checkpoint_agent(checkpoint: Checkpoint) -> Agent:
-    """As `etude.eval.match.agent` makes one, with the code's version computed once.
+def checkpoint_model(checkpoint: Checkpoint) -> Model:
+    """Seat a checkpoint with the inference code's version computed once.
 
     Keyed by its window or segment run and update (`RUN/checkpoints/uNNNNNN`),
-    so where its bytes lie is not part of what it is.
+    so where its bytes lie is not part of what it is. It declares where it
+    stood (`at`) and its learner (`LINE`), which Etude's report needs to draw
+    it on a curve: no Etude training run of this experiment recorded it. Like
+    `at`, `line` is part of no key.
     """
-    return Agent(
-        key=AgentKey(
-            checkpoint=CheckpointKey(
-                run=checkpoint.run, name=player(checkpoint.updates)
-            )
+    return _inference().model(
+        CheckpointRef(
+            key=CheckpointKey(run=checkpoint.run, name=player(checkpoint.updates)),
+            artifact=checkpoint.artifact,
+            at={"updates": checkpoint.updates},
+            line=LINE,
         ),
-        name=player(checkpoint.updates),
-        artifact=checkpoint.artifact,
-        version=_inference_version(),
     )
 
 
 @cache
-def heuristic_agent() -> Agent:
-    return agent(HEURISTIC, code=heuristic_source_paths())
+def heuristic_code() -> Code:
+    return Code(name=HEURISTIC, source=heuristic_source_paths())
 
 
 type Kind = Literal["full", "subset", "pair"]
@@ -341,6 +346,8 @@ class Unit:
     # The pair's older checkpoint; None for a heuristic grid.
     older: int | None
     matches: tuple[Match, ...]
+    # The pair's role in the design; None for a heuristic grid.
+    role: Role | None = None
 
 
 def h2h_groups(games: Sequence[H2HGame]) -> list[Group]:
@@ -368,12 +375,12 @@ def rows(kind: Kind, found: Sequence[Group]) -> list[Conditions]:
 
 def _matches(
     kind: Kind,
-    agents: tuple[Agent, Agent],
+    players: tuple[Player, Player],
     found: Sequence[Group],
 ) -> tuple[Match, ...]:
     return tuple(
         Match(
-            agents=agents,
+            players=players,
             conditions=row.model_dump(mode="json"),
             games=sum(len(group.deals) for group in row.groups),
         )
@@ -387,8 +394,8 @@ def units(state: EvalState) -> list[Unit]:
     rated = tuple(
         u for u in rated_updates(latest, state.endpoint) if u in state.checkpoints
     )
-    agents = {u: checkpoint_agent(state.checkpoints[u]) for u in rated}
-    anchor = heuristic_agent()
+    players = {u: checkpoint_model(state.checkpoints[u]) for u in rated}
+    anchor = heuristic_code()
     found = []
     for updates in rated:
         grid, games = heuristic_games(updates, state.endpoint)
@@ -397,7 +404,7 @@ def units(state: EvalState) -> list[Unit]:
                 key=f"heuristic-{updates:06d}-{grid}",
                 newer=updates,
                 older=None,
-                matches=_matches(grid, (agents[updates], anchor), groups(games)),
+                matches=_matches(grid, (players[updates], anchor), groups(games)),
             )
         )
     pairs = h2h_groups(h2h_schedule())
@@ -409,8 +416,9 @@ def units(state: EvalState) -> list[Unit]:
                 newer=pair.newer,
                 older=pair.older,
                 matches=_matches(
-                    "pair", (agents[pair.newer], agents[pair.older]), pairs
+                    "pair", (players[pair.newer], players[pair.older]), pairs
                 ),
+                role=pair.role,
             )
         )
     # Stable: a checkpoint's grid before its pairs, nearer older checkpoints first.
@@ -432,7 +440,9 @@ def halving_pairs(rated: tuple[int, ...], design: Sequence[Pair]) -> list[Pair]:
     return [
         Pair(newer, newer // 2, "halving")
         for newer in rated
-        if newer > 0 and newer % 2 == 0 and newer // 2 in rated
+        if newer > 0
+        and newer % 2 == 0
+        and newer // 2 in rated
         and (newer, newer // 2) not in held
     ]
 
@@ -443,7 +453,7 @@ def halving_pairs(rated: tuple[int, ...], design: Sequence[Pair]) -> list[Pair]:
 
 class LocalCheckpoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # The seated agent's name, such as `u000200` or `learner_transitions-512.pt`.
+    # The seated player's name, such as `u000200` or `learner_transitions-512.pt`.
     name: str
     path: Path
     sha256: str
@@ -461,10 +471,12 @@ class H2HRequest(BaseModel):
     compute: EvalCompute | None = None
 
 
-def _local(seated: Agent) -> LocalCheckpoint:
-    """A checkpoint agent's verified bytes, downloaded once per digest."""
-    reference = seated.artifact
-    if reference is None or reference.sha256 is None:
+def _local(seated: Player) -> LocalCheckpoint:
+    """A model's verified checkpoint bytes, downloaded once per digest."""
+    if not isinstance(seated, Model):
+        raise ValueError(f"{seated.name} is not a checkpoint with a digest")
+    reference = seated.checkpoint.artifact
+    if reference.sha256 is None:
         raise ValueError(f"{seated.name} is not a checkpoint with a digest")
     # A local file is verified in place; a remote object is cached by digest.
     path = cache_directory() / reference.sha256
@@ -495,8 +507,8 @@ def play(match: Match) -> Tables:
     and its card tables are delivered beside `games`. A failed group has none.
     """
     conditions = Conditions.model_validate(match.conditions)
-    newer = _local(match.agents[0])
-    older = None if conditions.kind != "pair" else _local(match.agents[1])
+    newer = _local(match.players[0])
+    older = None if conditions.kind != "pair" else _local(match.players[1])
     # The registered player IDs the workers seat, in Etude row order.
     participants = ("model", "heuristic") if older is None else ("newer", "older")
     cards = Path(os.environ[CARDS])
@@ -598,9 +610,9 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
 
     `unit` is the match's kind: an endpoint on a subset cadence update plays
     both heuristic grids, and the report keeps the full one.
-    `seat` is the player's native seat (0 is on the play); `score` counts a
-    draw as half and is null for an invalid game, so Etude's `compare` and the
-    report count only valid games.
+    `seat` indexes the Etude participants; `game_seat` is the native seat
+    (0 is on the play). `score` counts a draw as half and is null for an invalid
+    game, so Etude's `compare` and the report count only valid games.
     """
     found: list[Row] = []
     for row in rows:
@@ -614,15 +626,15 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
                 None if score is None else 1.0 - score,
             ),
         )
-        for player, (deck, opponent_deck, seat, player_score) in enumerate(sides):
+        for seat, (deck, opponent_deck, game_seat, player_score) in enumerate(sides):
             found.append(
                 {
-                    "player": player,
+                    "seat": seat,
                     "unit": kind,
                     "deal": row.deal,
                     "deck": deck,
                     "opponent_deck": opponent_deck,
-                    "seat": seat,
+                    "game_seat": game_seat,
                     "score": player_score,
                     "valid": row.valid,
                     "terminated": row.terminated,

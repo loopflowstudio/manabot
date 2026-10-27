@@ -29,7 +29,7 @@ use crate::{
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 6;
+pub const SEMANTIC_DECISION_VERSION: u16 = 7;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.
@@ -78,7 +78,7 @@ pub struct Command {
 
 /// Typed identity for one composite Observation. `viewer_state_hash` digests
 /// the viewer-safe projection only; it never includes opponent-private state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ObservationIdentity {
     pub schema_version: u16,
     pub revision: u64,
@@ -90,7 +90,7 @@ pub struct ObservationIdentity {
 /// state, the ordered newly-visible event increment, and the current semantic
 /// decision (only when this viewer is the actor). Model tensors and histories
 /// are derived from this, not the reverse.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Observation {
     pub identity: ObservationIdentity,
     /// Viewer-safe projection from `agent::Observation::for_player`. Opponent
@@ -294,6 +294,16 @@ impl Game {
     /// `decision` is present only when `viewer` is the acting player, so a
     /// non-acting viewer never sees the actor's legal offers.
     pub fn semantic_observation(&self, viewer: PlayerId) -> Result<Observation, SemanticError> {
+        self.semantic_observation_with_input(viewer)
+            .map(|(observation, _)| observation)
+    }
+
+    /// Keep the native input available to capture without projecting the same
+    /// viewer state and continuation a second time.
+    pub(crate) fn semantic_observation_with_input(
+        &self,
+        viewer: PlayerId,
+    ) -> Result<(Observation, AgentObservation), SemanticError> {
         if viewer.0 >= self.state.players.len() {
             return Err(SemanticError::ViewerOutOfBounds(viewer.0));
         }
@@ -325,7 +335,7 @@ impl Game {
             }
         };
 
-        Ok(Observation {
+        let observation = Observation {
             identity: ObservationIdentity {
                 schema_version: SEMANTIC_DECISION_VERSION,
                 revision: self.decision_epoch,
@@ -335,7 +345,8 @@ impl Game {
             viewer_state,
             events: Vec::new(),
             decision,
-        })
+        };
+        Ok((observation, agent_obs))
     }
 
     /// Validate one revision-bound Command against the current authority,

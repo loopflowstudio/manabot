@@ -46,10 +46,10 @@ import tarfile
 import tempfile
 import threading
 import time
-from typing import Literal
+from typing import Any, Literal
 
 from etude.eval.match import evaluate
-from etude.eval.records import Match
+from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
 from etude.run.storage import run_directory
 from pydantic import BaseModel, ConfigDict
@@ -188,9 +188,10 @@ def _checkpoint_inputs(state: EvalState, chosen: Iterable[Unit]) -> dict[str, in
     found: dict[str, int] = {}
     for unit in chosen:
         for match in unit.matches:
-            for seated in match.agents:
-                if seated.artifact is not None and seated.artifact.sha256:
-                    found[seated.artifact.sha256] = seated.artifact.size_bytes or 0
+            for seated in match.players:
+                if isinstance(seated, Model) and seated.checkpoint.artifact.sha256:
+                    artifact = seated.checkpoint.artifact
+                    found[artifact.sha256] = artifact.size_bytes or 0
     return found
 
 
@@ -369,11 +370,19 @@ def admitted() -> EvalState:
 
 
 def _match_identity(match: Match) -> tuple[str, str, str, str]:
-    conditions = match.conditions
-    assert isinstance(conditions, dict)
+    return _identity(match.model_dump(mode="json"))
+
+
+def _identity(record: dict[str, Any]) -> tuple[str, str, str, str]:
+    """What a stored match plays: its seats' names, kind and deck.
+
+    Records written before etude-sdk 0.2.8 list their seats as `agents`.
+    """
+    seats = record.get("players") or record["agents"]
+    conditions = record["conditions"]
     return (
-        match.agents[0].name,
-        match.agents[1].name,
+        seats[0]["name"],
+        seats[1]["name"],
         str(conditions["kind"]),
         str(conditions["deck"]),
     )
@@ -388,7 +397,7 @@ def stored() -> set[tuple[str, str, str, str]]:
     """
     ingest(BucketFolder(MINI_RUN))
     return {
-        _match_identity(Match.model_validate(json.loads(path.read_bytes())["match"]))
+        _identity(json.loads(path.read_bytes())["match"])
         for path in MIRROR.glob("*/*/matches/*.json")
         if not path.name.endswith(".failed.json")
     }
@@ -419,9 +428,11 @@ def job(batch: Batch, *, revision: str, max_hours: float, max_usd: Decimal) -> J
     inputs = []
     for unit in chosen:
         for match in unit.matches:
-            for seated in match.agents:
-                reference = seated.artifact
-                if reference is None or reference.sha256 is None:
+            for seated in match.players:
+                if not isinstance(seated, Model):
+                    continue
+                reference = seated.checkpoint.artifact
+                if reference.sha256 is None:
                     continue
                 name = f"{reference.sha256}.pt"
                 if any(found.name == name for found in inputs):

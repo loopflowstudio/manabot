@@ -17,6 +17,7 @@ const manifestPath = path.join(
   '../src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
 );
 const outDir = path.join(here, '../src/lib/card-art');
+const fullDir = path.join(outDir, 'full');
 const creditsFile = path.join(outDir, 'credits.json');
 
 const USER_AGENT = 'Academy/0.1 (research fan project; github.com/loopflowstudio/manabot)';
@@ -84,7 +85,7 @@ function artCropUri(card) {
   return card?.image_uris?.art_crop ?? card?.card_faces?.[0]?.image_uris?.art_crop ?? null;
 }
 
-const manifests = await Promise.all([manifestPath, path.join(here, '../src/lib/packs/elemental-world/v1/manifest.json')]
+const manifests = await Promise.all([manifestPath, path.join(here, '../src/lib/packs/elemental-world/v2/manifest.json')]
   .map(async filename => JSON.parse(await readFile(filename, 'utf8'))));
 const identities = [...new Map(manifests.flatMap(manifest => Object.entries(manifest.identities)) )]
   .map(([name, identity]) => ({ name, kind: identity.kind }));
@@ -106,6 +107,7 @@ for (const filename of (await readdir(fixtureDir)).filter(name => name.includes(
 if (!known.has('Treasure')) identities.push({ name: 'Treasure', kind: 'token' });
 
 await mkdir(outDir, { recursive: true });
+await mkdir(fullDir, { recursive: true });
 const credits = await exists(creditsFile)
   ? JSON.parse(await readFile(creditsFile, 'utf8')) : {};
 
@@ -133,7 +135,8 @@ if (await exists(backFile)) {
 
 for (const { name, kind } of identities) {
   const file = path.join(outDir, `${artSlug(name)}.jpg`);
-  if (await exists(file) && credits[name]) {
+  const fullFile = path.join(fullDir, `${artSlug(name)}.jpg`);
+  if (await exists(file) && await exists(fullFile) && credits[name]) {
     cached += 1;
     continue;
   }
@@ -155,6 +158,13 @@ for (const { name, kind } of identities) {
     continue;
   }
   await writeFile(file, Buffer.from(await image.arrayBuffer()));
+  const fullUri = card?.image_uris?.normal ?? card?.card_faces?.[0]?.image_uris?.normal;
+  if (fullUri) {
+    await sleep(DELAY_MS);
+    const fullImage = await request(fullUri);
+    if (!fullImage.ok) throw new Error(`Card preview fetch failed (${fullImage.status}): ${name}`);
+    await writeFile(fullFile, Buffer.from(await fullImage.arrayBuffer()));
+  }
   credits[name] = {
     artist: card.artist ?? card.card_faces?.[0]?.artist ?? 'Artist not listed',
     source: card.scryfall_uri,

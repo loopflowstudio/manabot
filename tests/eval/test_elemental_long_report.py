@@ -39,7 +39,7 @@ def _play(match: Match) -> Tables:
     """Bradley-Terry games between the seated strengths, seeded by the match."""
     rng = random.Random(match.seed)
     conditions = Conditions.model_validate(match.conditions)
-    a, b = (_strength(agent.name) for agent in match.agents)
+    a, b = (_strength(player.name) for player in match.players)
     rows = [
         GameRow(
             model_deck=conditions.deck,

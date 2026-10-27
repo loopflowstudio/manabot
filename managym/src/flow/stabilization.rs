@@ -18,6 +18,13 @@ impl Game {
         self.state.priority.sba_done = false;
 
         loop {
+            // CR 603.3b: finish this placement round before another SBA or
+            // collection pass, including after an ordering/target suspension.
+            if self.state.trigger_placement.is_some() {
+                if let Some(choice) = self.flush_triggers() {
+                    return Some(choice);
+                }
+            }
             // Only committed facts enter trigger matching. Processing is
             // deterministic because events, trigger sources, and enqueue
             // order all have canonical sequence order.
@@ -43,11 +50,9 @@ impl Game {
                 return Some(space);
             }
 
-            // CR 603.3, 603.3b — put waiting triggers on the stack in the
-            // engine's deterministic APNAP/enqueue order. Stacking triggers
-            // can emit committed facts, so always re-enter the fixed point.
-            let had_waiting_triggers = self.state.pending_trigger_choice.is_some()
-                || !self.state.pending_triggers.is_empty();
+            // CR 603.3b (2026-09-25): controller choices within each of two
+            // APNAP passes. Placement arrivals wait for the next round.
+            let had_waiting_triggers = !self.state.pending_triggers.is_empty();
             if had_waiting_triggers {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
                     self.journal_turn();

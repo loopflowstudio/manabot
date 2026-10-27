@@ -1,8 +1,11 @@
+pub(crate) mod ability_description;
 pub mod action;
 pub mod behavior_tracker;
+pub mod continuation;
 pub mod env;
 pub mod observation;
 pub mod observation_encoder;
+pub mod observation_json;
 pub mod opponent;
 pub mod policy_history;
 pub mod rollout_pool;

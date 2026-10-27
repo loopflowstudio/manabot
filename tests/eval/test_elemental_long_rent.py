@@ -3,6 +3,8 @@
 from decimal import Decimal
 from pathlib import Path
 
+from etude.eval.records import Model
+
 from experiments.elemental_long_eval import units
 from experiments.elemental_long_rent import (
     SCALAR_RUN,
@@ -45,11 +47,11 @@ def test_job_seats_each_checkpoint_once_as_a_digest_checked_input(
     )
     frozen = job(batch, revision="0" * 40, max_hours=1.0, max_usd=Decimal("1.10"))
     seated = {
-        seated.artifact.sha256
+        seated.checkpoint.artifact.sha256
         for u in chosen
         for m in u.matches
-        for seated in m.agents
-        if seated.artifact is not None
+        for seated in m.players
+        if isinstance(seated, Model)
     }
     assert sorted(i.sha256 for i in frozen.inputs) == sorted(seated)
     assert all(i.name == f"{i.sha256}.pt" for i in frozen.inputs)

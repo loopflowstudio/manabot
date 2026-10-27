@@ -1,9 +1,12 @@
 pub mod agent;
 pub mod benchmark;
+#[cfg(feature = "benchmark")]
+pub mod benchmark_allocations;
 pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;
 pub mod decision;
+pub mod decision_capture;
 mod decision_context;
 pub mod experience;
 pub mod flow;
@@ -22,4 +25,4 @@ pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
 pub use state::player::PlayerConfig;
 
 /// Rules and observation/action meaning; see WORLDS.md for compatibility.
-pub const WORLD_VERSION: &str = "w13";
+pub const WORLD_VERSION: &str = "w14";

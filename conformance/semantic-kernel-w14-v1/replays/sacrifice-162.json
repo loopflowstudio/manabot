@@ -1,0 +1,3630 @@
+{
+  "schema_version": 1,
+  "contract_id": "manabot.semantic-kernel-conformance.v1",
+  "case_id": "sacrifice-162",
+  "matchup_pack_key": "elemental-sacrifice-v1",
+  "matchup_source_digest": "d1e12a1055a1244f34a043ceb49f68210f652e034c8ccc151abc94e020ebf868",
+  "content_digest": "d70d27074d6686dd9a27b81f37821d75a1c54e87ba4df207fd1e12e045411924",
+  "reference": "reference/explicit-step-v1",
+  "optimized": "optimized/skip-trivial-v1",
+  "orientation": "sacrifice_left_vs_right",
+  "game_seed": 162,
+  "choice_seed": 16200,
+  "max_commands": 2000,
+  "initial_checkpoint": {
+    "state_hash": "v9:aa73da8a8b953dace95721dbe862cac5771effa63de6c0af332dd6455fac7321",
+    "action_space_digest": "84ac6082bd66c533262a166cb1cc5cfd569a5b4a0461be4904a00e36c8afa8c1",
+    "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+    "event_boundary": [
+      5,
+      0,
+      5
+    ],
+    "game_over": false,
+    "winner": null
+  },
+  "commands": [
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 33,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:483499a9b02581d26d030f42b8dbc9bee24289385dbf2f98fccfd64e956e51b7",
+        "action_space_digest": "dd3ad6bc0d735fcfde748a1d63734646950b2aa08961d1eb1654441628cc0986",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          6,
+          0,
+          6
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:916d412f10811d4acfc7cfcbe37b25d7cf927885812ae4c7dd02f8434606b9b7",
+        "action_space_digest": "dd3ad6bc0d735fcfde748a1d63734646950b2aa08961d1eb1654441628cc0986",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          12,
+          0,
+          12
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f4f684cf061037b400e636cd7a505558aa8df6baf5bbd56d240b0e96de7c4993",
+        "action_space_digest": "3e5ccb9e52a5a7fe870192671f2151cf7923a8f2a4c2472b004288a40151feb1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          21,
+          0,
+          21
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 71,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:dac9cc2939a6a3bfad78ce7d7a95ea9e19b6218055bc181aeb7ae174aa7a0b89",
+        "action_space_digest": "69d293268edcbf6202a8e7032d8d8133041ea1d4a320c5f42780877d79a85d87",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          37,
+          0,
+          37
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 9,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:2548edad7f7ba3ffee4681ca4f31a61bbecc683aadad3f6245ba25da119f2a19",
+        "action_space_digest": "dd3ad6bc0d735fcfde748a1d63734646950b2aa08961d1eb1654441628cc0986",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          38,
+          0,
+          38
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 1,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f8614b1b19429400f7eeb903b06e62936513fc95a9f8b9763f936645009958a7",
+        "action_space_digest": "8014b25022c9024076d1db3a3c28b54be30c871a05da2ca620336a63759adb2a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          58,
+          0,
+          58
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 59,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:7bc36c1b601387711d3eb23cc30138308158b253d196a387f0fe0f6b4a495dab",
+        "action_space_digest": "6c5d6bea520abbf638b7c1c63fee54f5f74d69ffd646464c915c1ae1df509750",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          59,
+          0,
+          59
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 79,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e7d7df64763da29b67ca47f9a8789dce3fb7317081723ba4309bd6b01ce24880",
+        "action_space_digest": "6290cf65cc099f8582f416830c19458842b4e2fdd1e7df221cc5967421765f18",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          80,
+          0,
+          80
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 15,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ea17ddbc1534839216322f2410ab4c8c96e346132803af678ff92c09ad74f5c0",
+        "action_space_digest": "0c01215eba3aad7809d628908fa1a5e767459d9be63fc23f9c89393944016a1e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          81,
+          0,
+          81
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e2ab08a54db6f2745419f387db586c9e89eac3bda02371cb576d7eabab1bbb00",
+        "action_space_digest": "8b0b388572840f921fcb1e4445fcb4703e780bdb3056cc1352cbfc9a154e568d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          83,
+          1,
+          83
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": false,
+          "permanent": 3,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4c02e2e9aea6ee1daf7f54a9117f60b1923a9bd05bc0271abe6734929265623f",
+        "action_space_digest": "0c01215eba3aad7809d628908fa1a5e767459d9be63fc23f9c89393944016a1e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          87,
+          0,
+          87
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 5,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:d3ea8e7c61d8befd769775dd91208a4ac71b8939a028252f0745df91f8a828f4",
+        "action_space_digest": "014bee4e8869c742a40e335cd4b74f63b924973fd83668249c012268517c8200",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          97,
+          0,
+          97
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:308cf4c139df329ab97b9a53a7e400bb3934398f91dc415464d61a8afe67472b",
+        "action_space_digest": "014bee4e8869c742a40e335cd4b74f63b924973fd83668249c012268517c8200",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          99,
+          0,
+          99
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 7,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4fd070766bb6f734e5aff540c0a8499f4e9a1a753940544b55b52efc900ad848",
+        "action_space_digest": "79d2873ca1c1695f21372873de19d1df2c808cd439badd09347217d88c113e65",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          114,
+          0,
+          114
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:aeab005728244dcc1824df62ebf2bd735b30c50fcb0c8c32bd7c853bd2d06831",
+        "action_space_digest": "79d2873ca1c1695f21372873de19d1df2c808cd439badd09347217d88c113e65",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          120,
+          0,
+          120
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f4f0227cd1d4228eb4f360dd10d089e07641a346f209faba10517249c3f4dcc7",
+        "action_space_digest": "11ddae91c5d28b9d3729888a4261353d350ff7e136eb32761829c0758cb516d8",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          129,
+          0,
+          129
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 28,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:01324feaea295108ea078ef5c181c03714b0674847c0dd30747668204ca3a552",
+        "action_space_digest": "334e482092ffbe8dbbf6be917e5c009055871c4f32f147da04cd103b28f54cab",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          130,
+          0,
+          130
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 8,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e9f7125a85c53ae9709ef7aaa2366178be9790f6595166904e35d877de5710b8",
+        "action_space_digest": "52b37b9694cfe15dbfca52da5130527b3a576e9aace8d4d53c8f38db0b14eb6d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          134,
+          0,
+          134
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 11,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 26,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:65f3508cf49b51d0fd569221f32a76ad1304eeaae4e56ebaff4de88957afa8ba",
+        "action_space_digest": "74d9844bf1a810fc9654422d11af27254982196a7d54f9922b6976100ca1e06e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          135,
+          0,
+          135
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 37,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:feab0bcd8a8513d67153d520f6a1931554b443582fff95ac4072090758009f63",
+        "action_space_digest": "4eb6b0f771bff27a9dce1e14cda8b1d41e35f6e53c8aaccdd2652f91e1f111ec",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          145,
+          0,
+          145
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 11,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4282c27fc0b9fc30bcc215436401bcf60b71a3e44b17a42f460fadc11b34c2ee",
+        "action_space_digest": "79d2873ca1c1695f21372873de19d1df2c808cd439badd09347217d88c113e65",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          166,
+          0,
+          166
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 52,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ba8ab9ac1e8bc6bb2cab2fcb45ac115ce02512312c2aa1d8ba9f9b8811d68146",
+        "action_space_digest": "5c23b855b86aa3c2fe9ffb245f7b2fc3655015c996fc6450c27fa7277f959b2e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          167,
+          0,
+          167
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 58,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ce36241f3c1091f7a78501cf3266edf867da485759f773c171522597dbd04393",
+        "action_space_digest": "16088fd46252cac2bfcf58c022e6603772e2981389b1565f286f942ff4ee3413",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          185,
+          0,
+          185
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cd70db5be81b2cd8c12fe980acbc274d3d08c9af4cc1e93240fc36cf6e7a99c1",
+        "action_space_digest": "16088fd46252cac2bfcf58c022e6603772e2981389b1565f286f942ff4ee3413",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          188,
+          0,
+          188
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 4,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4fd14fc9ec3bfc9c70cf5a34f8856402d0827a69038f5f5d005bbda3e78d1d85",
+        "action_space_digest": "d19d77a307547793451ffc9bd1b2069044a70365db65ed593711b3532754e274",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          195,
+          1,
+          195
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Player": 1
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b311e8d5e01bed08640c264f6280fb92386b92c1e28774ec4199f59aa78a4f75",
+        "action_space_digest": "754e576a633492379b4a2cb184b1ae0f50c5b3902e83a07417cb9c0d7e0b1331",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          206,
+          0,
+          206
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:60d72567191cb72025cc9db902f27f953023ab90b9b554e5e2141b278dc70062",
+        "action_space_digest": "10495ca68b6bbb5b5d5afbf92ffb2ac47322fd3842152f077a1f91041b61f6a5",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          207,
+          0,
+          207
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 23,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:92748dde16633dd43fd8dd8d78607bf28a0252e3e4fdcf599d881bb5d32aed11",
+        "action_space_digest": "9b602e17245c237d44b131ba56f29f5cb689946d42251872647bdbef71865f99",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          208,
+          0,
+          208
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ade92e898f57323696f3eb161f0cb334c64fa572fd0a2e7ff5bd6941646be494",
+        "action_space_digest": "754e576a633492379b4a2cb184b1ae0f50c5b3902e83a07417cb9c0d7e0b1331",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          209,
+          0,
+          209
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 16,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:23a7226b7f5f0e50a74bae2dcd9af86c2390b0d58b22ba8c3ab76e51239cc94c",
+        "action_space_digest": "73ccb1d21640f5efe27db1a991f99dcdc335fcb168f54590b4c1400c1b77f99a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          212,
+          0,
+          212
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Modal",
+      "action_type": "ChooseMode",
+      "action": {
+        "ChooseMode": {
+          "mode": 0,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:5046887151779488430455d8f51ae20b1bf098fcae1e74cbcbc70e59e704009a",
+        "action_space_digest": "67cd228d06e993daa9ec0f2f5d3593f6e810f19cf17f28da1a74af2d0f27c9a5",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          212,
+          0,
+          212
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 15
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:d3068a1389840578ff6a54fb904be5d9e8cc79e0c584de9d037ae84e5e940ac9",
+        "action_space_digest": "0356bf8aadb6eb2addeac261b30ddc11dde6ce5aa10ce2de6bc3951175e9b67a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          225,
+          0,
+          226
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:54be178656cc24ba5eb9cd897bec3b700af16f5bffbc9554da37ee32dbf22567",
+        "action_space_digest": "d19d77a307547793451ffc9bd1b2069044a70365db65ed593711b3532754e274",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          225,
+          0,
+          226
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Player": 0
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:5202f411abd5fcc6fa647b5f12619e2f7689d76a9b689fdd854d299d52e8d0ba",
+        "action_space_digest": "873e20cbe4a14fbdfeabce81c0fd38433e02ba2fb338b11b445682d9d92264dd",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          229,
+          0,
+          230
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Player": 1
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9a0b4aabd94c1a6e15c6a548fe1cbd5c7cc2548967d95e9e0fe33e7b83d1f748",
+        "action_space_digest": "5b1b1582eceecf147e4945392ba67bca6cb5d0667f40aa1919d292735107fa42",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          238,
+          0,
+          239
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:1946c1d6ae2cb17dfffe299f3675334fc1b95b082e3a8375bcabc2b83621f507",
+        "action_space_digest": "5b1b1582eceecf147e4945392ba67bca6cb5d0667f40aa1919d292735107fa42",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          244,
+          0,
+          245
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 55,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ac3d6e8b07b2fc83bca759ac9d3aac54702ffa382377d4587d5b4c494a3f782c",
+        "action_space_digest": "121364ba456f48ef5e3545a66c6651d031adef1e32481164f774498d1026dd51",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          254,
+          0,
+          255
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 7,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:da9a0e809b7016ffe022476608a8c5a8c1d41c5ef194f31e3cde35e79a7b8dc9",
+        "action_space_digest": "4b3a5b3bd83421054f39abb963dcea356dbc5ea0fb33f232f578952b8d6f85cc",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          255,
+          0,
+          256
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b236e2cb589b0d39b5715de21f0553ef430e74305a05bff31c64c0bd936bfe7e",
+        "action_space_digest": "4b3a5b3bd83421054f39abb963dcea356dbc5ea0fb33f232f578952b8d6f85cc",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          261,
+          0,
+          262
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 36,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9d6c6618602cba4d580600b3647a35ba902692ed33fdffd9c85692e316e5cf2e",
+        "action_space_digest": "4755195f1af8ba2836dce668babf7ed306491ef3a74800365b3605d8f0fb5d14",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          268,
+          0,
+          269
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 38,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8a1b074b792df4c98aeb7f3fa7df7f8ba0c413bccc75537beafbefeb2a697bf0",
+        "action_space_digest": "faeffe8e36ca275632e8d9be474f83deece5ec2b11ca78115352aece90242ad2",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          286,
+          0,
+          287
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 60,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:6f387c4ee21887a28ff8367b1df584a1f99ff23bf46e5c3a4e318e30fcb60235",
+        "action_space_digest": "615ba390f7a1478dd16087f12baf55051a35c8d859b64663c21ef62cbafda2fc",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          287,
+          0,
+          288
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b056d6915678b17d86392ddbd9f7bcfa36a86c306a84405367989a4fc1d59c21",
+        "action_space_digest": "615ba390f7a1478dd16087f12baf55051a35c8d859b64663c21ef62cbafda2fc",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          293,
+          0,
+          294
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 40,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:05adc27c7e1ea852521764a7eb55e119365853eaad8570841929bb7e6972c1c2",
+        "action_space_digest": "e88b4a6a482ad3ad8f28c40eb4f6146b2641b4816be47b7a1527b672f346d140",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          302,
+          0,
+          303
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8e4ae20d4d0ff0916a767b41c2b3d201eb4616ea8a6082a2cfce48ebb60b3516",
+        "action_space_digest": "e88b4a6a482ad3ad8f28c40eb4f6146b2641b4816be47b7a1527b672f346d140",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          303,
+          0,
+          304
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:c2b4f13dc0fa589abc27107e8b1b225880bba63174d0bfae98c3b5c3134db91c",
+        "action_space_digest": "4b4eaaac2d51ad45ce2380ac402b67205de250756262af9e1a5a0084df0ea170",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          303,
+          0,
+          304
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 21
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:91ca1e653344a3fe7808e50a1e365d848a4ee7dfe1dda7b78cfdde17b6037c6b",
+        "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          316,
+          0,
+          318
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 22,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0955091f28d468bb6fd0512cc0269a6ea661553daabfb3374ea3a373017f3c26",
+        "action_space_digest": "77d2e4607a3b6a443bda68af02365cf42da863d1a7fcb7fa823ca6f9a2a9dd4d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          328,
+          0,
+          330
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 32,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f65a408efb8e2ea1e5bb24aaabb62cde35a23865ff0d1b4068cc0128bc9af99a",
+        "action_space_digest": "b1a433e3a86b8576b4f043f35ca745373516a3660e3c5da10765f1bd9947e990",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          331,
+          0,
+          333
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 28,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:78e7a8e74146b816208194b556117ccc9b0c82817c29f8b9ef9180a0223cb7b4",
+        "action_space_digest": "e7160696ea12b5020625fd931f69edec0b822f83ae81c232cff1b4b11fa60df1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          338,
+          0,
+          340
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:700ff651bbd55ccc0fe60f80e8d27ee7d766e7006251ad6d35fd0b1cf46f808b",
+        "action_space_digest": "7da9072964ea7f7a44ee73d3fdded5942b0046b87f22e874feaa17bd0ea9acbb",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          340,
+          1,
+          342
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": false,
+          "permanent": 20,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9ef741e573a8ff266d07da50b581706df4ca8ee4c2aa565cc5209ab334998fe7",
+        "action_space_digest": "e7160696ea12b5020625fd931f69edec0b822f83ae81c232cff1b4b11fa60df1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          344,
+          0,
+          346
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 0,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:3cefda543798ab255efde248069dba8dc414d34fef600c2b02b67d385d5dcdd7",
+        "action_space_digest": "893a64164300b7accb27c8e9528fcd67589a6d8532ac948a9881fc95a700703f",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          362,
+          0,
+          364
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 63,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8a0b2cb8f58bad2383e931e6a567b75ab19e659fec502dfc1df5fe09289ed2f2",
+        "action_space_digest": "070c5f6d511ffa6c9ac9c9c62491247d8d516f1ae6e92bd8c8b07abc7adef9b9",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          378,
+          0,
+          380
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 6,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0fb89969a6c8ee58f806f8ad91e13f365c1b5f1e46ea8f12c682ff402c346227",
+        "action_space_digest": "5b20e672a8e2c42e055b1da0ffebf855fa9c55efa516de33956555a57786c2cd",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          380,
+          0,
+          382
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:31dd30a41de1e26209d2a81f4c0db08f099890ab039ff40c42235173993317ef",
+        "action_space_digest": "707c0bdb395ed65604a4f3332802fe9d0e0761395f90e51cc6a36b8c6aa4fb8a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          381,
+          0,
+          383
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 32,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:a936a20589ddb85b5ed576b319c64193051feb20c1ecdef3921a04ce0f6b4897",
+        "action_space_digest": "21e6cb9f690a9ee19ceddb4097e44271b47cb0e783a89afeafadda25aa50ccc6",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          385,
+          0,
+          387
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:be0ec6e8609317ae492533877bcf299d0fc9e39ed2527e8cf419d95206a67a40",
+        "action_space_digest": "21e6cb9f690a9ee19ceddb4097e44271b47cb0e783a89afeafadda25aa50ccc6",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          386,
+          0,
+          388
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 33,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0304c836a3e7c33e71435adfa833b45abf37ebf63127f06acd56ad37d2810b92",
+        "action_space_digest": "768d8492a2addf64183593804d4685ab928a18d510d5e2c07a24611fd7e6b7a1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          393,
+          0,
+          395
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 6,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 21,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:729d4e68c00ddb0565e0d4bf2cea29d43f8f5815f655050593bbc3581c5cb974",
+        "action_space_digest": "cddde350c9286aa9734acf009796bf91d387672ba4f8168c87da2e5d819971f7",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          396,
+          0,
+          398
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 29,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:08f12e0a7500bded5c1a0f77a1a3b31c6335e73104f790f6d40174c5f8017ca3",
+        "action_space_digest": "2a3656c9e3e5b43d184f613161c2fcfe2368584add90d0c975aca2ce91f03426",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          402,
+          0,
+          404
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 36,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ae419bd2f9aa82ef5f1d1b320134e91a3ea19bcdc570759e46abe827cc75aa49",
+        "action_space_digest": "894d7393ad041acf8f7964645cf49f61290da59778db8e3370407d5629b738de",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          411,
+          1,
+          413
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": false,
+          "permanent": 30,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:c1f983e89b30b8345be9384d9d51ee5f1e173ca9b09d3aa9609f75a7619d4654",
+        "action_space_digest": "e9c250be95f90ac014c6b06589595caafb80d9eb509e8ac667640f67561a4b39",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          411,
+          1,
+          413
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": true,
+          "permanent": 26,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:14be162b15b2804d9ee8861e3e18a4651769822d32fe58cdeb6fee6af7e48340",
+        "action_space_digest": "7da9072964ea7f7a44ee73d3fdded5942b0046b87f22e874feaa17bd0ea9acbb",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          412,
+          2,
+          414
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": false,
+          "permanent": 20,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:107d59804a8703b92ff895dee7ce12ad5b6655cae2db192a17e55033296f1729",
+        "action_space_digest": "5da84c949cb91d61b8a2a655ddda091287b7d3336d60fa3a5d7a941882997747",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          428,
+          0,
+          432
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 49,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f582ae6ed44be7b67b3debe523ceaf48d01c0207d544359bcce2f527c50a6432",
+        "action_space_digest": "f7b7a0805f77c09be5bc9545afd618a3e49114f2bfa064ecb1d31e3b445f3566",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          429,
+          0,
+          433
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 57,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:5a2afabba8a76259f2c656d304b29d029c903f6e0b5110cca60a83f620e44164",
+        "action_space_digest": "0356bf8aadb6eb2addeac261b30ddc11dde6ce5aa10ce2de6bc3951175e9b67a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          440,
+          0,
+          444
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:a355212fca7ab0fa3632d609b85a8cecbd1cd79a19b817979c90680aece4ff4c",
+        "action_space_digest": "f6b3f533169b7fd43b0524f65d6f8541242cdb44ed853be73772a3a47f2e08d5",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          440,
+          0,
+          444
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 6,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 37
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:66cb65068b87781d882f262b2f8cfe921545772263f146297bf475ba3454b6d3",
+        "action_space_digest": "9298f153845090f90ba5c86272c055d5027bcb07380103c2681a608a99abf97e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          465,
+          0,
+          470
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 22,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:90cd77fe6ef00708d089fadd7446f5ee09d8e2fe001cdd6367da132e7f0e30be",
+        "action_space_digest": "d9a4f1ccec89d9df00289804a8e57e04bacfe46c2459ab9faf21c45edc8bc04d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          468,
+          0,
+          473
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 41,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:97584fefe3e09dc1ca4ada818f36872eec61da1aaf5b11d66afb625a317e2a73",
+        "action_space_digest": "452993bf8f4820335803e937bfe7fdc7ab54c21d9bec5e647cb8b2690fc16b13",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          472,
+          0,
+          477
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 0,
+          "trigger_id": 22
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b1507f81aba64510421af2fd3c16da864ad6ea8de34b3f66c883705430c6e604",
+        "action_space_digest": "2fd24a5e4f59ee6a1b72f81e9a0a93c102bff15db723b88f14d0c39e67ccd28d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          477,
+          0,
+          482
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 39,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:258d69347f42b2ea6a59334ab0c1f033ef354491a1ea9e650beb553546076e73",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          484,
+          0,
+          489
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:106c0da81d64554403051b3d10ac797150cc3ecb7b5fa3ef7090a32de25e238b",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          485,
+          0,
+          490
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ef5beb72d9bdb7846919f7c4107ed7b540afcb090c72dd0ed33016c9732182e2",
+        "action_space_digest": "30239f692ffd50978e49ede92adebc9ba348e9f6dfcd09f796910e83c1749594",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          485,
+          0,
+          490
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 5,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Permanent": 34
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ef5beb72d9bdb7846919f7c4107ed7b540afcb090c72dd0ed33016c9732182e2",
+        "action_space_digest": "ded4fc54d6bcd804fafc3c2b641a81929b971b50d82ffbc3f2adc62d7f49054c",
+        "pending_choice_digest": "22fea7c1df8c1cf11718ea3f71e917dea8d468623abd5db4756aaa20caf6ef07",
+        "event_boundary": [
+          485,
+          0,
+          490
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 89,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:dda778ecf54baa904d75c8a031cba4de38fc2c4c83d5579b71851608793afa62",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          490,
+          0,
+          495
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:2cf0651a16413df08e21e861aea819f30d0cbbb5947e39fe39bb303d0e23fb0c",
+        "action_space_digest": "e09fe388f30287de040058e2954880fef80949f46c6ad035baf8951842d0db8e",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          490,
+          0,
+          495
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 5,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Permanent": 42
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:2cf0651a16413df08e21e861aea819f30d0cbbb5947e39fe39bb303d0e23fb0c",
+        "action_space_digest": "a4e4e7a5fc1e7eb97b96b5a7151cf5a76e095ef0518d1154d1c344a8fef75668",
+        "pending_choice_digest": "49aa533a05e482b5f5981484cf0cb05e979222ae51986789f90fb30b90774f6b",
+        "event_boundary": [
+          490,
+          0,
+          495
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 91,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:a8816de17dcb30061b3cf641cdc3c8350a2591167139842d2cea5e61882114aa",
+        "action_space_digest": "e9c250be95f90ac014c6b06589595caafb80d9eb509e8ac667640f67561a4b39",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          505,
+          1,
+          511
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": false,
+          "permanent": 26,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:2111cd209ee2e79a39495d672efa61b3f2a4eacd7791292488f22ef3b8020148",
+        "action_space_digest": "7da9072964ea7f7a44ee73d3fdded5942b0046b87f22e874feaa17bd0ea9acbb",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          505,
+          1,
+          511
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "DeclareAttacker",
+      "action_type": "DeclareAttacker",
+      "action": {
+        "DeclareAttacker": {
+          "attack": true,
+          "permanent": 20,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:48e6e44487720314fa7a380c996d932b442cfee6218c87ac9c0d258511c600dc",
+        "action_space_digest": "3454c4b7349df2838bc5ed098d9273951ac73788e3b44c3f3b8a98d1aa71367e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          521,
+          0,
+          529
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:7f0fd5f103185a51a5286c83223272da23a91cf149955e412a292f3d02f7238c",
+        "action_space_digest": "d03ee31a7d214a157d34133a90cafb76e9e4a4c2ba5ecdb6a3ad8a248ba3295b",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          522,
+          0,
+          530
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 76,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:885241eca6cfc48a8b10b071226fe0d2dcc6a28d00083b856ef3d7636f27dec2",
+        "action_space_digest": "826e10a95bb464793bcace5a2efd38c86c2483163633c5359fecbc306d2a7958",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          533,
+          0,
+          541
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 70,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:d5d40ee3ab97b7e10cb29776b8113569683b76984b1f3fb443e6cfc506511985",
+        "action_space_digest": "0356bf8aadb6eb2addeac261b30ddc11dde6ce5aa10ce2de6bc3951175e9b67a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          535,
+          0,
+          543
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 44,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:15beddc03cdc32c07fd141d6468a95f6a536fa1b386ad7c43ede439b77a0b0de",
+        "action_space_digest": "8b0242c56eaf002e4a9125b37331294dc1fe4e1505123ac0a8354cb382819575",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          549,
+          0,
+          557
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cec8b74798c65ecf79e58ccfbc24517fd01789c3f4cf0c90d9e6fce43d56e05c",
+        "action_space_digest": "e6c6f6c3407f9a09f0d5a0ba65accdc18de6f167b15235ac9dd63fa4f94e9ae4",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          550,
+          0,
+          558
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 77,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:76b4142317e4b02ef305738327d96ae19d7e11ff8d25a2b7c1942e26892e8f9f",
+        "action_space_digest": "13975889425646b1b1f8cc7fe236227ea2180e944746b28809c9d2e57f098eb4",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          556,
+          0,
+          564
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 47,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:fb930b6212badf8ccba944f98218e10677dfa7757a91d1d772e6ec5c79daccda",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          575,
+          0,
+          583
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8a3eb7e4fa5a4371fd6af4cc5e753c6285afbc19e07f7503610cf681952cddf7",
+        "action_space_digest": "5ecf80ba0d2ee25e1d8092a5f37877dbea3b765e18f938bea637f91a0cc3f8cc",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          575,
+          0,
+          583
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 1
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8a3eb7e4fa5a4371fd6af4cc5e753c6285afbc19e07f7503610cf681952cddf7",
+        "action_space_digest": "d2361438906900ab42781c84ca6c7b7fd247e8e43510252255419b4176d28cf3",
+        "pending_choice_digest": "a2c6689aec170e7d992eddcede6a9aae4092d8e2b6c3f02e67c7a2093cee2f2c",
+        "event_boundary": [
+          575,
+          0,
+          583
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 87,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:fabfa336a2d8ce53c824d7ca03cb44d776e06d0cfe827b9de1cffa2fd9d314ce",
+        "action_space_digest": "e3c86decba9801a7779b93c3f1ee06bd8e2f2c9539ef639506155547b18548de",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          579,
+          0,
+          587
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 0,
+          "trigger_id": 30
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:99356508c2cf644199451c4b625512ad404e1a4bac0a49375c6a183a624bef34",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          581,
+          0,
+          589
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:3ced01860371c239f0b7d83d6e284c9ea7f55ed61317e04bd61bf12e383f3611",
+        "action_space_digest": "4a85a932340d78516ca83aa049801d219c100c72f68abae9ef394ff260cb2ee9",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          581,
+          0,
+          589
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Permanent": 20
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:fdc9f51a8f0442c2c3396f64ec407219e927a4987ac2abf8a426385163a4f232",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          591,
+          0,
+          599
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:6327c2b539f19043e107b56498263431bb18a6c71ec9f42e2a01dce09b64193a",
+        "action_space_digest": "538d81a0781d1410445d70df05296351bb45ae2dbea043f8719b452ae18e9c74",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          591,
+          0,
+          599
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 0
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:a5b815cf6a45f0083e5295e88fcfa9abd321139670bf1b9df7e4f3fca98bcea1",
+        "action_space_digest": "44e5e275917ec3de8f2870eeb9a9643fc52cb0e1cd64d5bebf312758aa73848d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          606,
+          0,
+          614
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 25,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:7070a0fff85f672c443caf78a1cee3e6b1773a6abe8f19b26b2f3b217858b85b",
+        "action_space_digest": "fd64078e9fce3f9e9ec189fe6430d621d9b9c4c7834547d05ae08b2baf12e47d",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          618,
+          0,
+          626
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 43,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:f5581f547d9a064a6f384b68b0bb2e69e334ec17e8dc903c97e96c369fb86ff5",
+        "action_space_digest": "fd81fa9c799b5e23d75dcb314b62f3f0db16eec0f59dbd328aff02b112c78c31",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          627,
+          0,
+          635
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cfe3b848715993f5b81caa8671f7da6d4e0c25cd4a3bbead0247e91c6bb951dd",
+        "action_space_digest": "4b0618a5338aafd1b4ebd446bb038537c6a0a4f78b8846846175557f225b0023",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          627,
+          0,
+          635
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 5,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 63,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cfd4864a2d3c4407e711ab943bebd62d1f62d68ed0eae3d5f1fb0db20c436194",
+        "action_space_digest": "0d3ba67af3c59bb237840cff1e678b0f9bc485628ba5460042794f679be7003c",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          629,
+          0,
+          637
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 50,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4166450f9361647c051eec3c16fcc754d9357fc57b882766641260828595293c",
+        "action_space_digest": "a046a429f1813f0f97b8e07b7eb7f3a3381cc4af4cdbba550f6c1c2b0c780756",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          630,
+          0,
+          638
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 4,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 54,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:2c75d203345922bcab71b84e19766190f170c54770967d5ec430a0d42e98366c",
+        "action_space_digest": "fd81fa9c799b5e23d75dcb314b62f3f0db16eec0f59dbd328aff02b112c78c31",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          634,
+          0,
+          642
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 49,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:23fff93394b12fa413f7541d89f9f711a0b3658f55851b7b8e11abdcf124a3e0",
+        "action_space_digest": "e88b4a6a482ad3ad8f28c40eb4f6146b2641b4816be47b7a1527b672f346d140",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          639,
+          0,
+          647
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:d35ec77c385cb5dbf811e8c74976bd39d4d99fd637d348b14cdbdedac85094fa",
+        "action_space_digest": "092f3006be1ff1d8ea2833588606f01114f609eeee790ea0931f2512bfc9308c",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          639,
+          0,
+          647
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 54
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9480098c407ee9b5e908011ad0fd43d641313bb69869a59eff72e2597382877d",
+        "action_space_digest": "ab110d02f3f0861e457de95f5ac9118fdc3859195efa91cfc8597eee76f51ead",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          648,
+          0,
+          656
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 51,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:5461eb95c14e4c0ae22b58f6804d410ed9b8c4b6377bacb856a4ab806b7d6979",
+        "action_space_digest": "8c0f1b8b7ab83462417a6c4b41903d3613cd9ae011a01aa484e2dae465751ac1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          649,
+          0,
+          657
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0d344a76157799483968299b742fe9832e7411fef49387b89e2b9a47968d118d",
+        "action_space_digest": "8c0f1b8b7ab83462417a6c4b41903d3613cd9ae011a01aa484e2dae465751ac1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          655,
+          0,
+          663
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 41,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cbf8cd774815e5ae6a936dd61174bb1a25bc34cade2cebfcd11e5c9fd4ac6b4b",
+        "action_space_digest": "400561d518f5a261d576ce179070dffbc3711ba713c135430690041ddece1714",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          669,
+          0,
+          677
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 8,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8cb33bcbfa910202da4a440041497ab0c0cf5474967bc770532546aaf6244b7b",
+        "action_space_digest": "cd39137fd41f65deed8167b7b94e0a6c90a94320024f301d0c6395b1cc26c573",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          670,
+          0,
+          678
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 35,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b2ce2c56971d3d7b46f2d680895356a571cd0f7fc0ef013bf6a2b19d4621d85b",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          677,
+          0,
+          685
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b2adf70041ce12654fa19e6213987cc4613cf35f0f149d14d8e501a7960ca814",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          678,
+          0,
+          686
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9029882ad5f293ff40ac0f079fc0dcd393136c1cc6887a4b4bba44222daa1e96",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          679,
+          0,
+          687
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:230317d05f5f96d8b0caa6a016501430c9205f792fab323aac32969d7907ffc4",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          680,
+          0,
+          688
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8370bc40aad47fbe9ddae24418772c3c23cf4ba7db88a71f9a30a5405f6e2900",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          681,
+          0,
+          689
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:45a8b709f2be8e40cecc11b638bc23eebe4f8eb41d75139445657331b7a1cb53",
+        "action_space_digest": "91b984b7ab119dbfbdc518de6e4e9196ad7f0fd094a6969a38d8c47ab4ff7b5a",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          681,
+          0,
+          689
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Permanent": 58
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:61219cda660303a93496cd042597bfe71a01c9ff541a24e5e6009c0dca16c4f0",
+        "action_space_digest": "16b25d57062df5f05a13b5e93bcccdca6d03d8ae612e31a2583bc76a9c4a397a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          685,
+          0,
+          693
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 0,
+          "trigger_id": 37
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:098d05966db05f194bec797567df3aaaa89b8055fb6817b241dab0df0a184ce0",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          688,
+          0,
+          696
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:83e2dab5e6104d02778a59b6b63f857cc2bfedd095b1f7fb70ca733bd1686dd3",
+        "action_space_digest": "965dcb4d29bc1ade017646d63afb21ec4f6e5e0089f8c2f0813304884cd6f333",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          688,
+          0,
+          696
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 1
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:9b9cd2a615b653d03ef6fbf14a83872d2962bce1ddbd59cdab1996e4054c0b0e",
+        "action_space_digest": "e88b4a6a482ad3ad8f28c40eb4f6146b2641b4816be47b7a1527b672f346d140",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          706,
+          0,
+          714
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:65d400c6fad0477f1afd6c0e04992ead2da298cfcb09f5863030b4639882d9ed",
+        "action_space_digest": "b907c12c4bfe2acd6cbf99d945725f2afd21b4dd9a42109e15e13695a188169f",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          706,
+          0,
+          714
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Player": 0
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:bde3ba8a3f3c2739ea8517f55aeca23b021423c40dc4d80d0b06d13982c6e4a2",
+        "action_space_digest": "7d93277ac76b1f1889d6f8cfad7cd4b97edd3c793cfcee6f0bd2a48838346cf2",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          710,
+          0,
+          718
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 1,
+          "trigger_id": 39
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e14dba1050c1756d0c2d019fd7985dda4b7f8f86ac2eab0c46e9c94a39cf84bd",
+        "action_space_digest": "59672b9b8290d55b16bffaeb82c0c1d56dc5a192382ee47e50e11919837476e2",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          711,
+          1,
+          719
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 1,
+          "trigger_id": 41
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:085a11cc994798a320ac0bdfaef47098929d96f33a43107b4bb27865e86ada3d",
+        "action_space_digest": "787b373c2d11bd83a17606bdcfe696e426a9bd43160c7006394d373ea4b8d29b",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          718,
+          0,
+          726
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 60,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0fe01f6e86c02f663d8857387d2b221b64dc6395197f999fd6698c372f42a3a2",
+        "action_space_digest": "e88b4a6a482ad3ad8f28c40eb4f6146b2641b4816be47b7a1527b672f346d140",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          725,
+          0,
+          733
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:81c7e68b31c2962dc0ec65adf368207704e80adce79dc0aaa4022c67c10df3c7",
+        "action_space_digest": "3090e0a2c3674cca65654018f0812bbe81ba8a763b90c3be4ad2ae3b27866c9c",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          725,
+          0,
+          733
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 61
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0510bd1ac9cb5d7e9de0f6ba264c5bb498cbb15df4829efdd43098f60be01332",
+        "action_space_digest": "1a5c8b1e43cfa3a5ff5063f11074c57f85a63a4cec9e63b2291ce704dd489037",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          738,
+          0,
+          746
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 69,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:a7b777e6ea847947ab57e1e57dcda844fbafe2435f763af58423294bb7e0de51",
+        "action_space_digest": "95528a3f4685973594a5b6e1c08961e3552d2dc4e30c88c98bbcce8eb11411ad",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          744,
+          0,
+          752
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 4,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 5,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cbc719cdce5e24afd687650f863907e35cc8354fccdd67b44e97eb80c8624a18",
+        "action_space_digest": "c35af8b86b9dd3c062d1fd5e2a7610a8d4245e1ad38453b1108ac85c488cba36",
+        "pending_choice_digest": "ca1ed0f940f03145aeba3b93bcc4f75c668a914b86452b2f55ca8af4c2221fc4",
+        "event_boundary": [
+          744,
+          0,
+          752
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 1,
+          "target": {
+            "Permanent": 62
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:633a2799559fbe29ee1a0487bb40fb67e8f41ca22a7e3206c0db170c12c15b16",
+        "action_space_digest": "693fcd1117aaea95b5c5cdfcbb73d27b66de640ddfedd8e8e2585e58370b1088",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          750,
+          0,
+          758
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 62,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:34578371755818fa5ab668f1c7cb979a776955cff9ec6c3d48aeffc23cb244fa",
+        "action_space_digest": "e9735a239b7ce6e0b1785ddfee622f50da86022efee43a427da1ac23898fcd95",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          766,
+          0,
+          774
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 3,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 20,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:081a33b97dcee7b0566749834bc1609e8ecf85373b3f7f2c28e3ad49d509f64b",
+        "action_space_digest": "10e4b4e22cbe5734373ad1d5eb866f2ff05cbbb95c5d55213b58c1a87d3abf1e",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          782,
+          0,
+          790
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 73,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:8297aa37df2f120ef3d1e357357ec35f7ec969d353d8cf437d1f3db8fc4a00f2",
+        "action_space_digest": "eec3fccf8b1f5a97484fb54016fc6c2fea48a44ae2791ea154009d34fe8064cf",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          798,
+          0,
+          806
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 4,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 12,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:628daf2822b1e73b6ec4d7c9bbb67f2c0ed24b0d21e28a35ee6f32816178c450",
+        "action_space_digest": "c36b68eb007d0ab42ee1401932222871f642213f4ee0dfef51d22615e74efd82",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          814,
+          0,
+          822
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 64,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:bc7128be5b8ad7934cbf99bb1de56e9012b86268f77ee912d6f4cc1a16c9d03d",
+        "action_space_digest": "0639fead193789cfab6632bb85a8f0d10e05f7a2336b167bf1f3bfc6e138215c",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          829,
+          0,
+          837
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ac9e2f68420920f9dedcc575352d8a79b6e193a8d4eda77eb917c35aa687d396",
+        "action_space_digest": "5add0f334750e74df4049223abad8b7252e6ea4f64e3f8de69e276ae773baac1",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          830,
+          0,
+          838
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 30,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:3a98aab0fcc1b8fde9a85f4cdf8c5c9e4900e16efe91e02be6d7f8e4292431e4",
+        "action_space_digest": "0639fead193789cfab6632bb85a8f0d10e05f7a2336b167bf1f3bfc6e138215c",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          831,
+          0,
+          839
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:d71fd1102d4df3f79eb882c6fb57ec888804f6452fc737a3f5f4e849bc642b49",
+        "action_space_digest": "0639fead193789cfab6632bb85a8f0d10e05f7a2336b167bf1f3bfc6e138215c",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          832,
+          0,
+          840
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 3,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:70c668dff9464745cc8a8de3a41b744ece1c63c373667789b0d659f6d75e1faa",
+        "action_space_digest": "c87097d1330fa34cdf51d969e332d94de4388ac616f5098f5eaefbe5bf10180a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          837,
+          0,
+          845
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 9,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 25,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:768ad76d076b9529d418e7503e185e364c186b1883534d72179bae6e05e3de4c",
+        "action_space_digest": "62ac5dc12f5b807d90f5a70cf4bca37265f5f1d2e1123923a3f8abfc8dca4fae",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          839,
+          0,
+          847
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 2,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "SelectCard",
+      "action": {
+        "SelectCard": {
+          "card": 14,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:22cca8505964db4f7cc3a3a1ebb4a8c3c96cb5130190760879951f5087a7745c",
+        "action_space_digest": "fc9c7d37dc559b48adc98cdfbee0b4f0e176bceda3a7bab4d76a7400cec77810",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          840,
+          0,
+          848
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 5,
+      "prompt_kind": "LookAndSelect",
+      "action_type": "DeclineChoice",
+      "action": {
+        "Decline": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:ebd53664fed582c4c8ff23c4469b26cbac9afecbad41e27af0ae0feda31686f7",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          844,
+          0,
+          852
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:6fe91a22252f88881727b49ecd10827ff2df756fbaaf10a935387eb6c6a3b313",
+        "action_space_digest": "da6e60d961d931d11a6cc79052772daa0691643bcd77b45e5d4b4071343c4ef8",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          844,
+          0,
+          852
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 0
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:4a9ae4cbaf33e627a1b89d2873fedff5cd493e5560da1b59abaea38331cf2d41",
+        "action_space_digest": "af927d2807c2437d90e63344f3d44993504c0c6af697f140763e7355c4fdcfe8",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          867,
+          0,
+          875
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 61,
+          "player": 1
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e08bf718f96860fd3ef0392a22045aef904ea0ba469020377f1fe88a9004fec5",
+        "action_space_digest": "0f6ea45fdfdf0fad85ce8d8825c9790d62e601da2cb7af32cac8bd2773bf249a",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          883,
+          0,
+          891
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPlayLand",
+      "action": {
+        "PlayLand": {
+          "card": 19,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:1a3617fc9d7068354041c3275031c2a627d1bd20444dd3a20966a73ba5ad5b8e",
+        "action_space_digest": "c33f70e89ae22148d9bf0f19f4c7056cf747365f53468ea2701b96de9456303f",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          884,
+          0,
+          892
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:b1d7170198c6b3d265eaa40bd6b7176c5f75a950eabe7e5e5aef44bffc41cfe9",
+        "action_space_digest": "c33f70e89ae22148d9bf0f19f4c7056cf747365f53468ea2701b96de9456303f",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          890,
+          0,
+          898
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityCastSpell",
+      "action": {
+        "CastSpell": {
+          "card": 17,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:0750f52f5fedc1d722a88ca87484437e196089f2548b6563626b0a27c7ff68fb",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          896,
+          0,
+          904
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:62db0c78ff5a14f0310a7b5a7bcec70ff3050ddb1b0974f6f2317865777eb711",
+        "action_space_digest": "45c9c5ef3932cbb6f2471aee854e7561f935672bcd19f5b9a945269d5b285eb6",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          896,
+          0,
+          904
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 0
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:e5a08732bd6968cffe3af0271595f877a1098bb35a5e75845cdabba733f93ee5",
+        "action_space_digest": "282699ec3b48619fdeb3778e6f8e3ac15ed94b6cb162f1987172bf0556942773",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          900,
+          0,
+          908
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "OrderTriggers",
+      "action_type": "ChooseTrigger",
+      "action": {
+        "ChooseTrigger": {
+          "player": 0,
+          "trigger_id": 47
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:3144a3c3ee92b606b2d57018cf57717c40c680bd0c86c49ec0ffc15c4c8d502f",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          903,
+          0,
+          911
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityPassPriority",
+      "action": {
+        "PassPriority": {
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:de6db2a1aa7ddae94f6965d61c33efbfde8cc79bf3ab4f014526da4de9cb4038",
+        "action_space_digest": "62ee15a0ed6f066c008c91fc8d6a6d2e97aad38428f3d861915e260979f73176",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          905,
+          0,
+          913
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 0,
+      "prompt_kind": "Priority",
+      "action_type": "PriorityActivateAbility",
+      "action": {
+        "ActivateAbility": {
+          "ability_index": 0,
+          "permanent": 43,
+          "player": 0
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:cfa8ee8c0bf1604b9c9c2c2ae126866409d04668f9ec804c0775c56ddd8ea7f1",
+        "action_space_digest": "193816486b4c2507d8403805690fbc34a11ea3f2efdc13d6a231c7667ec5b35d",
+        "pending_choice_digest": "19c153959d65a9ed8e07b1f201809f42051e848b5a989d5aecc5d676d7d80f20",
+        "event_boundary": [
+          905,
+          0,
+          913
+        ],
+        "game_over": false,
+        "winner": null
+      }
+    },
+    {
+      "diagnostic_index": 1,
+      "prompt_kind": "ChooseTarget",
+      "action_type": "ChooseTarget",
+      "action": {
+        "ChooseTarget": {
+          "player": 0,
+          "target": {
+            "Player": 1
+          }
+        }
+      },
+      "checkpoint": {
+        "state_hash": "v9:1ab6be684cee3197e5e68aa511a9d1a7263ba23b56ecd5d7ecc13e77d6b20e21",
+        "action_space_digest": "2f49f6b069fdf9d36c4284635494111aeeeee0bb13428f98efffa281e475c9d6",
+        "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+        "event_boundary": [
+          912,
+          0,
+          920
+        ],
+        "game_over": true,
+        "winner": 0
+      }
+    }
+  ],
+  "outcome": "terminal",
+  "final_checkpoint": {
+    "state_hash": "v9:1ab6be684cee3197e5e68aa511a9d1a7263ba23b56ecd5d7ecc13e77d6b20e21",
+    "action_space_digest": "2f49f6b069fdf9d36c4284635494111aeeeee0bb13428f98efffa281e475c9d6",
+    "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
+    "event_boundary": [
+      912,
+      0,
+      920
+    ],
+    "game_over": true,
+    "winner": 0
+  }
+}

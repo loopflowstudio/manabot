@@ -39,7 +39,7 @@ import managym
 
 if TYPE_CHECKING:
     # Local policy loading must not import managed evaluation machinery.
-    from etude.eval.records import Agent
+    from etude.eval.records import Player
 
 
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
@@ -55,11 +55,13 @@ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSp
         )
 
 
-def local_checkpoint_file(seated: "Agent") -> Path:
-    """The verified local file a checkpoint agent plays; raises for a code agent or a remote file."""
-    artifact = seated.artifact
-    if artifact is None or artifact.sha256 is None or artifact.size_bytes is None:
-        raise ValueError("expected a checkpoint agent with a digest and byte count")
+def local_checkpoint_file(seated: "Player") -> Path:
+    """The verified file a model plays; raises for code or a remote checkpoint."""
+    if seated.kind != "model":
+        raise ValueError("expected a model with a digest and byte count")
+    artifact = seated.checkpoint.artifact
+    if artifact.sha256 is None or artifact.size_bytes is None:
+        raise ValueError("expected a model with a digest and byte count")
     uri = urlsplit(artifact.uri)
     if uri.scheme != "file" or uri.netloc:
         raise ValueError("checkpoint must be a verified local file")
@@ -131,7 +133,9 @@ def load_checkpoint(
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     config = checkpoint["hypers"]
-    obs_space = ObservationSpace(ObservationConfig(**config["observation_hypers"]))
+    obs_space = ObservationSpace(
+        ObservationConfig.from_checkpoint(config["observation_hypers"])
+    )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))

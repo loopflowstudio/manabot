@@ -11,6 +11,11 @@ debugging and demos.
 Run `uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`
 when changing resume admission or game-error recovery.
 
+For observation-input or model-cost changes, also run
+`uv run --extra dev pytest tests/training/test_active_training.py -q`.
+Its endpoint checks use injected collection/learning durations: retain real
+training, but never mix host elapsed time into an exact-update-count assertion.
+
 ## Required checks for tracking and offline reports
 
 When changing checkpoint imports or syncing managed evaluation adapters, run

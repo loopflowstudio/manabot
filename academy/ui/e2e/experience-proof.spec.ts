@@ -1,3 +1,4 @@
+import { selectDeck } from './deck-selection';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { EXPERIENCE_PROOF_BASELINE, REACHABLE_PROMPT_FAMILIES } from './experience-proof-baseline';
@@ -81,12 +82,8 @@ async function stubCardArt(page: Page): Promise<void> {
 }
 
 async function selectReferenceExperience(page: Page): Promise<void> {
-  await page.getByTestId('deck-select-hero').selectOption(
-    EXPERIENCE_PROOF_BASELINE.scope.heroDeck,
-  );
-  await page.getByTestId('deck-select-villain').selectOption(
-    EXPERIENCE_PROOF_BASELINE.scope.villainDeck,
-  );
+  await selectDeck(page, 'hero', EXPERIENCE_PROOF_BASELINE.scope.heroDeck);
+  await selectDeck(page, 'villain', EXPERIENCE_PROOF_BASELINE.scope.villainDeck);
   await page.getByTestId('opponent-select').selectOption(
     EXPERIENCE_PROOF_BASELINE.scope.opponent,
   );

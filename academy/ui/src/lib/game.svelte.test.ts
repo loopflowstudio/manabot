@@ -284,7 +284,7 @@ describe('GameStore', () => {
       [],
       undefined,
       undefined,
-      ['Villain: Cast Grey Ogre'],
+      ['Villain: Cast Grey Ogre', 'Auto: Choose red'],
       undefined,
       3,
     );
@@ -292,8 +292,10 @@ describe('GameStore', () => {
     expect(store.fastForwarding).toBe(false);
     expect(store.actionLog.map((entry) => entry.text)).toEqual([
       'Villain: Cast Grey Ogre',
+      'Auto: Choose red',
       'Auto-passed 3 priority windows.',
     ]);
+    expect(store.actionLog[1].actor).toBe('system');
   });
 });
 

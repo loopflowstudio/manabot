@@ -664,7 +664,7 @@
               <p class="type-rubric mt-3">Decision before · Chosen action · Consequences after</p>
               <DecisionSurface frame={recordedDecision.frame} readOnly chosenOffer={recordedDecision.offer_id} />
             {:else if studyStore.phase === 'score'}
-              <p class="type-caption mt-3 text-ink-2">{replayStore.trace.events[replayStore.currentFrameIndex]?.auto ? 'Automatic priority pass · configured automation' : 'No recorded decision at this transition.'}</p>
+              <p class="type-caption mt-3 text-ink-2">{replayStore.trace.events[replayStore.currentFrameIndex]?.auto ? 'Automatic action · configured automation' : 'No recorded decision at this transition.'}</p>
             {/if}
             <div class="mt-3 border-t border-line">
               {#if boardObservation}

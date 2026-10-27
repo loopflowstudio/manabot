@@ -106,6 +106,7 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
                 ordinal=ordinal,
                 artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
                 clocks={"updates": float(update)},
+                line="seed-1",
             )
         )
     return TrainingRun(
@@ -117,10 +118,10 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
 
 
 def _design(matches: list[Match]) -> set[tuple[str, ...]]:
-    """Each match as its seated agents' names and conditions, wherever it came from."""
+    """Each match as its seated players' names and conditions, wherever it came from."""
     return {
         (
-            *(agent.name for agent in match.agents),
+            *(player.name for player in match.players),
             str(match.conditions),
             str(match.games),
         )
@@ -156,7 +157,13 @@ def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
         endpoint=500,
         segment_outcome="succeeded",
     )
-    expected = [match for unit in units(followed) for match in unit.matches]
+    # Halving pairs extend MTG-183's follower only, not the shared design.
+    expected = [
+        match
+        for unit in units(followed)
+        if unit.role != "halving"
+        for match in unit.matches
+    ]
 
     def renamed(names: tuple[str, ...]) -> tuple[str, ...]:
         # The follower names a checkpoint `uNNNNNN`; Etude by its file.

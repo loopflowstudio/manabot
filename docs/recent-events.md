@@ -131,3 +131,141 @@ contracts, Clippy and focused formatting/lint checks. A direct comparison with
 base `ab1f61c4` preserved all state-dict bytes, architecture receipts and outputs
 for four semantic history-off configurations (scalar/WDL × attention off/on).
 These are correctness fixtures, not scientific training or evaluation evidence.
+
+## Current continuation input
+
+Public history and current continuation are separate inputs. Fresh
+`ObservationConfig` uses policy input v3: a native `relations[64,32]` float32
+buffer represents ordered stack entries, announced targets and clauses, chosen
+modes/abilities, kicker, reserved sacrifice, suspended payment obligations, and
+waiting triggers with their ability and causal context.
+The version is recorded in checkpoint configuration and world input binding.
+Loading a checkpoint whose observation configuration omits the version selects
+v1. Explicit v2 configurations retain continuation input and their serialized
+version. Historical worlds still fail current-world admission; a version default
+does not upgrade weights or reinterpret their action head.
+
+V1 checkpoints still lack continuation input. A matched-input LLM comparison
+requires a policy trained with continuation input and an explicitly matched public-history
+treatment; card text versus semantic catalog programs remains a representation
+difference. This delivery selects no comparator, model or playing-strength run.
+
+`agent/continuation.rs` projects the facts from rules state once per observation.
+Only the acting viewer receives private continuation; all viewers retain public
+stack facts. Object links resolve exact visible incarnations. An expired or
+unavailable reference has no current object link. The complete relation table
+must fit; overflow fails encoding instead of truncating targets or frames.
+The Rust vector path writes directly into reusable buffers without JSON or
+Python validation. `env/observation.py` is the matching reference encoder.
+
+At `Decision::ManaChoice`, the rules state retains the output menu and resumed
+payment but has already discarded the activation source after committing costs.
+Both projections mark that source unavailable; neither reconstructs it from
+tapped permanents or history. Retaining it would require separate rules-state
+and frozen-world design.
+
+Each frame contributes a header, followed by ordered target, trigger-context,
+reserved-sacrifice, hybrid-cost and mana-output rows. Mana-output rows reuse
+the mode, mana amounts and Lesson flag columns for each possible output. Columns are:
+
+| Columns | Meaning |
+| --- | --- |
+| 0–4 | Row kind; frame and parent ordinals (one-based); frame kind; controller role |
+| 5–10 | Source definition and object link (one-based); mode, ability, kicker, active clause |
+| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
+| 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
+| 30–31 | Ability resolutions this turn; row validity |
+
+Zero denotes absent selectors/links and padding. The model joins definitions to
+its existing card catalog, gathers object embeddings for links, and combines
+relation context with object and action embeddings. It never treats transport
+IDs as numeric features. Public stack and target order retain ordinal features.
+Pending-trigger frame ordinals are joins only: all rows for the selected frame
+are pooled into that action, so same-source occurrences retain causal/target
+context without learning occurrence numbers. The action join is checked and
+excluded from numeric features. The channel has no writable memory across decisions.
+
+Atomic text capture v3 retains these same typed frames alongside the
+schema-7 Observation. Native types validate portable viewer JSON; Python owns
+formatting and the small capture envelope. Public definitions and their content
+digest are cached on the immutable native content pack. Origin-bound submission,
+reset/stale rejection and complete legal Commands retain their existing owners.
+Earlier capture-v1/v2 evidence remains historical; it does not acquire v3
+trigger-order facts. Current capture, action ABI and hash identities belong to w14.
+
+The v2 measurement protocol and receipts below are historical; they do not
+establish w14 performance. Measure encode-only behavior with
+`cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`
+(`-- --legacy` isolates the old layout after refactoring). The seeded corpus
+contains priority, target, additional-cost and large-legal positions and reports
+buffer bytes, allocation traffic and repeated latency for batch sizes 1 and 64.
+Allocation counting runs separately from timing. Normal wheels omit the
+`benchmark` feature and its allocator instrumentation.
+
+For matched full-vector measurements, build a release extension with
+`uv run maturin build --release --features python,benchmark -i .venv/bin/python -m managym/Cargo.toml -o .runs/benchmark-wheels`
+and install its cp312 extension atomically as described in AGENTS.md. Run
+`uv run python scripts/bench_breakdown.py --matched-corpus --num-envs 64 --steps 128 --json`.
+The four seeded input families contain 2, 2, 1 and 33 legal actions. A fifth
+vector case executes the final combat-priority pass into a 33-action main-phase
+output, ensuring the full vector path encodes a large legal-action set too. Fixture roots are
+restored outside timing; each sample executes the real vector step, failure
+capture, tensor synchronization and reward policy. The receipt proves positional
+actions equal the retained semantic Commands and checks every output row against
+the scalar native transition. This measures decision steps, not whole-game throughput.
+
+Receipts retain input/Command/output hashes, v2 continuation hashes and separate
+Rust allocation requests, Torch CPU allocation events, Python traced peak/live
+bytes, dense native output bytes and tensor-copy destination bytes. Output bytes
+are logical buffer writes, not memory-bus traffic or a count of repeated stores;
+Python traced peaks are not cumulative allocation traffic. Neither profiler runs
+during the latency samples. The ordinary `bench_breakdown.py` mode remains a
+supplemental steady-game measurement.
+
+`uv run python scripts/bench_observation_pair.py --before <instrumented-source-snapshot> --out <fresh-directory>`
+alternates before/v1-refactor/v2 arms serially, at both batch sizes, for three
+pairs. Prepare the baseline from its exact revision with only the benchmark
+instrumentation transplanted, retaining that overlay. Build both with the same
+compiler and release flags. The runner records source manifests (including new
+files), extension/executable hashes, runtime/toolchain identities, commands,
+host load and CPU/wall times, and rejects source or binary changes during the run.
+Before/after claims require matching input/Command digests and stable paired
+measurements; an overloaded-host timing is not a nonregression result.
+
+On 2026-10-26, three alternating baseline/v1-refactor/v2 comparisons on a
+Runpod 32-vCPU AMD EPYC 7763 CPU allocation passed all matched-input, Command,
+legacy-output and immutable-source checks. At batch 64, large-input stepping
+measured 171.77→173.19 µs/environment (paired ratios 1.008–1.018), while
+large-output stepping measured 85.02→84.49 (0.992–0.994). Other full-step pairs
+ranged 0.978–1.051; large-action encode-only improved about 20%. These
+decision-step measurements support normal performance with small overheads,
+not zero overhead or model/training-throughput claims. Both arms used release
+Rust 1.98.1, CPython 3.12 and CPU Torch 2.10 on the same Linux host.
+
+The v2 dense buffer adds 8,192 bytes/environment (524,288 at batch 64).
+The refactor arm uses current native facts with the old tensor layout:
+before→refactor includes fact projection, while refactor→v2 isolates the
+additional relation-buffer path. These measurements do not establish Apple-host
+equivalence or end-to-end model throughput. They meet Jack Heart's revised
+2026-10-26 shipping acceptance, which permits the small measured overheads.
+
+The final shipping gate verified all 425 executable-source/content hashes
+against the Runpod receipt. Its sorted compact current-source manifest hashes
+to SHA-256 `8f4d24b77790e09aea196b5d6ae57cc9516f743a04b4c352126aff13b0c9d737`.
+The only executable-source change since the prior correctness gate is benchmark
+extension-suffix discovery for Linux. Reused results include 539 debug Rust
+tests (one ignored), the 308-test remaining Python selection (one CUDA-only
+skip), the completed 200-game native/Python parity soak and 33 legal text
+alternatives executed/replayed. Prior Clippy and formatting/lint checks passed;
+final focused Ruff lint/format and portable-runner CLI checks also passed.
+The original affected
+Python run's five stale verifier failures were repaired and passed in the
+remaining selection. Long debug-test warnings were investigated and completed;
+no required-check timeout is counted as a pass.
+
+`./scripts/verify-eval-performance-report` remains deferred to capable CI under
+the accepted validation plan; it is not a local pass. CUDA-only coverage also
+remains unverified locally. Evidence is retained under
+`.runs/observation-gate-20261026-final/` and
+`.runs/runpod-performance/evidence/paired/`; the latter includes all 27 successful
+commands, matched-work comparisons and final source/binary identity checks.

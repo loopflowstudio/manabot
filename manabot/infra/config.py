@@ -30,6 +30,15 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
+    policy_input_version: Literal[1, 2, 3] = Field(
+        default=3, exclude_if=lambda value: value == 1
+    )
+
+    @classmethod
+    def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
+        """Missing version means the frozen input-v1 contract, never today's default."""
+        return cls(**{"policy_input_version": 1, **payload})
+
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40

@@ -112,9 +112,9 @@ recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w13** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w14** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w12 artifacts, are not compatible with w13. Elemental combat,
+including w13 artifacts, are not compatible with w14. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -386,6 +386,13 @@ live in `infra.identity`. The former `manabot.arena` package is removed. Existin
 serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
 paths preserve their original meaning; current source identities use the new paths.
 
+For a standalone, inspectable pretrained-model decision over supplied text and
+legal references, see the optional [LLM harness](../docs/llm-harness.md). It owns
+protocol recovery and inference evidence; observation rendering and Command
+execution remain outside it.
+
+### Shared evaluation inference
+
 Frozen arena policies can share a bounded, single-machine inference allocation
 through an explicit execution envelope. Monitoring, Etude benchmark and duel
 callers retain native isolation, Commands, replay and original training
@@ -398,3 +405,19 @@ The [local evaluation API and CLI](../docs/shared-evaluation.md#quick-local-eval
 share arena admission, bounded inference, Commands, replay and Perf receipts with
 monitoring and managed comparisons. Pass another local checkpoint as `--opponent`
 for checkpoint-versus-checkpoint evaluation.
+
+### Native decision text
+
+`semantic.text_observation.capture_text_decision(env, history_capacity=32)`
+produces deterministic English and exact legal A references from one native
+capture. `submit_response(env, decision, "A0")` parses an exact reference and
+atomically checks origin, reset generation and current captured facts before
+executing the ordinary Command. A cloned Env needs its own capture. Retained
+JSON can be rendered with `render_decision` but cannot authorize submission.
+
+Run the local response-stub proof with
+`uv run python -m manabot.verify.text_observation --out .runs/text-observation`.
+It retains native inputs, prompts, bindings, malformed/stale checks and execution
+receipts. This uses bounded public policy history v1; it loads no model and has
+no writable model memory. Tokenizer/model recovery belongs to the caller;
+`TextDecision.check_token_budget` checks the complete prompt without truncation.
