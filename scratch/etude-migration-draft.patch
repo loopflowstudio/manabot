@@ -1,0 +1,1270 @@
+diff --git a/experiments/elemental.py b/experiments/elemental.py
+index f96fda529..162616eca 100644
+--- a/experiments/elemental.py
++++ b/experiments/elemental.py
+@@ -29,7 +29,7 @@ Etude tracking and its segments track under `self-play`, so its follower
+ from decimal import Decimal
+ from pathlib import Path
+ 
+-from etude.eval.records import Agent, Benchmark, Matchup, Model
++from etude.eval.records import Benchmark, Matchup, Inference, Player
+ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
+ from etude.jobs import evaluation
+ from etude.launch.records import Job, Run
+@@ -59,7 +59,7 @@ from experiments.elemental_long_eval import (
+     Kind,
+     eval_environment,
+     h2h_groups,
+-    heuristic_agent,
++    heuristic_code,
+     play,
+     rows,
+ )
+@@ -78,7 +78,7 @@ WORKERS = 10
+ EVAL_HOURS = 12.0
+ 
+ # The checkpoint in the model's seat: the inference code is its version.
+-MODEL = Model(code=list(INFERENCE_CODE))
++INFERENCE = Inference(source=list(INFERENCE_CODE))
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -127,7 +127,7 @@ def _rated(run: TrainingRun) -> tuple[dict[int, Checkpoint], int | None]:
+ def _matchup(
+     name: str,
+     tags: tuple[str, ...],
+-    players: tuple[Agent | Model, Agent | Model],
++    players: tuple[Player | Inference, Player | Inference],
+     grid: list[Conditions],
+ ) -> Matchup:
+     """One match per grid row; every row of a grid plays the same number of games."""
+@@ -149,7 +149,7 @@ def _grid(name: str, kind: Kind, games: list[Game]) -> Benchmark:
+             _matchup(
+                 f"vs heuristic, {kind} grid",
+                 ("heuristic",),
+-                (MODEL, heuristic_agent()),
++                (INFERENCE, heuristic_code()),
+                 rows(kind, groups(games)),
+             ),
+         ),
+@@ -165,7 +165,7 @@ def _pairs(
+         _matchup(
+             f"{run.name} u{pair.newer} vs u{pair.older}",
+             (pair.role,),
+-            (rated[pair.newer].agent(MODEL), rated[pair.older].agent(MODEL)),
++            (rated[pair.newer].model(INFERENCE), rated[pair.older].model(INFERENCE)),
+             grid,
+         )
+         for pair in pair_design(tuple(sorted(rated)), endpoint)
+diff --git a/experiments/elemental_long_eval.py b/experiments/elemental_long_eval.py
+index 0dc05affc..5380c0112 100644
+--- a/experiments/elemental_long_eval.py
++++ b/experiments/elemental_long_eval.py
+@@ -57,10 +57,13 @@ import sys
+ import time
+ from typing import Literal
+ 
+-from etude.eval.match import Row, Tables, agent, environment, evaluate
++from etude.eval.match import Row, Tables, environment, evaluate
+ from etude.eval.records import (
+-    Agent,
+-    AgentKey,
++    Model,
++    Inference,
++    CheckpointRef,
++    Code,
++    Player,
+     CheckpointKey,
+     Environment,
+     Match,
+@@ -111,7 +114,7 @@ ROOT = Path(__file__).resolve().parents[1]
+ EXPERIMENT = "mtg183-elemental-eval"
+ RUN = "mtg183-eval"
+ HEURISTIC = "heuristic"
+-# The code that turns a checkpoint's bytes into play; a change makes new agents.
++# Inference provenance is versioned independently of player identity.
+ INFERENCE_CODE = (
+     ROOT / "manabot/model",
+     ROOT / "manabot/env",
+@@ -232,7 +235,7 @@ def admit(
+ 
+ 
+ # ---------------------------------------------------------------------------
+-# Agents and matches
++# Players and matches
+ 
+ 
+ def eval_environment() -> Environment:
+@@ -257,27 +260,27 @@ def _inference_version() -> Version:
+     return version_of(INFERENCE_CODE)
+ 
+ 
+-def checkpoint_agent(checkpoint: Checkpoint) -> Agent:
+-    """As `etude.eval.match.agent` makes one, with the code's version computed once.
++def checkpoint_model(checkpoint: Checkpoint) -> Model:
++    """Seat a checkpoint with the inference code's version computed once.
+ 
+     Keyed by its window or segment run and update (`RUN/checkpoints/uNNNNNN`),
+     so where its bytes lie is not part of what it is.
+     """
+-    return Agent(
+-        key=AgentKey(
+-            checkpoint=CheckpointKey(
++    return Model(
++        checkpoint=CheckpointRef(
++            key=CheckpointKey(
+                 run=checkpoint.run, name=player(checkpoint.updates)
+-            )
++            ),
++            artifact=checkpoint.artifact,
+         ),
+         name=player(checkpoint.updates),
+-        artifact=checkpoint.artifact,
+-        version=_inference_version(),
++        inference=Inference.model_validate({"version": _inference_version()}),
+     )
+ 
+ 
+ @cache
+-def heuristic_agent() -> Agent:
+-    return agent(HEURISTIC, code=heuristic_source_paths())
++def heuristic_code() -> Code:
++    return Code(name=HEURISTIC, source=heuristic_source_paths())
+ 
+ 
+ type Kind = Literal["full", "subset", "pair"]
+@@ -333,12 +336,12 @@ def rows(kind: Kind, found: Sequence[Group]) -> list[Conditions]:
+ 
+ def _matches(
+     kind: Kind,
+-    agents: tuple[Agent, Agent],
++    players: tuple[Player, Player],
+     found: Sequence[Group],
+ ) -> tuple[Match, ...]:
+     return tuple(
+         Match(
+-            agents=agents,
++            players=players,
+             conditions=row.model_dump(mode="json"),
+             games=sum(len(group.deals) for group in row.groups),
+         )
+@@ -352,8 +355,8 @@ def units(state: EvalState) -> list[Unit]:
+     rated = tuple(
+         u for u in rated_updates(latest, state.endpoint) if u in state.checkpoints
+     )
+-    agents = {u: checkpoint_agent(state.checkpoints[u]) for u in rated}
+-    anchor = heuristic_agent()
++    players = {u: checkpoint_model(state.checkpoints[u]) for u in rated}
++    anchor = heuristic_code()
+     found = []
+     for updates in rated:
+         grid, games = heuristic_games(updates, state.endpoint)
+@@ -362,7 +365,7 @@ def units(state: EvalState) -> list[Unit]:
+                 key=f"heuristic-{updates:06d}-{grid}",
+                 newer=updates,
+                 older=None,
+-                matches=_matches(grid, (agents[updates], anchor), groups(games)),
++                matches=_matches(grid, (players[updates], anchor), groups(games)),
+             )
+         )
+     pairs = h2h_groups(h2h_schedule())
+@@ -373,7 +376,7 @@ def units(state: EvalState) -> list[Unit]:
+                 newer=pair.newer,
+                 older=pair.older,
+                 matches=_matches(
+-                    "pair", (agents[pair.newer], agents[pair.older]), pairs
++                    "pair", (players[pair.newer], players[pair.older]), pairs
+                 ),
+             )
+         )
+@@ -406,10 +409,12 @@ class H2HRequest(BaseModel):
+     output: Path
+ 
+ 
+-def _local(seated: Agent) -> LocalCheckpoint:
+-    """A checkpoint agent's verified bytes, downloaded once per digest."""
+-    reference = seated.artifact
+-    if reference is None or reference.sha256 is None:
++def _local(seated: Player) -> LocalCheckpoint:
++    """A model's verified checkpoint bytes, downloaded once per digest."""
++    if not isinstance(seated, Model):
++        raise ValueError(f"{seated.name} is not a checkpoint with a digest")
++    reference = seated.checkpoint.artifact
++    if reference.sha256 is None:
+         raise ValueError(f"{seated.name} is not a checkpoint with a digest")
+     # A local file is verified in place; a remote object is cached by digest.
+     path = cache_directory() / reference.sha256
+@@ -436,8 +441,8 @@ def evidence_directory() -> Path:
+ def play(match: Match) -> Tables:
+     """Play one grid row, a bounded worker process per group; see the module docstring."""
+     conditions = Conditions.model_validate(match.conditions)
+-    newer = _local(match.agents[0])
+-    older = None if conditions.kind != "pair" else _local(match.agents[1])
++    newer = _local(match.players[0])
++    older = None if conditions.kind != "pair" else _local(match.players[1])
+     rows: list[GameRow] = []
+     for group in conditions.groups:
+         if group.model_deck != conditions.deck:
+@@ -531,7 +536,7 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
+         for player, (deck, opponent_deck, seat, player_score) in enumerate(sides):
+             found.append(
+                 {
+-                    "player": player,
++                    "seat": player,
+                     "unit": kind,
+                     "deal": row.deal,
+                     "deck": deck,
+diff --git a/experiments/elemental_long_report.py b/experiments/elemental_long_report.py
+index fca07b8c1..3a2cb745a 100644
+--- a/experiments/elemental_long_report.py
++++ b/experiments/elemental_long_report.py
+@@ -35,7 +35,7 @@ from pathlib import Path
+ from typing import Any
+ 
+ from etude.eval.query import statsdb
+-from etude.eval.records import AgentKey, digest
++from etude.eval.records import Code, digest
+ from etude.eval.source import digest_files
+ from etude.run.storage import Storage, storage_from_uri
+ import numpy as np
+@@ -48,7 +48,7 @@ from experiments.elemental_long_eval import (
+     HEURISTIC,
+     RUN,
+     EvalState,
+-    heuristic_agent,
++    heuristic_code,
+     player,
+     units,
+ )
+@@ -79,19 +79,19 @@ class Results:
+ 
+ # Player 0's row of every game, with both seats' agents and the opponent's version.
+ _GAMES = """
+-    select g.*, a.name as subject, o.name as opponent, o.agent as opponent_agent,
++    select g.*, a.name as subject, o.name as opponent, o.player as opponent_player,
+         t.source as opponent_source
+     from games g
+-    join seats s on s.run = g.run and s.match = g.match and s.player = 0
+-    join agents a on a.agent = s.agent
+-    join seats t on t.run = g.run and t.match = g.match and t.player = 1
+-    join agents o on o.agent = t.agent
+-    where g.player = 0 and g.run = ?
++    join seats s on s.run = g.run and s.match = g.match and s.seat = 0
++    join players a on a.player = s.player
++    join seats t on t.run = g.run and t.match = g.match and t.seat = 1
++    join players o on o.player = t.player
++    where g.seat = 0 and g.run = ?
+ """
+ 
+ 
+ def _updates(name: str) -> int:
+-    """A checkpoint agent's update, from its name (`elemental_long_eval.player`)."""
++    """A checkpoint agent's update, from its name (`elemental_long_eval.seat`)."""
+     if not name.startswith("u") or not name[1:].isdigit():
+         raise ValueError(f"not a rated checkpoint agent: {name}")
+     return int(name[1:])
+@@ -105,8 +105,8 @@ def _current_heuristic() -> set[tuple[str, str | None]]:
+     0.2.5 reads back as a recorded key with no source.
+     """
+     source = digest_files(heuristic_source_paths())
+-    legacy = AgentKey(recorded=digest(["code", source, {}])).encoded
+-    return {(heuristic_agent().key.encoded, source), (legacy, None)}
++    legacy = Code(name="etude-sdk-0.2:" + digest(["code", source, {}])).key
++    return {(heuristic_code().key, source), (legacy, None)}
+ 
+ 
+ def load(directory: Path, store: Storage | Path) -> Results:
+@@ -125,7 +125,7 @@ def load(directory: Path, store: Storage | Path) -> Results:
+     for row in found:
+         if row["opponent"] == HEURISTIC:
+             # Only the current heuristic anchors the curve (protocol amendment).
+-            if (row["opponent_agent"], row["opponent_source"]) not in anchors:
++            if (row["opponent_player"], row["opponent_source"]) not in anchors:
+                 continue
+             key = (_updates(row["subject"]), None, row["unit"])
+         else:
+diff --git a/experiments/mtg186_cards.py b/experiments/mtg186_cards.py
+index 3035216e6..ea1ee956e 100644
+--- a/experiments/mtg186_cards.py
++++ b/experiments/mtg186_cards.py
+@@ -12,7 +12,7 @@ elemental_gw)` with MTG-186 as arena player A: legs 0 and 3 put MTG-186 on UR
+ in seats 0 and 1, legs 1 and 2 put it on GW. Mirror legs 4–7 never play.
+ 
+ One Etude eval run (`EXPERIMENT`/`RUN`) holds the games. Each match is
+-`MATCH_DEALS` deals between agents `mtg186` (player 0) and `mtg181` (player 1),
++`MATCH_DEALS` deals between players `mtg186` (player 0) and `mtg181` (player 1),
+ played by one bounded worker process (`python -m experiments.mtg186_cards
+ worker`) through replay-checked `play_cell(card_evidence_dir=…)`. A match
+ returns table `games` (one row per game, player 0's: MTG-186's deck, seat and
+@@ -53,8 +53,9 @@ from typing import TYPE_CHECKING
+ from etude.eval.match import Row, Tables, environment as eval_environment, evaluate
+ from etude.eval.query import statsdb
+ from etude.eval.records import (
+-    Agent,
+-    AgentKey,
++    Model,
++    Inference,
++    CheckpointRef,
+     CheckpointKey,
+     Environment,
+     Match,
+@@ -148,22 +149,24 @@ def endpoint() -> Pairing:
+ 
+ 
+ # ---------------------------------------------------------------------------
+-# Agents and matches
++# Players and matches
+ 
+ 
+-def checkpoint_agent(name: str, checkpoint: Checkpoint) -> Agent:
+-    """A checkpoint agent keyed by its R2 object; `name` is what `--subject` takes."""
++def checkpoint_model(name: str, checkpoint: Checkpoint) -> Model:
++    """A model keyed by its R2 object; `name` is what `--subject` takes."""
+     uri = f"r2://{BUCKET}/{checkpoint.key}"
+-    return Agent(
+-        key=AgentKey(
+-            checkpoint=CheckpointKey(address=uri),
+-            config={"updates": checkpoint.updates, "seed": checkpoint.seed},
++    return Model(
++        checkpoint=CheckpointRef(
++            key=CheckpointKey(address=uri),
++            artifact=ArtifactRef(
++                uri=uri, sha256=checkpoint.sha256, size_bytes=checkpoint.size_bytes
++            ),
+         ),
+         name=name,
+-        artifact=ArtifactRef(
+-            uri=uri, sha256=checkpoint.sha256, size_bytes=checkpoint.size_bytes
++        inference=Inference(
++            source=INFERENCE_CODE,
++            config={"updates": checkpoint.updates, "seed": checkpoint.seed},
+         ),
+-        version=version_of(INFERENCE_CODE),
+     )
+ 
+ 
+@@ -173,14 +176,14 @@ class Conditions(BaseModel):
+ 
+ 
+ def matches(pairing: Pairing) -> list[Match]:
+-    agents = (
+-        checkpoint_agent("mtg186", pairing.mtg186),
+-        checkpoint_agent("mtg181", pairing.mtg181),
++    players = (
++        checkpoint_model("mtg186", pairing.mtg186),
++        checkpoint_model("mtg181", pairing.mtg181),
+     )
+     found = deals()
+     return [
+         Match(
+-            agents=agents,
++            players=players,
+             conditions=Conditions(deals=found[i : i + MATCH_DEALS]).model_dump(
+                 mode="json"
+             ),
+@@ -300,7 +303,7 @@ def game_rows(rows: list[GameRow]) -> list[Row]:
+     """One row per game, player 0's (MTG-186's); `score` is null for an invalid game."""
+     return [
+         {
+-            "player": 0,
++            "seat": 0,
+             "deal": row.deal,
+             "deck": row.model_deck,
+             "opponent_deck": row.heuristic_deck,
+diff --git a/manabot/eval/benchmark.py b/manabot/eval/benchmark.py
+index 06a02bc96..c443d2162 100644
+--- a/manabot/eval/benchmark.py
++++ b/manabot/eval/benchmark.py
+@@ -13,15 +13,16 @@ from functools import partial
+ import os
+ from pathlib import Path
+ 
+-from etude.eval.match import Row, Tables, agent
++from etude.eval.match import Row, Tables
+ from etude.eval.records import (
+     Benchmark,
+     CheckpointKey,
+     CheckpointRef,
++    Code,
+     Environment,
+     Match,
+     Matchup,
+-    Model,
++    Inference,
+ )
+ from etude.eval.tournament import hold
+ from etude.run.records import ArtifactRef
+@@ -83,9 +84,9 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
+         )
+         for path in sorted(Path(folder).rglob("*.py"))
+     ] + [Path(__file__)]
+-    opponent = agent(
+-        "heuristic",
+-        code=code,
++    opponent = Code(
++        name="heuristic",
++        source=code,
+         config={"registration": manifest.opponent.model_dump(mode="json")},
+     )
+     return Benchmark(
+@@ -99,8 +100,8 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
+             Matchup(
+                 name="checkpoint vs heuristic",
+                 players=(
+-                    Model(
+-                        code=code,
++                    Inference(
++                        source=code,
+                         config={"registration": registration.model_dump(mode="json")},
+                     ),
+                     opponent,
+@@ -122,9 +123,9 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
+ 
+ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
+     """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
+-    if len(match.agents) != 2 or match.games != 8:
++    if len(match.players) != 2 or match.games != 8:
+         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
+-    checkpoint, anchor = match.agents
++    checkpoint, anchor = match.players
+     path = local_checkpoint_file(checkpoint)
+     sha256 = file_sha256(path)
+     candidate = PlayerRegistration.model_validate(checkpoint.config["registration"])
+@@ -198,7 +199,7 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
+             deck, opponent_deck = decks[native_seat], decks[1 - native_seat]
+             plays.append(
+                 {
+-                    "player": player,
++                    "seat": player,
+                     "game": row.leg,
+                     "score": score if player == 0 else 1.0 - score,
+                     "deck": deck,
+diff --git a/manabot/eval/card_evaluation.py b/manabot/eval/card_evaluation.py
+index 494e6d5f6..ff6a5a54b 100644
+--- a/manabot/eval/card_evaluation.py
++++ b/manabot/eval/card_evaluation.py
+@@ -16,9 +16,12 @@ from pathlib import Path
+ import tempfile
+ from typing import Literal
+ 
+-from etude.eval.match import EvalRun, Row, Tables, agent
++from etude.eval.match import EvalRun, Row, Tables
+ from etude.eval.records import (
+-    Agent,
++    Code,
++    Inference,
++    Model,
++    Player,
+     CheckpointKey,
+     CheckpointRef,
+     Environment,
+@@ -110,7 +113,7 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
+                 os.environ[key] = value
+ 
+ 
+-def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
++def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
+     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
+     # Bind all Python inference code as well as the separately bound native
+     # runtime; a registration's human label never establishes byte identity.
+@@ -127,7 +130,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
+     runtime = runtime_fingerprints(
+         match_config=setup, observation_space=spaces[0] if spaces else None
+     )
+-    entrants = []
++    entrants: list[Player] = []
+     for player in spec.players:
+         validate_player_compatibility(player, spec.key, runtime)
+         checkpoint = None
+@@ -141,13 +144,15 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Agent, ...]:
+                     size_bytes=player.checkpoint_bytes,
+                 ),
+             )
++        config = {"registration": player.model_dump(mode="json")}
+         entrants.append(
+-            agent(
+-                player.player_id,
++            Model(
++                name=player.player_id,
+                 checkpoint=checkpoint,
+-                code=code,
+-                config={"registration": player.model_dump(mode="json")},
++                inference=Inference(source=code, config=config),
+             )
++            if checkpoint is not None
++            else Code(name=player.player_id, source=code, config=config)
+         )
+     return tuple(entrants)
+ 
+@@ -156,12 +161,12 @@ def play_card_match(match: Match) -> Tables:
+     players = card_match_players(match)
+     conditions = CardConditions.model_validate(match.conditions)
+     paths: dict[str, str] = {}
+-    for entrant, player in zip(match.agents, players, strict=True):
+-        if entrant.kind == "checkpoint":
++    for entrant, player in zip(match.players, players, strict=True):
++        if isinstance(entrant, Model):
++            artifact = entrant.checkpoint.artifact
+             if (
+-                entrant.artifact is None
+-                or entrant.artifact.sha256 != player.checkpoint_sha256
+-                or entrant.artifact.size_bytes != player.checkpoint_bytes
++                artifact.sha256 != player.checkpoint_sha256
++                or artifact.size_bytes != player.checkpoint_bytes
+             ):
+                 raise ValueError("checkpoint must be admitted local bytes")
+             paths[player.player_id] = str(local_checkpoint_file(entrant))
+@@ -202,7 +207,7 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) ->
+         for play in game_tables["card_plays"]:
+             tables["plays"].append(
+                 {
+-                    "player": play["player"],
++                    "seat": play["seat"],
+                     "game": game.game,
+                     "score": 0.5 if game.winner is None else float(play["win"] or 0),
+                     "on_play": play["on_play"],
+@@ -257,7 +262,7 @@ def _game_card_tables(
+     }
+     return {
+         "card_plays": [
+-            {**play, **evidence, "participant": participants[int(play["player"] or 0)]}
++            {**play, **evidence, "participant": participants[int(play["seat"] or 0)]}
+             for play in rows.plays
+         ],
+         "card_counts": list(rows.counts),
+diff --git a/manabot/eval/card_metrics.py b/manabot/eval/card_metrics.py
+index d49f73dab..8e268f884 100644
+--- a/manabot/eval/card_metrics.py
++++ b/manabot/eval/card_metrics.py
+@@ -2,7 +2,7 @@
+ 
+ `reduce_cards` owns the counting rules. `normalize` splits its rows into the
+ three author tables an evaluation delivers: `card_plays` (one row per game and
+-player, with the game's facts), `card_counts` (per card in that game) and
++seat, with the game's facts), `card_counts` (per card in that game) and
+ `cards` (names for card keys)."""
+ 
+ from __future__ import annotations
+@@ -16,7 +16,7 @@ METRIC_VERSION = "gih-copies-v1"
+ 
+ 
+ class CardGame(StrictModel):
+-    player: Seat
++    seat: Seat
+     game: str
+     deal: int
+     card: str
+@@ -66,7 +66,7 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
+         for definition in sorted(deck.keys() | opening.keys() | drawn.keys()):
+             rows.append(
+                 CardGame(
+-                    player=participants.index(game.seat_players[seat]),
++                    seat=participants.index(game.seat_players[seat]),
+                     game=game.game,
+                     deal=game.deal,
+                     card=f"{capture.content_digest}:{definition}",
+@@ -89,7 +89,7 @@ def reduce_cards(game: GameEvidence, participants: tuple[str, str]) -> list[Card
+ 
+ 
+ PLAY_FIELDS = (
+-    "player",
++    "seat",
+     "game",
+     "deal",
+     "deck",
+@@ -102,7 +102,7 @@ PLAY_FIELDS = (
+     "metric_version",
+ )
+ COUNT_FIELDS = (
+-    "player",
++    "seat",
+     "game",
+     "card",
+     "deck_copies",
+@@ -110,8 +110,8 @@ COUNT_FIELDS = (
+     "drawn_copies",
+     "gih_copies",
+ )
+-# Etude rows name a player, so a card's name row is keyed by whose deck held it.
+-CARD_FIELDS = ("player", "card", "content", "definition", "name")
++# Etude rows name a seat, so a card's name row is keyed by whose deck held it.
++CARD_FIELDS = ("seat", "card", "content", "definition", "name")
+ 
+ 
+ class CardRows(StrictModel):
+@@ -121,14 +121,14 @@ class CardRows(StrictModel):
+ 
+ 
+ def normalize(rows: list[CardGame]) -> CardRows:
+-    """One `card_plays` row per (game, player); counts and names keyed by card."""
++    """One `card_plays` row per (game, seat); counts and names keyed by card."""
+     plays: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
+     cards: dict[tuple[str, int], dict[str, int | float | str | bool | None]] = {}
+     counts = []
+     for row in rows:
+         data = row.model_dump()
+-        plays.setdefault((row.game, row.player), {f: data[f] for f in PLAY_FIELDS})
+-        cards.setdefault((row.card, row.player), {f: data[f] for f in CARD_FIELDS})
++        plays.setdefault((row.game, row.seat), {f: data[f] for f in PLAY_FIELDS})
++        cards.setdefault((row.card, row.seat), {f: data[f] for f in CARD_FIELDS})
+         counts.append({f: data[f] for f in COUNT_FIELDS})
+     return CardRows(
+         plays=list(plays.values()), counts=counts, cards=list(cards.values())
+diff --git a/manabot/eval/card_page.py b/manabot/eval/card_page.py
+index c98e90d8a..644333d97 100644
+--- a/manabot/eval/card_page.py
++++ b/manabot/eval/card_page.py
+@@ -61,12 +61,12 @@ def page_data(
+ ) -> dict[str, object]:
+     """Every non-empty filter combination of `selection`, keyed for the page.
+ 
+-    Subjects and opponents are offered by agent name, so one player whose code
++    Subjects and opponents are offered by player name, so one player whose code
+     identity changed between runs is still one choice.
+     """
+     base = card_data(db, selection)
+     sql, parameters = selected_games(db, selection)
+-    names = dict(db.execute("select agent, name from agents").fetchall())
++    names = dict(db.execute("select player, name from players").fetchall())
+     present = {
+         (names[subject], names[opponent], "play" if on_play else "draw", deck, against)
+         for subject, opponent, on_play, deck, against in db.execute(
+@@ -290,7 +290,7 @@ select { max-width: 100%; }
+     const subjects = $("subject").value ? [$("subject").value] : data.subjects;
+     const excluded = Object.entries(variant.excluded).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(", ") || "none";
+     summary.innerHTML = [
+-      ["Subjects", subjects.length > 3 ? `${subjects.length} agents` : subjects.join(", ") || "—"],
++      ["Subjects", subjects.length > 3 ? `${subjects.length} players` : subjects.join(", ") || "—"],
+       ["Opponents", $("opponent").value || "all"],
+       ["Games", variant.games.toLocaleString()],
+       ["Deals", variant.deals.toLocaleString()],
+diff --git a/manabot/eval/card_query.py b/manabot/eval/card_query.py
+index 854a0de62..a842bfc86 100644
+--- a/manabot/eval/card_query.py
++++ b/manabot/eval/card_query.py
+@@ -2,7 +2,7 @@
+ 
+ `card_data` selects games from every eval run of one experiment (Etude
+ `statsdb`) and reports 17Lands-style columns per card. Players come from
+-Etude's `seats` and `agents` tables, so subjects and opponents are joins, never
++Etude's `seats` and `players` tables, so subjects and opponents are joins, never
+ fields copied into card rows. Queries trust the rows admitted when each match
+ was played; `audit` re-reads and re-verifies the retained evidence on request.
+ 
+@@ -49,7 +49,7 @@ from manabot.sim.replay import replay_games
+ class CardSelection(StrictModel):
+     """Which games to pool. Empty tuples select everything in the experiment.
+ 
+-    A subject or opponent is an agent's key, its name, its checkpoint's key
++    A subject or opponent is an player's key, its name, its checkpoint's key
+     (such as `RUN/checkpoints/NAME`), or a prefix (at least eight characters)
+     of its checkpoint digest.
+     """
+@@ -83,7 +83,7 @@ class CardStats(StrictModel):
+ 
+ 
+ class CardData(StrictModel):
+-    """`games` counts player-games: without a subject, each game counts once per side."""
++    """`games` counts seat-games: without a subject, each game counts once per side."""
+ 
+     selection: CardSelection
+     metric_version: str = METRIC_VERSION
+@@ -99,20 +99,20 @@ class CardData(StrictModel):
+     cards: tuple[CardStats, ...]
+ 
+ 
+-def _agents(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
++def _players(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
+     known = db.execute(
+-        "select agent, name, checkpoint, artifact from agents"
++        "select player, name, checkpoint, artifact from players"
+     ).fetchall()
+     found: list[str] = []
+     for value in values:
+         matches = [
+-            agent
+-            for agent, name, checkpoint, artifact in known
+-            if value in (agent, name, checkpoint)
++            player
++            for player, name, checkpoint, artifact in known
++            if value in (player, name, checkpoint)
+             or (len(value) >= 8 and (artifact or "").startswith(value))
+         ]
+         if not matches:
+-            raise ValueError(f"no agent in this experiment matches {value!r}")
++            raise ValueError(f"no player in this experiment matches {value!r}")
+         found.extend(matches)
+     return found
+ 
+@@ -120,7 +120,7 @@ def _agents(db: duckdb.DuckDBPyConnection, values: Sequence[str]) -> list[str]:
+ def selected_games(
+     db: duckdb.DuckDBPyConnection, selection: CardSelection
+ ) -> tuple[str, list[object]]:
+-    """The selected (run, match, player) games as SQL, with its parameters."""
++    """The selected (run, match, seat) games as SQL, with its parameters."""
+     where = ["true"]
+     parameters: list[object] = []
+ 
+@@ -129,9 +129,9 @@ def selected_games(
+         parameters.extend(values)
+ 
+     if selection.subjects:
+-        among("s.agent", _agents(db, selection.subjects))
++        among("s.player", _players(db, selection.subjects))
+     if selection.opponents:
+-        among("o.agent", _agents(db, selection.opponents))
++        among("o.player", _players(db, selection.opponents))
+     if selection.runs:
+         among("p.run", selection.runs)
+     if selection.commits:
+@@ -148,10 +148,10 @@ def selected_games(
+             where.append(f"{column} = ?")
+             parameters.append(value)
+     return (
+-        "select p.*, s.agent as subject, o.agent as opponent from card_plays p"
+-        " join seats s on s.run = p.run and s.match = p.match and s.player = p.player"
++        "select p.*, s.player as subject, o.player as opponent from card_plays p"
++        " join seats s on s.run = p.run and s.match = p.match and s.seat = p.seat"
+         " join seats o on o.run = p.run and o.match = p.match"
+-        " and o.player = 1 - p.player"
++        " and o.seat = 1 - p.seat"
+         f" where {' and '.join(where)}"
+     ), parameters
+ 
+@@ -169,14 +169,14 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
+     db.execute(f"create or replace temp table selected as {sql}", parameters)
+     names = dict(
+         db.execute(
+-            "select agent, name from agents where agent in"
++            "select player, name from players where player in"
+             " (select distinct subject from selected)"
+         ).fetchall()
+     )
+     opponents = dict(
+         db.execute(
+             "select a.name, count(*) from selected s"
+-            " join agents a on a.agent = s.opponent group by a.name"
++            " join players a on a.player = s.opponent group by a.name"
+         ).fetchall()
+     )
+     runs = tuple(
+@@ -230,7 +230,7 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
+         " count(*) filter (where c.deck_copies > 0 and c.gih_copies = 0),"
+         " coalesce(sum(s.win) filter (where c.deck_copies > 0 and c.gih_copies = 0), 0)"
+         " from card_counts c join selected s"
+-        " on c.run = s.run and c.match = s.match and c.player = s.player"
++        " on c.run = s.run and c.match = s.match and c.seat = s.seat"
+         " and c.game = s.game"
+         " where s.eligible group by c.card, s.deal"
+     ).fetchall()
+@@ -332,7 +332,7 @@ def audit(
+     participant = "participant" if "participant" in columns else "null"
+     plays = db.execute(
+         "select run, match, game, evidence, evidence_sha256, evidence_bytes,"
+-        f" list({participant} order by player)"
++        f" list({participant} order by seat)"
+         " from card_plays group by all order by run, match, game"
+     ).fetchall()
+     held: dict[str, tuple[dict[str, Match], TournamentRun] | None] = {}
+diff --git a/manabot/eval/card_schedule.py b/manabot/eval/card_schedule.py
+index 14b7a36b1..130d7d3c0 100644
+--- a/manabot/eval/card_schedule.py
++++ b/manabot/eval/card_schedule.py
+@@ -38,13 +38,13 @@ class CardConditions(StrictModel):
+ 
+ def card_match_players(match: Match) -> tuple[PlayerRegistration, PlayerRegistration]:
+     """Resolve the same registered participant pair for execution and admission."""
+-    if len(match.agents) != 2 or match.games != 8:
++    if len(match.players) != 2 or match.games != 8:
+         raise ValueError("card evaluation schedules eight legs per deal")
+     first, second = (
+         PlayerRegistration.model_validate(agent.config["registration"])
+-        for agent in match.agents
++        for agent in match.players
+     )
+-    if (first.player_id, second.player_id) != tuple(a.name for a in match.agents):
++    if (first.player_id, second.player_id) != tuple(a.name for a in match.players):
+         raise ValueError("scheduled participant differs from registration")
+     return first, second
+ 
+diff --git a/manabot/eval/cards.py b/manabot/eval/cards.py
+index 51553a1fb..9060e1417 100644
+--- a/manabot/eval/cards.py
++++ b/manabot/eval/cards.py
+@@ -122,7 +122,7 @@ def verify(games: int, out: Path) -> dict[str, int | float | str]:
+ 
+ 
+ def print_data(data: CardData) -> None:
+-    subjects = ", ".join(data.subjects.values()) or "every agent"
++    subjects = ", ".join(data.subjects.values()) or "every player"
+     print(
+         f"{data.selection.experiment}: {subjects}; {data.games} games, "
+         f"{data.deals} deals, {len(data.runs)} runs"
+diff --git a/manabot/eval/duel.py b/manabot/eval/duel.py
+index 74f01f1d9..6b90dd4c7 100644
+--- a/manabot/eval/duel.py
++++ b/manabot/eval/duel.py
+@@ -9,7 +9,7 @@ import json
+ import os
+ from pathlib import Path
+ 
+-from etude.eval.match import EvalRun, Tables, agent
++from etude.eval.match import EvalRun, Tables
+ from etude.eval.records import (
+     Benchmark,
+     CheckpointKey,
+@@ -17,6 +17,7 @@ from etude.eval.records import (
+     Environment,
+     Match,
+     Matchup,
++    Inference,
+     Model,
+ )
+ from etude.eval.tournament import hold
+@@ -119,8 +120,8 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
+ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
+     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
+     candidate, opponent = registrations(duel)
+-    seated = match.agents[0].artifact
+-    if seated is None or seated.sha256 != candidate.checkpoint_sha256:
++    seated = match.players[0]
++    if not isinstance(seated, Model) or seated.checkpoint.artifact.sha256 != candidate.checkpoint_sha256:
+         raise ValueError("Etude candidate differs from admitted checkpoint")
+     conditions = Conditions.model_validate(match.conditions)
+     out = Path(os.environ["ETUDE_OUTPUT_DIR"]) / "arena" / match.key
+@@ -261,15 +262,17 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
+             Matchup(
+                 name="two-seat vs one-seat",
+                 players=(
+-                    Model(
+-                        code=code,
++                    Inference(
++                        source=code,
+                         config={"registration": candidate.model_dump(mode="json")},
+                     ),
+-                    agent(
+-                        "one-seat",
++                    Model(
++                        name="one-seat",
+                         checkpoint=_checkpoint(duel.one_seat),
+-                        code=code,
+-                        config={"registration": opponent.model_dump(mode="json")},
++                        inference=Inference(
++                            source=code,
++                            config={"registration": opponent.model_dump(mode="json")},
++                        ),
+                     ),
+                 ),
+                 conditions=tuple(
+diff --git a/manabot/model/checkpoint.py b/manabot/model/checkpoint.py
+index 73bfc5a0e..2a306faa7 100644
+--- a/manabot/model/checkpoint.py
++++ b/manabot/model/checkpoint.py
+@@ -39,7 +39,7 @@ import managym
+ 
+ if TYPE_CHECKING:
+     # Local policy loading must not import managed evaluation machinery.
+-    from etude.eval.records import Agent
++    from etude.eval.records import Player
+ 
+ 
+ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
+@@ -55,11 +55,13 @@ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSp
+         )
+ 
+ 
+-def local_checkpoint_file(seated: "Agent") -> Path:
+-    """The verified local file a checkpoint agent plays; raises for a code agent or a remote file."""
+-    artifact = seated.artifact
+-    if artifact is None or artifact.sha256 is None or artifact.size_bytes is None:
+-        raise ValueError("expected a checkpoint agent with a digest and byte count")
++def local_checkpoint_file(seated: "Player") -> Path:
++    """The verified file a model plays; raises for code or a remote checkpoint."""
++    if seated.kind != "model":
++        raise ValueError("expected a model with a digest and byte count")
++    artifact = seated.checkpoint.artifact
++    if artifact.sha256 is None or artifact.size_bytes is None:
++        raise ValueError("expected a model with a digest and byte count")
+     uri = urlsplit(artifact.uri)
+     if uri.scheme != "file" or uri.netloc:
+         raise ValueError("checkpoint must be a verified local file")
+diff --git a/pyproject.toml b/pyproject.toml
+index 2137e6aa5..0d1b8daa8 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -16,7 +16,7 @@ dependencies = [
+     "pydantic>=2.12.0",
+     "typer>=0.12.5",
+     "psutil>=5.9.0",
+-    "etude-sdk==0.2.5",
++    "etude-sdk==0.2.7",
+ ]
+ 
+ [project.scripts]
+@@ -30,7 +30,7 @@ llm = [
+     "torch==2.10.0",
+ ]
+ reports = [
+-    "etude-sdk[s3]==0.2.5 ; python_version >= '3.12'",
++    "etude-sdk[s3]==0.2.7 ; python_version >= '3.12'",
+     "matplotlib>=3.9",
+ ]
+ artifacts = [
+@@ -41,7 +41,7 @@ academy = [
+     "uvicorn[standard]>=0.34.0",
+ ]
+ evaluation = [
+-    "etude-sdk[eval]==0.2.5",
++    "etude-sdk[eval]==0.2.7",
+     "matplotlib>=3.9",
+ ]
+ play = [
+@@ -76,7 +76,7 @@ play-runtime = [
+     "psutil>=5.9.0",
+     "torch==2.10.0",
+     "uvicorn[standard]>=0.34.0",
+-    "etude-sdk==0.2.5",
++    "etude-sdk==0.2.7",
+ ]
+ 
+ [tool.uv]
+diff --git a/tests/eval/test_card_evaluation.py b/tests/eval/test_card_evaluation.py
+index bc7492b8a..3373ab7ff 100644
+--- a/tests/eval/test_card_evaluation.py
++++ b/tests/eval/test_card_evaluation.py
+@@ -11,7 +11,7 @@ from typing import Any
+ import duckdb
+ from etude.eval.match import Tables, evaluate
+ from etude.eval.query import statsdb
+-from etude.eval.records import Agent, Environment, Match
++from etude.eval.records import Code, Environment, Match
+ from etude.run.declaration import declare
+ from etude.run.delivery import sync
+ from etude.run.storage import DirectoryStorage
+@@ -166,7 +166,7 @@ def _scheduled_fixture(
+     """Synthetic metric facts with explicit schedule provenance; no replay claim."""
+     conditions = CardConditions.model_validate(match.conditions)
+     game = card_fixture(deal=conditions.deal, leg=leg)
+-    names = tuple(agent.name for agent in match.agents)
++    names = tuple(agent.name for agent in match.players)
+     seats = names if leg % 2 == 0 else names[::-1]
+     matrix = conditions.authored_matchup
+     decks = matrix.decks(leg) if matrix else selected_decks(leg)
+@@ -234,25 +234,25 @@ def _db(
+     """The statsdb tables card queries read, built straight from reducer rows."""
+     db = duckdb.connect()
+     db.execute(
+-        "create table card_plays (run varchar, match varchar, player bigint, game varchar,"
++        "create table card_plays (run varchar, match varchar, seat bigint, game varchar,"
+         " deal bigint, deck varchar, opponent_deck varchar, on_play boolean,"
+         " eligible boolean, outcome varchar, win bigint, content varchar,"
+         " metric_version varchar, source_commit varchar)"
+     )
+     db.execute(
+-        "create table card_counts (run varchar, match varchar, player bigint, game varchar,"
++        "create table card_counts (run varchar, match varchar, seat bigint, game varchar,"
+         " card varchar, deck_copies bigint, opening_copies bigint, drawn_copies bigint,"
+         " gih_copies bigint)"
+     )
+     db.execute(
+-        "create table cards (run varchar, match varchar, player bigint, card varchar,"
++        "create table cards (run varchar, match varchar, seat bigint, card varchar,"
+         " content varchar, definition bigint, name varchar)"
+     )
+     db.execute(
+-        "create table seats (run varchar, match varchar, player bigint, agent varchar)"
++        "create table seats (run varchar, match varchar, seat bigint, player varchar)"
+     )
+     db.execute(
+-        "create table agents (agent varchar, name varchar, kind varchar,"
++        "create table players (player varchar, name varchar, kind varchar,"
+         " checkpoint varchar, artifact varchar,"
+         " uri varchar, config json)"
+     )
+@@ -260,7 +260,7 @@ def _db(
+     names = {name for _, pair, _ in matches for name in pair}
+     for name in names:
+         db.execute(
+-            "insert into agents values (?, ?, 'code', null, ?, null, null)",
++            "insert into players values (?, ?, 'code', null, ?, null, null)",
+             [f"id-{name}", name, "a" * 64],
+         )
+     for match, pair, rows in matches:
+@@ -279,7 +279,7 @@ def _db(
+                     *(
+                         play[f]
+                         for f in (
+-                            "player",
++                            "seat",
+                             "game",
+                             "deal",
+                             "deck",
+@@ -312,7 +312,7 @@ def test_copy_weighted_gih_distinguishes_draw_tutor_bounce_and_redraw() -> None:
+     rows = reduce_cards(game, ("player-two", "player-one"))
+     red = next(r for r in rows if r.name == "Mountain")
+     assert (
+-        red.player,
++        red.seat,
+         red.deck_copies,
+         red.opening_copies,
+         red.drawn_copies,
+@@ -375,21 +375,19 @@ def test_execution_rejects_invalid_participant_schedule(
+     corruption: str, error: str
+ ) -> None:
+     spec = verification_spec(8)
+-    agents = tuple(
+-        Agent(
++    entrants = tuple(
++        Code(
+             name=player.player_id,
+-            kind="code",
+-            artifact="a" * 64,
+             config={"registration": player.model_dump(mode="json")},
+         )
+         for player in spec.players
+     )
+     if corruption == "participants":
+-        agents = agents[:1]
++        entrants = entrants[:1]
+     elif corruption == "name":
+-        agents = (agents[0].model_copy(update={"name": "other-player"}), agents[1])
++        entrants = (entrants[0].model_copy(update={"name": "other-player"}), entrants[1])
+     match = Match(
+-        agents=agents,
++        players=entrants,
+         games=4 if corruption == "games" else 8,
+         conditions=CardConditions(
+             deal=spec.deals[0],
+@@ -508,7 +506,7 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
+     with statsdb(spec.experiment, tmp_path) as db:
+         data = card_data(db, selection)
+     assert data.games == 12 and data.failed_matches == 0
+-    with pytest.raises(ValueError, match="no agent in this experiment"):
++    with pytest.raises(ValueError, match="no player in this experiment"):
+         with statsdb(spec.experiment, tmp_path) as db:
+             card_data(db, selection.model_copy(update={"subjects": ("absent",)}))
+ 
+@@ -559,7 +557,7 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
+         # Etude orders players by agent identity. Player 0 is on the play in
+         # even legs, which hold the crashed leg 2.
+         (player,) = db.execute(
+-            "select distinct s.player from seats s join agents a using (agent)"
++            "select distinct s.seat from seats s join players a using (player)"
+             " where a.name = ?",
+             [subject],
+         ).fetchone()
+@@ -590,11 +588,9 @@ def test_each_game_is_admitted_against_its_schedule(
+     assert spec.authored_matchup is not None
+     runtime = runtime_fingerprints(match_config=spec.authored_matchup.match())
+     match = Match(
+-        agents=tuple(
+-            Agent(
++        players=tuple(
++            Code(
+                 name=p.player_id,
+-                kind="code",
+-                artifact="a" * 64,
+                 config={"registration": p.model_dump(mode="json")},
+             )
+             for p in spec.players
+@@ -640,11 +636,9 @@ def test_audit_binds_games_to_their_declared_runtime(field: str) -> None:
+         config={**identity, "capture_version": 1, "metric_version": "gih-copies-v1"},
+     )
+     match = Match(
+-        agents=tuple(
+-            Agent(
++        players=tuple(
++            Code(
+                 name=p.player_id,
+-                kind="code",
+-                artifact="a" * 64,
+                 config={"registration": p.model_dump(mode="json")},
+             )
+             for p in spec.players
+@@ -776,12 +770,12 @@ def test_invalid_outcomes_never_receive_win_rate_credit(outcome: str) -> None:
+ 
+ def test_outcome_only_experiment_has_no_card_data(tmp_path: Path) -> None:
+     def outcome_only(match: Match) -> Tables:
+-        return {"plays": [{"player": 0, "score": 1.0}]}
++        return {"plays": [{"seat": 0, "score": 1.0}]}
+ 
+     evaluate(
+         experiment="old",
+         environment=Environment(name="old", files="a" * 64),
+-        matches=[Match(agents=(Agent(name="one", kind="code", artifact="b" * 64),))],
++        matches=[Match(players=(Code(name="one"),))],
+         play=outcome_only,
+         run="old",
+         directory=tmp_path,
+@@ -884,7 +878,7 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
+             card_evidence_dir=root,
+         )
+         own = {
+-            "games": [{"player": 0, "score": float(r["score_a"] or 0)} for r in rows]
++            "games": [{"seat": 0, "score": float(r["score_a"] or 0)} for r in rows]
+         }
+         return {
+             **own,
+@@ -896,9 +890,9 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
+         environment=Environment(name="grid", files="a" * 64),
+         matches=[
+             Match(
+-                agents=(
+-                    Agent(name=first.player_id, kind="code", artifact="b" * 64),
+-                    Agent(name=second.player_id, kind="code", artifact="c" * 64),
++                players=(
++                    Code(name=first.player_id),
++                    Code(name=second.player_id),
+                 ),
+                 conditions={"deal": spec.deals[0]},
+             )
+diff --git a/tests/eval/test_elemental_long_eval.py b/tests/eval/test_elemental_long_eval.py
+index 0e52bd2c0..9a181beaf 100644
+--- a/tests/eval/test_elemental_long_eval.py
++++ b/tests/eval/test_elemental_long_eval.py
+@@ -22,7 +22,7 @@ from experiments.elemental_long_eval import (
+     EvalState,
+     SegmentSource,
+     admit,
+-    checkpoint_agent,
++    checkpoint_model,
+     done_keys,
+     follow,
+     game_rows,
+@@ -148,15 +148,15 @@ def test_units_play_the_frozen_schedules_one_match_per_deck(tmp_path: Path) -> N
+     assert deals(subset) == sorted(g.deal for g in schedule() if g.index < 10)
+     assert deals(pair) == sorted(g.deal for g in h2h_schedule())
+     # The heuristic is player 1 of every grid; the older checkpoint of every pair.
+-    assert {m.agents[1].name for m in full.matches} == {"heuristic"}
+-    assert {(m.agents[0].name, m.agents[1].name) for m in pair.matches} == {
++    assert {m.players[1].name for m in full.matches} == {"heuristic"}
++    assert {(m.players[0].name, m.players[1].name) for m in pair.matches} == {
+         ("u000050", "u000000")
+     }
+ 
+ 
+ def test_agent_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
+     state = _state(tmp_path, (0,), None)
+-    local = checkpoint_agent(state.checkpoints[0])
++    local = checkpoint_model(state.checkpoints[0])
+     moved = state.checkpoints[0].model_copy(
+         update={
+             "artifact": state.checkpoints[0].artifact.model_copy(
+@@ -164,7 +164,7 @@ def test_agent_identity_ignores_where_the_bytes_live(tmp_path: Path) -> None:
+             )
+         }
+     )
+-    assert checkpoint_agent(moved).key == local.key
++    assert checkpoint_model(moved).key == local.key
+ 
+ 
+ def test_failed_group_is_stored_as_invalid_games(
+@@ -178,9 +178,9 @@ def test_failed_group_is_stored_as_invalid_games(
+     one = first.model_copy(
+         update={"groups": (first.groups[0].model_copy(update={"deals": (1,)}),)}
+     )
+-    match = Match(agents=unit.matches[0].agents, conditions=one.model_dump(mode="json"))
++    match = Match(players=unit.matches[0].players, conditions=one.model_dump(mode="json"))
+     games = play(match)["games"]
+-    assert [(row["player"], row["valid"], row["score"]) for row in games] == [
++    assert [(row["seat"], row["valid"], row["score"]) for row in games] == [
+         (0, False, None),
+         (1, False, None),
+     ]
+diff --git a/tests/eval/test_elemental_long_report.py b/tests/eval/test_elemental_long_report.py
+index 0567b8afd..e7897ee11 100644
+--- a/tests/eval/test_elemental_long_report.py
++++ b/tests/eval/test_elemental_long_report.py
+@@ -39,7 +39,7 @@ def _play(match: Match) -> Tables:
+     """Bradley-Terry games between the seated strengths, seeded by the match."""
+     rng = random.Random(match.seed)
+     conditions = Conditions.model_validate(match.conditions)
+-    a, b = (_strength(agent.name) for agent in match.agents)
++    a, b = (_strength(agent.name) for agent in match.players)
+     rows = [
+         GameRow(
+             model_deck=conditions.deck,
+diff --git a/tests/eval/test_experiment_files.py b/tests/eval/test_experiment_files.py
+index dc497d869..b84efa67c 100644
+--- a/tests/eval/test_experiment_files.py
++++ b/tests/eval/test_experiment_files.py
+@@ -120,7 +120,7 @@ def _design(matches: list[Match]) -> set[tuple[str, ...]]:
+     """Each match as its seated agents' names and conditions, wherever it came from."""
+     return {
+         (
+-            *(agent.name for agent in match.agents),
++            *(agent.name for agent in match.players),
+             str(match.conditions),
+             str(match.games),
+         )
+diff --git a/tests/training/test_etude_evaluation.py b/tests/training/test_etude_evaluation.py
+index 77c921ce7..443371e5a 100644
+--- a/tests/training/test_etude_evaluation.py
++++ b/tests/training/test_etude_evaluation.py
+@@ -188,9 +188,9 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
+         assert {
+             row["game"]
+             for row in projected
+-            if row["player"] == 0 and row["matchup"] == matchup
++            if row["seat"] == 0 and row["matchup"] == matchup
+         } == legs
+-    assert [row["matchup"] for row in projected if row["player"] == 1][:4] == [
++    assert [row["matchup"] for row in projected if row["seat"] == 1][:4] == [
+         "AvL",
+         "LvA",
+         "LvA",
+@@ -198,7 +198,7 @@ def test_deck_labels_follow_candidate_seat_when_cross_decks_swap(
+     ]
+     # The candidate plays Lessons in legs 0 and 3, so a deck matrix puts those
+     # games in its Lessons column against the heuristic's Allies row.
+-    candidate = [row for row in projected if row["player"] == 0]
++    candidate = [row for row in projected if row["seat"] == 0]
+     assert {row["game"] for row in candidate if row["deck"] == "ur_lessons"} == {
+         0,
+         3,
+diff --git a/uv.lock b/uv.lock
+index b7f9b32e9..ef97468c0 100644
+--- a/uv.lock
++++ b/uv.lock
+@@ -383,16 +383,16 @@ wheels = [
+ 
+ [[package]]
+ name = "etude-sdk"
+-version = "0.2.5"
++version = "0.2.7"
+ source = { registry = "https://pypi.org/simple" }
+ dependencies = [
+     { name = "numpy" },
+     { name = "pydantic" },
+     { name = "typer" },
+ ]
+-sdist = { url = "https://files.pythonhosted.org/packages/66/f1/141d4ad42adaf31108fe5882b3f6bfd0b73eaf94b5cb3ba8f69f9b262cd7/etude_sdk-0.2.5.tar.gz", hash = "sha256:bf1555890b6e6609821a8ee28a445fa615501d09f86ac3f9d53cb6d6c20c7b81", size = 546497, upload-time = "2026-10-25T04:40:25.334Z" }
++sdist = { url = "https://files.pythonhosted.org/packages/fb/4a/a2abea86550eed97002c4a36fe892999ccf0c5b8ece6ac79536382f777a9/etude_sdk-0.2.7.tar.gz", hash = "sha256:3407fd16e41395318660a0444603e87f264e9a72d129d1c778f40ee01b2186f1", size = 593450, upload-time = "2026-10-27T12:32:36.168Z" }
+ wheels = [
+-    { url = "https://files.pythonhosted.org/packages/63/3f/e2a3a3f3a56f24f83ea1e6658db7a03063e542aad2653b06bbac3cb6ed38/etude_sdk-0.2.5-py3-none-any.whl", hash = "sha256:4a1a294723049003cee73c39966241ea830385ff6d2625c43c53ff92cffa6a0a", size = 394295, upload-time = "2026-10-25T04:40:23.384Z" },
++    { url = "https://files.pythonhosted.org/packages/45/e7/57b8e0165c738f170e2a2b2150395a10de3350f60030426f5c36fcf4688a/etude_sdk-0.2.7-py3-none-any.whl", hash = "sha256:598656b90a1ad19d99cdb0e76b917553fe7683e0d69845ef128c80569729765e", size = 417936, upload-time = "2026-10-27T12:32:34.445Z" },
+ ]
+ 
+ [package.optional-dependencies]
+@@ -1051,9 +1051,9 @@ training-runtime = [
+ [package.metadata]
+ requires-dist = [
+     { name = "boto3", marker = "extra == 'artifacts'", specifier = ">=1.35.0" },
+-    { name = "etude-sdk", specifier = "==0.2.5" },
+-    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = "==0.2.5" },
+-    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", specifier = "==0.2.5" },
++    { name = "etude-sdk", specifier = "==0.2.7" },
++    { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = "==0.2.7" },
++    { name = "etude-sdk", extras = ["s3"], marker = "python_full_version >= '3.12' and extra == 'reports'", specifier = "==0.2.7" },
+     { name = "fastapi", marker = "extra == 'academy'", specifier = ">=0.116.0" },
+     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
+     { name = "gymnasium", specifier = ">=1.0.0" },
+@@ -1084,7 +1084,7 @@ provides-extras = ["openrouter", "llm", "reports", "artifacts", "academy", "eval
+ 
+ [package.metadata.requires-dev]
+ play-runtime = [
+-    { name = "etude-sdk", specifier = "==0.2.5" },
++    { name = "etude-sdk", specifier = "==0.2.7" },
+     { name = "fastapi", specifier = ">=0.116.0" },
+     { name = "gymnasium", specifier = ">=1.0.0" },
+     { name = "maturin", specifier = ">=1.5,<2.0" },
