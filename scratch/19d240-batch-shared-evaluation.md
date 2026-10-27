@@ -316,14 +316,8 @@ a checkpoint has one way to play in evaluation (served; `is_served` →
 search players play in their game child; one engine serves both devices, with
 the boundary written in `docs/shared-evaluation.md`. No open product choice.
 
-**Next implement direction (implied by 1a, a name only):** "scalar" no longer
-names an evaluation way of playing, but the child still calls its in-child
-players that. Rename `native_game._ScalarPlayers` → `_InChildPlayers` (local
-`scalar` → `in_child`) and say "served and in-child players" in the
-`supervision.py` header. Keep the `scalar_policy` performance span and the
-`cold_scalar` benchmark variant: both are retained receipt keys. MTG-183's
-runner `scalar` mode is MTG-183's name, not changed here. Remaining after
-that: the rental calibration and landing gate as written in Acceptance.
-
-The unstaged `tests/training/game_error_*` edits (a `ChildProcess` game-worker
-fixture) are another contribution in progress; preserve them.
+Applied (implement, 2026-10-27): `native_game._InChildPlayers` names the
+in-child players. The `scalar_policy` performance span and `cold_scalar`
+benchmark variant keep their names as retained receipt keys; MTG-183's runner
+`scalar` mode is MTG-183's name. Remaining: the rental calibration and landing
+gate as written in Acceptance.

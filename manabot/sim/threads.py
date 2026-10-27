@@ -65,10 +65,11 @@ REPLAY_BUDGET = ThreadBudget("replay", 4)
 SERVING_BUDGET = ThreadBudget("serving", 16)
 
 # The group worker runs `play_cell`. Without a shared runtime (code and search
-# players only) it keeps the main thread plus a small helper allowance. Hosting an inference runtime adds one game
-# thread per active game; its main thread, request reader and sender, plus four
-# runtime helpers make the fixed allowance. Recorded for calibration, not
-# enforced: the worker coordinates games rather than playing them.
+# players only) it keeps the main thread plus a small helper allowance. Hosting
+# an inference runtime adds one game thread per active game; its main thread,
+# request reader and sender, plus four runtime helpers make the fixed
+# allowance. Recorded for calibration, not enforced: the worker coordinates
+# games rather than playing them.
 _GROUP_WORKER_UNSERVED_THREADS = 8
 _GROUP_WORKER_ALLOWANCE = 7
 
