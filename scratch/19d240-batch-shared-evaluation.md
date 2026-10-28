@@ -202,44 +202,27 @@ setup validation, packed `transfer`, env-dict cutover, docs and AGENTS.md.
 7. Engine boundary (decided 2026-10-27, implement; documented in
    `docs/shared-evaluation.md`): the engine is the serving child's flush loop
    and `serving._infer`; everything before it stays shared. Both devices keep
-   the one serial service per allocation. A CPU host runs several allocations
-   side by side (MTG-183's `batched` mode: 6 groups × 12 active games, one
-   CPU service each), so "several inference workers per host" already exists
-   as layout. An in-process engine saves only the IPC hop and loses
-   killability. Multi-worker allocations, intra-op threads and a CPU delay
-   are not written until rental counters show a saturated CPU service (YAGNI;
-   no second engine without evidence). **Remaining:** the rental calibration
-   in Acceptance. MTG-183's runner (`experiments/elemental_long_rent.py`) lives
-   on its branch and imports that branch's `elemental_long_eval` family, so the
-   calibration runs from a calibration branch merging both, with its own eval
-   run names (not `mtg183-eval-*`) and no `collect` into MTG-183's database.
-   As of MTG-183 `a75df8b5e` (2026-10-27) the merge brings 31 files and
-   etude-sdk 0.2.9; both branches change `experiments/elemental_grid.py`,
-   `experiments/elemental_long_eval.py`, `manabot/training/execution.py` and
-   `manabot/training/state/learning_state.py`. On this code the runner's modes
-   mean: `gpu` is the A4500 arm, but its `GPU` contract caps
-   `max_active_games=64` for Torch children, so the calibration branch raises
-   it to 256 for the OOM check; `batched` (6 groups × 12 active games, one CPU
-   service each) is the `cpu32` served arm; `scalar` (no `EvalCompute`) now
-   serves one game at a time per group and no longer measures scalar play, so
-   the scalar baseline is the retained run `00119d1c9211`.
-   The calibration also settles the RSS target, the thread budgets and the oversubscription
-   culprit. If `cpu32` served is slower, iterate the CPU engine (several
-   workers per allocation, then intra-op threads, which need a compute-contract
-   decision) before Jack Heart decides on retaining scalar play.
+   the one serial service per allocation; after the parent hop, `cpu32` runs
+   one shared CPU allocation per machine. An in-process engine saves only the
+   IPC hop and loses killability. Multi-worker allocations, intra-op threads
+   and a CPU delay are not written until rental counters show a saturated CPU
+   service (YAGNI; no second engine without evidence). **Remaining:** the
+   rental calibration in Acceptance, run from a calibration branch that merges
+   MTG-183's runner (`experiments/elemental_long_rent.py`), with its own run
+   names and no `collect` into MTG-183's database. Its `scalar` mode now
+   serves, so the scalar baseline is the retained run `00119d1c9211`. If
+   `cpu32` served is slower, iterate the CPU engine (several workers per
+   allocation, then intra-op threads, which need a compute-contract decision)
+   before Jack Heart decides on retaining scalar play.
 
 ### Calibration (implement, 2026-10-27)
 
-Branch `jack-heart/mtg193-calibration` (worktree
-`~/src/manabot.mtg193-calibration`, unpushed) = this branch at `c6c8f4c87` +
-MTG-183 `a75df8b5e`, commit `950e2066e`: `elemental_grid.py` keeps both
-imports (+`os`); the other three overlaps auto-merged; MTG-183 rent/eval tests
-pass (22). Runner edits: runs `mtg193-cal-{rent,batched,gpu}`, `GPU`
-`max_active_games=256` (`max_batch_rows` 64 as in `d0955f2a44b6`), fixed
-units skip `stored()` (MTG-183's database is not read or written; no
-`collect`), receipts returned as `receipts.tar` (per-group
-`performance.json`/`serving.json`) and `progress.jsonl` (per-minute load,
-threads/RSS by child target). Unit `pair-005950-v-005600` (1,000 games).
+Runner edits on the calibration branch (first merge `950e2066e`; current
+branch below): runs `mtg193-cal-{rent,batched,gpu}`, `GPU`
+`max_active_games=256` (`max_batch_rows` 64), fixed units skip `stored()`,
+receipts returned as `receipts.tar` (per-group `performance.json`/
+`serving.json`) and `progress.jsonl` (per-minute load, threads/RSS by child
+target). Unit `pair-005950-v-005600` (1,000 games).
 Launch path: etude-sdk 0.2.9 refuses the shared launcher DB (schema 10, held
 by MTG-183's 0.2.6 controller), so runs are built with the branch
 (`~/.manabot/mtg193-calibration/build_runs.py`) and queued with the
