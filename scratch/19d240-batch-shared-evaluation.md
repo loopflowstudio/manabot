@@ -280,13 +280,10 @@ decisions/s), which led to the parent-hop decision below.
 
 Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py tests/eval/test_mirror_admission.py tests/eval/test_inference_receipts.py -q` → 146 passed, 1 skipped (11 min). Host load average ~370 from other sessions during the run.
 
-Compress (2026-10-27/28, detail in git log; serving and execution modules settled, no
-further cut found): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped.
-
-Compress 2026-10-28: `tests/academy/test_trigger_order.py` imported `ObservationSpace` from the bare `manabot.env` package (inherited from `main`'s `e742e8bff`); now imports it from `env.observation` → 3 passed. Dropped `verify/games.MOUNTAIN_DECK` (unused since `main`) → `tests/verify/test_util.py tests/test_package_boundaries.py` 16 passed.
-`InferenceRuntime` writes `allocation.json` through one `_write_allocation` → `tests/eval/test_batched_eval.py tests/sim/test_child_surface.py` 26 passed, 1 skipped.
-Dropped the resolved concept-review 5 page (`scratch/concept-review.html`, at `b81336386`); `players.build_code_player` documents that demo search also takes `seed` → `tests/sim/test_child_surface.py tests/test_package_boundaries.py` 14 passed.
-Compress 2026-10-28 (later): no code cut in `threads`, `child`, `serving_protocol`, `serving`, `native_game`, `supervision`, `players`, `match`, `anchors`, `frames`, `eval.execution`, `verify.games`, `model.inference.transfer`, `verify.{scenarios,competency,scenario_validation,checkpoint_scenarios}`, `eval.{match,evaluation,serving_benchmark}`, `experiment.checkpoint_evaluation`, `search.flat_mc`; trimmed resolved notes from `scratch/questions.md`. No code edits, no rerun.
+Compress (2026-10-27/28, per-pass detail in git log up to `c054e05d2`): every
+changed module, test, doc and import cutover reviewed; settled, no further cut.
+Last code check: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 27 passed, 1 skipped;
+`ruff check` on all changed Python passed.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
@@ -408,10 +405,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 11:09 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 11:42 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
-Compress 2026-10-28 (third): `guidance._build_policy_player` now checks its leaf evaluator by class identity instead of the name string it inherited from `players` → `tests/sim/test_puct_compatibility.py tests/sim/test_mcts.py` 21 passed. No other cut in `guidance`, `teacher1_evidence`, `verify.util`.
-Compress 2026-10-28 (fourth): `docs/shared-evaluation.md` no longer describes the retired one-allocation-per-group CPU layout; no cut in `model.inference`, `performance`, `replay`, `target_practice`, `decision_profile`, experiment runners. Docs only, no rerun.
-Compress 2026-10-28 (fifth): tests only. `test_batched_eval` imports `os`/`signal` at the top; the missing-target `ChildProcess` check is its own test → `tests/eval/test_batched_eval.py tests/sim/test_child_surface.py` 27 passed, 1 skipped. No cut in the small import-cutover diffs (`env`/`infra`/`model` packages, `heuristic`, `rollout`, `sim`, `belief.demo`) or the game-error fixtures.
-Compress 2026-10-28 (sixth): no cut in the remaining import-cutover files (`academy`, `model`, `config`, `eval.{admission,evaluate,cards,endpoint}`, `experiment.{runner,evaluation_queue,execution,study}`, `search.{puct,value,local_update}`, AGENTS.md); `ruff check` on all changed Python passed. No edits, no rerun.
