@@ -55,7 +55,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from etude.eval.match import Row, Tables, agent, environment, evaluate
 from etude.eval.records import (
@@ -106,6 +106,9 @@ from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
 from manabot.sim.heuristic import heuristic_source_paths
 import managym
+
+if TYPE_CHECKING:
+    from manabot.sim.serving import InferenceRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = "mtg183-elemental-eval"
@@ -549,9 +552,13 @@ def game_rows(rows: Sequence[GameRow], kind: Kind) -> list[Row]:
     return found
 
 
-def play_h2h_group(request: H2HRequest) -> list[GameRow]:
+def play_h2h_group(
+    request: H2HRequest, *, inference: InferenceRuntime | None = None
+) -> list[GameRow]:
     """Newer checkpoint as arena player A, through the grid's deck/seat legs.
 
+    An optional shared allocation serves both saved policies. Each registration
+    uses its own checkpoint observation schema.
     Rows use the grid's `GameRow`: `model_*` is the newer checkpoint and
     `heuristic_deck` the older checkpoint's deck.
     """
@@ -585,9 +592,15 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
     ) -> PlayerRegistration:
         if file_sha256(checkpoint.path) != checkpoint.sha256:
             raise ValueError("checkpoint byte identity differs")
-        model, _ = load_checkpoint(str(checkpoint.path))
+        model, space = load_checkpoint(str(checkpoint.path))
+        policy_fingerprints = runtime_fingerprints(
+            match_config=matchup.match(), observation_space=space
+        )
         return PlayerRegistration(
-            **common,
+            **{
+                **common,
+                "observation_abi_sha256": policy_fingerprints["observation_abi_sha256"],
+            },
             player_id=name,
             display_name=checkpoint.name,
             role=role,
@@ -635,6 +648,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         authored_matchup=matchup,
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
+        inference=inference,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
