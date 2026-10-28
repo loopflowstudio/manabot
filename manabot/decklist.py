@@ -3,6 +3,7 @@
 Text parsing and name resolution live here; the native content pool owns card
 eligibility and native admission owns construction policy. An admitted setup
 retains both the submitted source and the exact content identity for replay.
+Native imports stay lazy so configuration and historical readers remain portable.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import re
 from typing import TYPE_CHECKING, Literal
 import unicodedata
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 if TYPE_CHECKING:
     from manabot.infra.config import MatchConfig
@@ -74,10 +75,16 @@ class DeckEntry(_Record):
 
 
 class DeckDocument(_Record):
+    dialect: Literal["counted-lines-v1"] = "counted-lines-v1"
     source: str
     filename: str = "deck.txt"
     entries: tuple[DeckEntry, ...] = ()
     issues: tuple[DeckIssue, ...] = ()
+
+    @computed_field
+    @property
+    def source_sha256(self) -> str:
+        return hashlib.sha256(self.source.encode("utf-8")).hexdigest()
 
 
 class AdmittedDeck(_Record):
@@ -94,6 +101,7 @@ class ImportedMatch(_Record):
     hero: AdmittedDeck
     villain: AdmittedDeck
 
+    @computed_field
     @property
     def setup_id(self) -> str:
         # Presentation (filenames, line order, comments) cannot alter game identity.
@@ -193,7 +201,8 @@ def parse_decklist(source: str, filename: str = "deck.txt") -> DeckDocument:
             continue
         # Bound conversion before int() so arbitrary numeric input stays actionable.
         digits, name = match.groups()
-        if len(digits) > 9 or int(digits) <= 0:
+        magnitude = digits.lstrip("+-").lstrip("0") or "0"
+        if digits.startswith("-") or len(magnitude) > 9 or int(magnitude) == 0:
             issues.append(
                 DeckIssue(
                     line=number,
@@ -205,7 +214,7 @@ def parse_decklist(source: str, filename: str = "deck.txt") -> DeckDocument:
             )
             continue
         entries.append(
-            DeckEntry(line=number, section=section, count=int(digits), name=name)
+            DeckEntry(line=number, section=section, count=int(magnitude), name=name)
         )
     return DeckDocument(
         source=source, filename=filename, entries=tuple(entries), issues=tuple(issues)
@@ -218,13 +227,29 @@ def admit_document(
     import managym
 
     names: dict[str, list[PoolDefinition]] = defaultdict(list)
+    reverse_faces: dict[str, str] = {}
     for definition in pool.definitions:
         names[_name_key(definition.registry_name)].append(definition)
+        if " // " in definition.registry_name:
+            front, reverse = definition.registry_name.split(" // ", 1)
+            names[_name_key(front)].append(definition)
+            reverse_faces[_name_key(reverse)] = definition.registry_name
     issues = list(document.issues)
     resolved: list[DeckEntry] = []
     sections: dict[Section, dict[str, int]] = {"main": {}, "sideboard": {}}
     for entry in document.entries:
         candidates = names.get(_name_key(entry.name), [])
+        if not candidates and _name_key(entry.name) in reverse_faces:
+            issues.append(
+                DeckIssue(
+                    line=entry.line,
+                    section=entry.section,
+                    code="face",
+                    card_name=entry.name,
+                    message=f"Reverse faces cannot be deck entries; use {reverse_faces[_name_key(entry.name)]}.",
+                )
+            )
+            continue
         if len(candidates) != 1:
             code = "ambiguous" if candidates else "unknown"
             issues.append(

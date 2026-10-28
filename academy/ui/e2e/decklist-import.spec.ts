@@ -8,14 +8,14 @@ test('correct a file, start a novel deck and reconnect to its pending decision',
   await page.getByLabel('Use imported decks for the next game').check();
   await page.getByLabel('Your deck file', { exact: true }).setInputFiles({
     name: 'my-deck.txt', mimeType: 'text/plain',
-    buffer: Buffer.from('# retained source\n10 Forest\n0 Mountain'),
+    buffer: Buffer.from('\ufeff# retained source\n10 Forest\n0 Mountain'),
   });
   await page.getByLabel('Opponent deck file', { exact: true }).setInputFiles({
     name: 'opponent.txt', mimeType: 'text/plain', buffer: Buffer.from('20 Island'),
   });
   await page.getByRole('button', { name: 'Check decklists', exact: true }).click();
   await expect(page.getByText(/Your deck, line 3: Quantity/)).toBeVisible();
-  await expect(page.getByLabel('Your deck source', { exact: true })).toHaveValue('# retained source\n10 Forest\n0 Mountain');
+  await expect(page.getByLabel('Your deck source', { exact: true })).toHaveValue('\ufeff# retained source\n10 Forest\n0 Mountain');
   await page.getByLabel('Your deck source', { exact: true }).fill('# retained source\n10 Forest\n10 Mountain\nSideboard\n1 Island');
   await page.getByRole('button', { name: 'Check decklists', exact: true }).click();
   await expect(page.getByText(/Ready — development-v1/)).toBeVisible();

@@ -269,7 +269,11 @@ def prepare_trace_payload(
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     config.pop("seed", None)
-    config.pop("imported_decks", None)
+    if config.pop("imported_decks", None) is not None:
+        # Submitted lists are private setup provenance. Native viewer observations
+        # still expose exactly the public information in the shared contract.
+        for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):
+            config[key] = {}
     reveal_hidden = (
         reveal_hidden
         and payload.get("end_reason") == "game_over"

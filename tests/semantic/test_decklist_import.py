@@ -19,7 +19,7 @@ from manabot.infra.config import SimulationConfig
 import managym
 
 PACK = "tla-pool-v1"
-HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\nSideboard\n1 Island\n"
+HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n"
 VILLAIN = "20 Island\n"
 
 
@@ -46,12 +46,14 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     imported = import_files(hero, villain, PACK)
     assert imported.hero.document.source == HERO.replace("\n", "\r\n")
     reformatted = import_match(
-        parse_decklist("10 mountain\n5 Forest\n5 forest\nSideboard\n1 Island"),
+        parse_decklist(
+            "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island"
+        ),
         parse_decklist(VILLAIN),
         PACK,
     )
     assert imported.setup_id == reformatted.setup_id
-    assert imported.hero.main == {"Forest": 10, "Mountain": 10}
+    assert imported.hero.main == {"Forest": 10, "Mountain": 10, "Avatar Enthusiasts": 2}
     assert imported.hero.sideboard == {"Island": 1}
     assert all(
         entry.card_def_id is not None for entry in imported.hero.document.entries
@@ -131,3 +133,30 @@ def test_decklist_checkpoint_simulation_is_explicitly_rejected() -> None:
     imported = import_match(parse_decklist(HERO), parse_decklist(VILLAIN), PACK)
     with pytest.raises(ValueError, match="checkpoint setup admission"):
         SimulationConfig(hero="policy.pt", match=imported.match_config())
+
+
+@pytest.mark.parametrize(
+    "name", ["Avatar Aang", "Avatar Aang // Aang, Master of Elements"]
+)
+def test_decklist_double_faced_identity_is_known_but_unsupported(name: str) -> None:
+    with pytest.raises(DeckImportError) as caught:
+        import_match(
+            parse_decklist(f"10 Forest\n1 {name}"), parse_decklist(VILLAIN), PACK
+        )
+    assert any(
+        issue.code == "unsupported" and issue.line == 2
+        for issue in caught.value.documents["hero"].issues
+    )
+
+
+def test_decklist_reverse_face_is_not_a_separate_card() -> None:
+    with pytest.raises(DeckImportError) as caught:
+        import_match(
+            parse_decklist("10 Forest\n1 Aang, Master of Elements"),
+            parse_decklist(VILLAIN),
+            PACK,
+        )
+    assert any(
+        issue.code == "face" and issue.line == 2
+        for issue in caught.value.documents["hero"].issues
+    )

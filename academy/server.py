@@ -57,7 +57,7 @@ from managym.experience_projection import (
 )
 from pydantic import ValidationError
 
-from manabot.decklist import DeckImportError
+from manabot.decklist import DeckImportError, ImportedMatch
 import managym
 
 from . import trace as trace_store, villain as villain_module
@@ -182,6 +182,7 @@ DECK_DISPLAY_NAMES = {
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
+    "imported": "Imported deck",
     **{
         row["deck_id"]: row["display_name"]
         for row in ELEMENTAL_WORLD_PACK.manifest["roster"]
@@ -2902,8 +2903,6 @@ def _dispatch_table_request(
                 **config,
             }
             if previous.imported_decks is not None:
-                from manabot.decklist import ImportedMatch
-
                 imported = ImportedMatch.model_validate(previous.imported_decks)
                 imported.validate_current()
                 config["deck_import"] = {

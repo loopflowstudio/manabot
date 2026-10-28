@@ -10,6 +10,7 @@ import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
+from manabot.decklist import import_files
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
@@ -219,8 +220,6 @@ def sim_command(
         return
     if hero_deck_file is None or villain_deck_file is None:
         raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
-    from manabot.decklist import import_files
-
     try:
         imported = import_files(hero_deck_file, villain_deck_file, content_pool)
         sim_config, runtime_config = load_sim_config(preset, set_values)

@@ -2,5 +2,6 @@
 Main
 10 Forest
 10 Mountain
+2 Avatar Enthusiasts
 Sideboard
 1 Island

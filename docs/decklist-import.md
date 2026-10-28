@@ -9,7 +9,8 @@ and a card name. Blank lines and full-line `#` comments are ignored. `Main`,
 `Deck`, and `Sideboard` headings are case-insensitive and may end with a colon.
 Entries before a heading belong to the main deck. Repeated entries are added
 within their section. Names match case-insensitively with Unicode NFC and
-whitespace normalization; punctuation is significant. Set codes, collector
+whitespace normalization; punctuation is significant. Double-faced cards accept
+the full “front // reverse” name or the front name, never a reverse face alone. Set codes, collector
 numbers, inline comments and `4x` quantities are not part of this dialect.
 
 ```text
@@ -17,6 +18,7 @@ numbers, inline comments and `4x` quantities are not part of this dialect.
 Main
 10 Forest
 10 Mountain
+2 Avatar Enthusiasts
 Sideboard
 1 Island
 ```
@@ -40,7 +42,8 @@ by deck and line; **New Game** starts the admitted pair with a built-in opponent
 Uncheck imported decks to return to authored presets. The source is retained in
 the private replay setup, and is excluded from viewer replay responses.
 
-For a bounded ordinary manabot simulation using the example files:
+For a bounded ordinary manabot startup proof using the example files
+(four decisions, then the configured step limit ends the run):
 
 ```sh
 uv run manabot sim \

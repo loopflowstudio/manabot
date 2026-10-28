@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from managym.decision import SemanticContractError
 import pytest
 
 from academy import server
@@ -24,7 +25,7 @@ def _request() -> dict[str, object]:
             "pack_key": "tla-pool-v1",
             "hero": {
                 "filename": "novel.txt",
-                "source": "# private note\n10 Forest\n10 Mountain\nSideboard\n1 Island",
+                "source": "# private note\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island",
             },
             "villain": {"source": "20 Island"},
         },
@@ -60,8 +61,19 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
         {"config": asdict(config), "events": [], "final_observation": {}}
     )
     assert "imported_decks" not in public["config"]
+    assert public["config"]["hero_deck"] == {}
+    assert public["config"]["villain_sideboard"] == {}
     offer = bot_contract.frame.find_verb("pass_priority")
+    original = bot.search_witness_json()
+    fork = bot.clone_env()
+    SemanticDecisionContract.from_env(fork).apply(
+        fork, offer["id"], command_id="import-pass"
+    )
+    assert bot.search_witness_json() == original
     bot_contract.apply(bot, offer["id"], command_id="import-pass")
+    assert bot.search_witness_json() == fork.search_witness_json()
+    with pytest.raises(SemanticContractError, match="stale"):
+        bot_contract.apply(bot, offer["id"], command_id="import-stale")
     SemanticDecisionContract.from_env(rebuilt).apply(
         rebuilt, offer["id"], command_id="import-pass"
     )

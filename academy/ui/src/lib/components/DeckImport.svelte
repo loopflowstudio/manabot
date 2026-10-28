@@ -29,7 +29,7 @@
       return;
     }
     try {
-      const source = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer());
+      const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
       if (seat === 'hero') { hero = source; heroFilename = file.name; }
       else { villain = source; villainFilename = file.name; }
       update();
