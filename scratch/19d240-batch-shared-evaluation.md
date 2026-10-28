@@ -283,7 +283,7 @@ Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_b
 Compress (2026-10-27/28, detail in git log; serving and execution modules settled, no
 further cut found): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped.
 
-Compress 2026-10-28: `tests/academy/test_trigger_order.py` imported `ObservationSpace` from the bare `manabot.env` package (inherited from `main`'s `e742e8bff`); now imports it from `env.observation` → 3 passed.
+Compress 2026-10-28: `tests/academy/test_trigger_order.py` imported `ObservationSpace` from the bare `manabot.env` package (inherited from `main`'s `e742e8bff`); now imports it from `env.observation` → 3 passed. Dropped `verify/games.MOUNTAIN_DECK` (unused since `main`) → `tests/verify/test_util.py tests/test_package_boundaries.py` 16 passed.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
@@ -405,6 +405,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 08:42 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 09:17 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).

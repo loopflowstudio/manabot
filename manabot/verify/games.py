@@ -16,7 +16,6 @@ STANDARD_DECK = {
     "Llanowar Elves": 18,
     "Gray Ogre": 18,
 }
-MOUNTAIN_DECK = {"Mountain": 20}
 
 # UR deck with real interaction: instant-speed removal (Lightning Bolt),
 # permission (Counterspell), card draw (Ancestral Recall), and mass removal
