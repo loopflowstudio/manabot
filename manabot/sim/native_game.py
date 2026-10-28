@@ -2,13 +2,14 @@
 
 `supervise_game` launches `game_worker` as a `ChildProcess`. The child builds
 viewer-safe frames, sends each pending Command for durable acknowledgement
-before native execution, and reports the settled game. Checkpoint players
-are served: they reach their policy over the game's own connection to the
-allocation's inference service, not through the supervisor.
-Code players (anchors, heuristic) are built Torch-free, so a game between them
-and served players never imports Torch. Search players (flat-MC, PUCT, local
-update) keep their policy in-child; `_InChildPlayers` is the one place this
-module imports Torch-bearing code.
+before native execution, and reports the settled game. Under a declared
+allocation, checkpoint players are served: they reach their policy over the
+game's own connection to the allocation's inference service, not through the
+supervisor. Without one, they play scalar in-child. Code players (anchors,
+heuristic) are built Torch-free, so a game between them and served players
+never imports Torch. Scalar checkpoint and search players (flat-MC, PUCT,
+local update) keep their policy in-child; `_InChildPlayers` is the one place
+this module imports Torch-bearing code.
 
 Before reporting, the child counts its threads against the declared game
 budget; exceeding it is an infrastructure failure, not a forfeit.
@@ -57,7 +58,8 @@ class _InChildPlayers:
     """Builds in-process players and answers which game hooks they take.
 
     Code players (anchors, heuristic, demo search) come from the Torch-free
-    `players` module. Search players load Torch on their first build. Only
+    `players` module. Scalar checkpoint and search players load Torch on their
+    first build. Only
     search players that track the whole game receive `start_game`, and only
     local-update players observe each step, exactly as registered policies
     always have.
@@ -77,8 +79,6 @@ class _InChildPlayers:
     ) -> tuple[Any, ObservationSpace | None]:
         if registration.player_spec["kind"] in CODE_PLAYER_KINDS:
             return build_code_player(registration, seed=seed), None
-        if registration.player_spec["kind"] == "checkpoint":
-            raise InferenceFailure("evaluation checkpoint players play served")
         if self._torch is None:
             import torch
 

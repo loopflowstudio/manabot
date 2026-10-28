@@ -11,7 +11,6 @@ import torch
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval import monitor as monitor
-from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.experiment import checkpoint_evaluation
 from manabot.infra.config import ModelConfig
@@ -196,27 +195,19 @@ def test_block_failure_retains_prior_rows_and_costs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manifest = _manifest()
-
-    def bound_manifest(
-        *args: Any, execution: EvalExecution, **kwargs: Any
-    ) -> monitor.MonitorResult:
-        bound = manifest.model_copy(deep=True)
-        bound.key, (bound.candidate, bound.opponent) = bind_execution(
-            bound.key, (bound.candidate, bound.opponent), execution
-        )
-        return bound
-
-    monkeypatch.setattr(checkpoint_evaluation, "checkpoint_manifest", bound_manifest)
+    monkeypatch.setattr(
+        checkpoint_evaluation,
+        "checkpoint_manifest",
+        lambda *args, **kwargs: manifest.model_copy(deep=True),
+    )
 
     def play(
         **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-        # One served panel covers every deal; rows persisted before the failure survive.
-        assert kwargs["deal_seeds"] == (101, 102)
-        assert kwargs["execution"].device == "cpu"
-        rows = _rows(bound_manifest(execution=kwargs["execution"]), (101,))
-        (kwargs["out_dir"] / "rows.json").write_text(json.dumps(rows))
-        raise TimeoutError("retained block failure")
+        # Without an allocation the checkpoint plays scalar, one block per deal.
+        if kwargs["deal_seeds"] == (102,):
+            raise TimeoutError("retained block failure")
+        return _rows(manifest, (101,)), {"sha256": "trace"}, {"passed": True}
 
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play)
     # The injected manifest isolates arena orchestration from checkpoint loading.

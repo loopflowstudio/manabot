@@ -19,7 +19,7 @@ from uuid import uuid4
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.eval.execution import bind_execution, is_served, resolve_execution
+from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval
@@ -262,20 +262,6 @@ def _execute_attempt(
     return result
 
 
-def _execution(
-    execution: EvalExecution | None,
-    inference: InferenceRuntime | InferenceEndpoint | None,
-    request: EvaluationRequest,
-) -> EvalExecution | None:
-    return resolve_execution(
-        execution,
-        inference,
-        serves=any(is_served(p) for p in (request.candidate, request.opponent)),
-        games=request.expected_games,
-        game_seconds=request.game_seconds,
-    )
-
-
 def evaluate(
     request: EvaluationRequest,
     *,
@@ -289,7 +275,7 @@ def evaluate(
     Explicit continuation uses continue_evaluation. The first attempt stays at
     this root; subsequent attempts retain their own subdirectories and receipts.
     """
-    execution = _execution(execution, inference, request)
+    execution = resolve_execution(execution, inference)
     if execution is not None:
         request = request.bind(execution)
     out_dir.mkdir(parents=True, exist_ok=False)
@@ -426,7 +412,7 @@ def continue_evaluation(
         if result.evaluation_id is None:
             raise ValueError("historical evaluation has no continuation identity")
         original = result.request
-        execution = _execution(execution, inference, original)
+        execution = resolve_execution(execution, inference)
         if (execution.compute if execution else None) != (
             result.execution.compute if result.execution else None
         ):

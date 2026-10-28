@@ -11,12 +11,13 @@ seed identities and frozen evidence retain their original meanings.
 `manabot.sim.execution.EvalExecution` declares a local evaluation allocation:
 CPU or CUDA float32, active-game limit, batch-row limit, batching delay,
 resident-model byte allowance, request timeout and absolute Unix deadline.
-Evaluation checkpoint players are always served. When a cell with a flat
-checkpoint player declares no execution, `manabot.eval.execution.resolve_execution`
-gives `play_cell`, `evaluate` and the training monitor a CPU envelope that plays
-one game at a time. Execution derives new registrations and a new arena compute
-envelope, so checkpoint players that formerly played scalar in-child now have a
-new identity: their frozen scalar evidence stays as it was and is not reused.
+A declared execution serves flat checkpoint players; without one, `play_cell`,
+`evaluate` and the training monitor play them scalar in their game child, with
+their original registrations, identities and Commands. Execution derives new
+registrations and a new arena compute envelope, so served and scalar players
+of one checkpoint have distinct identities. Retiring scalar checkpoint play
+awaits a CPU measurement of served play after direct game connections
+(Jack Heart, 2026-10-28).
 
 `EvalCompute` is the stable part of that declaration: device/dtype, batching,
 residency/cache settings and request limits identify the player and benchmark.

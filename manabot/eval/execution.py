@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 from manabot.eval.models import EvaluationKey
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def is_served(player: PlayerRegistration) -> bool:
-    """Flat checkpoint players play through shared inference in evaluation."""
+    """Flat checkpoint players play through shared inference when one is declared."""
     return (
         player.runner_kind == "checkpoint"
         and player.player_spec.get("kind") == "checkpoint"
@@ -25,26 +24,15 @@ def is_served(player: PlayerRegistration) -> bool:
 def resolve_execution(
     execution: EvalExecution | None,
     inference: InferenceRuntime | InferenceEndpoint | None,
-    *,
-    serves: bool,
-    games: int,
-    game_seconds: float,
 ) -> EvalExecution | None:
-    """The declared allocation, or local CPU serving when `serves` declares none.
+    """The declared allocation; a running service fixes it.
 
-    A running service fixes the allocation. Local serving plays one game at a
-    time; its deadline covers every game and its replay.
+    Without a declaration, checkpoint players play scalar in their game child.
     """
     if inference is not None:
         if execution is not None and execution != inference.execution:
             raise ValueError("conflicting execution declaration")
         return inference.execution
-    if execution is None and serves:
-        return EvalExecution(
-            device="cpu",
-            max_active_games=1,
-            deadline_unix=time.time() + 2 * games * game_seconds,
-        )
     return execution
 
 

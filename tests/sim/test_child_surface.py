@@ -49,9 +49,15 @@ _PARENT_MAIN = textwrap.dedent(
     )
     served = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
     report = {}
-    # Checkpoints are always served. A code anchor plays Torch-free in-child;
-    # a search player is the one in-child Torch consumer.
-    for mode, opponent in (("served", other), ("anchor", anchor), ("search", search)):
+    # Under an allocation checkpoints are served and a code anchor plays
+    # Torch-free in-child. Search players, and checkpoints without an
+    # allocation (scalar), load Torch in-child.
+    for mode, opponent, execution in (
+        ("served", other, served),
+        ("anchor", anchor, served),
+        ("scalar", anchor, None),
+        ("search", search, served),
+    ):
         _, trace, replay = play_cell(
             key=key,
             player_a=player,
@@ -59,7 +65,7 @@ _PARENT_MAIN = textwrap.dedent(
             deal_seeds=(831,),
             out_dir=out / mode,
             checkpoint_paths={player.player_id: str(path), other.player_id: str(other_path)},
-            execution=served,
+            execution=execution,
             max_commands=4,
         )
         games = read_trace(Path(trace["path"]))
@@ -118,10 +124,13 @@ def test_replay_child_never_imports_torch(child_report: dict) -> None:
     assert replay["process"]["threads/replay"] <= REPLAY_BUDGET.threads
 
 
-def test_search_game_child_stays_within_budget(child_report: dict) -> None:
-    search = child_report["search"]
-    assert search["replay_passed"] and search["failures"] == []
-    for counters in search["children"]:
+@pytest.mark.parametrize("mode", ["scalar", "search"])
+def test_in_child_policy_game_child_stays_within_budget(
+    child_report: dict, mode: str
+) -> None:
+    report = child_report[mode]
+    assert report["replay_passed"] and report["failures"] == []
+    for counters in report["children"]:
         assert counters["torch_loaded/game"] == 1
         assert counters["threads/game"] <= GAME_BUDGET.threads
 

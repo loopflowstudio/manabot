@@ -157,16 +157,12 @@ def play_cell(
     if legs is not None and (not legs or not set(legs) <= set(mode_legs)):
         raise ValueError("selected legs must be a nonempty subset of the mode's legs")
     played_legs = tuple(mode_legs) if legs is None else tuple(sorted(set(legs)))
-    # Evaluation checkpoint players are always served.
-    execution = resolve_execution(
-        execution,
-        inference,
-        serves=any(is_served(p) for p in (player_a, player_b)),
-        games=len(deal_seeds) * len(played_legs),
-        game_seconds=game_seconds,
-    )
+    # Checkpoint players are served under a declared allocation, else scalar.
+    execution = resolve_execution(execution, inference)
     if execution is not None:
         key, (player_a, player_b) = bind_execution(key, (player_a, player_b), execution)
+    elif any("execution" in p.player_spec for p in (player_a, player_b)):
+        raise ValueError("shared registration requires its declared runtime")
     games: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
     replay_receipts: list[dict[str, Any]] = []
