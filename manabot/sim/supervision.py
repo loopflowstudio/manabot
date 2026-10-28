@@ -97,9 +97,12 @@ def supervise_game(
         game["registrations"] = [
             registration.model_dump(mode="json") for registration in registrations
         ]
-        deadline_unix = time.time() + game_seconds
+        # The game's own allowance, clamped to its allocation's deadline.
+        seconds = game_seconds
         if inference is not None:
-            deadline_unix = min(deadline_unix, inference.execution.deadline_unix)
+            seconds = min(seconds, inference.execution.remaining())
+        deadline = started + seconds
+        deadline_unix = time.time() + seconds
         if evidence_path is not None:
             evidence_path.parent.mkdir(parents=True, exist_ok=True)
             evidence_path.touch(mode=0o600, exist_ok=False)
@@ -134,9 +137,8 @@ def supervise_game(
                     client.close()
             receiver = process.connection
             while True:
-                remaining = game_seconds - (time.monotonic() - started)
+                remaining = deadline - time.monotonic()
                 if inference is not None:
-                    remaining = min(remaining, inference.execution.remaining())
                     try:
                         inference.check()
                     except InferenceFailure as exc:

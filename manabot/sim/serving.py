@@ -405,10 +405,12 @@ def serve(
         if kind == "close":
             return False
         try:
-            result = store.admit(payload) if kind == "admit" else perf.snapshot()
             if kind == "admit":
+                result = store.admit(payload)
                 _sample_memory(perf, execution)
                 perf.write(directory / "serving.json")
+            else:
+                result = perf.snapshot()
             connection.send((identity, result, None))
         except Exception as exc:
             perf.count("failed_admissions")

@@ -18,7 +18,7 @@ of each registration, its admission and its evidence.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
 from multiprocessing.reduction import ForkingPickler
@@ -292,10 +292,9 @@ class InferenceRuntime:
                     raise OSError("service closed the connection handoff")
         except OSError as exc:
             client.close()
-            self.fail(f"inference connection handoff failed: {exc}")
-            raise InferenceFailure(
-                f"inference connection handoff failed: {exc}"
-            ) from exc
+            message = f"inference connection handoff failed: {exc}"
+            self.fail(message)
+            raise InferenceFailure(message) from exc
         finally:
             service.close()
         self.performance.count("client_connections")

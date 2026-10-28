@@ -387,6 +387,8 @@ admit/snapshot/close, `InferenceRuntime.game_slot` owning the slot wait, the
 client alone validating replies as `(reply, error)`.
 Compress 5: `PolicyStore.admit` alone checks each registration's parameter
 count (reloads re-verify bytes); `InferenceRuntime.check` relies on `_closing`.
+Compress 6: `supervise_game` keeps one clamped deadline; builtin
+`TimeoutError`; one admit/snapshot branch in `serve.control`.
 `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
@@ -510,7 +512,7 @@ receipt past its deadline has its attempts finished as lost
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
 from the 0.2.6 client as in Calibration. Rechecked by quote 2026-10-28
-04:26 UTC (implement): still "at its machine limit" (`etude machines` lists
+05:05 UTC (implement): still "at its machine limit" (`etude machines` lists
 `cpu32-b937fa5a80b7`); nothing queued, no new spend. The bug is unfixed on
 Etude main v0.2.11 (`scheduler.py:1898-1902`) and is Etude EXP-13's (an
 owned-SSH session that has no receipt stays claimed). This case is recorded there as a comment.
