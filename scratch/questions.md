@@ -33,13 +33,9 @@ live at `ce43a5cf7:scratch/questions.md`.
 
 ## Sync resolution — 2026-10-27
 
-The incoming conflict revision `b8820b0d9e9160086d8acc13075638003c61b3e5` extends the
-inherited MTG-188 Qwen runtime and game runner. Retain its runtime fixes,
-effective campaign budgets, hosted-model accounting and checkpoint-opponent
-support; these paths do not implement MTG-193's shared evaluation changes.
-Keep this branch's assumptions above. The target's MTG-188 notes remain at
-`b8820b0d9e9160086d8acc13075638003c61b3e5:scratch/questions.md` as historical
-context, not new execution direction. No rental is launched by this sync.
+Kept the incoming MTG-188 Qwen runtime and game-runner fixes at
+`b8820b0d9e9160086d8acc13075638003c61b3e5` (historical notes in that
+revision's `scratch/questions.md`); they do not touch shared evaluation.
 
 ## Served-only and Torch-free anchors — implement 2026-10-27
 
@@ -89,11 +85,6 @@ keep matching for resumption.
   A4500 about 2,600 games/h; `00119d1c9211` `cpu32` scalar about 1,700) on the
   same 1,000-game pair, so the $5 ledger buys only the two "after" arms. A
   fresh `main` before-arm is optional if the ledger allows and the hosts differ.
-- **Assumption — one launching writer (2026-10-27 15:50):** the interactive
-  Task session `a35bc11b…` committed `d2f46c62c` and calibration `7616dd740`
-  while the implement step held this worktree. The implement step therefore launched
-  nothing after `2e066580c458` and left its `serve` drain fix uncommitted for that
-  writer and gate, so two writers would not spend the $5 ledger.
 
 ## Parent hop (decided by Jack Heart, 2026-10-27: option b; implemented)
 

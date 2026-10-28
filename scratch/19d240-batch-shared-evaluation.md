@@ -286,6 +286,7 @@ further cut found): `uv run --extra dev pytest tests/eval/test_batched_eval.py t
 Compress 2026-10-28: `tests/academy/test_trigger_order.py` imported `ObservationSpace` from the bare `manabot.env` package (inherited from `main`'s `e742e8bff`); now imports it from `env.observation` → 3 passed. Dropped `verify/games.MOUNTAIN_DECK` (unused since `main`) → `tests/verify/test_util.py tests/test_package_boundaries.py` 16 passed.
 `InferenceRuntime` writes `allocation.json` through one `_write_allocation` → `tests/eval/test_batched_eval.py tests/sim/test_child_surface.py` 26 passed, 1 skipped.
 Dropped the resolved concept-review 5 page (`scratch/concept-review.html`, at `b81336386`); `players.build_code_player` documents that demo search also takes `seed` → `tests/sim/test_child_surface.py tests/test_package_boundaries.py` 14 passed.
+Compress 2026-10-28 (later): no code cut in `threads`, `child`, `serving_protocol`, `serving`, `native_game`, `supervision`, `players`, `match`; trimmed resolved notes from `scratch/questions.md`. No code edits, no rerun.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
