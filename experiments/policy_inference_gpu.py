@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from experiments import inference_baseline as baseline, qwen_mtg183 as inputs
 from manabot.eval.local import checkpoint_request
 from manabot.infra.artifacts import verify_file
-from manabot.sim.execution import EvalCompute
+from manabot.sim.execution import EvalAllocation
 from manabot.sim.matchup import AuthoredMatchup
 
 
@@ -64,7 +64,7 @@ def prepare(root: Path, checkpoint: Path, config: Campaign) -> baseline.Recipe:
     for size in (1, 4):
         baseline._write(
             root / f"cuda-{size}.json",
-            EvalCompute(
+            EvalAllocation(
                 device="cuda",
                 max_active_games=size,
                 max_batch_rows=size,

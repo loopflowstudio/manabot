@@ -417,3 +417,40 @@ hop (a follow-up, not MTG-193). Next implement direction:
 - Squash the ~60 "Record that the cpu32 calibration arm is still blocked"
   checkpoint commits out of the branch history before publishing.
 - Sync with `main`, republish #389, and gate.
+
+## Concept review 7 (with Jack Heart, 2026-10-28, at `c85470a59`, PR #389)
+
+**Proposed, not accepted.** One mismatch matters for the next tuning step:
+**allocation settings are part of player identity.**
+
+- `EvalCompute` (`manabot/sim/execution.py`) hashes `max_active_games`,
+  `max_batch_rows`, `max_delay_seconds`, `resident_model_bytes`,
+  `request_seconds`, `cache_catalog` and `resident` with device, dtype and
+  version. A bound player's `compute_class_id` and the arena compute envelope
+  are that hash (`bind_execution`). So raising active games from 64 to 256
+  (the open batch and memory targets) makes new player identities, and the
+  64-active evidence cannot be reused for them.
+- The service already disagrees: `PolicyKey.from_registration` batches on
+  checkpoint, ABIs, world, device, dtype and `deterministic` only. Its docstring
+  says the knobs are included "because they can change batch composition or
+  numerical results". But v1 already lets composition vary with arrival order
+  inside one identity, and sampling is per row (`sample_rows`, tested
+  independent of neighbours). The knobs are not what makes batch composition
+  vary, and pinning them does not make it reproducible.
+- **Proposal:** identity = numerics (version, device, dtype, deterministic,
+  implementation). The allocation knobs move to `EvalExecution` and are kept in
+  attempt receipts, like the deadline already is. That is a compute-contract
+  change: `shared-eval-v2`.
+- **What must survive:** replay verification (it replays Commands, not policy
+  outputs), the frozen v1 evidence, and the CPU/CUDA parity limit. Scalar and
+  served play remain different identities, because their sampling differs.
+- **Counterexample to check:** if a numerics difference between batch sizes
+  ever changes a deterministic player's argmax, would two allocation settings
+  of one identity diverge? They would, but v1 already has the same exposure
+  through arrival order. The honest contract is "Commands are reproducible from
+  the retained trace; live recomputation across batch sizes is not promised."
+- **Open:** the numbered questions in `scratch/concept-review.html`.
+- **Decided (Jack Heart, 2026-10-28, "1a 2a 3a"):** in #389, `EvalCompute`
+  becomes `shared-eval-v2` = version, device, dtype. The allocation settings
+  move to `EvalAllocation`/`EvalExecution` and are kept in attempt receipts.
+  Frozen v1 served evidence stays as it is, readable but not reused.

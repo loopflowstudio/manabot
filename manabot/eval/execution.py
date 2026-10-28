@@ -54,11 +54,9 @@ def bind_execution(
             existing = spec.get("execution")
             if existing is not None and existing != compute:
                 raise ValueError("conflicting execution declaration")
-            spec.update(
-                device=execution.device,
-                batch_size=execution.max_batch_rows,
-                execution=compute,
-            )
+            # Batch size is an allocation setting, not part of the player.
+            spec.pop("batch_size", None)
+            spec.update(device=execution.device, execution=compute)
             player = PlayerRegistration.model_validate(
                 {
                     **player.model_dump(),

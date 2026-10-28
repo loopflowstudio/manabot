@@ -19,14 +19,25 @@ of one checkpoint have distinct identities. Retiring scalar checkpoint play
 awaits a CPU measurement of served play after direct game connections
 (Jack Heart, 2026-10-28).
 
-`EvalCompute` is the stable part of that declaration: device/dtype, batching,
-residency/cache settings and request limits identify the player and benchmark.
-`EvalExecution` adds the allocation deadline and instrumentation/diagnostic
-switches. Those attempt settings remain in game and allocation receipts, not
-registration hashes. A new allocation window therefore preserves Etude model,
-benchmark and match identities when its compute contract is unchanged; changing
-the compute contract still creates distinct identities. Duel seed derivation
-also retains the original opponent cohort before binding shared execution.
+`EvalCompute` is the identity part of that declaration: version, device and
+dtype, i.e. how a served policy's numbers are computed (`shared-eval-v2`).
+`EvalAllocation` adds the scheduling and cache limits (active games, batch rows,
+batching delay, resident-model bytes, request timeout, catalog cache,
+residency), and `EvalExecution` adds the deadline and instrumentation/diagnostic
+switches. Allocation and attempt settings remain in game and allocation
+receipts, not registration hashes: they change throughput, not the contract,
+because batch composition already varies with arrival order and each row
+samples from its own decision seed. Commands are reproducible from retained
+traces (replay re-executes them), not by recomputing the policy live across
+batch sizes. Rerunning with more active games or larger batches therefore
+preserves Etude model, benchmark and match identities; changing device, dtype
+or the contract version creates distinct identities. Duel seed derivation also
+retains the original opponent cohort before binding shared execution.
+
+`shared-eval-v1` (through PR #389) hashed the allocation settings as well, and
+its served players carried `batch_size` in their spec. Its frozen records stay
+readable (`EvalComputeV1`, `EvalExecutionV1`) but are not reused or continued
+under v2 (Jack Heart, 2026-10-28).
 
 Etude can reuse completed deals under the same identity. Such reuse adds no new
 sample or performance measurement, and changing instrumentation alone does not
@@ -43,10 +54,9 @@ Matchup and content suite are not model inputs: the card catalog is bound by the
 checkpoint's world, so concurrent games that seat one checkpoint share its
 resident policy and its batches whatever their matchup. Each registration's
 setups are still validated against that policy at admission, and matchup
-identity remains in registrations and evidence. This stays `shared-eval-v1`:
-the contract never fixed batch composition, which already depended on arrival
-order within the row and delay limits, and each row samples from its own
-decision seed. Each batch moves to the device in one copy per dtype (float32
+identity remains in registrations and evidence. The contract never fixed batch
+composition, which depends on arrival order within the row and delay limits,
+and each row samples from its own decision seed. Each batch moves to the device in one copy per dtype (float32
 observations, int64 catalog references).
 
 Decisions do not pass through the allocation's supervising process. For each

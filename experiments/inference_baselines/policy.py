@@ -14,7 +14,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig
-from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.execution import EvalAllocation, EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
 from manabot.sim.serving import PolicyStore, _infer
@@ -44,9 +44,9 @@ def execute(
     if len(request.deal_seeds) > 4 or not set(workload.legs) <= set(request.legs):
         raise ValueError("invalid bounded deal/leg selection")
     compute = (
-        EvalCompute.model_validate_json(cell.execution.read_bytes())
+        EvalAllocation.model_validate_json(cell.execution.read_bytes())
         if cell.execution
-        else EvalCompute(
+        else EvalAllocation(
             max_active_games=1,
             max_batch_rows=1,
             max_delay_seconds=0,

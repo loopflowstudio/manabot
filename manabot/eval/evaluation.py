@@ -26,7 +26,7 @@ from manabot.eval.results import EvaluationRow, RateInterval
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
-from manabot.sim.execution import EvalExecution
+from manabot.sim.execution import EvalExecution, EvalExecutionV1
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
@@ -90,7 +90,8 @@ class EvaluationResult(BaseModel):
     request: EvaluationRequest
     evaluation_id: str | None = None
     card_evidence_dir: str | None = None
-    execution: EvalExecution | None = None
+    # Retained v1 allocations stay readable; they are never continued under v2.
+    execution: EvalExecution | EvalExecutionV1 | None = None
     status: Literal["running", "completed", "incomplete"] = "running"
     rows: list[EvaluationRow] = Field(default_factory=list)
     win: RateInterval | None = None

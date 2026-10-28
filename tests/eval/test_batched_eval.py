@@ -29,7 +29,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.model.inference import transfer
 from manabot.sim import child, serving
-from manabot.sim.execution import EvalExecution
+from manabot.sim.execution import EvalComputeV1, EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
@@ -637,20 +637,58 @@ def test_execution_binding_preserves_seed_authority_and_rejects_conflicts(
         PlayerRegistration.model_validate_json(players[0].model_dump_json())
         == players[0]
     )
+    # Allocation settings are attempt facts: they leave identities unchanged.
     later = execution.model_copy(
         update={
             "deadline_unix": execution.deadline_unix + 3600,
             "instrumentation": False,
             "diagnostic_batches": 2,
+            "max_active_games": 256,
+            "max_batch_rows": 64,
+            "max_delay_seconds": 0.02,
+            "resident_model_bytes": 2**31,
+            "request_seconds": 30.0,
+            "cache_catalog": False,
+            "resident": False,
         }
     )
     assert later != execution
     assert later.identity == execution.identity
     assert bind_execution(bound, players, later) == (bound, players)
+    assert "batch_size" not in players[0].player_spec
     with pytest.raises(ValueError, match="conflicting"):
-        bind_execution(
-            bound, players, execution.model_copy(update={"max_batch_rows": 1})
-        )
+        bind_execution(bound, players, execution.model_copy(update={"device": "cuda"}))
+
+
+def test_frozen_v1_served_registration_stays_readable(tmp_path: Path) -> None:
+    _, player, _, _ = fixture_policy(tmp_path)
+    v1 = EvalComputeV1(
+        version="shared-eval-v1",
+        device="cpu",
+        dtype="float32",
+        max_active_games=64,
+        max_batch_rows=64,
+        max_delay_seconds=0.005,
+        resident_model_bytes=2**30,
+        request_seconds=60.0,
+        cache_catalog=True,
+        resident=True,
+    )
+    frozen = PlayerRegistration.model_validate(
+        {
+            **player.model_dump(),
+            "player_spec": {
+                **player.player_spec,
+                "device": "cpu",
+                "batch_size": 64,
+                "execution": v1.model_dump(),
+            },
+            "compute_class_id": v1.identity,
+        }
+    )
+    assert frozen.compute_class_id.startswith("shared-eval-")
+    # v1 and v2 never share an identity, so v1 deals are not reused.
+    assert v1.identity != EvalExecution(deadline_unix=time.time() + 30).identity
 
 
 def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) -> None:
