@@ -13,7 +13,7 @@ Inherited MTG-206 notes are at `4ab16a140:scratch/questions.md`.
   design question left for review; values were not rounded, since the
   acceptance compares them exactly.
 - **etude-sdk 0.2.11** (etude #72) merged 2026-10-28 02:09Z but was not on
-  PyPI or GitHub releases at 03:24Z, so the pin stays 0.2.10. Projection with
+  PyPI or GitHub releases at 03:24Z (still 0.2.10 at 03:40Z), so the pin stays 0.2.10 (confirmed by Jack Heart's operator steer 2026-10-28). Projection with
   Etude main's `estimate` swapped in is recorded in `scratch/mtg207.md`.
 - **Machine load.** Load average 90–240 on 16 cores throughout; wall times
   are inflated several-fold, CPU less so.
