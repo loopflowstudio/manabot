@@ -1,84 +1,51 @@
-# TLA content implementation — reconciled 2026-10-28
+# TLA Rust authoring — implementation, 2026-10-28
 
-Accepted outcome: [tla-content-handoff.md](tla-content-handoff.md), Jack Heart,
-2026-10-28. One cohesive PR for review at demo, no merge or later Task launches.
-The eight-PR allocation remains in [tla-delivery-batches.md](tla-delivery-batches.md).
+Accepted: Jack Heart's [Rust-first revision](tla-rust-authoring-direction.md)
+supersedes JSON authoring. This remains Task 892c47 / draft PR394, one cohesive
+PR, stopping at demo without merge. D1/f871a8 retains admission/parser ownership.
+The active Graph owns subsequent gate, publication and demo steps.
 
-Implemented at `2a44b763c`: current definitions and setup projections lower to one
-native runtime and learning source. All nine fixed token templates are explicit.
-World w16 and learning schema 8 are fresh; frozen evidence and setup counts stay
-unchanged. Qualification hashes cover transitive card/token closure. IR owns IDs
-and membership; generated eligibility retains inventory and qualified keys per IR
-hash. Policy binding reads the descriptor without starting a game.
+## Design and deletion cut
 
-## Delete — do not maintain
+Typed Rust card definitions in `managym/src/cardsets/` own current characteristics,
+programs and presentation. An offline Rust exporter serializes this source; the
+existing Python compiler resolves symbolic references, validates, and emits the
+checked-in native/learning IR. There remains one runtime lowering path. Ordinary
+setup decklists, independent qualification decisions and frozen evidence remain data.
 
-Completed: handwritten TLA registrations in cardsets/tla.rs and TLA portions of
-elemental.rs, sacrifice.rs and temur.rs; registry-only presentation lookup in
-semantic/content.rs; exclusive native/compiled equality tests. Preserve non-TLA
-rules and independent directed witnesses on the surviving typed source.
-Attack legality reuses can_tap's haste-aware restriction; temporary haste never
-clears sickness. Existing typed look/select carries Rallier's required reveal.
-The repeated Python pack-path tables and policy receipt comparison are removed:
-CURRENT_IR_PATHS selects explicit current catalogs and BoundSemanticPack checks
-pack key plus both source/IR hashes for every compiled binding. Policy retains
-its required-receipt and full-definition coverage checks. The required-receipt
-guard rejects null or malformed provenance before generic observation binding,
-which still permits uncompiled manifests. Receipt tests mutate the native descriptor
-at that boundary rather than replacing a successfully validated binding.
-Directed card tests use effective_pt for paired assertions; learning tests check
-the complete shared compiler vocabulary separately from each pack's used opcodes.
-Pool descriptors now create implemented entries directly and add only missing
-inventory entries; both public accessors share the same runtime lookup. Current
-projections assemble their closure once. Qualification mutation tests share one
-fixture while preserving direct-card and transitive-token cases. Surviving
-Lotus Cobra and Treasure registrations reuse the existing modal-mana constructor,
-retaining color order and payment behavior. The duplicate `tla_content::pin_library`
-fixture is removed; Rallier and Piandao now reuse `elemental_cards::pin_top` to
-arrange private library choices without unrelated zone changes. The content README
-now points to current authoring and qualification, retaining historical checks and
-the original rollout reference at `c5d406e3d:content/semantic/README.md`.
-No deletion targets remain in this cut.
+Delete — do not maintain: hand-authored `current/definitions.json`,
+`native_roots.json`, `token_templates.json`, their loader paths, authoring docs,
+parity source-manifest reference, and the JSON-only unregistered-definition smoke. Independent Avatar Enthusiasts/Glider Kids rules witnesses and the shared
+Command/learning/Academy proof remain on the surviving Rust source.
+Replace them with one generated catalog exported from Rust, including membership.
+Preserve exact program/source hashes where behavior is unchanged, all historical
+artifacts, setup counts, independent tests and the public ContentPool API.
+No stringly JSON macros or runtime Oracle parsing in set definitions.
+The deletion cut is complete; no predecessor authoring paths remain to maintain.
+Shared typed helpers express the ten draw lands, five basic lands, single targets,
+mana-only costs, modal mana alternatives, prowess and unconditional firebending.
+Program constructors live beside their type; named mechanics share their trigger
+and duration contracts while retaining each card's program key. Keep conditional
+firebending, unusual target ranges and costs
+explicit, and retain optional-field presence because source hashes distinguish
+omitted fields from empty or false values. The reduction preserves catalog bytes
+and all downstream identities.
 
-## Clause review
+Main resolution repair `7d7736c6a` is integrated at `f674bcd8f`. Allies at Last
+now has independent outcomes on that integration. World w16/schema 8 remain;
+five other T1 holdouts retain T2/T3 prerequisites. Full TLA is not this PR.
 
-All 60 previously unqualified T1 cards now have a disposition in
-`docs/rules/tla/t1-clause-review.json`, checked against final pinned Oracle/rules
-and release notes. 54 gain complete printed-clause evidence (existing independent
-witnesses plus focused supplements); the qualified pool grows from 31 to 85.
-Rallier now reveals its selected card. Wartime Protestors' temporary haste now
-enables attacks and tap-symbol costs without erasing summoning sickness.
+Implemented: 140 typed Rust definitions with 95 native roots and nine fixed
+tokens export byte-equivalent source values; all prior IR and coverage identities
+are unchanged. JSON authoring/dependent loader paths are removed. Source and
+membership export to checked-in `generated/cards.json`; the CLI compiles Rust
+before generating/checking every projection, and CI provisions Rust for that step.
+Allies at Last now qualifies on integrated resolution semantics (86 cards total).
+Five other T1 holdouts retain their reviewed prerequisites.
 
-Six stay unsupported with concrete shared prerequisites, retaining T1 completion
-ownership rather than silently handing qualification to T7:
-- Accumulate Wisdom: ordered private library remainder (T2).
-- Suki, Kyoshi Warrior: CDA power outside the battlefield (T3).
-- Water Tribe Rallier: effective library power filtering, demonstrated by Suki;
-  reveal/payment/ordinary selection fixed or witnessed (T3 authority, T2 consumer).
-- Cat-Gator and Lightning Strike: planeswalker/battle damage-target classes under
-  CR 115.4, absent from CreatureOrPlayer (T3 characteristics/target authority).
-- Allies at Last: illegal victim still receives power damage when another target
-  remains valid (MTG-177; same primitive as Rocky Rebuke).
+Remaining: Graph-owned gate/publication/demo. Gate owns full debug/Clippy, current-world
+arena/evaluation/monitoring/model suites and choice-navigation/Learn/browser
+receipts. The existing draft PR394 is updated by the publication step, without merge.
+Prior implementation and evidence detail: `f674bcd8f:scratch/892c47-author-tla-cards.md`.
 
-The 91-card T1 allocation is reviewed, not fully delivered. Prerequisite owners
-are existing plan boundaries, not newly launched work or a cyclic dependency on
-landing the entirety of T1. Eligibility remains closed until accepted integration
-and remaining whole-card witnesses. No partial card is qualified.
-
-Five earlier corrections remain: Foggy Swamp Hunters to T3; Pirate Peddlers, Zhao,
-Vindictive Warden and Rocky Rebuke to T4. MTG-177's last observed status reports
-gate running; retained PR354 does not establish acceptance of its later w15 repair.
-No resolution repair was copied. Full-file ownership still covers 286 identities
-and 294 faces. All ten final raw source byte digests were rechecked this pass.
-
-Parallel f871a8 retains admission/parser/consumer ownership. Its agreed pool API
-and checkpoints remain intact; latest compressed integration and joined consumer
-proof are D1 work. No Task, Graph, publication or merge was launched here.
-
-Qualification evidence includes 102 passing exact-filter debug witnesses plus
-Rallier reveal and haste controls (19 new directed tests), and verified source pins.
-Check: `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::tla_content -- --test-threads=1` — 35 passed after fixture reuse; Rust format and whitespace checks passed. Retained results for unchanged runtime: pool — 2 passed, sacrifice — 21 passed; current-content/policy — 27 passed including malformed receipts; learning projections — 12 passed; all 10 native pool descriptors match pre-reduction snapshots after atomic extension rebuild; generator `--check` and Ruff passed.
-Gate retains full debug Rust/Clippy, current-world
-arena/evaluation/monitoring, model suite, choice-navigation,
-Learn/browser proofs on new receipts, CI collection and release-source checks.
-Publication and demo remain later; historical receipts are unchanged.
+Check: `CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test --manifest-path managym/Cargo.toml -j 2 --test rules_tests tla_content` — 37 passed, plus the focused `prowess_resolves_above_the_noncreature_spell` test; `CARGO_PROFILE_DEV_OPT_LEVEL=1 uv run python -m scripts.compile_current_content --check` — catalog and projections unchanged; Rustfmt/whitespace passed; cp312 release extension rebuilt and atomically installed, pool import retains w16 and 86 eligible cards. Reuse implementation's 13 focused Python passes and source-pin checks; full affected suites and browser acceptance remain with gate.

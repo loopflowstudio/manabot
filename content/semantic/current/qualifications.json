@@ -306,6 +306,15 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.allies_at_last": {
+    "closure_hash": "eb08d41547fc077c358e209a73d2a187717e22c137c8acfb79d436f4f5fddf36",
+    "witnesses": [
+      "managym/tests/rules/stage2_cards.rs::allies_at_last_affinity_and_two_attackers",
+      "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal",
+      "managym/tests/rules/tla_content.rs::allies_at_last_can_choose_one_source_and_uses_its_current_power",
+      "managym/tests/rules/tla_content.rs::allies_at_last_respects_source_and_victim_legality_and_lifelink"
+    ]
+  },
   "tla.avatar_enthusiasts": {
     "closure_hash": "e07125fac706e597143d10211804d17f08565a9c45b3739a096abfd7107c846d",
     "witnesses": [

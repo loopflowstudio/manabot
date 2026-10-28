@@ -1,15 +1,27 @@
 # Semantic content
 
-Current card authoring lives in `current/definitions.json`: typed characteristics,
-programs and presentation text shared by native play and learning. `current/setups.json`
-selects deck and sideboard entries; it does not redefine cards. The compiler resolves
-definition references and token closure, validates a closed instruction schema, and
-emits canonical IR plus coverage reports:
+Current TLA cards are authored as typed Rust functions in
+[`managym/src/cardsets/tla.rs`](../../managym/src/cardsets/tla.rs).
+[`authoring.rs`](../../managym/src/cardsets/authoring.rs) defines symbolic programs,
+costs, targets, predicates and characteristics; `authored_support.rs` supplies the
+non-TLA definitions needed by current setups. Card text is presentation only.
+
+The offline exporter writes `current/generated/cards.json`. The existing compiler
+then resolves definition references and token closure, validates the closed
+instruction schema, and emits canonical IR plus coverage reports. All generated
+files are checked in. `--check` compiles the Rust source and rejects any stale output:
 
 ```bash
 uv run python -m scripts.compile_current_content
 uv run python -m scripts.compile_current_content --check
 ```
+
+Edit a card's Rust function, add it to its set's `cards()` list, and regenerate.
+TLA membership and fixed tokens derive from that set list. Do not edit generated
+JSON or add another native registration. `current/setups.json` remains ordinary
+deck/sideboard data, and `qualifications.json` remains independent review evidence.
+Changes to rules or token dependencies require renewed qualification, even if the
+Rust source compiles. The exporter requires Cargo but no installed Python extension.
 
 The [TLA authoring and qualification contract](../../docs/rules/tla/README.md)
 describes the inventory, independent witnesses, unsupported cards and ownership

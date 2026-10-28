@@ -30,9 +30,9 @@ T4 (respectively another-source matching, untargeted damage and invalid-victim
 resolution). Each reason is retained beside the allocation row. This changes the
 research counts of T1 96/T3 48/T4 71 without splitting any card's clauses or faces.
 
-T1 currently qualifies 85 cards. All 60 formerly unqualified definitions have
-clause dispositions in `docs/rules/tla/t1-clause-review.json`: 54 qualified, six
-blocked on explicit T2/T3/MTG-177 prerequisites. Completion ownership remains T1;
+T1 currently qualifies 86 cards. All 60 formerly unqualified definitions have
+clause dispositions in `docs/rules/tla/t1-clause-review.json`: 55 qualified, five
+blocked on explicit T2/T3 prerequisites after main's resolution integration. Completion ownership remains T1;
 this is reviewed allocation, not full delivery or an implicit T7 deferral. No
 batch counts or launch order change. The current status and remaining checks are
 in [892c47-author-tla-cards.md](892c47-author-tla-cards.md).

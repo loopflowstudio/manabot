@@ -31,17 +31,18 @@
     },
     {
       "card_name": "Allies at Last",
-      "status": "prerequisite",
-      "prerequisite_owner": "MTG-177",
-      "prerequisite": "Invalid damage-victim resolution",
-      "finding": "Same DealPowerDamage primitive as Rocky Rebuke: a valid source keeps the spell resolving after victim gains hexproof, but damage ignores victim legality. MTG-177 owns resolution repair; T1 retains card affinity/zero-one-two-source and whole-card qualification after accepted integration.",
-      "evidence": [
-        "managym/src/flow/resolution.rs::Effect::TargetCreaturesDealPowerDamageToLastTarget",
-        "scratch/rocky-rebuke-positive.rs"
-      ],
+      "status": "qualified",
       "semantic_key": "tla.allies_at_last",
       "completion_owner": "T1",
-      "oracle_id": "c15e5e93-2eff-407d-ae75-437e36ef85ba"
+      "oracle_id": "c15e5e93-2eff-407d-ae75-437e36ef85ba",
+      "clauses": "Affinity reduces generic mana only; zero, one or two distinct own creature sources plus one opposing creature victim. Each legal source deals its current power with its own damage abilities. An illegal victim receives no damage; a departed source contributes none.",
+      "witnesses": [
+        "managym/tests/rules/stage2_cards.rs::allies_at_last_affinity_and_two_attackers",
+        "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal",
+        "managym/tests/rules/tla_content.rs::allies_at_last_can_choose_one_source_and_uses_its_current_power",
+        "managym/tests/rules/tla_content.rs::allies_at_last_respects_source_and_victim_legality_and_lifelink"
+      ],
+      "integration": "Main resolution repair 7d7736c6a integrated; four focused debug witnesses passed on 2026-10-28. Prior blocked finding is retained at f674bcd8f:docs/rules/tla/t1-clause-review.json."
     },
     {
       "card_name": "Azula Always Lies",

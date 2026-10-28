@@ -20,6 +20,13 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
+Current TLA authoring lives in typed functions in `src/cardsets/tla.rs`; symbolic
+authoring types live in `src/cardsets/authoring.rs`. The offline exporter and
+compiler (`uv run python -m scripts.compile_current_content`, from the repository
+root) regenerate the checked-in catalog and native/learning IR. `--check` rejects
+stale outputs. Keep decklist data and independent qualification evidence separate
+from card behavior; see [the authoring contract](../content/semantic/README.md).
+
 Dependencies flow: python → agent → flow → state/infra.
 
 The semantic kernel direction — typed card programs, exact object identity,

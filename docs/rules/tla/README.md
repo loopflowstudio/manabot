@@ -1,12 +1,14 @@
 # TLA content and qualification
 
 Current definitions are authored once in
-[`content/semantic/current/definitions.json`](../../../content/semantic/current/definitions.json).
-They contain typed characteristics, programs and presentation text. Setup manifests
-only choose definition IDs and counts. Generate every native/learning projection
-with `uv run python -m scripts.compile_current_content`; `--check` rejects stale
-outputs. Frozen v1/w11 sources remain historical evidence and are not generator
-inputs. Current execution uses world **w16** and learning schema **8**.
+[`managym/src/cardsets/tla.rs`](../../../managym/src/cardsets/tla.rs).
+The typed Rust definitions contain characteristics, programs and presentation text.
+Set membership also owns native roots and fixed tokens. Setup manifests only choose
+definition IDs and counts. Generate the catalog and every native/learning projection
+with `uv run python -m scripts.compile_current_content`; `--check` compiles the Rust
+source and rejects stale checked-in outputs. Frozen v1/w11 sources remain historical
+evidence and are not generator inputs. Current execution uses world **w16** and
+learning schema **8**.
 
 `SemanticPack::compile_content_pack` lowers these programs into the ordinary rules
 runtime. The generic native pack also lowers its TLA definitions from that source;
@@ -32,8 +34,8 @@ programs remain explicitly unsupported by the shared pool descriptor.
 Generated eligibility retains the inventory once and qualified keys per IR hash;
 the runtime derives pack membership and definition identity from that checked IR.
 
-The current pool qualifies **85 cards**: the five basic lands, Avatar Enthusiasts
-and Glider Kids, the 54 cards documented in the [T1 clause review](t1-clause-review.json),
+The current pool qualifies **86 cards**: the five basic lands, Avatar Enthusiasts
+and Glider Kids, the 55 cards documented in the [T1 clause review](t1-clause-review.json),
 and these 24 cards:
 
 - Earth Kingdom Protectors, Water Tribe Captain, Iguana Parrot, Boar-q-pine,
@@ -50,7 +52,7 @@ registration and generation are not the evidence. Water Tribe Rallier now reveal
 its chosen card, and temporary haste grants now permit attacks and tap-symbol
 costs without erasing summoning sickness when the grant expires.
 
-T1 still owns 91 cards; these six retain explicit prerequisites and stay unsupported:
+T1 still owns 91 cards; these five retain explicit prerequisites and stay unsupported:
 
 | Cards | Required behavior | Prerequisite owner |
 | --- | --- | --- |
@@ -58,7 +60,6 @@ T1 still owns 91 cards; these six retain explicit prerequisites and stay unsuppo
 | Suki, Kyoshi Warrior | CDA power applies outside the battlefield | T3 characteristics |
 | Water Tribe Rallier | Library power filter evaluates CDAs (notably Suki); reveal is repaired | T3 authority / T2 selection |
 | Cat-Gator; Lightning Strike | “Any target” includes planeswalkers and battles (CR 115.4) | T3 target characteristics |
-| Allies at Last | Invalid victim receives no damage while legal source targets remain | MTG-177 resolution |
 
 The review retains T1 completion ownership and links exact implementation evidence
 for each prerequisite. It does not launch work, add a cyclic landing dependency,
@@ -76,9 +77,9 @@ Five final-research T1 candidates require primitives beyond this content cut:
 Foggy Swamp Hunters moves to T3 for conditional keyword grants; Pirate Peddlers
 and Zhao move to T4 for `another` sacrifice-source matching; Vindictive Warden
 moves to T4 for untargeted opponent damage. The precise reasons are retained
-beside those rows. Rocky Rebuke also moves to T4: its power-damage operation
-ignores an invalid victim when the source remains legal, pending MTG-177
-integration. Their other clauses do not justify partial admission.
+beside those rows. Rocky Rebuke retains its T4 completion owner; the original
+invalid-victim finding is historical following main's integrated resolution repair.
+That integration alone does not qualify Rocky Rebuke's complete card behavior.
 
 Source inventory comes from exploration Task **0d9ba3**, finalized 2026-10-28.
 [Source pins](source-pins.json) retain URLs, retrieval times and byte digests.
@@ -88,10 +89,11 @@ secondary Oracle transcription; Wizards' checklist defines inventory and the
 release notes/rules supply independent authority. Historical 201-test and
 parity receipts establish bounded prior behavior, not new-card qualification.
 
-MTG-177's pending w15 resolution repair is not included or presumed accepted.
-Existing program availability is preserved without certifying full fidelity on
-that unresolved dependency. Historical worlds, receipts and checkpoints remain
-unchanged; current checkpoints must bind the new world and content identities.
+Main's MTG-177 resolution repair (`7d7736c6a`) is integrated. Allies at Last now
+qualifies after four directed debug witnesses covering affinity, zero/one/two
+sources, current power and lifelink, a departed source, and an illegal victim.
+Historical worlds, receipts and checkpoints remain unchanged; current checkpoints
+must bind the new world and content identities.
 
 The new `tla-baseline-v1` authored proof pairs white Captain/Glider and red
 Treetop/Fire Sages decks. It exercises the same programs through native Commands,

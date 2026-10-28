@@ -8,7 +8,7 @@ from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.compiler import SemanticCompileError, compile_source
+from manabot.semantic.compiler import SemanticCompileError
 from manabot.semantic.content import CONTENT_ROOT, ContentSource, generate
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
@@ -46,58 +46,30 @@ def test_missing_token_fails_closed() -> None:
         source.project("two_deck")
 
 
-def test_new_definition_compiles_without_a_native_registration() -> None:
-    ir, _ = compile_source(
-        {
-            "schema_version": 1,
-            "pack_key": "authoring-proof",
-            "decks": [],
-            "pool": ["proof.draw"],
-            "definitions": [
-                {
-                    "key": "proof.draw",
-                    "registry_name": "Unregistered authoring witness",
-                    "text_box": "Draw a card.",
-                    "characteristics": {"types": ["sorcery"], "mana_cost": "U"},
-                    "programs": [
-                        {
-                            "key": "draw",
-                            "kind": "spell",
-                            "cost": {"mana": "U"},
-                            "ops": [{"op": "draw_cards", "count": 1}],
-                        }
-                    ],
-                }
-            ],
-        }
-    )
-    assert ir["definitions"][0]["text_box"] == "Draw a card."
-    assert ir["programs"][0]["instructions"][0]["op_name"] == "draw_cards"
-
-
 @pytest.mark.parametrize("name", ["Avatar Enthusiasts", "Ally"])
 def test_qualification_rejects_changes_to_card_or_token_clauses(
     tmp_path: Path,
     name: str,
 ) -> None:
     shutil.copytree(CONTENT_ROOT, tmp_path / "content")
-    path = tmp_path / "content" / "definitions.json"
-    rows = json.loads(path.read_text())
+    root = tmp_path / "content"
+    path = root / "generated" / "cards.json"
+    catalog = json.loads(path.read_text())
+    rows = catalog["definitions"]
     definition = next(row for row in rows if row["registry_name"] == name)
     if name == "Ally":
         definition["characteristics"]["power"] = 7
     else:
         definition["programs"] = []
-    path.write_text(json.dumps(rows))
+    path.write_text(json.dumps(catalog))
     with pytest.raises(SemanticCompileError, match="stale qualification"):
-        generate(root=path.parent)
+        generate(root=root)
 
 
 @pytest.mark.parametrize(
     "name",
     [
         "Accumulate Wisdom",
-        "Allies at Last",
         "Cat-Gator",
         "Lightning Strike",
         "Suki, Kyoshi Warrior",
@@ -112,7 +84,9 @@ def test_cards_with_unresolved_clause_prerequisites_stay_out_of_pool(name: str) 
     assert entry["reason"]
 
 
-@pytest.mark.parametrize("name", ["Wartime Protestors", "Master Piandao", "Gran-Gran"])
+@pytest.mark.parametrize(
+    "name", ["Wartime Protestors", "Master Piandao", "Gran-Gran", "Allies at Last"]
+)
 def test_reviewed_cards_are_eligible_in_the_native_pool(name: str) -> None:
     pool = managym.content_pool("tla-pool-v1")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)

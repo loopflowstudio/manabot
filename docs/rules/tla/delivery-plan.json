@@ -1,5 +1,5 @@
 {
-  "T1":{"title":"Content authority and baseline cards","depends_on":[],"effort_weeks":[2,3],"external_dependency":"Accepted MTG-177 resolution contract where required by independent behavior witnesses; not assumed delivered","owner":"card definitions, content lowering, pool eligibility descriptor, immutable identity"},
+  "T1":{"title":"Content authority and baseline cards","depends_on":[],"effort_weeks":[2,3],"external_dependency":"Main resolution repair 7d7736c6a integrated; affected card qualification requires independent behavior witnesses","owner":"card definitions, content lowering, pool eligibility descriptor, immutable identity"},
   "T2":{"title":"Casting, costs, zone permissions and private zones","depends_on":["T1"],"effort_weeks":[5,9],"owner":"PaymentModel, cast planning, exact-zone grants, private search/choice"},
   "T3":{"title":"Characteristics, counters, replacements and attachments","depends_on":["T1","T2"],"effort_weeks":[6,10],"owner":"effective characteristics/LKI, replacement event decisions, attachment relations and SBAs; build beside T2, land after shared cost integration"},
   "T4":{"title":"Triggers, history and stack behavior","depends_on":["T2","T3"],"effort_weeks":[4,7],"owner":"trigger event matching/placement, resolution choices, ability/spell copies and retargeting"},

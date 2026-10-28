@@ -1,8 +1,8 @@
 """Build current pack projections from one reviewed definition catalog.
 
-Definitions own rules and text; setup manifests only select deck entries. Frozen
-v1/w11 sources are historical evidence, never inputs to current generation.
-JSON is validated by the semantic compiler before leaving this offline boundary.
+Rust set files own rules and text; their generated catalog is the compiler input.
+Setup manifests only select deck entries. Frozen v1/w11 sources are historical
+evidence, never inputs to current generation.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from manabot.semantic.compiler import (
 CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic/current"
 
 
-# These mappings exist only at the authored JSON/compiler boundary. Executable
+# These mappings exist only at the generated catalog/compiler boundary. Executable
 # consumers receive checked IR, never the source dictionaries.
 @dataclass(frozen=True)
 class ContentSource:
@@ -35,7 +35,8 @@ class ContentSource:
 
     @classmethod
     def load(cls, root: Path = CONTENT_ROOT) -> ContentSource:
-        rows = json.loads((root / "definitions.json").read_text())
+        catalog = json.loads((root / "generated" / "cards.json").read_text())
+        rows = catalog["definitions"]
         definitions = {row["key"]: row for row in rows}
         if len(definitions) != len(rows):
             raise SemanticCompileError("duplicate content definition key")
@@ -44,8 +45,8 @@ class ContentSource:
         return cls(
             definitions,
             json.loads((root / "setups.json").read_text()),
-            set(json.loads((root / "native_roots.json").read_text())),
-            set(json.loads((root / "token_templates.json").read_text())),
+            set(catalog["native_roots"]),
+            set(catalog["token_templates"]),
         )
 
     def closure(self, roots: set[str]) -> list[dict[str, Any]]:

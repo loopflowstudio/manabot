@@ -172,7 +172,14 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
-### Typed card mana authoring
+### Typed card authoring
+
+Current TLA cards are authored in `managym/src/cardsets/tla.rs`, using the
+symbolic types in `authoring.rs`. Regenerate and check the committed catalog/IR
+with `uv run python -m scripts.compile_current_content` and `--check`; never
+hand-edit generated card JSON. Keep decklists and independent qualification
+receipts separate from behavior. Keep long printed text in a local `text_box`
+binding so rustfmt can format the typed definition.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

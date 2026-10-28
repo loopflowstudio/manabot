@@ -1,8 +1,11 @@
 pub mod alpha;
+mod authored_support;
+pub mod authoring;
 pub mod elemental;
 pub mod ice_age;
 pub mod mkm;
 pub mod sacrifice;
 pub mod strixhaven;
 pub mod temur;
+mod tla;
 pub mod visions;

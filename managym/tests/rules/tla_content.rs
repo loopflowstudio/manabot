@@ -57,6 +57,81 @@ fn can_cast(s: &Scenario, id: CardId) -> bool {
         .any(|a| matches!(a, Action::CastSpell { card, .. } if *card == id))
 }
 
+/// CR 608.2b: a legal source keeps resolution alive, but never licenses damage
+/// to an illegal victim. Damage belongs to each remaining legal source.
+#[test]
+fn allies_at_last_respects_source_and_victim_legality_and_lifelink() {
+    for (protect_victim, remove_hawk) in [(false, false), (true, false), (false, true)] {
+        let mut s = setup(&[
+            "Allies at Last",
+            "Healer's Hawk",
+            "Kyoshi Warriors",
+            "Wall of Stone",
+        ]);
+        let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+        let warrior = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
+        let victim = s.force_permanent_on_battlefield(1, "Wall of Stone");
+        // One Ally reduces {2}{G} to {1}{G}; non-Allies do not reduce it.
+        s.set_player_mana_pool(0, "1G");
+        let life = s.life(0);
+        cast(&mut s, "Allies at Last");
+        assert!(s.choose_target(Target::Permanent(hawk)));
+        assert!(s.choose_target(Target::Permanent(warrior)));
+        assert!(s.choose_target(Target::Permanent(victim)));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        if protect_victim {
+            s.game_mut().state.permanents[victim]
+                .as_mut()
+                .unwrap()
+                .temp_keywords
+                .hexproof = true;
+        }
+        if remove_hawk {
+            let card = s.game().state.permanents[hawk].as_ref().unwrap().card;
+            s.game_mut().move_card(card, ZoneType::Hand);
+        }
+        settle(&mut s);
+        let damage = if protect_victim {
+            0
+        } else if remove_hawk {
+            3
+        } else {
+            4
+        };
+        assert_eq!(
+            s.game().state.permanents[victim].as_ref().unwrap().damage,
+            damage
+        );
+        assert_eq!(s.life(0), life + i32::from(!protect_victim && !remove_hawk));
+        assert!(s.game().state.stack_objects.is_empty());
+    }
+}
+
+#[test]
+fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
+    let mut s = setup(&["Allies at Last", "Healer's Hawk", "Wall of Stone"]);
+    let hawk = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+    let _unchosen = s.force_permanent_on_battlefield(0, "Healer's Hawk");
+    let victim = s.force_permanent_on_battlefield(1, "Wall of Stone");
+    s.set_player_mana_pool(0, "2G");
+    let life = s.life(0);
+    cast(&mut s, "Allies at Last");
+    assert!(s.choose_target(Target::Permanent(hawk)));
+    choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+    assert!(s.choose_target(Target::Permanent(victim)));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    s.game_mut().state.permanents[hawk]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 2;
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.permanents[victim].as_ref().unwrap().damage,
+        3
+    );
+    assert_eq!(s.life(0), life + 3);
+}
+
 #[test]
 fn water_tribe_captain_pays_five_and_buffs_only_own_creatures_until_cleanup() {
     let mut s = setup(&["Water Tribe Captain", "Gray Ogre"]);
