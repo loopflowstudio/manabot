@@ -22,6 +22,23 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
 DEFAULT_IR_PATH = ROOT / "content/semantic/current/generated/two_deck.ir.json"
 
+# Explicit current catalogs shared by live-manifest and policy binding. Historical
+# or research IR outside this catalog requires an explicit path.
+CURRENT_IR_PATHS: dict[str, Path] = {
+    key: DEFAULT_IR_PATH.parent / f"{preset}.ir.json"
+    for key, preset in {
+        "tla-pool-v1": "pool",
+        "tla-baseline-v1": "baseline",
+        "ur-lessons-vs-gw-allies": "two_deck",
+        "elemental-combat-v1": "elemental",
+        "elemental-sacrifice-v1": "sacrifice",
+        "elemental-temur-v1": "temur",
+        "elemental-world-v2": "optional_payments",
+        "elemental-world-v1": "elemental_world",
+        "mtg122-complexity-v1": "complexity",
+    }.items()
+}
+
 
 class SemanticProjectionError(ValueError):
     """Base error for invalid semantic inputs or incompatible artifacts."""
@@ -911,21 +928,12 @@ class BoundSemanticPack:
         provenance = manifest.get("compiled_semantics")
         default_ir = DEFAULT_IR_PATH
         if isinstance(provenance, Mapping):
-            filename = {
-                "tla-pool-v1": "pool.ir.json",
-                "tla-baseline-v1": "baseline.ir.json",
-                "elemental-combat-v1": "elemental.ir.json",
-                "elemental-world-v2": "optional_payments.ir.json",
-                "elemental-world-v1": "elemental_world.ir.json",
-                "elemental-temur-v1": "temur.ir.json",
-                "elemental-sacrifice-v1": "sacrifice.ir.json",
-            }.get(provenance.get("pack_key"))
-            if filename is not None:
-                default_ir = DEFAULT_IR_PATH.parent / filename
+            default_ir = CURRENT_IR_PATHS.get(provenance.get("pack_key"), default_ir)
         schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
         ir = SemanticIr.load(schema, ir_path or default_ir)
         if isinstance(provenance, Mapping) and (
-            provenance.get("ir_hash") != ir.ir_hash
+            provenance.get("pack_key") != ir.raw["pack_key"]
+            or provenance.get("ir_hash") != ir.ir_hash
             or provenance.get("source_hash") != ir.raw["source_hash"]
         ):
             raise ContentPackBindingError("Compiled IR differs from the live pack")

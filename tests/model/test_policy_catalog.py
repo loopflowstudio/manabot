@@ -1,7 +1,7 @@
 """Explicit native catalog binding and shared encoder dimensions, not strength."""
 
-from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import torch
@@ -12,9 +12,10 @@ from manabot.model import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
-from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
+from manabot.semantic.learning import ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim.matchup import AuthoredMatchup
+import managym
 
 
 def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
@@ -42,22 +43,27 @@ def test_unknown_catalog_is_not_a_name_alias() -> None:
         SemanticCardEncoder("simple-subset", 8)
 
 
-def test_native_ir_receipt_must_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = BoundSemanticPack.bind
-
-    def altered_binding(
-        cls: type[BoundSemanticPack],
-        manifest: dict[str, object],
-        *,
-        ir_path: Path,
-        schema_path: Path,
-    ) -> BoundSemanticPack:
-        pack = original(manifest, ir_path=ir_path, schema_path=schema_path)
-        return replace(pack, ir=replace(pack.ir, ir_hash="not-native-ir"))
-
-    monkeypatch.setattr(BoundSemanticPack, "bind", classmethod(altered_binding))
-    with pytest.raises(ContentPackBindingError, match="differs from IR"):
+@pytest.mark.parametrize("field", ["pack_key", "ir_hash", "source_hash"])
+def test_native_ir_receipt_must_match(
+    monkeypatch: pytest.MonkeyPatch,
+    field: Literal["pack_key", "ir_hash", "source_hash"],
+) -> None:
+    pool = managym.content_pool("ur-lessons-vs-gw-allies")
+    pool["compiled_semantics"][field] = "not-native-ir"
+    monkeypatch.setattr(managym, "content_pool", lambda key: pool)
+    with pytest.raises(ContentPackBindingError, match="Compiled IR differs"):
         SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
+
+
+@pytest.mark.parametrize("receipt", [None, "unverified", []])
+def test_policy_catalog_requires_a_compiled_receipt(
+    monkeypatch: pytest.MonkeyPatch, receipt: object
+) -> None:
+    pool = managym.content_pool("ur-lessons-vs-gw-allies")
+    pool["compiled_semantics"] = receipt
+    monkeypatch.setattr(managym, "content_pool", lambda key: pool)
+    with pytest.raises(ContentPackBindingError, match="compiled receipt"):
+        bind_policy_catalog("ur-lessons-vs-gw-allies")
 
 
 @pytest.mark.parametrize(

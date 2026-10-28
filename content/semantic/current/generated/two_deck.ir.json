@@ -904,7 +904,7 @@
       "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn."
     }
   ],
-  "ir_hash": "ec20d43655c85754de2b2f62add13164956619effe19b968145e3b19c2375df2",
+  "ir_hash": "d77d723f0b2657e073c196988b898c52c1f572582eccfd6256a9f34c4b296e5e",
   "pack_key": "ur-lessons-vs-gw-allies",
   "programs": [
     {
@@ -1869,7 +1869,8 @@
             ]
           },
           "remainder": "library_bottom",
-          "remainder_order": "random"
+          "remainder_order": "random",
+          "reveal": true
         }
       ],
       "kind": 4,
@@ -1953,5 +1954,5 @@
   ],
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "ee94cc598452c0a8774e6008ad5ab9a0891240b0853a43e9ead35da8a7cfc990"
+  "source_hash": "f74c352d9946e380d0c704d5f78ff473564410faa4da6b3efa49137372fb5e37"
 }

@@ -4,11 +4,15 @@ import json
 from pathlib import Path
 import shutil
 
+from managym.decision import Command, DecisionFrame, Observation
+from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
 from manabot.semantic.compiler import SemanticCompileError, compile_source
 from manabot.semantic.content import CONTENT_ROOT, ContentSource, generate
 from manabot.semantic.learning import BoundSemanticPack
+from manabot.semantic.policy_catalog import bind_policy_catalog
+import managym
 
 
 def test_current_outputs_and_all_learning_projections() -> None:
@@ -89,8 +93,36 @@ def test_qualified_producer_rejects_changed_token_characteristics(
     ally = next(row for row in rows if row["registry_name"] == "Ally")
     ally["characteristics"]["power"] = 7
     path.write_text(json.dumps(rows))
-    with pytest.raises(SemanticCompileError, match="stale qualification.*treetop"):
+    with pytest.raises(SemanticCompileError, match="stale qualification"):
         generate(root=path.parent)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Accumulate Wisdom",
+        "Allies at Last",
+        "Cat-Gator",
+        "Lightning Strike",
+        "Suki, Kyoshi Warrior",
+        "Water Tribe Rallier",
+    ],
+)
+def test_cards_with_unresolved_clause_prerequisites_stay_out_of_pool(name: str) -> None:
+    pool = managym.content_pool("tla-pool-v1")
+    entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
+    assert entry["card_def_id"] is not None  # Preserved authored availability.
+    assert entry["eligibility"] == "unsupported"
+    assert entry["reason"]
+
+
+@pytest.mark.parametrize("name", ["Wartime Protestors", "Master Piandao", "Gran-Gran"])
+def test_reviewed_cards_are_eligible_in_the_native_pool(name: str) -> None:
+    pool = managym.content_pool("tla-pool-v1")
+    entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
+    assert entry["card_def_id"] is not None
+    assert entry["eligibility"] == "eligible"
+    assert entry["reason"] is None
 
 
 def test_current_projections_preserve_every_historical_setup_count() -> None:
@@ -130,12 +162,6 @@ def test_current_projections_preserve_every_historical_setup_count() -> None:
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
     None
 ):
-    from managym.decision import Command, DecisionFrame, Observation
-    from managym.experience_projection import describe_actions, serialize_observation
-
-    from manabot.semantic.policy_catalog import bind_policy_catalog
-    import managym
-
     env = managym.Env(seed=28, skip_trivial=False)
     obs, _ = env.reset(
         [

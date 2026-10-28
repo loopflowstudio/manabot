@@ -32,8 +32,9 @@ programs remain explicitly unsupported by the shared pool descriptor.
 Generated eligibility retains the inventory once and qualified keys per IR hash;
 the runtime derives pack membership and definition identity from that checked IR.
 
-This cut qualifies **31 cards**: the five basic lands, migrated Avatar Enthusiasts
-and Glider Kids, and these 24 additions:
+The current pool qualifies **85 cards**: the five basic lands, Avatar Enthusiasts
+and Glider Kids, the 54 cards documented in the [T1 clause review](t1-clause-review.json),
+and these 24 cards:
 
 - Earth Kingdom Protectors, Water Tribe Captain, Iguana Parrot, Boar-q-pine,
   Fire Sages, Treetop Freedom Fighters, Yuyan Archers, Walltop Sentries,
@@ -42,6 +43,27 @@ and Glider Kids, and these 24 additions:
 - Rumble Arena; Airship Engine Room, Boiling Rock Prison, Foggy Bottom Swamp,
   Kyoshi Village, Meditation Pools, Misty Palms Oasis, North Pole Gates,
   Omashu City, Serpent's Pass, Sun-Blessed Peak.
+
+The [T1 clause review](t1-clause-review.json) covers all 60 remaining candidates
+against the pinned rules and card text. Named independent witnesses cover printed clauses;
+registration and generation are not the evidence. Water Tribe Rallier now reveals
+its chosen card, and temporary haste grants now permit attacks and tap-symbol
+costs without erasing summoning sickness when the grant expires.
+
+T1 still owns 91 cards; these six retain explicit prerequisites and stay unsupported:
+
+| Cards | Required behavior | Prerequisite owner |
+| --- | --- | --- |
+| Accumulate Wisdom | Controller orders the library remainder, rather than randomizing it | T2 private choices |
+| Suki, Kyoshi Warrior | CDA power applies outside the battlefield | T3 characteristics |
+| Water Tribe Rallier | Library power filter evaluates CDAs (notably Suki); reveal is repaired | T3 authority / T2 selection |
+| Cat-Gator; Lightning Strike | “Any target” includes planeswalkers and battles (CR 115.4) | T3 target characteristics |
+| Allies at Last | Invalid victim receives no damage while legal source targets remain | MTG-177 resolution |
+
+The review retains T1 completion ownership and links exact implementation evidence
+for each prerequisite. It does not launch work, add a cyclic landing dependency,
+or claim the 91-card allocation is delivered. Existing exact authored setups can
+still contain these cards; arbitrary pool admission remains closed.
 
 The [allocation](allocation.jsonl) retains all 286 card identities, all 294 faces,
 and nine fixed tokens plus the Copy marker. Treasure is an explicit adjacent

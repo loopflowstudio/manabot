@@ -1110,7 +1110,7 @@
       "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn."
     }
   ],
-  "ir_hash": "3582aec27e85a07bfb1580e52b01d0d2f942e339df08ad0ae22cd504cfe17c52",
+  "ir_hash": "6e861e91ed68bf5378bea589e96facea0c34ae80757628b5b4073b733e9ec945",
   "pack_key": "mtg122-complexity-v1",
   "programs": [
     {
@@ -2103,7 +2103,8 @@
             ]
           },
           "remainder": "library_bottom",
-          "remainder_order": "random"
+          "remainder_order": "random",
+          "reveal": true
         }
       ],
       "kind": 4,
@@ -2187,5 +2188,5 @@
   ],
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "3196d4b5f52b2f8aeeddbc469855f008018844ec533f0c38754887a4d65a84ca"
+  "source_hash": "6a10a42d4aeb753e000b9a475610382a5de185552aa0ca7dcd444eb64b8115e9"
 }

@@ -3436,7 +3436,7 @@
       "text_box": "This token can't block or be blocked by non-Spirit creatures."
     }
   ],
-  "ir_hash": "c837b0dc926c7cab0209bfde57910b36b1e2269740a3541ebd2f6c41164ac1f3",
+  "ir_hash": "33cae76c67028219fe682f73bfb12426da1eccd9116470a8a5bfad1e9fe01412",
   "pack_key": "elemental-world-v1",
   "programs": [
     {
@@ -7312,7 +7312,8 @@
             ]
           },
           "remainder": "library_bottom",
-          "remainder_order": "random"
+          "remainder_order": "random",
+          "reveal": true
         }
       ],
       "kind": 4,
@@ -7438,5 +7439,5 @@
   ],
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "b31cca207b0f3288cd34c7659d792a6711bbb728756eb0ccc873da141f35ac50"
+  "source_hash": "9cdcf95037f3bb85eedbe15a2e70dbcfea66b09eef937a4a6ba76b1c4c4bbc5b"
 }

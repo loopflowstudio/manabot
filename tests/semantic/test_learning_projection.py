@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.semantic.compiler import canonical_json
+from manabot.semantic.compiler import Opcode, canonical_json
 from manabot.semantic.learning import (
     DEFAULT_IR_PATH,
     DEFAULT_SCHEMA_PATH,
@@ -102,7 +102,7 @@ def _first_instruction_span(
     return kinds[begin : finish + 1].tobytes(), values[begin : finish + 1].tobytes()
 
 
-def test_schema_and_catalog_are_deterministic_and_cover_compiler_opcodes():
+def test_schema_and_catalog_are_deterministic_and_cover_compiler_opcodes() -> None:
     first = BoundSemanticPack.bind(_manifest())
     second = BoundSemanticPack.bind(deepcopy(_manifest()))
 
@@ -113,7 +113,12 @@ def test_schema_and_catalog_are_deterministic_and_cover_compiler_opcodes():
         for program in first.ir.programs
         for instruction in _walk(program["instructions"])
     }
-    assert used_opcodes == first.schema.opcodes
+    # The shared schema covers the compiler; an individual deck pack need not
+    # exercise every opcode in that vocabulary.
+    assert first.schema.opcodes == {
+        opcode.name.lower(): int(opcode) for opcode in Opcode
+    }
+    assert used_opcodes.items() <= first.schema.opcodes.items()
     for field in first.catalog.__dict__:
         left = getattr(first.catalog, field)
         right = getattr(second.catalog, field)
@@ -173,7 +178,7 @@ def test_same_instruction_recombines_identically_across_card_programs():
     ]
 
 
-def test_catalog_exposes_every_required_semantic_token_family():
+def test_catalog_exposes_every_required_semantic_token_family() -> None:
     pack = BoundSemanticPack.bind(_manifest())
     kinds = pack.catalog.token_kind
     values = pack.catalog.token_value
@@ -233,7 +238,11 @@ def test_catalog_exposes_every_required_semantic_token_family():
         if int(kind) == pack.schema.token_kinds["opcode"]
     }
     assert program_kinds == set(pack.schema.program_kinds.values())
-    assert opcodes == set(pack.schema.opcodes.values())
+    assert opcodes == {
+        instruction["opcode"]
+        for program in pack.ir.programs
+        for instruction in _walk(program["instructions"])
+    }
 
 
 def test_semantic_only_ablation_is_independent_of_card_def_id_allocation():

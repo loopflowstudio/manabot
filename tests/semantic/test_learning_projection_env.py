@@ -49,7 +49,9 @@ def test_exact_environment_manifest_binds_the_selected_matchup():
     assert len(pack.definition_row_by_card_def_id) == len(pack.ir.definitions)
 
 
-def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_references():
+def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_references() -> (
+    None
+):
     engine = _engine()
     engine.scenario_clear_hand(0)
     engine.scenario_force_card_in_hand(0, "Invasion Reinforcements")
@@ -72,7 +74,7 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     ally_row = next(
         row
         for row, definition in enumerate(pack.ir.definitions)
-        if definition["semantic_key"] == "token.ally"
+        if definition["semantic_key"] == "sacrifice.ally"
     )
     padded_catalog = pack.pad_catalog()
     targets = padded_catalog["definition_ref_target_rows"][program_row]

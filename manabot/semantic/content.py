@@ -111,6 +111,9 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
     catalog = ContentSource.load(root)
     inventory = json.loads((root / "inventory.json").read_text())
     qualifications = json.loads((root / "qualifications.json").read_text())
+    multi_face_cards = {
+        row["registry_name"] for row in inventory if len(row["faces"]) != 1
+    }
     for key, qualification in qualifications.items():
         digest = hashlib.sha256(
             canonical_json(catalog.closure({key})).encode()
@@ -122,11 +125,7 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
             )
         if definition["characteristics"].get("token", False):
             raise SemanticCompileError(f"token {key} cannot qualify for deck entry")
-        if any(
-            row["registry_name"] == definition["registry_name"]
-            and len(row["faces"]) != 1
-            for row in inventory
-        ):
+        if definition["registry_name"] in multi_face_cards:
             raise SemanticCompileError(
                 f"qualification for {key} requires unsupported face lifecycle"
             )

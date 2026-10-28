@@ -388,7 +388,7 @@
       "semantic_key": "tla.yip_yip"
     }
   ],
-  "ir_hash": "a025d7fbdf0798f7642b4ac3d3d426ba5393066086c468071fc92bcbd2aa8409",
+  "ir_hash": "8b870a095f11b4947b6a90d6ac50c7e63f2efcc63859ab8b40f39c586bd0a28f",
   "no_card_name_dispatch": true,
   "opcode_counts": {
     "add_mana": 6,
@@ -420,5 +420,5 @@
   "referenced_definition_count": 2,
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "b860e60f8c82c001d7fb66898060d9c956c5bee0be2f312a5e023339ccbf14fc"
+  "source_hash": "6e83a60db9c528d0e8a6aac93922b2d32a5cb1568f997d47e6c9760cd032b1b9"
 }

@@ -5,5 +5,4 @@ pub mod mkm;
 pub mod sacrifice;
 pub mod strixhaven;
 pub mod temur;
-
 pub mod visions;

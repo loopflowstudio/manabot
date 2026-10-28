@@ -1232,7 +1232,7 @@
       "semantic_key": "token.spirit"
     }
   ],
-  "ir_hash": "c837b0dc926c7cab0209bfde57910b36b1e2269740a3541ebd2f6c41164ac1f3",
+  "ir_hash": "33cae76c67028219fe682f73bfb12426da1eccd9116470a8a5bfad1e9fe01412",
   "no_card_name_dispatch": true,
   "opcode_counts": {
     "add_lesson_mana": 15,
@@ -1303,5 +1303,5 @@
   "referenced_definition_count": 6,
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "b31cca207b0f3288cd34c7659d792a6711bbb728756eb0ccc873da141f35ac50"
+  "source_hash": "9cdcf95037f3bb85eedbe15a2e70dbcfea66b09eef937a4a6ba76b1c4c4bbc5b"
 }

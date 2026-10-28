@@ -7,43 +7,34 @@ any IDs reach the encoder. Research pools must register their own exact entry;
 this module does not relax subset, checkpoint or setup admission.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from manabot.semantic.learning import (
-    DEFAULT_IR_PATH,
+    CURRENT_IR_PATHS,
     DEFAULT_SCHEMA_PATH,
     BoundSemanticPack,
     ContentPackBindingError,
 )
 import managym
 
-ROOT = DEFAULT_IR_PATH.parent
-
-
-_CATALOGS = {
-    "tla-pool-v1": "pool.ir.json",
-    "tla-baseline-v1": "baseline.ir.json",
-    "ur-lessons-vs-gw-allies": "two_deck.ir.json",
-    "elemental-combat-v1": "elemental.ir.json",
-    "elemental-sacrifice-v1": "sacrifice.ir.json",
-    "elemental-temur-v1": "temur.ir.json",
-    "elemental-world-v2": "optional_payments.ir.json",
-    "elemental-world-v1": "elemental_world.ir.json",
-    "mtg122-complexity-v1": "complexity.ir.json",
-}
-
 
 def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
     """Admit checked programs against the actual native compiled manifest."""
     try:
-        filename = _CATALOGS[pack_key]
+        ir_path = CURRENT_IR_PATHS[pack_key]
     except KeyError as error:
         raise ValueError(f"unsupported policy semantic pack: {pack_key}") from error
     pool = managym.content_pool(pack_key)
+    compiled = pool.get("compiled_semantics")
+    # Generic observation binding permits uncompiled manifests; policy catalogs
+    # require native provenance before the shared binder compares its hashes.
+    if not isinstance(compiled, Mapping):
+        raise ContentPackBindingError("policy catalog requires a native compiled receipt")
     manifest = {
         "schema_version": 1,
         "content_digest": pool["content_digest"],
-        "compiled_semantics": pool["compiled_semantics"],
+        "compiled_semantics": compiled,
         "definitions": [
             {
                 "card_def_id": row["card_def_id"],
@@ -53,21 +44,7 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
             if row["card_def_id"] is not None
         ],
     }
-    pack = BoundSemanticPack.bind(
-        manifest,
-        ir_path=ROOT / filename,
-        schema_path=learning_schema_path(pack_key),
-    )
-    compiled = manifest.get("compiled_semantics")
-    expected = {
-        "pack_key": pack_key,
-        "ir_hash": pack.ir.ir_hash,
-        "source_hash": pack.ir.raw["source_hash"],
-    }
-    if not isinstance(compiled, dict) or any(
-        compiled.get(key) != value for key, value in expected.items()
-    ):
-        raise ContentPackBindingError("native compiled policy catalog differs from IR")
+    pack = BoundSemanticPack.bind(manifest, ir_path=ir_path)
     if len(pack.definition_row_by_card_def_id) != len(manifest["definitions"]):
         raise ContentPackBindingError(
             "policy catalog does not cover native definitions"
@@ -77,6 +54,6 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
 
 def learning_schema_path(pack_key: str | None) -> Path:
     """Current catalogs share one schema; reject unregistered policy packs."""
-    if pack_key is not None and pack_key not in _CATALOGS:
+    if pack_key is not None and pack_key not in CURRENT_IR_PATHS:
         raise ValueError(f"unsupported policy semantic pack: {pack_key}")
     return DEFAULT_SCHEMA_PATH

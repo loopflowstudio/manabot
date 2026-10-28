@@ -2585,7 +2585,7 @@
       "text_box": "This token can't block or be blocked by non-Spirit creatures."
     }
   ],
-  "ir_hash": "5c685a3d75c9a569029b9126dfc9a5346611abe0264d1cd5f1cc9ea3da45134e",
+  "ir_hash": "a040fe5cd660d825889b7068b2eee2ee98971fcbf06a86d84ffc7a4130432a33",
   "pack_key": "tla-tla-v1",
   "programs": [
     {
@@ -6735,7 +6735,8 @@
             ]
           },
           "remainder": "library_bottom",
-          "remainder_order": "random"
+          "remainder_order": "random",
+          "reveal": true
         }
       ],
       "kind": 4,
@@ -6956,5 +6957,5 @@
   ],
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "7028a40055fca9e0dc83d0083177aca0a840f26503e0527b53b1fdd8e3c2104b"
+  "source_hash": "301151c7e93a961de5e951a3c58df9c95d3e4a282799a9f5946afc699d51c0c9"
 }

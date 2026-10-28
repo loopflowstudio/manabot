@@ -6754,7 +6754,8 @@
               ]
             },
             "remainder": "library_bottom",
-            "remainder_order": "random"
+            "remainder_order": "random",
+            "reveal": true
           }
         ]
       }
