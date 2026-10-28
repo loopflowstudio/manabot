@@ -510,5 +510,7 @@ receipt past its deadline has its attempts finished as lost
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
 from the 0.2.6 client as in Calibration. Rechecked by quote 2026-10-28
-04:20 UTC (implement): still "at its machine limit" (`etude machines` lists
-`cpu32-b937fa5a80b7`; RunPod has no cpu pod); nothing queued, no new spend.
+04:26 UTC (implement): still "at its machine limit" (`etude machines` lists
+`cpu32-b937fa5a80b7`); nothing queued, no new spend. The bug is unfixed on
+Etude main v0.2.11 (`scheduler.py:1898-1902`) and is Etude EXP-13's (an
+owned-SSH session that has no receipt stays claimed). This case is recorded there as a comment.
