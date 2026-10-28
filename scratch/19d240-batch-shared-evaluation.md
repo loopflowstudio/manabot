@@ -404,3 +404,16 @@ time." The `cpu32` arm and CPU-engine iteration leave MTG-193; the stuck
 `cpu32` session is Etude EXP-33 (filed autonomously). Open with Jack Heart:
 concept review 4's served-only checkpoint play was gated on `cpu32` served ≥
 scalar, which is now unmeasured after the parent hop.
+
+Decided (Jack Heart, 2026-10-28, option b): **keep scalar checkpoint play on
+CPU in this PR.** Served play stays available on CPU and is the GPU path;
+retiring scalar checkpoint play waits for a CPU measurement after the parent
+hop (a follow-up, not MTG-193). Next implement direction:
+- Restore scalar (in-child) checkpoint play as a supported evaluation option
+  on CPU, with its previous identity and Commands, where served-only
+  (`303e65204`) removed or rejected it; keep code anchors Torch-free.
+- Keep the GPU gains: direct game-to-service connections, matchup-free key,
+  packed transfers, light children, thread budgets.
+- Squash the ~60 "Record that the cpu32 calibration arm is still blocked"
+  checkpoint commits out of the branch history before publishing.
+- Sync with `main`, republish #389, and gate.
