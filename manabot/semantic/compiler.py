@@ -1166,13 +1166,19 @@ def compile_paths(
     return ir, coverage
 
 
-def write_or_check(path: Path, value: Mapping[str, Any], *, check: bool) -> None:
+def write_or_check(
+    path: Path,
+    value: Mapping[str, Any],
+    *,
+    check: bool,
+    regenerate_command: str = "uv run scripts/compile_semantic_content.py",
+) -> None:
     expected = pretty_json(value)
     if check:
         actual = path.read_text(encoding="utf-8") if path.exists() else None
         if actual != expected:
             raise SemanticCompileError(
-                f"{path} is stale; run `uv run scripts/compile_semantic_content.py`"
+                f"{path} is stale; run `{regenerate_command}`"
             )
         return
     path.parent.mkdir(parents=True, exist_ok=True)

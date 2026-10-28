@@ -22,6 +22,7 @@ from manabot.semantic.compiler import (
 )
 
 CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic/current"
+REGENERATE_COMMAND = "uv run python -m scripts.compile_current_content"
 
 
 # These mappings exist only at the generated catalog/compiler boundary. Executable
@@ -140,9 +141,17 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
     packs: dict[str, dict[str, Any]] = {}
     for preset in [*catalog.setups, "pool", "tla"]:
         ir, coverage = catalog.project(preset)
-        write_or_check(root / "generated" / f"{preset}.ir.json", ir, check=check)
         write_or_check(
-            root / "generated" / f"{preset}.coverage.json", coverage, check=check
+            root / "generated" / f"{preset}.ir.json",
+            ir,
+            check=check,
+            regenerate_command=REGENERATE_COMMAND,
+        )
+        write_or_check(
+            root / "generated" / f"{preset}.coverage.json",
+            coverage,
+            check=check,
+            regenerate_command=REGENERATE_COMMAND,
         )
         packs[ir["pack_key"]] = {
             "ir_hash": ir["ir_hash"],
@@ -156,4 +165,9 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
         "inventory": sorted({row["registry_name"] for row in inventory}),
         "packs": packs,
     }
-    write_or_check(root / "generated" / "eligibility.json", eligibility, check=check)
+    write_or_check(
+        root / "generated" / "eligibility.json",
+        eligibility,
+        check=check,
+        regenerate_command=REGENERATE_COMMAND,
+    )

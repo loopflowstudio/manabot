@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 
 from manabot.semantic.compiler import write_or_check
-from manabot.semantic.content import CONTENT_ROOT, generate
+from manabot.semantic.content import CONTENT_ROOT, REGENERATE_COMMAND, generate
 
 
 def export_cards(*, check: bool) -> None:
@@ -30,7 +30,12 @@ def export_cards(*, check: bool) -> None:
         text=True,
     )
     catalog = json.loads(result.stdout)
-    write_or_check(CONTENT_ROOT / "generated" / "cards.json", catalog, check=check)
+    write_or_check(
+        CONTENT_ROOT / "generated" / "cards.json",
+        catalog,
+        check=check,
+        regenerate_command=REGENERATE_COMMAND,
+    )
 
 
 def main() -> None:
