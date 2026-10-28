@@ -192,7 +192,6 @@ class InferenceRuntime:
         self.slots = threading.BoundedSemaphore(execution.max_active_games)
         self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
         self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
-        self._capacity = threading.BoundedSemaphore(execution.max_active_games + 1)
         self._lock = threading.RLock()
         self._futures: dict[str, Future[Any]] = {}
         self._error: str | None = None
@@ -225,11 +224,10 @@ class InferenceRuntime:
         self._connection = self.process.connection
         self._reader = threading.Thread(target=self._receive, daemon=True)
         self._reader.start()
-        self._outgoing: queue.Queue[tuple[str, str, object] | None] = queue.Queue(
-            execution.max_active_games + 2
-        )
-        # Pipe.send can block while a service is stopped. Keep it off the
-        # futures lock and caller thread so request deadlines and fail() work.
+        # Only admissions, snapshots and close travel here, so the queue needs
+        # no bound. Pipe.send can block while a service is stopped; keep it off
+        # the futures lock and caller thread so call deadlines and fail() work.
+        self._outgoing: queue.Queue[tuple[str, str, object] | None] = queue.Queue()
         self._sender = threading.Thread(target=self._send, daemon=True)
         self._sender.start()
 
@@ -322,31 +320,21 @@ class InferenceRuntime:
                     future.set_exception(InferenceFailure(message))
             self._futures.clear()
 
-    def _call(self, kind: str, payload: object, timeout: float | None = None) -> Any:
-        timeout = min(
-            self.execution.request_seconds,
-            self.execution.request_seconds if timeout is None else timeout,
-            self.execution.remaining(),
-        )
+    def _call(self, kind: str, payload: object) -> Any:
+        timeout = min(self.execution.request_seconds, self.execution.remaining())
         if timeout <= 0:
             raise InferenceFailure("inference request deadline exhausted")
-        deadline = time.monotonic() + timeout
-        if not self._capacity.acquire(timeout=timeout):
-            raise InferenceFailure("inference backpressure deadline exhausted")
+        self.check()
+        identity = uuid4().hex
+        future: Future[Any] = Future()
+        with self._lock:
+            self._futures[identity] = future
+            self._outgoing.put((identity, kind, payload))
         try:
-            self.check()
-            identity = uuid4().hex
-            future: Future[Any] = Future()
-            with self._lock:
-                self._futures[identity] = future
-                self._outgoing.put_nowait((identity, kind, payload))
-            try:
-                return future.result(timeout=max(0, deadline - time.monotonic()))
-            except TimeoutError as exc:
-                self.fail("inference service request timed out")
-                raise InferenceFailure("inference service request timed out") from exc
-        finally:
-            self._capacity.release()
+            return future.result(timeout=timeout)
+        except TimeoutError as exc:
+            self.fail("inference service request timed out")
+            raise InferenceFailure("inference service request timed out") from exc
 
     def admit(self, admission: PolicyAdmission) -> ObservationConfig:
         started = time.monotonic()
@@ -391,18 +379,12 @@ class InferenceRuntime:
         if self._futures:
             self.fail("allocation closed with pending requests")
         self._games.shutdown(wait=True, cancel_futures=True)
-        try:
-            self._outgoing.put_nowait(("close", "close", None))
-        except queue.Full:
-            self.fail("inference shutdown queue saturated")
+        self._outgoing.put(("close", "close", None))
         self.process.join(timeout=min(5, self.execution.remaining()))
         self.process.kill()
         self.process.join()
         self._reader.join(timeout=1)
-        try:
-            self._outgoing.put_nowait(None)
-        except queue.Full:
-            pass
+        self._outgoing.put(None)
         self._sender.join(timeout=1)
         self._closed = True
         self._connection.close()

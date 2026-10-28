@@ -382,6 +382,9 @@ Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_b
 
 Compress, 2026-10-27: one due rule (`serve.head_group`), one infrastructure-failure
 helper (`supervision._infrastructure_failure`), one client write. `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py tests/test_package_boundaries.py -q` → 57 passed, 1 skipped.
+Compress 2: the runtime's control channel carries only admit/snapshot/close,
+so its relay-era backpressure semaphore and bounded queue are gone.
+`uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_evaluation_match.py tests/sim/test_child_surface.py -q` → 36 passed, 1 skipped.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
