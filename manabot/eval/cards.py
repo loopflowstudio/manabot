@@ -14,68 +14,23 @@ import resource
 import sys
 import time
 
-from etude.eval.query import statsdb
 from etude.run.storage import default_root
 
 from manabot.eval.arena_log import CardMapping, export_arena_log
-from manabot.eval.card_evaluation import CardEvaluationSpec, evaluate_cards
+from manabot.eval.card_evaluation import (
+    CardEvaluationSpec,
+    evaluate_cards,
+    verification_spec,
+)
 from manabot.eval.card_page import write_page
-from manabot.eval.card_query import CardData, CardSelection, audit, card_data, load_game
-from manabot.eval.evaluate import source_digest
-from manabot.eval.models import EvaluationKey
-from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints
-from manabot.sim.matchup import AuthoredMatchup
-from manabot.sim.registration import PlayerRegistration
-
-VERIFY_EXPERIMENT = "card-verification"
-
-
-def verification_spec(games: int) -> CardEvaluationSpec:
-    if games < 8 or games % 8:
-        raise ValueError("games must be a positive multiple of eight")
-    matrix = AuthoredMatchup(
-        pack_key="elemental-world-v2", role_a="elemental_ug", role_b="elemental_bg"
-    )
-    runtime = runtime_fingerprints(match_config=matrix.match())
-    players = tuple(
-        PlayerRegistration(
-            player_id=name,
-            display_name=name,
-            role="anchor",
-            runner_kind="code",
-            player_spec={"kind": "scripted_greedy"},
-            compute_class_id="scripted-greedy-cpu-v1",
-            information_boundary="acting-viewer",
-            world=runtime["world"],
-            content_suite=matrix.content_suite,
-            observation_abi_sha256=runtime["observation_abi_sha256"],
-            action_abi_sha256=runtime["action_abi_sha256"],
-            matchup_sha256=runtime["matchup_sha256"],
-            source_sha256=source_digest(["manabot/sim/anchors.py"]),
-            player_seed_derivation_id="arena-pair-deal-player-v1",
-        )
-        for name in ("verify-one", "verify-two")
-    )
-    return CardEvaluationSpec(
-        experiment=VERIFY_EXPERIMENT,
-        run=f"verify-{games}",
-        key=EvaluationKey(
-            world=runtime["world"],
-            content_suite=matrix.content_suite,
-            viewer_boundary="acting-viewer",
-            arena_version="card-evaluation-v1",
-            rating_model_version="unrated-card-evaluation",
-            rating_prior_sha256=canonical_sha256({}),
-            anchor_cohort_sha256=canonical_sha256([p.model_dump() for p in players]),
-            evaluation_compute_envelope_id="scripted-greedy-cpu-v1",
-        ),
-        players=players,
-        deals=tuple(range(230000, 230000 + games // 8)),
-        authored_matchup=matrix,
-        game_seconds=60,
-        max_commands=10000,
-    )
+from manabot.eval.card_query import (
+    CardData,
+    CardSelection,
+    audit,
+    card_data,
+    card_db,
+    load_game,
+)
 
 
 def verify(games: int, out: Path) -> dict[str, int | float | str]:
@@ -93,7 +48,7 @@ def verify(games: int, out: Path) -> dict[str, int | float | str]:
         )
         for p in spec.players
     ]
-    with statsdb(spec.experiment, out) as db:
+    with card_db(spec.experiment, out) as db:
         before = [card_data(db, selection) for selection in selections]
         if (
             sum(data.games + sum(data.excluded.values()) for data in before)
@@ -195,7 +150,7 @@ def main() -> None:
             opponent_deck=args.opponent_deck,
             on_play=None if args.position is None else args.position == "play",
         )
-        with statsdb(args.experiment, args.source, rebuild=args.rebuild) as db:
+        with card_db(args.experiment, args.source, rebuild=args.rebuild) as db:
             if args.html:
                 print(write_page(db, selection, args.html))
             elif args.json:
@@ -204,14 +159,14 @@ def main() -> None:
                 print_data(card_data(db, selection))
     elif args.command == "audit":
         source = args.source
-        with statsdb(args.experiment, source) as db:
+        with card_db(args.experiment, source) as db:
             result = audit(db, source or default_root(), replay=args.replay)
         print(result.model_dump_json(indent=2))
         if result.problems:
             sys.exit(1)
     elif args.command == "export-log":
         source = args.source
-        with statsdb(args.experiment, source) as db:
+        with card_db(args.experiment, source) as db:
             game = load_game(db, source or default_root(), args.run, args.game)
         log = export_arena_log(
             game,

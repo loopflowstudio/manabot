@@ -57,6 +57,7 @@ import sys
 import time
 from typing import Literal
 
+from etude.eval.block import run_blocks
 from etude.eval.match import Row, Tables, environment, evaluate
 from etude.eval.records import (
     CheckpointKey,
@@ -71,7 +72,12 @@ from etude.eval.records import (
 from etude.launch.client import status
 from etude.launch.records import Status
 from etude.run.records import ArtifactRef
-from etude.run.storage import Storage, run_directory, storage_from_uri
+from etude.run.storage import (
+    DirectoryStorage,
+    Storage,
+    run_directory,
+    storage_from_uri,
+)
 from etude.train.read import read
 from etude.train.records import CheckpointRecord
 from pydantic import BaseModel, ConfigDict, JsonValue
@@ -677,15 +683,16 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
 
 
 def done_keys(directory: Path) -> set[str]:
-    """Match keys this eval run has stored as done (`matches/KEY.json`)."""
+    """Match keys this eval run has stored as done, from its sealed blocks."""
     _, root = run_directory(directory, EXPERIMENT, RUN)
-    folder = root / "matches"
-    if not folder.is_dir():
+    if not root.is_dir():
         return set()
+    names = [str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()]
     return {
-        path.name.removesuffix(".json")
-        for path in folder.glob("*.json")
-        if not path.name.endswith(".failed.json")
+        record.match.key
+        for block in run_blocks(DirectoryStorage(root), "", RUN, names, {})
+        for record in block.matches
+        if record.state == "done"
     }
 
 

@@ -30,6 +30,11 @@ report fixtures alone do not exercise their coexistence.
 
 ## Required checks for Python package and CLI moves
 
+When changing experiment imports or recipe discovery, run
+`uv run --extra dev pytest tests/training/test_regimes.py -q`.
+Its fresh-process discovery check blocks DuckDB even when local evaluation
+extras are installed: listing training recipes must not require card reports.
+
 When moving modules, tests or CLI entry points, collect the exact test paths in
 `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.

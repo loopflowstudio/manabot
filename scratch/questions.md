@@ -11,10 +11,10 @@ live at `ce43a5cf7:scratch/questions.md`.
   oversubscription culprit; evidence in the design's Calibration section.
 - **Rentals (Jack Heart, 2026-10-27):** MTG-193 may launch its own machines,
   under $5 total, with a spend ledger. MTG-183's runner is on its branch.
-- **Decided (Jack Heart, 2026-10-27):** code anchors become Torch-free in
-  #389, and evaluation checkpoint players become served-only, gated on a
-  `cpu32` served-CPU calibration arm against `cpu32` scalar. See concept review
-  4 in the design.
+- **Decided (Jack Heart, 2026-10-27/28):** code anchors are Torch-free in
+  #389. Checkpoint players are served under a declared allocation and keep
+  scalar in-child play without one; retiring scalar waits for a CPU
+  measurement (CPU work descoped 2026-10-28).
 - **Assumption — supervisor census recorded, not enforced:** the group-worker
   parent hosts Etude callbacks and checkpoint preparation whose threads this
   change does not own; failing an allocation at close would discard results.
@@ -36,21 +36,16 @@ revision's `scratch/questions.md`); they do not touch shared evaluation.
 
 - **Assumption — in-child checkpoint search players keep `torch.manual_seed`:**
   agent PUCT, policy-prior PUCT and local update still play in-child; only the
-  plain `checkpoint` kind left the child, so only its seeding went with it.
-- **Assumption — local CPU envelope (`resolve_execution`):** callers without an allocation
-  (monitor, study, attack, card evaluation, `evaluate.py`, experiment runners)
-  serve on CPU with `max_active_games=1` (games stay sequential, as before) and
-  default batching; deadline `2 × games × game_seconds` covers play and replay.
-  The CPU engine work (Jack Heart's engine-boundary steer) may change these.
-- **Changed — the training monitor plays one panel:** it always declares an
-  execution (local CPU serving when none is given), so all deals share one
-  CPU service instead of one `evaluate` call per deal. Block retention still
-  comes from `rows.json` after each completed deal.
+  plain `checkpoint` kind leaves the child when served, and only then is its
+  seeding replaced by per-request service seeds.
+- **Superseded 2026-10-28 (option b):** `resolve_execution` no longer adds a
+  local CPU envelope; without an allocation checkpoints play scalar and the
+  monitor keeps one block per deal.
 - **Changed — `bind_execution` admits code and search players** unchanged into
   served cells (they play in their child); before, any non-anchor was rejected.
 - **Changed — `serving_benchmark`'s `cold_scalar` arm is served** (one row,
-  not resident, no catalog cache). Frozen experiment runners (MTG-181 grid,
-  MTG-186, MTG-183 head-to-head) now serve too; reruns get new identities.
+  not resident, no catalog cache). Frozen experiment runners that declare no
+  allocation keep scalar play and their identities.
 
 ## Engine boundary — implement 2026-10-27
 

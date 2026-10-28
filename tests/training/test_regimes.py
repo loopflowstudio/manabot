@@ -2,6 +2,9 @@
 
 import json
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 
 import numpy as np
 import pytest
@@ -371,6 +374,28 @@ def test_editing_one_stage_of_a_named_regime_changes_nothing_else() -> None:
             learning.max_grad_norm = 0.123
         assert [s.model_dump() for s in edited.stages[1:]] == before[1:]
         assert named_regime(name).stages[0].model_dump() == before[0]
+
+
+def test_regime_discovery_without_evaluation_dependencies() -> None:
+    # A fresh process prevents installed extras or prior tests from hiding
+    # report dependencies imported by experiment modules during discovery.
+    probe = textwrap.dedent("""
+        import sys
+
+        sys.modules["duckdb"] = None
+        from manabot.cli import named_regime, regime_names
+
+        assert "batched_baseline" in regime_names()
+        assert named_regime("batched_baseline:scale_ladder").id == "scale-ladder-allies-lessons-v1"
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_regime_names_say_file_and_recipe() -> None:

@@ -159,7 +159,11 @@ def test_failed_deal_retains_evidence_and_etude_failure(
     monkeypatch.setattr("manabot.eval.evaluation.play_cell", play_cell)
     with pytest.raises(Exception, match="match_failed"):
         evaluation.evaluate(manifest, tmp_path / "evaluations/one")
-    assert list((tmp_path / "track").rglob("*.failed.json"))
+    db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
+    try:
+        assert db.execute("select state from matches").fetchall() == [("failed",)]
+    finally:
+        db.close()
     assert list((tmp_path / "evaluations/one/arena").rglob("rows.json"))
     assert not (tmp_path / "evaluations/one/result.json").exists()
 

@@ -159,9 +159,10 @@ checks required by the affected package and workflow.
   `uv run --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`.
 - After a world or observation-shape change, validate current-world arena
   admission and monitoring with `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py -q`.
-- Remote credential tests require the `artifacts` extra. Validate dependency
-  changes in an isolated environment so locally installed extras cannot hide
-  missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.
+- Artifact storage and Etude integration tests require the `artifacts` extra.
+  Validate dependency changes in an isolated environment so locally installed
+  extras cannot hide missing CI dependencies:
+  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
 - **CI runs `cargo test` in debug, so validate in debug before landing.**
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
@@ -176,19 +177,21 @@ checks required by the affected package and workflow.
 
 ### Etude card evaluation
 
-Etude SDK 0.2.8 hashes tracked source paths (`git add -N` admits new files for
-local implementation checks). Card evidence is retained once under the eval
-run's `artifacts/evidence/` directory with content-addressed names. Ordinary
-Etude delivery carries those bytes with tables and match records. Keep the
-evidence with its run; do not publish indexes alone, overwrite immutable
-artifacts, or put card evidence in the checkpoint namespace. Historical
-evidence paths remain valid and must not be rewritten.
+Etude hashes tracked source paths (`git add -N` admits new files for local
+implementation checks). Eval runs are sealed blocks: each game's card evidence
+is a blob of its match, named in `card_plays` by SHA256 and read back through
+`etude.eval.query.read_blobs`. Card queries read only `CARD_ROLLUPS`; open the
+database with `manabot.eval.card_query.card_db`, and give a changed rollup a new
+name. Never put card evidence in the checkpoint namespace. Per-file runs from
+earlier SDKs become readable through `etude convert-eval`, which writes blocks
+beside their files and never rewrites them; converting stored data is an
+explicit step of its own.
 
 Etude evaluation tables use `seat` for the participant's index in
 `Match.players`, and `game_seat` for its native game seat (0 is on the play).
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
-group native play/draw reports by `game_seat`. SDK 0.2.8 owns the historical
-`player`/`seat` column conversion; never rewrite retained tables for this rename.
+group native play/draw reports by `game_seat`. Etude's conversion owns the
+historical `player`/`seat` column rename; never rewrite retained tables for it.
 
 ### Offline inference reports
 

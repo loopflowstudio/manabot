@@ -16,7 +16,8 @@ One Etude eval run (`EXPERIMENT`/`RUN`) holds the games. Each match is
 played by one bounded worker process (`python -m experiments.mtg186_cards
 worker`) through replay-checked `play_cell(card_evidence_dir=…)`. A match
 returns table `games` (one row per game, player 0's: MTG-186's deck, seat and
-score) and the card tables of `trace_card_tables`. Only valid games count:
+score) with the card tables and evidence blobs of `trace_card_tables`, and the
+run declares `CARD_ROLLUPS`. Only valid games count:
 terminated, untruncated, no failure, trace replayed. A worker that fails or
 reaches its wall bound returns its games as invalid rows and no card rows; it
 is never replayed.
@@ -28,7 +29,9 @@ which the machine binds before playing (it has no `.git`). On the machine,
 folder to `ETUDE_OUTPUT_DIR` as `cards.tar`. `launch` and `collect` run on the
 operator's machine and play nothing; `collect` unpacks the run under
 `experiments/data/mtg186/cards/eval/` and `report` writes the two card tables
-(text and `--html` pages) and the head-to-head scores beside it.
+(text and `--html` pages) and the head-to-head scores beside it. The retained
+2026-10-25 run predates Etude's blocks: `etude convert-eval mtg186-cards-endpoint
+--source experiments/data/mtg186/cards/eval` makes it readable first.
 
     doppler run -p manabot -c prd -- doppler run -p etude -c prd -- \\
         uv run --extra evaluation python -m experiments.mtg186_cards launch --revision <commit>
@@ -50,8 +53,7 @@ import tempfile
 import time
 from typing import TYPE_CHECKING
 
-from etude.eval.match import Row, Tables, environment as eval_environment, evaluate
-from etude.eval.query import statsdb
+from etude.eval.match import Result, Row, environment as eval_environment, evaluate
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -89,6 +91,7 @@ from experiments.mtg186_eval import (
     arena,
 )
 from manabot.eval.card_evaluation import trace_card_tables
+from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
@@ -204,7 +207,7 @@ class CardRequest(BaseModel):
     a: Player
     b: Player
     deals: tuple[int, ...]
-    # The eval run's folder, where card evidence is retained.
+    # Where the worker hands card evidence to `play`, which returns it as blobs.
     root: Path
     output: Path
 
@@ -330,7 +333,7 @@ class Machine(BaseModel):
     work: Path
 
 
-def play(match: Match) -> Tables:
+def play(match: Match) -> Result:
     """One match in a bounded worker process; invalid rows when it fails."""
     machine = Machine.model_validate_json(os.environ["MTG186_CARDS"])
     conditions = Conditions.model_validate(match.conditions)
@@ -357,13 +360,13 @@ def play(match: Match) -> Tables:
         completed, failure = None, "match wall-time bound reached"
     if failure is not None:
         print(failure, file=sys.stderr, flush=True)
-        return {"games": game_rows(_invalid(conditions.deals, failure))}
+        return Result(tables={"games": game_rows(_invalid(conditions.deals, failure))})
     assert completed is not None
     reply = CardReply.model_validate_json(completed.stdout)
-    return {
-        "games": game_rows(reply.rows),
-        **trace_card_tables(machine.root, reply.trace, ("mtg186", "mtg181")),
-    }
+    cards = trace_card_tables(machine.root, reply.trace, ("mtg186", "mtg181"))
+    return Result(
+        tables={"games": game_rows(reply.rows), **cards.tables}, blobs=cards.blobs
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +400,9 @@ def cards(spec: CardJob) -> None:
         kind="evaluation",
         directory=directory / "eval",
     ).root
-    machine = Machine(a=a, b=b, root=root.resolve(), work=directory / "work")
+    machine = Machine(
+        a=a, b=b, root=(directory / "evidence").resolve(), work=directory / "work"
+    )
     os.environ["MTG186_CARDS"] = machine.model_dump_json()
     started = time.time()
     try:
@@ -409,6 +414,7 @@ def cards(spec: CardJob) -> None:
             workers=spec.workers,
             run=RUN,
             directory=directory / "eval",
+            rollups=CARD_ROLLUPS,
         )
         print(result.model_dump_json(), flush=True)
     finally:
@@ -575,10 +581,10 @@ def write_tables(source: Path = OUT / "eval") -> None:
     # Card queries need duckdb (the `evaluation` extra); recipe discovery imports
     # every experiment module without it, so they load only here.
     from manabot.eval.card_page import write_page
-    from manabot.eval.card_query import CardSelection, card_data
+    from manabot.eval.card_query import CardSelection, card_data, card_db
     from manabot.eval.cards import print_data
 
-    with statsdb(EXPERIMENT, source, rebuild=True) as db:
+    with card_db(EXPERIMENT, source, rebuild=True) as db:
         for subject in ("mtg186", "mtg181"):
             selection = CardSelection(experiment=EXPERIMENT, subjects=(subject,))
             text = io.StringIO()
