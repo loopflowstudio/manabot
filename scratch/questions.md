@@ -1,7 +1,7 @@
 # MTG-206 assumptions and dependencies — 2026-10-27
 
-The Task directive (Jack Heart, 2026-10-27) is the accepted design; the plan
-and remaining work are in `scratch/mtg206.md`. Inherited MTG-188 notes remain
+The Task directive (Jack Heart, 2026-10-27) is the accepted design; the prior plan
+is retained at `bb3091113:scratch/mtg206.md` after delivery cleanup. Inherited MTG-188 notes remain
 at `37e5ccd8d65527f63486f1d9770af20f612fa8c8:scratch/questions.md`.
 
 - **etude-sdk 0.2.10** (released 2026-10-27 via `lf release run`, etude #69)
@@ -36,4 +36,6 @@ at `37e5ccd8d65527f63486f1d9770af20f612fa8c8:scratch/questions.md`.
   database catch-up adds 30.48 s wall in the separated measurement. All card
   metrics match prior results and the L4 audit replays 96/96. This supports
   advance, not a claim of human approval or a 1.5-second CLI. See
-  [the demo record](mtg206-demo.md). No stored-data conversion was needed.
+  `bb3091113:scratch/mtg206-demo.md` and the lasting
+  [acceptance record](../docs/card-evaluation.md#scale-proof).
+  No stored-data conversion was needed.

@@ -178,6 +178,23 @@ add an import command or claim equivalence with 17Lands' downstream service.
 
 ## Scale proof
 
+MTG-206 acceptance on 2026-10-27 used the original converted MTG-183
+u005950-versus-heuristic cohort: 5,000 eligible player-games, 5,000 deals and
+90 cards. Page generation took **16.01 s wall / 5.28 s CPU** for 363
+deck/position combinations (1,452 embedded filter keys). Every variant preserved
+the previous counts, rates and summary; bootstrap interval endpoints were
+excluded from that comparison. The complete CLI took 44.67 s wall; a separate
+measurement put database catch-up at 30.48 s wall. These are observed local
+timings, not a latency guarantee or a reproduction of the 1.5-second prototype.
+
+The real L4 smoke, `mtg206-cards-l4-verify` (Etude launcher run `b6fc065fb4e0`,
+source `325b64652`), cost approximately $0.03. Its delivered sealed block held
+96 games with evidence blobs and both rollups; `cards data --html` completed in
+1.2 s wall, and the replay audit checked **96/96 games with no problems**.
+The headless page-script proof covered filtering and exclusions, without visual
+approval. Detailed gate/demo records are retained in git at
+`bb3091113:scratch/mtg206.md` and `bb3091113:scratch/mtg206-demo.md`.
+
 The `Card evaluation scale proof` workflow runs `verify --games 1024` on CPU CI:
 bounded native games between two code players, card data for both, and an audit
 that replays every retained game. It reports elapsed time and peak parent and
