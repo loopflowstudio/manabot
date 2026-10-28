@@ -84,7 +84,7 @@ _GAMES = """
     join players a on a.player = s.player
     join seats t on t.run = g.run and t.match = g.match and t.seat = 1
     join players o on o.player = t.player
-    where g.seat = 0 and g.run = ?
+    where g.seat = 0
 """
 
 
@@ -109,15 +109,36 @@ def _current_heuristic() -> set[tuple[str, str | None]]:
 
 
 def load(directory: Path, store: Storage | Path) -> Results:
-    """The state and every stored game; a design unit short of its games is missing."""
+    """The state and every game of the mini's eval run in `store`."""
     state = EvalState.model_validate_json((directory / "state.json").read_bytes())
     with statsdb(EXPERIMENT, store) as db:
-        cursor = db.execute(_GAMES, [RUN])
-        names = [column[0] for column in cursor.description]
-        found = [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+        return results(state, _rows(db, f"{_GAMES} and g.run = ?", [RUN]))
+
+
+def load_database(database: Path, state: EvalState) -> Results:
+    """Every game of every eval run in the combined database (`elemental_long_db`)."""
+    import duckdb
+
+    with duckdb.connect(str(database), read_only=True) as db:
+        return results(state, _rows(db, _GAMES, []))
+
+
+def _rows(db: Any, query: str, parameters: list[Any]) -> list[dict[str, Any]]:
+    cursor = db.execute(query, parameters)
+    names = [column[0] for column in cursor.description]
+    return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+
+def results(state: EvalState, found: Sequence[dict[str, Any]]) -> Results:
+    """The design's games by unit; a design unit short of its games is missing.
+
+    A pair played by more than one match (a replication, or a batch replayed
+    after it was lost) keeps every valid game: its deals repeat, and the
+    bootstrap resamples by deal, so the repeats stay together.
+    """
     anchors = _current_heuristic()
-    # (newer, older or None, unit kind) → deal → row
-    played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
+    # (newer, older or None, unit kind) → (deal, match) → row
+    played: dict[tuple[int, int | None, str], dict[tuple[int, str], GameRow]] = {}
     for row in found:
         if row["opponent_kind"] == "code":
             # Only the current heuristic anchors the curve (protocol amendment).
@@ -127,11 +148,12 @@ def load(directory: Path, store: Storage | Path) -> Results:
         else:
             key = (_updates(row["subject"]), _updates(row["opponent"]), "pair")
         target = played.setdefault(key, {})
-        if row["deal"] in target:
+        identity = (row["deal"], f"{row['run']}/{row['match']}")
+        if identity in target:
             raise ValueError(
-                f"{row['subject']} v {row['opponent']}: deal {row['deal']} twice"
+                f"{row['subject']} v {row['opponent']}: deal {row['deal']} twice in one match"
             )
-        target[row["deal"]] = GameRow(
+        target[identity] = GameRow(
             model_deck=row["deck"],
             heuristic_deck=row["opponent_deck"],
             model_seat=row["game_seat"],
@@ -156,6 +178,12 @@ def load(directory: Path, store: Storage | Path) -> Results:
     roles = {
         (p.newer, p.older): p.role
         for p in pair_design(tuple(sorted(heuristic)), state.endpoint)
+    }
+    # MTG-183's own halving pairs, beside the shared design.
+    roles |= {
+        (u.newer, u.older): u.role
+        for u in units(state)
+        if u.role == "halving" and u.older is not None
     }
     pairs = {
         (newer, older): (roles.get((newer, older), "consecutive"), games)
@@ -629,20 +657,27 @@ def markdown(summary: Summary) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--storage", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--directory", type=Path, help="the mini's eval directory")
+    source.add_argument(
+        "--database", type=Path, help="the combined database (`elemental_long_db`)"
+    )
+    parser.add_argument("--storage", help="where the mini's eval run is (--directory)")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replicates", type=int, default=REPLICATES)
     args = parser.parse_args()
-    summary = summarize(
-        load(args.directory.expanduser(), storage_from_uri(args.storage)),
-        replicates=args.replicates,
-    )
+    if args.database is not None:
+        # The state the rented batches were planned from: every admitted export.
+        from experiments.elemental_long_rent import admitted
+
+        found = load_database(args.database.expanduser(), admitted())
+    else:
+        found = load(args.directory.expanduser(), storage_from_uri(args.storage))
+    summary = summarize(found, replicates=args.replicates)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(summary.model_dump_json(indent=2))
     (args.out / "report.md").write_text(markdown(summary))
     print(args.out / "report.md")
-
 
 if __name__ == "__main__":
     main()
