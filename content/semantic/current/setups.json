@@ -3100,5 +3100,46 @@
         ]
       }
     ]
+  },
+  "baseline": {
+    "pack_key": "tla-baseline-v1",
+    "decks": [
+      {
+        "key": "tla_white",
+        "card_count": 40,
+        "cards": [
+          {
+            "definition": "sacrifice.plains",
+            "count": 24
+          },
+          {
+            "definition": "tla.water_tribe_captain",
+            "count": 8
+          },
+          {
+            "definition": "tla.glider_kids",
+            "count": 8
+          }
+        ]
+      },
+      {
+        "key": "tla_red",
+        "card_count": 40,
+        "cards": [
+          {
+            "definition": "temur.mountain",
+            "count": 24
+          },
+          {
+            "definition": "tla.treetop_freedom_fighters",
+            "count": 8
+          },
+          {
+            "definition": "tla.fire_sages",
+            "count": 8
+          }
+        ]
+      }
+    ]
   }
 }

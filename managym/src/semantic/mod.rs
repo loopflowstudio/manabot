@@ -1,7 +1,7 @@
-//! Generic interpreter over the checked-in two-deck typed IR.
+//! Runtime lowering and diagnostic interpretation of reviewed typed card IR.
 //!
-//! This module is the runtime consumer proof for W2-223. It parses the
-//! versioned, reviewed IR emitted by `scripts/compile_semantic_content.py`,
+//! This module parses the versioned IR projected from the current definition
+//! catalog by `scripts/compile_current_content.py`,
 //! binds every semantic definition **once** to a real [`ContentPack`]
 //! [`CardDefId`], and then executes admitted card programs by dispatching purely
 //! on the stable numeric [`Opcode`]. No step in this module inspects a card
@@ -12,8 +12,8 @@
 //! parsed pack also lowers every admitted characteristic and program into the
 //! live [`ContentPack`] used by the exact authored matchup, so ordinary game
 //! commands, events, stabilization, search forks, and terminal state now run
-//! on compiled semantics. Differential tests keep that live lowering aligned
-//! with the reviewed reference definitions.
+//! on compiled semantics. Directed rules tests independently witness behavior;
+//! shared pool descriptors expose identity and qualification to deck admission.
 
 mod content;
 mod pool;
@@ -681,6 +681,7 @@ impl SemanticPack {
                     Self::elemental_world()?,
                     Self::optional_payments()?,
                     Self::complexity()?,
+                    Self::baseline()?,
                 ])
             })
             .as_deref()
@@ -690,6 +691,12 @@ impl SemanticPack {
     pub fn optional_payments() -> Result<Self, IrError> {
         Self::from_json(include_str!(
             "../../../content/semantic/current/generated/optional_payments.ir.json"
+        ))
+    }
+
+    pub fn baseline() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/current/generated/baseline.ir.json"
         ))
     }
 

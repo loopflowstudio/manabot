@@ -169,6 +169,13 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
+### Typed card mana authoring
+
+Native fixed mana abilities on a card are additive: multiple fixed productions
+produce all listed colors together. A land that produces one chosen color uses
+one activated modal mana program, not multiple fixed mana programs. Verify each
+choice by paying a real cost and checking the remaining mana.
+
 ### Etude card evaluation
 
 Etude hashes tracked source paths (`git add -N` admits new files for local

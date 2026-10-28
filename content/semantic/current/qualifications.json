@@ -1,38 +1,191 @@
 {
   "sacrifice.plains": {
-    "definition_hash": "c4dcea8e9082750df41f076d2171194b245416b37f91399c51b35595d01f7917",
+    "closure_hash": "bad2c7bf760ad76f23f5aaf606d2e13e77409770a5d3c3d00a88d3aed932b20d",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
     ]
   },
   "sacrifice.swamp": {
-    "definition_hash": "d8cb6c5baf0ac54e12bab97218d018343beb42b0e10ec8704111c31bf938c075",
+    "closure_hash": "7e42321f3a5251ee5bac6e5a6f9abc407d95340d3a1a56ed8b6d8aab860f7539",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
     ]
   },
   "temur.forest": {
-    "definition_hash": "9a442004a5fe721f4442079096555e2fd5ee0a45d841b3024b40c2614369872f",
+    "closure_hash": "00a7aee872d923d40085b76dbbd733263811dc081819e5740f251b20ae7f467d",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
     ]
   },
   "temur.island": {
-    "definition_hash": "791648d2acd97100dda8e08325f1386cdc8d2902b7f1d4ed98c86afdc7e7ef30",
+    "closure_hash": "91075098de7652ad8ec47071066cdbc0a1db00a6f78b2198bc862d141d2f3df3",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
     ]
   },
   "temur.mountain": {
-    "definition_hash": "faf995c7d61efab1aa64d1308f69a8b6a20769523176d2ed7d7e36ef6240c4ba",
+    "closure_hash": "75f7d49a270ff9d81243aacd520302507c64cb2c53e2551164a4528a8828cb96",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
     ]
   },
+  "tla.airship_engine_room": {
+    "closure_hash": "fa959bed5d27c4c2eafd6038b24d1a36406e366930d19cef00db7469b2e24b33",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
   "tla.avatar_enthusiasts": {
-    "definition_hash": "0b6fdeabf834db5c391a8e882915af02e360b9ed550e8f8c533d03e4c5f42dba",
+    "closure_hash": "e07125fac706e597143d10211804d17f08565a9c45b3739a096abfd7107c846d",
     "witnesses": [
       "managym/tests/rules/tla_cards.rs::avatar_enthusiasts_counter_when_another_ally_enters"
+    ]
+  },
+  "tla.boar_q_pine": {
+    "closure_hash": "73790eb07b1a16c155dcd2d41cccebb88dc1e987b57468a4456adbeb8be7e5ff",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::iguana_and_boar_trigger_only_on_own_noncreature_casts"
+    ]
+  },
+  "tla.boiling_rock_prison": {
+    "closure_hash": "55d2ddd76c204828677be5810ae4bbcf6b767c05ba8b717a5ad2b13761777d31",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.cat_owl": {
+    "closure_hash": "62e38b267043bf71a41c43997d0b21c00292c3d49396aa4c09574b74e70c84e3",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::cat_owl_attack_untaps_artifacts_or_creatures_in_either_control"
+    ]
+  },
+  "tla.cunning_maneuver": {
+    "closure_hash": "3568a4f7eb1bf9ef0b7aadad8422760cae5c84977bacec71bb9716c814151b03",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::cunning_maneuver_buffs_and_investigates_but_all_invalid_targets_stop_it"
+    ]
+  },
+  "tla.earth_kingdom_protectors": {
+    "closure_hash": "1c10db1e9ab84742373a5d8229c065d56d31e2bfa8e95400cfac6da2e3b94c89",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::protectors_sacrifice_is_committed_and_only_another_own_ally_is_legal"
+    ]
+  },
+  "tla.earth_kingdom_soldier": {
+    "closure_hash": "4fd42a0f7b5cb03f5004fa0bd4a6ec81b5fa63222a69678a39ad5fe011425323",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::earth_kingdom_soldier_offers_zero_one_or_two_distinct_own_creatures"
+    ]
+  },
+  "tla.fire_sages": {
+    "closure_hash": "2053f82f836762eca423e78b422539bb8e692de3bff0ee0cd17834ff1a57b9ad",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::fire_sages_counter_cost_and_firebending_mana_lifetime"
+    ]
+  },
+  "tla.foggy_bottom_swamp": {
+    "closure_hash": "b65f2ff02ccb41faae7eb77591f28c8a0acbd4ebb4ba4ba8f5bcf40cf88bda2d",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.glider_kids": {
+    "closure_hash": "8d4cad9bc7598a90a01d1422af30486a7e7f00b0dc081445f27df9f19562e967",
+    "witnesses": [
+      "managym/tests/rules/stage2_cards.rs::glider_kids_scry_surfaces_binary_decision_to_controller",
+      "managym/tests/rules/stage2_cards.rs::glider_kids_scry_bottom_moves_top_card_to_bottom",
+      "managym/tests/rules/stage2_cards.rs::glider_kids_scry_keep_leaves_top_card",
+      "managym/tests/rules/stage2_cards.rs::glider_kids_flies_over_ground_blockers"
+    ]
+  },
+  "tla.iguana_parrot": {
+    "closure_hash": "1e7607f86a167d3b99beaef839ab79c2358f478236a4bc63cb4a455316b40925",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::iguana_and_boar_trigger_only_on_own_noncreature_casts"
+    ]
+  },
+  "tla.kyoshi_village": {
+    "closure_hash": "86e3d8efac47ffd18c4e84909146a761d3e82c3423e343ea739c7890543fe0ab",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.meditation_pools": {
+    "closure_hash": "f02de7842ec7ffc2dbb559c0a8cd8c337415c60d3ab7e6bf776bb2776f4e40bb",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.misty_palms_oasis": {
+    "closure_hash": "3a19ab9f296c9b21a578a9d10fdc04776b4e881db503b9a0a610eb4b46f0a420",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.north_pole_gates": {
+    "closure_hash": "affb2589c37affd8229bfe24a8b0a6e1f895d5f6979737bd10ccb821c329162b",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.omashu_city": {
+    "closure_hash": "3fade4082fcb5f197dd6c04ffd77ac40303f43048c6bc53d933e97eb44e13b2a",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.pillar_launch": {
+    "closure_hash": "a41093c90ac8b727092fad77b82b3a155f7e56dd280abf81ca7c8e15dd738335",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::pillar_launch_untaps_and_grants_temporary_reach_and_stats"
+    ]
+  },
+  "tla.rumble_arena": {
+    "closure_hash": "ff998a05542aca6ffb5a1895e3a0900bd2dd8de09cd4f0bdbf1971760305664a",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::rumble_arena_scries_then_filters_one_paid_mana_without_using_the_stack"
+    ]
+  },
+  "tla.serpents_pass": {
+    "closure_hash": "346f75f55e2e550da72d1dbb5d3da07f16930c1d7304d1197f3c56129275adf3",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.sun_blessed_peak": {
+    "closure_hash": "577830f4184a22babf20ae891d2a1279d3801a925011ef67cafcb457d310c99e",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.treetop_freedom_fighters": {
+    "closure_hash": "753d223d93f0f194e56df6a094bc08882ad7a110fd3d5eeae206f8e9d8377fdb",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::treetop_creates_one_white_ally_and_can_attack_immediately"
+    ]
+  },
+  "tla.walltop_sentries": {
+    "closure_hash": "0a12c0eef4a8d97f7e0db9f13fadc374df23d3f45e1feea0ca4cb117837f29f7",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::walltop_intervening_lesson_condition_is_checked_at_death_and_resolution"
+    ]
+  },
+  "tla.wandering_musicians": {
+    "closure_hash": "3a14740a3f60b4b615759047a51500495e0a118e8677f9b75d77038e89d3e1f1",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::wandering_musicians_pump_all_own_creatures_for_the_turn"
+    ]
+  },
+  "tla.water_tribe_captain": {
+    "closure_hash": "2a1c1b26cb15215e5484ceeef9c463161f2994facc80b662904baf758ec43fc6",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::water_tribe_captain_pays_five_and_buffs_only_own_creatures_until_cleanup"
+    ]
+  },
+  "tla.yuyan_archers": {
+    "closure_hash": "e191bdfd28e8707ea34bf0ae44e2e0879e393a67d179dd37b13fb8cd3eef5d9a",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::yuyan_rummage_may_be_declined_or_discard_then_draw"
     ]
   }
 }

@@ -10937,6 +10937,1733 @@
     ],
     "ir_hash": "3582aec27e85a07bfb1580e52b01d0d2f942e339df08ad0ae22cd504cfe17c52"
   },
+  "tla-baseline-v1": {
+    "definitions": [
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Aang's Iceberg",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Aang's Journey",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Aang, Swift Savior // Aang and La, Ocean's Fury",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Aang, at the Crossroads // Aang, Destined Savior",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Aang, the Last Airbender",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Abandon Attachments",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Abandoned Air Temple",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Accumulate Wisdom",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Agna Qel'a",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Air Nomad Legacy",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Airbender Ascension",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Airbender's Reversal",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Airbending Lesson",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Airship Engine Room",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Allies at Last",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Ally",
+        "semantic_key": "sacrifice.ally"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Appa, Loyal Sky Bison",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Appa, Steadfast Guardian",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Avatar Aang // Aang, Master of Elements",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Avatar Destiny",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Avatar Enthusiasts",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Avatar's Wrath",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Azula Always Lies",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Azula, Cunning Usurper",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Azula, On the Hunt",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ba Sing Se",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Badgermole",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Badgermole Cub",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Barrels of Blasting Jelly",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Beetle-Headed Merchants",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Beifong's Bounty Hunters",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Bender's Waterskin",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Benevolent River Spirit",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Bitter Work",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Boar-q-pine",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Boiling Rock Prison",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Boiling Rock Rioter",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Boomerang Basics",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Bumi Bash",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Bumi, King of Three Trials",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Bumi, Unleashed",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Buzzard-Wasp Colony",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Callous Inspector",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Canyon Crawler",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Cat-Gator",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Cat-Owl",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Combustion Man",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Combustion Technique",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Compassionate Healer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Corrupt Court Official",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Crashing Wave",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Crescent Island Temple",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Cruel Administrator",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Cunning Maneuver",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Curious Farm Animals",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Cycle of Renewal",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Dai Li Agents",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Dai Li Indoctrination",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Day of Black Sun",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Deadly Precision",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Deserter's Disciple",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Destined Confrontation",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Diligent Zookeeper",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Dragonfly Swarm",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth King's Lieutenant",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Kingdom General",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Kingdom Jailer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Kingdom Protectors",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Kingdom Soldier",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Rumble",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Rumble Wrestlers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earth Village Ruffians",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earthbender Ascension",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earthbending Lesson",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Earthen Ally",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Elemental Teachings",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ember Island Production",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Energybending",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Enter the Avatar State",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Epic Downfall",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fancy Footwork",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fatal Fissure",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fated Firepower",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Lord Azula",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Lord Zuko",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Attacks",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Cadets",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Engineer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Palace",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Raider",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Nation Warship",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Fire Navy Trebuchet",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Fire Sages",
+        "semantic_key": "tla.fire_sages"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Firebender Ascension",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Firebending Lesson",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Firebending Student",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "First-Time Flyer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Flexible Waterbender",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Flopsie, Bumi's Buddy",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Foggy Bottom Swamp",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Foggy Swamp Hunters",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Foggy Swamp Spirit Keeper",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Foggy Swamp Vinebender",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Foggy Swamp Visions",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Forecasting Fortune Teller",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Forest",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Gather the White Lotus",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Geyser Leaper",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Giant Koi",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Glider Kids",
+        "semantic_key": "tla.glider_kids"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Glider Staff",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Gran-Gran",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Great Divide Guide",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Guru Pathik",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Hakoda, Selfless Commander",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Hama, the Bloodbender",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Haru, Hidden Talent",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Heartless Act",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Hei Bai, Spirit of Balance",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Hermitic Herbalist",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Hog-Monkey",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Honest Work",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "How to Start a Riot",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Iguana Parrot",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Invasion Reinforcements",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Invasion Submersible",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Invasion Tactics",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Iroh's Demonstration",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Iroh, Grand Lotus",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Iroh, Tea Master",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Island",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "It'll Quench Ya!",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Jasmine Dragon Tea Shop",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Jeong Jeong's Deserters",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Jeong Jeong, the Deserter",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Jet's Brainwashing",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Jet, Freedom Fighter",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Joo Dee, One of Many",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "June, Bounty Hunter",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Katara, Bending Prodigy",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Katara, Water Tribe's Hope",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Katara, the Fearless",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Knowledge Seeker",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Koh, the Face Stealer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Kyoshi Battle Fan",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Kyoshi Island Plaza",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Kyoshi Village",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Kyoshi Warriors",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Leaves from the Vine",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Lightning Strike",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Lo and Li, Twin Tutors",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Long Feng, Grand Secretariat",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Lost Days",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Mai, Jaded Edge",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Mai, Scornful Striker",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Master Pakku",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Master Piandao",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Meditation Pools",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Merchant of Many Hats",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Messenger Hawk",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Meteor Sword",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Misty Palms Oasis",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Momo, Friendly Flier",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Momo, Playful Pet",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Mongoose Lizard",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Mountain",
+        "semantic_key": "temur.mountain"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "North Pole Gates",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "North Pole Patrol",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Northern Air Temple",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Obsessive Pursuit",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Octopus Form",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Omashu City",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Origin of Metalbending",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ostrich-Horse",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Otter-Penguin",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ozai's Cruelty",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ozai, the Phoenix King",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Path to Redemption",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Phoenix Fleet Airship",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Pillar Launch",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Pirate Peddlers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Plains",
+        "semantic_key": "sacrifice.plains"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Planetarium of Wan Shi Tong",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Platypus-Bear",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Pretending Poxbearers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Price of Freedom",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Professor Zei, Anthropologist",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rabaroo Troop",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ran and Shaw",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Raucous Audience",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Raven Eagle",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Razor Rings",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Realm of Koh",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rebellious Captives",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Redirect Lightning",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rockalanche",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rocky Rebuke",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rough Rhino Cavalry",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rowdy Snowballers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ruinous Waterbending",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Rumble Arena",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Saber-Tooth Moose-Lion",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sandbender Scavengers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sandbenders' Storm",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Secret Tunnel",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Secret of Bloodbending",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Seismic Sense",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Serpent of the Pass",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Serpent's Pass",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Shared Roots",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sokka's Haiku",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sokka, Bold Boomeranger",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sokka, Lateral Strategist",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sokka, Tenacious Tactician",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sold Out",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Solstice Revelations",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "South Pole Voyager",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Southern Air Temple",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sozin's Comet",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sparring Dummy",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Spirit Water Revival",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Suki, Courageous Rescuer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Suki, Kyoshi Warrior",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sun Warriors",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Sun-Blessed Peak",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Swamp",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Swampsnare Trap",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Team Avatar",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Teo, Spirited Glider",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Boulder, Ready to Rumble",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Cave of Two Lovers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Earth King",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Fire Nation Drill",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Last Agni Kai",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Legend of Kuruk // Avatar Kuruk",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Legend of Kyoshi // Avatar Kyoshi",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Legend of Roku // Avatar Roku",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Legend of Yangchen // Avatar Yangchen",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Lion-Turtle",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Mechanist, Aerial Artisan",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Rise of Sozin // Fire Lord Sozin",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Spirit Oasis",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Unagi of Kyoshi Island",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "The Walls of Ba Sing Se",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Tiger-Dillo",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Tiger-Seal",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Tolls of War",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Toph, Hardheaded Teacher",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Toph, the Blind Bandit",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Toph, the First Metalbender",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Treetop Freedom Fighters",
+        "semantic_key": "tla.treetop_freedom_fighters"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "True Ancestry",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Trusty Boomerang",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Tundra Tank",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Turtle-Duck",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Twin Blades",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ty Lee, Artful Acrobat",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Ty Lee, Chi Blocker",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Uncle Iroh",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "United Front",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Unlucky Cabbage Merchant",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Vengeful Villagers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Vindictive Warden",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Walltop Sentries",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Wan Shi Tong, Librarian",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Wandering Musicians",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "War Balloon",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Wartime Protestors",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "eligible",
+        "reason": null,
+        "registry_name": "Water Tribe Captain",
+        "semantic_key": "tla.water_tribe_captain"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Water Tribe Rallier",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Waterbender Ascension",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Waterbending Lesson",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Waterbending Scroll",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Watery Grasp",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "White Lotus Hideout",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "White Lotus Reinforcements",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "White Lotus Tile",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Wolfbat",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Yip Yip!",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Yue, the Moon Spirit",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Yuyan Archers",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zhao, Ruthless Admiral",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zhao, the Moon Slayer",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zuko's Conviction",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zuko's Exile",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zuko, Conflicted",
+        "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Not implemented in this content pack",
+        "registry_name": "Zuko, Exiled Prince",
+        "semantic_key": null
+      }
+    ],
+    "ir_hash": "e5e642b0967c75e8900668f83a9f1458ac8f7abbf344284550ff01f8e7469905"
+  },
   "tla-jeong-increment-v1": {
     "definitions": [
       {
@@ -12769,8 +14496,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Airship Engine Room",
         "semantic_key": "tla.airship_engine_room"
       },
@@ -12860,6 +14587,12 @@
       },
       {
         "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Ballistic Boulder",
+        "semantic_key": "token.ballistic_boulder"
+      },
+      {
+        "eligibility": "unsupported",
         "reason": "Not implemented in this content pack",
         "registry_name": "Barrels of Blasting Jelly",
         "semantic_key": null
@@ -12869,6 +14602,12 @@
         "reason": "Preserved authored behavior; complete independent qualification pending",
         "registry_name": "Bastion of Remembrance",
         "semantic_key": "sacrifice.bastion_of_remembrance"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Bear",
+        "semantic_key": "token.bear"
       },
       {
         "eligibility": "unsupported",
@@ -12901,14 +14640,14 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Boar-q-pine",
         "semantic_key": "tla.boar_q_pine"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Boiling Rock Prison",
         "semantic_key": "tla.boiling_rock_prison"
       },
@@ -12967,10 +14706,10 @@
         "semantic_key": "elemental.cat_gator"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Cat-Owl",
-        "semantic_key": null
+        "semantic_key": "tla.cat_owl"
       },
       {
         "eligibility": "unsupported",
@@ -13021,8 +14760,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Cunning Maneuver",
         "semantic_key": "tla.cunning_maneuver"
       },
@@ -13095,6 +14834,12 @@
       {
         "eligibility": "unsupported",
         "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Dragon",
+        "semantic_key": "token.dragon"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
         "registry_name": "Dragonfly Swarm",
         "semantic_key": "tla.dragonfly_swarm"
       },
@@ -13117,16 +14862,16 @@
         "semantic_key": "tla.earth_kingdom_jailer"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Earth Kingdom Protectors",
         "semantic_key": "tla.earth_kingdom_protectors"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Earth Kingdom Soldier",
-        "semantic_key": null
+        "semantic_key": "tla.earth_kingdom_soldier"
       },
       {
         "eligibility": "unsupported",
@@ -13291,8 +15036,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Fire Sages",
         "semantic_key": "tla.fire_sages"
       },
@@ -13339,8 +15084,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Foggy Bottom Swamp",
         "semantic_key": "tla.foggy_bottom_swamp"
       },
@@ -13411,8 +15156,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Glider Kids",
         "semantic_key": "tla.glider_kids"
       },
@@ -13513,8 +15258,8 @@
         "semantic_key": "stx.igneous_inspiration"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Iguana Parrot",
         "semantic_key": "tla.iguana_parrot"
       },
@@ -13651,8 +15396,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Kyoshi Village",
         "semantic_key": "tla.kyoshi_village"
       },
@@ -13729,8 +15474,8 @@
         "semantic_key": "sacrifice.mayhem_devil"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Meditation Pools",
         "semantic_key": "tla.meditation_pools"
       },
@@ -13753,8 +15498,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Misty Palms Oasis",
         "semantic_key": "tla.misty_palms_oasis"
       },
@@ -13783,14 +15528,20 @@
         "semantic_key": null
       },
       {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Monk",
+        "semantic_key": "token.monk"
+      },
+      {
         "eligibility": "eligible",
         "reason": null,
         "registry_name": "Mountain",
         "semantic_key": "temur.mountain"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "North Pole Gates",
         "semantic_key": "tla.north_pole_gates"
       },
@@ -13819,8 +15570,8 @@
         "semantic_key": "elemental.octopus_form"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Omashu City",
         "semantic_key": "tla.omashu_city"
       },
@@ -13867,8 +15618,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Pillar Launch",
         "semantic_key": "tla.pillar_launch"
       },
@@ -14000,9 +15751,9 @@
       },
       {
         "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "reason": "Not implemented in this content pack",
         "registry_name": "Rocky Rebuke",
-        "semantic_key": "tla.rocky_rebuke"
+        "semantic_key": null
       },
       {
         "eligibility": "unsupported",
@@ -14023,8 +15774,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Rumble Arena",
         "semantic_key": "tla.rumble_arena"
       },
@@ -14083,8 +15834,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Serpent's Pass",
         "semantic_key": "tla.serpents_pass"
       },
@@ -14123,6 +15874,12 @@
         "reason": "Not implemented in this content pack",
         "registry_name": "Sold Out",
         "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Soldier",
+        "semantic_key": "token.soldier"
       },
       {
         "eligibility": "unsupported",
@@ -14191,8 +15948,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Sun-Blessed Peak",
         "semantic_key": "tla.sun_blessed_peak"
       },
@@ -14365,8 +16122,8 @@
         "semantic_key": "sacrifice.treasure"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Treetop Freedom Fighters",
         "semantic_key": "tla.treetop_freedom_fighters"
       },
@@ -14443,10 +16200,10 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Walltop Sentries",
-        "semantic_key": null
+        "semantic_key": "tla.walltop_sentries"
       },
       {
         "eligibility": "unsupported",
@@ -14455,10 +16212,10 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Wandering Musicians",
-        "semantic_key": null
+        "semantic_key": "tla.wandering_musicians"
       },
       {
         "eligibility": "unsupported",
@@ -14473,8 +16230,8 @@
         "semantic_key": "elemental.wartime_protestors"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Water Tribe Captain",
         "semantic_key": "tla.water_tribe_captain"
       },
@@ -14551,8 +16308,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Yuyan Archers",
         "semantic_key": "tla.yuyan_archers"
       },
@@ -14593,7 +16350,7 @@
         "semantic_key": null
       }
     ],
-    "ir_hash": "f270799fa0230b03dc0684768ed139a4f918fcd17ef7ff133f7bf455ff8023d7"
+    "ir_hash": "18cd1450ce12f342702b925598509dfdad7ded1fc7129e5afb0ce5eeb0863554"
   },
   "tla-tla-v1": {
     "definitions": [
@@ -14676,8 +16433,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Airship Engine Room",
         "semantic_key": "tla.airship_engine_room"
       },
@@ -14767,9 +16524,21 @@
       },
       {
         "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Ballistic Boulder",
+        "semantic_key": "token.ballistic_boulder"
+      },
+      {
+        "eligibility": "unsupported",
         "reason": "Not implemented in this content pack",
         "registry_name": "Barrels of Blasting Jelly",
         "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Bear",
+        "semantic_key": "token.bear"
       },
       {
         "eligibility": "unsupported",
@@ -14802,14 +16571,14 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Boar-q-pine",
         "semantic_key": "tla.boar_q_pine"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Boiling Rock Prison",
         "semantic_key": "tla.boiling_rock_prison"
       },
@@ -14868,10 +16637,10 @@
         "semantic_key": "elemental.cat_gator"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Cat-Owl",
-        "semantic_key": null
+        "semantic_key": "tla.cat_owl"
       },
       {
         "eligibility": "unsupported",
@@ -14922,8 +16691,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Cunning Maneuver",
         "semantic_key": "tla.cunning_maneuver"
       },
@@ -14984,6 +16753,12 @@
       {
         "eligibility": "unsupported",
         "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Dragon",
+        "semantic_key": "token.dragon"
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
         "registry_name": "Dragonfly Swarm",
         "semantic_key": "tla.dragonfly_swarm"
       },
@@ -15006,16 +16781,16 @@
         "semantic_key": "tla.earth_kingdom_jailer"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Earth Kingdom Protectors",
         "semantic_key": "tla.earth_kingdom_protectors"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Earth Kingdom Soldier",
-        "semantic_key": null
+        "semantic_key": "tla.earth_kingdom_soldier"
       },
       {
         "eligibility": "unsupported",
@@ -15156,8 +16931,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Fire Sages",
         "semantic_key": "tla.fire_sages"
       },
@@ -15198,8 +16973,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Foggy Bottom Swamp",
         "semantic_key": "tla.foggy_bottom_swamp"
       },
@@ -15264,8 +17039,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Glider Kids",
         "semantic_key": "tla.glider_kids"
       },
@@ -15348,8 +17123,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Iguana Parrot",
         "semantic_key": "tla.iguana_parrot"
       },
@@ -15486,8 +17261,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Kyoshi Village",
         "semantic_key": "tla.kyoshi_village"
       },
@@ -15552,8 +17327,8 @@
         "semantic_key": "elemental.master_piandao"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Meditation Pools",
         "semantic_key": "tla.meditation_pools"
       },
@@ -15576,8 +17351,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Misty Palms Oasis",
         "semantic_key": "tla.misty_palms_oasis"
       },
@@ -15601,13 +17376,19 @@
       },
       {
         "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Monk",
+        "semantic_key": "token.monk"
+      },
+      {
+        "eligibility": "unsupported",
         "reason": "Not implemented in this content pack",
         "registry_name": "Mountain",
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "North Pole Gates",
         "semantic_key": "tla.north_pole_gates"
       },
@@ -15636,8 +17417,8 @@
         "semantic_key": "elemental.octopus_form"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Omashu City",
         "semantic_key": "tla.omashu_city"
       },
@@ -15684,8 +17465,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Pillar Launch",
         "semantic_key": "tla.pillar_launch"
       },
@@ -15787,9 +17568,9 @@
       },
       {
         "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "reason": "Not implemented in this content pack",
         "registry_name": "Rocky Rebuke",
-        "semantic_key": "tla.rocky_rebuke"
+        "semantic_key": null
       },
       {
         "eligibility": "unsupported",
@@ -15810,8 +17591,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Rumble Arena",
         "semantic_key": "tla.rumble_arena"
       },
@@ -15858,8 +17639,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Serpent's Pass",
         "semantic_key": "tla.serpents_pass"
       },
@@ -15898,6 +17679,12 @@
         "reason": "Not implemented in this content pack",
         "registry_name": "Sold Out",
         "semantic_key": null
+      },
+      {
+        "eligibility": "unsupported",
+        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "registry_name": "Soldier",
+        "semantic_key": "token.soldier"
       },
       {
         "eligibility": "unsupported",
@@ -15960,8 +17747,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Sun-Blessed Peak",
         "semantic_key": "tla.sun_blessed_peak"
       },
@@ -16116,8 +17903,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Treetop Freedom Fighters",
         "semantic_key": "tla.treetop_freedom_fighters"
       },
@@ -16194,10 +17981,10 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Walltop Sentries",
-        "semantic_key": null
+        "semantic_key": "tla.walltop_sentries"
       },
       {
         "eligibility": "unsupported",
@@ -16206,10 +17993,10 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Not implemented in this content pack",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Wandering Musicians",
-        "semantic_key": null
+        "semantic_key": "tla.wandering_musicians"
       },
       {
         "eligibility": "unsupported",
@@ -16224,8 +18011,8 @@
         "semantic_key": "elemental.wartime_protestors"
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Water Tribe Captain",
         "semantic_key": "tla.water_tribe_captain"
       },
@@ -16296,8 +18083,8 @@
         "semantic_key": null
       },
       {
-        "eligibility": "unsupported",
-        "reason": "Preserved authored behavior; complete independent qualification pending",
+        "eligibility": "eligible",
+        "reason": null,
         "registry_name": "Yuyan Archers",
         "semantic_key": "tla.yuyan_archers"
       },
@@ -16338,7 +18125,7 @@
         "semantic_key": null
       }
     ],
-    "ir_hash": "f253e7125f0874a142adf83af98cf143eb71230aa84ebac9f4047a6eda6cfe4e"
+    "ir_hash": "5c685a3d75c9a569029b9126dfc9a5346611abe0264d1cd5f1cc9ea3da45134e"
   },
   "ur-lessons-vs-gw-allies": {
     "definitions": [

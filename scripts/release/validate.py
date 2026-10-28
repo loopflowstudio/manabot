@@ -40,7 +40,7 @@ def validate(directory: Path, complete: bool) -> None:
                         "Manabot wheel is missing its bundled native extension"
                     )
                 if (
-                    "content/semantic/w11/generated/elemental_world.ir.json"
+                    "content/semantic/current/generated/pool.ir.json"
                     not in files
                 ):
                     raise ValueError("Manabot wheel is missing semantic runtime data")
@@ -57,7 +57,7 @@ def validate(directory: Path, complete: bool) -> None:
             root = source.name.removesuffix(".tar.gz")
             files = set(archive.getnames())
             if (
-                f"{root}/content/semantic/w11/generated/elemental_world.ir.json"
+                f"{root}/content/semantic/current/generated/pool.ir.json"
                 not in files
             ):
                 raise ValueError(f"missing content in {source.name}")

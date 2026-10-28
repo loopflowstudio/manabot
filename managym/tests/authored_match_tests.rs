@@ -1,9 +1,6 @@
 // Authored-match proof: the selected product decks play to terminal on compiled semantics.
 
-use managym::{
-    cardsets::alpha::ContentPack, flow::event::GameEvent, semantic::SemanticPack,
-    state::player::PlayerConfig, Game,
-};
+use managym::{flow::event::GameEvent, semantic::SemanticPack, state::player::PlayerConfig, Game};
 
 fn authored_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
     vec![
@@ -65,46 +62,6 @@ fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
 }
 
 #[test]
-fn compiled_pack_matches_the_reviewed_reference_behavior() {
-    let semantic = SemanticPack::two_deck().expect("checked-in semantic IR parses");
-    let compiled = semantic
-        .compile_content_pack()
-        .expect("semantic IR lowers into live content");
-    let reference = ContentPack::default();
-
-    for semantic_definition in &semantic.definitions {
-        let compiled_id = compiled
-            .definition_id(&semantic_definition.registry_name)
-            .expect("compiled definition exists");
-        let reference_id = reference
-            .definition_id(&semantic_definition.registry_name)
-            .expect("reviewed reference definition exists");
-        let mut compiled_definition = compiled
-            .definition(compiled_id)
-            .expect("compiled definition")
-            .clone();
-        let mut reference_definition = reference
-            .definition(reference_id)
-            .expect("reference definition")
-            .clone();
-        if reference_definition.targeting.is_empty() {
-            compiled_definition.targeting.clear();
-        }
-        compiled_definition
-            .abilities
-            .sort_by_key(|ability| format!("{ability:?}"));
-        reference_definition
-            .abilities
-            .sort_by_key(|ability| format!("{ability:?}"));
-        assert_eq!(
-            &compiled_definition, &reference_definition,
-            "compiled behavior drifted for {}",
-            semantic_definition.registry_name
-        );
-    }
-}
-
-#[test]
 fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
     let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
     let configs = jeong_configs(&semantic);
@@ -120,24 +77,6 @@ fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
         assert_eq!(provenance.ir_hash, semantic.ir_hash);
         assert_eq!(provenance.source_hash, semantic.source_hash);
     }
-}
-
-#[test]
-fn compiled_jeong_definition_matches_the_reviewed_reference_behavior() {
-    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
-    let compiled = semantic
-        .compile_content_pack()
-        .expect("Jeong IR lowers into live content");
-    let reference = ContentPack::default();
-    let name = "Jeong Jeong's Deserters";
-
-    let compiled_definition = compiled
-        .definition(compiled.definition_id(name).expect("compiled Jeong"))
-        .expect("compiled Jeong definition");
-    let reference_definition = reference
-        .definition(reference.definition_id(name).expect("reference Jeong"))
-        .expect("reference Jeong definition");
-    assert_eq!(compiled_definition, reference_definition);
 }
 
 #[test]
@@ -170,32 +109,6 @@ fn non_authored_decks_keep_the_general_content_pack() {
 }
 
 #[test]
-fn compiled_elemental_closure_matches_all_native_rules() {
-    let semantic = SemanticPack::elemental().expect("Elemental IR parses");
-    let compiled = semantic.compile_content_pack().expect("Elemental lowers");
-    let native = ContentPack::default();
-    assert_eq!(semantic.definitions.len(), 51); // 42 owned cards, five basics, four tokens.
-    for definition in &semantic.definitions {
-        let name = &definition.registry_name;
-        let mut actual = compiled
-            .definition(compiled.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        let mut expected = native
-            .definition(native.definition_id(name).unwrap())
-            .unwrap()
-            .clone();
-        actual
-            .abilities
-            .sort_by_key(|ability| format!("{ability:?}"));
-        expected
-            .abilities
-            .sort_by_key(|ability| format!("{ability:?}"));
-        assert_eq!(actual, expected, "compiled Elemental drift for {name}");
-    }
-}
-
-#[test]
 fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
     let semantic = SemanticPack::elemental().unwrap();
     let configs = vec![
@@ -210,41 +123,5 @@ fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
         );
         assert!(game.random_playout(100_000, None).unwrap().is_some());
         assert!(game.is_game_over());
-    }
-}
-
-#[test]
-fn compiled_sacrifice_closure_matches_all_native_rules() {
-    let semantic = SemanticPack::sacrifice().unwrap();
-    let compiled = semantic.compile_content_pack().unwrap();
-    let native = ContentPack::default();
-    assert_eq!(semantic.definitions.len(), 27);
-    for definition in &semantic.definitions {
-        let name = &definition.registry_name;
-        let actual = compiled
-            .definition(compiled.definition_id(name).unwrap())
-            .unwrap();
-        let expected = native
-            .definition(native.definition_id(name).unwrap())
-            .unwrap();
-        assert_eq!(actual, expected, "compiled sacrifice drift for {name}");
-    }
-}
-
-#[test]
-fn compiled_temur_closure_matches_all_native_rules() {
-    let semantic = SemanticPack::temur().unwrap();
-    let compiled = semantic.compile_content_pack().unwrap();
-    let native = ContentPack::default();
-    assert_eq!(semantic.definitions.len(), 9);
-    for definition in &semantic.definitions {
-        let name = &definition.registry_name;
-        let actual = compiled
-            .definition(compiled.definition_id(name).unwrap())
-            .unwrap();
-        let expected = native
-            .definition(native.definition_id(name).unwrap())
-            .unwrap();
-        assert_eq!(actual, expected, "compiled temur drift for {name}");
     }
 }

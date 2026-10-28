@@ -4396,26 +4396,6 @@
     },
     "programs": [
       {
-        "key": "mana_U",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "U"
-          }
-        ]
-      },
-      {
-        "key": "mana_R",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "R"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -4427,6 +4407,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "U"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "R"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -4646,26 +4653,6 @@
     },
     "programs": [
       {
-        "key": "mana_B",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "B"
-          }
-        ]
-      },
-      {
-        "key": "mana_R",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "R"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -4677,6 +4664,88 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "B"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "R"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "tla.cat_owl",
+    "registry_name": "Cat-Owl",
+    "text_box": "Flying\nWhenever this creature attacks, untap target artifact or creature.",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Cat",
+        "Bird"
+      ],
+      "mana_cost": "{3}{W/U}",
+      "power": 3,
+      "toughness": 3,
+      "keywords": [
+        "flying"
+      ]
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "attacks",
+          "subject": {
+            "kind": "this"
+          }
+        },
+        "ops": [
+          {
+            "op": "untap",
+            "target": "permanent"
+          }
+        ],
+        "targets": [
+          {
+            "role": "permanent",
+            "selector": {
+              "kind": "permanent",
+              "predicate": {
+                "kind": "types_any",
+                "values": [
+                  "artifact",
+                  "creature"
+                ]
+              }
+            },
+            "min": 1,
+            "max": 1
           }
         ]
       }
@@ -4965,6 +5034,67 @@
             },
             "min": 1,
             "max": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "tla.earth_kingdom_soldier",
+    "registry_name": "Earth Kingdom Soldier",
+    "text_box": "Vigilance\nWhen this creature enters, put a +1/+1 counter on each of up to two target creatures you control.",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Human",
+        "Soldier"
+      ],
+      "mana_cost": "{4}{G/W}",
+      "power": 3,
+      "toughness": 4,
+      "keywords": [
+        "vigilance"
+      ]
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "enters_battlefield",
+          "subject": {
+            "kind": "this"
+          }
+        },
+        "ops": [
+          {
+            "op": "target_clause",
+            "role": "creatures",
+            "body": [
+              {
+                "op": "for_each_target",
+                "role": "creatures",
+                "body": [
+                  {
+                    "op": "put_counters",
+                    "target": "creatures",
+                    "count": 1
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "targets": [
+          {
+            "role": "creatures",
+            "selector": {
+              "kind": "creature_you_control"
+            },
+            "min": 0,
+            "max": 2
           }
         ]
       }
@@ -5314,26 +5444,6 @@
     },
     "programs": [
       {
-        "key": "mana_B",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "B"
-          }
-        ]
-      },
-      {
-        "key": "mana_G",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "G"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5345,6 +5455,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "B"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "G"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5616,26 +5753,6 @@
     },
     "programs": [
       {
-        "key": "mana_G",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "G"
-          }
-        ]
-      },
-      {
-        "key": "mana_W",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "W"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5647,6 +5764,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "G"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "W"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5703,26 +5847,6 @@
     },
     "programs": [
       {
-        "key": "mana_G",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "G"
-          }
-        ]
-      },
-      {
-        "key": "mana_U",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "U"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5734,6 +5858,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "G"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "U"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5753,26 +5904,6 @@
     },
     "programs": [
       {
-        "key": "mana_W",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "W"
-          }
-        ]
-      },
-      {
-        "key": "mana_B",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "B"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5784,6 +5915,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "W"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "B"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5803,26 +5961,6 @@
     },
     "programs": [
       {
-        "key": "mana_W",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "W"
-          }
-        ]
-      },
-      {
-        "key": "mana_U",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "U"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5834,6 +5972,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "W"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "U"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5853,26 +6018,6 @@
     },
     "programs": [
       {
-        "key": "mana_R",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "R"
-          }
-        ]
-      },
-      {
-        "key": "mana_G",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "G"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -5884,6 +6029,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "R"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "G"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -5990,53 +6162,6 @@
     ]
   },
   {
-    "key": "tla.rocky_rebuke",
-    "registry_name": "Rocky Rebuke",
-    "text_box": "Target creature you control deals damage equal to its power to target creature an opponent controls.",
-    "characteristics": {
-      "types": [
-        "instant"
-      ],
-      "subtypes": [],
-      "keywords": [],
-      "mana_cost": "{1}{G}"
-    },
-    "programs": [
-      {
-        "key": "spell",
-        "kind": "spell",
-        "cost": {
-          "mana": "{1}{G}"
-        },
-        "targets": [
-          {
-            "role": "source",
-            "selector": {
-              "kind": "creature_you_control"
-            },
-            "min": 1,
-            "max": 1
-          },
-          {
-            "role": "victim",
-            "selector": {
-              "kind": "creature_opponent_controls"
-            },
-            "min": 1,
-            "max": 1
-          }
-        ],
-        "ops": [
-          {
-            "op": "deal_power_damage",
-            "sources": "source",
-            "target": "victim"
-          }
-        ]
-      }
-    ]
-  },
-  {
     "key": "tla.rumble_arena",
     "registry_name": "Rumble Arena",
     "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
@@ -6137,26 +6262,6 @@
     },
     "programs": [
       {
-        "key": "mana_U",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "U"
-          }
-        ]
-      },
-      {
-        "key": "mana_B",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "B"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -6168,6 +6273,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "U"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "B"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -6297,26 +6429,6 @@
     },
     "programs": [
       {
-        "key": "mana_R",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "R"
-          }
-        ]
-      },
-      {
-        "key": "mana_W",
-        "kind": "mana",
-        "ops": [
-          {
-            "op": "add_mana",
-            "mana": "W"
-          }
-        ]
-      },
-      {
         "key": "draw",
         "kind": "activated",
         "cost": {
@@ -6328,6 +6440,33 @@
           {
             "op": "draw_cards",
             "count": 1
+          }
+        ]
+      },
+      {
+        "key": "mana",
+        "kind": "activated",
+        "cost": {
+          "mana": "0",
+          "tap_source": true
+        },
+        "ops": [
+          {
+            "op": "modal",
+            "modes": [
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "R"
+                }
+              ],
+              [
+                {
+                  "op": "add_mana",
+                  "mana": "W"
+                }
+              ]
+            ]
           }
         ]
       }
@@ -6423,6 +6562,110 @@
             "op": "create_token",
             "definition_ref": "sacrifice.ally",
             "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "tla.walltop_sentries",
+    "registry_name": "Walltop Sentries",
+    "text_box": "Reach, deathtouch\nWhen this creature dies, if there's a Lesson card in your graveyard, you gain 2 life.",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Human",
+        "Soldier",
+        "Ally"
+      ],
+      "mana_cost": "{2}{G}",
+      "power": 2,
+      "toughness": 3,
+      "keywords": [
+        "reach",
+        "deathtouch"
+      ]
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "dies",
+          "subject": {
+            "kind": "this"
+          },
+          "if": {
+            "kind": "graveyard_at_least",
+            "count": 1,
+            "predicate": {
+              "kind": "subtype",
+              "value": "Lesson"
+            }
+          }
+        },
+        "ops": [
+          {
+            "op": "branch",
+            "condition": {
+              "kind": "graveyard_at_least",
+              "count": 1,
+              "predicate": {
+                "kind": "subtype",
+                "value": "Lesson"
+              }
+            },
+            "then": [
+              {
+                "op": "gain_life",
+                "amount": 2
+              }
+            ],
+            "otherwise": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "tla.wandering_musicians",
+    "registry_name": "Wandering Musicians",
+    "text_box": "Whenever this creature attacks, creatures you control get +1/+0 until end of turn.",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Human",
+        "Bard",
+        "Ally"
+      ],
+      "mana_cost": "{3}{R/W}",
+      "power": 2,
+      "toughness": 5,
+      "keywords": []
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "attacks",
+          "subject": {
+            "kind": "this"
+          }
+        },
+        "ops": [
+          {
+            "op": "modify_controlled",
+            "predicate": {
+              "kind": "card_type",
+              "value": "creature"
+            },
+            "power": 1,
+            "toughness": 0
           }
         ]
       }
@@ -6652,6 +6895,176 @@
           {
             "op": "optional_discard_draw",
             "count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "token.ballistic_boulder",
+    "registry_name": "Ballistic Boulder",
+    "text_box": "Flying",
+    "characteristics": {
+      "types": [
+        "artifact",
+        "creature"
+      ],
+      "subtypes": [
+        "Construct"
+      ],
+      "colors": [],
+      "power": 2,
+      "toughness": 1,
+      "token": true,
+      "keywords": [
+        "flying"
+      ]
+    },
+    "programs": []
+  },
+  {
+    "key": "token.bear",
+    "registry_name": "Bear",
+    "text_box": "",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Bear"
+      ],
+      "colors": [
+        "G"
+      ],
+      "power": 4,
+      "toughness": 4,
+      "token": true,
+      "keywords": []
+    },
+    "programs": []
+  },
+  {
+    "key": "token.dragon",
+    "registry_name": "Dragon",
+    "text_box": "Flying, firebending 4 (Whenever this token attacks, add {R}{R}{R}{R} to your mana pool. This mana lasts until end of combat.)",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Dragon"
+      ],
+      "colors": [
+        "R"
+      ],
+      "power": 4,
+      "toughness": 4,
+      "token": true,
+      "keywords": [
+        "flying"
+      ]
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "attacks",
+          "subject": {
+            "kind": "this"
+          }
+        },
+        "ops": [
+          {
+            "op": "add_mana",
+            "mana": "RRRR",
+            "until": "end_of_combat"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "token.monk",
+    "registry_name": "Monk",
+    "text_box": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Monk"
+      ],
+      "colors": [
+        "R"
+      ],
+      "power": 1,
+      "toughness": 1,
+      "token": true,
+      "keywords": []
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "cast_spell",
+          "subject": {
+            "kind": "this"
+          },
+          "predicate": {
+            "kind": "not_card_types",
+            "values": [
+              "creature"
+            ]
+          }
+        },
+        "ops": [
+          {
+            "op": "modify_pt",
+            "target": "source",
+            "power": 1,
+            "toughness": 1,
+            "duration": "end_of_turn"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": "token.soldier",
+    "registry_name": "Soldier",
+    "text_box": "Firebending 1 (Whenever this token attacks, add {R}. This mana lasts until end of combat.)",
+    "characteristics": {
+      "types": [
+        "creature"
+      ],
+      "subtypes": [
+        "Soldier"
+      ],
+      "colors": [
+        "R"
+      ],
+      "power": 2,
+      "toughness": 2,
+      "token": true,
+      "keywords": []
+    },
+    "programs": [
+      {
+        "key": "ability",
+        "kind": "triggered",
+        "trigger": {
+          "event": "attacks",
+          "subject": {
+            "kind": "this"
+          }
+        },
+        "ops": [
+          {
+            "op": "add_mana",
+            "mana": "R",
+            "until": "end_of_combat"
           }
         ]
       }
