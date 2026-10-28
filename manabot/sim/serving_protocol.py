@@ -138,14 +138,14 @@ class InferenceClient:
             self._socket.settimeout(_remaining(request))
             self._socket.sendall(struct.pack("!i", len(payload)) + payload)
             (size,) = struct.unpack("!i", self._read(4, request))
-            identity, reply, error = pickle.loads(self._read(size, request))
+            reply, error = pickle.loads(self._read(size, request))
         except TimeoutError as exc:
             raise InferenceFailure("inference service request timed out") from exc
         except (OSError, EOFError) as exc:
             raise InferenceFailure(f"inference service exited: {exc}") from exc
         if error:
             raise InferenceFailure(error)
-        if identity != request.request_id or not isinstance(reply, DecisionReply):
+        if not isinstance(reply, DecisionReply):
             raise InferenceFailure("invalid inference reply")
         reply.validate(request)
         if time.time() >= request.deadline_unix:

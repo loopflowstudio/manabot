@@ -337,7 +337,7 @@ def test_service_batches_a_backlog_of_overdue_requests(
         for service_end in handed_over:
             service_end.close()
     assert handoff.recv(len(requests)) == b"a" * len(requests)
-    assert [(identity, error) for identity, _, error in replies] == [
+    assert [(reply.request_id, error) for reply, error in replies] == [
         (r.request_id, None) for r in requests
     ]
     counters = json.loads((tmp_path / "serving.json").read_bytes())["counters"]

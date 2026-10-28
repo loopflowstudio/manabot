@@ -379,7 +379,7 @@ def serve(
 
     `connection` carries the supervisor's admissions, snapshots and close.
     `handoff` delivers one socket descriptor per game; each game sends its
-    `DecisionRequest`s on that socket and receives `(request_id, reply, error)`.
+    `DecisionRequest`s on that socket and receives `(reply, error)`.
     One selector watches all of them, so each wake-up costs only its ready
     connections, and `service_receive` measures that per-request work.
     """
@@ -509,18 +509,14 @@ def serve(
                 SERVING_BUDGET.account(perf.counters)
             except Exception as exc:
                 for item in chosen:
-                    _reply(
-                        perf,
-                        item,
-                        (item.request.request_id, None, f"{type(exc).__name__}: {exc}"),
-                    )
+                    _reply(perf, item, (None, f"{type(exc).__name__}: {exc}"))
                     perf.latency(
                         time.monotonic() - item.request.submitted, outcome="failed"
                     )
             else:
                 with perf.span("reply_send", batch=batch):
                     for item, reply in zip(chosen, replies, strict=True):
-                        _reply(perf, item, (item.request.request_id, reply, None))
+                        _reply(perf, item, (reply, None))
                         perf.latency(time.monotonic() - item.request.submitted)
             _sample_memory(perf, execution)
             if time.monotonic() - published >= 1:
