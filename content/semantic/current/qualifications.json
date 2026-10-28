@@ -1,0 +1,38 @@
+{
+  "sacrifice.plains": {
+    "definition_hash": "c4dcea8e9082750df41f076d2171194b245416b37f91399c51b35595d01f7917",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "sacrifice.swamp": {
+    "definition_hash": "d8cb6c5baf0ac54e12bab97218d018343beb42b0e10ec8704111c31bf938c075",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "temur.forest": {
+    "definition_hash": "9a442004a5fe721f4442079096555e2fd5ee0a45d841b3024b40c2614369872f",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "temur.island": {
+    "definition_hash": "791648d2acd97100dda8e08325f1386cdc8d2902b7f1d4ed98c86afdc7e7ef30",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "temur.mountain": {
+    "definition_hash": "faf995c7d61efab1aa64d1308f69a8b6a20769523176d2ed7d7e36ef6240c4ba",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.avatar_enthusiasts": {
+    "definition_hash": "0b6fdeabf834db5c391a8e882915af02e360b9ed550e8f8c533d03e4c5f42dba",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::avatar_enthusiasts_counter_when_another_ally_enters"
+    ]
+  }
+}

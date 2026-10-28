@@ -16,6 +16,9 @@
 //! with the reviewed reference definitions.
 
 mod content;
+mod pool;
+
+pub use pool::{content_pool, pool_content, ContentPool, Eligibility, PoolDefinition};
 
 pub(crate) use content::content_pack_for_authored_match;
 
@@ -29,17 +32,20 @@ use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
 
 /// Canonical, checked-in IR document. Kept in sync by the offline compiler's
 /// `--check` mode; this crate only ever reads it.
-const SACRIFICE_IR: &str = include_str!("../../../content/semantic/v1/generated/sacrifice.ir.json");
+const SACRIFICE_IR: &str =
+    include_str!("../../../content/semantic/current/generated/sacrifice.ir.json");
 
-const ELEMENTAL_IR: &str = include_str!("../../../content/semantic/v1/generated/elemental.ir.json");
+const ELEMENTAL_IR: &str =
+    include_str!("../../../content/semantic/current/generated/elemental.ir.json");
 
-const TWO_DECK_IR: &str = include_str!("../../../content/semantic/v1/generated/two_deck.ir.json");
+const TWO_DECK_IR: &str =
+    include_str!("../../../content/semantic/current/generated/two_deck.ir.json");
 
 /// Additive Jeong increment. The original two-deck IR remains a separate,
 /// immutable catalog entry so existing match and replay identities do not
 /// acquire "latest pack" semantics.
 const JEONG_INCREMENT_IR: &str =
-    include_str!("../../../content/semantic/v1/generated/jeong_increment.ir.json");
+    include_str!("../../../content/semantic/current/generated/jeong_increment.ir.json");
 
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
 /// are the *only* dispatch key the interpreter uses.
@@ -514,6 +520,7 @@ pub struct Definition {
     pub semantic_index: usize,
     pub semantic_key: String,
     pub registry_name: String,
+    pub text_box: Option<String>,
     characteristics: Value,
 }
 
@@ -655,7 +662,7 @@ pub struct DefaultContext;
 impl InterpreterContext for DefaultContext {}
 
 const COMPLEXITY_IR: &str =
-    include_str!("../../../content/semantic/v1/generated/complexity.ir.json");
+    include_str!("../../../content/semantic/current/generated/complexity.ir.json");
 
 impl SemanticPack {
     /// Every admitted immutable pack; shared by runtime and Python setup discovery.
@@ -682,19 +689,19 @@ impl SemanticPack {
 
     pub fn optional_payments() -> Result<Self, IrError> {
         Self::from_json(include_str!(
-            "../../../content/semantic/w11/generated/elemental_world.ir.json"
+            "../../../content/semantic/current/generated/optional_payments.ir.json"
         ))
     }
 
     pub fn elemental_world() -> Result<Self, IrError> {
         Self::from_json(include_str!(
-            "../../../content/semantic/v1/generated/elemental_world.ir.json"
+            "../../../content/semantic/current/generated/elemental_world.ir.json"
         ))
     }
 
     pub fn temur() -> Result<Self, IrError> {
         Self::from_json(include_str!(
-            "../../../content/semantic/v1/generated/temur.ir.json"
+            "../../../content/semantic/current/generated/temur.ir.json"
         ))
     }
 
@@ -1088,6 +1095,7 @@ fn parse_definition(value: &Value, expected_index: usize) -> Result<Definition, 
         semantic_index,
         semantic_key,
         registry_name,
+        text_box: opt_str_field(value, "text_box")?.map(str::to_owned),
         characteristics: value
             .get("characteristics")
             .cloned()

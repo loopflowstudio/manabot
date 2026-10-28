@@ -17,7 +17,8 @@ use crate::{
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            SacrificeCost, SpellCostReduction, StaticPtBuff, StaticScope, TriggeredManaAbility,
+            ReplacementEffect, SacrificeCost, SpellCostReduction, StaticPtBuff, StaticScope,
+            TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
@@ -243,29 +244,40 @@ mod catalog_tests {
 }
 
 impl SemanticPack {
+    /// Current TLA definitions, lowered through the same compiler as authored setups.
+    pub fn tla() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/current/generated/tla.ir.json"
+        ))
+    }
+
+    pub fn pool() -> Result<Self, IrError> {
+        Self::from_json(include_str!(
+            "../../../content/semantic/current/generated/pool.ir.json"
+        ))
+    }
     /// Materialize the reviewed typed IR as the immutable pack consumed by a
-    /// live [`Game`](crate::Game). Registry names are used only to carry
-    /// presentation text across the migration boundary; every rules-relevant
-    /// characteristic and program is lowered from this IR.
+    /// live [`Game`](crate::Game). No executable registry is consulted: text,
+    /// characteristics and programs are carried by the authored content.
     pub fn compile_content_pack(&self) -> Result<ContentPack, IrError> {
-        let mut presentation = ContentPack::default();
-        if self.pack_key == "mtg122-complexity-v1" {
-            presentation.register_complexity_presentation();
-        }
+        Ok(ContentPack::from_compiled_semantics(
+            self.lower_definitions()?,
+            CompiledSemanticManifest {
+                pack_key: self.pack_key.clone(),
+                ir_hash: self.ir_hash.clone(),
+                source_hash: self.source_hash.clone(),
+            },
+        ))
+    }
+
+    fn lower_definitions(&self) -> Result<Vec<CardDefinition>, IrError> {
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
-            let presentation_id = presentation
-                .definition_id(&definition.registry_name)
-                .ok_or_else(|| IrError::UnadmittedDefinition {
-                    semantic_key: definition.semantic_key.clone(),
-                    registry_name: definition.registry_name.clone(),
-                })?;
-            compiled.text_box = presentation
-                .definition(presentation_id)
-                .expect("definition id came from this content pack")
-                .text_box
-                .clone();
+            compiled.text_box = match &definition.text_box {
+                Some(text) => text.clone(),
+                None => historical_presentation(&definition.registry_name)?,
+            };
 
             for program in self
                 .programs
@@ -276,15 +288,7 @@ impl SemanticPack {
             }
             definitions.push(compiled);
         }
-
-        Ok(ContentPack::from_compiled_semantics(
-            definitions,
-            CompiledSemanticManifest {
-                pack_key: self.pack_key.clone(),
-                ir_hash: self.ir_hash.clone(),
-                source_hash: self.source_hash.clone(),
-            },
-        ))
+        Ok(definitions)
     }
 
     pub fn player_config(&self, name: &str, key: &str) -> Result<PlayerConfig, IrError> {
@@ -320,6 +324,32 @@ impl SemanticPack {
     }
 }
 
+impl ContentPack {
+    pub(crate) fn register_current_tla(&mut self) {
+        let pack = SemanticPack::tla().expect("checked TLA IR");
+        // Lower once, then register each pristine definition exactly once. In
+        // particular, registration is the sole materializer of ward triggers.
+        for definition in pack.lower_definitions().expect("checked TLA programs") {
+            self.register_card(definition);
+        }
+    }
+}
+
+/// Frozen IR predating embedded presentation remains readable without loading
+/// another executable content pack. Current generated IR always includes text.
+fn historical_presentation(name: &str) -> Result<String, IrError> {
+    static TEXT: OnceLock<std::collections::BTreeMap<String, String>> = OnceLock::new();
+    TEXT.get_or_init(|| {
+        serde_json::from_str(include_str!(
+            "../../../content/semantic/current/presentation.json"
+        ))
+        .expect("checked presentation snapshot")
+    })
+    .get(name)
+    .cloned()
+    .ok_or_else(|| IrError::Malformed(format!("missing presentation for {name:?}")))
+}
+
 fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, IrError> {
     let value = &definition.characteristics;
     let mana_cost = opt_str_field(value, "mana_cost")?.map(ManaCost::parse);
@@ -353,6 +383,11 @@ fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, Ir
         is_token: opt_bool_field(value, "token")?.unwrap_or(false),
         power: optional_i32(value, "power")?,
         toughness: optional_i32(value, "toughness")?,
+        replacement_effects: if opt_bool_field(value, "enters_tapped")?.unwrap_or(false) {
+            vec![ReplacementEffect::EntersTapped]
+        } else {
+            Vec::new()
+        },
         ..CardDefinition::default()
     })
 }

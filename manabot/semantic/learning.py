@@ -19,8 +19,8 @@ import numpy as np
 from .compiler import IR_SCHEMA_VERSION, Opcode, ProgramKind, canonical_json
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/v1/learning_schema.json"
-DEFAULT_IR_PATH = ROOT / "content/semantic/v1/generated/two_deck.ir.json"
+DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
+DEFAULT_IR_PATH = ROOT / "content/semantic/current/generated/two_deck.ir.json"
 
 
 class SemanticProjectionError(ValueError):
@@ -117,9 +117,9 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version not in {2, 3, 4, 5, 6, 7}:
+        if version not in {2, 3, 4, 5, 6, 7, 8}:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 2, 3, 4, 5, 6 or 7, got {version}"
+                f"learning_schema.schema_version: expected 2, 3, 4, 5, 6, 7 or 8, got {version}"
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -175,7 +175,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 65}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -913,27 +913,27 @@ class BoundSemanticPack:
         if isinstance(provenance, Mapping):
             match provenance.get("pack_key"):
                 case "elemental-combat-v1":
-                    default_schema = ROOT / "content/semantic/w7/learning_schema.json"
+                    default_schema = ROOT / "content/semantic/current/learning_schema.json"
                     default_ir = (
-                        ROOT / "content/semantic/v1/generated/elemental.ir.json"
+                        ROOT / "content/semantic/current/generated/elemental.ir.json"
                     )
                 case "elemental-world-v2":
-                    default_schema = ROOT / "content/semantic/w11/learning_schema.json"
+                    default_schema = ROOT / "content/semantic/current/learning_schema.json"
                     default_ir = (
-                        ROOT / "content/semantic/w11/generated/elemental_world.ir.json"
+                        ROOT / "content/semantic/current/generated/optional_payments.ir.json"
                     )
                 case "elemental-world-v1":
-                    default_schema = ROOT / "content/semantic/w10/learning_schema.json"
+                    default_schema = ROOT / "content/semantic/current/learning_schema.json"
                     default_ir = (
-                        ROOT / "content/semantic/v1/generated/elemental_world.ir.json"
+                        ROOT / "content/semantic/current/generated/elemental_world.ir.json"
                     )
                 case "elemental-temur-v1":
-                    default_schema = ROOT / "content/semantic/w9/learning_schema.json"
-                    default_ir = ROOT / "content/semantic/v1/generated/temur.ir.json"
+                    default_schema = ROOT / "content/semantic/current/learning_schema.json"
+                    default_ir = ROOT / "content/semantic/current/generated/temur.ir.json"
                 case "elemental-sacrifice-v1":
-                    default_schema = ROOT / "content/semantic/w8/learning_schema.json"
+                    default_schema = ROOT / "content/semantic/current/learning_schema.json"
                     default_ir = (
-                        ROOT / "content/semantic/v1/generated/sacrifice.ir.json"
+                        ROOT / "content/semantic/current/generated/sacrifice.ir.json"
                     )
         schema = LearningSchema.load(schema_path or default_schema)
         ir = SemanticIr.load(schema, ir_path or default_ir)

@@ -3584,6 +3584,40 @@ fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticP
 
 #[cfg(feature = "python")]
 #[pyfunction]
+fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
+    let pool = crate::semantic::content_pool(pack_key)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out = PyDict::new_bound(py);
+    out.set_item("pack_key", pool.pack_key)?;
+    out.set_item("world_version", pool.world_version)?;
+    out.set_item("content_digest", pool.content_digest)?;
+    let compiled = PyDict::new_bound(py);
+    compiled.set_item("pack_key", pool.compiled_semantics.pack_key)?;
+    compiled.set_item("ir_hash", pool.compiled_semantics.ir_hash)?;
+    compiled.set_item("source_hash", pool.compiled_semantics.source_hash)?;
+    out.set_item("compiled_semantics", compiled)?;
+    let definitions = PyList::empty_bound(py);
+    for row in pool.definitions {
+        let item = PyDict::new_bound(py);
+        item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
+        item.set_item("semantic_key", row.semantic_key)?;
+        item.set_item("registry_name", row.registry_name)?;
+        item.set_item(
+            "eligibility",
+            match row.eligibility {
+                crate::semantic::Eligibility::Eligible => "eligible",
+                crate::semantic::Eligibility::Unsupported => "unsupported",
+            },
+        )?;
+        item.set_item("reason", row.reason)?;
+        definitions.append(item)?;
+    }
+    out.set_item("definitions", definitions)?;
+    Ok(out.into())
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
 fn parse_continuation_frames_json(
     text: &str,
 ) -> PyResult<Vec<crate::agent::continuation::ContinuationFrame>> {
@@ -3674,6 +3708,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
+    m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;

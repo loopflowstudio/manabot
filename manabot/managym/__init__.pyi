@@ -1,9 +1,30 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
+
+class CompiledContentIdentity(TypedDict):
+    pack_key: str
+    ir_hash: str
+    source_hash: str
+
+class PoolDefinition(TypedDict):
+    card_def_id: int | None
+    semantic_key: str | None
+    registry_name: str
+    eligibility: Literal["eligible", "unsupported"]
+    reason: str | None
+
+class ContentPool(TypedDict):
+    pack_key: str
+    world_version: str
+    content_digest: str
+    compiled_semantics: CompiledContentIdentity
+    definitions: list[PoolDefinition]
+
+def content_pool(pack_key: str) -> ContentPool: ...
 
 class PreparedPossibleWorldMaterializer:
     @property

@@ -141,44 +141,12 @@ impl ContentPack {
         self.register_ice_age();
         self.register_visions();
         self.register_strixhaven();
-        self.register_tla();
-        self.register_tla_lessons_increment();
+        self.register_current_tla();
+        self.register_modal_fixture();
         self.register_mkm();
         self.register_elemental();
         self.register_sacrifice();
         self.register_temur();
-    }
-
-    /// Presentation entries for the isolated complexity catalog. The default
-    /// registry and its checked content digest must remain unchanged.
-    pub(crate) fn register_complexity_presentation(&mut self) {
-        self.register_creature(
-            "Savannah Lions",
-            "W",
-            &["Cat"],
-            2,
-            1,
-            Keywords::default(),
-            "",
-        );
-        self.register_creature(
-            "Glory Seeker",
-            "1W",
-            &["Human", "Soldier"],
-            2,
-            2,
-            Keywords::default(),
-            "",
-        );
-        self.register_creature(
-            "Hill Giant",
-            "3R",
-            &["Giant"],
-            3,
-            3,
-            Keywords::default(),
-            "",
-        );
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {
@@ -518,6 +486,24 @@ impl ContentPack {
             text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(5),
             toughness: Some(5),
+            ..Default::default()
+        });
+    }
+}
+
+impl ContentPack {
+    fn register_modal_fixture(&mut self) {
+        self.register_card(CardDefinition {
+            name: "Crossroads of Destiny".to_string(),
+            mana_cost: Some(ManaCost::parse("1")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::GainLife { amount: 3 }],
+                    vec![Effect::DrawCards { count: 1 }],
+                ],
+            }],
+            text_box: "Choose one —\n• You gain 3 life.\n• Draw a card.".to_string(),
             ..Default::default()
         });
     }
