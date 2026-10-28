@@ -433,3 +433,27 @@ in-child code/search players, one policy key per checkpoint, child processes
 and role thread budgets still hold, and the engine boundary is unchanged. No
 design change and no open product choice. Remaining: the rental calibration
 and landing gate in Acceptance (now run by MTG-193 itself; ledger in Calibration).
+
+## Parent hop decided (Jack Heart, 2026-10-27)
+
+Jack Heart lifted the Exclusion "removing the parent's request hop" ("I dont
+have a reason for that") and chose option **b**, accepting a bigger change for
+the faster long-run design: **game children talk to the inference service
+directly.** The allocation parent keeps game lifecycle, deadlines, failure
+classification and the durable journal, but it is no longer on the decision
+path.
+
+Requirements carried forward:
+- Same seeds give the same Commands; replay verification and evidence formats
+  are unchanged; identities change only if the compute contract does.
+- Durability: a Command is journaled at the same boundary as today before it
+  is treated as committed. Journal writes must not sit on the decision path.
+- Failure handling: a dead or hung service, a dead child, and deadline expiry
+  remain infrastructure failures, never forfeits, with the same receipts.
+- One service, many direct client connections. The service loop's
+  per-request cost becomes the next ceiling: measure it (receipt counters),
+  and keep per-request work minimal (no per-request `asdict`/JSON).
+- CPU and GPU engines share this layout up to the engine (Jack Heart's
+  engine direction). `cpu32` uses one shared CPU service per machine instead
+  of a service per cell.
+- Calibrate on rentals within the remaining $5 ledger.
