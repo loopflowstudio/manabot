@@ -290,16 +290,11 @@ rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
 Remaining `spawn` uses (`eval/local.py`, `verify/competency`, `llm/*`,
 `_process.py`) are not game/replay/serving children.
 
-## Concept reviews 1–3 (headless, 2026-10-26)
+## Concept reviews 1–3, 5–6 (headless, 2026-10-26/27)
 
-The three concepts hold: **policy key** (checkpoint + ABIs + world + numerics;
-matchup only in admission/evidence), **child process** (`module:function`
-target, no parent `__main__`, pinned pools) and **thread budget by role**.
-Applied: `play_cell` records `ProcessCensus` under `group_worker` on every path
-(budget `max_active_games + 7`, or 8 without a runtime; recorded, not enforced);
-`verify/scenarios` helpers are public. Kept: `InferenceRuntime` in
-`serving_protocol.py`; `supervision._failure` imported by `native_game`
-(inherited from `main` at `f5e7289b1`). Full text at `ea8d0e874`.
+Concepts hold as in Chosen approach and slice 6; no open product choice.
+Retained receipt keys keep their names (`scalar_policy` span, `cold_scalar`
+benchmark variant). Full text at `ea8d0e874` and `c6c8f4c87`.
 
 ## Concept review 4 (with Jack Heart, 2026-10-27, at `ea8d0e874`, PR #389)
 
@@ -315,14 +310,6 @@ children, per-row seeds, receipts); each device's engine owns process layout,
 batching, threads and transfer, and CPU performance is iterated on rental
 evidence rather than only gated. Implemented as slices 6–7. Proposal text at
 `303e65204`.
-
-## Concept reviews 5–6 (headless, 2026-10-27, at `302204fd7`, `c6c8f4c87`)
-
-Concepts hold: a checkpoint plays served only (`is_served` → `bind_execution`,
-local CPU envelope from `resolve_execution`); code and search players play in
-their game child (`native_game._InChildPlayers`); one engine serves both
-devices. The `scalar_policy` span and `cold_scalar` benchmark variant keep their
-names as retained receipt keys. No open product choice.
 
 ## Parent hop decided (Jack Heart, 2026-10-27)
 
@@ -405,6 +392,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 11:42 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 12:15 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
