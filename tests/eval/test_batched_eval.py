@@ -125,11 +125,7 @@ def request_for(
     )
     return DecisionRequest(
         str(seed),
-        "fixture-game",
-        0,
-        seed,
         PolicyKey.from_registration(player, execution),
-        seed,
         seed,
         obs,
         execution.deadline_unix,
@@ -373,7 +369,7 @@ def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
         reply = client.infer(request)
         reply.validate(request)
         with pytest.raises(InferenceFailure, match="stale"):
-            replace(reply, revision=-1).validate(request)
+            replace(reply, request_id="stale").validate(request)
         receipt = runtime.snapshot()
         runtime.process.kill()
         runtime.process.join()

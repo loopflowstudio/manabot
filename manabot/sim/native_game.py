@@ -225,11 +225,7 @@ def execute_game(
                 assert execution is not None and infer is not None
                 request = DecisionRequest(
                     uuid4().hex,
-                    game["match_id"],
-                    actor,
-                    revision,
                     policies[player_id],
-                    ordinal,
                     policy_seed,
                     {k: v.copy() for k, v in obs.items()},
                     min(

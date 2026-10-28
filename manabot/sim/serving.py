@@ -272,9 +272,7 @@ def _infer(
     if not store.execution.cache_catalog and policy.agent.semantic_cards is not None:
         perf.count("catalog_builds")
     replies = [
-        DecisionReply(
-            r.request_id, r.game_id, r.actor, r.revision, r.ordinal, action, batch
-        )
+        DecisionReply(r.request_id, action, batch)
         for r, action in zip(requests, actions, strict=True)
     ]
     if witness is not None:

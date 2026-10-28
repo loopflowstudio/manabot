@@ -79,11 +79,7 @@ class PolicyKey:
 @dataclass(frozen=True)
 class DecisionRequest:
     request_id: str
-    game_id: str
-    actor: int
-    revision: int
     policy: PolicyKey
-    ordinal: int
     seed: int
     observation: dict[str, np.ndarray]
     deadline_unix: float
@@ -92,22 +88,15 @@ class DecisionRequest:
 
 @dataclass(frozen=True)
 class DecisionReply:
+    """One decision's action; a game connection has one request in flight, so
+    the request's unique `request_id` alone binds the reply to its decision."""
+
     request_id: str
-    game_id: str
-    actor: int
-    revision: int
-    ordinal: int
     action: int
     batch_id: str
 
     def validate(self, request: DecisionRequest) -> None:
-        if (self.request_id, self.game_id, self.actor, self.revision, self.ordinal) != (
-            request.request_id,
-            request.game_id,
-            request.actor,
-            request.revision,
-            request.ordinal,
-        ):
+        if self.request_id != request.request_id:
             raise InferenceFailure("stale or mismatched inference reply")
 
 

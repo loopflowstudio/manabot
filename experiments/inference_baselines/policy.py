@@ -194,11 +194,7 @@ def _retained(
                 requests = [
                     DecisionRequest(
                         str(i),
-                        str(roots[i][0]["match_id"]),
-                        0,
-                        int(roots[i][1]["revision"]),
                         PolicyKey.from_registration(player, execution),
-                        i,
                         seeds[i],
                         observations[i],
                         execution.deadline_unix,

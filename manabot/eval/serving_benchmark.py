@@ -232,11 +232,7 @@ def _numerical_worker(
                 requests = [
                     DecisionRequest(
                         str(i),
-                        "calibration",
-                        0,
-                        i,
                         PolicyKey.from_registration(bound, execution),
-                        i,
                         seed,
                         obs,
                         plan.deadline_unix,
