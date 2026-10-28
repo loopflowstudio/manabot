@@ -206,8 +206,31 @@ def sim_command(
         "--set",
         help="Override config values with key.path=value (repeatable)",
     ),
+    hero_deck_file: Path | None = typer.Option(
+        None, help="UTF-8 main/sideboard decklist"
+    ),
+    villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
+    content_pool: str = typer.Option(
+        "tla-pool-v1", help="Qualified native content pool"
+    ),
 ) -> None:
-    _run_sim(preset, set_values or [])
+    if hero_deck_file is None and villain_deck_file is None:
+        _run_sim(preset, set_values or [])
+        return
+    if hero_deck_file is None or villain_deck_file is None:
+        raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
+    from manabot.decklist import import_files
+
+    try:
+        imported = import_files(hero_deck_file, villain_deck_file, content_pool)
+        sim_config, runtime_config = load_sim_config(preset, set_values)
+        config = sim_config.model_dump()
+        config["match"] = imported.match_config().model_dump()
+        sim_config = type(sim_config).model_validate(config)
+    except (ValueError, OSError) as error:
+        raise typer.BadParameter(str(error)) from error
+    typer.echo(f"Admitted {imported.ruleset} setup {imported.setup_id}")
+    run_simulation(sim_config, runtime_config)
 
 
 @app.command("training-report")

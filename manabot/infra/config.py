@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from manabot.decklist import ImportedMatch
+
 
 def _default_deck() -> dict[str, int]:
     return {
@@ -58,12 +60,30 @@ class MatchConfig(BaseConfig):
     content_pack: str | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    imported_decks: ImportedMatch | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     hero: str = "gaea"
     villain: str = "urza"
     hero_deck: dict[str, int] = Field(default_factory=_default_deck)
     villain_deck: dict[str, int] = Field(default_factory=_default_deck)
     hero_sideboard: dict[str, int] = Field(default_factory=dict)
     villain_sideboard: dict[str, int] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_imported_decks(self) -> "MatchConfig":
+        imported = self.imported_decks
+        if imported is not None:
+            imported.validate_current()
+            if (
+                self.content_pack != imported.pool.pack_key
+                or self.hero_deck != imported.hero.main
+                or self.villain_deck != imported.villain.main
+                or self.hero_sideboard != imported.hero.sideboard
+                or self.villain_sideboard != imported.villain.sideboard
+            ):
+                raise ValueError("Match differs from its admitted decklist files")
+        return self
 
     @field_validator("hero_sideboard", "villain_sideboard", mode="before")
     @classmethod
@@ -218,3 +238,13 @@ class SimulationConfig(BaseConfig):
     max_steps: int = 2000
     match: MatchConfig = Field(default_factory=MatchConfig)
     reward: RewardConfig = Field(default_factory=RewardConfig)
+
+    @model_validator(mode="after")
+    def validate_imported_players(self) -> "SimulationConfig":
+        if self.match.imported_decks is not None and any(
+            player not in {"random", "default"} for player in (self.hero, self.villain)
+        ):
+            raise ValueError(
+                "Imported decks currently support random/default simulation players; checkpoint setup admission is not available"
+            )
+        return self

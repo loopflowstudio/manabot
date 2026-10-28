@@ -16,6 +16,7 @@
 //! with the reviewed reference definitions.
 
 mod content;
+pub mod deck_admission;
 
 pub(crate) use content::content_pack_for_authored_match;
 

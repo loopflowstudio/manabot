@@ -88,26 +88,6 @@ fn select_authored_runtime<'a>(
     player_configs: &[PlayerConfig],
     catalog: &'a [AuthoredRuntime],
 ) -> Result<Option<&'a AuthoredRuntime>, IrError> {
-    if let Some(key) = player_configs.iter().find_map(|p| p.content_pack.as_ref()) {
-        let runtime = catalog
-            .iter()
-            .find(|r| &r.pack_key == key)
-            .ok_or_else(|| IrError::Malformed(format!("unknown explicit content pack {key}")))?;
-        if player_configs.len() != 2
-            || player_configs.iter().any(|p| {
-                p.content_pack.as_ref() != Some(key)
-                    || !runtime
-                        .setups
-                        .iter()
-                        .any(|s| s.decklist == p.decklist && s.sideboard == p.sideboard)
-            })
-        {
-            return Err(IrError::Malformed(
-                "explicit pack requires two admitted authored setups".into(),
-            ));
-        }
-        return Ok(Some(runtime));
-    }
     let matches = catalog
         .iter()
         .filter(|runtime| runtime.matches(player_configs))
@@ -129,6 +109,47 @@ pub(crate) fn content_pack_for_authored_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, IrError> {
     let catalog = authored_runtime_catalog()?;
+    if let Some(key) = player_configs.iter().find_map(|p| p.content_pack.as_ref()) {
+        if player_configs.len() != 2
+            || player_configs
+                .iter()
+                .any(|p| p.content_pack.as_ref() != Some(key))
+        {
+            return Err(IrError::Malformed(
+                "explicit content pool requires two players with the same pack key".into(),
+            ));
+        }
+        // Authored presets retain their established admission. Their availability
+        // does not qualify individual cards for arbitrary submitted combinations.
+        if let Some(runtime) = catalog.iter().find(|r| &r.pack_key == key) {
+            if player_configs.iter().all(|p| {
+                runtime
+                    .setups
+                    .iter()
+                    .any(|s| s.decklist == p.decklist && s.sideboard == p.sideboard)
+            }) {
+                return Ok(Some(Arc::clone(&runtime.content)));
+            }
+        }
+        for player in player_configs {
+            let issues = super::deck_admission::admit_deck(
+                key,
+                &player.decklist,
+                &player.sideboard,
+                super::deck_admission::DEVELOPMENT_RULESET,
+            )?;
+            if !issues.is_empty() {
+                return Err(IrError::Malformed(
+                    issues
+                        .iter()
+                        .map(|issue| issue.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                ));
+            }
+        }
+        return super::pool_content(key).map(Some);
+    }
     Ok(select_authored_runtime(player_configs, &catalog)?
         .map(|runtime| Arc::clone(&runtime.content)))
 }
@@ -145,6 +166,29 @@ mod catalog_tests {
     }
 
     #[test]
+    fn explicit_pool_selection_uses_qualified_novel_decks_and_never_falls_back() {
+        let mut first = PlayerConfig::new(
+            "first",
+            std::collections::BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]),
+        );
+        first.content_pack = Some("tla-pool-v1".into());
+        let mut second = PlayerConfig::new(
+            "second",
+            std::collections::BTreeMap::from([("Island".into(), 20)]),
+        );
+        second.content_pack = first.content_pack.clone();
+        let content = content_pack_for_authored_match(&[first.clone(), second.clone()])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            content.compiled_semantics().unwrap().pack_key,
+            "tla-pool-v1"
+        );
+        first.sideboard.insert("Airbending Lesson".into(), 1);
+        assert!(content_pack_for_authored_match(&[first, second]).is_err());
+    }
+
+    #[test]
     fn explicit_mirrors_preserve_pack_and_reject_unadmitted_setups() {
         let catalog = authored_runtime_catalog().unwrap();
         let runtime = catalog
@@ -156,21 +200,23 @@ mod catalog_tests {
             config.content_pack = Some(runtime.pack_key.clone());
             let pair = vec![config.clone(), config.clone()];
             assert_eq!(
-                select_authored_runtime(&pair, &catalog)
+                content_pack_for_authored_match(&pair)
                     .unwrap()
+                    .unwrap()
+                    .compiled_semantics()
                     .unwrap()
                     .pack_key,
                 runtime.pack_key
             );
             let mut wrong = pair.clone();
             wrong[0].content_pack = None;
-            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+            assert!(content_pack_for_authored_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].decklist.clear();
-            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+            assert!(content_pack_for_authored_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].content_pack = Some("missing-pack".into());
-            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+            assert!(content_pack_for_authored_match(&wrong).is_err());
         }
     }
 
@@ -205,8 +251,10 @@ mod catalog_tests {
             let mut config = setup.clone();
             config.content_pack = Some(runtime.pack_key.clone());
             assert_eq!(
-                select_authored_runtime(&[config.clone(), config], &catalog)
+                content_pack_for_authored_match(&[config.clone(), config])
                     .unwrap()
+                    .unwrap()
+                    .compiled_semantics()
                     .unwrap()
                     .pack_key,
                 "mtg122-complexity-v1"

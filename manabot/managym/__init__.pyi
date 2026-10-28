@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
 
@@ -519,3 +519,16 @@ class ManaOutput:
     mode: int
     mana: list[int]
     lesson: list[int]
+
+
+class DeckAdmissionIssue(TypedDict):
+    section: Literal["main", "sideboard"] | None
+    card_name: str | None
+    code: str
+    message: str
+
+
+def admit_deck(
+    pack_key: str, main: dict[str, int], sideboard: dict[str, int],
+    ruleset: str = "development-v1",
+) -> list[DeckAdmissionIssue]: ...

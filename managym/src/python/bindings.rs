@@ -3652,6 +3652,36 @@ fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
 }
 
 #[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (pack_key, main, sideboard, ruleset="development-v1"))]
+fn admit_deck(
+    py: Python<'_>,
+    pack_key: &str,
+    main: BTreeMap<String, usize>,
+    sideboard: BTreeMap<String, usize>,
+    ruleset: &str,
+) -> PyResult<PyObject> {
+    let issues = crate::semantic::deck_admission::admit_deck(pack_key, &main, &sideboard, ruleset)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let result = PyList::empty_bound(py);
+    for issue in issues {
+        let row = PyDict::new_bound(py);
+        row.set_item(
+            "section",
+            issue.section.map(|section| match section {
+                crate::semantic::deck_admission::DeckSection::Main => "main",
+                crate::semantic::deck_admission::DeckSection::Sideboard => "sideboard",
+            }),
+        )?;
+        row.set_item("card_name", issue.card_name)?;
+        row.set_item("code", issue.code)?;
+        row.set_item("message", issue.message)?;
+        result.append(row)?;
+    }
+    Ok(result.into_any().unbind())
+}
+
+#[cfg(feature = "python")]
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
@@ -3673,6 +3703,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
+    m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;

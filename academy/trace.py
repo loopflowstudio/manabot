@@ -57,11 +57,27 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
+    imported_decks: dict[str, Any] | None = None
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
         from .curated_pack import curated_pack_for_matchup
 
+        if self.imported_decks is not None:
+            from manabot.decklist import ImportedMatch
+            from manabot.env.match import Match
+
+            imported = ImportedMatch.model_validate(self.imported_decks)
+            match = imported.match_config()
+            if (
+                self.hero_deck != match.hero_deck
+                or self.villain_deck != match.villain_deck
+                or self.hero_sideboard != match.hero_sideboard
+                or self.villain_sideboard != match.villain_sideboard
+            ):
+                raise ValueError("Recorded decks differ from the imported setup")
+            match.hero, match.villain = "Hero", "Villain"
+            return Match(match).to_rust()
         for sideboard in (self.hero_sideboard, self.villain_sideboard):
             if not isinstance(sideboard, dict) or any(
                 not isinstance(name, str)
@@ -253,6 +269,7 @@ def prepare_trace_payload(
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     config.pop("seed", None)
+    config.pop("imported_decks", None)
     reveal_hidden = (
         reveal_hidden
         and payload.get("end_reason") == "game_over"

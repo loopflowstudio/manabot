@@ -421,3 +421,6 @@ It retains native inputs, prompts, bindings, malformed/stale checks and executio
 receipts. This uses bounded public policy history v1; it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
+
+[Decklist file import](../docs/decklist-import.md) admits novel development decks
+through the shared native pool for simulation and Academy play.

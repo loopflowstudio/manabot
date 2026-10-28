@@ -65,6 +65,16 @@ class Match:
         return Match(
             MatchConfig(
                 content_pack=self.config.content_pack,
+                imported_decks=(
+                    self.config.imported_decks.model_copy(
+                        update={
+                            "hero": self.config.imported_decks.villain,
+                            "villain": self.config.imported_decks.hero,
+                        }
+                    )
+                    if self.config.imported_decks is not None
+                    else None
+                ),
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,
