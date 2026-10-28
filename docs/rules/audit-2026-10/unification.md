@@ -1,5 +1,10 @@
 # Authority adjudication — concrete draft
 
+Historical adjudication for the increment delivered in PR354. World labels,
+ownership reads and validation below describe those checkpoints. The
+[October 26 coverage map](coverage-map.md) supersedes current-scope claims,
+including the newly distinguished intra-resolution target-recheck failure.
+
 This increment starts at `ededb325`, preserving the original inventory and
 `2b6e2b1b7` draft. It inspects the accepted boundaries, rather than rerunning
 the whole inventory. Rules are the pinned September 25, 2026 text and digest

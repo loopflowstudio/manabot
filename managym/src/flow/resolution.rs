@@ -6,13 +6,13 @@ use std::collections::VecDeque;
 
 use crate::{
     flow::{
-        decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress},
+        decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionTarget},
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
-        ability::{Ability, Effect, EffectValue, PaymentCost, TargetSpec},
+        ability::{Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -77,22 +77,16 @@ impl Game {
             crate::state::ability::bind_effect_clauses(card_ref.spell_effects_for_mode(spell.mode));
         let requirements = card_ref.target_requirements_for_mode(spell.mode);
 
-        // CR 608.2b — A spell whose targets are all illegal on resolution
-        // doesn't resolve and is put into its owner's graveyard.
-        if !spell.targets.is_empty() {
-            let controller = spell.controller;
-            let any_legal = spell.targets.iter().enumerate().any(|(i, target)| {
-                let req_index = spell.target_req_indices.get(i).copied().unwrap_or(0);
-                requirements
-                    .get(req_index)
-                    .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller))
-            });
-            if !any_legal {
-                self.move_card(card, ZoneType::Graveyard);
-                self.emit(GameEvent::SpellCountered { card, by: None });
-                return;
-            }
-        }
+        let Some(targets) = self.resolution_targets(
+            &spell.targets,
+            &spell.target_req_indices,
+            &requirements,
+            spell.controller,
+        ) else {
+            self.move_card(card, ZoneType::Graveyard);
+            self.emit(GameEvent::SpellCountered { card, by: None });
+            return;
+        };
 
         let frame = EffectFrame {
             source: Some(card),
@@ -100,8 +94,7 @@ impl Game {
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
-            targets: spell.targets.clone(),
-            target_req_indices: spell.target_req_indices.clone(),
+            targets,
             active_requirement: 0,
             context_target: None,
             queue: VecDeque::from(effects),
@@ -127,6 +120,14 @@ impl Game {
             return;
         };
 
+        let effects = vec![definition.effect];
+        let requirements = crate::state::ability::effect_target_requirements(&effects);
+        let Some(targets) =
+            self.resolution_targets(&ability.targets, &[], &requirements, ability.controller)
+        else {
+            return;
+        };
+
         // CR 113.7a: an activated ability exists independently of its source.
         // Source-relative effects still require the original battlefield object;
         // independent effects (such as drawing) resolve after that object leaves.
@@ -138,13 +139,10 @@ impl Game {
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
-            targets: ability.targets.clone(),
-            target_req_indices: Vec::new(),
+            targets,
             active_requirement: 0,
             context_target: None,
-            queue: VecDeque::from(crate::state::ability::bind_effect_clauses(vec![
-                definition.effect,
-            ])),
+            queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
         self.run_frame(frame);
@@ -159,9 +157,10 @@ impl Game {
             .source_lki
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
-        let effects = if let Some(effects) = triggered.inline_effects.clone() {
-            // Delayed triggers carry their effects inline.
-            effects
+        let (effects, ability_key) = if let Some(effects) = triggered.inline_effects {
+            // Inline (delayed) triggers use a sentinel so their per-turn
+            // resolution count never collides with a printed ability slot.
+            (effects, usize::MAX)
         } else {
             let Some(ability) = self
                 .state
@@ -173,36 +172,21 @@ impl Game {
                 return;
             };
             let Ability::Triggered { effects, .. } = ability;
-            effects
+            (effects, triggered.ability_index)
         };
 
         let requirements = crate::state::ability::effect_target_requirements(&effects);
-        if !triggered.targets.is_empty()
-            && !triggered.targets.iter().enumerate().any(|(index, target)| {
-                requirements
-                    .get(
-                        triggered
-                            .target_req_indices
-                            .get(index)
-                            .copied()
-                            .unwrap_or(0),
-                    )
-                    .is_some_and(|requirement| {
-                        self.target_is_legal(*target, &requirement.spec, triggered.controller)
-                    })
-            })
-        {
+        let Some(targets) = self.resolution_targets(
+            &triggered.targets,
+            &triggered.target_req_indices,
+            &requirements,
+            triggered.controller,
+        ) else {
             return;
-        }
+        };
 
         // Track per-turn resolutions for "the Nth time this ability has
-        // resolved this turn" gating. Inline (delayed) triggers get a
-        // sentinel index so they never collide with real ability slots.
-        let ability_key = if triggered.inline_effects.is_some() {
-            usize::MAX
-        } else {
-            triggered.ability_index
-        };
+        // resolved this turn" gating.
         self.journal_turn();
         let key = (source_card.0, ability_key);
         let count = self
@@ -220,14 +204,63 @@ impl Game {
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
-            targets: triggered.targets.clone(),
-            target_req_indices: triggered.target_req_indices.clone(),
+            targets,
             active_requirement: 0,
             context_target: triggered.context,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
         self.run_frame(frame);
+    }
+
+    /// CR 608.2b: check every chosen slot against its own clause once, before
+    /// any instruction. Zero chosen optional targets still resolve; a nonempty
+    /// all-illegal set suppresses the entire spell or ability, even untargeted
+    /// instructions. The retained slots also enter clone/undo and state hashes.
+    fn resolution_targets(
+        &self,
+        targets: &[Target],
+        indices: &[usize],
+        requirements: &[TargetRequirement],
+        controller: PlayerId,
+    ) -> Option<Vec<ResolutionTarget>> {
+        let slots: Vec<_> = targets
+            .iter()
+            .enumerate()
+            .map(|(index, target)| {
+                let requirement = indices.get(index).copied().unwrap_or(0);
+                ResolutionTarget {
+                    target: *target,
+                    requirement,
+                    legal: requirements
+                        .get(requirement)
+                        .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller)),
+                }
+            })
+            .collect();
+        (slots.is_empty() || slots.iter().any(|slot| slot.legal)).then_some(slots)
+    }
+
+    /// Instructions cannot act on an object that has left its expected zone
+    /// (CR 400.7). This is deliberately independent of TargetSpec: hexproof,
+    /// controller and characteristic changes during resolution do not retarget.
+    fn target_is_present(&self, target: Target) -> bool {
+        match target {
+            Target::Permanent(id) => self.permanent_object_ref(id).is_some(),
+            Target::GraveyardCard(object) => {
+                let card = CardId::from(object.entity);
+                self.current_object_ref(card) == Some(object)
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+            }
+            Target::StackSpell(card) => self.find_spell_on_stack_index(card).is_some(),
+            Target::Player(player) => self.state.players[player.0].alive,
+        }
+    }
+
+    fn present_primary_target(&self, frame: &EffectFrame) -> Option<Target> {
+        frame
+            .primary_target()
+            .filter(|target| self.target_is_present(*target))
     }
 
     /// Execute one effect. Returns a decision to suspend on, or None if the
@@ -255,24 +288,20 @@ impl Game {
                 self.gain_life(frame.controller, *amount);
                 None
             }
-            Effect::CantBeBlockedTarget { target: spec } => {
-                let target = frame.primary_target()?;
-                if self.target_is_legal(target, spec, frame.controller) {
-                    if let Target::Permanent(id) = target {
-                        self.journal_permanent(id);
-                        self.state.permanents[id]
-                            .as_mut()?
-                            .cant_be_blocked_this_turn = true;
-                    }
+            Effect::CantBeBlockedTarget { .. } => {
+                let target = self.present_primary_target(frame)?;
+                if let Target::Permanent(id) = target {
+                    self.journal_permanent(id);
+                    self.state.permanents[id]
+                        .as_mut()?
+                        .cant_be_blocked_this_turn = true;
                 }
                 None
             }
-            Effect::ReturnGraveyardTarget { target: spec } => {
-                let target = frame.primary_target()?;
+            Effect::ReturnGraveyardTarget { .. } => {
+                let target = self.present_primary_target(frame)?;
                 if let Target::GraveyardCard(object) = target {
-                    if self.target_is_legal(target, spec, frame.controller) {
-                        self.reveal_card_to_hand(CardId::from(object.entity), frame.controller);
-                    }
+                    self.reveal_card_to_hand(CardId::from(object.entity), frame.controller);
                 }
                 None
             }
@@ -332,17 +361,15 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileWithControllerToken { target, token_name } => {
-                let Some(Target::Permanent(id)) = frame.primary_target() else {
+            Effect::ExileWithControllerToken { token_name, .. } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
-                if self.target_is_legal(Target::Permanent(id), target, frame.controller) {
-                    let permanent = self.state.permanents[id].as_ref()?;
-                    let controller = permanent.controller;
-                    let card = permanent.card;
-                    self.move_card(card, ZoneType::Exile);
-                    self.create_token(token_name, controller, false);
-                }
+                let permanent = self.state.permanents[id].as_ref()?;
+                let controller = permanent.controller;
+                let card = permanent.card;
+                self.move_card(card, ZoneType::Exile);
+                self.create_token(token_name, controller, false);
                 None
             }
             Effect::SearchBasicLand {
@@ -365,7 +392,7 @@ impl Game {
                 count: *count,
             }),
             Effect::DiscardTargetPlayer { count, .. } => {
-                let Some(Target::Player(player)) = frame.primary_target() else {
+                let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;
                 };
                 (!self
@@ -379,13 +406,10 @@ impl Game {
                         remaining: *count,
                     })
             }
-            Effect::Destroy { target } | Effect::Exile { target } => {
-                let Some(Target::Permanent(id)) = frame.primary_target() else {
+            Effect::Destroy { .. } | Effect::Exile { .. } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
-                if !self.target_is_legal(Target::Permanent(id), target, frame.controller) {
-                    return None;
-                }
                 if matches!(effect, Effect::Destroy { .. }) {
                     if let Some(object) = self.permanent_object_ref(id) {
                         self.destroy_object(object);
@@ -407,13 +431,10 @@ impl Game {
                 },
                 frame,
             ),
-            Effect::ReturnToHandDrawIfControlled { target } => {
-                let Some(Target::Permanent(id)) = frame.primary_target() else {
+            Effect::ReturnToHandDrawIfControlled { .. } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
                 };
-                if !self.target_is_legal(Target::Permanent(id), target, frame.controller) {
-                    return None;
-                }
                 let controlled = self.state.permanents[id]
                     .as_ref()
                     .is_some_and(|p| p.controller == frame.controller);
@@ -427,9 +448,7 @@ impl Game {
                 let Some(Target::Permanent(id)) = frame.context_target else {
                     return None;
                 };
-                if !self.permanent_on_battlefield(id) {
-                    return None;
-                }
+                self.permanent_object_ref(id)?;
                 self.change_plus_one_counters(id, *counters);
                 self.journal_permanent(id);
                 if let Some(permanent) = self.state.permanents[id].as_mut() {
@@ -437,11 +456,8 @@ impl Game {
                 }
                 None
             }
-            Effect::ReturnToHand { target: spec } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::ReturnToHand { .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 match chosen {
                     Target::Permanent(permanent_id) => {
                         self.return_permanent_to_owner_hand(permanent_id);
@@ -461,14 +477,8 @@ impl Game {
                 }
                 None
             }
-            Effect::DealDamage {
-                amount,
-                target: spec,
-            } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::DealDamage { amount, .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 match chosen {
                     Target::Player(player) => {
                         self.apply_player_damage(frame.source_ref, player, *amount);
@@ -481,7 +491,8 @@ impl Game {
                 None
             }
             Effect::CounterSpell { .. } => {
-                let Some(Target::StackSpell(target_spell)) = frame.primary_target() else {
+                let Some(Target::StackSpell(target_spell)) = self.present_primary_target(frame)
+                else {
                     return None;
                 };
                 self.counter_spell(target_spell, frame.source);
@@ -575,11 +586,8 @@ impl Game {
                     frame,
                 )
             }
-            Effect::AddSubtypeToTarget { target, subtype } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, target, frame.controller) {
-                    return None;
-                }
+            Effect::AddSubtypeToTarget { subtype, .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(id) = chosen {
                     self.journal_permanent(id);
                     let permanent = self.state.permanents[id].as_mut()?;
@@ -589,13 +597,11 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileIfDiesThisTurn { target } => {
-                let chosen = frame.primary_target()?;
-                if self.target_is_legal(chosen, target, frame.controller) {
-                    if let Target::Permanent(id) = chosen {
-                        self.journal_permanent(id);
-                        self.state.permanents[id].as_mut()?.exile_if_dies_this_turn = true;
-                    }
+            Effect::ExileIfDiesThisTurn { .. } => {
+                let chosen = self.present_primary_target(frame)?;
+                if let Target::Permanent(id) = chosen {
+                    self.journal_permanent(id);
+                    self.state.permanents[id].as_mut()?.exile_if_dies_this_turn = true;
                 }
                 None
             }
@@ -632,14 +638,8 @@ impl Game {
                 }
                 None
             }
-            Effect::PutCounters {
-                count,
-                target: spec,
-            } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::PutCounters { count, .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
                     self.change_plus_one_counters(permanent_id, *count);
                 }
@@ -734,8 +734,8 @@ impl Game {
                 };
                 // The spell may already have left the stack (e.g. it was
                 // countered in response) — the effect does nothing.
-                self.find_spell_on_stack_index(target_spell)?;
-                let spell_controller = self.spell_controller(target_spell)?;
+                let index = self.find_spell_on_stack_index(target_spell)?;
+                let spell_controller = self.state.stack_objects[index].controller();
                 Some(Decision::Payment(PaymentProgress::new(
                     spell_controller,
                     PaymentCost::Mana(cost.clone()),
@@ -762,41 +762,34 @@ impl Game {
                 None
             }
             Effect::TargetCreaturesDealPowerDamageToLastTarget => {
-                let targets = frame.targets.clone();
-                if targets.len() < 2 {
+                let (victim_slot, attackers) = frame.targets.split_last()?;
+                if !victim_slot.legal {
                     return None;
                 }
-                let Some(Target::Permanent(victim)) = targets.last().copied() else {
+                let Target::Permanent(victim) = victim_slot.target else {
                     return None;
                 };
-                for attacker in &targets[..targets.len() - 1] {
-                    let Target::Permanent(attacker_id) = attacker else {
+                for attacker in attackers.iter().filter(|slot| slot.legal) {
+                    let Target::Permanent(attacker_id) = attacker.target else {
                         continue;
                     };
-                    // Both creatures must still be legal (on the
-                    // battlefield) when damage is dealt.
-                    if !self.permanent_is_battlefield_creature(victim) {
+                    // Eligibility was fixed at entry; damage still requires
+                    // the original battlefield objects (CR 400.7).
+                    if self.permanent_object_ref(victim).is_none() {
                         break;
                     }
-                    if !self.permanent_is_battlefield_creature(*attacker_id) {
+                    let Some(attacker_ref) = self.permanent_object_ref(attacker_id) else {
                         continue;
-                    }
-                    let attacker_ref = self.permanent_object_ref(*attacker_id);
-                    let power = self.effective_power(*attacker_id);
+                    };
+                    let power = self.effective_power(attacker_id);
                     if power > 0 {
-                        self.apply_permanent_damage(attacker_ref, victim, power);
+                        self.apply_permanent_damage(Some(attacker_ref), victim, power);
                     }
                 }
                 None
             }
-            Effect::Earthbend {
-                count,
-                target: spec,
-            } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::Earthbend { count, .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
                 };
@@ -841,11 +834,8 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileUntilSourceLeaves { target: spec } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::ExileUntilSourceLeaves { .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
                 };
@@ -880,14 +870,9 @@ impl Game {
                 None
             }
             Effect::BuffTarget {
-                power,
-                toughness,
-                target: spec,
+                power, toughness, ..
             } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+                let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
                     self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -897,11 +882,8 @@ impl Game {
                 }
                 None
             }
-            Effect::UntapTarget { target: spec } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::UntapTarget { .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
                     self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -912,14 +894,8 @@ impl Game {
                 }
                 None
             }
-            Effect::GrantKeywordsToTarget {
-                keywords,
-                target: spec,
-            } => {
-                let chosen = frame.primary_target()?;
-                if !self.target_is_legal(chosen, spec, frame.controller) {
-                    return None;
-                }
+            Effect::GrantKeywordsToTarget { keywords, .. } => {
+                let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
                     self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -929,7 +905,8 @@ impl Game {
                 None
             }
             Effect::IfTargetMatches { predicate, then } => {
-                let Some(Target::Permanent(permanent_id)) = frame.primary_target() else {
+                let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)
+                else {
                     return None;
                 };
                 if self.permanent_matches_predicate(permanent_id, predicate) {
@@ -947,8 +924,10 @@ impl Game {
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
-                        targets: vec![target],
-                        target_req_indices: Vec::new(),
+                        targets: vec![ResolutionTarget {
+                            requirement: 0,
+                            ..target
+                        }],
                         active_requirement: 0,
                         context_target: None,
                         queue: VecDeque::from(effects.clone()),
@@ -984,16 +963,6 @@ impl Game {
         }
     }
 
-    fn spell_controller(&self, card: CardId) -> Option<PlayerId> {
-        self.state
-            .stack_objects
-            .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
-                _ => None,
-            })
-    }
-
     pub(crate) fn permanent_is_battlefield_creature(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self
             .state
@@ -1005,16 +974,6 @@ impl Game {
         };
         self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
             && self.permanent_is_creature(permanent_id)
-    }
-
-    fn permanent_on_battlefield(&self, permanent_id: PermanentId) -> bool {
-        self.state
-            .permanents
-            .get(permanent_id.0)
-            .and_then(|p| p.as_ref())
-            .is_some_and(|permanent| {
-                self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-            })
     }
 
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
@@ -1127,3 +1086,7 @@ impl Game {
             .unwrap_or(0)
     }
 }
+
+#[cfg(test)]
+#[path = "resolution_tests.rs"]
+mod resolution_tests;

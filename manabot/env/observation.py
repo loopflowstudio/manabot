@@ -45,7 +45,10 @@ ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
-RELATION_DIM = 32
+LEGACY_RELATION_DIM = 32
+RELATION_DIM = 33
+# V4 appends eligibility; row validity keeps its v2/v3 position.
+RELATION_VALID_INDEX = 31
 
 
 # -----------------------------------------------------------------------------
@@ -58,8 +61,11 @@ class ObservationEncoder:
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
 
-    def __init__(self, config: ObservationConfig):
+    def __init__(self, config: ObservationConfig) -> None:
         self.config = config
+        self.relation_dim = (
+            RELATION_DIM if config.policy_input_version >= 4 else LEGACY_RELATION_DIM
+        )
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
         self.max_actions = config.max_actions
@@ -104,7 +110,7 @@ class ObservationEncoder:
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
             **(
-                {"relations": (RELATION_ROWS, RELATION_DIM)}
+                {"relations": (RELATION_ROWS, self.relation_dim)}
                 if self.config.policy_input_version >= 2
                 else {}
             ),
@@ -263,16 +269,19 @@ class ObservationEncoder:
             out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
         if self.config.policy_input_version >= 2:
-            out["relations"] = self._encode_relations(obs)
+            out["relations"] = self._encode_relations(
+                obs.continuation, obs.agent.player_index
+            )
 
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
         return out
 
-    def _encode_relations(self, obs: managym.Observation) -> np.ndarray:
+    def _encode_relations(
+        self, frames: list[managym.ContinuationFrame], viewer: int
+    ) -> np.ndarray:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
-        viewer = obs.agent.player_index
 
         def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
             row[23] = 0 if value.definition is None else value.definition + 1
@@ -280,8 +289,8 @@ class ObservationEncoder:
             if value.player is not None:
                 row[25] = row[24] = 1 if value.player == viewer else 2
 
-        for index, frame in enumerate(obs.continuation):
-            row = np.zeros(RELATION_DIM, dtype=np.float32)
+        for index, frame in enumerate(frames):
+            row = np.zeros(self.relation_dim, dtype=np.float32)
             row[:5] = (
                 1,
                 index + 1,
@@ -305,19 +314,26 @@ class ObservationEncoder:
             row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
             row[30] = frame.resolutions_this_turn
             row[28] = frame.decision
-            row[31] = 1
+            row[RELATION_VALID_INDEX] = 1
             rows.append(row)
-            targets = [(2, target.reference, target.clause) for target in frame.targets]
-            if frame.context is not None:
-                targets.append((3, frame.context, 0))
-            if frame.sacrifice is not None:
-                targets.append((4, frame.sacrifice, 0))
-            for ordinal, (kind, target, clause) in enumerate(targets):
+            for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
-                target_row[0], target_row[22] = kind, clause + 1
-                target_row[29] = ordinal + 1 if kind == 2 else 1
-                _reference(target_row, target)
+                target_row[0], target_row[22], target_row[29] = (
+                    2,
+                    target.clause + 1,
+                    ordinal,
+                )
+                if self.config.policy_input_version >= 4:
+                    legal = target.legal_at_resolution_start
+                    target_row[32] = 0 if legal is None else (1 if legal else 2)
+                _reference(target_row, target.reference)
                 rows.append(target_row)
+            for kind, reference in ((3, frame.context), (4, frame.sacrifice)):
+                if reference is not None:
+                    context_row = row.copy()
+                    context_row[0], context_row[22], context_row[29] = kind, 1, 1
+                    _reference(context_row, reference)
+                    rows.append(context_row)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
@@ -334,7 +350,7 @@ class ObservationEncoder:
                     rows.append(produced)
         if len(rows) > RELATION_ROWS:
             raise ValueError("observation capacity exceeded: continuation relations")
-        result = np.zeros((RELATION_ROWS, RELATION_DIM), dtype=np.float32)
+        result = np.zeros((RELATION_ROWS, self.relation_dim), dtype=np.float32)
         if rows:
             result[: len(rows)] = rows
         return result

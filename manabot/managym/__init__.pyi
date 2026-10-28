@@ -139,7 +139,7 @@ class Env:
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
     def encode_observation(
-        self, obs: Observation, policy_input_version: int = 3
+        self, obs: Observation, policy_input_version: int = 4
     ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]
@@ -488,6 +488,7 @@ class VisibleReference:
     player: int | None
 
 class ClauseTarget:
+    legal_at_resolution_start: bool | None
     reference: VisibleReference
     clause: int
 
