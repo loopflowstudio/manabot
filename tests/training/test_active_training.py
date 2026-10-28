@@ -182,12 +182,15 @@ def test_initial_admission_precedes_collection(
         clock.offset += 100
         digest = run.stages[0].artifacts["initial_raw"]["sha256"]
         gate.write_text(digest if admitted else "wrong-checkpoint")
+        # Subtracting the real clock epoch can round the injected 100-second wait.
         if admitted:
             finished = future.result(timeout=30)
             assert finished.status == "completed"
             assert finished.stages[0].updates == 2
             assert finished.stages[0].admission_wait_seconds is not None
-            assert finished.stages[0].admission_wait_seconds >= 100
+            assert finished.stages[0].admission_wait_seconds == pytest.approx(
+                100, rel=0, abs=1e-6
+            )
         else:
             with pytest.raises(ValueError, match="admission differs"):
                 future.result(timeout=30)
@@ -195,6 +198,8 @@ def test_initial_admission_precedes_collection(
             assert failed.updates_through() == 0
             assert failed.stages[0].learner_transitions == 0
             assert failed.stages[0].admission_wait_seconds is not None
-            assert failed.stages[0].admission_wait_seconds >= 100
+            assert failed.stages[0].admission_wait_seconds == pytest.approx(
+                100, rel=0, abs=1e-6
+            )
             # Failure accounting does not charge the same wait a second time.
             assert failed.stages[0].diagnostic_seconds < 10

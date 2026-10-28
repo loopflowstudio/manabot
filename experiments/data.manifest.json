@@ -886,6 +886,46 @@
    "sha256": "8ab1c6db007ef6e8ed2718ba0996caa6a02fea95b278ab61b43947a5779113e5",
    "bytes": 1969
   },
+  "experiments/data/curriculum-175/development-200/deck-seat-strata.json": {
+   "sha256": "29c69f3a0c85fe0a78c7c227a8f516f5adab506badf54b64d4701ac20b29e334",
+   "bytes": 106074
+  },
+  "experiments/data/curriculum-175/development-200/early-outcomes.json": {
+   "sha256": "5050757d79a00304625534ee9cbf7d54e329f9abdef710cdcc660215aa6f21c2",
+   "bytes": 179269
+  },
+  "experiments/data/curriculum-175/development-200/three-arm-outcomes.json": {
+   "sha256": "faa2cf9713a08921e499376b9f8bfaffb02ad8037144814f3357f5c9524f0d28",
+   "bytes": 267691
+  },
+  "experiments/data/curriculum-175/distribution-400/e.json": {
+   "sha256": "265e4ea6d39c708fdbadf440b1f6303671164f44066d8ebe623f4d3b67212f61",
+   "bytes": 2636253
+  },
+  "experiments/data/curriculum-175/distribution-400/m.json": {
+   "sha256": "10402b139909e8479ea3dd4705f9512290663cb978e4ace69a9bd00746f54a09",
+   "bytes": 2614178
+  },
+  "experiments/data/curriculum-175/distribution-500/e.json": {
+   "sha256": "23282159fc43fafcd13f5d6047bf9191017b1ffb7512e9b2bcfe22d514558a3d",
+   "bytes": 2657090
+  },
+  "experiments/data/curriculum-175/distribution-500/m.json": {
+   "sha256": "a7da701429f5c08ce12962eb1173fa8ce7bf8dcf98c2c3fce7d24be7a5e0bdbe",
+   "bytes": 2610522
+  },
+  "experiments/data/curriculum-175/evaluation-costs/completed-rentals.json": {
+   "sha256": "60c1c827ea23346d949b75e208d03ebc5a7b50a436a77e87b9ee71db445543df",
+   "bytes": 1899570
+  },
+  "experiments/data/curriculum-175/initial-evaluation/operations.json": {
+   "sha256": "4243717944b87503caba87a495a8bc9309f008b63fca6d1a680678326f3318bb",
+   "bytes": 78208
+  },
+  "experiments/data/curriculum-175/initial-evaluation/outcomes.json": {
+   "sha256": "db72cbcf82afaefd295fa09bd92eb437c7483872fc393fd3c60461bb0ab83d6c",
+   "bytes": 354418
+  },
   "experiments/data/curriculum/analysis.json": {
    "sha256": "6983f9e9eaacd2fd9337df5c156b777f39bc717a780cf175dab1a0fbd69abdb5",
    "bytes": 24010

@@ -36,7 +36,7 @@ EXPERIMENTS = ROOT / "experiments"
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {"elemental", "seat_comparison", "two_seat"}
+    assert found == {"curriculum_adapters", "elemental", "seat_comparison", "two_seat"}
 
 
 def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:

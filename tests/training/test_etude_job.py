@@ -5,6 +5,7 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 
 from etude.train.read import read_all
@@ -112,14 +113,32 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     worker_environment(tmp_path, monkeypatch)
-    subprocess.run(
-        ["uv", "run", "--locked", "python", "-m", "manabot.experiment.job"],
+    with subprocess.Popen(
+        # Keep the parent's admitted environment, including an isolated one.
+        # Resyncing the checkout here escapes dependency isolation and can wait
+        # on another test's environment lock.
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "--active",
+            "python",
+            "-m",
+            "manabot.experiment.job",
+        ],
         cwd=ROOT,
-        check=True,
-        timeout=30,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-    )
+        start_new_session=True,
+    ) as worker:
+        try:
+            stdout, stderr = worker.communicate(timeout=120)
+            assert worker.returncode == 0, (stdout, stderr)
+        finally:
+            if worker.poll() is None:
+                os.killpg(worker.pid, signal.SIGKILL)
+                worker.communicate()
     run = TrainingRun.model_validate_json(
         (tmp_path / "output/training/run.json").read_text()
     )
@@ -349,3 +368,43 @@ def test_continuation_milestones_follow_the_parent(tmp_path: Path) -> None:
     stage.learning.ema = None
     with pytest.raises(ValueError, match="EMA"):
         TrainingJob(regime=without_ema, experiment="fixture", continuation=continuation)
+
+
+def test_worker_imports_exact_initial_weights_and_keeps_optimizer_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import torch
+
+    from manabot.env import Match, ObservationSpace
+    from manabot.model.actor_critic import ActorCritic
+    from manabot.model.checkpoint import save_checkpoint
+
+    spec = specification()
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    path = inputs / "initial-weights.pt"
+    space = ObservationSpace(spec.regime.observation)
+    torch.manual_seed(4567)
+    producer = ActorCritic(space, spec.regime.agent)
+    save_checkpoint(
+        producer,
+        space,
+        path,
+        player_configs=Match(spec.regime.match).to_rust(),
+        extra={"weights": "initial_raw"},
+    )
+    spec.initial_checkpoint = StagedExport(
+        key="existing/initial.pt", sha256=file_sha256(path), bytes=path.stat().st_size
+    )
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
+    assert len(job.inputs) == 1
+    assert job.inputs[0].sha256 == file_sha256(path)
+    worker_environment(tmp_path, monkeypatch, spec)
+    monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
+    run = run_worker()
+    assert run.status == "completed"
+    copied, _ = load_checkpoint(run.stages[0].artifacts["initial_raw"]["path"])
+    for key, value in producer.state_dict().items():
+        torch.testing.assert_close(copied.state_dict()[key], value, rtol=0, atol=0)
+    assert run.stages[0].learning_state_origin is None
+    assert run.stages[0].inputs["initial_weights"]["sha256"] == file_sha256(path)

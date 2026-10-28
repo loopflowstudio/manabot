@@ -31,6 +31,10 @@ type Updates = dict[int, MetricRow]
 
 # Lists whose entries are named by fields, not by position.
 _KEYED_LISTS = {
+    "adaptive/exposures": ("cell", "seat"),
+    "adaptive/allocations": ("stream", "game"),
+    "adaptive/completed": ("stream", "game", "seat"),
+    "adaptive/errors": ("cell",),
     "selection_groups": ("action_type", "terminal_distance"),
     "self_play_outcomes": ("deck", "opponent_deck", "position"),
 }
@@ -118,7 +122,9 @@ def _flatten(value: object, name: str, row: MetricRow) -> None:
         for key, item in value.items():
             _flatten(item, f"{name}{key}/", row)
     elif isinstance(value, Sequence) and not isinstance(value, str):
-        keys = _KEYED_LISTS.get(name.rstrip("/").rsplit("/", 1)[-1])
+        keys = _KEYED_LISTS.get(name.rstrip("/")) or _KEYED_LISTS.get(
+            name.rstrip("/").rsplit("/", 1)[-1]
+        )
         for index, item in enumerate(value):
             if keys is not None and isinstance(item, Mapping):
                 label = "/".join(str(item[key]) for key in keys)

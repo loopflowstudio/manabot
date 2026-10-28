@@ -56,7 +56,7 @@ _PARENT_FILES = {
 
 
 class StagedExport(Strict):
-    """One parent file held in the machine's Etude storage under `key`."""
+    """One immutable input held in the machine's Etude storage under `key`."""
 
     key: str = Field(min_length=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -140,6 +140,9 @@ class TrainingJob(Strict):
     source_bundle: SourceBundle | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    initial_checkpoint: StagedExport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     continuation: LearnerContinuation | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -155,6 +158,7 @@ class TrainingJob(Strict):
                 stage.initial,
                 stage.learning_state,
                 stage.pretrained,
+                stage.initial_weights,
                 stage.active_seconds,
             )
         ):
@@ -162,6 +166,8 @@ class TrainingJob(Strict):
                 "Etude training jobs require step-target self-play;"
                 " a learner continuation is bound from its inputs"
             )
+        if self.initial_checkpoint is not None and self.continuation is not None:
+            raise ValueError("choose fresh initialization or learner continuation")
         start = 0 if self.continuation is None else self.continuation.from_update
         if start >= stage.updates:
             raise ValueError("continuation must start before the update target")
@@ -177,6 +183,14 @@ class TrainingJob(Strict):
 
     def bound_regime(self, inputs: Path) -> TrainingRegime:
         """The regime with the continuation's staged files bound as its import."""
+        if self.initial_checkpoint is not None:
+            serialized = self.regime.model_dump(mode="json")
+            serialized["stages"][0]["initial_weights"] = {
+                "path": str(inputs / "initial-weights.pt"),
+                "sha256": self.initial_checkpoint.sha256,
+                "bytes": self.initial_checkpoint.bytes,
+            }
+            return TrainingRegime.model_validate(serialized)
         if self.continuation is None:
             return self.regime
         serialized = self.regime.model_dump(mode="json")
@@ -236,7 +250,18 @@ class TrainingJob(Strict):
             max_hours=max_hours,
             max_usd=max_usd,
             max_attempts=1,
-            inputs=() if spec.continuation is None else spec.continuation.inputs(),
+            inputs=(
+                Input(
+                    name="initial-weights.pt",
+                    key=spec.initial_checkpoint.key,
+                    sha256=spec.initial_checkpoint.sha256,
+                    size_bytes=spec.initial_checkpoint.bytes,
+                ),
+            )
+            if spec.initial_checkpoint is not None
+            else ()
+            if spec.continuation is None
+            else spec.continuation.inputs(),
         )
 
 
@@ -268,18 +293,21 @@ def run_worker() -> TrainingRun:
     if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
         raise ValueError("remaining allocation cannot cover the frozen regime")
     regime = spec.regime
-    if spec.continuation is not None:
+    if spec.continuation is not None or spec.initial_checkpoint is not None:
         directory = environment.get("ETUDE_INPUTS_DIR")
         inputs = Path(directory or "")
         if not directory or not inputs.is_dir():
-            raise ValueError("a learner continuation needs its staged inputs")
-        parent = TrainingRun.model_validate_json(
-            (inputs / _PARENT_FILES["source_run"]).read_bytes()
-        )
-        if parent.updates_through() != spec.continuation.from_update:
-            raise ValueError("staged parent ends at a different update")
-        if parent.seed != int(environment["ETUDE_SEED"]):
-            raise ValueError("a learner continuation keeps its parent's seed")
+            raise ValueError(
+                "training initialization/continuation needs its staged inputs"
+            )
+        if spec.continuation is not None:
+            parent = TrainingRun.model_validate_json(
+                (inputs / _PARENT_FILES["source_run"]).read_bytes()
+            )
+            if parent.updates_through() != spec.continuation.from_update:
+                raise ValueError("staged parent ends at a different update")
+            if parent.seed != int(environment["ETUDE_SEED"]):
+                raise ValueError("a learner continuation keeps its parent's seed")
         regime = spec.bound_regime(inputs)
     # Native world admission precedes any collector or optimizer work. Never
     # shrink the recipe to fit a late start or silently substitute a device.

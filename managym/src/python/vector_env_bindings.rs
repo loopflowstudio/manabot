@@ -18,8 +18,8 @@ use crate::{
         action::AgentError,
         observation::Observation,
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-            PERMANENT_DIM, PLAYER_DIM,
+            encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
+            CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -195,6 +195,30 @@ impl PyVectorEnv {
                 write_buffers
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
             })
+        })
+    }
+
+    fn reassign_roots_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        player_configs: Vec<Option<Vec<PyPlayerConfig>>>,
+    ) -> PyResult<()> {
+        let configs = player_configs
+            .into_iter()
+            .map(|row| row.map(|players| players.into_iter().map(PlayerConfig::from).collect()))
+            .collect();
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            inner.reassign_roots_into(
+                configs,
+                |_, obs| {
+                    encode(obs, &config)
+                        .map(|_| ())
+                        .map_err(|error| AgentError(error.to_string()))
+                },
+                |index, obs, reward, terminated, truncated| {
+                    buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                },
+            )
         })
     }
 
