@@ -625,7 +625,7 @@ def test_budget_digest_identifies_exact_dispatched_payload(
 
 
 @pytest.mark.parametrize("failure", ["missing", "deadline", "http"])
-def test_decisions_uncertain_charge_stops_and_keeps_reservation(
+def test_decisions_uncertain_charge_stops_and_keeps_its_bound(
     failure: str, budget_ledger: BudgetLedger
 ) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -644,8 +644,8 @@ def test_decisions_uncertain_charge_stops_and_keeps_reservation(
     assert result.failure is not None and result.selected_reference is None
     assert result.attempts[0].reservation_id
     assert budget_ledger.snapshot().pending_usd == Decimal("0.01")
-    with pytest.raises(RuntimeError, match="unsettled"):
-        budget_ledger.reserve("next", "digest")
+    budget_ledger.reserve("next", "digest")
+    assert budget_ledger.snapshot().accounted_usd == Decimal("0.02")
 
 
 @pytest.mark.parametrize("failures", [1, 2])

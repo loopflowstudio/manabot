@@ -95,7 +95,9 @@ pair and Jev seat, shuffled with a retained seed. The first 10–20 games are th
 included pilot under the same treatment. History capacity, forced-choice
 skipping, policy RNG and game limits are retained. Only a complete, valid pilot
 produces a 1,000-game cost projection.
-The driver continues the affordable prefix, with no replacement games. Reported
+The driver continues the affordable prefix, with no replacement games. A failed
+or replay-divergent game is retained unscored; three consecutive failed games
+stop the campaign. Reported
 Wilson intervals describe wins among completed, replay-verified games and do not
 claim fixed-sample coverage under cost-based stopping.
 
@@ -103,9 +105,9 @@ claim fixed-sample coverage under cost-based stopping.
 request charge **before every dispatch**, including chat repairs when used by a
 chat caller. The provider's reported cost is multiplied by the declared billing
 fee factor, rounded up to nanodollars, and settles that reservation. Missing
-usage, failed requests and interruptions retain the full bound and block further
-requests. A reservation whose connection was never established is abandoned by
-the live session: it stays counted at its full bound without blocking the resend. Charges exceeding the bound are retained and stop the campaign even
+usage and failed requests keep their full bound: the live session abandons the
+reservation, which stays counted but no longer blocks later requests. Process
+death leaves it pending and blocks restart. Charges exceeding the bound are retained and stop the campaign even
 on restart. Rental, publication and shutdown allowances are reserved up front;
 the caller must establish that those allowances and the request bound are valid.
 A payload-byte limit or an observed pilot mean is not that evidence.

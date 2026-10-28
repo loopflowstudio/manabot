@@ -457,6 +457,9 @@ class OpenRouterSession:
                     )
         except Exception as error:
             self.close()
+            # The failed request stays counted at its full bound.
+            if self._budget is not None and attempts and attempts[-1].reservation_id:
+                self._budget.abandon(attempts[-1].reservation_id)
             if attempts:
                 attempts[-1] = attempts[-1].model_copy(
                     update={"seconds": time.monotonic() - attempt_start}

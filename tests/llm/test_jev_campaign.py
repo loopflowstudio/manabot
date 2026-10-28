@@ -242,17 +242,22 @@ def test_campaign_stops_before_admitting_another_game_with_pending_spend(
         GameSummary(mode="fixture", completed=True, winner=0, failure="fixture"),
     ],
 )
-def test_invalid_game_stops_campaign_and_cannot_score(
+def test_invalid_games_are_retained_unscored_until_consecutive_failures_stop(
     tmp_path: Path, summary: GameSummary
 ) -> None:
+    played: list[str] = []
+
     def player(game: ScheduledGame, out: Path, ledger: BudgetLedger) -> GameSummary:
+        played.append(game.name)
+        if len(played) == 2:
+            return GameSummary(mode="fixture", completed=True, winner=0)
         return summary
 
     result = execute(protocol(), tmp_path, player, admit=lambda: None)
-    assert result.overall.attempted == result.overall.failures == 1
-    assert result.overall.valid == result.overall.wins == result.overall.losses == 0
+    assert len(played) == result.overall.attempted == 5
+    assert result.overall.failures == 4 and result.overall.valid == 1
     assert result.pilot.projected_1000_api_usd is None
-    assert result.stop_reason
+    assert result.stop_reason and result.stop_reason.startswith("3 consecutive")
 
 
 def test_admission_failure_leaves_the_campaign_runnable(tmp_path: Path) -> None:
@@ -266,7 +271,7 @@ def test_admission_failure_leaves_the_campaign_runnable(tmp_path: Path) -> None:
         execute(protocol(), tmp_path, player, admit=refuse)
     assert not (tmp_path / "report.json").exists()
     result = execute(protocol(), tmp_path, player, admit=lambda: None)
-    assert result.overall.attempted == 1
+    assert result.overall.attempted == protocol().max_consecutive_failures
 
 
 def test_abandoned_reservation_counts_its_bound_without_blocking(
@@ -277,8 +282,9 @@ def test_abandoned_reservation_counts_its_bound_without_blocking(
     ledger.abandon(ledger.reserve("game", "digest"))
     identifier = ledger.reserve("game", "digest")
     ledger.settle(identifier, 0.1)
+    ledger.abandon(identifier)
     spend = BudgetLedger(path, budget_config()).snapshot()
     assert spend.accounted_usd == Decimal("0.41")
     assert [r.abandoned for r in spend.requests] == [True, False]
-    with pytest.raises(ValueError, match="only an unsettled"):
-        ledger.abandon(identifier)
+    with pytest.raises(ValueError, match="unknown"):
+        ledger.abandon("missing")

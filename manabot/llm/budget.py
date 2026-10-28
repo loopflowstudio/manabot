@@ -1,9 +1,9 @@
 """Durable request reservations for sequential hosted campaigns.
 
-SQLite commits a maximum inclusive charge before dispatch. Missing replies and
-process death leave that reservation pending and prohibit further requests.
-A live session may abandon a reservation whose connection was never
-established: it stays counted at its full bound but no longer blocks admission.
+SQLite commits a maximum inclusive charge before dispatch. Process death leaves
+that reservation pending and prohibits further requests. A live session abandons
+the reservation of a failed or unpriced request: it stays counted at its full
+bound but no longer blocks admission.
 The caller must supply a justified provider charge bound, not a cost estimate.
 Amounts use integer nanodollars, rounded upward at the billing boundary.
 """
@@ -139,14 +139,22 @@ class BudgetLedger:
         return identifier
 
     def abandon(self, identifier: str) -> None:
-        """Keep an unsent request's full bound while admitting later requests."""
+        """Keep an unsettled request's full bound while admitting later requests.
+
+        A settled request keeps its charge, including one above its bound.
+        """
         with self._transaction() as db:
-            updated = db.execute(
+            if (
+                db.execute(
+                    "SELECT 1 FROM requests WHERE id = ?", (identifier,)
+                ).fetchone()
+                is None
+            ):
+                raise ValueError("unknown request reservation")
+            db.execute(
                 "UPDATE requests SET abandoned = 1 WHERE id = ? AND charged IS NULL",
                 (identifier,),
-            ).rowcount
-        if updated != 1:
-            raise ValueError("only an unsettled reservation can be abandoned")
+            )
 
     def settle(self, identifier: str, reported_usd: float | None) -> None:
         if reported_usd is None:

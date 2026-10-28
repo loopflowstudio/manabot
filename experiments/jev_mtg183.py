@@ -47,7 +47,7 @@ class PinnedFile(Record):
 
 
 class Protocol(Record):
-    version: Literal["jev-mtg183-v2"] = "jev-mtg183-v2"
+    version: Literal["jev-mtg183-v3"] = "jev-mtg183-v3"
     inference: OpenRouterConfig
     checkpoint: PinnedFile
     checkpoint_artifact_id: str = Field(min_length=1)
@@ -71,6 +71,8 @@ class Protocol(Record):
     max_decisions: int = Field(default=2000, gt=0)
     game_seconds: float = Field(default=3600, gt=0, allow_inf_nan=False)
     campaign_seconds: float = Field(default=86400, gt=0, allow_inf_nan=False)
+    # A failed game is retained unscored; consecutive failures suggest an outage.
+    max_consecutive_failures: int = Field(default=3, gt=0)
 
     @model_validator(mode="after")
     def treatment(self) -> "Protocol":
@@ -363,6 +365,7 @@ def execute(
         # directory runnable once the missing input is supplied.
         admit()
         stop_reason = None
+        failed_run = 0
         started = time.monotonic()
         try:
             for game in games:
@@ -388,8 +391,12 @@ def execute(
                 current = retain_report(None)
                 if len(attempts) == protocol.pilot_games:
                     _write(out / "pilot.json", current.pilot.model_dump_json(indent=2))
-                if attempt.outcome is None:
-                    stop_reason = summary.failure or "game incomplete or replay failed"
+                failed_run = 0 if attempt.outcome is not None else failed_run + 1
+                if failed_run == protocol.max_consecutive_failures:
+                    stop_reason = (
+                        f"{failed_run} consecutive failed games; last: "
+                        f"{summary.failure or 'game incomplete or replay failed'}"
+                    )
                     break
         except BaseException as error:
             stop_reason = f"{type(error).__name__}: campaign interrupted"
