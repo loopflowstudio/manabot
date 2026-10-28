@@ -270,32 +270,88 @@ Ledger (cap $5; committed = caps until settled):
 |---|---|---|---|---|
 | `091840ecd017` | `cpu32` `batched` (6 × 12) at `950e2066e` | cpu3c 32 vCPU, $0.96/h | $2.50 | ~$0.07, 0 valid |
 | `a8182c3ea633` | A4500 `gpu` (256 active) at `950e2066e` | a4500 ≤ $0.40/h | $0.40 | ~$0.01, 0 valid |
-| `a43579fb6172` | A4500 `gpu` (256 active) at `014868990` (pre-ABI-fix) | a4500 ≤ $0.40/h | $0.40 | queue state unverified |
+| `a43579fb6172` | A4500 `gpu` at `014868990` (pre-ABI-fix) | a4500 | $0.40 | $0.00, lost (capacity_refused) |
+| `ac309c613577` | `cpu32` `batched` (6 × 12) at `625283822` | cpu3c 32 vCPU, $0.96/h | $2.50 (quote $1.20) | ~$0.68, 1,000/1,000 valid |
+| `2e066580c458` | A4500 `gpu` (256 active) at `625283822` | a4500 | $0.40 | ~$0.10, 999/1,000 valid (1 hit 600 s at 818 decisions) |
+| `6ed5413f5292` | `cpu32` `batched` at `7616dd740` (+ fsync fix) | cpu3c 32 vCPU | $2.50 | lost: pod create HTTP 400, no machine; Etude estimate ~$1.20, likely $0 actual |
+| `ccc8a29160c0` | A4500 `gpu` (256 active) at `7616dd740` (+ fsync fix) | a4500 | $0.40 | ~$0.03, 1,000/1,000 valid |
 
-Committed at most about $0.48 of $5 (two settled runs, ~$0.08, plus `a43579fb6172`'s cap if queued).
+Settled ~$0.89 measured, ~$2.09 counting `6ed5413f5292`'s estimate; $2.91 of $5 left. Nothing running (17:10).
 
-Both settled arms recorded 1,000/1,000 games failed with "checkpoint requires an
-explicit compatible w14 world binding": `e742e8bff` (main, inherited by both
-branches) moved the engine to w14, and MTG-183's 5,950/5,600 checkpoints are
-w13. Their receipts reported 1,000 games and no error, so a receipt must
-count valid games (uncommitted edit in the calibration worktree). The
-calibration branch reverts `e742e8bff` (`014868990`) so the after-arms play
-the before-arms' w13 world. The `cpu32` arm still needs a valid relaunch.
+Failure 1: both `950e2066e` arms recorded 1,000/1,000 games invalid with
+"checkpoint requires an explicit compatible w14 world binding": `e742e8bff`
+(main, MTG-195, inherited by both branches) moved the engine to w14, and
+MTG-183's 5,950/5,600 checkpoints are w13. Their receipts still reported
+1,000 games and no error. The calibration branch reverts `e742e8bff`
+(`014868990`) so the after-arms play the before-arms' w13 world.
 
-Second admission failure (found by a local `machine` smoke, 2026-10-27):
-served admission checks a checkpoint registration's observation ABI against
-the checkpoint's saved space, but the runners registered every checkpoint with
-the runtime's default space, so policy-input v1 checkpoints were rejected as
-ABI drift. Fixed on this branch for the Elemental grid and MTG-186 arena
-(`c3bd35895`) and on the calibration branch (`97a9c8f0e`, plus an uncommitted
-edit making MTG-183's `elemental_long_eval.play_h2h_group` register with the
-checkpoint's own space). `a43579fb6172` was built at `014868990`, before both
-fixes, so it cannot produce valid games; `~/.manabot/mtg193-calibration/queued.txt`
-lists only the two settled runs, so whether it was queued is unverified. Valid
-after-arms need a revision that has the revert, the ABI fix and the
-valid-game receipt edit committed. From 2026-10-27 ~14:55, session
-`manabot-19d240-batch-shared-evaluation-a1` owns the calibration (one
-launching writer). Throughput, census and batch targets are still unmeasured.
+Failure 2 (local `machine` smoke at `014868990`): served admission checks a
+checkpoint registration's observation ABI against the checkpoint's saved
+space, but the experiment runners registered checkpoints with the runtime's
+default space, so policy-input v1 checkpoints failed as ABI drift. Fixed here
+(`c3bd35895`, reshaped in `064d2395c`) and on the calibration branch
+(`97a9c8f0e`; `625283822` adds MTG-183's `play_h2h_group` and a receipt
+`valid` count that sets `error` when any game is invalid).
+
+Smoke at `625283822` (1 match, CPU, 4 active, 16 local cores): 100/100 valid,
+`model_loads` 2 per group, serving child 1 thread, 273 MiB; not comparable
+with the rental targets.
+
+Rental results at `625283822` (receipts in `~/.manabot/mtg193-calibration/out/<run>/`):
+
+| target | `cpu32` `ac309c613577` | A4500 `2e066580c458` |
+|---|---|---|
+| games/h | **1,508** (2,387 s; target ≥ 1,700) | **2,557** (1,407 s; target > 2,600) |
+| `model_loads` | 2 per cell × 200 cells | **2** |
+| median batch rows | 1 (≤ 5 games per service) | **1** (214,199 of 214,212 forwards; target > 8) |
+| `host_to_device_calls/decisions` | 0 (CPU) | 2.00 (= 2 × forwards, packed transfer holds) |
+| served game child | 1 thread, ≤ 71 MiB, no Torch | 1 thread, ≤ 71 MiB, no Torch (≤ 90 MiB met) |
+| serving child | 1 thread, 569 MiB | 5 threads (budget 16), 1.1 GiB |
+| group worker | 8–12 threads (budget 19) | 267–268 threads (recorded budget 263) |
+| load (1-min median / max) | 33.6 / 54.4 on 32 vCPUs (host `cpu_count` 384) | 7.4 / 8.6 on 48 |
+| request latency | p50 72 ms submission→receipt, forward 6 ms | mean 0.70 s; service queue 6 s total |
+| active game children (mid-run) | 13 of 72 slots | 91 of 256 |
+
+The 3,154 threads on `cpu32` are not this PR's processes. Seven `python3` processes
+(Etude's spawned `play` callbacks, which import the Torch-bearing
+`elemental_long_eval`) hold about 330 threads each, and the runner parent holds 772. Their
+thread names are not in the census.
+
+Findings (implement, 2026-10-27):
+- **Not fsync.** Fsync only at the Command boundary (`d2f46c62c`, calibration
+  `7616dd740`) gave A4500 `ccc8a29160c0` 2,608 games/h (1,380 s, 1,000 valid), against
+  2,557, with batches still 1 row (214,185 of 214,206) and p50 1.14 s. Reverted
+  in `1a032e95b`; the durability boundary is unchanged.
+- **The binding limit is the allocation parent.** `InferenceEndpoint.play_cell`
+  delegates every group's `play_cell` to the allocation's supervisor process,
+  so one Python process supervises all active games and relays every request.
+  A local `yappi` CPU profile (shared CPU allocation, 16 active, 100 games;
+  `~/.manabot/mtg193-calibration/profile/yappi.txt`) shows the parent busy
+  146.8 s of 249.7 s, about 8 ms of CPU per decision. `supervise_game` accounts
+  for 96 s: journal `retain` (file open + JSON per event) 24 s, pipe poll/recv
+  ~29 s, `dataclasses.asdict` 9 s, `InferenceRuntime.check` 5 s. That caps one
+  parent at roughly 120–150 decisions/s, matching the A4500's ~153/s in all
+  three valid runs (and MTG-183's 2,600 games/h before). Requests therefore
+  reach the service one at a time, so no service-side batching can raise the
+  median batch above 1 on this layout. This contradicts the design's
+  Exclusion "removing the parent's request hop", so the A4500 target needs a
+  design revision (several supervising processes each with its own
+  connection to the one service, or games talking to the service directly)
+  before more implementation. Cheaper parent work (one journal handle per
+  game, fewer polls/checks/`asdict`) could gain a constant factor but not 8×.
+- The other writer's due-flush backlog read in `serve` (uncommitted, with
+  `test_service_batches_a_backlog_of_overdue_requests`) is correct but cannot
+  bind until arrivals outpace the service.
+- `cpu32` `batched` at 1,508 games/h is a layout limit: 200 cells of 5 games each
+  start a service and load both models, so only ~13 games are active. The
+  `cpu32` arm was not re-measured (`6ed5413f5292` never got a machine).
+- Met: `model_loads` 2 (A4500), `host_to_device_calls/decisions` 2.00 (= 2 ×
+  forwards), served game child 1 thread, no Torch, ≤ 88 MiB (≤ 90 target), 200
+  concurrent games on the A4500 without OOM (13.9 GiB of children), serving
+  child 5 threads ≤ 16. Over budget: the A4500 group-worker parent census, 267–268
+  threads against a recorded 263; on `cpu32`, Etude's `python3` callbacks (~330
+  threads each) and the runner parent (772). Load ≤ vCPUs on the A4500, but
+  33–54 on 32 vCPUs on `cpu32`.
 
 ### Implementation decisions (2026-10-26)
 
@@ -318,7 +374,7 @@ launching writer). Throughput, census and batch targets are still unmeasured.
 
 Compress, 2026-10-27, after `c3bd35895`: checkpoint registrations in `elemental_grid.play_group` and `mtg186_eval.arena` pass their own ABI as keyword arguments (no default-space fingerprints computed only to be overridden); `uv run --extra dev pytest tests/eval/test_elemental_grid.py tests/eval/test_mtg186_cards.py tests/eval/test_etude_player_migration.py -q` → 13 passed (no test reaches these two functions; the calibration's `machine` smoke does).
 Compress, 2026-10-27: `InferenceRuntime.close` relies on `ChildProcess.kill`'s liveness guard; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 24 passed, 1 skipped.
-Realign, 2026-10-27: `_InChildPlayers`/`in_child` and the supervision header are in `manabot/sim` (grep); calibration has 0 valid games so far.
+Implement, 2026-10-27 15:55: drain-before-flush in `serve`; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q -k "not two_policies_never_share"` → 23 passed, 1 skipped. Rental arms at `625283822` settled (table above).
 Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
 
 Open for gate: the two

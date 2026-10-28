@@ -92,3 +92,22 @@ keep matching for resumption.
   A4500 about 2,600 games/h; `00119d1c9211` `cpu32` scalar about 1,700) on the
   same 1,000-game pair, so the $5 ledger buys only the two "after" arms. A
   fresh `main` before-arm is optional if the ledger allows and the hosts differ.
+- **Assumption — one launching writer (2026-10-27 15:50):** the interactive
+  Task session `a35bc11b…` committed `d2f46c62c` and calibration `7616dd740`
+  while the implement step held this worktree. The implement step therefore launched
+  nothing after `2e066580c458` and left its `serve` drain fix uncommitted for that
+  writer and gate, so two writers would not spend the $5 ledger.
+
+## Parent hop (implement, 2026-10-27 17:15) — needs Jack Heart
+
+- **Open — revise the Exclusion "removing the parent's request hop".** Three
+  valid A4500 runs all played ~153 decisions/s (2,553–2,608 games/h) with
+  1-row batches, because one allocation parent supervises and relays every
+  game at ~8 ms of Python CPU per decision (local `yappi` profile; plan
+  "Findings"). The A4500 target (> 2,600 games/h, median batch > 8) is
+  unreachable on this layout. Candidate: several supervising processes per
+  allocation, each with its own connection to the one service. That is
+  architectural, so implement stopped instead of building it. The `cpu32`
+  target is a separate layout question (shared CPU allocation).
+- **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
+  measurement-only and never lands; MTG-183's checkpoints cannot play w14.
