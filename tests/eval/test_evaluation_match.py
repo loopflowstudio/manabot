@@ -213,7 +213,9 @@ def test_game_cap_retains_all_four_failed_prefixes_without_draw_credit(tmp_path)
     )
 
 
-def _dead_worker(connection, game, registrations, checkpoint_paths, max_commands):
+def _dead_worker(
+    connection, game, registrations, checkpoint_paths, max_commands, *_endpoint
+):
     import os
 
     connection.send(("phase", game["seat_players"][0]))

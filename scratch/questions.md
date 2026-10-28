@@ -92,3 +92,24 @@ keep matching for resumption.
   A4500 about 2,600 games/h; `00119d1c9211` `cpu32` scalar about 1,700) on the
   same 1,000-game pair, so the $5 ledger buys only the two "after" arms. A
   fresh `main` before-arm is optional if the ledger allows and the hosts differ.
+- **Assumption — one launching writer (2026-10-27 15:50):** the interactive
+  Task session `a35bc11b…` committed `d2f46c62c` and calibration `7616dd740`
+  while the implement step held this worktree. The implement step therefore launched
+  nothing after `2e066580c458` and left its `serve` drain fix uncommitted for that
+  writer and gate, so two writers would not spend the $5 ledger.
+
+## Parent hop (decided by Jack Heart, 2026-10-27: option b; implemented)
+
+- **Assumption — failure text:** a game whose handoff fails reads
+  "inference connection handoff failed: …"; a decision timeout in the child
+  keeps "inference service request timed out". Both remain infrastructure
+  failures with no failed player and fail the allocation.
+- **Assumption — `allocation.json` has no request latency:** decisions no
+  longer pass the supervisor; latency lives in `worker_performance` (game) and
+  `serving.json` (service). No reader used the allocation's request counters.
+- **Not run — rental calibration:** the calibration worktree was removed
+  (branch `recovery/mtg193-calibration-20261028`), and a headless pass should
+  not rebuild that cross-branch launch path and spend unattended. Steps are
+  in the plan's "Parent hop decided" section.
+- **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
+  measurement-only and never lands; MTG-183's checkpoints cannot play w14.
